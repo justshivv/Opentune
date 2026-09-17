@@ -5,7 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.innertube.InnertubeParser
-import com.opentune.data.model.SearchFilter
 import com.opentune.data.model.Song
 import com.opentune.playback.PlayerConnection
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,7 +47,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _searchState.value = SearchState.Loading
         viewModelScope.launch {
             try {
-                val response = Innertube.search(q, SearchFilter.SONGS.params)
+                // The "All" tab (no params) is what parseSearchSongs is built to
+                // walk. The SONGS filter's own params blob currently comes back
+                // "No results" for plenty of real tracks — verified live against
+                // music.youtube.com's search endpoint, unfiltered doesn't.
+                val response = Innertube.search(q)
                 val songs = InnertubeParser.parseSearchSongs(response)
                 _searchState.value = SearchState.Success(songs)
             } catch (e: Exception) {
