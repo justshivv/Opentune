@@ -1,5 +1,14 @@
 package com.opentune.ui
 
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
@@ -75,6 +84,13 @@ import com.opentune.ui.components.glass
 val CHROME_TAB_HEIGHT = 64.dp
 val CHROME_MINI_HEIGHT = 64.dp
 private val BUBBLE = 62.dp
+
+/** How long the dock takes to fold away or come back, and its easing (Material's emphasized curve). */
+private const val FOLD_MS = 560
+private const val FOLD_FADE_IN_MS = 380
+private const val FOLD_FADE_DELAY_MS = 120
+private const val FOLD_FADE_OUT_MS = 240
+private val FOLD_EASING = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 private val DOCK_SHAPE = RoundedCornerShape(32.dp)
 private val LENS_SHAPE = RoundedCornerShape(26.dp)
 private val DOCK_INSET = 6.dp
@@ -146,8 +162,16 @@ fun BottomChrome(
         AnimatedContent(
             inline,
             transitionSpec = {
-                (fadeIn(spring(stiffness = 380f)) togetherWith fadeOut(spring(stiffness = 380f)))
-                    .using(SizeTransform(clip = false))
+                // One unhurried curve for every part: the incoming chrome rises a
+                // little and fades in once the outgoing one has mostly faded,
+                // while the size change and the cover glide on the same timing.
+                val enter = fadeIn(tween(FOLD_FADE_IN_MS, delayMillis = FOLD_FADE_DELAY_MS, easing = LinearOutSlowInEasing)) +
+                    slideInVertically(tween(FOLD_MS, easing = FOLD_EASING)) { it / 4 } +
+                    scaleIn(tween(FOLD_MS, easing = FOLD_EASING), initialScale = 0.94f, transformOrigin = TransformOrigin(1f, 1f))
+                val exit = fadeOut(tween(FOLD_FADE_OUT_MS, easing = FastOutLinearInEasing)) +
+                    slideOutVertically(tween(FOLD_MS, easing = FOLD_EASING)) { it / 5 } +
+                    scaleOut(tween(FOLD_MS, easing = FOLD_EASING), targetScale = 0.96f, transformOrigin = TransformOrigin(1f, 1f))
+                (enter togetherWith exit).using(SizeTransform(clip = false) { _, _ -> tween(FOLD_MS, easing = FOLD_EASING) })
             },
             contentAlignment = Alignment.BottomEnd,
             label = "chrome",
@@ -185,7 +209,7 @@ private class SharedMini(private val layout: SharedTransitionScope, private val 
         this@sharedMini.sharedElement(
             rememberSharedContentState("mini"),
             scope,
-            boundsTransform = { _, _ -> spring(dampingRatio = 0.8f, stiffness = 360f) },
+            boundsTransform = { _, _ -> tween(FOLD_MS, easing = FOLD_EASING) },
         )
     }
 }
