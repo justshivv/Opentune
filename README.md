@@ -92,7 +92,10 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   corner, still ringed by progress; scroll up and both come back.
 - **Its own typeface.** Every screen is set in [Outfit](https://github.com/Outfitio/Outfit-Fonts).
 - **Home greets you** by the time of day and your name, with your avatar
-  leading to settings. Explore's moods are full-cover cards.
+  leading to settings. Below YouTube Music's own shelves it adds a radio
+  of your last song, albums, singles and similar artists for the artists
+  you play most, new releases, the charts, Explore, and playlists for a
+  couple of moods that change daily. Explore's moods are full-cover cards.
 - **An Apple Music-style player.** Cover, lyrics and queue modes, heart and
   "…" buttons, the current lyric line under the title, the artist name
   opening their page, time remaining,

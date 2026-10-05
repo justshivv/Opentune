@@ -13,6 +13,11 @@ import com.opentune.data.model.Song
 import android.content.Context
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
+import com.opentune.data.history.History
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -83,34 +88,144 @@ object MusicRepository {
     }
 
     /**
-     * Follows Home's continuation pages. The shelves from the last load stay
-     * up until the first new page lands, so a refresh doesn't empty the
-     * bottom of the page and fill it again.
+     * Fills in the rest of Home while its first page is on screen.
+     *
+     * YouTube only pages Home further for a signed-in account; signed out,
+     * the first page is all it sends, about three shelves. So besides those
+     * pages, Home takes shelves from other places: a radio off the last song
+     * played, albums, singles and similar artists for the artists played
+     * most, new releases, the charts, Explore, and playlists for a couple of
+     * moods and genres. They load side by side and are shown in that fixed
+     * order as each one lands.
+     *
+     * The shelves from the last load stay up until the first new batch
+     * arrives, so a refresh doesn't empty the bottom of the page.
      */
-    private suspend fun CoroutineScope.followHome(first: List<HomeShelf>, token: String?) {
-        val more = mutableListOf<HomeShelf>()
-        val seen = first.mapTo(HashSet()) { it.title }
-        var next = token
-        var pages = 0
-        while (next != null && pages < MAX_HOME_PAGES) {
-            val response = try {
-                Innertube.browseContinuation(next)
-            } catch (e: Exception) {
-                ensureActive()
-                DebugLog.w("MusicRepository", "Home page ${pages + 2} failed", e)
-                break
-            }
-            ensureActive()
-            InnertubeParser.parseHomeContinuation(response)
-                .filter { it.items.isNotEmpty() && seen.add(it.title) }
-                .let(more::addAll)
-            _homeMore.value = more.toList()
-            next = InnertubeParser.sectionListContinuation(response)
-            pages++
+    private suspend fun followHome(first: List<HomeShelf>, token: String?) = coroutineScope {
+        val lock = Any()
+        val pages = mutableListOf<HomeShelf>()
+        val extras = arrayOfNulls<List<HomeShelf>>(HomeSource.entries.size)
+        fun publish() = synchronized(lock) {
+            val seen = first.mapTo(HashSet()) { it.dedupeKey() }
+            _homeMore.value = (pages + extras.filterNotNull().flatten())
+                .filter { it.items.isNotEmpty() && seen.add(it.dedupeKey()) }
         }
-        if (pages == 0) _homeMore.value = emptyList()
-        saveHome(SavedHome(first, more))
+        launch {
+            var next = token
+            var count = 0
+            while (next != null && count < MAX_HOME_PAGES) {
+                val response = try {
+                    Innertube.browseContinuation(next)
+                } catch (e: Exception) {
+                    ensureActive()
+                    DebugLog.w("MusicRepository", "Home page ${count + 2} failed", e)
+                    break
+                }
+                ensureActive()
+                synchronized(lock) { pages += InnertubeParser.parseHomeContinuation(response) }
+                publish()
+                next = InnertubeParser.sectionListContinuation(response)
+                count++
+            }
+        }
+        HomeSource.entries.forEach { source ->
+            launch {
+                extras[source.ordinal] = extraShelves(source)
+                publish()
+            }
+        }
+    }.also {
+        saveHome(SavedHome(first, _homeMore.value))
     }
+
+    /** Where Home's extra shelves come from, in the order they're shown. */
+    private enum class HomeSource { RADIO, ARTISTS, NEW_RELEASES, CHARTS, EXPLORE, MOODS }
+
+    private class Fetched(val shelves: List<HomeShelf>, val at: Long)
+    private val extrasCache = java.util.concurrent.ConcurrentHashMap<HomeSource, Fetched>()
+
+    /**
+     * One source's shelves; reused for [EXTRAS_FRESH_MS] so opening Home
+     * again doesn't fetch twenty pages. A source that fails just adds nothing.
+     */
+    private suspend fun extraShelves(source: HomeSource): List<HomeShelf> {
+        val now = System.currentTimeMillis()
+        extrasCache[source]?.takeIf { now - it.at < EXTRAS_FRESH_MS }?.let { return it.shelves }
+        val shelves = try {
+            when (source) {
+                HomeSource.RADIO -> radioShelf()
+                HomeSource.ARTISTS -> artistShelves()
+                HomeSource.NEW_RELEASES -> shelvesOf("FEmusic_new_releases")
+                HomeSource.CHARTS -> shelvesOf("FEmusic_charts")
+                HomeSource.EXPLORE -> shelvesOf("FEmusic_explore")
+                HomeSource.MOODS -> moodShelves()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            DebugLog.w("MusicRepository", "Home's ${source.name.lowercase()} shelves failed", e)
+            return extrasCache[source]?.shelves.orEmpty()
+        }
+        extrasCache[source] = Fetched(shelves, now)
+        return shelves
+    }
+
+    private suspend fun shelvesOf(browseId: String): List<HomeShelf> {
+        val response = Innertube.browse(browseId)
+        return InnertubeParser.parseHome(response).ifEmpty { InnertubeParser.parseHomeContinuation(response) }
+            .filter { it.items.isNotEmpty() }
+    }
+
+    /** "Because you played …": the radio YouTube queues after the last song heard. */
+    private suspend fun radioShelf(): List<HomeShelf> {
+        val last = History.records.value.firstOrNull() ?: return emptyList()
+        val songs = InnertubeParser.parseWatchQueue(Innertube.next(last.videoId))
+            .filter { it.videoId != last.videoId }
+            .take(20)
+        if (songs.size < 4) return emptyList()
+        val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
+        return listOf(HomeShelf("Because you played ${last.title}", items, "Picked for you"))
+    }
+
+    /** Albums, singles and look-alikes for the two artists played most this month. */
+    private suspend fun artistShelves(): List<HomeShelf> = coroutineScope {
+        val since = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+        val top = History.replay(History.records.value, since).topArtists.take(2)
+        top.map { entry ->
+            async {
+                val song = entry.song ?: return@async emptyList()
+                val id = artistIdFor(song) ?: return@async emptyList()
+                val page = InnertubeParser.parseArtistPage(Innertube.browse(id))
+                val name = page.name ?: entry.title
+                page.sections
+                    // Cards that open a page: albums, singles, playlists, artists.
+                    .filter { shelf -> shelf.items.isNotEmpty() && shelf.items.all { it.browseId != null } }
+                    .take(3)
+                    .map { it.copy(subtitle = "Because you like $name") }
+            }
+        }.awaitAll().flatten()
+    }
+
+    /** Playlists for two moods or genres, a different pair each day. */
+    private suspend fun moodShelves(): List<HomeShelf> = coroutineScope {
+        val moods = InnertubeParser.parseMoodAndGenres(Innertube.browse("FEmusic_moods_and_genres"))
+            .flatMap { it.items }
+        if (moods.isEmpty()) return@coroutineScope emptyList()
+        val day = (System.currentTimeMillis() / (24 * 60 * 60 * 1000)).toInt()
+        listOf(day, day * 7 + 3).map { (it % moods.size + moods.size) % moods.size }.distinct().map { i ->
+            async {
+                val mood = moods[i]
+                val response = Innertube.browse(mood.browseId, mood.params)
+                InnertubeParser.parseHome(response).ifEmpty { InnertubeParser.parseHomeContinuation(response) }
+                    .filter { it.items.isNotEmpty() }
+                    .take(2)
+                    .map { it.copy(subtitle = mood.title) }
+            }
+        }.awaitAll().flatten()
+    }
+
+    /** Shelves from different artists or moods may share a title like "Albums". */
+    private fun HomeShelf.dedupeKey() = "${subtitle.lowercase()}|${title.lowercase()}"
 
     private fun saveHome(saved: SavedHome) {
         val f = homeFile ?: return
@@ -122,6 +237,7 @@ object MusicRepository {
     }
 
     private const val MAX_HOME_PAGES = 8
+    private const val EXTRAS_FRESH_MS = 30 * 60 * 1000L
 
     suspend fun moodsAndGenres(): List<MoodGenreSection> = io {
         InnertubeParser.parseMoodAndGenres(Innertube.browse("FEmusic_moods_and_genres"))

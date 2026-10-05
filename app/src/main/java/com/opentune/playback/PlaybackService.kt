@@ -401,6 +401,7 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            mediaSession?.player?.let { watchPlayed(it, isPlaying) }
             if (isPlaying && startRequestedAt > 0) {
                 NerdStats.onStartup(SystemClock.elapsedRealtime() - startRequestedAt)
                 startRequestedAt = 0
@@ -415,7 +416,6 @@ class PlaybackService : MediaSessionService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) {
-                retriedMediaId = null
                 // The figure arrives with the stream; on a first play it's
                 // only known once the track has resolved.
                 applyLoudness()
@@ -787,9 +787,33 @@ class PlaybackService : MediaSessionService() {
      * time this runs, so preparing again resolves a fresh one. A track the
      * resolver has ruled unplayable is skipped without the retry.
      */
+    /**
+     * What to do when the current track fails:
+     *  - an upgraded stream goes back to the stream the track started on, at
+     *    the same place, rather than costing the track;
+     *  - anything that may pass is retried once;
+     *  - then the track is skipped, but only up to [MAX_FAILED_IN_ROW] tracks
+     *    in a row. Past that, every stream is failing for the same reason
+     *    (network, a YouTube change), and skipping on would only run through
+     *    the queue and autoplay without a sound. Playback stops on the error
+     *    instead, so it's shown, and play tries again.
+     */
     private fun recover(error: PlaybackException) {
-        val player = mediaSession?.player ?: return
-        val mediaId = player.currentMediaItem?.mediaId ?: return
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val item = player.currentMediaItem ?: return
+        val mediaId = item.mediaId
+        val uri = item.localConfiguration?.uri
+        if (uri != null && isUpgradedUri(uri)) {
+            Log.w(TAG, "Upgraded stream for $mediaId failed (${error.errorCodeName}); back to the one it started on")
+            StreamResolver.dropUpgrade(mediaId)
+            val index = player.currentMediaItemIndex
+            val position = player.currentPosition
+            swappingTo = mediaId
+            player.replaceMediaItem(index, item.buildUpon().setUri(streamUri(mediaId, upgraded = false)).build())
+            player.seekTo(index, position)
+            player.prepare()
+            return
+        }
         val permanent = generateSequence<Throwable>(error) { it.cause }
             .any { it is StreamResolver.PermanentlyUnplayableException }
 
@@ -799,10 +823,39 @@ class PlaybackService : MediaSessionService() {
             player.prepare()
             return
         }
+        failedInRow++
+        if (failedInRow >= MAX_FAILED_IN_ROW) {
+            Log.w(TAG, "$failedInRow tracks in a row failed (last: $mediaId, ${error.errorCodeName}); stopping")
+            failedInRow = 0
+            return
+        }
         if (player.hasNextMediaItem()) {
             Log.w(TAG, "Skipping $mediaId after ${error.errorCodeName}")
             player.seekToNextMediaItem()
             player.prepare()
+        }
+    }
+
+    /** Tracks in a row that failed and were skipped; see [recover]. */
+    private var failedInRow = 0
+    private var playedCheck: Job? = null
+
+    /**
+     * A track counts as working once it has really played for a while, not
+     * when it first reports ready: a stream refused a few seconds in is
+     * ready first and fails after. Until then its retry stays spent and
+     * the failures in a row stand.
+     */
+    private fun watchPlayed(player: Player, playing: Boolean) {
+        playedCheck?.cancel()
+        if (!playing) return
+        val id = player.currentMediaItem?.mediaId ?: return
+        playedCheck = scope.launch {
+            delay(PLAYED_OK_MS)
+            if (player.isPlaying && player.currentMediaItem?.mediaId == id) {
+                failedInRow = 0
+                retriedMediaId = null
+            }
         }
     }
 
@@ -881,6 +934,10 @@ class PlaybackService : MediaSessionService() {
         val VOLUME_RECEIVER_FLAGS = if (android.os.Build.VERSION.SDK_INT >= 33) Context.RECEIVER_EXPORTED else 0
         const val QUEUE_SAVE_MS = 5_000L
         const val UPGRADE_DELAY_MS = 8_000L
+        /** Failed tracks in a row before playback stops on the error. */
+        const val MAX_FAILED_IN_ROW = 3
+        /** Playing this long means the track's stream really works. */
+        const val PLAYED_OK_MS = 10_000L
         const val UPGRADE_MIN_REMAINING_MS = 20_000L
         const val FAR_BUFFER_MS = 15 * 60 * 1000
         const val FAR_BUFFER_BYTES = 8 * 1024 * 1024

@@ -189,7 +189,7 @@ object InnerTubeXResolver {
     private val remoteStore = RemotePlayerConfigStore(http, repository, logger)
     private val cipherService = YouTubeCipherService(http, remoteStore, logger)
     private val extractor = InnerTubeExtractor(
-        configParser = YtConfigParserImpl(http, innerTube, remoteStore, logger),
+        configParser = YtConfigParserImpl(http, innerTube, remoteStore, logger, cipherService),
         cipherService = cipherService,
         innerTube = innerTube,
         tokenProvider = tokenProvider,

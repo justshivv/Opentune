@@ -1,5 +1,7 @@
 package com.opentune.ui.player
 
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.media.AudioManager
@@ -175,11 +177,16 @@ fun PlayerBackdrop(
 private fun MeshGradient(animate: Boolean, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val colors = listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.primaryContainer)
-    val transition = rememberInfiniteTransition(label = "mesh")
-    val t by if (animate) {
-        transition.animateFloat(0f, 1f, infiniteRepeatable(tween(24_000, easing = LinearEasing)), label = "meshT")
-    } else {
-        remember { mutableFloatStateOf(0.15f) }
+    // One drift takes 24 s, so a dozen steps a second can't be told from
+    // every frame. It matters: the mesh is what the player's Liquid Glass
+    // samples, and each step makes every glass control blur and bend again.
+    val t by produceState(0.15f, animate) {
+        if (!animate) return@produceState
+        val start = withFrameNanos { it } - (0.15f * MESH_CYCLE_NS).toLong()
+        while (true) {
+            delay(MESH_STEP_MS)
+            value = ((withFrameNanos { it } - start) % MESH_CYCLE_NS).toFloat() / MESH_CYCLE_NS
+        }
     }
     Canvas(modifier) {
         drawRect(scheme.surface)
@@ -200,6 +207,9 @@ private fun MeshGradient(animate: Boolean, modifier: Modifier = Modifier) {
         drawRect(Brush.verticalGradient(0.35f to Color.Transparent, 1f to scheme.surface.copy(alpha = 0.85f)))
     }
 }
+
+private const val MESH_CYCLE_NS = 24_000_000_000L
+private const val MESH_STEP_MS = 80L
 
 /**
  * Large cover art. It eases smaller while paused, crossfades on a track
@@ -303,6 +313,9 @@ fun SeekBar(
             Modifier
                 .fillMaxWidth()
                 .height(28.dp)
+                // Redrawn every frame while playing; its own layer keeps that from
+                // re-recording the rest of the player.
+                .graphicsLayer()
                 .pointerInput(durationMs) {
                     detectTapGestures { offset ->
                         if (durationMs > 0) onSeek((offset.x / size.width).coerceIn(0f, 1f).times(durationMs).toLong())
