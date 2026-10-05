@@ -17,18 +17,22 @@ object TrackLog {
     fun about(videoId: String): CoroutineContext = CoroutineName(videoId)
 
     fun d(tag: String, message: String) {
+        AppLog.add('D', tag, message)
         Log.d(tag, message)
     }
 
     fun w(tag: String, message: String) {
+        AppLog.add('W', tag, message)
         Log.w(tag, message)
     }
 
     fun w(tag: String, message: String, error: Throwable) {
+        AppLog.add('W', tag, message, error)
         Log.w(tag, message, error)
     }
 
     fun e(tag: String, message: String) {
+        AppLog.add('E', tag, message)
         Log.e(tag, message)
     }
 }

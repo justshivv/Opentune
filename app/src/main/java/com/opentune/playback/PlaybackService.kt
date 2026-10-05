@@ -440,6 +440,7 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            Log.e(TAG, "Playback error on ${mediaSession?.player?.currentMediaItem?.mediaId}: ${error.errorCodeName}", error)
             recover(error)
         }
     }
