@@ -6,21 +6,27 @@ your own required.
 
 ## Status
 
-Early MVP:
+What works:
 
-- Search (song results) via Innertube
+- Home feed, Explore (moods and genres), and search with suggestions,
+  recent searches and filters (songs, videos, albums, artists, playlists)
+- Album, playlist and artist pages with Play and Shuffle
 - Playback through a Media3 `MediaSessionService` / ExoPlayer, with stream
   URLs resolved and deciphered via NewPipeExtractor
-- A play queue: tapping a song starts it followed by its YouTube Music radio,
-  and more radio is appended as playback nears the end. Search results can be
-  queued with "Play next" / "Add to queue"; the now-playing screen lists what's
-  up next, and tracks can be skipped, jumped to, or removed
-- Mini player + a full now-playing screen with seek and previous/next
+- A play queue with autoplay radio, shuffle and repeat (off / all / one).
+  "Play next" and "Add to queue" on any track
+- A full-screen player with artwork-tinted colors, swipe to skip, drag down
+  to close, and a floating mini player with progress
+- Synced lyrics from [LRCLIB](https://lrclib.net), highlighted word by word,
+  scrolling with the song; tap a line to jump there
+- Remix: speed, pitch, reverb and bass boost, with presets such as Slowed +
+  reverb and Nightcore. Reverb and bass use Android's audio effects, so
+  support depends on the phone
+- Themes: light, dark or system; Material You; accent colors; palette
+  styles; pure black; color from artwork; three player backgrounds
 
-Not yet built: shuffle/repeat, downloads, lyrics, library/login, Discord Rich
-Presence, scrobbling, on-device automix, and the "Listen Together" party
-backend — see the architecture sketch this project started from for the
-fuller shape.
+Not yet built: downloads, library/login, Discord Rich Presence,
+scrobbling, on-device automix, and the "Listen Together" party backend.
 
 ## Building
 

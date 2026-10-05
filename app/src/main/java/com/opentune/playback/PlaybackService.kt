@@ -29,6 +29,7 @@ import com.opentune.data.innertube.Innertube
 import com.opentune.data.innertube.InnertubeParser
 import com.opentune.data.innertube.PlayerClient
 import com.opentune.data.innertube.StreamResolver
+import com.opentune.data.settings.AppSettings
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +68,8 @@ class PlaybackService : MediaSessionService() {
     /** The item a failed load was last retried for. See [recover]. */
     private var retriedMediaId: String? = null
 
+    private var soundEffects: SoundEffects? = null
+
     override fun onCreate() {
         super.onCreate()
 
@@ -93,6 +96,13 @@ class PlaybackService : MediaSessionService() {
             .build()
         player.addListener(playerListener)
 
+        val effects = SoundEffects(player)
+        soundEffects = effects
+        scope.launch { AppSettings.sound.collect(effects::apply) }
+        // Turning autoplay back on near the end of the queue should fetch now,
+        // not at the next track change.
+        scope.launch { AppSettings.autoplay.collect { extendQueueIfNeeded() } }
+
         val sessionActivity = PendingIntent.getActivity(
             this,
             0,
@@ -118,6 +128,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         scope.cancel()
+        soundEffects?.release()
+        soundEffects = null
         mediaSession?.run {
             player.removeListener(playerListener)
             player.release()
@@ -158,12 +170,20 @@ class PlaybackService : MediaSessionService() {
     }
 
     private val playerListener = object : Player.Listener {
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            extendQueueIfNeeded()
+        override fun onEvents(player: Player, events: Player.Events) {
+            if (events.containsAny(
+                    Player.EVENT_MEDIA_ITEM_TRANSITION,
+                    Player.EVENT_TIMELINE_CHANGED,
+                    Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                    Player.EVENT_REPEAT_MODE_CHANGED,
+                )
+            ) {
+                extendQueueIfNeeded()
+            }
         }
 
-        override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
-            extendQueueIfNeeded()
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            soundEffects?.onAudioSessionIdChanged()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -178,11 +198,14 @@ class PlaybackService : MediaSessionService() {
     /**
      * Append radio for the last queued track once playback nears the end, so
      * the music doesn't stop. Starting a single song goes through here too:
-     * a one-track queue is already "near the end".
+     * a one-track queue is already "near the end". With repeat on the queue
+     * never ends, so there is nothing to extend.
      */
     private fun extendQueueIfNeeded() {
         val player = mediaSession?.player ?: return
-        if (!Autoplay.shouldExtend(player.currentMediaItemIndex, player.mediaItemCount)) return
+        if (!AppSettings.autoplay.value || player.repeatMode != Player.REPEAT_MODE_OFF) return
+        val remaining = player.upcomingPlayOrder().size - 1
+        if (!Autoplay.shouldExtend(remaining, player.mediaItemCount)) return
         val seed = player.getMediaItemAt(player.mediaItemCount - 1).mediaId
         if (seed in exhaustedSeeds) return
         if (radioJob?.isActive == true && radioSeed == seed) return

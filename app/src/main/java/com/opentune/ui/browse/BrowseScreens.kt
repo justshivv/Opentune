@@ -1,0 +1,329 @@
+package com.opentune.ui.browse
+
+import androidx.compose.runtime.getValue
+import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.opentune.data.MusicRepository
+import com.opentune.data.model.BrowseType
+import com.opentune.data.model.HEADER_ART_PX
+import com.opentune.data.model.ShelfItem
+import com.opentune.data.model.Song
+import com.opentune.data.model.UiState
+import com.opentune.data.model.artworkAt
+import com.opentune.ui.components.Artwork
+import com.opentune.ui.components.ErrorState
+import com.opentune.ui.components.ItemCard
+import com.opentune.ui.components.Placeholder
+import com.opentune.ui.components.SectionHeader
+import com.opentune.ui.components.Shelf
+import com.opentune.ui.components.SongListItem
+import com.opentune.ui.components.SongRowPlaceholder
+import com.opentune.ui.rememberLoader
+import com.opentune.ui.type
+
+/** Callbacks every track list needs. */
+class SongActions(
+    val currentVideoId: String?,
+    val isPlaying: Boolean,
+    val playAll: (List<Song>, Int, Boolean) -> Unit,
+    val playNext: (Song) -> Unit,
+    val addToQueue: (Song) -> Unit,
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CollapsingBar(title: String, listState: LazyListState, onBack: () -> Unit) {
+    val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    TopAppBar(
+        title = { if (collapsed) Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        navigationIcon = {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = if (collapsed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
+        ),
+    )
+}
+
+@Composable
+private fun PlayShuffleButtons(enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(onClick = onPlay, enabled = enabled, modifier = Modifier.weight(1f).height(52.dp)) {
+            Icon(Icons.Filled.PlayArrow, null)
+            Spacer(Modifier.width(8.dp))
+            Text("Play")
+        }
+        FilledTonalButton(onClick = onShuffle, enabled = enabled, modifier = Modifier.weight(1f).height(52.dp)) {
+            Icon(Icons.Filled.Shuffle, null)
+            Spacer(Modifier.width(8.dp))
+            Text("Shuffle")
+        }
+    }
+}
+
+/** Blurred, faded artwork behind a page header (blur needs Android 12). */
+@Composable
+private fun HeaderBackdrop(url: String?, modifier: Modifier = Modifier) {
+    val background = MaterialTheme.colorScheme.background
+    Box(modifier) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Artwork(
+                url,
+                Modifier.matchParentSize().graphicsLayer { alpha = 0.55f }.blur(60.dp),
+                shape = androidx.compose.ui.graphics.RectangleShape,
+            )
+        }
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.verticalGradient(listOf(background.copy(alpha = 0.2f), background)),
+            ),
+        )
+    }
+}
+
+@Composable
+fun CollectionScreen(
+    browseId: String,
+    contentPadding: PaddingValues,
+    actions: SongActions,
+    onBack: () -> Unit,
+) {
+    val loader = rememberLoader("collection:$browseId") { MusicRepository.collection(browseId) }
+    val state by loader.state.collectAsState()
+    val listState = rememberLazyListState()
+    val isAlbum = MusicRepository.typeOf(browseId) == BrowseType.ALBUM
+    val title = (state as? UiState.Success)?.data?.title.orEmpty()
+
+    Box(Modifier.fillMaxSize()) {
+        when (val s = state) {
+            is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
+            else -> {
+                val c = (s as? UiState.Success)?.data
+                LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+                    item(key = "header") {
+                        Box {
+                            HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize())
+                            Column(
+                                Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 56.dp, start = 24.dp, end = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                if (c == null) {
+                                    Placeholder(Modifier.size(232.dp), MaterialTheme.shapes.large)
+                                    Placeholder(Modifier.padding(top = 20.dp).width(200.dp).height(24.dp))
+                                    Placeholder(Modifier.padding(top = 8.dp).width(140.dp).height(16.dp))
+                                } else {
+                                    Artwork(
+                                        c.thumbnailUrl.artworkAt(HEADER_ART_PX),
+                                        Modifier.size(232.dp).shadow(24.dp, MaterialTheme.shapes.large),
+                                        shape = MaterialTheme.shapes.large,
+                                        placeholder = Icons.Filled.Album,
+                                    )
+                                    Text(
+                                        c.title,
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(top = 20.dp),
+                                    )
+                                    Text(
+                                        listOf(c.subtitle, "${c.songs.size} songs").filter { it.isNotBlank() }.joinToString(" • "),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 6.dp),
+                                    )
+                                }
+                                PlayShuffleButtons(
+                                    enabled = !c?.songs.isNullOrEmpty(),
+                                    onPlay = { c?.let { actions.playAll(it.songs, 0, false) } },
+                                    onShuffle = { c?.let { actions.playAll(it.songs, 0, true) } },
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                                )
+                            }
+                        }
+                    }
+                    if (c == null) {
+                        items(8) { SongRowPlaceholder() }
+                    } else {
+                        itemsIndexed(c.songs, key = { i, song -> "$i:${song.videoId}" }) { i, song ->
+                            SongListItem(
+                                song = song,
+                                onClick = { actions.playAll(c.songs, i, false) },
+                                isCurrent = song.videoId == actions.currentVideoId,
+                                isPlaying = actions.isPlaying,
+                                leading = if (isAlbum) {
+                                    {
+                                        Box(Modifier.size(width = 28.dp, height = 52.dp), Alignment.Center) {
+                                            Text(
+                                                "${i + 1}",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = if (song.videoId == actions.currentVideoId) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    null
+                                },
+                                onPlayNext = { actions.playNext(song) },
+                                onAddToQueue = { actions.addToQueue(song) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        CollapsingBar(title, listState, onBack)
+    }
+}
+
+@Composable
+fun ArtistScreen(
+    browseId: String,
+    contentPadding: PaddingValues,
+    actions: SongActions,
+    onBack: () -> Unit,
+    onItemClick: (ShelfItem) -> Unit,
+) {
+    val loader = rememberLoader("artist:$browseId") { MusicRepository.artist(browseId) }
+    val state by loader.state.collectAsState()
+    val listState = rememberLazyListState()
+    val page = (state as? UiState.Success)?.data
+
+    Box(Modifier.fillMaxSize()) {
+        when (val s = state) {
+            is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
+            else -> LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+                item(key = "hero") {
+                    val background = MaterialTheme.colorScheme.background
+                    Box(Modifier.fillMaxWidth().aspectRatio(1.05f)) {
+                        if (page == null) {
+                            Placeholder(Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape)
+                        } else {
+                            Artwork(
+                                page.thumbnailUrl.artworkAt(HEADER_ART_PX),
+                                Modifier.fillMaxSize(),
+                                shape = androidx.compose.ui.graphics.RectangleShape,
+                                placeholder = Icons.Filled.Person,
+                            )
+                        }
+                        Box(
+                            Modifier.fillMaxSize().background(
+                                Brush.verticalGradient(0.35f to Color.Transparent, 1f to background),
+                            ),
+                        )
+                        Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 20.dp)) {
+                            Text(
+                                page?.name.orEmpty(),
+                                style = MaterialTheme.typography.displaySmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            listOfNotNull(page?.monthlyListenerCount, page?.subscriberCountText).firstOrNull()?.let {
+                                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+                item(key = "buttons") {
+                    PlayShuffleButtons(
+                        enabled = !page?.songs.isNullOrEmpty(),
+                        onPlay = { page?.let { actions.playAll(it.songs, 0, false) } },
+                        onShuffle = { page?.let { actions.playAll(it.songs, 0, true) } },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+                    )
+                }
+                if (page == null) {
+                    items(5) { SongRowPlaceholder() }
+                } else {
+                    if (page.songs.isNotEmpty()) {
+                        item(key = "top-header") { SectionHeader("Top songs") }
+                        itemsIndexed(page.songs, key = { i, song -> "top:$i:${song.videoId}" }) { i, song ->
+                            SongListItem(
+                                song = song,
+                                onClick = { actions.playAll(page.songs, i, false) },
+                                isCurrent = song.videoId == actions.currentVideoId,
+                                isPlaying = actions.isPlaying,
+                                onPlayNext = { actions.playNext(song) },
+                                onAddToQueue = { actions.addToQueue(song) },
+                            )
+                        }
+                    }
+                    page.sections.forEachIndexed { i, shelf ->
+                        item(key = "shelf:$i:${shelf.title}") {
+                            Shelf(shelf.title, shelf.items) { item ->
+                                ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) })
+                            }
+                        }
+                    }
+                    page.description?.takeIf { it.isNotBlank() }?.let { about ->
+                        item(key = "about") {
+                            Column {
+                                SectionHeader("About")
+                                Text(
+                                    about,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 8,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        CollapsingBar(page?.name.orEmpty(), listState, onBack)
+    }
+}
