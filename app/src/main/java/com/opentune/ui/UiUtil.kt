@@ -44,10 +44,35 @@ fun ShelfItem.toSong(): Song? = videoId?.let {
 fun ShelfItem.type(): BrowseType? = browseId?.let(MusicRepository::typeOf)
 
 /**
+ * What screens loaded recently, by loader key, so going back to a page shows
+ * it at once instead of a spinner. Entries are only a head start: anything
+ * older than [FRESH_MS] is shown and then fetched again in the background.
+ */
+internal object ScreenCache {
+    private class Entry(val value: Any?, val at: Long)
+
+    private val entries = object : LinkedHashMap<String, Entry>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>?) = size > MAX_ENTRIES
+    }
+
+    @Synchronized
+    fun get(key: String): Pair<Any?, Long>? = entries[key]?.let { it.value to it.at }
+
+    @Synchronized
+    fun put(key: String, value: Any?, at: Long = System.currentTimeMillis()) {
+        entries[key] = Entry(value, at)
+    }
+
+    const val FRESH_MS = 2 * 60 * 1000L
+    private const val MAX_ENTRIES = 48
+}
+
+/**
  * Loads one thing for a screen, survives rotation, and can be retried or
  * refreshed. [refreshing] is a reload that keeps the old content on screen.
+ * A page seen recently starts from [ScreenCache] and refreshes quietly.
  */
-class LoaderViewModel<T>(private val load: suspend () -> T) : ViewModel() {
+class LoaderViewModel<T>(private val key: String, private val load: suspend () -> T) : ViewModel() {
     private val _state = MutableStateFlow<UiState<T>>(UiState.Loading)
     val state = _state.asStateFlow()
 
@@ -55,18 +80,30 @@ class LoaderViewModel<T>(private val load: suspend () -> T) : ViewModel() {
     val refreshing = _refreshing.asStateFlow()
 
     init {
-        reload()
+        val cached = ScreenCache.get(key)
+        if (cached != null) {
+            @Suppress("UNCHECKED_CAST")
+            _state.value = UiState.Success(cached.first as T)
+            if (System.currentTimeMillis() - cached.second > ScreenCache.FRESH_MS) reload(keepContent = true, quiet = true)
+        } else {
+            reload()
+        }
     }
 
-    fun reload(keepContent: Boolean = false) {
+    fun reload(keepContent: Boolean = false, quiet: Boolean = false) {
         viewModelScope.launch {
-            if (keepContent && _state.value is UiState.Success) _refreshing.value = true else _state.value = UiState.Loading
+            val hasContent = keepContent && _state.value is UiState.Success
+            if (hasContent) {
+                if (!quiet) _refreshing.value = true
+            } else {
+                _state.value = UiState.Loading
+            }
             _state.value = try {
-                UiState.Success(load())
+                UiState.Success(load().also { ScreenCache.put(key, it) })
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (_refreshing.value) _state.value else UiState.Error(friendlyError(e))
+                if (hasContent) _state.value else UiState.Error(friendlyError(e))
             }
             _refreshing.value = false
         }
@@ -75,4 +112,4 @@ class LoaderViewModel<T>(private val load: suspend () -> T) : ViewModel() {
 
 @Composable
 fun <T> rememberLoader(key: String, load: suspend () -> T): LoaderViewModel<T> =
-    viewModel(key = key) { LoaderViewModel(load) }
+    viewModel(key = key) { LoaderViewModel(key, load) }

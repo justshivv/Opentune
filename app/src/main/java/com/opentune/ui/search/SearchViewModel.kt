@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import com.opentune.data.innertube.StreamResolver
+import kotlinx.coroutines.Dispatchers
 
 class SearchViewModel : ViewModel() {
     private val _query = MutableStateFlow("")
@@ -78,15 +80,42 @@ class SearchViewModel : ViewModel() {
         val q = _submitted.value ?: return
         val f = _filter.value
         searchJob?.cancel()
-        _results.value = UiState.Loading
+        val key = "$f:${q.trim().lowercase()}"
+        // A search made a minute ago comes back at once; it's refreshed anyway.
+        _results.value = recentSearches[key]?.let { UiState.Success(it) } ?: UiState.Loading
         searchJob = viewModelScope.launch {
-            _results.value = try {
+            val fresh = try {
                 UiState.Success(MusicRepository.search(q, f))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                UiState.Error(friendlyError(e))
+                if (_results.value is UiState.Success) null else UiState.Error(friendlyError(e))
+            }
+            fresh?.let { _results.value = it }
+            (fresh as? UiState.Success)?.data?.let { rows ->
+                recentSearches[key] = rows
+                warmTopResult(rows)
             }
         }
+    }
+
+    /**
+     * Finds the stream for the first song in the results before it's tapped,
+     * since it's the one most likely to be. The stream URL is cached for 20
+     * minutes, so the tap only has to fetch audio.
+     */
+    private fun warmTopResult(rows: List<SearchResult>) {
+        val top = rows.firstNotNullOfOrNull {
+            when (it) {
+                is SearchResult.TopTrack -> it.song
+                is SearchResult.Track -> it.song
+                else -> null
+            }
+        } ?: return
+        viewModelScope.launch(Dispatchers.IO) { runCatching { StreamResolver.resolve(top.videoId) } }
+    }
+
+    private val recentSearches = object : LinkedHashMap<String, List<SearchResult>>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<SearchResult>>?) = size > 60
     }
 }

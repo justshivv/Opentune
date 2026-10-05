@@ -54,6 +54,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import android.media.audiofx.AudioEffect
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
@@ -134,12 +135,16 @@ class PlaybackService : MediaSessionService() {
         }
 
         // Start as soon as a little audio is in: the defaults wait for 2.5 s,
-        // which is video-sized caution. A stream starts after 0.75 s buffered
+        // which is video-sized caution. A stream starts after half a second buffered
         // and a local file after a quarter second.
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMsForStreaming(20_000, 60_000, 750, 2_000)
-            .setBufferDurationsMsForLocalPlayback(5_000, 30_000, 250, 500)
-            .setPrioritizeTimeOverSizeThresholds(true)
+            .setBufferDurationsMsForStreaming(20_000, FAR_BUFFER_MS, 500, 2_000)
+            .setBufferDurationsMsForLocalPlayback(5_000, FAR_BUFFER_MS, 250, 500)
+            // The byte ceiling decides, not the time one: about a whole song
+            // of Opus, so a fetched track is fetched once and seeks within it
+            // are instant. Media3's audio default is around 40 seconds.
+            .setTargetBufferBytes(FAR_BUFFER_BYTES)
+            .setBackBuffer(BACK_BUFFER_MS, true)
             .build()
 
         val player = ExoPlayer.Builder(context, renderers)
@@ -258,6 +263,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        closeEffectSession()
         finishListen()
         loudnessEnhancer?.release()
         loudnessEnhancer = null
@@ -353,6 +359,7 @@ class PlaybackService : MediaSessionService() {
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             loudnessEnhancer?.release()
             loudnessEnhancer = null
+            openEffectSession(audioSessionId)
             applyLoudness()
         }
 
@@ -414,12 +421,56 @@ class PlaybackService : MediaSessionService() {
      * pumping and nothing touching the peaks in between. Without a figure, or
      * with the setting off, the gain is zero and the effect is off.
      */
+    /**
+     * Tells the system a music session is open, so the phone's own sound
+     * effects (Dolby Atmos, Samsung's SoundAlive and Adapt Sound, the system
+     * equalizer and similar) attach to this app the way they do to the stock
+     * players. Without this many phones leave OpenTune unprocessed and it
+     * sounds flatter and quieter next to other apps.
+     */
+    private var effectSession = C.AUDIO_SESSION_ID_UNSET
+
+    private fun openEffectSession(session: Int) {
+        if (session == C.AUDIO_SESSION_ID_UNSET || session == effectSession) return
+        closeEffectSession()
+        effectSession = session
+        sendBroadcast(
+            Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION)
+                .putExtra(AudioEffect.EXTRA_AUDIO_SESSION, session)
+                .putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+                .putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC),
+        )
+    }
+
+    private fun closeEffectSession() {
+        if (effectSession == C.AUDIO_SESSION_ID_UNSET) return
+        sendBroadcast(
+            Intent(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION)
+                .putExtra(AudioEffect.EXTRA_AUDIO_SESSION, effectSession)
+                .putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName),
+        )
+        effectSession = C.AUDIO_SESSION_ID_UNSET
+    }
+
+    private var loudnessRetry: Job? = null
+
     private fun applyLoudness() {
         val player = mediaSession?.player as? ExoPlayer ?: return
         val session = player.audioSessionId
         if (session == C.AUDIO_SESSION_ID_UNSET) return
+        openEffectSession(session)
         val id = player.currentMediaItem?.mediaId
         val db = id?.let { StreamResolver.loudnessDbFor(it) ?: Downloads.loudnessFor(it) }
+        // A track playing from the cache never resolved, so its figure may not
+        // be known yet. Look it up once, a moment in, then apply it.
+        loudnessRetry?.cancel()
+        if (db == null && id != null && !LocalMusic.isLocal(id) && AppSettings.playback.value.loudnessNormalization) {
+            loudnessRetry = scope.launch {
+                delay(LOUDNESS_RETRY_MS)
+                withContext(Dispatchers.IO) { runCatching { StreamResolver.resolve(id) } }
+                if (player.currentMediaItem?.mediaId == id && StreamResolver.loudnessDbFor(id) != null) applyLoudness()
+            }
+        }
         val on = AppSettings.playback.value.loudnessNormalization && db != null
         val enhancer = loudnessEnhancer?.takeIf { loudnessSession == session }
             ?: runCatching { LoudnessEnhancer(session) }
@@ -658,6 +709,10 @@ class PlaybackService : MediaSessionService() {
         const val TAG = "PlaybackService"
 
         /** Bounds on the loudness gain, in millibels: down 15 dB, up 3 dB at most. */
+        const val LOUDNESS_RETRY_MS = 6_000L
+        const val FAR_BUFFER_MS = 15 * 60 * 1000
+        const val FAR_BUFFER_BYTES = 8 * 1024 * 1024
+        const val BACK_BUFFER_MS = 30_000
         const val MIN_LOUDNESS_GAIN_MB = -1500
         const val MAX_LOUDNESS_GAIN_MB = 300
 
