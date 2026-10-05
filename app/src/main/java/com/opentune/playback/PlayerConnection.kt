@@ -2,12 +2,10 @@ package com.opentune.playback
 
 import android.content.ComponentName
 import android.content.Context
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import com.opentune.data.innertube.StreamResolver
 import com.opentune.data.model.Song
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,10 +15,10 @@ import kotlinx.coroutines.guava.await
  * The app's one connection to [PlaybackService], wrapping a [MediaController]
  * behind Compose-friendly state.
  *
- * Resolving a track's stream URL is done here, on the way into [play], rather
- * than inside the service: [StreamResolver.resolve] is a suspend call, and
- * keeping it on this side lets the UI show its own loading state around it
- * without teaching the service about that concern.
+ * Everything here is read back from the controller rather than tracked on the
+ * side, because the queue also changes from places this class doesn't drive:
+ * the service appends autoplay radio and skips tracks that fail, and the
+ * notification has its own next/previous buttons.
  */
 class PlayerConnection(private val context: Context) {
 
@@ -28,6 +26,15 @@ class PlayerConnection(private val context: Context) {
 
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong = _currentSong.asStateFlow()
+
+    private val _queue = MutableStateFlow<List<Song>>(emptyList())
+    val queue = _queue.asStateFlow()
+
+    private val _currentIndex = MutableStateFlow(0)
+    val currentIndex = _currentIndex.asStateFlow()
+
+    private val _hasNext = MutableStateFlow(false)
+    val hasNext = _hasNext.asStateFlow()
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
@@ -39,16 +46,12 @@ class PlayerConnection(private val context: Context) {
     val error = _error.asStateFlow()
 
     private val listener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            _isPlaying.value = isPlaying
+        override fun onEvents(player: Player, events: Player.Events) {
+            refresh(player)
         }
 
-        override fun onPlaybackStateChanged(playbackState: Int) {
-            _isBuffering.value = playbackState == Player.STATE_BUFFERING
-        }
-
-        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-            _error.value = error.message
+        override fun onPlayerError(error: PlaybackException) {
+            _error.value = error.cause?.message ?: error.message
         }
     }
 
@@ -59,6 +62,7 @@ class PlayerConnection(private val context: Context) {
             .await()
         newController.addListener(listener)
         controller = newController
+        refresh(newController)
     }
 
     fun disconnect() {
@@ -67,37 +71,73 @@ class PlayerConnection(private val context: Context) {
         controller = null
     }
 
-    /** Resolves [song]'s stream and starts it playing, replacing whatever was queued. */
-    suspend fun play(song: Song) {
+    private fun refresh(player: Player) {
+        _queue.value = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toSong() }
+        _currentIndex.value = player.currentMediaItemIndex
+        _currentSong.value = player.currentMediaItem?.toSong()
+        _hasNext.value = player.hasNextMediaItem()
+        _isPlaying.value = player.isPlaying
+        _isBuffering.value = player.playbackState == Player.STATE_BUFFERING
+        // A track that started, or a recovery the service made on its own,
+        // makes the last error stale.
+        if (player.isPlaying) _error.value = null
+    }
+
+    /**
+     * Starts [song] on its own, replacing the queue. The service fills in
+     * radio after it.
+     */
+    fun play(song: Song) {
         val controller = controller ?: return
         _error.value = null
-        _isBuffering.value = true
-        try {
-            val url = StreamResolver.resolve(song.videoId)
-            val mediaItem = MediaItem.Builder()
-                .setMediaId(song.videoId)
-                .setUri(url)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(song.title)
-                        .setArtist(song.artist)
-                        .setArtworkUri(song.thumbnailUrl?.let { android.net.Uri.parse(it) })
-                        .build(),
-                )
-                .build()
-            _currentSong.value = song
-            controller.setMediaItem(mediaItem)
-            controller.prepare()
-            controller.play()
-        } catch (e: Exception) {
-            _isBuffering.value = false
-            _error.value = e.message ?: "Couldn't play ${song.title}"
-        }
+        controller.setMediaItem(song.toMediaItem())
+        controller.prepare()
+        controller.play()
+    }
+
+    /** Queues [song] right after the current track. */
+    fun playNext(song: Song) {
+        val controller = controller ?: return
+        if (controller.mediaItemCount == 0) return play(song)
+        controller.addMediaItem(controller.currentMediaItemIndex + 1, song.toMediaItem())
+    }
+
+    /** Queues [song] at the end. */
+    fun addToQueue(song: Song) {
+        val controller = controller ?: return
+        if (controller.mediaItemCount == 0) return play(song)
+        controller.addMediaItem(song.toMediaItem())
     }
 
     fun togglePlayPause() {
         val controller = controller ?: return
-        if (controller.isPlaying) controller.pause() else controller.play()
+        if (controller.isPlaying) {
+            controller.pause()
+        } else {
+            // After an error the player sits idle; play() alone won't restart it.
+            if (controller.playbackState == Player.STATE_IDLE) controller.prepare()
+            controller.play()
+        }
+    }
+
+    fun skipNext() {
+        controller?.seekToNext()
+    }
+
+    /** Restarts the current track, or goes back one if it has only just begun. */
+    fun skipPrevious() {
+        controller?.seekToPrevious()
+    }
+
+    fun playQueueItem(index: Int) {
+        val controller = controller ?: return
+        controller.seekToDefaultPosition(index)
+        controller.play()
+    }
+
+    fun removeQueueItem(index: Int) {
+        val controller = controller ?: return
+        if (index != controller.currentMediaItemIndex) controller.removeMediaItem(index)
     }
 
     fun seekTo(positionMs: Long) {

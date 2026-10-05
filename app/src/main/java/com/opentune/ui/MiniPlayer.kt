@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,7 +33,9 @@ fun MiniPlayer(
     song: Song,
     isPlaying: Boolean,
     isBuffering: Boolean,
+    hasNext: Boolean,
     onTogglePlayPause: () -> Unit,
+    onSkipNext: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -71,6 +74,9 @@ fun MiniPlayer(
                         contentDescription = if (isPlaying) "Pause" else "Play",
                     )
                 }
+            }
+            IconButton(onClick = onSkipNext, enabled = hasNext) {
+                Icon(Icons.Filled.SkipNext, contentDescription = "Next")
             }
         }
     }

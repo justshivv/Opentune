@@ -29,6 +29,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val searchState = _searchState.asStateFlow()
 
     val currentSong = player.currentSong
+    val queue = player.queue
+    val currentIndex = player.currentIndex
+    val hasNext = player.hasNext
     val isPlaying = player.isPlaying
     val isBuffering = player.isBuffering
     val playbackError = player.error
@@ -60,11 +63,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun play(song: Song) {
-        viewModelScope.launch { player.play(song) }
-    }
+    fun play(song: Song) = player.play(song)
+
+    fun playNext(song: Song) = player.playNext(song)
+
+    fun addToQueue(song: Song) = player.addToQueue(song)
 
     fun togglePlayPause() = player.togglePlayPause()
+
+    fun skipNext() = player.skipNext()
+
+    fun skipPrevious() = player.skipPrevious()
+
+    fun playQueueItem(index: Int) = player.playQueueItem(index)
+
+    fun removeQueueItem(index: Int) = player.removeQueueItem(index)
 
     override fun onCleared() {
         player.disconnect()

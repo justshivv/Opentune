@@ -39,6 +39,10 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        // Lets JVM tests run code that logs through android.util.Log.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 kotlin {
