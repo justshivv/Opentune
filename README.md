@@ -150,14 +150,30 @@ setting.
 Open the repository in Android Studio, or build from the command line:
 
 ```
-./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleDebug        # app/build/outputs/apk/debug/app-<abi>-debug.apk
+./gradlew assembleRelease      # app/build/outputs/apk/release/app-<abi>-release.apk
 ./gradlew testDebugUnitTest    # unit tests
+./gradlew lintDebug            # lint
 ```
 
-You need JDK 17 and an Android SDK with platform 37 (InnerTubeX is compiled
-against it; the app targets 36), set through `ANDROID_HOME` or
-`local.properties`. There's no release signing config; debug builds are
-signed with the local debug key.
+Each build makes one APK per processor type (`arm64-v8a` for most phones,
+`armeabi-v7a`, `x86_64`) and a `universal` one that runs anywhere. Release
+builds go through R8, which only removes unused code: nothing is renamed,
+so crash logs stay readable (see `app/proguard-rules.pro`).
+
+You need JDK 17 or newer (CI uses 21) and an Android SDK with platform 37
+(InnerTubeX is compiled against it; the app targets 36), set through
+`ANDROID_HOME` or `local.properties`.
+
+### CI and releases
+
+GitHub Actions builds, tests and lints every push (`.github/workflows/ci.yml`)
+and keeps the release APKs as an artifact. Pushing a tag such as `v0.2.0`
+builds signed APKs and publishes them as a GitHub release
+(`.github/workflows/release.yml`). Release signing uses the repository
+secrets `OPENTUNE_KEYSTORE_BASE64`, `OPENTUNE_KEYSTORE_PASSWORD`,
+`OPENTUNE_KEY_ALIAS` and `OPENTUNE_KEY_PASSWORD` when they're set, and the
+debug key otherwise.
 
 ## Project layout
 

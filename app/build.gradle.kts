@@ -14,22 +14,50 @@ android {
         applicationId = "com.opentune"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // A release key from the environment (CI secrets) when there is one;
+    // otherwise release builds are signed with the debug key so they still
+    // install. See .github/workflows/release.yml.
+    val releaseKeystore = System.getenv("OPENTUNE_KEYSTORE")?.let(::file)?.takeIf { it.exists() }
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("OPENTUNE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("OPENTUNE_KEY_ALIAS")
+                keyPassword = System.getenv("OPENTUNE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Off deliberately: stream resolution reaches for NewPipeExtractor,
-            // Ktor and kotlinx.serialization reflectively, none of which R8 can
-            // see without keep rules that still need writing and proving.
-            isMinifyEnabled = false
+            // Shrinking only: nothing renamed or optimized (see proguard-rules.pro),
+            // because stream resolution reaches NewPipe, Rhino, Ktor and others by
+            // reflection. Unused library code and resources go.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+        }
+    }
+
+    // One APK per processor type, so each is a third of the size, plus one
+    // that runs anywhere.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
         }
     }
     compileOptions {
