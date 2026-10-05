@@ -142,11 +142,11 @@ fun HomeScreen(
                     ErrorState(s.message, onRetry = { loader.reload() }, modifier = Modifier.padding(top = 24.dp))
                 }
                 is UiState.Success -> {
-                    itemsIndexed(s.data, key = { i, shelf -> "$i:${shelf.title}" }) { _, shelf ->
+                    itemsIndexed(s.data, key = { i, shelf -> "$i:${shelf.title}" }, contentType = { _, shelf -> shelfType(shelf) }) { _, shelf ->
                         HomeShelfView(shelf, onItemClick)
                     }
                     // The rest of Home, which arrives a page at a time after the first.
-                    itemsIndexed(more, key = { i, shelf -> "more$i:${shelf.title}" }) { _, shelf ->
+                    itemsIndexed(more, key = { i, shelf -> "more$i:${shelf.title}" }, contentType = { _, shelf -> shelfType(shelf) }) { _, shelf ->
                         HomeShelfView(shelf, onItemClick, Modifier.animateItem())
                     }
                 }
@@ -200,11 +200,17 @@ private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, on
     }
 }
 
+/** Songs-only shelves of four or more are laid out as quick picks. */
+private fun HomeShelf.isQuickPicks(): Boolean =
+    items.size >= 4 && items.all { it.videoId != null && it.browseId == null }
+
+/** Lets the list reuse a shelf scrolled away for the next one of the same kind. */
+private fun shelfType(shelf: HomeShelf): String = if (shelf.isQuickPicks()) "picks" else "shelf"
+
 @Composable
 fun HomeShelfView(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, modifier: Modifier = Modifier) {
-    val songsOnly = shelf.items.isNotEmpty() && shelf.items.all { it.videoId != null && it.browseId == null }
     Box(modifier) {
-        if (songsOnly && shelf.items.size >= 4) {
+        if (shelf.isQuickPicks()) {
             QuickPicks(shelf, onItemClick)
         } else {
             Shelf(title = shelf.title, subtitle = shelf.subtitle, items = shelf.items) { item ->
