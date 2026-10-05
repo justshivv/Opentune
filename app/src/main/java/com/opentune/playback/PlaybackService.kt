@@ -118,9 +118,10 @@ class PlaybackService : MediaSessionService() {
         val cached = CacheDataSource.Factory()
             .setCache(AudioCache.get(context))
             .setUpstreamDataSourceFactory(resolving)
-            .setCacheKeyFactory { spec -> videoIdOf(spec.uri) ?: spec.key ?: spec.uri.toString() }
+            .setCacheKeyFactory { spec -> cacheKeyOf(spec.uri) ?: spec.key ?: spec.uri.toString() }
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         val routing = SchemeRoutingDataSource.Factory(streams = cached, local = DefaultDataSource.Factory(context))
+        val sources = DefaultMediaSourceFactory(routing)
 
         val floatOutput = AppSettings.playback.value.floatOutput
         val renderers = object : DefaultRenderersFactory(context) {
@@ -148,7 +149,7 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         val player = ExoPlayer.Builder(context, renderers)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(routing))
+            .setMediaSourceFactory(sources)
             .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -192,6 +193,8 @@ class PlaybackService : MediaSessionService() {
         }
 
         scope.launch { runSleepTimer(player) }
+        crossfade = Crossfade(context, scope, sources, player).also { it.start() }
+        scope.launch { PlaybackRequests.upgrade.collect { scheduleUpgrade(force = true) } }
 
         audioManager = getSystemService(AudioManager::class.java)?.also { am ->
             am.registerAudioDeviceCallback(deviceCallback, null)
@@ -263,6 +266,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        crossfade?.release()
+        crossfade = null
         closeEffectSession()
         finishListen()
         loudnessEnhancer?.release()
@@ -283,7 +288,9 @@ class PlaybackService : MediaSessionService() {
     private fun resolveTrack(dataSpec: DataSpec): DataSpec {
         val videoId = videoIdOf(dataSpec.uri) ?: return dataSpec
         val url = try {
-            runBlocking { StreamResolver.resolve(videoId) }
+            runBlocking {
+                if (isUpgradedUri(dataSpec.uri)) StreamResolver.resolveUpgrade(videoId) else StreamResolver.resolve(videoId)
+            }
         } catch (e: IOException) {
             throw e
         } catch (e: Exception) {
@@ -329,6 +336,12 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             applyLoudness()
+            scheduleUpgrade()
+            // The same song on a better stream is not a new listen.
+            if (mediaItem != null && mediaItem.mediaId == swappingTo) {
+                swappingTo = null
+                return
+            }
             finishListen()
             startListen(mediaItem?.toSong(), mediaSession?.player?.isPlaying == true)
             // Only time starts meant to sound now, not a skip made while paused.
@@ -409,6 +422,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     // ---- Loudness ----------------------------------------------------------------
+
+    private var crossfade: Crossfade? = null
 
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var loudnessSession = C.AUDIO_SESSION_ID_UNSET
@@ -494,6 +509,48 @@ class PlaybackService : MediaSessionService() {
                 NerdStats.onLoudnessGain(null)
             }
         }.onFailure { Log.w(TAG, "Couldn't apply loudness gain", it) }
+    }
+
+    // ---- Quality upgrade -----------------------------------------------------------
+
+    private var upgradeJob: Job? = null
+
+    /** The song being swapped onto its better stream; its transition isn't a new listen. */
+    private var swappingTo: String? = null
+
+    /**
+     * A few seconds into each song, off the start path, asks
+     * [StreamResolver.findUpgrade] whether a clearly better stream exists,
+     * and swaps to it in place if so. Also run from the player's menu.
+     */
+    private fun scheduleUpgrade(force: Boolean = false) {
+        upgradeJob?.cancel()
+        if (!force && !AppSettings.playback.value.qualityUpgrade) return
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val item = player.currentMediaItem ?: return
+        val uri = item.localConfiguration?.uri ?: return
+        val id = videoIdOf(uri) ?: return
+        if (isUpgradedUri(uri)) return
+        upgradeJob = scope.launch {
+            if (!force) delay(UPGRADE_DELAY_MS)
+            val found = withContext(Dispatchers.IO) { runCatching { StreamResolver.findUpgrade(id, force) }.getOrDefault(false) }
+            if (!found || player.currentMediaItem?.mediaId != id) return@launch
+            val left = player.duration - player.currentPosition
+            if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) return@launch
+            swapToUpgrade(player, id)
+        }
+    }
+
+    private fun swapToUpgrade(player: ExoPlayer, id: String) {
+        val index = player.currentMediaItemIndex
+        val item = player.getMediaItemAt(index)
+        val position = player.currentPosition
+        swappingTo = id
+        // If the player updates the item in place there's no transition to clear this.
+        scope.launch { delay(2_000); if (swappingTo == id) swappingTo = null }
+        player.replaceMediaItem(index, item.buildUpon().setUri(streamUri(id, upgraded = true)).build())
+        if (player.currentMediaItemIndex != index || player.currentPosition < position - 1_000) player.seekTo(index, position)
+        Log.d(TAG, "Swapped $id to its upgraded stream at ${position}ms")
     }
 
     // ---- Latency -----------------------------------------------------------------
@@ -710,6 +767,8 @@ class PlaybackService : MediaSessionService() {
 
         /** Bounds on the loudness gain, in millibels: down 15 dB, up 3 dB at most. */
         const val LOUDNESS_RETRY_MS = 6_000L
+        const val UPGRADE_DELAY_MS = 8_000L
+        const val UPGRADE_MIN_REMAINING_MS = 20_000L
         const val FAR_BUFFER_MS = 15 * 60 * 1000
         const val FAR_BUFFER_BYTES = 8 * 1024 * 1024
         const val BACK_BUFFER_MS = 30_000

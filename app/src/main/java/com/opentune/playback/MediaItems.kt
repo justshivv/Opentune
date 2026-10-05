@@ -7,6 +7,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import com.opentune.data.download.Downloads
+import com.opentune.data.innertube.UpgradedTracks
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.model.Song
 
@@ -28,12 +29,26 @@ private const val EXTRA_ALBUM = "album"
 fun trackUri(videoId: String): Uri = when {
     LocalMusic.isLocal(videoId) -> LocalMusic.contentUri(videoId)
     else -> Downloads.fileFor(videoId)?.let(Uri::fromFile)
-        ?: Uri.Builder().scheme(TRACK_SCHEME).authority(TRACK_HOST).appendPath(videoId).build()
+        ?: streamUri(videoId, upgraded = UpgradedTracks.contains(videoId))
 }
+
+/** A YouTube track's queue URI; [upgraded] asks for the better stream found mid-play. */
+fun streamUri(videoId: String, upgraded: Boolean): Uri =
+    Uri.Builder().scheme(TRACK_SCHEME).authority(TRACK_HOST).appendPath(videoId)
+        .apply { if (upgraded) appendQueryParameter(QUALITY_PARAM, QUALITY_UPGRADED) }
+        .build()
 
 /** The video id a [trackUri] stands for, or null for any other URI. */
 fun videoIdOf(uri: Uri): String? =
     if (uri.scheme == TRACK_SCHEME && uri.authority == TRACK_HOST) uri.lastPathSegment else null
+
+fun isUpgradedUri(uri: Uri): Boolean = uri.getQueryParameter(QUALITY_PARAM) == QUALITY_UPGRADED
+
+/** The song cache key: the video id, kept apart for an upgraded copy. */
+fun cacheKeyOf(uri: Uri): String? = videoIdOf(uri)?.let { if (isUpgradedUri(uri)) "$it:hq" else it }
+
+private const val QUALITY_PARAM = "q"
+private const val QUALITY_UPGRADED = "hq"
 
 fun Song.toMediaItem(): MediaItem =
     MediaItem.Builder()

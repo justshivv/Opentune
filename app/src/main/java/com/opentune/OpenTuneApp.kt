@@ -17,6 +17,7 @@ import com.opentune.data.MusicRepository
 import com.opentune.data.history.History
 import com.opentune.ui.ScreenCache
 import com.opentune.data.innertube.InnerTubeXResolver
+import com.opentune.data.innertube.UpgradedTracks
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.settings.AppSettings
 
@@ -44,6 +45,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         AppSettings.init(this)
         History.init(this)
         LoudnessStore.init(this)
+        UpgradedTracks.init(this)
         LibraryStore.init(this)
         Downloads.init(this)
         AccountStore.init(this)

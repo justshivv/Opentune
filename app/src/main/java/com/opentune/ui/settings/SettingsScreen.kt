@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MusicOff
@@ -364,6 +365,24 @@ private fun settingsSections(
                 },
                 Entry("Preload upcoming songs", "latency fast skip instant buffer") {
                     ToggleRow("Preload upcoming songs", pb.preloadUpcoming, { v -> AppSettings.updatePlayback { it.copy(preloadUpcoming = v) } }, summary = "Next and previous songs start almost instantly. Uses a little extra data.", icon = Icons.Rounded.Speed)
+                },
+                Entry("Upgrade quality while playing", "better stream premium 256 opus swap") {
+                    ToggleRow("Upgrade quality while playing", pb.qualityUpgrade, { v -> AppSettings.updatePlayback { it.copy(qualityUpgrade = v) } }, summary = "If a clearly better stream turns up a few seconds in, switch to it without stopping", icon = Icons.Rounded.HighQuality)
+                },
+                Entry("Crossfade", "fade blend transition overlap") {
+                    SettingRow(
+                        "Crossfade",
+                        summary = if (pb.crossfadeSeconds == 0) "Off: songs play back to back" else "Blend each song into the next over ${pb.crossfadeSeconds} s",
+                        icon = Icons.Rounded.Animation,
+                        below = {
+                            Slider(
+                                value = pb.crossfadeSeconds.toFloat(),
+                                onValueChange = { v -> AppSettings.updatePlayback { it.copy(crossfadeSeconds = v.toInt()) } },
+                                valueRange = 0f..12f,
+                                steps = 11,
+                            )
+                        },
+                    )
                 },
                 Entry("Skip silence", "gaps") {
                     ToggleRow("Skip silence", pb.skipSilence, { v -> AppSettings.updatePlayback { it.copy(skipSilence = v) } }, summary = "Trim gaps longer than a second", icon = Icons.Rounded.SpaceBar)

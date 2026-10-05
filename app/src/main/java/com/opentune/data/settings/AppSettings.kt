@@ -151,6 +151,10 @@ data class PlaybackSettings(
     val playNextOnSwipe: Boolean = true,
     /** Buffer the next track and resolve its neighbours early, for instant skips. */
     val preloadUpcoming: Boolean = true,
+    /** Swap to a clearly better stream mid-song when one turns up. */
+    val qualityUpgrade: Boolean = true,
+    /** Overlap the end of a song with the start of the next; 0 is off. */
+    val crossfadeSeconds: Int = 0,
 )
 
 @Serializable

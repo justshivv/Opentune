@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.HighQuality
+import com.opentune.playback.PlaybackRequests
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MoreHoriz
@@ -407,6 +409,7 @@ fun PlayerLayout(
         if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })
         if (showMenu) {
             SongMenuSheet(current, onDismiss = { showMenu = false }) { close ->
+                MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
                 MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
                 MenuRow(Icons.Rounded.Tune, "Remix") { close(); showRemix = true }
             }

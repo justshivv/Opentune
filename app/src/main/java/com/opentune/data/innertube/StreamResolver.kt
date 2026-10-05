@@ -329,8 +329,60 @@ object StreamResolver {
         // real figure is ever known.
         NerdStats.onStreamPicked(videoId, stream.kbps)
         remember(videoId, stream.url)
+        served[videoId] = stream
         return stream.url
     }
+
+    // ---- Quality upgrade ------------------------------------------------------
+
+    /** The stream each track started on, so a better one can be recognised. */
+    private val served = ConcurrentHashMap<String, Stream>()
+
+    /** Better streams found while a track played, ready for the swap. */
+    private val upgrades = ConcurrentHashMap<String, Resolved>()
+
+    private fun Stream.score(): Double =
+        if ("opus" in mimeType.lowercase(Locale.ROOT)) kbps * OPUS_EFFICIENCY else kbps.toDouble()
+
+    /**
+     * Looks for a clearly better copy of [videoId] than the one it started on:
+     * the signed-in account's own formats (Premium's 256 kbps Opus and AAC
+     * only come that way) and, when the start was AAC, InnerTubeX's Opus.
+     * "Clearly" is [UPGRADE_MIN_GAIN] in AAC-equivalent kbps, so a swap is
+     * always one you can hear. Every candidate is probed like any stream.
+     *
+     * @return true when an upgrade is pinned for [resolveUpgrade].
+     */
+    suspend fun findUpgrade(videoId: String, force: Boolean = false): Boolean = withContext(TrackLog.about(videoId)) {
+        val current = served[videoId] ?: return@withContext false
+        if (upgrades[videoId]?.let { SystemClock.elapsedRealtime() - it.at < URL_TTL_MS } == true) return@withContext true
+        val maxKbps = AppSettings.effectiveAudioQuality.maxKbps
+        val candidates = buildList {
+            runCatching { authenticatedWebRemixStream(videoId, ::rankForPlayback) }.getOrNull()?.let(::add)
+            if ("opus" !in current.mimeType.lowercase(Locale.ROOT)) innerTubeXStream(videoId, maxKbps)?.let(::add)
+        }.filter { it.kbps <= maxKbps && it.url != current.url }
+        val best = candidates.maxByOrNull { it.score() } ?: return@withContext false
+        val gain = best.score() - current.score()
+        if (!force && gain < UPGRADE_MIN_GAIN || gain <= 0) return@withContext false
+        TrackLog.d(TAG, "upgrade for $videoId: ${current.kbps} kbps ${current.mimeType} -> ${best.kbps} kbps ${best.mimeType}")
+        upgrades[videoId] = Resolved(best.url, SystemClock.elapsedRealtime())
+        UpgradedTracks.add(videoId)
+        true
+    }
+
+    /**
+     * The URL for an upgraded track: the pinned one while it's fresh,
+     * otherwise a new search, otherwise the normal stream.
+     */
+    suspend fun resolveUpgrade(videoId: String): String {
+        upgrades[videoId]?.takeIf { SystemClock.elapsedRealtime() - it.at < URL_TTL_MS }?.let { return it.url }
+        if (served[videoId] == null) resolve(videoId)
+        if (findUpgrade(videoId, force = true)) upgrades[videoId]?.let { return it.url }
+        return resolve(videoId)
+    }
+
+    /** Kbps and codec the current stream started on, for the menu's "Upgrade quality" row. */
+    fun servedLabel(videoId: String): String? = served[videoId]?.let { "${it.kbps} kbps ${if ("opus" in it.mimeType) "Opus" else "AAC"}" }
 
     /**
      * A track this app cannot play, for a reason that will read the same in ten
@@ -398,6 +450,7 @@ object StreamResolver {
         standDownUntil.clear()
         refusalsByClient.clear()
         preferred = null
+        upgrades.clear()
         InnerTubeXResolver.onSessionChanged()
     }
 
@@ -464,12 +517,26 @@ object StreamResolver {
     /** The two ways to a stream that [resolveUncached] switches between. */
     enum class Engine(val label: String) { OWN("OpenTune"), INNERTUBEX("InnerTubeX") }
 
-    /** The engine that served the last track; the next one starts there. */
+    /**
+     * The engine the next track starts on. InnerTubeX by default, as it picks
+     * Opus and carries YouTube's loudness figure; after it fails, the walk
+     * leads until [ENGINE_RETRY_MS] has passed, then InnerTubeX gets its turn
+     * back.
+     */
     @Volatile
-    private var engine = Engine.OWN
+    private var engine = Engine.INNERTUBEX
+        get() {
+            if (field == Engine.OWN && SystemClock.elapsedRealtime() - switchedAt > ENGINE_RETRY_MS) field = Engine.INNERTUBEX
+            return field
+        }
+
+    private var switchedAt = 0L
 
     private fun onEngineWorked(e: Engine) {
-        if (engine != e) TrackLog.d(TAG, "switching to ${e.label}")
+        if (engine != e) {
+            TrackLog.d(TAG, "switching to ${e.label}")
+            switchedAt = SystemClock.elapsedRealtime()
+        }
         engine = e
         NerdStats.onEngine(e.label)
     }
@@ -1064,7 +1131,15 @@ object StreamResolver {
          */
         val isAac: Boolean get() = "mp4" in mimeType.lowercase(Locale.ROOT)
         val isOpus: Boolean get() = "opus" in mimeType.lowercase(Locale.ROOT)
+
+        /** Bitrate in AAC-equivalent terms: Opus matches AAC at about two thirds the rate. */
+        val qualityScore: Double get() = if (isOpus) kbps * OPUS_EFFICIENCY else kbps.toDouble()
     }
+
+    private const val OPUS_EFFICIENCY = 1.5
+
+    /** An upgrade has to gain this much, in AAC-equivalent kbps, to be worth a swap. */
+    private const val UPGRADE_MIN_GAIN = 64.0
 
     private fun audioFormats(response: JsonObject): List<Audio> {
         rememberLoudness(response)
@@ -1088,8 +1163,15 @@ object StreamResolver {
 
     private fun rememberLoudness(response: JsonObject) {
         val id = response["videoDetails"]?.jsonObject?.str("videoId") ?: return
+        // Some clients leave playerConfig out; the audio formats carry the
+        // same figure, which is where InnerTubeX looks next too.
         val db = response["playerConfig"]?.jsonObject?.get("audioConfig")?.jsonObject
-            ?.get("loudnessDb")?.jsonPrimitive?.doubleOrNull ?: return
+            ?.get("loudnessDb")?.jsonPrimitive?.doubleOrNull
+            ?: response["streamingData"]?.jsonObject?.get("adaptiveFormats")?.jsonArray
+                ?.map { it.jsonObject }
+                ?.firstOrNull { it.str("mimeType")?.startsWith("audio/") == true && it["loudnessDb"] != null }
+                ?.get("loudnessDb")?.jsonPrimitive?.doubleOrNull
+            ?: return
         keepLoudness(id, db)
     }
 
@@ -1134,7 +1216,11 @@ object StreamResolver {
     private fun rankByQuality(candidates: List<Audio>, maxKbps: Int): List<Audio> {
         val order = compareByDescending<Audio> { it.url != null }
         val (withinBudget, overBudget) = candidates.partition { it.kbps <= maxKbps }
-        val ranked = withinBudget.sortedWith(compareByDescending<Audio> { it.kbps }.then(order)) +
+        // Ranked by how good it sounds, not by the raw bitrate: Opus is the
+        // better codec, and YouTube's Opus is variable-rate, so its figure
+        // often reads a little under AAC 140's while sounding clearly better.
+        // AAC 256 (Premium's 141) still outranks Opus 160.
+        val ranked = withinBudget.sortedWith(compareByDescending<Audio> { it.qualityScore }.then(order)) +
             overBudget.sortedWith(compareBy<Audio> { it.kbps }.then(order))
         return if (signatureSolverBroken) ranked.sortedWith(order) else ranked
     }
@@ -1606,7 +1692,10 @@ object StreamResolver {
         // excludes that client variant, and the next track starts on our walk.
         InnerTubeXResolver.onRefused(url)?.let { videoId ->
             recent.remove(videoId)
-            if (engine == Engine.INNERTUBEX) engine = Engine.OWN
+            if (engine == Engine.INNERTUBEX) {
+                engine = Engine.OWN
+                switchedAt = SystemClock.elapsedRealtime()
+            }
             return
         }
         val client = PlayerClient.forStreamUrl(url)
@@ -1890,6 +1979,8 @@ object StreamResolver {
 
     /** See [resolveForDownload]: one walk to burn a stale visitor id, one to use its replacement. */
     private const val DOWNLOAD_ATTEMPTS = 2
+
+    private const val ENGINE_RETRY_MS = 10 * 60 * 1000L
 
     /** Client variants InnerTubeX may try per track before the other engine is asked. */
     private const val INNERTUBEX_ATTEMPTS = 3
