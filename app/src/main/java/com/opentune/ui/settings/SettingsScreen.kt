@@ -220,7 +220,7 @@ private fun settingsSections(
 ): List<Section> {
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
-    val downloads by Downloads.entries.collectAsState()
+    val done by Downloads.done.collectAsState(Downloads.doneNow())
     var downloadQualityDialog by remember { mutableStateOf(false) }
     var lyricsSourcesDialog by remember { mutableStateOf(false) }
     var lastFmDialog by remember { mutableStateOf(false) }
@@ -338,7 +338,6 @@ private fun settingsSections(
         AlertDialog(onDismissRequest = { message = null }, confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } }, text = { Text(m) })
     }
 
-    val done = downloads.values.filter { it.state == DownloadState.DONE }
     return listOf(
         Section(
             "Account",

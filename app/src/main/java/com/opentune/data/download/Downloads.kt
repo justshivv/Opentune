@@ -28,6 +28,9 @@ import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
@@ -76,6 +79,24 @@ object Downloads {
 
     private val _entries = MutableStateFlow<Map<String, DownloadEntry>>(emptyMap())
     val entries: StateFlow<Map<String, DownloadEntry>> = _entries.asStateFlow()
+
+    /**
+     * One song's entry, changing only when that song's does. A song row
+     * watches this rather than [entries], which changes every 256 KB of any
+     * download in progress.
+     */
+    fun entry(videoId: String): Flow<DownloadEntry?> = _entries.map { it[videoId] }.distinctUntilChanged()
+
+    /** What [entry] holds right now, to start from. */
+    fun entryNow(videoId: String): DownloadEntry? = _entries.value[videoId]
+
+    /** Finished downloads; progress on others leaves it alone. */
+    val done: Flow<List<DownloadEntry>> = _entries.map(::finished).distinctUntilChanged()
+
+    /** What [done] holds right now, to start from without a blank first frame. */
+    fun doneNow(): List<DownloadEntry> = finished(_entries.value)
+
+    private fun finished(m: Map<String, DownloadEntry>) = m.values.filter { it.state == DownloadState.DONE }
 
     @OptIn(FlowPreview::class)
     fun init(context: Context) {

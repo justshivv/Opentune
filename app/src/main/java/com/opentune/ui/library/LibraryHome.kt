@@ -1,5 +1,6 @@
 package com.opentune.ui.library
 
+import com.opentune.ui.ScreenCache
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -87,12 +88,14 @@ class LibraryNav(
     val browse: (String) -> Unit,
 )
 
+private const val YT_PLAYLISTS = "library:ytPlaylists"
+
 @Composable
 fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: LibraryNav) {
     val records by History.records.collectAsState()
     val liked by LibraryStore.liked.collectAsState()
     val playlists by LibraryStore.playlists.collectAsState()
-    val downloads by Downloads.entries.collectAsState()
+    val finished by Downloads.done.collectAsState(Downloads.doneNow())
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val recents = remember(records) { History.recents(records, 30) }
@@ -101,13 +104,23 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
     val year = remember { Calendar.getInstance().get(Calendar.YEAR) }
     val summary = remember(records) { History.replay(records, yearStart) }
-    var ytPlaylists by remember { mutableStateOf<List<ShelfItem>>(emptyList()) }
+    // Starts from the last copy, so coming back doesn't drop the list and
+    // shift everything under the restored scroll position.
+    @Suppress("UNCHECKED_CAST")
+    var ytPlaylists by remember { mutableStateOf(ScreenCache.get(YT_PLAYLISTS)?.first as? List<ShelfItem> ?: emptyList()) }
     LaunchedEffect(signedIn) {
-        ytPlaylists = if (signedIn) runCatching { MusicRepository.libraryPlaylists() }.getOrDefault(emptyList()) else emptyList()
+        ytPlaylists = if (signedIn) {
+            runCatching { MusicRepository.libraryPlaylists() }.getOrNull()
+                ?.also { ScreenCache.put(YT_PLAYLISTS, it) }
+                ?: ytPlaylists
+        } else {
+            ScreenCache.put(YT_PLAYLISTS, emptyList<ShelfItem>())
+            emptyList()
+        }
     }
     var naming by remember { mutableStateOf(false) }
     if (naming) NameDialog("New playlist", "", onDismiss = { naming = false }) { name -> naming = false; nav.playlist(LibraryStore.createPlaylist(name)) }
-    val doneCount = downloads.values.count { it.state == DownloadState.DONE }
+    val doneCount = finished.size
 
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item {

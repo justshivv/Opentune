@@ -1,5 +1,14 @@
 package com.opentune.ui.player
 
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.os.Build
@@ -52,6 +61,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
@@ -62,11 +72,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.opentune.data.lyrics.LyricLine
 import com.opentune.data.lyrics.Lyrics
@@ -140,7 +145,9 @@ private fun PlainLyrics(text: String, source: String, note: String? = "These lyr
 private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (Long) -> Unit, blur: Boolean, source: String) {
     val animation = AppSettings.ui.collectAsState().value.lyricsAnimation
     val listState = rememberLazyListState()
-    val active by remember(lines) { derivedStateOf { lines.activeIndex(position()) } }
+    // The position function changes with the lyrics offset; read the latest.
+    val pos by rememberUpdatedState(position)
+    val active by remember(lines) { derivedStateOf { lines.activeIndex(pos()) } }
     var following by remember { mutableStateOf(true) }
     var autoScrolling by remember { mutableStateOf(false) }
 
@@ -174,7 +181,7 @@ private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (
         ) {
             item(key = "intro") {
                 val firstStart = lines.firstOrNull()?.startMs ?: 0L
-                val waiting by remember(firstStart) { derivedStateOf { firstStart > 2_500 && position() < firstStart - 300 } }
+                val waiting by remember(firstStart) { derivedStateOf { firstStart > 2_500 && pos() < firstStart - 300 } }
                 IntroDots(visible = waiting)
             }
             itemsIndexed(lines, key = { i, line -> "$i:${line.startMs}" }) { i, line ->
@@ -274,11 +281,26 @@ private fun LyricLineView(
     )
     val base = lyricsStyle()
     val style = if (motion.glow && isActive) base.copy(shadow = Shadow(bright.copy(alpha = 0.55f), blurRadius = 24f)) else base
+    val text = remember(line) { if (line.words.isEmpty()) line.text else line.words.joinToString("") { it.text } }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    // Where each word sits, worked out once per layout rather than every frame.
+    val wordBoxes = remember(layout, line) {
+        val l = layout ?: return@remember emptyList()
+        var start = 0
+        line.words.map { w ->
+            val end = (start + w.text.length).coerceAtMost(text.length)
+            val box = if (end > start) l.getPathForRange(start, end).getBounds() else Rect.Zero
+            start = end
+            box
+        }
+    }
+    val sweep = isActive && line.words.isNotEmpty()
 
     Text(
-        text = if (isActive) litWords(line, position(), dim, bright) else AnnotatedString(line.text),
+        text = text,
         style = style,
-        color = dim,
+        color = if (isActive) bright else dim,
+        onTextLayout = { layout = it },
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
@@ -290,24 +312,45 @@ private fun LyricLineView(
                 this.alpha = alpha
                 translationX = shift.toPx()
                 transformOrigin = TransformOrigin(0f, 0.5f)
+                // The sweep below cuts into the text's own pixels, so it needs a layer of its own.
+                if (sweep) compositingStrategy = CompositingStrategy.Offscreen
             }
-            .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blur > 0.dp) Modifier.blur(blur) else Modifier),
+            .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blur > 0.dp) Modifier.blur(blur) else Modifier)
+            .then(if (sweep) Modifier.drawWithContent { drawContent(); sweepWords(line, wordBoxes, position()) } else Modifier),
     )
 }
 
 /**
- * The active line with each word lit by how far through it the song is, so
- * the highlight sweeps along instead of jumping a word at a time.
+ * Lights the active line word by word, the highlight sweeping along each
+ * word as it's sung. The text is drawn bright; what isn't reached yet is
+ * faded back to the dim lyric colour. This happens at draw time, so the
+ * line isn't rebuilt and measured again every frame.
  */
-private fun litWords(line: LyricLine, positionMs: Long, dim: Color, bright: Color): AnnotatedString =
-    buildAnnotatedString {
-        line.words.forEach { word ->
-            val span = (word.endMs - word.startMs).coerceAtLeast(1)
-            val progress = ((positionMs - word.startMs).toFloat() / span).coerceIn(0f, 1f)
-            withStyle(SpanStyle(color = lerp(dim, bright, easeOut(progress)))) { append(word.text) }
-        }
-        if (line.words.isEmpty()) append(line.text)
+private fun DrawScope.sweepWords(line: LyricLine, boxes: List<Rect>, positionMs: Long) {
+    val feather = 14.dp.toPx()
+    line.words.forEachIndexed { i, word ->
+        val box = boxes.getOrNull(i) ?: return@forEachIndexed
+        if (box.isEmpty) return@forEachIndexed
+        val span = (word.endMs - word.startMs).coerceAtLeast(1)
+        val t = easeOut(((positionMs - word.startMs).toFloat() / span).coerceIn(0f, 1f))
+        if (t >= 1f) return@forEachIndexed
+        val litX = box.left + (box.width + feather) * t
+        drawRect(
+            brush = Brush.horizontalGradient(
+                0f to Color.Transparent,
+                1f to UNLIT,
+                startX = litX - feather,
+                endX = litX,
+            ),
+            topLeft = Offset(box.left, box.top),
+            size = Size(box.width, box.height),
+            blendMode = BlendMode.DstOut,
+        )
     }
+}
+
+/** Cuts bright text down to the dim lyric colour's 0.32 alpha. */
+private val UNLIT = Color.Black.copy(alpha = 0.68f)
 
 private fun easeOut(t: Float): Float = 1f - (1f - t) * (1f - t)
 

@@ -512,7 +512,8 @@ fun MiniPlayer(
 /** A circle that fills clockwise from the top as [progress] goes 0 to 1. */
 @Composable
 private fun ProgressRing(progress: () -> Float, color: Color, track: Color, stroke: Dp, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
+    // Its own layer: the ring redraws as the song plays, the glass under it needn't.
+    Canvas(modifier.graphicsLayer()) {
         val w = stroke.toPx()
         val inset = w / 2
         val arcSize = Size(size.width - w, size.height - w)

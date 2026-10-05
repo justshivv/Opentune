@@ -72,6 +72,7 @@ import com.opentune.ui.rememberLoader
 import com.opentune.ui.type
 
 /** Callbacks every track list needs. */
+@androidx.compose.runtime.Immutable
 class SongActions(
     val currentVideoId: String?,
     val isPlaying: Boolean,

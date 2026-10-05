@@ -1,5 +1,8 @@
 package com.opentune.ui.player
 
+import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.AnimatedContent
@@ -161,7 +164,12 @@ class PlayerActions(
 )
 
 @Composable
-fun PlayerScreen(vm: PlayerViewModel, onCollapse: () -> Unit) {
+fun PlayerScreen(
+    vm: PlayerViewModel,
+    onCollapse: () -> Unit,
+    /** True while the player sits fully open, not being dragged down. */
+    onCovering: (Boolean) -> Unit = {},
+) {
     val song by vm.currentSong.collectAsState()
     val current = song ?: return
     val theme by AppSettings.theme.collectAsState()
@@ -201,6 +209,7 @@ fun PlayerScreen(vm: PlayerViewModel, onCollapse: () -> Unit) {
         position = rememberPlaybackPosition(vm),
         buffered = vm::bufferedPositionMs,
         actions = actions,
+        onCovering = onCovering,
     )
 }
 
@@ -213,6 +222,7 @@ fun PlayerLayout(
     buffered: () -> Long,
     actions: PlayerActions,
     initialLyrics: Boolean = false,
+    onCovering: (Boolean) -> Unit = {},
 ) {
     val current = state.song
     val theme = state.theme
@@ -239,6 +249,10 @@ fun PlayerLayout(
 
     // Drag down anywhere outside the lyrics and queue lists to close.
     val dragOffset = remember { Animatable(0f) }
+    val covering by rememberUpdatedState(onCovering)
+    LaunchedEffect(dragOffset) {
+        snapshotFlow { dragOffset.value == 0f }.distinctUntilChanged().collect { covering(it) }
+    }
     val scope = rememberCoroutineScope()
     val dismissPx = with(LocalDensity.current) { 140.dp.toPx() }
     val backdrop = rememberLayerBackdrop()

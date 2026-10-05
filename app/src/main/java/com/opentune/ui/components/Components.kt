@@ -1,5 +1,9 @@
 package com.opentune.ui.components
 
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.LinearEasing
@@ -141,7 +145,8 @@ fun SongListItem(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val hasMenu = onPlayNext != null || onAddToQueue != null || LocalSongMenu.current != null
-    val downloads by Downloads.entries.collectAsState()
+    val download by remember(song.videoId) { Downloads.entry(song.videoId) }
+        .collectAsState(Downloads.entryNow(song.videoId))
     if (menuOpen) SongMenuSheet(song, onDismiss = { menuOpen = false })
     val playback by AppSettings.playback.collectAsState()
     val onSwipe = if (playback.playNextOnSwipe) onPlayNext else onAddToQueue
@@ -226,8 +231,7 @@ fun SongListItem(
                 )
             }
             trailing()
-            val download = downloads[song.videoId]
-            if (download != null) DownloadBadge(download.state, download.progress)
+            download?.let { DownloadBadge(it.state, it.progress) }
             if (hasMenu) {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(Icons.Filled.MoreVert, contentDescription = "More options")
@@ -353,31 +357,36 @@ fun <T> Shelf(
 /** Three bars bouncing out of phase; still when paused. */
 @Composable
 fun NowPlayingBars(playing: Boolean, color: Color, modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "bars")
-    val heights = listOf(0, 180, 360).map { delay ->
-        transition.animateFloat(
-            initialValue = 0.25f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                tween(durationMillis = 420, delayMillis = delay, easing = LinearEasing),
-                RepeatMode.Reverse,
-            ),
-            label = "bar",
-        )
-    }
-    Row(
-        modifier = modifier.size(20.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        heights.forEach { h ->
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight(if (playing) h.value else 0.3f)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(color),
+    if (playing) {
+        val transition = rememberInfiniteTransition(label = "bars")
+        val heights = listOf(0, 180, 360).map { delay ->
+            transition.animateFloat(
+                initialValue = 0.25f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    tween(durationMillis = 420, delayMillis = delay, easing = LinearEasing),
+                    RepeatMode.Reverse,
+                ),
+                label = "bar",
             )
+        }
+        Bars(color, modifier) { i -> heights[i].value }
+    } else {
+        // Paused: still bars, and no animation asking for frames.
+        Bars(color, modifier) { 0.3f }
+    }
+}
+
+/** Three bars drawn at the given heights; read while drawing, so only the draw repeats. */
+@Composable
+private fun Bars(color: Color, modifier: Modifier, height: (Int) -> Float) {
+    Canvas(modifier.size(20.dp)) {
+        val gap = 3.dp.toPx()
+        val w = (size.width - gap * 2) / 3
+        val r = CornerRadius(2.dp.toPx())
+        repeat(3) { i ->
+            val h = size.height * height(i)
+            drawRoundRect(color, Offset(i * (w + gap), size.height - h), Size(w, h), r)
         }
     }
 }
