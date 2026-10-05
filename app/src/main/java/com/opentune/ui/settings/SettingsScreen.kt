@@ -1,6 +1,14 @@
 package com.opentune.ui.settings
 
 import android.content.Context
+import kotlin.math.roundToInt
+import com.opentune.data.LogExport
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.FormatSize
+import androidx.compose.material.icons.rounded.BatteryChargingFull
+import android.provider.Settings
+import android.os.PowerManager
+import android.content.Intent
 import android.media.AudioManager
 import android.os.Build
 import android.text.format.Formatter
@@ -355,6 +363,18 @@ private fun settingsSections(
                         )
                     })
                 },
+                Entry("System audio effects", "dolby atmos soundalive equalizer device effects") {
+                    ToggleRow("System audio effects", pb.systemEffects, { v -> AppSettings.updatePlayback { it.copy(systemEffects = v) } }, summary = "Let the phone's own effects (Dolby, SoundAlive, system equalizer) process playback", icon = Icons.Rounded.SurroundSound)
+                },
+                Entry("Background playback", "battery optimization doze killed stops samsung") {
+                    val ignoring = remember { context.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(context.packageName) == true }
+                    NavRow(
+                        "Background playback",
+                        { runCatching { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } },
+                        summary = if (ignoring) "Unrestricted: music keeps playing with the screen off" else "Restricted: if playback stops in the background, set OpenTune to Unrestricted",
+                        icon = Icons.Rounded.BatteryChargingFull,
+                    )
+                },
                 Entry("Prefer USB DAC", "external dac usb audio") {
                     ToggleRow("Prefer USB DAC", pb.preferUsbDac, { v -> AppSettings.updatePlayback { it.copy(preferUsbDac = v) } }, summary = "Send audio to a USB DAC whenever one is plugged in", icon = Icons.Rounded.Usb)
                 },
@@ -489,6 +509,21 @@ private fun settingsSections(
                 Entry("Synced lyrics", "karaoke words") {
                     ToggleRow("Synced lyrics", ui.syncedLyrics, { v -> AppSettings.updateUi { it.copy(syncedLyrics = v) } }, summary = "Lights up the words as they're sung", icon = Icons.Rounded.Lyrics)
                 },
+                Entry("Lyrics text size", "font bigger smaller") {
+                    SettingRow(
+                        "Lyrics text size",
+                        summary = "${(ui.lyricsTextScale * 100).roundToInt()}%" + if (ui.lyricsTextScale == 1f) " · Standard" else "",
+                        icon = Icons.Rounded.FormatSize,
+                        below = {
+                            Slider(
+                                value = ui.lyricsTextScale,
+                                onValueChange = { v -> AppSettings.updateUi { it.copy(lyricsTextScale = (v * 20).roundToInt() / 20f) } },
+                                valueRange = 0.7f..1.5f,
+                                steps = 15,
+                            )
+                        },
+                    )
+                },
                 Entry("Blur unfocused lyrics", "spotlight") {
                     ToggleRow("Blur unfocused lyrics", ui.blurLyrics, { v -> AppSettings.updateUi { it.copy(blurLyrics = v) } }, summary = "Keeps the spotlight on the current line", icon = Icons.Rounded.BlurOn)
                 },
@@ -604,6 +639,17 @@ private fun settingsSections(
         Section(
             "Advanced",
             listOf(
+                Entry("Export diagnostics", "log share troubleshooting bug report") {
+                    NavRow("Export diagnostics", {
+                        scope.launch {
+                            val log = LogExport.recent()
+                            val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                                .putExtra(Intent.EXTRA_SUBJECT, "OpenTune ${BuildConfig.VERSION_NAME} log")
+                                .putExtra(Intent.EXTRA_TEXT, log)
+                            context.startActivity(Intent.createChooser(send, "Share log"))
+                        }
+                    }, summary = "Share this app's recent log for troubleshooting", icon = Icons.Rounded.BugReport)
+                },
                 Entry("Show stats for nerds", "codec bitrate sample rate debug") {
                     ToggleRow("Show stats for nerds", ui.statsForNerds, { v -> AppSettings.updateUi { it.copy(statsForNerds = v) } }, summary = "Codec, bitrate and sample rate under the seek bar", icon = Icons.Rounded.Info)
                 },

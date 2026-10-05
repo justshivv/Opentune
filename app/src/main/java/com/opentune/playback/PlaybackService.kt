@@ -194,6 +194,9 @@ class PlaybackService : MediaSessionService() {
         }
 
         scope.launch { runSleepTimer(player) }
+        scope.launch {
+            AppSettings.playback.map { it.systemEffects }.distinctUntilChanged().collect { openEffectSession(player.audioSessionId) }
+        }
         crossfade = Crossfade(context, scope, sources, player).also { it.start() }
         scope.launch { PlaybackRequests.upgrade.collect { scheduleUpgrade(force = true) } }
 
@@ -447,6 +450,7 @@ class PlaybackService : MediaSessionService() {
     private var effectSession = C.AUDIO_SESSION_ID_UNSET
 
     private fun openEffectSession(session: Int) {
+        if (!AppSettings.playback.value.systemEffects) return closeEffectSession()
         if (session == C.AUDIO_SESSION_ID_UNSET || session == effectSession) return
         closeEffectSession()
         effectSession = session

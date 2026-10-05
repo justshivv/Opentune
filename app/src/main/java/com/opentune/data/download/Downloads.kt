@@ -18,6 +18,7 @@ import androidx.work.workDataOf
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
 import com.opentune.data.innertube.StreamResolver
+import com.opentune.data.lyrics.LyricsRepository
 import com.opentune.data.library.SongRef
 import com.opentune.data.model.PLAYER_ART_PX
 import com.opentune.data.model.Song
@@ -108,6 +109,10 @@ object Downloads {
 
     fun loudnessFor(videoId: String): Double? = _entries.value[videoId]?.loudnessDb
 
+    /** Where a downloaded song's lyrics are kept, if it's downloaded. */
+    fun lyricsFileFor(videoId: String): File? =
+        if (_entries.value[videoId]?.state == DownloadState.DONE) dir?.let { File(it, "$videoId.lyrics.json") } else null
+
     fun enqueue(context: Context, song: Song) {
         if (song.videoId.startsWith("local:")) return
         val existing = _entries.value[song.videoId]
@@ -128,6 +133,7 @@ object Downloads {
             e.path?.let { File(it).delete() }
             e.artPath?.let { File(it).delete() }
             File(dir, "$videoId.part").delete()
+            File(dir, "$videoId.lyrics.json").delete()
         }
         _entries.value = _entries.value - videoId
     }
@@ -170,6 +176,10 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
                     state = DownloadState.DONE, progress = 1f, path = target.path, artPath = art?.path,
                     bytes = target.length(), loudnessDb = StreamResolver.loudnessDbFor(id),
                 )
+            }
+            // Lyrics too, so they show offline; a miss doesn't fail the download.
+            runCatching {
+                LyricsRepository.saveOffline(id, entry.song.title, entry.song.artist, parseDuration(entry.song.durationText))
             }
             Result.success()
         } catch (e: CancellationException) {
@@ -244,6 +254,11 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             ForegroundInfo(NOTIFICATION_ID, notification)
         }
     }
+
+    /** "3:45" or "1:02:03" in milliseconds, or 0. */
+    private fun parseDuration(text: String?): Long =
+        text?.split(':')?.mapNotNull { it.trim().toLongOrNull() }?.takeIf { it.isNotEmpty() }
+            ?.fold(0L) { acc, part -> acc * 60 + part }?.times(1000) ?: 0L
 
     companion object {
         const val KEY_ID = "videoId"

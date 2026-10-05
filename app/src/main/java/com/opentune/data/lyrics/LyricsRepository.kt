@@ -4,7 +4,9 @@ import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.local.LocalMusic
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import com.opentune.data.download.Downloads
 import com.opentune.data.settings.LyricsSource
 import com.opentune.data.settings.AppSettings
 import kotlin.math.abs
@@ -41,7 +43,23 @@ object LyricsRepository {
     private val json = Json { ignoreUnknownKeys = true }
     private val cache = ConcurrentHashMap<String, Lyrics?>()
 
+    /** Lyrics saved with a download, so they show offline. */
+    private fun offlineFile(videoId: String): File? = Downloads.lyricsFileFor(videoId)
+
+    private fun readOffline(videoId: String): Lyrics? =
+        offlineFile(videoId)?.takeIf { it.exists() }?.let { f ->
+            runCatching { json.decodeFromString(Lyrics.serializer(), f.readText()) }.getOrNull()
+        }
+
+    /** Fetches and keeps the lyrics for a downloaded song; called by the download job. */
+    suspend fun saveOffline(videoId: String, title: String, artist: String, durationMs: Long) {
+        val f = offlineFile(videoId) ?: return
+        val found = lyricsFor(videoId, title, artist, durationMs) ?: return
+        withContext(Dispatchers.IO) { runCatching { f.writeText(json.encodeToString(Lyrics.serializer(), found)) } }
+    }
+
     suspend fun lyricsFor(videoId: String, title: String, artist: String, durationMs: Long): Lyrics? {
+        withContext(Dispatchers.IO) { readOffline(videoId) }?.let { return it }
         val settings = AppSettings.lyrics.value
         val key = "$videoId|${settings.ordered.filter { it.enabled }.joinToString(",") { it.source.name }}|${settings.preferWordSynced}"
         if (cache.containsKey(key)) return cache[key]

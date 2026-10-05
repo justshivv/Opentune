@@ -224,6 +224,7 @@ fun PlayerLayout(
     var showMenu by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
     var showOffset by remember { mutableStateOf(false) }
+    var showSignal by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val clipboard = remember { context.getSystemService(ClipboardManager::class.java) }
     // Lyrics run on their own clock, shifted by this song's offset.
@@ -382,7 +383,9 @@ fun PlayerLayout(
                 }
                 Spacer(Modifier.height(8.dp))
                 SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo)
-                if (state.ui.statsForNerds) NerdStatsLine(state.audioFormat)
+                if (state.ui.statsForNerds) {
+                    Box(Modifier.clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
+                }
                 PlayerControls(
                     isPlaying = state.isPlaying,
                     isBuffering = state.isBuffering,
@@ -431,6 +434,7 @@ fun PlayerLayout(
                 onDismiss = { showMenu = false },
                 top = { close -> MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() } },
                 tools = { close ->
+                    MenuRow(Icons.Rounded.GraphicEq, "Signal path") { close(); showSignal = true }
                     MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
                     MenuRow(Icons.Rounded.Tune, "Lyrics offset") { close(); showOffset = true }
                     MenuRow(Icons.Rounded.GraphicEq, "Remix") { close(); showRemix = true }
@@ -448,6 +452,7 @@ fun PlayerLayout(
             )
         }
         if (showOffset) LyricsOffsetDialog(current.videoId, onDismiss = { showOffset = false })
+        if (showSignal) SignalPathDialog(state.audioFormat, onDismiss = { showSignal = false })
     }
 }
 
