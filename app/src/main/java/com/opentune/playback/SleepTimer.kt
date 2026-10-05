@@ -30,3 +30,14 @@ object SleepTimer {
         _state.value = State.Off
     }
 }
+
+/** Requests from the UI that the service carries out directly (same process). */
+object PlaybackRequests {
+    private val _upgrade = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val upgrade: kotlinx.coroutines.flow.SharedFlow<Unit> = _upgrade
+
+    /** Look for a better stream for the current song now, and swap if one exists. */
+    fun upgradeQuality() {
+        _upgrade.tryEmit(Unit)
+    }
+}

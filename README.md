@@ -10,15 +10,22 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
 
 ### Listening
 
-- **Two stream engines that switch on their own.** OpenTune's own client
-  walk and [InnerTubeX](https://github.com/MetrolistGroup/innertubex). Each
-  track starts on whichever engine served the last one and falls back to
-  the other, with NewPipeExtractor as the last resort. Every stream URL is
+- **Two stream engines that switch on their own.**
+  [InnerTubeX](https://github.com/MetrolistGroup/innertubex) leads and
+  OpenTune's own client walk backs it up; after a failure the walk leads
+  for ten minutes, then InnerTubeX gets its turn back. NewPipeExtractor is
+  the last resort. Every stream URL is
   test-fetched before playback, so a dead link fails fast instead of
   spinning. Stats for nerds shows which engine served the track.
-- **Best audio by default.** The highest-bitrate stream YouTube offers
-  (Opus around 160 kbps, or 256 kbps where the account gets it), on Wi-Fi
-  and mobile data alike, with a lower ceiling available per network.
+- **Best audio by default.** Streams are ranked by how they sound, not by
+  raw bitrate, so Opus wins over AAC at a similar rate, on Wi-Fi and mobile
+  data alike, with a lower ceiling available per network.
+- **Quality upgrade.** A few seconds into a song, OpenTune looks for a
+  clearly better copy (your Premium account's 256 kbps streams, or Opus
+  when the song started on AAC) and switches to it without stopping. The
+  player's "…" menu has "Upgrade quality" to ask on demand.
+- **Crossfade** from 1 to 12 seconds, with equal-power curves so the blend
+  stays level. Off by default.
 - **One steady volume.** Loudness normalization uses YouTube's own
   measurement of each song. Figures are kept on the device, so songs played
   from the cache or from downloads get the same level as fresh ones.
@@ -75,14 +82,16 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
 - **Quick screens.** Home opens on the last copy saved while the fresh one
   loads; pages you've visited and searches you've made come back at once
   and refresh in the background.
+- **iOS-style bounce** at the ends of every list.
 - **Themes:** light, dark or system, Material You, accent colors, palette
   styles, pure black, color from artwork, and reduced motion and blur.
 
 YouTube's audio is lossy, so there's no lossless or Dolby Atmos stream
-option.
+option. OpenTune only plays YouTube's own streams: it doesn't pull from
+JioSaavn or from lossless "addon" servers.
 
-Not built yet: crossfade, Listen Together, Last.fm, lyric translation and
-an in-app language setting.
+Not built yet: Listen Together, Last.fm, lyric translation and an in-app
+language setting.
 
 ## Building
 
@@ -105,7 +114,8 @@ app/src/main/java/com/opentune/
   data/innertube/   Innertube client and parser, StreamResolver (engine switch),
                     InnerTubeXResolver, PoToken WebView
   data/             account, downloads, library, history, lyrics, loudness, settings
-  playback/         PlaybackService (ExoPlayer, cache, loudness, sleep timer), DSP
+  playback/         PlaybackService (ExoPlayer, cache, loudness, upgrade, sleep timer),
+                    Crossfade, DSP
   ui/               Compose screens: home, explore, search, library, player, settings
 ```
 

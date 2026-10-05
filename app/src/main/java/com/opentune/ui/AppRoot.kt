@@ -39,6 +39,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.LocalOverscrollFactory
+import com.opentune.ui.components.RubberBandOverscrollFactory
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -150,7 +152,12 @@ fun AppRoot(vm: PlayerViewModel) {
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val content = PaddingValues(bottom = navInset + CHROME_TAB_HEIGHT + 24.dp + if (song != null) CHROME_MINI_HEIGHT + 8.dp else 0.dp)
 
-    CompositionLocalProvider(LocalHazeState provides haze, LocalSongMenu provides songMenu) {
+    CompositionLocalProvider(
+        LocalHazeState provides haze,
+        LocalSongMenu provides songMenu,
+        // iOS-style rubber band at the ends of every list.
+        LocalOverscrollFactory provides RubberBandOverscrollFactory,
+    ) {
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier.fillMaxSize()
