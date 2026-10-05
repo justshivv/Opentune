@@ -11,6 +11,11 @@ import com.opentune.data.library.LibraryStore
 import com.opentune.data.UpdateCheck
 import com.opentune.data.sponsorblock.SponsorBlock
 import com.opentune.data.settings.PlayerStyle
+import com.opentune.data.releases.NewReleases
+import com.opentune.data.spotify.Spotify
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.core.net.toUri
@@ -160,9 +165,10 @@ fun SettingsScreen(
     onOpenReplay: () -> Unit,
     onSignIn: () -> Unit = {},
     onOpenDownloads: () -> Unit = {},
+    onOpenSpotify: () -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onSignIn, onOpenDownloads)
+    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onSignIn, onOpenDownloads, onOpenSpotify)
     val q = query.trim()
     val visible = sections.mapNotNull { s ->
         val matches = if (q.isEmpty()) s.entries else s.entries.filter {
@@ -225,6 +231,7 @@ private fun settingsSections(
     onOpenReplay: () -> Unit,
     onSignIn: () -> Unit,
     onOpenDownloads: () -> Unit,
+    onOpenSpotify: () -> Unit,
 ): List<Section> {
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
@@ -237,6 +244,10 @@ private fun settingsSections(
     var sponsorBlockDialog by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<UpdateCheck.Release?>(null) }
     var playerStyleDialog by remember { mutableStateOf(false) }
+    var followedDialog by remember { mutableStateOf(false) }
+    var spotifyDialog by remember { mutableStateOf(false) }
+    val spotify by Spotify.account.collectAsState()
+    val followedArtists by NewReleases.followed.collectAsState()
     val listenBrainz by ListenBrainz.account.collectAsState()
     val listensWaiting by ListenBrainz.queued.collectAsState()
     val musicServer by Subsonic.server.collectAsState()
@@ -307,6 +318,8 @@ private fun settingsSections(
     if (listenBrainzDialog) ListenBrainzDialog(onDismiss = { listenBrainzDialog = false })
     if (sponsorBlockDialog) SponsorBlockDialog(onDismiss = { sponsorBlockDialog = false })
     update?.let { UpdateDialog(it, onDismiss = { update = null }) }
+    if (followedDialog) FollowedArtistsDialog(onDismiss = { followedDialog = false })
+    if (spotifyDialog) SpotifyDialog(onDismiss = { spotifyDialog = false })
     if (playerStyleDialog) {
         ChoiceDialog(
             title = "Player layout",
@@ -631,6 +644,26 @@ private fun settingsSections(
             ),
         ),
         Section(
+            "New releases",
+            listOf(
+                Entry("New-release alerts", "new release album single notify follow artists notification") {
+                    ToggleRow(
+                        "New-release alerts",
+                        lib.releaseAlerts,
+                        { v ->
+                            AppSettings.updateLibrary { it.copy(releaseAlerts = v) }
+                            NewReleases.schedule(context)
+                        },
+                        summary = "A notification when an artist you follow puts out an album or single. Checked twice a day.",
+                        icon = Icons.Rounded.NotificationsActive,
+                    )
+                },
+                Entry("Followed artists", "follow artists unfollow") {
+                    NavRow("Followed artists", { followedDialog = true }, summary = if (followedArtists.isEmpty()) "Follow from an artist's page" else "${followedArtists.size} artists", icon = Icons.Rounded.Person)
+                },
+            ),
+        ),
+        Section(
             "Content",
             listOf(
                 Entry("Hide explicit content", "explicit clean kids family parental filter") {
@@ -787,6 +820,22 @@ private fun settingsSections(
                 },
                 if (listenBrainz != null) Entry("Disconnect ListenBrainz", "sign out listenbrainz") {
                     SettingRow("Disconnect ListenBrainz", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { ListenBrainz.signOut() })
+                } else null,
+            ),
+        ),
+        Section(
+            "Spotify (optional)",
+            listOfNotNull(
+                Entry("Spotify", "spotify import playlists liked songs transfer migrate sign in") {
+                    val who = spotify
+                    if (who == null) {
+                        NavRow("Sign in to Spotify", { spotifyDialog = true }, summary = "Bring your Spotify playlists and liked songs over, played from YouTube Music", icon = Icons.AutoMirrored.Rounded.QueueMusic)
+                    } else {
+                        NavRow("Import from Spotify", onOpenSpotify, summary = "Signed in as ${who.name}", icon = Icons.AutoMirrored.Rounded.QueueMusic)
+                    }
+                },
+                if (spotify != null) Entry("Sign out of Spotify", "spotify logout") {
+                    SettingRow("Sign out of Spotify", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { Spotify.signOut() })
                 } else null,
             ),
         ),

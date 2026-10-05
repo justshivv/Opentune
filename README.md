@@ -60,6 +60,20 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   measurements and their parametric correction runs ahead of your own EQ,
   so you start from a neutral sound.
 - **Sleep timer.** Stop after 15 to 90 minutes, or at the end of the song.
+- **SponsorBlock.** Music videos skip the parts viewers have marked as
+  non-music (talking, skits), sponsor reads, self-promotion and like or
+  subscribe reminders, using [SponsorBlock](https://sponsor.ajay.app)'s
+  segments. Choose the categories in Settings. Only a 4-character hash of
+  the video id is sent.
+- **Headphones and volume** (optional, off by default). Playback can carry
+  on when headphones are plugged in or a Bluetooth device connects, and
+  pause when the volume is turned all the way down, playing again when it
+  comes back up.
+- **Internet radio.** 50,000+ live stations from
+  [Radio Browser](https://www.radio-browser.info), the free community
+  directory: stations near you, the most played, genres and search, with
+  favourites. The song on air shows in the player and notification when
+  the station sends it. Favourite stations are in Android Auto too.
 - **Picks up where you left off.** The queue, song and position come back
   at launch, paused, without fetching anything until you press play.
 - **Home-screen widget.** Cover, title and artist, with previous,
@@ -69,7 +83,7 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   notification's extra buttons and in Android Auto, and stay in step with the
   app.
 - **Android Auto.** Browse Home, Recent and Library (Liked, Downloads,
-  playlists) on the car screen, search by typing or voice ("play … on
+  playlists, radio stations) on the car screen, search by typing or voice ("play … on
   OpenTune"), and tap a song to play its list from there. Sideloaded
   builds show up in Android Auto once "Unknown sources" is turned on in
   Android Auto's developer settings.
@@ -102,8 +116,29 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   Archive instead of a video frame, when MusicBrainz has a confident match.
 - **Last.fm scrobbling** (optional), with your own free Last.fm API key.
   The password is only used once to get a session and isn't stored.
+- **Import from Spotify** (optional). Sign in on Spotify's own login page
+  and bring playlists and liked songs over as playlists on the phone: each
+  track is looked up on YouTube Music and the closest catalogue match is
+  kept, with the misses listed. Nothing streams from Spotify. Spotify only
+  lets registered apps sign in, so you create a free app at
+  developer.spotify.com, add the redirect URI `opentune://spotify-auth`,
+  and paste its Client ID into OpenTune. Tokens are kept in app-private
+  storage and left out of backups.
+- **New-release alerts.** Follow an artist from their page (no account
+  needed) and a notification tells you when they put out an album or
+  single. Checked twice a day.
+- **Hide explicit content** (optional): songs and albums YouTube Music
+  marks explicit are left out of Home, search, album and artist pages,
+  autoplay and radio. Tracks the catalogue doesn't label still show.
+- **Set as ringtone.** A downloaded song or a file on the phone can be the
+  ringtone, notification sound or alarm. A downloaded song is copied to
+  Ringtones/OpenTune first, since the system can't read app storage.
 - **Export and import** of settings, history, likes and playlists as JSON.
-- **Check for updates** against this repository's GitHub releases.
+- **Updates in the app.** OpenTune checks this repository's GitHub releases
+  once a day (or when you ask), downloads the APK for your phone's
+  processor, checks it against the release's SHA256SUMS and hands it to
+  Android's installer. Android only installs an update signed with the same
+  key as the installed app.
 
 ### Look and feel
 
@@ -138,6 +173,10 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   view artist, open album, convert to the music video, and dislike (kept
   out of autoplay); plus upgrade quality,
   signal path, sleep timer, lyrics offset and copy log in the player.
+- **Player layouts:** Classic; Vinyl, where the cover turns as a record
+  while the song plays; Lyrics first, with a small cover on top and the
+  lyrics taking the rest; and Minimal, with just the cover, title, seek bar
+  and controls.
 - **Wavy seek bar** (optional) that ripples while music plays.
 - **Quick screens.** Home opens on the last copy saved while the fresh one
   loads; pages you've visited and searches you've made come back at once
@@ -147,9 +186,13 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   styles, pure black, color from artwork, and reduced motion and blur.
 
 YouTube's audio is lossy, so there's no lossless or Dolby Atmos stream
-option. OpenTune only plays YouTube's own streams: it doesn't pull from
-JioSaavn, from lossless "addon" servers, or from Apple Music, Spotify or
-Musixmatch through unofficial proxies.
+option from YouTube; lossless comes from your own music server. OpenTune
+doesn't unlock JioSaavn streams with a hard-coded key, doesn't fetch Tidal,
+Qobuz, Deezer or DAB audio through relay servers or decrypt Deezer
+streams, doesn't use scraped Apple Music, Tidal or Spotify tokens for
+animated "Canvas" covers, and doesn't take lyrics from Apple Music, Spotify
+or Musixmatch through proxies or scraped secrets. Those depend on getting
+around a service's protection or terms, so they stay out.
 
 Not built yet: Listen Together, lyric translation and an in-app language
 setting.
@@ -182,7 +225,9 @@ builds signed APKs and publishes them as a GitHub release
 (`.github/workflows/release.yml`). Release signing uses the repository
 secrets `OPENTUNE_KEYSTORE_BASE64`, `OPENTUNE_KEYSTORE_PASSWORD`,
 `OPENTUNE_KEY_ALIAS` and `OPENTUNE_KEY_PASSWORD` when they're set, and the
-debug key otherwise.
+debug key otherwise. Set the secrets before the first release: the in-app
+updater can only install a release signed with the same key as the copy
+already on the phone, and a CI runner's debug key changes from run to run.
 
 ## Project layout
 
@@ -216,6 +261,9 @@ come from the [Cover Art Archive](https://coverartarchive.org) through
 [ListenBrainz](https://listenbrainz.org), all run by the MetaBrainz
 Foundation. Headphone corrections come from
 [AutoEq](https://github.com/jaakkopasanen/AutoEq) by Jaakko Pasanen (MIT).
+Skip segments come from [SponsorBlock](https://sponsor.ajay.app) (data
+under CC BY-NC-SA 4.0), and radio stations from the
+[Radio Browser](https://www.radio-browser.info) community directory.
 
 OpenTune is licensed under the GNU General Public License v3.0. See
 [LICENSE](LICENSE).

@@ -274,6 +274,8 @@ data class LibrarySettings(
     val downloadWifiOnly: Boolean = true,
     /** Leave out songs and albums marked explicit; see [com.opentune.data.ContentFilter]. */
     val hideExplicit: Boolean = false,
+    /** Notify about new albums and singles from followed artists. */
+    val releaseAlerts: Boolean = true,
 )
 
 /** How synced lyrics move as the song plays. */

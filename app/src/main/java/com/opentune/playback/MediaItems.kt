@@ -11,6 +11,8 @@ import com.opentune.data.innertube.UpgradedTracks
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.model.Song
 import com.opentune.data.subsonic.Subsonic
+import com.opentune.data.radio.Radio
+import androidx.media3.common.MimeTypes
 
 /**
  * Queue entries point at `opentune://track/<videoId>` rather than at a stream
@@ -33,6 +35,8 @@ fun trackUri(videoId: String): Uri = when {
     // Your own server streams the stored file directly; Uri.EMPTY fails the
     // item cleanly if the server has been disconnected since it was queued.
     Subsonic.isSubsonic(videoId) -> Subsonic.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
+    // A station streams from its own server.
+    Radio.isRadio(videoId) -> Radio.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
     else -> Downloads.fileFor(videoId)?.let(Uri::fromFile)
         ?: streamUri(videoId, upgraded = UpgradedTracks.contains(videoId))
 }
@@ -59,6 +63,7 @@ fun Song.toMediaItem(): MediaItem =
     MediaItem.Builder()
         .setMediaId(videoId)
         .setUri(trackUri(videoId))
+        .apply { if (Radio.isRadio(videoId) && Radio.station(videoId)?.hls == true) setMimeType(MimeTypes.APPLICATION_M3U8) }
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(title)

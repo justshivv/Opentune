@@ -35,6 +35,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.LibraryResult
 import com.opentune.widget.NowPlayingWidget
 import com.opentune.data.ContentFilter
+import com.opentune.data.radio.Radio
 import com.opentune.data.sponsorblock.SponsorBlock
 import android.widget.Toast
 import android.os.Bundle
@@ -627,6 +628,22 @@ class PlaybackService : MediaLibraryService() {
             applyLoudness()
         }
 
+        /** A radio station names the song on air (ICY); shown as the station's second line. */
+        override fun onMetadata(metadata: androidx.media3.common.Metadata) {
+            val player = mediaSession?.player ?: return
+            val item = player.currentMediaItem ?: return
+            if (!Radio.isRadio(item.mediaId)) return
+            val onAir = (0 until metadata.length()).firstNotNullOfOrNull { i ->
+                (metadata[i] as? androidx.media3.extractor.metadata.icy.IcyInfo)?.title?.trim()?.takeIf { it.isNotEmpty() }
+            } ?: return
+            if (item.mediaMetadata.artist?.toString() == onAir) return
+            // Same URI, so ExoPlayer updates the item in place without rebuffering.
+            player.replaceMediaItem(
+                player.currentMediaItemIndex,
+                item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setArtist(onAir).build()).build(),
+            )
+        }
+
         override fun onPlayerError(error: PlaybackException) {
             Log.e(TAG, "Playback error on ${mediaSession?.player?.currentMediaItem?.mediaId}: ${error.errorCodeName}", error)
             recover(error)
@@ -641,7 +658,8 @@ class PlaybackService : MediaLibraryService() {
     private var listenRecord: Long? = null
 
     private fun startListen(song: Song?, playing: Boolean) {
-        listenSong = song
+        // A radio station isn't a song: it stays out of history and scrobbles.
+        listenSong = song?.takeUnless { Radio.isRadio(it.videoId) }
         listenedMs = 0
         listenSince = if (playing) SystemClock.elapsedRealtime() else -1
         listenRecord = null
@@ -1024,7 +1042,7 @@ class PlaybackService : MediaLibraryService() {
         val seed = player.getMediaItemAt(player.mediaItemCount - 1).mediaId
         // Radio is a YouTube feature; a local file has none. A song on your own
         // server carries on with more of the server's songs, picked at random.
-        if (LocalMusic.isLocal(seed)) return
+        if (LocalMusic.isLocal(seed) || Radio.isRadio(seed)) return
         if (seed in exhaustedSeeds) return
         if (radioJob?.isActive == true && radioSeed == seed) return
 

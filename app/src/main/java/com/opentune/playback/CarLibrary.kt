@@ -1,5 +1,6 @@
 package com.opentune.playback
 
+import com.opentune.data.radio.Radio
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -73,6 +74,8 @@ class CarLibrary(private val context: Context) {
             parentId == LIBRARY -> libraryItems()
             parentId == LIKED -> songs(LIKED, LibraryStore.liked.value.map { it.toSong() })
             parentId == DOWNLOADS -> songs(DOWNLOADS, Downloads.doneNow().map { it.song.toSong() })
+            // Favourite stations, then others played lately; next and previous change station.
+            parentId == RADIO -> songs(RADIO, radioStations().map { it.toSong() })
             parentId.startsWith(PLAYLIST) -> {
                 val playlist = LibraryStore.playlists.value.firstOrNull { it.id == parentId.removePrefix(PLAYLIST) }
                 songs(parentId, playlist?.songs.orEmpty().map { it.toSong() })
@@ -183,6 +186,9 @@ class CarLibrary(private val context: Context) {
         LibraryStore.playlists.value.forEach { p ->
             add(folder("$PLAYLIST${p.id}", p.name, subtitle = "${p.songs.size} songs", artwork = p.songs.firstOrNull()?.thumbnailUrl, type = MediaMetadata.MEDIA_TYPE_PLAYLIST))
         }
+        if (radioStations().isNotEmpty()) {
+            add(folder(RADIO, "Radio", subtitle = "Your stations", artwork = radioStations().firstOrNull()?.favicon))
+        }
         Subsonic.server.value?.let { server ->
             add(folder(SERVER, "Your music server", subtitle = server.url.substringAfter("://"), browsableStyle = MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM))
         }
@@ -214,6 +220,8 @@ class CarLibrary(private val context: Context) {
         }
         return top + more
     }
+
+    private fun radioStations() = (Radio.favourites.value + Radio.recent.value).distinctBy { it.uuid }
 
     private fun songs(parent: String, songs: List<Song>, group: String? = null): List<MediaItem> {
         listed[parent] = songs
@@ -317,6 +325,7 @@ class CarLibrary(private val context: Context) {
         private const val COLLECTION = "collection:"
         private const val ARTIST = "artist:"
         const val SERVER = "server"
+        const val RADIO = "radio"
         private const val SERVER_ALBUM = "server-album:"
         private const val SERVER_PLAYLIST = "server-playlist:"
         private const val SEP = '|'

@@ -133,6 +133,12 @@ object LibraryStore {
         return id
     }
 
+    /** Adds [songs] in order, skipping any already there; one write for the lot. */
+    fun addAllToPlaylist(id: String, songs: List<Song>) = editPlaylist(id) { p ->
+        val have = p.songs.mapTo(HashSet()) { it.videoId }
+        p.copy(songs = p.songs + songs.filter { have.add(it.videoId) }.map(SongRef::of))
+    }
+
     fun addToPlaylist(id: String, song: Song) = editPlaylist(id) { p ->
         if (p.songs.any { it.videoId == song.videoId }) p else p.copy(songs = p.songs + SongRef.of(song))
     }
