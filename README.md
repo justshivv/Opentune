@@ -16,13 +16,12 @@ What works:
   streams resolved and deciphered via NewPipeExtractor. A queue with
   autoplay radio, shuffle and repeat, and swipe-to-queue on any song
 - **Audio:** per-network quality (defaults to the best stream YouTube
-  offers), a song cache for instant replays and seeks, a 7-band equalizer
-  with tone and balance, loudness levelling, stereo widening, skip silence,
-  USB DAC preference, optional 32-bit float output, preloading of the next
-  song (and early stream lookup either side) for near-instant skips, and a
-  Remix sheet for
-  speed, pitch, reverb and bass (Slowed + reverb, Nightcore and more). The
-  EQ, levelling and bass run in the app's own DSP, so they work on any phone
+  offers), a song cache for instant replays and seeks, preloading of the
+  next song for near-instant skips, a 7-band equalizer with tone and
+  balance, loudness levelling, stereo widening, skip silence, USB DAC
+  preference, optional 32-bit float output, and a Remix sheet for speed,
+  pitch, reverb and bass (Slowed + reverb, Nightcore and more). The EQ,
+  levelling and bass run in the app's own DSP, so they work on any phone
 - **Player:** artwork-tinted colors, mesh / gradient / blurred / plain
   backgrounds, optional full-screen cover art, volume bar, "Playing from",
   stats for nerds, swipe to skip, drag down to close
