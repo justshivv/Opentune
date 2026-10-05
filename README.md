@@ -11,12 +11,16 @@ Early MVP:
 - Search (song results) via Innertube
 - Playback through a Media3 `MediaSessionService` / ExoPlayer, with stream
   URLs resolved and deciphered via NewPipeExtractor
-- Mini player + a full now-playing screen with seek
+- A play queue: tapping a song starts it followed by its YouTube Music radio,
+  and more radio is appended as playback nears the end. Search results can be
+  queued with "Play next" / "Add to queue"; the now-playing screen lists what's
+  up next, and tracks can be skipped, jumped to, or removed
+- Mini player + a full now-playing screen with seek and previous/next
 
-Not yet built: queueing/autoplay, downloads, lyrics, library/login,
-Discord Rich Presence, scrobbling, on-device automix, and the "Listen
-Together" party backend — see the architecture sketch this project started
-from for the fuller shape.
+Not yet built: shuffle/repeat, downloads, lyrics, library/login, Discord Rich
+Presence, scrobbling, on-device automix, and the "Listen Together" party
+backend — see the architecture sketch this project started from for the
+fuller shape.
 
 ## Building
 
@@ -27,8 +31,9 @@ Studio, or from the CLI:
 ./gradlew assembleDebug
 ```
 
-Requires an Android SDK (compileSdk 36) on `ANDROID_HOME`; there's no signing
-config, so this produces an unsigned debug APK.
+Requires an Android SDK (compileSdk 36) on `ANDROID_HOME` or in
+`local.properties`; there's no signing config, so this produces an unsigned
+debug APK. Unit tests run with `./gradlew testDebugUnitTest`.
 
 ## Attribution
 
