@@ -41,6 +41,7 @@ import com.opentune.data.model.artworkAt
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.LocalBackdrop
 import com.opentune.ui.components.LocalHazeState
+import com.opentune.ui.components.LocalSongMenu
 import com.opentune.ui.components.MenuRow
 import com.opentune.ui.components.SongMenuSheet
 import com.opentune.ui.components.glass
@@ -502,7 +503,16 @@ private fun LyricsOffsetDialog(videoId: String, onDismiss: () -> Unit) {
 private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () -> Unit, compact: Boolean = false) {
     Column(Modifier.weight(1f)) {
         MarqueeText(song.title, Modifier.fillMaxWidth(), style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall)
-        Text(song.artist, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // Tapping the artist opens their page.
+        val viewArtist = LocalSongMenu.current?.viewArtist
+        Text(
+            song.artist,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = if (viewArtist != null && !song.videoId.startsWith("local:")) Modifier.clickable { viewArtist(song) } else Modifier,
+        )
     }
     Spacer(Modifier.width(10.dp))
     HeartButton(liked, onLike)

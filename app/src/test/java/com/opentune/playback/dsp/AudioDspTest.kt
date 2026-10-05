@@ -96,7 +96,7 @@ class DspAudioProcessorTest {
         // A cut can't clip, so nothing should limit. A 1 kHz cut has unity gain
         // at DC, so near-full-scale DC must come out at the same level; with the
         // limiter engaged it would be squeezed to about 0.95.
-        val p = configured(DspParams(EqualizerSettings(enabled = true, bands = listOf(0f, 0f, 0f, -3f, 0f, 0f, 0f))))
+        val p = configured(DspParams(EqualizerSettings(enabled = true, bands = List(15) { if (it == 8) -3f else 0f })))
         val out = run(p, pcm16Stereo(5_000) { 0.99f })
         var last = 0
         while (out.hasRemaining()) last = out.getShort().toInt()
@@ -106,16 +106,16 @@ class DspAudioProcessorTest {
     @Test
     fun onlyBoostingChainsUseTheLimiter() {
         assertTrue(!DspParams().canBoost)
-        assertTrue(!DspParams(EqualizerSettings(enabled = true, bands = listOf(-2f, 0f, 0f, 0f, 0f, 0f, 0f))).canBoost)
+        assertTrue(!DspParams(EqualizerSettings(enabled = true, bands = List(15) { if (it == 0) -2f else 0f })).canBoost)
         assertTrue(DspParams(EqualizerSettings(enabled = true, bassDb = 2f)).canBoost)
         assertTrue(DspParams(bassBoost = 100).canBoost)
     }
 
     @Test
     fun eqBoostsGetMatchingHeadroom() {
-        val p = DspParams(EqualizerSettings(enabled = true, bands = listOf(6f, 0f, 0f, 0f, 0f, 0f, 0f)))
+        val p = DspParams(EqualizerSettings(enabled = true, bands = List(15) { if (it == 0) 6f else 0f }))
         assertEquals(dbToGain(-6f), p.preampGain, 1e-4f)
-        assertEquals(1f, DspParams(EqualizerSettings(enabled = true, bands = listOf(-3f, 0f, 0f, 0f, 0f, 0f, 0f))).preampGain, 1e-4f)
+        assertEquals(1f, DspParams(EqualizerSettings(enabled = true, bands = List(15) { if (it == 0) -3f else 0f })).preampGain, 1e-4f)
     }
 
     @Test
@@ -181,5 +181,22 @@ class OutputGainTest {
     @Test
     fun zeroVolumeIsSilent() {
         assertEquals(0f, DspParams(outputGainDb = com.opentune.playback.BitPerfectUsb.SILENT_DB).preampGain, 0f)
+    }
+}
+
+class FifteenBandTest {
+    @Test
+    fun sevenBandCurvesCarryOver() {
+        val old = listOf(6f, 0f, 0f, 0f, 0f, 0f, 0f) // +6 dB at 60 Hz only
+        val new = com.opentune.data.settings.resampleBands(old)
+        assertEquals(15, new.size)
+        assertEquals(6f, new[0], 0.01f) // 25 Hz, below the old range: flat at its first value
+        assertTrue(new[3] in 0.1f..5.9f) // 100 Hz, between 60 and 150
+        assertEquals(0f, new[14], 0.01f)
+    }
+
+    @Test
+    fun everyPresetHasFifteenBands() {
+        com.opentune.data.settings.EqPreset.entries.forEach { assertEquals(it.label, 15, it.bands.size) }
     }
 }

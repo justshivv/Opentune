@@ -39,6 +39,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.background
 import androidx.compose.foundation.LocalOverscrollFactory
 import com.opentune.ui.components.RubberBandOverscrollFactory
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -150,6 +152,17 @@ fun AppRoot(vm: PlayerViewModel) {
             if (s.videoId == song?.videoId) vm.skipNext()
             uiScope.launch { snackbar.showSnackbar("You won't hear \"${s.title}\" in autoplay again") }
         },
+        viewArtist = { s ->
+            uiScope.launch {
+                val id = MusicRepository.artistIdFor(s)
+                if (id == null) {
+                    snackbar.showSnackbar("Couldn't find ${s.artist}'s page")
+                } else {
+                    playerOpen = false
+                    nav.openBrowse(id, BrowseType.ARTIST)
+                }
+            }
+        },
         playVideoVersion = { s ->
             uiScope.launch {
                 val video = runCatching { MusicRepository.search("${s.title} ${s.artist}", SearchFilter.VIDEOS) }.getOrNull()
@@ -205,6 +218,9 @@ fun AppRoot(vm: PlayerViewModel) {
             Box(
                 Modifier.fillMaxSize()
                     .then(if (liquid) Modifier.layerBackdrop(backdrop) else Modifier)
+                    // Painted inside the recorded layer: a see-through backdrop would let
+                    // the sharp page show through the glass instead of the blurred copy.
+                    .background(MaterialTheme.colorScheme.background)
                     .hazeSource(haze)
                     .nestedScroll(chromeScroll),
             ) {

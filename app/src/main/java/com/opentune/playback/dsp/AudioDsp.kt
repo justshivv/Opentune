@@ -189,7 +189,8 @@ data class DspParams(
     val balance: Float get() = if (equalizer.enabled) equalizer.balance.coerceIn(-1f, 1f) else 0f
 
     companion object {
-        const val BAND_Q = 1.1
+        /** √2: neighbouring 2/3-octave bands overlap at about -3 dB. */
+        const val BAND_Q = 1.4142
         const val CLARITY_HEADROOM_DB = 3.3f
         const val MAX_BASS_BOOST_DB = 12.0
     }

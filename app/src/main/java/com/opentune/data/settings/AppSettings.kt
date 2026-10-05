@@ -105,13 +105,41 @@ enum class RemixPreset(val label: String, val sound: SoundSettings) {
 }
 
 /** Band centres for the 7-band equalizer, in Hz. */
-val EQ_BANDS_HZ = listOf(60f, 150f, 400f, 1_000f, 2_400f, 6_000f, 15_000f)
+/** Band centres for the 15-band equalizer: the ISO 2/3-octave series, in Hz. */
+val EQ_BANDS_HZ = listOf(25f, 40f, 63f, 100f, 160f, 250f, 400f, 630f, 1_000f, 1_600f, 2_500f, 4_000f, 6_300f, 10_000f, 16_000f)
+
+/** The seven bands older versions saved, kept to carry those curves over. */
+private val SEVEN_BAND_HZ = listOf(60f, 150f, 400f, 1_000f, 2_400f, 6_000f, 15_000f)
+
+/**
+ * [gains] at [from] frequencies, redrawn at [EQ_BANDS_HZ] by interpolating
+ * on a log-frequency axis, flat beyond the ends.
+ */
+fun resampleBands(gains: List<Float>, from: List<Float> = SEVEN_BAND_HZ): List<Float> {
+    if (gains.size == EQ_BANDS_HZ.size && from.size != gains.size) return gains
+    val points = from.zip(gains).sortedBy { it.first }
+    if (points.isEmpty()) return List(EQ_BANDS_HZ.size) { 0f }
+    return EQ_BANDS_HZ.map { f ->
+        val x = kotlin.math.ln(f)
+        when {
+            f <= points.first().first -> points.first().second
+            f >= points.last().first -> points.last().second
+            else -> {
+                val hi = points.indexOfFirst { it.first >= f }
+                val (f0, g0) = points[hi - 1]
+                val (f1, g1) = points[hi]
+                val t = (x - kotlin.math.ln(f0)) / (kotlin.math.ln(f1) - kotlin.math.ln(f0))
+                (g0 + (g1 - g0) * t).let { (it * 10).toInt() / 10f }
+            }
+        }
+    }
+}
 
 @Serializable
 data class EqualizerSettings(
     val enabled: Boolean = false,
     /** Gain per band in dB, -12..12, one per [EQ_BANDS_HZ]. */
-    val bands: List<Float> = List(EQ_BANDS_HZ.size) { 0f },
+    val bands: List<Float> = List(15) { 0f },
     val preampDb: Float = 0f,
     /** Tone controls: shelves at 120 Hz and 8 kHz, dB. */
     val bassDb: Float = 0f,
@@ -121,14 +149,21 @@ data class EqualizerSettings(
 )
 
 enum class EqPreset(val label: String, val bands: List<Float>) {
-    FLAT("Flat", listOf(0f, 0f, 0f, 0f, 0f, 0f, 0f)),
-    BASS("Bass", listOf(6f, 4f, 1f, 0f, 0f, 0f, 0f)),
-    WARM("Warm", listOf(3f, 2f, 1f, 0f, -1f, -2f, -2f)),
-    VOCAL("Vocal", listOf(-2f, -1f, 1f, 3f, 3f, 1f, 0f)),
-    BRIGHT("Bright", listOf(-1f, 0f, 0f, 1f, 2f, 4f, 5f)),
-    LOUDNESS("Loudness", listOf(5f, 3f, 0f, -1f, 0f, 3f, 4f)),
-    ELECTRONIC("Electronic", listOf(5f, 3f, 0f, -2f, 1f, 3f, 4f)),
-    ACOUSTIC("Acoustic", listOf(3f, 2f, 1f, 1f, 2f, 2f, 1f)),
+    FLAT("Flat", List(15) { 0f }),
+    /** After LastWave's Studio Master curve: deep, clean lows and open highs. */
+    STUDIO("Studio", listOf(2.6f, 2.8f, 2.2f, 0.6f, -1.8f, -2.6f, -1.2f, 0f, 1.2f, 2.4f, 3.6f, 4.0f, 4.2f, 4.5f, 4.8f)),
+    BASS("Bass", resampleBands(listOf(6f, 4f, 1f, 0f, 0f, 0f, 0f))),
+    DEEP_BASS("Deep bass", listOf(6f, 5.5f, 4.5f, 3f, 1.5f, 0f, -1f, -1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)),
+    WARM("Warm", resampleBands(listOf(3f, 2f, 1f, 0f, -1f, -2f, -2f))),
+    VOCAL("Vocal", resampleBands(listOf(-2f, -1f, 1f, 3f, 3f, 1f, 0f))),
+    BRIGHT("Bright", resampleBands(listOf(-1f, 0f, 0f, 1f, 2f, 4f, 5f))),
+    TREBLE_AIR("Air", listOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.5f, 1f, 2f, 3f, 4.5f, 5.5f)),
+    LOUDNESS("Loudness", resampleBands(listOf(5f, 3f, 0f, -1f, 0f, 3f, 4f))),
+    ROCK("Rock", listOf(4f, 4f, 3.5f, 2.5f, 1f, -0.5f, -1.5f, -1.5f, -0.5f, 1f, 2.5f, 3.5f, 4f, 4f, 4f)),
+    POP("Pop", listOf(-1f, -0.5f, 0.5f, 1.5f, 2.5f, 3f, 2.5f, 1.5f, 0.5f, 0f, -0.5f, -0.5f, 0f, 0.5f, 1f)),
+    ELECTRONIC("Electronic", resampleBands(listOf(5f, 3f, 0f, -2f, 1f, 3f, 4f))),
+    ACOUSTIC("Acoustic", resampleBands(listOf(3f, 2f, 1f, 1f, 2f, 2f, 1f))),
+    CLASSICAL("Classical", listOf(3f, 3f, 2.5f, 2f, 1f, 0f, 0f, 0f, 0f, 0f, 0f, -1f, -1.5f, -2f, -2.5f)),
 }
 
 @Serializable
@@ -295,7 +330,10 @@ object AppSettings {
         publish(stored ?: migrateLegacy(p))
     }
 
-    private fun publish(s: SettingsState) {
+    private fun publish(stored: SettingsState) {
+        // Curves saved by the seven-band equalizer are redrawn on fifteen bands.
+        val s = if (stored.equalizer.bands.size == EQ_BANDS_HZ.size) stored
+        else stored.copy(equalizer = stored.equalizer.copy(bands = resampleBands(stored.equalizer.bands)))
         _state.value = s
         _theme.value = s.theme
         _sound.value = s.sound
