@@ -76,7 +76,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import com.opentune.data.model.BrowseType
 import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.ROW_ART_PX
@@ -85,7 +86,13 @@ import com.opentune.data.download.DownloadState
 import com.opentune.data.download.Downloads
 import com.opentune.data.model.artworkAt
 
-/** Artwork with a tinted placeholder icon while it loads or when there is none. */
+/**
+ * Artwork with a tinted placeholder icon while it loads or when there is none.
+ *
+ * The placeholder sits under a plain [AsyncImage] rather than in a
+ * SubcomposeAsyncImage slot: subcomposing every cover cost a frame here and
+ * there while long shelves scrolled.
+ */
 @Composable
 fun Artwork(
     url: String?,
@@ -93,11 +100,12 @@ fun Artwork(
     shape: Shape = MaterialTheme.shapes.small,
     placeholder: ImageVector = Icons.Filled.MusicNote,
 ) {
-    val fallback: @Composable () -> Unit = {
-        Box(
-            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHighest),
-            contentAlignment = Alignment.Center,
-        ) {
+    var loaded by remember(url) { mutableStateOf(false) }
+    Box(
+        modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (!loaded) {
             Icon(
                 placeholder,
                 contentDescription = null,
@@ -105,15 +113,16 @@ fun Artwork(
                 modifier = Modifier.fillMaxSize(0.4f),
             )
         }
+        if (url != null) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+                onState = { loaded = it is AsyncImagePainter.State.Success },
+            )
+        }
     }
-    SubcomposeAsyncImage(
-        model = url,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = modifier.clip(shape),
-        loading = { fallback() },
-        error = { fallback() },
-    )
 }
 
 /** One track in a list. Shows animated bars instead of the art overlay while it plays. */
