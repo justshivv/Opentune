@@ -34,7 +34,16 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   similar effects apply to OpenTune the way they do to the stock players.
 - **A clean signal path.** With the equalizer and effects off, decoded
   audio goes to the output untouched. When they're on, the app's own DSP
-  adds headroom so boosts don't clip.
+  adds headroom so boosts don't clip. The player's Signal path dialog
+  shows every stage: source, engine, DSP, tempo, loudness, device effects,
+  the Android mixer's rate, volume and output.
+- **Bit-perfect USB output** (Android 14+, optional). A USB DAC gets the
+  song at its own rate with no mixing, resampling or effects, through
+  Android's bit-perfect mixer. The app applies the volume, and at full
+  volume the signal is bit-exact.
+- **Clarity** (optional). A tone curve after LastWave's Studio Master
+  Clarity: rumble cut, firmer bass, less mud, more presence and air, with
+  headroom and a soft limiter so peaks stay clean.
 - **Fast starts and skips.** Playback begins after half a second of audio.
   The songs either side of the current one are found before you get to
   them, and the next one is buffered while this one plays. Played songs
@@ -47,6 +56,10 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   output, and a Remix sheet for speed, pitch and reverb (Slowed + reverb,
   Nightcore and more).
 - **Sleep timer.** Stop after 15 to 90 minutes, or at the end of the song.
+- **Picks up where you left off.** The queue, song and position come back
+  at launch, paused, without fetching anything until you press play.
+- **Opens YouTube links.** music.youtube.com, youtube.com and youtu.be
+  links, or links shared to the app, open in OpenTune.
 
 ### Library and account
 
@@ -60,7 +73,10 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   Downloads, music on the device, Liked Music, playlists made in the app,
   and your YouTube playlists.
 - **Replay:** top songs, artists and albums from this device's history.
-- **Export and import** of settings and history as JSON.
+- **Last.fm scrobbling** (optional), with your own free Last.fm API key.
+  The password is only used once to get a session and isn't stored.
+- **Export and import** of settings, history, likes and playlists as JSON.
+- **Check for updates** against this repository's GitHub releases.
 
 ### Look and feel
 
@@ -76,9 +92,14 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   name of the output device. Drag it down and it shrinks into a card
   before it closes.
 - **Synced lyrics** from [LRCLIB](https://lrclib.net), lit word by word,
-  with YouTube Music's lyrics as a fallback.
-- **One song menu everywhere:** like, add to playlist, download, start
-  radio, play next, add to queue, open album or artist, share.
+  and YouTube Music's lyrics, in an order you set, with a per-song timing
+  offset, adjustable text size, and lyrics saved with downloads so they
+  work offline.
+- **One song menu everywhere:** like, dislike (kept out of autoplay),
+  add to playlist, download, convert to the music video, start radio, play
+  next, add to queue, open album or artist, share; plus upgrade quality,
+  signal path, sleep timer, lyrics offset and copy log in the player.
+- **Wavy seek bar** (optional) that ripples while music plays.
 - **Quick screens.** Home opens on the last copy saved while the fresh one
   loads; pages you've visited and searches you've made come back at once
   and refresh in the background.
@@ -88,10 +109,11 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
 
 YouTube's audio is lossy, so there's no lossless or Dolby Atmos stream
 option. OpenTune only plays YouTube's own streams: it doesn't pull from
-JioSaavn or from lossless "addon" servers.
+JioSaavn, from lossless "addon" servers, or from Apple Music, Spotify or
+Musixmatch through unofficial proxies.
 
-Not built yet: Listen Together, Last.fm, lyric translation and an in-app
-language setting.
+Not built yet: Listen Together, lyric translation and an in-app language
+setting.
 
 ## Building
 

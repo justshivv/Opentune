@@ -36,8 +36,9 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Open YouTube Music and YouTube links: songs, playlists, albums, channels. -->
-            <intent-filter>
+            <!-- Open YouTube Music and YouTube links: songs, playlists, albums, channels.
+                 Not autoVerify: these domains aren't ours, so the user picks OpenTune. -->
+            <intent-filter tools:ignore="AppLinkWarning">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
