@@ -24,11 +24,12 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      # compileSdk 37 (InnerTubeX's AAR is built against it) and the build
+      # tools. The packages are named because the action's default list
+      # includes "tools", which the current SDK manager no longer has.
       - uses: android-actions/setup-android@v3
-
-      # compileSdk 37 (InnerTubeX's AAR is built against it) and the build tools.
-      - name: Install SDK packages
-        run: sdkmanager --install "platforms;android-37.0" "build-tools;36.0.0"
+        with:
+          packages: platform-tools platforms;android-37.0 build-tools;36.0.0
 
       - uses: gradle/actions/setup-gradle@v4
 
