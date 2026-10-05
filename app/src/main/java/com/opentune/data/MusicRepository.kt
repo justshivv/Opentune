@@ -101,6 +101,11 @@ object MusicRepository {
         InnertubeParser.parseLibraryItems(Innertube.browse("FEmusic_liked_playlists")).filter { it.browseId != null }
     }
 
+    /** The song and the radio YouTube Music queues after it. */
+    suspend fun watchQueue(videoId: String): List<Song> = io {
+        InnertubeParser.parseWatchQueue(Innertube.next(videoId))
+    }
+
     /** What a browse id opens, read off its prefix. */
     fun typeOf(browseId: String): BrowseType = when {
         browseId.startsWith("UC") -> BrowseType.ARTIST

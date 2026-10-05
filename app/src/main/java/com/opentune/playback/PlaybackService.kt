@@ -40,6 +40,7 @@ import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
 import com.opentune.data.download.Downloads
 import com.opentune.data.library.LibraryStore
+import com.opentune.data.library.SongRef
 import com.opentune.data.NerdStats
 import com.opentune.data.history.History
 import com.opentune.data.local.LocalMusic
@@ -218,6 +219,34 @@ class PlaybackService : MediaSessionService() {
             .setSessionActivity(sessionActivity)
             .setCallback(sessionCallback)
             .build()
+
+        restoreQueue(player)
+        scope.launch { keepQueueSaved(player) }
+    }
+
+    /**
+     * Puts back the queue from last time, paused where it was left and not
+     * prepared: nothing is fetched until play is pressed.
+     */
+    private fun restoreQueue(player: ExoPlayer) {
+        if (player.mediaItemCount > 0) return
+        val saved = QueueStore.load() ?: return
+        val items = saved.songs.map { it.toSong().toMediaItem() }
+        player.setMediaItems(items, saved.index.coerceIn(items.indices), saved.positionMs.coerceAtLeast(0))
+    }
+
+    /** Saves the queue every few seconds while it changes or plays. */
+    private suspend fun keepQueueSaved(player: ExoPlayer) {
+        var last: QueueStore.Saved? = null
+        while (true) {
+            delay(QUEUE_SAVE_MS)
+            if (player.mediaItemCount == 0) continue
+            val songs = (0 until player.mediaItemCount).map { SongRef.of(player.getMediaItemAt(it).toSong()) }
+            val saved = QueueStore.Saved(songs, player.currentMediaItemIndex, player.currentPosition)
+            if (saved == last) continue
+            last = saved
+            withContext(Dispatchers.IO) { QueueStore.save(saved) }
+        }
     }
 
     /**
@@ -270,6 +299,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        (mediaSession?.player as? ExoPlayer)?.takeIf { it.mediaItemCount > 0 }?.let { p ->
+            QueueStore.save(QueueStore.Saved((0 until p.mediaItemCount).map { SongRef.of(p.getMediaItemAt(it).toSong()) }, p.currentMediaItemIndex, p.currentPosition))
+        }
         crossfade?.release()
         crossfade = null
         closeEffectSession()
@@ -772,6 +804,7 @@ class PlaybackService : MediaSessionService() {
 
         /** Bounds on the loudness gain, in millibels: down 15 dB, up 3 dB at most. */
         const val LOUDNESS_RETRY_MS = 6_000L
+        const val QUEUE_SAVE_MS = 5_000L
         const val UPGRADE_DELAY_MS = 8_000L
         const val UPGRADE_MIN_REMAINING_MS = 20_000L
         const val FAR_BUFFER_MS = 15 * 60 * 1000

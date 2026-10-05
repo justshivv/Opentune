@@ -52,6 +52,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.opentune.data.MusicRepository
+import kotlinx.coroutines.flow.first
 import com.opentune.data.model.SearchResult
 import com.opentune.data.model.SearchFilter
 import com.opentune.data.library.LibraryStore
@@ -173,6 +174,23 @@ fun AppRoot(vm: PlayerViewModel) {
         playlist = { id -> nav.navigate("playlist/${Uri.encode(id)}") },
         browse = { id -> nav.openBrowse(id) },
     )
+    // Links opened from outside: a song plays with its radio, anything else opens its page.
+    val incoming by Links.incoming.collectAsState()
+    LaunchedEffect(incoming) {
+        when (val link = incoming) {
+            is LinkTarget.Song -> {
+                vm.player.connected.first { it }
+                val queue = runCatching { MusicRepository.watchQueue(link.videoId) }.getOrDefault(emptyList())
+                val at = queue.indexOfFirst { it.videoId == link.videoId }
+                if (at >= 0) vm.playAll(queue, at, false, "Shared link")
+                else vm.play(com.opentune.data.model.Song(link.videoId, "Shared song", "", null), "Shared link")
+                playerOpen = true
+            }
+            is LinkTarget.Browse -> nav.openBrowse(link.browseId)
+            null -> return@LaunchedEffect
+        }
+        Links.consumed()
+    }
     val chromeVisible = route != "login"
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val content = PaddingValues(bottom = navInset + CHROME_TAB_HEIGHT + 24.dp + if (song != null) CHROME_MINI_HEIGHT + 8.dp else 0.dp)
