@@ -1,6 +1,7 @@
 package com.opentune.ui.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,8 +76,6 @@ import com.opentune.ui.components.pressable
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
-private val TILE = 160.dp
-
 /** Where Library's tiles lead. */
 class LibraryNav(
     val downloads: () -> Unit,
@@ -108,107 +107,64 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
     var naming by remember { mutableStateOf(false) }
     if (naming) NameDialog("New playlist", "", onDismiss = { naming = false }) { name -> naming = false; nav.playlist(LibraryStore.createPlaylist(name)) }
-
-    val who = account?.name?.substringBefore(' ')?.uppercase() ?: "YOU"
     val doneCount = downloads.values.count { it.state == DownloadState.DONE }
 
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item {
             PageHeader("Library", actions = {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassIconButton(Icons.Rounded.History, "Replay", nav.replay)
-                    GlassIconButton(Icons.Rounded.Settings, "Settings", nav.settings) {
-                        val photo = account?.thumbnailUrl
-                        if (photo != null) Artwork(photo, Modifier.size(44.dp), androidx.compose.foundation.shape.CircleShape)
-                        else Icon(Icons.Rounded.Settings, "Settings", Modifier.size(26.dp))
-                    }
+                GlassIconButton(Icons.Rounded.Settings, "Settings", nav.settings) {
+                    val photo = account?.thumbnailUrl
+                    if (photo != null) Artwork(photo, Modifier.size(44.dp), androidx.compose.foundation.shape.CircleShape)
+                    else Icon(Icons.Rounded.Settings, "Settings", Modifier.size(26.dp))
                 }
             })
         }
         item {
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                item {
-                    ListeningCard(
-                        big = "${TimeUnit.MILLISECONDS.toMinutes(summary.listenedMs)}",
-                        caption = "MINUTES LISTENED",
-                        who = who,
-                        footer = "${summary.totalPlays} plays · $year",
-                        colors = listOf(Color(0xFF4A1A5C), Color(0xFF241030)),
-                        onClick = nav.replay,
-                    )
+            YearCard(
+                year = year,
+                minutes = TimeUnit.MILLISECONDS.toMinutes(summary.listenedMs),
+                plays = summary.totalPlays,
+                topArtist = summary.topArtists.firstOrNull()?.title,
+                topSong = summary.topSongs.firstOrNull()?.title,
+                onClick = nav.replay,
+            )
+        }
+        item {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Shortcut(Icons.Rounded.Favorite, "Liked", "${liked.size} songs", nav.liked, Modifier.weight(1f))
+                    Shortcut(Icons.Rounded.Download, "Downloads", if (doneCount == 0) "Offline songs" else "$doneCount songs", nav.downloads, Modifier.weight(1f))
                 }
-                summary.topSongs.firstOrNull()?.let { top ->
-                    item {
-                        ListeningCard(
-                            big = top.title,
-                            caption = "TOP SONG",
-                            who = who,
-                            footer = top.subtitle,
-                            colors = listOf(Color(0xFF5C1A3E), Color(0xFF2A1022)),
-                            onClick = nav.replay,
-                        )
-                    }
-                }
-                summary.topArtists.firstOrNull()?.let { top ->
-                    item {
-                        ListeningCard(
-                            big = top.title,
-                            caption = "TOP ARTIST",
-                            who = who,
-                            footer = "${top.plays} plays",
-                            colors = listOf(Color(0xFF1A3A5C), Color(0xFF101C2E)),
-                            onClick = nav.replay,
-                        )
-                    }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Shortcut(Icons.Rounded.LibraryMusic, "On this phone", "Local files", nav.local, Modifier.weight(1f))
+                    Shortcut(Icons.Rounded.History, "Replay", "Your top songs", nav.replay, Modifier.weight(1f))
                 }
             }
         }
-        item { SectionHeader("On Device") }
         item {
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                item {
-                    GradientTile(Icons.Rounded.Download, "Downloads", if (doneCount == 0) "Downloaded songs" else "$doneCount songs",
-                        listOf(Color(0xFF1C2A7A), Color(0xFF8A2340), Color(0xFF2A1260)), nav.downloads)
+            SectionHeader("Playlists", action = {
+                TextButton(onClick = { naming = true }) {
+                    Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("New")
                 }
-                item {
-                    GradientTile(Icons.Rounded.LibraryMusic, "Local Music", "Audio files on device",
-                        listOf(Color(0xFF1C5A55), Color(0xFF2A2A6A), Color(0xFF5A1E5C)), nav.local)
-                }
+            })
+        }
+        if (playlists.isEmpty() && ytPlaylists.isEmpty()) {
+            item {
+                Text(
+                    "Make one with New, or add any song from its menu.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
             }
         }
-        item { SectionHeader("Playlists") }
-        item {
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                item {
-                    Tile("New playlist", "Made on this device", { naming = true }) {
-                        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
-                            Icon(Icons.Rounded.Add, null, Modifier.size(56.dp))
-                        }
-                    }
-                }
-                item {
-                    Tile("Liked Music", "${liked.size} songs", nav.liked) {
-                        Box(
-                            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF8E6CF0), Color(0xFFD45BA8)))),
-                            Alignment.Center,
-                        ) { Icon(Icons.Rounded.Favorite, null, Modifier.size(64.dp), tint = Color.White) }
-                    }
-                }
-                items(playlists, key = { it.id }) { p ->
-                    Tile(p.name, "${p.songs.size} songs", { nav.playlist(p.id) }, Modifier.animateItem()) {
-                        val art = p.songs.firstOrNull()?.thumbnailUrl
-                        if (art != null) Artwork(art.artworkAt(CARD_ART_PX), Modifier.fillMaxSize(), RoundedCornerShape(0.dp))
-                        else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
-                            Icon(Icons.AutoMirrored.Rounded.QueueMusic, null, Modifier.size(48.dp))
-                        }
-                    }
-                }
-                items(ytPlaylists, key = { "yt:${it.browseId}" }) { p ->
-                    Tile(p.title, p.subtitle, { p.browseId?.let(nav.browse) }, Modifier.animateItem()) {
-                        Artwork(p.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.fillMaxSize(), RoundedCornerShape(0.dp))
-                    }
-                }
-            }
+        items(playlists, key = { it.id }) { p ->
+            PlaylistRow(p.songs.firstOrNull()?.thumbnailUrl, p.name, "${p.songs.size} songs · on this phone", { nav.playlist(p.id) }, Modifier.animateItem())
+        }
+        items(ytPlaylists, key = { "yt:${it.browseId}" }) { p ->
+            PlaylistRow(p.thumbnailUrl, p.title, p.subtitle.ifBlank { "YouTube Music" }, { p.browseId?.let(nav.browse) }, Modifier.animateItem())
         }
         if (recents.isNotEmpty()) {
             item {
@@ -230,45 +186,85 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
 }
 
+/** This year in numbers, in the accent colours; opens Replay. */
 @Composable
-private fun ListeningCard(big: String, caption: String, who: String, footer: String, colors: List<Color>, onClick: () -> Unit) {
+private fun YearCard(year: Int, minutes: Long, plays: Int, topArtist: String?, topSong: String?, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     Column(
         Modifier
-            .width(320.dp)
-            .height(200.dp)
-            .pressable(onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .fillMaxWidth()
+            .pressable(onClick, 0.97f)
             .clip(RoundedCornerShape(28.dp))
-            .background(Brush.linearGradient(colors))
-            .padding(22.dp),
+            .background(Brush.linearGradient(listOf(scheme.primaryContainer, scheme.tertiaryContainer)))
+            .padding(20.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("YOUR LISTENING EXPERIENCE", style = MaterialTheme.typography.labelMedium, letterSpacing = 1.6.sp, color = Color.White.copy(alpha = 0.75f), modifier = Modifier.weight(1f))
-            Icon(Icons.Rounded.GraphicEq, null, tint = Color.White.copy(alpha = 0.9f))
+        Text("$year so far", style = MaterialTheme.typography.titleMedium, color = scheme.onPrimaryContainer)
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Stat("$minutes", "minutes", Modifier.weight(1f))
+            Stat("$plays", "plays", Modifier.weight(1f))
         }
-        Spacer(Modifier.weight(1f))
-        Text(big, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(caption, style = MaterialTheme.typography.labelLarge, letterSpacing = 1.6.sp, color = Color.White.copy(alpha = 0.7f))
-        Spacer(Modifier.height(14.dp))
-        Text(who, style = MaterialTheme.typography.labelLarge, letterSpacing = 1.4.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        Text(footer, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-@Composable
-private fun GradientTile(icon: ImageVector, title: String, subtitle: String, colors: List<Color>, onClick: () -> Unit) {
-    Tile(title, subtitle, onClick) {
-        Box(Modifier.fillMaxSize().background(Brush.linearGradient(colors)), Alignment.Center) {
-            Icon(icon, null, Modifier.size(52.dp), tint = Color.White)
+        if (topArtist != null || topSong != null) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                listOfNotNull(topSong?.let { "Top song: $it" }, topArtist?.let { "Top artist: $it" }).joinToString("  ·  "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onPrimaryContainer.copy(alpha = 0.8f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
 
 @Composable
-private fun Tile(title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier, art: @Composable () -> Unit) {
-    Column(modifier.width(TILE).pressable(onClick)) {
-        Box(Modifier.size(TILE).clip(RoundedCornerShape(22.dp))) { art() }
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
-        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun Stat(value: String, label: String, modifier: Modifier) {
+    Column(modifier) {
+        Text(value, style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f))
+    }
+}
+
+/** One of the four library shortcuts: an accent badge, a name and a count. */
+@Composable
+private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier) {
+    Row(
+        modifier
+            .height(72.dp)
+            .pressable(onClick, 0.96f)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(MaterialTheme.colorScheme.primary), Alignment.Center) {
+            Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
+        }
+        Column(Modifier.padding(start = 12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun PlaylistRow(art: String?, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (art != null) {
+            Artwork(art.artworkAt(CARD_ART_PX), Modifier.size(56.dp), RoundedCornerShape(14.dp))
+        } else {
+            Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
+                Icon(Icons.AutoMirrored.Rounded.QueueMusic, null)
+            }
+        }
+        Column(Modifier.padding(start = 14.dp).weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

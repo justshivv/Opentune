@@ -77,7 +77,7 @@ fun ExploreScreen(contentPadding: PaddingValues, onMoodClick: (MoodGenre) -> Uni
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                items(12) { Placeholder(Modifier.fillMaxWidth().height(112.dp), RoundedCornerShape(18.dp)) }
+                items(12) { Placeholder(Modifier.fillMaxWidth().height(104.dp), RoundedCornerShape(20.dp)) }
             }
             is UiState.Error -> Box(Modifier.fillMaxSize().padding(contentPadding), Alignment.Center) {
                 ErrorState(s.message, onRetry = { loader.reload() })
@@ -137,48 +137,42 @@ private object MoodCovers {
 }
 
 /**
- * A colored card with the mood's name and a tilted cover poking out of the
- * corner. The hue comes from the title, so each mood keeps its color.
+ * A mood card: the first cover from the mood's playlists fills it behind a
+ * scrim in the mood's own colour, with the name set low on the left. Until
+ * the cover arrives, the colour alone carries it. The hue comes from the
+ * title, so each mood keeps its colour.
  */
 @Composable
 private fun MoodTile(mood: MoodGenre, onClick: () -> Unit) {
     val hue = (mood.title.hashCode().absoluteValue % 360).toFloat()
-    val top = Color.hsv(hue, 0.62f, 0.62f)
-    val bottom = Color.hsv((hue + 18f) % 360f, 0.70f, 0.42f)
+    val colour = Color.hsv(hue, 0.65f, 0.55f)
     var cover by remember(mood) { mutableStateOf(MoodCovers.cached(mood)) }
     LaunchedEffect(mood) { if (cover == null) cover = MoodCovers.load(mood) }
     Box(
         Modifier
             .fillMaxWidth()
-            .height(112.dp)
+            .height(104.dp)
             .pressable(onClick)
-            .clip(RoundedCornerShape(18.dp))
-            .background(Brush.linearGradient(listOf(top, bottom))),
+            .clip(RoundedCornerShape(20.dp))
+            .background(colour),
     ) {
+        AnimatedVisibility(cover != null, enter = fadeIn(tween(500)), modifier = Modifier.matchParentSize()) {
+            Artwork(cover.artworkAt(CARD_ART_PX), Modifier.fillMaxSize(), RoundedCornerShape(0.dp))
+        }
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.horizontalGradient(listOf(colour.copy(alpha = 0.96f), colour.copy(alpha = 0.7f), colour.copy(alpha = 0.15f))),
+            ),
+        )
         Text(
             mood.title,
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             color = Color.White,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 12.dp, end = 70.dp),
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 12.dp, end = 40.dp),
         )
-        AnimatedVisibility(
-            cover != null,
-            enter = fadeIn(tween(400)) + scaleIn(tween(400), 0.8f),
-            modifier = Modifier.align(Alignment.BottomEnd),
-        ) {
-            Artwork(
-                cover.artworkAt(CARD_ART_PX),
-                Modifier
-                    .offset(x = 14.dp, y = 14.dp)
-                    .size(86.dp)
-                    .graphicsLayer { rotationZ = 22f }
-                    .shadow(10.dp, RoundedCornerShape(10.dp)),
-                RoundedCornerShape(10.dp),
-            )
-        }
     }
 }
 

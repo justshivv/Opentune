@@ -99,20 +99,29 @@ fun HomeScreen(
     ) {
         LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
             item(key = "top") {
-                Column(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(top = 8.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        GlassIconButton(Icons.Rounded.GraphicEq, "Settings", onOpenSettings)
-                        GlassIconButton(Icons.Rounded.Person, "Account and settings", onOpenSettings) {
-                            val photo = account?.thumbnailUrl
-                            if (photo != null) Artwork(photo, Modifier.size(46.dp), CircleShape)
-                            else Icon(Icons.Rounded.Person, "Account and settings", Modifier.size(26.dp))
-                        }
+                // A greeting for the time of day, by name when signed in, with the
+                // account (and settings) one tap away on the right.
+                val hour = remember { java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) }
+                val greeting = when (hour) {
+                    in 5..11 -> "Good morning"
+                    in 12..16 -> "Good afternoon"
+                    in 17..21 -> "Good evening"
+                    else -> "Late night"
+                }
+                val firstName = account?.name?.substringBefore(' ')?.takeIf { it.isNotBlank() }
+                Row(
+                    Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 20.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(greeting, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(firstName ?: "What's playing?", style = MaterialTheme.typography.displaySmall)
                     }
-                    Text(
-                        "Listen Now",
-                        style = MaterialTheme.typography.displayMedium,
-                        modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 4.dp),
-                    )
+                    GlassIconButton(Icons.Rounded.Person, "Account and settings", onOpenSettings, size = 52.dp) {
+                        val photo = account?.thumbnailUrl
+                        if (photo != null) Artwork(photo, Modifier.size(44.dp), CircleShape)
+                        else Icon(Icons.Rounded.Person, "Account and settings", Modifier.size(26.dp))
+                    }
                 }
             }
             if (recents.isNotEmpty()) {

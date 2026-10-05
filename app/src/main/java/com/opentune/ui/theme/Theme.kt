@@ -17,6 +17,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import com.opentune.R
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.materialkolor.PaletteStyle
@@ -147,28 +152,45 @@ private fun ColorScheme.animated(): ColorScheme {
 
 private val baseType = Typography()
 
+/**
+ * Outfit, OpenTune's typeface: a geometric sans with round, open letters
+ * (SIL Open Font License; see third_party/outfit). One variable font file,
+ * instanced at the weights the app uses.
+ */
+@OptIn(ExperimentalTextApi::class)
+val Outfit = FontFamily(
+    listOf(300, 400, 500, 600, 700, 800).map { w ->
+        Font(R.font.outfit_variable, FontWeight(w), variationSettings = FontVariation.Settings(FontVariation.weight(w)))
+    },
+)
+
+private fun TextStyle.outfit(weight: FontWeight? = null, spacing: Float? = null) =
+    copy(fontFamily = Outfit, fontWeight = weight ?: fontWeight, letterSpacing = spacing?.sp ?: letterSpacing)
+
 val AppTypography = Typography(
-    displayMedium = baseType.displayMedium.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp),
-    displaySmall = baseType.displaySmall.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.75).sp),
-    headlineLarge = baseType.headlineLarge.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
-    headlineMedium = baseType.headlineMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp),
-    headlineSmall = baseType.headlineSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.25).sp),
-    titleLarge = baseType.titleLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp),
-    titleMedium = baseType.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-    titleSmall = baseType.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-    bodyLarge = baseType.bodyLarge,
-    bodyMedium = baseType.bodyMedium,
-    bodySmall = baseType.bodySmall,
-    labelLarge = baseType.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-    labelMedium = baseType.labelMedium,
-    labelSmall = baseType.labelSmall,
+    displayLarge = baseType.displayLarge.outfit(FontWeight.Bold, -1.2f),
+    displayMedium = baseType.displayMedium.outfit(FontWeight.Bold, -1f),
+    displaySmall = baseType.displaySmall.outfit(FontWeight.Bold, -0.6f),
+    headlineLarge = baseType.headlineLarge.outfit(FontWeight.Bold, -0.4f),
+    headlineMedium = baseType.headlineMedium.outfit(FontWeight.SemiBold, -0.3f),
+    headlineSmall = baseType.headlineSmall.outfit(FontWeight.SemiBold, -0.2f),
+    titleLarge = baseType.titleLarge.outfit(FontWeight.SemiBold, -0.1f),
+    titleMedium = baseType.titleMedium.outfit(FontWeight.Medium),
+    titleSmall = baseType.titleSmall.outfit(FontWeight.Medium),
+    bodyLarge = baseType.bodyLarge.outfit(),
+    bodyMedium = baseType.bodyMedium.outfit(),
+    bodySmall = baseType.bodySmall.outfit(),
+    labelLarge = baseType.labelLarge.outfit(FontWeight.Medium),
+    labelMedium = baseType.labelMedium.outfit(FontWeight.Medium),
+    labelSmall = baseType.labelSmall.outfit(FontWeight.Medium),
 )
 
 /** Large, bold lyric lines. */
 val LyricsTextStyle = TextStyle(
+    fontFamily = Outfit,
     fontSize = 28.sp,
     lineHeight = 36.sp,
-    fontWeight = FontWeight.ExtraBold,
+    fontWeight = FontWeight.Bold,
     letterSpacing = (-0.3).sp,
 )
 

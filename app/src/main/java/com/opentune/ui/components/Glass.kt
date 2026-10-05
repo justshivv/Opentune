@@ -39,6 +39,7 @@ import com.kyant.backdrop.effects.colorControls
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
 import com.opentune.data.settings.AppSettings
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
@@ -88,7 +89,10 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
         // A see-through dark (or light) film rather than the theme's grey, so
         // the colour behind comes through; callers can pass their own tint.
         val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
-        val film = if (tint.alpha < 1f) tint else (if (dark) Color(0xFF121212) else Color(0xFFFAFAFA)).copy(alpha = 0.4f)
+        // OpenTune's film carries a little of the accent, so the glass reads
+        // as part of the theme rather than plain smoke.
+        val neutral = if (dark) Color(0xFF101014) else Color(0xFFF7F7FA)
+        val film = if (tint.alpha < 1f) tint else lerp(neutral, MaterialTheme.colorScheme.primary, 0.14f).copy(alpha = 0.42f)
         return this.drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
