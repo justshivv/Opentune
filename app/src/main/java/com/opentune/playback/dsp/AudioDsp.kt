@@ -242,6 +242,11 @@ class DspAudioProcessor : BaseAudioProcessor() {
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
+        // Media3 asks for output before any input arrives, and hands over its
+        // shared empty buffer to do it. Until this processor first allocates,
+        // that is also its own output buffer, and copying it into itself
+        // throws. Nothing to process either way.
+        if (!inputBuffer.hasRemaining()) return
         val p = params
         if (p !== applied) rebuild(p)
         val size = inputBuffer.remaining()
