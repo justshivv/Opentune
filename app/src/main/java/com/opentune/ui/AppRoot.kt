@@ -318,14 +318,24 @@ fun AppRoot(vm: PlayerViewModel) {
                     selected = if (route == SEARCH_ROUTE) null else tab.ordinal,
                     onSelect = { i ->
                         val t = Tab.entries[i]
-                        if (route == t.route) {
-                            nav.popBackStack(t.route, inclusive = false)
-                        } else {
-                            tab = t
-                            nav.navigate(t.route) {
-                                popUpTo(Tab.HOME.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                        when {
+                            // Already in this tab, on its root, a sub-page or Search
+                            // opened from it: back to the tab's root.
+                            t == tab -> nav.popBackStack(t.route, inclusive = false)
+                            // Home is the start, so it's reached by popping. Navigating to
+                            // it with restoreState would bring back whatever was popped:
+                            // a non-inclusive pop files that state under Home's id too.
+                            t == Tab.HOME -> {
+                                tab = t
+                                nav.popBackStack(Tab.HOME.route, inclusive = false, saveState = true)
+                            }
+                            else -> {
+                                tab = t
+                                nav.navigate(t.route) {
+                                    popUpTo(Tab.HOME.route) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
                         }
                     },

@@ -228,6 +228,22 @@ object InnertubeParser {
     }
 
     /**
+     * The token for Home's next page of shelves: on the first page it hangs
+     * off the section list, on later pages off the continuation envelope.
+     * Null once YouTube has nothing more to send.
+     */
+    fun sectionListContinuation(response: JsonObject): String? {
+        val list = response.o("contents")
+            .o("singleColumnBrowseResultsRenderer").a("tabs")?.firstOrNull()
+            .o("tabRenderer").o("content").o("sectionListRenderer")
+            ?: response.o("continuationContents").o("sectionListContinuation")
+            ?: return null
+        return list.a("continuations")?.firstOrNull().o("nextContinuationData").s("continuation")
+            ?: list.a("contents")?.lastOrNull().o("continuationItemRenderer")
+                .o("continuationEndpoint").o("continuationCommand").s("token")
+    }
+
+    /**
      * More Home shelves off a continuation response.
      *
      * Unlike the first page, a continuation envelope doesn't repeat the
