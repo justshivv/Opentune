@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -78,6 +79,7 @@ fun HomeScreen(
     val loader = rememberLoader("home") { MusicRepository.home() }
     val state by loader.state.collectAsState()
     val refreshing by loader.refreshing.collectAsState()
+    val more by MusicRepository.homeMore.collectAsState()
     val records by History.records.collectAsState()
     val recents = remember(records) { History.recents(records, 24) }
     val ui by AppSettings.ui.collectAsState()
@@ -139,8 +141,14 @@ fun HomeScreen(
                 is UiState.Error -> item(key = "error") {
                     ErrorState(s.message, onRetry = { loader.reload() }, modifier = Modifier.padding(top = 24.dp))
                 }
-                is UiState.Success -> itemsIndexed(s.data, key = { i, shelf -> "$i:${shelf.title}" }) { _, shelf ->
-                    HomeShelfView(shelf, onItemClick)
+                is UiState.Success -> {
+                    itemsIndexed(s.data, key = { i, shelf -> "$i:${shelf.title}" }) { _, shelf ->
+                        HomeShelfView(shelf, onItemClick)
+                    }
+                    // The rest of Home, which arrives a page at a time after the first.
+                    itemsIndexed(more, key = { i, shelf -> "more$i:${shelf.title}" }) { _, shelf ->
+                        HomeShelfView(shelf, onItemClick, Modifier.animateItem())
+                    }
                 }
             }
         }
@@ -193,13 +201,15 @@ private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, on
 }
 
 @Composable
-fun HomeShelfView(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit) {
+fun HomeShelfView(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, modifier: Modifier = Modifier) {
     val songsOnly = shelf.items.isNotEmpty() && shelf.items.all { it.videoId != null && it.browseId == null }
-    if (songsOnly && shelf.items.size >= 4) {
-        QuickPicks(shelf, onItemClick)
-    } else {
-        Shelf(title = shelf.title, subtitle = shelf.subtitle, items = shelf.items) { item ->
-            ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) })
+    Box(modifier) {
+        if (songsOnly && shelf.items.size >= 4) {
+            QuickPicks(shelf, onItemClick)
+        } else {
+            Shelf(title = shelf.title, subtitle = shelf.subtitle, items = shelf.items) { item ->
+                ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) })
+            }
         }
     }
 }
