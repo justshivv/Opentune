@@ -75,6 +75,9 @@ import com.opentune.ui.LyricsState
 import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.Placeholder
 import com.opentune.ui.theme.LyricsTextStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.graphics.Shadow
+import com.opentune.data.settings.LyricsAnimation
 import androidx.compose.runtime.collectAsState
 import com.opentune.data.settings.AppSettings
 import kotlin.math.abs
@@ -97,20 +100,20 @@ fun LyricsView(
                 }
             }
             is LyricsState.NotFound -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                MessageState(Icons.Rounded.Lyrics, "No lyrics for this one", message = "LRCLIB doesn't have lyrics for this track yet.")
+                MessageState(Icons.Rounded.Lyrics, "No lyrics for this one", message = "None of your lyrics sources has this track yet. You can change them in Settings › Lyrics sources.")
             }
             is LyricsState.Found -> when (val lyrics = state.lyrics) {
                 is Lyrics.Synced ->
-                    if (synced) SyncedLyrics(lyrics.lines, position, onSeek, blur)
-                    else PlainLyrics(lyrics.lines.joinToString("\n") { it.text }, note = null)
-                is Lyrics.Plain -> PlainLyrics(lyrics.text)
+                    if (synced) SyncedLyrics(lyrics.lines, position, onSeek, blur, lyrics.source)
+                    else PlainLyrics(lyrics.lines.joinToString("\n") { it.text }, lyrics.source, note = null)
+                is Lyrics.Plain -> PlainLyrics(lyrics.text, lyrics.source)
             }
         }
     }
 }
 
 @Composable
-private fun PlainLyrics(text: String, note: String? = "These lyrics aren't synced to the music.") {
+private fun PlainLyrics(text: String, source: String, note: String? = "These lyrics aren't synced to the music.") {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 24.dp)) {
         if (note != null) {
             Text(
@@ -122,7 +125,7 @@ private fun PlainLyrics(text: String, note: String? = "These lyrics aren't synce
         }
         val style = lyricsStyle()
         Text(text, style = style.copy(fontSize = style.fontSize * 0.8f, lineHeight = style.lineHeight * 0.85f))
-        Credit()
+        Credit(source)
     }
 }
 
@@ -134,7 +137,8 @@ private fun PlainLyrics(text: String, note: String? = "These lyrics aren't synce
  * hand pauses that for a few seconds; tapping a line jumps the song there.
  */
 @Composable
-private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (Long) -> Unit, blur: Boolean) {
+private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (Long) -> Unit, blur: Boolean, source: String) {
+    val animation = AppSettings.ui.collectAsState().value.lyricsAnimation
     val listState = rememberLazyListState()
     val active by remember(lines) { derivedStateOf { lines.activeIndex(position()) } }
     var following by remember { mutableStateOf(true) }
@@ -178,6 +182,7 @@ private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (
                     line = line,
                     distance = i - active,
                     isActive = i == active,
+                    animation = animation,
                     blurEnabled = blur && following,
                     position = position,
                     onClick = {
@@ -186,7 +191,7 @@ private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (
                     },
                 )
             }
-            item(key = "credit") { Credit() }
+            item(key = "credit") { Credit(source) }
         }
 
         AnimatedVisibility(
@@ -215,32 +220,64 @@ private suspend fun glideTo(state: LazyListState, index: Int) {
     }
 }
 
+/** How one [LyricsAnimation] treats lines: sizes, blur per line away, slide and glow. */
+private class LineMotion(
+    val activeScale: Float,
+    val inactiveScale: Float,
+    val blurPerLine: Float,
+    val slide: Dp,
+    val glow: Boolean,
+    val inactiveAlpha: Float,
+)
+
+private fun motionOf(animation: LyricsAnimation) = when (animation) {
+    LyricsAnimation.FLUID -> LineMotion(1f, 0.93f, 1.1f, 0.dp, glow = false, inactiveAlpha = 0.8f)
+    LyricsAnimation.KARAOKE -> LineMotion(1f, 1f, 0f, 0.dp, glow = true, inactiveAlpha = 0.55f)
+    LyricsAnimation.SLIDE -> LineMotion(1f, 0.96f, 0.6f, 18.dp, glow = false, inactiveAlpha = 0.7f)
+    LyricsAnimation.ZOOM -> LineMotion(1.08f, 0.86f, 1.9f, 0.dp, glow = false, inactiveAlpha = 0.6f)
+    LyricsAnimation.MINIMAL -> LineMotion(1f, 1f, 0f, 0.dp, glow = false, inactiveAlpha = 0.6f)
+}
+
 @Composable
 private fun LyricLineView(
     line: LyricLine,
     distance: Int,
     isActive: Boolean,
+    animation: LyricsAnimation,
     blurEnabled: Boolean,
     position: () -> Long,
     onClick: () -> Unit,
 ) {
+    val motion = motionOf(animation)
     val bright = MaterialTheme.colorScheme.onSurface
     val dim = bright.copy(alpha = 0.32f)
     val scale by animateFloatAsState(
-        if (isActive) 1f else 0.93f,
+        if (isActive) motion.activeScale else motion.inactiveScale,
         spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessLow),
         label = "lineScale",
     )
-    val alpha by animateFloatAsState(if (isActive) 1f else if (distance < 0) 0.7f else 0.85f, tween(400), label = "lineAlpha")
+    val alpha by animateFloatAsState(
+        if (isActive) 1f else if (distance < 0) motion.inactiveAlpha - 0.1f else motion.inactiveAlpha,
+        tween(if (animation == LyricsAnimation.MINIMAL) 200 else 400),
+        label = "lineAlpha",
+    )
     val blur by animateDpAsState(
-        if (!blurEnabled || isActive) 0.dp else (minOf(abs(distance), 4) * 1.1f).dp,
+        if (!blurEnabled || isActive) 0.dp else (minOf(abs(distance), 4) * motion.blurPerLine).dp,
         tween(500),
         label = "lineBlur",
     )
+    // Slide: lines wait a little to the right and the current one glides home.
+    val shift by animateDpAsState(
+        if (isActive || motion.slide == 0.dp) 0.dp else motion.slide,
+        spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow),
+        label = "lineShift",
+    )
+    val base = lyricsStyle()
+    val style = if (motion.glow && isActive) base.copy(shadow = Shadow(bright.copy(alpha = 0.55f), blurRadius = 24f)) else base
 
     Text(
         text = if (isActive) litWords(line, position(), dim, bright) else AnnotatedString(line.text),
-        style = lyricsStyle(),
+        style = style,
         color = dim,
         modifier = Modifier
             .fillMaxWidth()
@@ -251,6 +288,7 @@ private fun LyricLineView(
                 scaleX = scale
                 scaleY = scale
                 this.alpha = alpha
+                translationX = shift.toPx()
                 transformOrigin = TransformOrigin(0f, 0.5f)
             }
             .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blur > 0.dp) Modifier.blur(blur) else Modifier),
@@ -299,10 +337,10 @@ private fun IntroDots(visible: Boolean) {
 }
 
 @Composable
-private fun Credit() {
+private fun Credit(source: String) {
     Spacer(Modifier.height(24.dp))
     Text(
-        "Lyrics from LRCLIB",
+        "Lyrics from $source",
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

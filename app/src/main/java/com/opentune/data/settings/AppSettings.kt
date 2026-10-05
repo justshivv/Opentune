@@ -214,6 +214,7 @@ data class InterfaceSettings(
     val liquidGlass: Boolean = true,
     /** Draw the played part of the seek bar as a moving wave. */
     val wavySeekbar: Boolean = false,
+    val lyricsAnimation: LyricsAnimation = LyricsAnimation.FLUID,
     /** Lyrics text size, as a fraction of the standard size. */
     val lyricsTextScale: Float = 1f,
 )
@@ -227,6 +228,16 @@ data class LibrarySettings(
     val downloadQuality: AudioQuality = AudioQuality.MAX,
     val downloadWifiOnly: Boolean = true,
 )
+
+/** How synced lyrics move as the song plays. */
+@Serializable
+enum class LyricsAnimation(val label: String, val summary: String) {
+    FLUID("Fluid", "The current line grows and the rest soften"),
+    KARAOKE("Karaoke", "Words fill with a glow; lines stay still"),
+    SLIDE("Slide", "The current line glides into place"),
+    ZOOM("Focus zoom", "A big current line, the rest blurred away"),
+    MINIMAL("Minimal", "Only the colour changes"),
+}
 
 /** Where lyrics can come from. */
 @Serializable
