@@ -39,6 +39,7 @@ import com.opentune.MainActivity
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
 import com.opentune.data.download.Downloads
+import com.opentune.data.lastfm.LastFm
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.library.SongRef
 import com.opentune.data.NerdStats
@@ -405,6 +406,7 @@ class PlaybackService : MediaSessionService() {
                 startRequestedAt = 0
             }
             if (isPlaying) {
+                sendNowPlaying()
                 if (listenSince < 0) listenSince = SystemClock.elapsedRealtime()
             } else {
                 pauseListen()
@@ -454,6 +456,22 @@ class PlaybackService : MediaSessionService() {
         listenedMs = 0
         listenSince = if (playing) SystemClock.elapsedRealtime() else -1
         listenRecord = null
+        listenStartedAt = System.currentTimeMillis()
+        scrobbled = false
+        nowPlayingSent = false
+        if (playing) sendNowPlaying()
+    }
+
+    /** Wall-clock start of the current listen, for the scrobble's timestamp. */
+    private var listenStartedAt = 0L
+    private var scrobbled = false
+    private var nowPlayingSent = false
+
+    private fun sendNowPlaying() {
+        val song = listenSong ?: return
+        if (nowPlayingSent) return
+        nowPlayingSent = true
+        LastFm.nowPlaying(song, mediaSession?.player?.duration?.takeIf { it > 0 } ?: 0L)
     }
 
     private fun pauseListen() {
@@ -474,10 +492,16 @@ class PlaybackService : MediaSessionService() {
         while (scope.isActive) {
             delay(5_000)
             val song = listenSong ?: continue
-            if (listenRecord != null) continue
-            val duration = player.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
-            val threshold = minOf(30_000L, duration / 2)
             val heard = listenedSoFar()
+            val known = player.duration.takeIf { it > 0 }
+            // Last.fm's rule: a song over 30 s, heard for half its length or 4 minutes.
+            if (!scrobbled && known != null && known > 30_000 && heard >= minOf(known / 2, 240_000L)) {
+                scrobbled = true
+                LastFm.scrobble(song, listenStartedAt, known)
+            }
+            if (listenRecord != null) continue
+            val duration = known ?: Long.MAX_VALUE
+            val threshold = minOf(30_000L, duration / 2)
             if (heard >= threshold) listenRecord = History.record(song, heard)
         }
     }
