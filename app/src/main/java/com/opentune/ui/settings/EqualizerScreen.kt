@@ -1,5 +1,11 @@
 package com.opentune.ui.settings
 
+import com.opentune.ui.components.SettingRow
+import com.opentune.ui.components.NavRow
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -59,6 +65,8 @@ private const val MAX_DB = 12f
 fun EqualizerScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
     val eq by AppSettings.equalizer.collectAsState()
     val preset = EqPreset.entries.firstOrNull { it.bands == eq.bands }
+    var picking by remember { mutableStateOf(false) }
+    if (picking) HeadphonePickerDialog(onDismiss = { picking = false })
 
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader("Equalizer", onBack = onBack) }
@@ -71,6 +79,22 @@ fun EqualizerScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
                     summary = "Boosts are balanced with automatic headroom, so they don't distort",
                     icon = Icons.Rounded.Equalizer,
                 )
+            }
+        }
+        item { GroupLabel("Headphones") }
+        item {
+            GroupCard {
+                val hp = eq.headphone
+                NavRow(
+                    hp?.name ?: "Correct for your headphones",
+                    { picking = true },
+                    summary = hp?.let { "AutoEq correction measured by ${it.source} · ${it.filters.size} filters, ${formatDb(it.preampDb)} preamp" }
+                        ?: "Pick your model from AutoEq's thousands of measurements",
+                    icon = Icons.Rounded.Headphones,
+                )
+                if (hp != null) {
+                    SettingRow("Turn off headphone correction", icon = Icons.Rounded.Close, onClick = { AppSettings.updateEqualizer { it.copy(headphone = null) } })
+                }
             }
         }
         item { GroupLabel("Response") }

@@ -10,6 +10,7 @@ import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.util.UnstableApi
 import com.opentune.data.settings.EQ_BANDS_HZ
 import com.opentune.data.settings.EqualizerSettings
+import com.opentune.data.settings.FilterType
 import java.nio.ByteBuffer
 import kotlin.math.PI
 import kotlin.math.abs
@@ -73,15 +74,18 @@ class Biquad(
             return Biquad((1 + cw) / 2 / a0, -(1 + cw) / a0, (1 + cw) / 2 / a0, -2 * cw / a0, (1 - alpha) / a0)
         }
 
-        fun lowShelf(sampleRate: Double, freq: Double, gainDb: Double): Biquad = shelf(sampleRate, freq, gainDb, low = true)
+        /** [q] of 1/√2 (the default) is a shelf slope of 1; AutoEq's shelves give their own. */
+        fun lowShelf(sampleRate: Double, freq: Double, gainDb: Double, q: Double = SHELF_Q): Biquad = shelf(sampleRate, freq, gainDb, q, low = true)
 
-        fun highShelf(sampleRate: Double, freq: Double, gainDb: Double): Biquad = shelf(sampleRate, freq, gainDb, low = false)
+        fun highShelf(sampleRate: Double, freq: Double, gainDb: Double, q: Double = SHELF_Q): Biquad = shelf(sampleRate, freq, gainDb, q, low = false)
 
-        private fun shelf(sampleRate: Double, freq: Double, gainDb: Double, low: Boolean): Biquad {
+        private const val SHELF_Q = 0.70710678
+
+        private fun shelf(sampleRate: Double, freq: Double, gainDb: Double, q: Double, low: Boolean): Biquad {
             val a = 10.0.pow(gainDb / 40)
             val w0 = 2 * PI * freq / sampleRate
             val cw = cos(w0)
-            val alpha = sin(w0) / 2 * sqrt(2.0) // shelf slope S = 1
+            val alpha = sin(w0) / (2 * q)
             val sa = 2 * sqrt(a) * alpha
             return if (low) {
                 val a0 = (a + 1) + (a - 1) * cw + sa
@@ -123,7 +127,10 @@ data class DspParams(
                 equalizer.bassDb != 0f || equalizer.trebleDb != 0f || equalizer.balance != 0f
             )
 
-    val isNeutral: Boolean get() = !eqActive && bassBoost == 0 && !spatial && !clarity && outputGainDb == 0f
+    /** The headphone correction from AutoEq, when one is chosen; independent of [eqActive]. */
+    private val headphone get() = equalizer.headphone?.takeIf { it.filters.isNotEmpty() }
+
+    val isNeutral: Boolean get() = !eqActive && headphone == null && bassBoost == 0 && !spatial && !clarity && outputGainDb == 0f
 
     /**
      * Whether anything in the chain can push a sample past full scale. Only
@@ -131,7 +138,7 @@ data class DspParams(
      * mastered.
      */
     val canBoost: Boolean
-        get() = spatial || clarity || bassBoost > 0 || (eqActive && (
+        get() = spatial || clarity || bassBoost > 0 || headphone?.filters?.any { it.gainDb > 0 } == true || (eqActive && (
             equalizer.preampDb > 0 || equalizer.bassDb > 0 || equalizer.trebleDb > 0 || equalizer.bands.any { it > 0 }
             ))
 
@@ -140,6 +147,20 @@ data class DspParams(
         val fs = sampleRate.toDouble()
         val nyquistSafe = fs * 0.45
         val out = mutableListOf<() -> Biquad>()
+        // The headphone correction first: it flattens the headphones, and the
+        // listener's own EQ then shapes a neutral sound.
+        headphone?.filters?.forEach { f ->
+            val freq = f.freqHz.toDouble()
+            if (freq <= 0 || freq >= nyquistSafe) return@forEach
+            val q = f.q.toDouble().coerceAtLeast(0.1)
+            val gain = f.gainDb.toDouble()
+            val stage: () -> Biquad = when (f.type) {
+                FilterType.PEAK -> { { Biquad.peaking(fs, freq, q, gain) } }
+                FilterType.LOW_SHELF -> { { Biquad.lowShelf(fs, freq, gain, q) } }
+                FilterType.HIGH_SHELF -> { { Biquad.highShelf(fs, freq, gain, q) } }
+            }
+            out.add(stage)
+        }
         if (eqActive) {
             equalizer.bands.forEachIndexed { i, gain ->
                 val f = EQ_BANDS_HZ.getOrNull(i)?.toDouble() ?: return@forEachIndexed
@@ -182,7 +203,8 @@ data class DspParams(
                 if (clarity) add(CLARITY_HEADROOM_DB)
             }
             val headroom = boosts.maxOrNull()?.coerceAtLeast(0f) ?: 0f
-            val user = if (eqActive) equalizer.preampDb else 0f
+            // AutoEq's preamp already makes room for its own boosts.
+            val user = (if (eqActive) equalizer.preampDb else 0f) + (headphone?.preampDb?.coerceAtMost(0f) ?: 0f)
             if (outputGainDb <= BitPerfectUsb.SILENT_DB) return 0f
             return dbToGain(user - headroom + outputGainDb.coerceAtMost(0f))
         }

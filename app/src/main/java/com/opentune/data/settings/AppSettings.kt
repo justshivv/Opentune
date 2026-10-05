@@ -146,7 +146,28 @@ data class EqualizerSettings(
     val trebleDb: Float = 0f,
     /** -1 (left only) .. 1 (right only). */
     val balance: Float = 0f,
+    /**
+     * A correction for the listener's headphones from AutoEq. Runs on its own,
+     * whether or not the equalizer above is on.
+     */
+    val headphone: HeadphoneEq? = null,
 )
+
+/** One AutoEq parametric profile: its preamp and filters, as published. */
+@Serializable
+data class HeadphoneEq(
+    val name: String,
+    /** Who measured it, e.g. "oratory1990". */
+    val source: String,
+    val preampDb: Float,
+    val filters: List<ParametricFilter>,
+)
+
+@Serializable
+data class ParametricFilter(val type: FilterType, val freqHz: Float, val gainDb: Float, val q: Float)
+
+@Serializable
+enum class FilterType { PEAK, LOW_SHELF, HIGH_SHELF }
 
 enum class EqPreset(val label: String, val bands: List<Float>) {
     FLAT("Flat", List(15) { 0f }),
