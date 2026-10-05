@@ -61,7 +61,8 @@ import java.util.Locale
  * from the stored cookie; no long-lived token is ever minted or stored.
  */
 object Innertube {
-    private val currentLanguage: String
+    /** The UI language as YouTube spells it (hl). */
+    val currentLanguage: String
         get() {
             val raw = Locale.getDefault().language.ifEmpty { "en" }
             return when (raw.lowercase(Locale.ROOT)) {

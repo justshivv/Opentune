@@ -7,7 +7,8 @@ plugins {
 
 android {
     namespace = "com.opentune"
-    compileSdk = 36
+    // InnerTubeX's AAR is compiled against 37; targetSdk (runtime behaviour) stays 36.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.opentune"
@@ -74,7 +75,9 @@ val newPipeExtractorStripped = tasks.register<org.gradle.api.tasks.bundling.Jar>
 ) {
     archiveFileName.set("NewPipeExtractor-v0.26.3-noutils.jar")
     destinationDirectory.set(layout.buildDirectory.dir("stripped-libs"))
-    from(provider { newPipeExtractorRaw.map { zipTree(it) } }) {
+    // `elements` keeps resolution lazy: the jar is only opened when this task runs,
+    // not while Gradle configures the build.
+    from(newPipeExtractorRaw.elements.map { jars -> jars.map { zipTree(it.asFile) } }) {
         exclude("org/schabi/newpipe/extractor/utils/Utils.class")
         exclude("org/schabi/newpipe/extractor/utils/Utils\$*.class")
     }
@@ -112,18 +115,22 @@ dependencies {
     implementation("androidx.media3:media3-common:1.11.0")
     implementation("androidx.media3:media3-datasource-okhttp:1.11.0")
     implementation("androidx.media3:media3-database:1.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.11.0")
 
     // ---- Images ----
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
 
     // ---- Innertube (YouTube Music) client: Ktor + kotlinx.serialization ----
-    implementation("io.ktor:ktor-client-core:3.0.3")
-    implementation("io.ktor:ktor-client-okhttp:3.0.3")
-    implementation("io.ktor:ktor-client-content-negotiation:3.0.3")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation("io.ktor:ktor-client-core:3.5.2")
+    implementation("io.ktor:ktor-client-okhttp:3.5.2")
+    implementation("io.ktor:ktor-client-content-negotiation:3.5.2")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.5.2")
+
+    // ---- InnerTubeX: a second stream extractor (client catalog, cipher tiers, PoTokens) ----
+    // Ktor and serialization above are held at its versions.
+    implementation("com.github.MetrolistGroup.innertubex:innertubex-android:v0.7.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     // ---- Stream resolution: NewPipe solves YouTube's signature + `n` throttling ----
     // Pinned to v0.26.3: the newer v0.26.4's player-JS parser fails to parse

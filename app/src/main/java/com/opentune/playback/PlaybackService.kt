@@ -44,7 +44,6 @@ import com.opentune.data.history.History
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.innertube.InnertubeParser
-import com.opentune.data.innertube.PlayerClient
 import com.opentune.data.innertube.StreamResolver
 import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
@@ -287,7 +286,7 @@ class PlaybackService : MediaSessionService() {
         // googlevideo expects the media request to look like the client that
         // minted the URL; these are also the headers StreamResolver probed with.
         return dataSpec.withUri(url.toUri())
-            .withAdditionalHeaders(PlayerClient.forStreamUrl(url).mediaHeaders())
+            .withAdditionalHeaders(StreamResolver.mediaHeadersFor(url))
     }
 
     /**

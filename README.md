@@ -13,7 +13,9 @@ What works:
   album, playlist and artist pages, and a Library with listening cards,
   Replay stats, downloads, local music, liked songs and playlists
 - **Playback:** a Media3 `MediaSessionService` / ExoPlayer, with YouTube
-  streams resolved and deciphered via NewPipeExtractor. A queue with
+  streams resolved by two engines that switch automatically: OpenTune's own
+  client walk (with NewPipeExtractor as the last resort) and InnerTubeX.
+  Each track starts with whichever served the last one. A queue with
   autoplay radio, shuffle and repeat, and swipe-to-queue on any song
 - **Audio:** per-network quality (defaults to the best stream YouTube
   offers), a song cache for instant replays and seeks, preloading of the
@@ -64,5 +66,9 @@ debug APK. Unit tests run with `./gradlew testDebugUnitTest`.
 The Innertube client, response parser, and YouTube stream resolver
 (`app/src/main/java/com/opentune/data/`) are adapted from
 [BitChord](https://github.com/kushagrasinghx/BitChord), used here under its
-GPLv3 license. This project is licensed under the GNU General Public License
+GPLv3 license. The InnerTubeX glue and the PoToken WebView
+(`data/innertube/InnerTubeXResolver.kt`, `data/innertube/potoken/`,
+`assets/po_token.html`) also come from BitChord; the PoToken code follows
+NewPipe's design. [InnerTubeX](https://github.com/MetrolistGroup/innertubex)
+by MetrolistGroup is used as a library under GPLv3. This project is licensed under the GNU General Public License
 v3.0 — see [LICENSE](LICENSE).

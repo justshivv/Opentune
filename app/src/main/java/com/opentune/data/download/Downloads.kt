@@ -17,7 +17,6 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
-import com.opentune.data.innertube.PlayerClient
 import com.opentune.data.innertube.StreamResolver
 import com.opentune.data.library.SongRef
 import com.opentune.data.model.PLAYER_ART_PX
@@ -186,7 +185,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
     private suspend fun fetch(url: String, part: File, target: File, title: String, onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
         val have = if (part.exists()) part.length() else 0L
         val request = Request.Builder().url(url).apply {
-            PlayerClient.forStreamUrl(url).mediaHeaders().forEach { (k, v) -> header(k, v) }
+            StreamResolver.mediaHeadersFor(url).forEach { (k, v) -> header(k, v) }
             if (have > 0) header("Range", "bytes=$have-")
         }.build()
         Http.client.newCall(request).execute().use { response ->
