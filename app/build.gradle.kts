@@ -129,7 +129,7 @@ dependencies {
 
     // ---- InnerTubeX: a second stream extractor (client catalog, cipher tiers, PoTokens) ----
     // Ktor and serialization above are held at its versions.
-    implementation("com.github.MetrolistGroup.innertubex:innertubex-android:v0.7.0")
+    implementation("com.github.MetrolistGroup.innertubex:innertubex-android:v0.7.4")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     // ---- Stream resolution: NewPipe solves YouTube's signature + `n` throttling ----

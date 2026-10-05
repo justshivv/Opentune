@@ -381,6 +381,15 @@ object StreamResolver {
         return resolve(videoId)
     }
 
+    /**
+     * Forgets [videoId]'s upgrade after its better stream failed in play, so
+     * the track goes back to, and stays on, the stream it started on.
+     */
+    fun dropUpgrade(videoId: String) {
+        upgrades.remove(videoId)
+        UpgradedTracks.remove(videoId)
+    }
+
     /** Kbps and codec the current stream started on, for the menu's "Upgrade quality" row. */
     fun servedLabel(videoId: String): String? = served[videoId]?.let { "${it.kbps} kbps ${if ("opus" in it.mimeType) "Opus" else "AAC"}" }
 

@@ -29,4 +29,9 @@ object UpgradedTracks {
         if (ids.size > MAX) ids.take(ids.size - MAX).forEach(ids::remove)
         prefs?.edit { putStringSet(KEY, HashSet(ids)) }
     }
+
+    fun remove(videoId: String) {
+        if (!ids.remove(videoId)) return
+        prefs?.edit { putStringSet(KEY, HashSet(ids)) }
+    }
 }
