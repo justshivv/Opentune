@@ -11,6 +11,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import com.opentune.data.settings.AppSettings
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -51,7 +55,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun watchLyrics() {
-        currentSong.distinctUntilChangedBy { it?.videoId }.collectLatest { song ->
+        combine(
+            currentSong.distinctUntilChangedBy { it?.videoId },
+            AppSettings.lyrics.map { it.ordered to it.preferWordSynced }.distinctUntilChanged(),
+        ) { song, _ -> song }.collectLatest { song ->
             if (song == null) return@collectLatest
             _lyrics.value = LyricsState.Loading
             // LRCLIB matches on duration, and the player's figure is exact

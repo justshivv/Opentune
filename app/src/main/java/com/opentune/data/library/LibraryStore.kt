@@ -51,6 +51,8 @@ data class LocalPlaylist(
 private data class LibraryDocument(
     val liked: List<SongRef> = emptyList(),
     val playlists: List<LocalPlaylist> = emptyList(),
+    /** Songs marked "Dislike": kept out of autoplay. */
+    val disliked: Set<String> = emptySet(),
 )
 
 /**
@@ -95,10 +97,26 @@ object LibraryStore {
 
     fun isLiked(videoId: String): Boolean = _liked.value.any { it.videoId == videoId }
 
+    fun isDisliked(videoId: String): Boolean = videoId in doc.value.disliked
+
+    /**
+     * Marks [song] as one not to hear again: it's taken out of Liked, kept out
+     * of autoplay from now on, and rated down on YouTube Music when signed in.
+     */
+    fun dislike(song: Song) {
+        update { d -> d.copy(liked = d.liked.filterNot { it.videoId == song.videoId }, disliked = d.disliked + song.videoId) }
+        if (AccountStore.signedIn.value && !song.videoId.startsWith("local:")) {
+            scope.launch {
+                runCatching { Innertube.rate(song.videoId, LikeStatus.DISLIKE) }
+                    .onFailure { Log.w("LibraryStore", "Couldn't rate ${song.videoId} down on YouTube Music", it) }
+            }
+        }
+    }
+
     fun setLiked(song: Song, liked: Boolean) {
         update { d ->
             val rest = d.liked.filterNot { it.videoId == song.videoId }
-            d.copy(liked = if (liked) listOf(SongRef.of(song)) + rest else rest)
+            d.copy(liked = if (liked) listOf(SongRef.of(song)) + rest else rest, disliked = if (liked) d.disliked - song.videoId else d.disliked)
         }
         if (AccountStore.signedIn.value && !song.videoId.startsWith("local:")) {
             scope.launch {

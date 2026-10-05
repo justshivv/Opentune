@@ -35,7 +35,10 @@ import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.effects.colorControls
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
+import androidx.compose.ui.graphics.luminance
 import com.opentune.data.settings.AppSettings
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
@@ -82,19 +85,24 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     val backdrop = LocalBackdrop.current
     val edge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
     if (backdrop != null && liquidGlassOn()) {
-        val surface = if (tint.alpha < 1f) tint else tint.copy(alpha = 0.28f)
+        // A see-through dark (or light) film rather than the theme's grey, so
+        // the colour behind comes through; callers can pass their own tint.
+        val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
+        val film = if (tint.alpha < 1f) tint else (if (dark) Color(0xFF121212) else Color(0xFFFAFAFA)).copy(alpha = 0.4f)
         return this.drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
             effects = {
-                // Frosted first, then bent: a real blur so text and art behind
-                // the bar turn to soft color, with the lens bending the edges.
-                vibrancy()
+                // Saturated and frosted, then bent at the edges with a little
+                // colour fringing, the way Apple's glass reads over artwork.
+                colorControls(saturation = 1.5f)
                 blur(LIQUID_BLUR.toPx())
-                lens(16.dp.toPx(), 32.dp.toPx(), depthEffect = true)
+                lens(24.dp.toPx(), 24.dp.toPx(), depthEffect = true, chromaticAberration = true)
             },
-            onDrawSurface = { drawRect(surface) },
-        )
+            highlight = { Highlight.Default },
+            shadow = { Shadow.Default },
+            onDrawSurface = { drawRect(film) },
+        ).border(0.5.dp, Color.White.copy(alpha = 0.10f), shape)
     }
     val base = this.clip(shape)
     val filled = if (haze == null || ui.reduceBlur) {

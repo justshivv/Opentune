@@ -39,6 +39,7 @@ import com.opentune.MainActivity
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
 import com.opentune.data.download.Downloads
+import com.opentune.data.library.LibraryStore
 import com.opentune.data.NerdStats
 import com.opentune.data.history.History
 import com.opentune.data.local.LocalMusic
@@ -663,7 +664,7 @@ class PlaybackService : MediaSessionService() {
 
             val queued = (0 until count).mapTo(HashSet()) { player.getMediaItemAt(it).mediaId }
             if (AppSettings.playback.value.noRepeatInSession) queued += sessionIds
-            val additions = Autoplay.newTracks(queued, radio)
+            val additions = Autoplay.newTracks(queued, radio.filterNot { LibraryStore.isDisliked(it.videoId) })
             if (additions.isEmpty()) {
                 exhaustedSeeds += seed
                 return@launch

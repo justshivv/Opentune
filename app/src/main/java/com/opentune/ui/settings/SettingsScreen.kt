@@ -205,6 +205,8 @@ private fun settingsSections(
     val account by AccountStore.account.collectAsState()
     val downloads by Downloads.entries.collectAsState()
     var downloadQualityDialog by remember { mutableStateOf(false) }
+    var lyricsSourcesDialog by remember { mutableStateOf(false) }
+    val lyricsSettings by AppSettings.lyrics.collectAsState()
     var confirmSignOut by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -260,6 +262,7 @@ private fun settingsSections(
             onDismiss = { qualityDialog = null },
         )
     }
+    if (lyricsSourcesDialog) LyricsSourcesDialog(onDismiss = { lyricsSourcesDialog = false })
     if (downloadQualityDialog) {
         ChoiceDialog(
             title = "Download quality",
@@ -489,8 +492,13 @@ private fun settingsSections(
                 Entry("Blur unfocused lyrics", "spotlight") {
                     ToggleRow("Blur unfocused lyrics", ui.blurLyrics, { v -> AppSettings.updateUi { it.copy(blurLyrics = v) } }, summary = "Keeps the spotlight on the current line", icon = Icons.Rounded.BlurOn)
                 },
-                Entry("Lyrics sources", "lrclib youtube") {
-                    SettingRow("Lyrics sources", summary = "LRCLIB, then YouTube Music", icon = Icons.Rounded.TextFields)
+                Entry("Lyrics sources", "lrclib youtube order provider") {
+                    NavRow(
+                        "Lyrics sources",
+                        { lyricsSourcesDialog = true },
+                        summary = lyricsSettings.ordered.filter { it.enabled }.joinToString(", then ") { it.source.label }.ifEmpty { "None: lyrics are off" },
+                        icon = Icons.Rounded.TextFields,
+                    )
                 },
             ),
         ),

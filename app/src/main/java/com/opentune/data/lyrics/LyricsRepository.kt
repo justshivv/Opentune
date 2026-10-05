@@ -5,6 +5,8 @@ import com.opentune.data.Http
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.local.LocalMusic
 import java.util.concurrent.ConcurrentHashMap
+import com.opentune.data.settings.LyricsSource
+import com.opentune.data.settings.AppSettings
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,10 +24,11 @@ import okhttp3.Request
  * Lyrics from LRCLIB (lrclib.net): free, keyless, and mostly line-synced, with
  * word sync for some tracks.
  *
- * Lookup order: an exact match on title, artist and duration; then a search
- * on title and artist, preferring synced results whose duration is closest;
- * then a free-text search on the cleaned title; and last, YouTube Music's own
- * (unsynced) lyrics for anything that isn't a local file.
+ * Sources are tried in the order set in Settings › Lyrics sources. Within
+ * LRCLIB: an exact match on title, artist and duration; then a search on
+ * title and artist, preferring synced results whose duration is closest;
+ * then a free-text search on the cleaned title. YouTube Music's lyrics are
+ * unsynced and never used for local files.
  */
 object LyricsRepository {
     private const val BASE = "https://lrclib.net/api"
@@ -39,19 +42,40 @@ object LyricsRepository {
     private val cache = ConcurrentHashMap<String, Lyrics?>()
 
     suspend fun lyricsFor(videoId: String, title: String, artist: String, durationMs: Long): Lyrics? {
-        if (cache.containsKey(videoId)) return cache[videoId]
+        val settings = AppSettings.lyrics.value
+        val key = "$videoId|${settings.ordered.filter { it.enabled }.joinToString(",") { it.source.name }}|${settings.preferWordSynced}"
+        if (cache.containsKey(key)) return cache[key]
         val result = withContext(Dispatchers.IO) {
-            runCatching { lookup(title, artist, durationMs) }
-                .onFailure { Log.w(TAG, "LRCLIB lookup failed for $videoId", it) }
-                .getOrNull()
-                ?: if (LocalMusic.isLocal(videoId)) null else runCatching { youTubeMusic(videoId) }
-                    .onFailure { Log.w(TAG, "YouTube Music lyrics failed for $videoId", it) }
-                    .getOrNull()
+            var best: Lyrics? = null
+            for (entry in settings.ordered) {
+                if (!entry.enabled) continue
+                val found = when (entry.source) {
+                    LyricsSource.LRCLIB -> runCatching { lookup(title, artist, durationMs) }
+                        .onFailure { Log.w(TAG, "LRCLIB lookup failed for $videoId", it) }
+                        .getOrNull()
+                    LyricsSource.YOUTUBE_MUSIC -> if (LocalMusic.isLocal(videoId)) null else runCatching { youTubeMusic(videoId) }
+                        .onFailure { Log.w(TAG, "YouTube Music lyrics failed for $videoId", it) }
+                        .getOrNull()
+                } ?: continue
+                if (rank(found) > rank(best)) best = found
+                // The first source with lyrics wins, unless word-by-word is
+                // wanted and this isn't it.
+                if (!settings.preferWordSynced || rank(found) == WORD_SYNCED) break
+            }
+            best
         }
         // Only remember answers; a failed request is worth retrying next time.
-        if (result != null) cache[videoId] = result
+        if (result != null) cache[key] = result
         return result
     }
+
+    private fun rank(lyrics: Lyrics?): Int = when (lyrics) {
+        null -> 0
+        is Lyrics.Plain -> 1
+        is Lyrics.Synced -> if (lyrics.lines.any { it.wordSynced }) WORD_SYNCED else 2
+    }
+
+    private const val WORD_SYNCED = 3
 
     private fun lookup(title: String, artist: String, durationMs: Long): Lyrics? {
         val cleaned = TrackNameCleaner.clean(title, artist)
