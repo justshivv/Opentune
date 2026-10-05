@@ -18,6 +18,7 @@ import com.opentune.data.history.History
 import com.opentune.ui.ScreenCache
 import com.opentune.data.innertube.InnerTubeXResolver
 import com.opentune.data.innertube.UpgradedTracks
+import com.opentune.data.lastfm.LastFm
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.settings.AppSettings
 import com.opentune.playback.QueueStore
@@ -48,6 +49,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         LoudnessStore.init(this)
         UpgradedTracks.init(this)
         QueueStore.init(this)
+        LastFm.init(this)
         LibraryStore.init(this)
         Downloads.init(this)
         AccountStore.init(this)

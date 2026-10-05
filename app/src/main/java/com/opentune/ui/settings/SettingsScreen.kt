@@ -106,6 +106,7 @@ import com.opentune.data.account.AccountStore
 import com.opentune.data.download.DownloadState
 import com.opentune.data.download.Downloads
 import com.opentune.data.history.History
+import com.opentune.data.lastfm.LastFm
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
@@ -216,6 +217,9 @@ private fun settingsSections(
     val downloads by Downloads.entries.collectAsState()
     var downloadQualityDialog by remember { mutableStateOf(false) }
     var lyricsSourcesDialog by remember { mutableStateOf(false) }
+    var lastFmDialog by remember { mutableStateOf(false) }
+    val lastFm by LastFm.account.collectAsState()
+    val scrobblesWaiting by LastFm.queued.collectAsState()
     val lyricsSettings by AppSettings.lyrics.collectAsState()
     var confirmSignOut by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -273,6 +277,7 @@ private fun settingsSections(
         )
     }
     if (lyricsSourcesDialog) LyricsSourcesDialog(onDismiss = { lyricsSourcesDialog = false })
+    if (lastFmDialog) LastFmDialog(onDismiss = { lastFmDialog = false })
     if (downloadQualityDialog) {
         ChoiceDialog(
             title = "Download quality",
@@ -639,6 +644,26 @@ private fun settingsSections(
                 Entry("Clear listening history", "delete history") {
                     NavRow("Clear listening history", { History.clear(); message = "Listening history cleared." }, summary = "Removes Recents and Replay data", icon = Icons.Rounded.DeleteSweep)
                 },
+            ),
+        ),
+        Section(
+            "Last.fm (optional)",
+            listOfNotNull(
+                Entry("Last.fm scrobbling", "scrobble lastfm audioscrobbler history") {
+                    val who = lastFm
+                    if (who == null) {
+                        NavRow("Connect Last.fm", { lastFmDialog = true }, summary = "Scrobble what you play with your own Last.fm API account", icon = Icons.Rounded.History)
+                    } else {
+                        SettingRow(
+                            "Scrobbling as ${who.user}",
+                            summary = if (scrobblesWaiting > 0) "$scrobblesWaiting scrobbles waiting to send" else "Songs are scrobbled after half their length or 4 minutes",
+                            icon = Icons.Rounded.History,
+                        )
+                    }
+                },
+                if (lastFm != null) Entry("Disconnect Last.fm", "sign out lastfm") {
+                    SettingRow("Disconnect Last.fm", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { LastFm.signOut() })
+                } else null,
             ),
         ),
         Section(
