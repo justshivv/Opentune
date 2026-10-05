@@ -86,7 +86,8 @@ class Crossfade(
 
     private fun check() {
         val length = fadeMs
-        if (length <= 0 || tail != null) return
+        // Two players mixing is the opposite of bit-perfect.
+        if (length <= 0 || tail != null || BitPerfectUsb.active) return
         if (!main.isPlaying || !main.hasNextMediaItem() || main.repeatMode == Player.REPEAT_MODE_ONE) return
         val duration = main.duration
         if (duration == C.TIME_UNSET || duration < length * 3) return

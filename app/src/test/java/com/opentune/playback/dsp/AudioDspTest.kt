@@ -163,3 +163,23 @@ class ClarityTest {
         assertEquals(-3.0, hp.magnitudeDb(24.0, fs), 0.2)
     }
 }
+
+class OutputGainTest {
+    @Test
+    fun fullVolumeStaysBitExact() {
+        assertTrue(DspParams(outputGainDb = 0f).isNeutral)
+    }
+
+    @Test
+    fun lowerVolumeIsAPlainCut() {
+        val p = DspParams(outputGainDb = -12f)
+        assertTrue(!p.isNeutral)
+        assertTrue(!p.canBoost)
+        assertEquals(dbToGain(-12f), p.preampGain, 1e-5f)
+    }
+
+    @Test
+    fun zeroVolumeIsSilent() {
+        assertEquals(0f, DspParams(outputGainDb = com.opentune.playback.BitPerfectUsb.SILENT_DB).preampGain, 0f)
+    }
+}

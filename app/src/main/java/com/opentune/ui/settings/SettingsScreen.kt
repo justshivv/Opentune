@@ -114,6 +114,7 @@ import com.opentune.data.settings.PlayerBackground
 import com.opentune.data.settings.SEED_COLORS
 import com.opentune.data.settings.ThemeMode
 import com.opentune.playback.AudioCache
+import com.opentune.playback.BitPerfectUsb
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.GroupCard
 import com.opentune.ui.components.liquidGlassSupported
@@ -363,6 +364,17 @@ private fun settingsSections(
                             modifier = Modifier.padding(top = 8.dp),
                         )
                     })
+                },
+                Entry("Bit-perfect USB output", "dac exclusive passthrough hi-fi audiophile mixer bypass") {
+                    ToggleRow(
+                        "Bit-perfect USB output",
+                        pb.bitPerfectUsb,
+                        { v -> AppSettings.updatePlayback { it.copy(bitPerfectUsb = v) } },
+                        summary = if (BitPerfectUsb.supported) "Sends the song unchanged to a USB DAC: no mixing, resampling, effects or crossfade. Volume is applied by the app; at full volume the signal is bit-exact."
+                        else "Needs Android 14 or newer",
+                        icon = Icons.Rounded.Usb,
+                        enabled = BitPerfectUsb.supported,
+                    )
                 },
                 Entry("System audio effects", "dolby atmos soundalive equalizer device effects") {
                     ToggleRow("System audio effects", pb.systemEffects, { v -> AppSettings.updatePlayback { it.copy(systemEffects = v) } }, summary = "Let the phone's own effects (Dolby, SoundAlive, system equalizer) process playback", icon = Icons.Rounded.SurroundSound)
