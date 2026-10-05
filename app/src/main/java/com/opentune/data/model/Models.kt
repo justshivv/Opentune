@@ -234,6 +234,7 @@ enum class SearchFilter(val label: String, val params: String?) {
 }
 
 /** A card in a home-feed carousel: either a track (videoId) or an album/playlist (browseId). */
+@kotlinx.serialization.Serializable
 data class ShelfItem(
     val title: String,
     val subtitle: String,
@@ -279,6 +280,7 @@ data class AccountChannel(
     val key: String get() = pageId ?: dataSyncId ?: name
 }
 
+@kotlinx.serialization.Serializable
 data class HomeShelf(
     val title: String,
     val items: List<ShelfItem>,

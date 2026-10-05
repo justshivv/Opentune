@@ -52,6 +52,9 @@ val LocalHazeState = staticCompositionLocalOf<HazeState?> { null }
  */
 val LocalBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
 
+/** How much Liquid Glass frosts what's behind it; Apple's bars sit around here. */
+private val LIQUID_BLUR = 16.dp
+
 /** Lens refraction needs runtime shaders, which arrived in Android 13. */
 val liquidGlassSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 
@@ -84,9 +87,11 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
             backdrop = backdrop,
             shape = { shape },
             effects = {
+                // Frosted first, then bent: a real blur so text and art behind
+                // the bar turn to soft color, with the lens bending the edges.
                 vibrancy()
-                blur(6.dp.toPx())
-                lens(14.dp.toPx(), 28.dp.toPx())
+                blur(LIQUID_BLUR.toPx())
+                lens(16.dp.toPx(), 32.dp.toPx(), depthEffect = true)
             },
             onDrawSurface = { drawRect(surface) },
         )

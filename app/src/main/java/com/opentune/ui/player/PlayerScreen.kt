@@ -31,7 +31,6 @@ import com.opentune.ui.components.LocalHazeState
 import com.opentune.ui.components.MenuRow
 import com.opentune.ui.components.SongMenuSheet
 import com.opentune.ui.components.glass
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -78,6 +77,7 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.opentune.data.settings.AppSettings
@@ -227,8 +227,17 @@ fun PlayerLayout(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    translationY = dragOffset.value
-                    alpha = 1f - (dragOffset.value / (dismissPx * 4)).coerceIn(0f, 0.4f)
+                    // Dragging down turns the player into a card over the app,
+                    // the way iOS sheets do: it shrinks from the top edge and
+                    // its corners round, so the screen behind shows around it.
+                    val p = (dragOffset.value / (dismissPx * 2)).coerceIn(0f, 1f)
+                    translationY = dragOffset.value * 0.9f
+                    val scale = 1f - 0.12f * p
+                    scaleX = scale
+                    scaleY = scale
+                    transformOrigin = TransformOrigin(0.5f, 0f)
+                    shape = RoundedCornerShape(40.dp * p)
+                    clip = p > 0f
                 }
                 .draggable(
                     orientation = Orientation.Vertical,
@@ -237,9 +246,11 @@ fun PlayerLayout(
                     },
                     onDragStopped = { velocity ->
                         if (dragOffset.value > dismissPx || velocity > 2_000f) {
+                            // Leave the card as it is: the exit slide carries it away from here.
                             actions.collapse()
+                        } else {
+                            dragOffset.animateTo(0f, spring(dampingRatio = 0.82f, stiffness = 420f))
                         }
-                        dragOffset.animateTo(0f, spring(dampingRatio = 0.8f))
                     },
                 ),
         ) {
@@ -448,28 +459,27 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Mini player wired to the view model, shown above the tabs. */
+/** Mini player wired to the view model; the bottom bar places and sizes it. */
 @Composable
-fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier = Modifier) {
+fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier = Modifier, inline: Boolean = false) {
     val song by vm.currentSong.collectAsState()
     val isPlaying by vm.isPlaying.collectAsState()
     val isBuffering by vm.isBuffering.collectAsState()
     val hasNext by vm.hasNext.collectAsState()
     val duration by vm.durationMs.collectAsState()
     val position = rememberPlaybackPosition(vm)
-    AnimatedVisibility(song != null, modifier = modifier) {
-        song?.let { s ->
-            MiniPlayer(
-                song = s,
-                isPlaying = isPlaying,
-                isBuffering = isBuffering,
-                hasNext = hasNext,
-                progress = { if (duration > 0) position().toFloat() / duration else 0f },
-                onTogglePlay = vm::togglePlayPause,
-                onNext = vm::skipNext,
-                onPrevious = vm::skipPrevious,
-                onClick = onExpand,
-            )
-        }
-    }
+    val s = song ?: return
+    MiniPlayer(
+        song = s,
+        isPlaying = isPlaying,
+        isBuffering = isBuffering,
+        hasNext = hasNext,
+        progress = { if (duration > 0) position().toFloat() / duration else 0f },
+        onTogglePlay = vm::togglePlayPause,
+        onNext = vm::skipNext,
+        onPrevious = vm::skipPrevious,
+        onClick = onExpand,
+        modifier = modifier,
+        inline = inline,
+    )
 }

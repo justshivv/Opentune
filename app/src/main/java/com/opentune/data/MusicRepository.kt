@@ -10,7 +10,11 @@ import com.opentune.data.model.SearchFilter
 import com.opentune.data.model.SearchResult
 import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.Song
+import android.content.Context
+import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.withContext
 
 /** An album or playlist page, ready to show. */
@@ -27,9 +31,30 @@ data class Collection(
  * and returns parsed models.
  */
 object MusicRepository {
+    private var homeFile: File? = null
+    private val json = Json { ignoreUnknownKeys = true }
+
+    /**
+     * Remembers where Home is kept, and returns the copy saved last time, so
+     * the app can open on it while the fresh one loads.
+     */
+    fun init(context: Context): List<HomeShelf>? {
+        val f = File(context.filesDir, "home.json")
+        homeFile = f
+        return runCatching { json.decodeFromString(ListSerializer(HomeShelf.serializer()), f.readText()) }.getOrNull()
+    }
 
     suspend fun home(): List<HomeShelf> = io {
         InnertubeParser.parseHome(Innertube.browse("FEmusic_home")).filter { it.items.isNotEmpty() }
+            .also { shelves ->
+                homeFile?.let { f ->
+                    runCatching {
+                        val tmp = File(f.parentFile, "home.json.tmp")
+                        tmp.writeText(json.encodeToString(ListSerializer(HomeShelf.serializer()), shelves))
+                        tmp.renameTo(f)
+                    }
+                }
+            }
     }
 
     suspend fun moodsAndGenres(): List<MoodGenreSection> = io {

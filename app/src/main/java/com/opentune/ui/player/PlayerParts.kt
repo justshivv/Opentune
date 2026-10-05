@@ -399,6 +399,7 @@ fun MiniPlayer(
     onPrevious: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    inline: Boolean = false,
 ) {
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -412,9 +413,6 @@ fun MiniPlayer(
         shape = shape,
         color = Color.Transparent,
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 6.dp)
-            .height(66.dp)
             .graphicsLayer { translationX = offsetX.value }
             .glass(shape)
             .pointerInput(Unit) {
@@ -435,31 +433,39 @@ fun MiniPlayer(
     ) {
         Box {
             Row(
-                Modifier.fillMaxSize().padding(start = 10.dp, end = 4.dp),
+                Modifier.fillMaxSize().padding(start = if (inline) 8.dp else 10.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Inline (folded into the tab row) shows art, title and play only.
+                val art = if (inline) 38.dp else 46.dp
                 AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(46.dp), MaterialTheme.shapes.small)
-                        Column(Modifier.padding(start = 12.dp)) {
+                        Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(art), RoundedCornerShape(if (inline) 19.dp else 12.dp))
+                        Column(Modifier.padding(start = if (inline) 10.dp else 12.dp)) {
                             Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                            Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (!inline) {
+                                Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    if (isBuffering) CircularProgressIndicator(Modifier.size(36.dp), strokeWidth = 2.dp)
+                Box(Modifier.size(if (inline) 44.dp else 48.dp), contentAlignment = Alignment.Center) {
+                    if (isBuffering) CircularProgressIndicator(Modifier.size(if (inline) 30.dp else 36.dp), strokeWidth = 2.dp)
                     IconButton(onClick = onTogglePlay) {
-                        Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", Modifier.size(30.dp))
+                        Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", Modifier.size(if (inline) 26.dp else 30.dp))
                     }
                 }
-                IconButton(onClick = onNext, enabled = hasNext) {
-                    Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(28.dp))
+                if (!inline) {
+                    IconButton(onClick = onNext, enabled = hasNext) {
+                        Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(28.dp))
+                    }
                 }
             }
-            Canvas(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).padding(horizontal = 14.dp)) {
-                drawRoundRect(track, cornerRadius = CornerRadius(size.height))
-                drawRoundRect(fill, size = Size(size.width * progress().coerceIn(0f, 1f), size.height), cornerRadius = CornerRadius(size.height))
+            if (!inline) {
+                Canvas(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).padding(horizontal = 24.dp)) {
+                    drawRoundRect(track, cornerRadius = CornerRadius(size.height))
+                    drawRoundRect(fill, size = Size(size.width * progress().coerceIn(0f, 1f), size.height), cornerRadius = CornerRadius(size.height))
+                }
             }
         }
     }

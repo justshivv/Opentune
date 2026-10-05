@@ -1,9 +1,9 @@
 package com.opentune.data.innertube
 
 import android.os.SystemClock
-import android.util.Log
 import com.opentune.data.TrackLog
 import com.opentune.data.Http
+import com.opentune.data.LoudnessStore
 import com.opentune.data.NerdStats
 import com.opentune.data.settings.AppSettings
 import kotlinx.coroutines.CancellationException
@@ -494,7 +494,7 @@ object StreamResolver {
                 return null
             } ?: return null
             if (probe(found.url) == Probe.OK) {
-                found.loudnessDb?.let { loudness[videoId] = it }
+                found.loudnessDb?.let { keepLoudness(videoId, it) }
                 TrackLog.d(TAG, "InnerTubeX served $videoId via ${found.clientName} at ${found.kbps} kbps")
                 return Stream(found.url, found.kbps, found.mimeType)
             }
@@ -1079,13 +1079,18 @@ object StreamResolver {
      */
     private val loudness = ConcurrentHashMap<String, Double>()
 
-    fun loudnessDbFor(videoId: String): Double? = loudness[videoId]
+    fun loudnessDbFor(videoId: String): Double? = loudness[videoId] ?: LoudnessStore.get(videoId)
+
+    private fun keepLoudness(videoId: String, db: Double) {
+        loudness[videoId] = db
+        LoudnessStore.put(videoId, db)
+    }
 
     private fun rememberLoudness(response: JsonObject) {
         val id = response["videoDetails"]?.jsonObject?.str("videoId") ?: return
         val db = response["playerConfig"]?.jsonObject?.get("audioConfig")?.jsonObject
             ?.get("loudnessDb")?.jsonPrimitive?.doubleOrNull ?: return
-        loudness[id] = db
+        keepLoudness(id, db)
     }
 
     private fun audioFormatList(response: JsonObject): List<Audio> =

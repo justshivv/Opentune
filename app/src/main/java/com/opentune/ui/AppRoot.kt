@@ -3,7 +3,6 @@ package com.opentune.ui
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -12,35 +11,23 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -52,10 +39,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -83,7 +68,6 @@ import com.opentune.ui.library.LikedScreen
 import com.opentune.ui.library.LocalPlaylistScreen
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.opentune.ui.components.glass
 import com.opentune.ui.explore.ExploreScreen
 import com.opentune.ui.explore.MoodScreen
 import com.opentune.ui.home.HomeScreen
@@ -106,9 +90,7 @@ private enum class Tab(val route: String, val label: String, val icon: ImageVect
 
 private const val SEARCH_ROUTE = "search"
 
-/** Room kept under scrolling content for the floating nav bar and mini player. */
-private val NAV_HEIGHT = 72.dp
-private val MINI_HEIGHT = 74.dp
+private val chromeTabs = Tab.entries.map { ChromeTab(it.label, it.icon) }
 
 @Composable
 fun AppRoot(vm: PlayerViewModel) {
@@ -121,11 +103,16 @@ fun AppRoot(vm: PlayerViewModel) {
     val haze = rememberHazeState()
     val backdrop = rememberLayerBackdrop()
     val liquid = liquidGlassOn()
+    // Scrolling any page down folds the bottom bar into one row; scrolling up unfolds it.
+    val chromeScroll = rememberChromeScroll()
 
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
-    LaunchedEffect(route) { Tab.entries.firstOrNull { it.route == route }?.let { tab = it } }
+    LaunchedEffect(route) {
+        Tab.entries.firstOrNull { it.route == route }?.let { tab = it }
+        chromeScroll.expand()
+    }
     LaunchedEffect(playbackError) { playbackError?.let { snackbar.showSnackbar(it) } }
     BackHandler(enabled = playerOpen) { playerOpen = false }
 
@@ -161,11 +148,16 @@ fun AppRoot(vm: PlayerViewModel) {
     )
     val chromeVisible = route != "login"
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val content = PaddingValues(bottom = navInset + NAV_HEIGHT + 24.dp + if (song != null) MINI_HEIGHT else 0.dp)
+    val content = PaddingValues(bottom = navInset + CHROME_TAB_HEIGHT + 24.dp + if (song != null) CHROME_MINI_HEIGHT + 8.dp else 0.dp)
 
     CompositionLocalProvider(LocalHazeState provides haze, LocalSongMenu provides songMenu) {
         Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().then(if (liquid) Modifier.layerBackdrop(backdrop) else Modifier).hazeSource(haze)) {
+            Box(
+                Modifier.fillMaxSize()
+                    .then(if (liquid) Modifier.layerBackdrop(backdrop) else Modifier)
+                    .hazeSource(haze)
+                    .nestedScroll(chromeScroll),
+            ) {
                 NavHost(
                     navController = nav,
                     startDestination = Tab.HOME.route,
@@ -254,32 +246,28 @@ fun AppRoot(vm: PlayerViewModel) {
             if (chromeVisible) CompositionLocalProvider(LocalBackdrop provides backdrop.takeIf { liquid }) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
                 SnackbarHost(snackbar)
-                MiniPlayerBar(vm, onExpand = { playerOpen = true })
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    NavPill(
-                        selected = if (route == SEARCH_ROUTE) null else tab,
-                        onSelect = { t ->
-                            if (route == t.route) {
-                                nav.popBackStack(t.route, inclusive = false)
-                            } else {
-                                tab = t
-                                nav.navigate(t.route) {
-                                    popUpTo(Tab.HOME.route) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                BottomChrome(
+                    inline = chromeScroll.inline,
+                    tabs = chromeTabs,
+                    selected = if (route == SEARCH_ROUTE) null else tab.ordinal,
+                    onSelect = { i ->
+                        val t = Tab.entries[i]
+                        if (route == t.route) {
+                            nav.popBackStack(t.route, inclusive = false)
+                        } else {
+                            tab = t
+                            nav.navigate(t.route) {
+                                popUpTo(Tab.HOME.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                    SearchButton(selected = route == SEARCH_ROUTE) {
-                        if (route != SEARCH_ROUTE) nav.navigate(SEARCH_ROUTE) { launchSingleTop = true }
-                    }
-                }
+                        }
+                    },
+                    onExpand = chromeScroll::expand,
+                    searchSelected = route == SEARCH_ROUTE,
+                    onSearch = { if (route != SEARCH_ROUTE) nav.navigate(SEARCH_ROUTE) { launchSingleTop = true } },
+                    mini = if (song == null) null else { folded, m -> MiniPlayerBar(vm, onExpand = { playerOpen = true }, modifier = m, inline = folded) },
+                )
             }
             }
 
@@ -291,54 +279,6 @@ fun AppRoot(vm: PlayerViewModel) {
                 PlayerScreen(vm, onCollapse = { playerOpen = false })
             }
         }
-    }
-}
-
-/** The glass pill holding the three main tabs; the current one sits in a lighter inset pill. */
-@Composable
-private fun NavPill(selected: Tab?, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(36.dp)
-    Row(
-        modifier.height(NAV_HEIGHT).glass(shape).padding(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Tab.entries.forEach { t ->
-            val isSelected = t == selected
-            val bg by animateColorAsState(
-                if (isSelected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f) else Color.Transparent,
-                label = "tabBg",
-            )
-            val fg by animateColorAsState(
-                if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                label = "tabFg",
-            )
-            Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(30.dp))
-                    .background(bg)
-                    .clickable { onSelect(t) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Icon(t.icon, null, tint = fg, modifier = Modifier.size(26.dp))
-                Text(t.label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = fg)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchButton(selected: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(NAV_HEIGHT)
-            .glass(CircleShape, if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Rounded.Search, "Search", Modifier.size(30.dp), tint = MaterialTheme.colorScheme.onSurface)
     }
 }
 

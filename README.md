@@ -1,74 +1,127 @@
 # OpenTune
 
-An Android YouTube Music client. Search and play tracks resolved through
-YouTube's internal ("Innertube") API — no official API key, no server of
-your own required.
+An Android music player for YouTube Music. It talks to YouTube's internal
+("Innertube") API directly, so there's no API key, no account required and
+no server of your own. Sign in if you want your likes and playlists.
 
-## Status
+Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
 
-What works:
+## Features
 
-- **Browse:** Home ("Listen Now" with Recents from your history), Explore
-  (moods and genres), Search with suggestions, recent searches and filters,
-  album, playlist and artist pages, and a Library with listening cards,
-  Replay stats, downloads, local music, liked songs and playlists
-- **Playback:** a Media3 `MediaSessionService` / ExoPlayer, with YouTube
-  streams resolved by two engines that switch automatically: OpenTune's own
-  client walk (with NewPipeExtractor as the last resort) and InnerTubeX.
-  Each track starts with whichever served the last one. A queue with
-  autoplay radio, shuffle and repeat, and swipe-to-queue on any song
-- **Audio:** per-network quality (defaults to the best stream YouTube
-  offers), a song cache for instant replays and seeks, preloading of the
-  next song for near-instant skips, a 7-band equalizer with tone and
-  balance, loudness normalization from YouTube's own measurement, stereo widening, skip silence, USB DAC
-  preference, optional 32-bit float output, and a Remix sheet for speed,
-  pitch, reverb and bass (Slowed + reverb, Nightcore and more). The EQ,
-  and bass run in the app's own DSP, so they work on any phone
-- **Player:** artwork-tinted colors, mesh / gradient / blurred / plain
-  backgrounds, optional full-screen cover art, a queue you can reorder by
-  dragging, the current lyric line under the title, time remaining, a sleep
-  timer, the output device's name, volume bar, "Playing from", stats for
-  nerds, swipe to skip, drag down to close
-- **Account and downloads:** sign in to YouTube Music on Google's own page
-  (likes sync to the account, your playlists show in Library); download
-  songs for offline play, with a quality setting and Wi-Fi only by default.
-  The login cookie stays in app storage and is left out of backups
-- **Lyrics:** synced from [LRCLIB](https://lrclib.net), highlighted word by
-  word and scrolling with the song; YouTube Music's lyrics as a fallback
-- **Look:** black-and-glass design with a floating nav bar, Liquid Glass
-  (lens refraction on Android 13+, via Kyant's backdrop library); light, dark or
-  system theme, Material You, accent colors, palette styles, pure black,
-  color from artwork, reduced motion and reduced blur options
-- **Data:** listening history on the device, Replay, and export/import of
-  settings and history as JSON
+### Listening
 
-YouTube's audio is lossy (Opus around 160 kbps; AAC 256 with Premium), so
-there is no lossless or Dolby Atmos option.
+- **Two stream engines that switch on their own.** OpenTune's own client
+  walk and [InnerTubeX](https://github.com/MetrolistGroup/innertubex). Each
+  track starts on whichever engine served the last one and falls back to
+  the other, with NewPipeExtractor as the last resort. Every stream URL is
+  test-fetched before playback, so a dead link fails fast instead of
+  spinning. Stats for nerds shows which engine served the track.
+- **Best audio by default.** The highest-bitrate stream YouTube offers
+  (Opus around 160 kbps, or 256 kbps where the account gets it), on Wi-Fi
+  and mobile data alike, with a lower ceiling available per network.
+- **One steady volume.** Loudness normalization uses YouTube's own
+  measurement of each song. Figures are kept on the device, so songs played
+  from the cache or from downloads get the same level as fresh ones.
+- **Your phone's own sound effects.** The audio session is opened to the
+  system, so Dolby Atmos, Samsung SoundAlive, the system equalizer and
+  similar effects apply to OpenTune the way they do to the stock players.
+- **A clean signal path.** With the equalizer and effects off, decoded
+  audio goes to the output untouched. When they're on, the app's own DSP
+  adds headroom so boosts don't clip.
+- **Fast starts and skips.** Playback begins after half a second of audio.
+  The songs either side of the current one are found before you get to
+  them, and the next one is buffered while this one plays. Played songs
+  stay in a song cache (512 MB by default) for instant replays and seeks.
+- **Queue and radio.** Autoplay keeps similar songs coming. Shuffle,
+  repeat, play next, add to queue, swipe-to-queue on any row, and
+  drag-to-reorder in the player's queue.
+- **Sound tools.** A 7-band equalizer with tone and balance, bass boost,
+  stereo widening, skip silence, USB DAC preference, optional 32-bit float
+  output, and a Remix sheet for speed, pitch and reverb (Slowed + reverb,
+  Nightcore and more).
+- **Sleep timer.** Stop after 15 to 90 minutes, or at the end of the song.
 
-Not yet built: crossfade/automix, Listen
-Together, Last.fm, lyric translation, app language.
+### Library and account
+
+- **Sign in to YouTube Music** on Google's own page inside the app. Likes
+  sync to the account, your playlists show in Library, and Home turns
+  personal. The login cookie stays in app-private storage and is left out
+  of backups.
+- **Downloads** for offline listening, with a quality setting and Wi-Fi
+  only by default. They keep going after the app is closed.
+- **Library:** listening cards (minutes this year, top song, top artist),
+  Downloads, music on the device, Liked Music, playlists made in the app,
+  and your YouTube playlists.
+- **Replay:** top songs, artists and albums from this device's history.
+- **Export and import** of settings and history as JSON.
+
+### Look and feel
+
+- **Liquid Glass.** The floating bars and player buttons frost and bend
+  what's behind them, like Apple's material (Android 13 and newer; frosted
+  glass below that, solid with "Reduce dynamic blur").
+- **A bottom bar that gets out of the way.** Scroll down and the tab bar
+  folds into one round button while the mini player slides into the same
+  row; scroll up and it unfolds. Each part springs into place.
+- **An Apple Music-style player.** Cover, lyrics and queue modes, heart and
+  "…" buttons, the current lyric line under the title, time remaining,
+  large back/play/forward controls, a shuffle/repeat/autoplay pill, and the
+  name of the output device. Drag it down and it shrinks into a card
+  before it closes.
+- **Synced lyrics** from [LRCLIB](https://lrclib.net), lit word by word,
+  with YouTube Music's lyrics as a fallback.
+- **One song menu everywhere:** like, add to playlist, download, start
+  radio, play next, add to queue, open album or artist, share.
+- **Quick screens.** Home opens on the last copy saved while the fresh one
+  loads; pages you've visited and searches you've made come back at once
+  and refresh in the background.
+- **Themes:** light, dark or system, Material You, accent colors, palette
+  styles, pure black, color from artwork, and reduced motion and blur.
+
+YouTube's audio is lossy, so there's no lossless or Dolby Atmos stream
+option.
+
+Not built yet: crossfade, Listen Together, Last.fm, lyric translation and
+an in-app language setting.
 
 ## Building
 
-Standard Gradle/Android Studio project. Open the repo root in Android
-Studio, or from the CLI:
+Open the repository in Android Studio, or build from the command line:
 
 ```
-./gradlew assembleDebug
+./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+./gradlew testDebugUnitTest    # unit tests
 ```
 
-Requires an Android SDK (compileSdk 36) on `ANDROID_HOME` or in
-`local.properties`; there's no signing config, so this produces an unsigned
-debug APK. Unit tests run with `./gradlew testDebugUnitTest`.
+You need JDK 17 and an Android SDK with platform 37 (InnerTubeX is compiled
+against it; the app targets 36), set through `ANDROID_HOME` or
+`local.properties`. There's no release signing config; debug builds are
+signed with the local debug key.
+
+## Project layout
+
+```
+app/src/main/java/com/opentune/
+  data/innertube/   Innertube client and parser, StreamResolver (engine switch),
+                    InnerTubeXResolver, PoToken WebView
+  data/             account, downloads, library, history, lyrics, loudness, settings
+  playback/         PlaybackService (ExoPlayer, cache, loudness, sleep timer), DSP
+  ui/               Compose screens: home, explore, search, library, player, settings
+```
 
 ## Attribution
 
-The Innertube client, response parser, and YouTube stream resolver
-(`app/src/main/java/com/opentune/data/`) are adapted from
-[BitChord](https://github.com/kushagrasinghx/BitChord), used here under its
+The Innertube client, response parser and YouTube stream resolver under
+`data/innertube/` are adapted from
+[BitChord](https://github.com/kushagrasinghx/BitChord), used under its
 GPLv3 license. The InnerTubeX glue and the PoToken WebView
 (`data/innertube/InnerTubeXResolver.kt`, `data/innertube/potoken/`,
 `assets/po_token.html`) also come from BitChord; the PoToken code follows
 NewPipe's design. [InnerTubeX](https://github.com/MetrolistGroup/innertubex)
-by MetrolistGroup is used as a library under GPLv3. This project is licensed under the GNU General Public License
-v3.0 — see [LICENSE](LICENSE).
+by MetrolistGroup and [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)
+are used as libraries under GPLv3. Liquid Glass uses Kyant's
+[backdrop](https://github.com/Kyant0/AndroidLiquidGlass) library, and
+frosted glass uses [Haze](https://github.com/chrisbanes/haze).
+
+OpenTune is licensed under the GNU General Public License v3.0. See
+[LICENSE](LICENSE).
