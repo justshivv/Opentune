@@ -26,6 +26,10 @@ class PlayerConnection(private val context: Context) {
 
     private var controller: MediaController? = null
 
+    /** True once the controller is connected and commands will be heard. */
+    private val _connected = MutableStateFlow(false)
+    val connected = _connected.asStateFlow()
+
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong = _currentSong.asStateFlow()
 
@@ -100,12 +104,14 @@ class PlayerConnection(private val context: Context) {
         newController.addListener(listener)
         controller = newController
         refresh(newController)
+        _connected.value = true
     }
 
     fun disconnect() {
         controller?.removeListener(listener)
         controller?.release()
         controller = null
+        _connected.value = false
     }
 
     private fun refresh(player: Player) {
