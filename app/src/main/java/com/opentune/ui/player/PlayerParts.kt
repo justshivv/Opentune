@@ -47,6 +47,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.unit.Dp
+import androidx.compose.animation.animateColorAsState
+import com.opentune.ui.theme.rememberArtworkSeed
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
@@ -414,8 +419,10 @@ private fun GlyphButton(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 }
 
 /**
- * The floating bar above the tabs: art, title, play and next, with a thin
- * progress line along its bottom edge. Swipe sideways to skip.
+ * Now playing, above the dock: a card tinted with the cover's colour, with
+ * the song's progress as a ring around the play button. Swipe it sideways to
+ * skip. [inline] is the round bubble the card becomes while a page scrolls:
+ * the cover in a circle, ringed by progress; tap it to open the player.
  */
 @Composable
 fun MiniPlayer(
@@ -434,17 +441,35 @@ fun MiniPlayer(
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val threshold = with(LocalDensity.current) { 72.dp.toPx() }
-    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-    val fill = MaterialTheme.colorScheme.primary
+    val accent = MaterialTheme.colorScheme.primary
+    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
+    // The cover's own colour, faded into the glass, so each song tints the card.
+    val seed = rememberArtworkSeed(song.thumbnailUrl)
+    val tint by animateColorAsState((seed ?: MaterialTheme.colorScheme.surfaceContainerHigh).copy(alpha = 0.38f), tween(600), label = "miniTint")
 
-    val shape = RoundedCornerShape(33.dp)
+    if (inline) {
+        Box(
+            modifier
+                .glass(CircleShape, tint)
+                .clickable(onClick = onClick)
+                .padding(4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            ProgressRing(progress, accent, track, stroke = 3.dp, modifier = Modifier.matchParentSize())
+            Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.padding(4.dp).fillMaxSize(), CircleShape)
+            if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize(), strokeWidth = 3.dp, color = accent)
+        }
+        return
+    }
+
+    val shape = RoundedCornerShape(22.dp)
     Surface(
         onClick = onClick,
         shape = shape,
         color = Color.Transparent,
         modifier = modifier
             .graphicsLayer { translationX = offsetX.value }
-            .glass(shape)
+            .glass(shape, tint)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
@@ -461,43 +486,38 @@ fun MiniPlayer(
                 }
             },
     ) {
-        Box {
-            Row(
-                Modifier.fillMaxSize().padding(start = if (inline) 8.dp else 10.dp, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Inline (folded into the tab row) shows art, title and play only.
-                val art = if (inline) 38.dp else 46.dp
-                AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(art), RoundedCornerShape(if (inline) 19.dp else 12.dp))
-                        Column(Modifier.padding(start = if (inline) 10.dp else 12.dp)) {
-                            Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                            if (!inline) {
-                                Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-                Box(Modifier.size(if (inline) 44.dp else 48.dp), contentAlignment = Alignment.Center) {
-                    if (isBuffering) CircularProgressIndicator(Modifier.size(if (inline) 30.dp else 36.dp), strokeWidth = 2.dp)
-                    IconButton(onClick = onTogglePlay) {
-                        Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", Modifier.size(if (inline) 26.dp else 30.dp))
-                    }
-                }
-                if (!inline) {
-                    IconButton(onClick = onNext, enabled = hasNext) {
-                        Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(28.dp))
+        Row(Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(44.dp), RoundedCornerShape(12.dp))
+                    Column(Modifier.padding(start = 12.dp)) {
+                        Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-            if (!inline) {
-                Canvas(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).padding(horizontal = 24.dp)) {
-                    drawRoundRect(track, cornerRadius = CornerRadius(size.height))
-                    drawRoundRect(fill, size = Size(size.width * progress().coerceIn(0f, 1f), size.height), cornerRadius = CornerRadius(size.height))
-                }
+            // Play inside the progress ring.
+            Box(Modifier.size(46.dp).clip(CircleShape).clickable(onClick = onTogglePlay), contentAlignment = Alignment.Center) {
+                ProgressRing(progress, accent, track, stroke = 2.5.dp, modifier = Modifier.matchParentSize().padding(3.dp))
+                if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize().padding(3.dp), strokeWidth = 2.5.dp, color = accent)
+                Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", Modifier.size(24.dp))
+            }
+            IconButton(onClick = onNext, enabled = hasNext) {
+                Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(26.dp))
             }
         }
+    }
+}
+
+/** A circle that fills clockwise from the top as [progress] goes 0 to 1. */
+@Composable
+private fun ProgressRing(progress: () -> Float, color: Color, track: Color, stroke: Dp, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val w = stroke.toPx()
+        val inset = w / 2
+        val arcSize = Size(size.width - w, size.height - w)
+        drawArc(track, 0f, 360f, useCenter = false, topLeft = Offset(inset, inset), size = arcSize, style = Stroke(w))
+        drawArc(color, -90f, 360f * progress().coerceIn(0f, 1f), useCenter = false, topLeft = Offset(inset, inset), size = arcSize, style = Stroke(w, cap = StrokeCap.Round))
     }
 }
 

@@ -70,9 +70,9 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   of backups.
 - **Downloads** for offline listening, with a quality setting and Wi-Fi
   only by default. They keep going after the app is closed.
-- **Library:** listening cards (minutes this year, top song, top artist),
-  Downloads, music on the device, Liked Music, playlists made in the app,
-  and your YouTube playlists.
+- **Library:** a card for your year so far (minutes, plays, top song and
+  artist), shortcuts to Liked, Downloads, On this phone and Replay, then
+  your playlists from the app and from YouTube in one list.
 - **Replay:** top songs, artists and albums from this device's history.
 - **Last.fm scrobbling** (optional), with your own free Last.fm API key.
   The password is only used once to get a session and isn't stored.
@@ -84,9 +84,15 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
 - **Liquid Glass.** The floating bars and player buttons frost and bend
   what's behind them, like Apple's material (Android 13 and newer; frosted
   glass below that, solid with "Reduce dynamic blur").
-- **A bottom bar that gets out of the way.** Scroll down and the tab bar
-  folds into one round button while the mini player slides into the same
-  row; scroll up and it unfolds. Each part springs into place.
+- **A dock that gets out of the way.** One glass dock holds every
+  destination, Search included; the current one is a filled capsule with
+  its name. The now-playing card above it takes its tint from the cover and
+  has the play button inside a progress ring. Scroll down and the dock
+  tucks away while the card shrinks into a round cover bubble in the
+  corner, still ringed by progress; scroll up and both come back.
+- **Its own typeface.** Every screen is set in [Outfit](https://github.com/Outfitio/Outfit-Fonts).
+- **Home greets you** by the time of day and your name, with your avatar
+  leading to settings. Explore's moods are full-cover cards.
 - **An Apple Music-style player.** Cover, lyrics and queue modes, heart and
   "…" buttons, the current lyric line under the title, the artist name
   opening their page, time remaining,
@@ -98,9 +104,10 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   styles (Fluid, Karaoke, Slide, Focus zoom, Minimal), a per-song timing
   offset, adjustable text size, and lyrics saved with downloads so they
   work offline.
-- **One song menu everywhere:** like, dislike (kept out of autoplay),
-  add to playlist, download, convert to the music video, start radio, play
-  next, add to queue, open album or artist, share; plus upgrade quality,
+- **One song menu everywhere:** round buttons up top for like, download,
+  add to playlist and share, then play next, add to queue, start radio,
+  view artist, open album, convert to the music video, and dislike (kept
+  out of autoplay); plus upgrade quality,
   signal path, sleep timer, lyrics offset and copy log in the player.
 - **Wavy seek bar** (optional) that ripples while music plays.
 - **Quick screens.** Home opens on the last copy saved while the fresh one
@@ -156,7 +163,9 @@ NewPipe's design. [InnerTubeX](https://github.com/MetrolistGroup/innertubex)
 by MetrolistGroup and [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)
 are used as libraries under GPLv3. Liquid Glass uses Kyant's
 [backdrop](https://github.com/Kyant0/AndroidLiquidGlass) library, and
-frosted glass uses [Haze](https://github.com/chrisbanes/haze).
+frosted glass uses [Haze](https://github.com/chrisbanes/haze). The
+[Outfit](https://github.com/Outfitio/Outfit-Fonts) font is used under the
+SIL Open Font License 1.1 (`third_party/outfit/OFL.txt`).
 
 OpenTune is licensed under the GNU General Public License v3.0. See
 [LICENSE](LICENSE).

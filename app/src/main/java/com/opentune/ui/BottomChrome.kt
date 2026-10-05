@@ -1,15 +1,18 @@
 package com.opentune.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,12 +21,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
@@ -50,17 +52,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.opentune.ui.components.glass
-import com.opentune.ui.components.liquidGlassOn
 
-/** Room the bar's two rows take when unfolded, for content padding. */
-val CHROME_TAB_HEIGHT = 72.dp
-val CHROME_MINI_HEIGHT = 66.dp
-private val INLINE_HEIGHT = 58.dp
-private val GAP = 8.dp
+/** Room the chrome takes when shown, for content padding. */
+val CHROME_TAB_HEIGHT = 64.dp
+val CHROME_MINI_HEIGHT = 64.dp
+private val BUBBLE = 62.dp
+private val DOCK_SHAPE = RoundedCornerShape(24.dp)
 
 /**
- * Folds the bottom bar while content scrolls down and unfolds it when it
- * scrolls back up. Direction has to hold for [thresholdPx] before the bar
+ * Tucks the dock away while content scrolls down and brings it back when it
+ * scrolls up. Direction has to hold for [thresholdPx] before anything
  * changes, so a small wobble mid-scroll doesn't flicker it. Nothing is
  * consumed: the list keeps every pixel of its scroll.
  */
@@ -90,7 +91,7 @@ class ChromeScrollConnection(private val thresholdPx: Float) : NestedScrollConne
 }
 
 @Composable
-fun rememberChromeScroll(threshold: Dp = 50.dp): ChromeScrollConnection {
+fun rememberChromeScroll(threshold: Dp = 48.dp): ChromeScrollConnection {
     val px = with(LocalDensity.current) { threshold.toPx() }
     return remember(px) { ChromeScrollConnection(px) }
 }
@@ -98,15 +99,14 @@ fun rememberChromeScroll(threshold: Dp = 50.dp): ChromeScrollConnection {
 class ChromeTab(val label: String, val icon: ImageVector)
 
 /**
- * The floating bottom bar in its two shapes.
+ * OpenTune's bottom chrome: the now-playing card over one dock that holds
+ * every destination, Search included. The current destination is a filled
+ * capsule in the accent colour with its name; the others are icons.
  *
- * Unfolded: the mini player across the full width, and under it the tab pill
- * and the round search button. Folded: one row of a round button showing the
- * current tab, the mini player squeezed between, and search.
- *
- * The pill, the current tab's icon, the mini player and search are shared
- * elements, so each one slides and resizes into its new place on a spring
- * while the rest cross-fades.
+ * While a page scrolls down, the dock tucks away and the now-playing card
+ * shrinks into a round bubble of the cover, ringed by the song's progress,
+ * in the corner. Scrolling back up brings both back. The card and the bubble
+ * are one shared element, so the cover travels between them.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -125,113 +125,102 @@ fun BottomChrome(
         AnimatedContent(
             inline,
             transitionSpec = {
-                (fadeIn(spring(stiffness = 420f)) togetherWith fadeOut(spring(stiffness = 420f)))
+                (fadeIn(spring(stiffness = 380f)) togetherWith fadeOut(spring(stiffness = 380f)))
                     .using(SizeTransform(clip = false))
             },
-            contentAlignment = Alignment.BottomCenter,
+            contentAlignment = Alignment.BottomEnd,
             label = "chrome",
         ) { folded ->
-            val scope = this
-            val shared = SharedKeys(this@SharedTransitionLayout, scope)
+            val shared = SharedMini(this@SharedTransitionLayout, this)
             if (folded) {
-                Row(
-                    Modifier.fillMaxWidth().height(INLINE_HEIGHT).padding(horizontal = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(GAP),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val current = selected?.let(tabs::getOrNull) ?: tabs.first()
-                    Box(
-                        with(shared) { Modifier.sharedTabs() }.size(INLINE_HEIGHT).glass(CircleShape).clickable(onClick = onExpand),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(current.icon, current.label, with(shared) { Modifier.sharedIcon() }.size(26.dp), tint = MaterialTheme.colorScheme.onSurface)
+                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.BottomEnd) {
+                    if (mini != null) {
+                        mini(true, with(shared) { Modifier.sharedMini() }.size(BUBBLE))
+                    } else {
+                        // Nothing playing: a small button brings the dock back.
+                        val current = selected?.let(tabs::getOrNull) ?: tabs.first()
+                        Box(
+                            Modifier.size(52.dp).glass(RoundedCornerShape(18.dp)).clickable(onClick = onExpand),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(current.icon, "Show navigation", tint = MaterialTheme.colorScheme.onSurface)
+                        }
                     }
-                    if (mini != null) mini(true, with(shared) { Modifier.sharedMini() }.weight(1f).fillMaxHeight()) else Spacer(Modifier.weight(1f))
-                    SearchButton(searchSelected, onSearch, with(shared) { Modifier.sharedSearch() }.size(INLINE_HEIGHT))
                 }
             } else {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(GAP)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (mini != null) mini(false, with(shared) { Modifier.sharedMini() }.fillMaxWidth().height(CHROME_MINI_HEIGHT))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        TabPill(tabs, selected, onSelect, shared, Modifier.weight(1f))
-                        SearchButton(searchSelected, onSearch, with(shared) { Modifier.sharedSearch() }.size(CHROME_TAB_HEIGHT))
-                    }
+                    Dock(tabs, selected, onSelect, searchSelected, onSearch)
                 }
             }
         }
     }
 }
 
-/** The shared-element keys, with one spring for every bounds change. */
 @OptIn(ExperimentalSharedTransitionApi::class)
-private class SharedKeys(private val layout: SharedTransitionScope, private val scope: AnimatedVisibilityScope) {
+private class SharedMini(private val layout: SharedTransitionScope, private val scope: AnimatedVisibilityScope) {
     @Composable
-    private fun Modifier.key(name: String): Modifier = with(layout) {
-        this@key.sharedElement(
-            rememberSharedContentState(name),
+    fun Modifier.sharedMini(): Modifier = with(layout) {
+        this@sharedMini.sharedElement(
+            rememberSharedContentState("mini"),
             scope,
-            boundsTransform = { _, _ -> spring(dampingRatio = 0.82f, stiffness = 380f) },
+            boundsTransform = { _, _ -> spring(dampingRatio = 0.8f, stiffness = 360f) },
         )
     }
-
-    @Composable fun Modifier.sharedTabs() = key("tabs")
-    @Composable fun Modifier.sharedIcon() = key("tab-icon")
-    @Composable fun Modifier.sharedMini() = key("mini")
-    @Composable fun Modifier.sharedSearch() = key("search")
 }
 
-/** The glass pill holding the main tabs; the current one sits in a lighter inset pill. */
+/** Home, Search, then the other destinations, in one bar. */
 @Composable
-private fun TabPill(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit, shared: SharedKeys, modifier: Modifier) {
+private fun Dock(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit, searchSelected: Boolean, onSearch: () -> Unit) {
     val haptics = LocalHapticFeedback.current
-    val liquid = liquidGlassOn()
+    val items = buildList {
+        tabs.forEachIndexed { i, t -> add(Triple(t, i == selected) { onSelect(i) }) }
+        add(1.coerceAtMost(size), Triple(ChromeTab("Search", Icons.Rounded.Search), searchSelected, onSearch))
+    }
     Row(
-        with(shared) { modifier.sharedTabs() }.height(CHROME_TAB_HEIGHT).glass(RoundedCornerShape(36.dp)).padding(6.dp),
+        Modifier.fillMaxWidth().height(CHROME_TAB_HEIGHT).glass(DOCK_SHAPE).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        tabs.forEachIndexed { i, t ->
-            val isSelected = i == selected
-            // On Liquid Glass the current tab sits in a dark scrim, as on iOS;
-            // on frosted or solid glass, a lighter inset reads better.
-            val selectedBg = if (liquid) Color.Black.copy(alpha = 0.34f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-            val bg by animateColorAsState(
-                if (isSelected) selectedBg else Color.Transparent,
-                spring(dampingRatio = 0.72f, stiffness = 320f),
-                label = "tabBg",
-            )
-            val fg by animateColorAsState(
-                if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                label = "tabFg",
-            )
-            Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(30.dp))
-                    .background(bg)
-                    .clickable {
-                        if (!isSelected) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onSelect(i)
-                    },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                val iconModifier = if (isSelected) with(shared) { Modifier.sharedIcon() } else Modifier
-                Icon(t.icon, null, tint = fg, modifier = iconModifier.size(26.dp))
-                Text(t.label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = fg)
+        items.forEach { (tab, isSelected, onClick) ->
+            DockItem(tab, isSelected) {
+                if (!isSelected) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
             }
         }
     }
 }
 
 @Composable
-private fun SearchButton(selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    Box(
-        modifier
-            .glass(CircleShape, if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+private fun DockItem(tab: ChromeTab, selected: Boolean, onClick: () -> Unit) {
+    val bg by animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        spring(stiffness = 500f),
+        label = "dockBg",
+    )
+    val fg by animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "dockFg",
+    )
+    Row(
+        Modifier
+            .height(46.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Search, "Search", Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurface)
+        Icon(tab.icon, tab.label, tint = fg, modifier = Modifier.size(24.dp))
+        AnimatedVisibility(
+            selected,
+            enter = fadeIn() + expandHorizontally(spring(dampingRatio = 0.8f, stiffness = 500f)),
+            exit = fadeOut() + shrinkHorizontally(spring(dampingRatio = 0.9f, stiffness = 600f)),
+        ) {
+            Row {
+                Spacer(Modifier.width(8.dp))
+                Text(tab.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = fg)
+            }
+        }
     }
 }

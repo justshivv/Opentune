@@ -2,6 +2,11 @@ package com.opentune.ui.components
 
 import android.content.Intent
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -117,55 +122,78 @@ fun SongMenuSheet(
                     Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            val videoVersion = actions?.playVideoVersion?.takeIf { !local && !song.isVideo }
-            if (top != null || videoVersion != null) {
-                HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                top?.invoke(this, close)
-                videoVersion?.let { play -> MenuRow(Icons.Rounded.Videocam, "Convert to video") { close(); play(song) } }
-            }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            MenuRow(if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (isLiked) "Remove from Liked" else "Like") {
-                LibraryStore.setLiked(song, !isLiked)
-                close()
-            }
-            if (actions != null) MenuRow(Icons.Rounded.ThumbDownOffAlt, "Dislike") { close(); actions.dislike(song) }
-            MenuRow(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") { pickPlaylist = true }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            if (!local) {
-                when (download?.state) {
-                    DownloadState.DONE -> MenuRow(Icons.Rounded.DownloadDone, "Remove download") { Downloads.remove(context, song.videoId); close() }
-                    DownloadState.QUEUED, DownloadState.DOWNLOADING ->
-                        MenuRow(Icons.Rounded.Download, "Downloading… ${(download.progress * 100).toInt()}% (tap to cancel)") {
-                            Downloads.remove(context, song.videoId); close()
+            // The four things done most often, one tap each.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                QuickAction(if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (isLiked) "Liked" else "Like", active = isLiked) {
+                    LibraryStore.setLiked(song, !isLiked)
+                }
+                if (!local) {
+                    val (icon, label) = when (download?.state) {
+                        DownloadState.DONE -> Icons.Rounded.DownloadDone to "Saved"
+                        DownloadState.QUEUED, DownloadState.DOWNLOADING -> Icons.Rounded.Download to "${(download.progress * 100).toInt()}%"
+                        DownloadState.FAILED -> Icons.Rounded.Download to "Retry"
+                        null -> Icons.Rounded.Download to "Download"
+                    }
+                    QuickAction(icon, label, active = download?.state == DownloadState.DONE) {
+                        when (download?.state) {
+                            DownloadState.DONE, DownloadState.QUEUED, DownloadState.DOWNLOADING -> Downloads.remove(context, song.videoId)
+                            DownloadState.FAILED -> Downloads.retry(context, song.videoId)
+                            null -> Downloads.enqueue(context, song)
                         }
-                    DownloadState.FAILED -> MenuRow(Icons.Rounded.Download, "Download failed, retry") { Downloads.retry(context, song.videoId); close() }
-                    null -> MenuRow(Icons.Rounded.Download, "Download") { Downloads.enqueue(context, song); close() }
+                    }
+                }
+                QuickAction(Icons.AutoMirrored.Rounded.PlaylistAdd, "Playlist", active = false) { pickPlaylist = true }
+                if (!local) {
+                    QuickAction(Icons.Rounded.Share, "Share", active = false) {
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/watch?v=${song.videoId}")
+                        context.startActivity(Intent.createChooser(send, null))
+                        close()
+                    }
                 }
             }
+            HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             if (actions != null) {
-                if (!local) MenuRow(Icons.Rounded.Radio, "Start radio") { actions.startRadio(song); close() }
                 MenuRow(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") { actions.playNext(song); close() }
                 MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue") { actions.addToQueue(song); close() }
-                song.albumId?.let { id -> MenuRow(Icons.Rounded.Album, "Open album") { close(); actions.openAlbum(id) } }
+                if (!local) MenuRow(Icons.Rounded.Radio, "Start radio") { actions.startRadio(song); close() }
                 when {
                     actions.viewArtist != null && !local -> MenuRow(Icons.Rounded.Person, "View artist") { close(); actions.viewArtist.invoke(song) }
                     song.artistId != null -> MenuRow(Icons.Rounded.Person, "View artist") { close(); actions.openArtist(song.artistId) }
                 }
+                song.albumId?.let { id -> MenuRow(Icons.Rounded.Album, "Open album") { close(); actions.openAlbum(id) } }
             }
-            tools?.invoke(this, close)
-            if (!local) {
-                MenuRow(Icons.Rounded.Share, "Share") {
-                    val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                        .putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/watch?v=${song.videoId}")
-                    context.startActivity(Intent.createChooser(send, null))
-                    close()
-                }
+            val videoVersion = actions?.playVideoVersion?.takeIf { !local && !song.isVideo }
+            if (top != null || videoVersion != null || tools != null) {
+                HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                top?.invoke(this, close)
+                videoVersion?.let { play -> MenuRow(Icons.Rounded.Videocam, "Convert to video") { close(); play(song) } }
+                tools?.invoke(this, close)
             }
+            if (actions != null) MenuRow(Icons.Rounded.ThumbDownOffAlt, "Not for me (dislike)") { close(); actions.dislike(song) }
             end?.invoke(this, close)
             Spacer(Modifier.size(12.dp))
         }
     }
     if (pickPlaylist) AddToPlaylistDialog(song, onDone = { pickPlaylist = false; close() }, onDismiss = { pickPlaylist = false })
+}
+
+/** A round quick action with its label underneath; filled when [active]. */
+@Composable
+private fun QuickAction(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
+    Column(
+        Modifier.width(76.dp).clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier.size(52.dp).clip(RoundedCornerShape(18.dp))
+                .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, null, tint = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+        }
+        Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp), maxLines = 1)
+    }
 }
 
 @Composable
