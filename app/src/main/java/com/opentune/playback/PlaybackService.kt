@@ -36,6 +36,7 @@ import androidx.media3.session.LibraryResult
 import com.opentune.widget.NowPlayingWidget
 import com.opentune.data.ContentFilter
 import com.opentune.data.radio.Radio
+import com.opentune.data.podcasts.Podcasts
 import com.opentune.data.sponsorblock.SponsorBlock
 import android.widget.Toast
 import android.os.Bundle
@@ -578,6 +579,10 @@ class PlaybackService : MediaLibraryService() {
             applyLoudness()
             scheduleUpgrade()
             watchSegments(mediaItem)
+            // A podcast episode picks up where it was left.
+            mediaItem?.mediaId?.let(Podcasts::resumeAt)?.let { at ->
+                mediaSession?.player?.takeIf { it.currentPosition < RESUME_SLACK_MS }?.seekTo(at)
+            }
             // The same song on a better stream is not a new listen.
             if (mediaItem != null && mediaItem.mediaId == swappingTo) {
                 swappingTo = null
@@ -591,6 +596,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             mediaSession?.player?.let { watchPlayed(it, isPlaying) }
+            if (!isPlaying) mediaSession?.player?.let(::saveEpisodePosition)
             if (isPlaying && startRequestedAt > 0) {
                 NerdStats.onStartup(SystemClock.elapsedRealtime() - startRequestedAt)
                 startRequestedAt = 0
@@ -697,10 +703,19 @@ class PlaybackService : MediaLibraryService() {
         listenRecord = null
     }
 
+    /** Keeps a podcast episode's place, so it resumes there. */
+    private fun saveEpisodePosition(player: Player) {
+        val id = player.currentMediaItem?.mediaId ?: return
+        if (!Podcasts.isEpisode(id)) return
+        Podcasts.savePosition(id, player.currentPosition, player.duration.takeIf { it > 0 } ?: 0L)
+    }
+
     /** A track counts as played after 30 seconds, or half its length if shorter. */
     private suspend fun trackListening(player: Player) {
+        var ticks = 0
         while (scope.isActive) {
             delay(5_000)
+            if (player.isPlaying && ++ticks % 3 == 0) saveEpisodePosition(player)
             val song = listenSong ?: continue
             val heard = listenedSoFar()
             val known = player.duration.takeIf { it > 0 }
@@ -1227,6 +1242,8 @@ class PlaybackService : MediaLibraryService() {
         const val UPGRADE_DELAY_MS = 8_000L
         /** Songs a server queue carries on with when it runs out. */
         const val RADIO_FROM_SERVER = 25
+        /** An episode only jumps to its saved place if it hasn't got going yet. */
+        const val RESUME_SLACK_MS = 5_000L
         const val SEGMENT_POLL_MS = 250L
         const val SEGMENT_IDLE_POLL_MS = 1_000L
         const val SEGMENT_END_SLACK_MS = 500L

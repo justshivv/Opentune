@@ -141,7 +141,11 @@ object NewReleases {
 
     /** Runs the twice-daily check while anyone is followed and alerts are on. */
     fun schedule(context: Context) {
-        val work = WorkManager.getInstance(context)
+        // WorkManager is set up by AndroidX Startup before the app runs; if it
+        // isn't (a test, a broken install), alerts just don't get scheduled.
+        val work = runCatching { WorkManager.getInstance(context) }
+            .onFailure { Log.w(TAG, "WorkManager unavailable", it) }
+            .getOrNull() ?: return
         if (_followed.value.isEmpty() || !AppSettings.library.value.releaseAlerts) {
             work.cancelUniqueWork(WORK)
             return

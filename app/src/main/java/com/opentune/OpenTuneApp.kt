@@ -80,6 +80,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         com.opentune.data.radio.Radio.init(this)
         com.opentune.data.releases.NewReleases.init(this)
         com.opentune.data.spotify.Spotify.init(this)
+        com.opentune.data.podcasts.Podcasts.init(this)
         AlbumCovers.init(this)
         AutoEq.init(this)
         LibraryStore.init(this)
