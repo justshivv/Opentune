@@ -24,8 +24,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,17 +34,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeDown
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material.icons.rounded.RepeatOne
-import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,6 +47,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.opentune.ui.components.glass
+import com.opentune.ui.components.pressable
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -82,7 +80,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.media3.common.Player
 import com.opentune.data.NerdStats
 import com.opentune.data.model.ROW_ART_PX
 import com.opentune.playback.AudioFormatInfo
@@ -326,83 +323,41 @@ fun SeekBar(
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatTime(elapsedSeconds * 1000), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(formatTime(durationMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // Time left, as Apple Music shows it; the total until the length is known.
+            Text(
+                if (durationMs > 0) "-" + formatTime((durationMs - elapsedSeconds * 1000).coerceAtLeast(0)) else formatTime(0),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
+/**
+ * Back, play/pause and forward as large bare glyphs, Apple Music style. Each
+ * sinks under the finger; play and pause cross-fade with a little scale.
+ */
 @Composable
 fun PlayerControls(
     isPlaying: Boolean,
     isBuffering: Boolean,
     hasNext: Boolean,
-    shuffle: Boolean,
-    repeatMode: Int,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
-    onShuffle: () -> Unit,
-    onRepeat: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier.fillMaxWidth().height(96.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ModeButton(Icons.Rounded.Shuffle, "Shuffle", active = shuffle, onClick = onShuffle)
-        IconButton(onClick = onPrevious, modifier = Modifier.size(60.dp)) {
-            Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(40.dp))
-        }
-        PlayPauseButton(isPlaying, isBuffering, onTogglePlay)
-        IconButton(onClick = onNext, enabled = hasNext, modifier = Modifier.size(60.dp)) {
-            Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(40.dp))
-        }
-        ModeButton(
-            if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-            when (repeatMode) {
-                Player.REPEAT_MODE_ONE -> "Repeat one"
-                Player.REPEAT_MODE_ALL -> "Repeat all"
-                else -> "Repeat off"
-            },
-            active = repeatMode != Player.REPEAT_MODE_OFF,
-            onClick = onRepeat,
-        )
-    }
-}
-
-/** A toggle shown in the accent color with a dot underneath when on. */
-@Composable
-private fun ModeButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
-    val tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    IconButton(onClick = onClick) {
+        GlyphButton(Icons.Rounded.FastRewind, "Previous", 64.dp, onClick = onPrevious)
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, label, tint = tint)
-            if (active) {
-                Box(
-                    Modifier.align(Alignment.BottomCenter).padding(top = 30.dp).size(4.dp)
-                        .clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-                )
+            if (isBuffering) {
+                CircularProgressIndicator(Modifier.size(84.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
             }
-        }
-    }
-}
-
-@Composable
-fun PlayPauseButton(isPlaying: Boolean, isBuffering: Boolean, onClick: () -> Unit, size: androidx.compose.ui.unit.Dp = 76.dp) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(dampingRatio = 0.5f), label = "press")
-    Box(contentAlignment = Alignment.Center) {
-        Surface(
-            onClick = onClick,
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            interactionSource = interaction,
-            modifier = Modifier.size(size).scale(scale),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
+            Box(Modifier.size(84.dp).pressable(onTogglePlay, 0.86f), contentAlignment = Alignment.Center) {
                 AnimatedContent(
                     isPlaying,
                     transitionSpec = { (scaleIn(initialScale = 0.6f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.6f) + fadeOut()) },
@@ -411,18 +366,20 @@ fun PlayPauseButton(isPlaying: Boolean, isBuffering: Boolean, onClick: () -> Uni
                     Icon(
                         if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         if (playing) "Pause" else "Play",
-                        Modifier.size(size * 0.5f),
+                        Modifier.size(80.dp),
                     )
                 }
             }
         }
-        if (isBuffering) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(size + 10.dp),
-                strokeWidth = 3.dp,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
+        GlyphButton(Icons.Rounded.FastForward, "Next", 64.dp, enabled = hasNext, onClick = onNext)
+    }
+}
+
+@Composable
+private fun GlyphButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, size: androidx.compose.ui.unit.Dp, enabled: Boolean = true, onClick: () -> Unit) {
+    val alpha = if (enabled) 1f else 0.35f
+    Box(Modifier.size(size + 12.dp).pressable({ if (enabled) onClick() }, 0.82f), contentAlignment = Alignment.Center) {
+        Icon(icon, label, Modifier.size(size), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
     }
 }
 
@@ -449,16 +406,17 @@ fun MiniPlayer(
     val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     val fill = MaterialTheme.colorScheme.primary
 
+    val shape = RoundedCornerShape(33.dp)
     Surface(
         onClick = onClick,
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        shadowElevation = 8.dp,
+        shape = shape,
+        color = Color.Transparent,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
             .height(66.dp)
             .graphicsLayer { translationX = offsetX.value }
+            .glass(shape)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {

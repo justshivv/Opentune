@@ -71,7 +71,18 @@ import com.opentune.data.model.ShelfItem
 import com.opentune.ui.browse.ArtistScreen
 import com.opentune.ui.browse.CollectionScreen
 import com.opentune.ui.browse.SongActions
+import com.opentune.ui.account.LoginScreen
+import com.opentune.ui.components.LocalBackdrop
 import com.opentune.ui.components.LocalHazeState
+import com.opentune.ui.components.LocalSongMenu
+import com.opentune.ui.components.SongMenuActions
+import com.opentune.ui.components.liquidGlassOn
+import com.opentune.ui.library.DownloadsScreen
+import com.opentune.ui.library.LibraryNav
+import com.opentune.ui.library.LikedScreen
+import com.opentune.ui.library.LocalPlaylistScreen
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opentune.ui.components.glass
 import com.opentune.ui.explore.ExploreScreen
 import com.opentune.ui.explore.MoodScreen
@@ -108,6 +119,8 @@ fun AppRoot(vm: PlayerViewModel) {
     var playerOpen by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val haze = rememberHazeState()
+    val backdrop = rememberLayerBackdrop()
+    val liquid = liquidGlassOn()
 
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
@@ -130,12 +143,29 @@ fun AppRoot(vm: PlayerViewModel) {
             else -> item.toSong()?.let { vm.play(it, "Home") }
         }
     }
+    val songMenu = SongMenuActions(
+        playNext = vm::playNext,
+        addToQueue = vm::addToQueue,
+        startRadio = vm::startRadio,
+        openAlbum = { id -> playerOpen = false; nav.openBrowse(id, BrowseType.ALBUM) },
+        openArtist = { id -> playerOpen = false; nav.openBrowse(id, BrowseType.ARTIST) },
+    )
+    val libraryNav = LibraryNav(
+        downloads = { nav.navigate("downloads") },
+        local = { nav.navigate("local") },
+        replay = { nav.navigate("replay") },
+        settings = { nav.navigate("settings") },
+        liked = { nav.navigate("liked") },
+        playlist = { id -> nav.navigate("playlist/${Uri.encode(id)}") },
+        browse = { id -> nav.openBrowse(id) },
+    )
+    val chromeVisible = route != "login"
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val content = PaddingValues(bottom = navInset + NAV_HEIGHT + 24.dp + if (song != null) MINI_HEIGHT else 0.dp)
 
-    CompositionLocalProvider(LocalHazeState provides haze) {
+    CompositionLocalProvider(LocalHazeState provides haze, LocalSongMenu provides songMenu) {
         Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().hazeSource(haze)) {
+            Box(Modifier.fillMaxSize().then(if (liquid) Modifier.layerBackdrop(backdrop) else Modifier).hazeSource(haze)) {
                 NavHost(
                     navController = nav,
                     startDestination = Tab.HOME.route,
@@ -158,13 +188,7 @@ fun AppRoot(vm: PlayerViewModel) {
                         })
                     }
                     composable(Tab.LIBRARY.route) {
-                        LibraryScreen(
-                            contentPadding = content,
-                            actions = actions,
-                            onOpenLocal = { nav.navigate("local") },
-                            onOpenReplay = { nav.navigate("replay") },
-                            onOpenSettings = { nav.navigate("settings") },
-                        )
+                        LibraryScreen(contentPadding = content, actions = actions, nav = libraryNav)
                     }
                     composable(SEARCH_ROUTE) {
                         SearchScreen(
@@ -183,7 +207,17 @@ fun AppRoot(vm: PlayerViewModel) {
                             onBack = { nav.popBackStack() },
                             onOpenEqualizer = { nav.navigate("equalizer") },
                             onOpenReplay = { nav.navigate("replay") },
+                            onSignIn = { nav.navigate("login") },
+                            onOpenDownloads = { nav.navigate("downloads") },
                         )
+                    }
+                    composable("login") { LoginScreen(onDone = { nav.popBackStack() }) }
+                    composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    composable("liked") {
+                        LikedScreen(content, actions, onBack = { nav.popBackStack() }, onOpenYouTubeLikes = { nav.openBrowse("VLLM", BrowseType.PLAYLIST) })
+                    }
+                    composable("playlist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                        LocalPlaylistScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }
                     composable("equalizer") { EqualizerScreen(content, onBack = { nav.popBackStack() }) }
                     composable("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
@@ -216,6 +250,8 @@ fun AppRoot(vm: PlayerViewModel) {
             }
 
             // Floating chrome: the mini player above the nav pill and search button.
+            // It sits outside the recorded layer, so its Liquid Glass can sample it.
+            if (chromeVisible) CompositionLocalProvider(LocalBackdrop provides backdrop.takeIf { liquid }) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
                 SnackbarHost(snackbar)
                 MiniPlayerBar(vm, onExpand = { playerOpen = true })
@@ -244,6 +280,7 @@ fun AppRoot(vm: PlayerViewModel) {
                         if (route != SEARCH_ROUTE) nav.navigate(SEARCH_ROUTE) { launchSingleTop = true }
                     }
                 }
+            }
             }
 
             AnimatedVisibility(

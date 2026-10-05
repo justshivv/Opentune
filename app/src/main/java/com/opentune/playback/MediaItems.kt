@@ -6,6 +6,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import com.opentune.data.download.Downloads
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.model.Song
 
@@ -20,10 +21,15 @@ private const val TRACK_HOST = "track"
 private const val EXTRA_DURATION_TEXT = "durationText"
 private const val EXTRA_ALBUM = "album"
 
-/** Local files play straight from MediaStore; everything else resolves on open. */
-fun trackUri(videoId: String): Uri =
-    if (LocalMusic.isLocal(videoId)) LocalMusic.contentUri(videoId)
-    else Uri.Builder().scheme(TRACK_SCHEME).authority(TRACK_HOST).appendPath(videoId).build()
+/**
+ * Local files play straight from MediaStore and downloads from their file;
+ * everything else resolves on open.
+ */
+fun trackUri(videoId: String): Uri = when {
+    LocalMusic.isLocal(videoId) -> LocalMusic.contentUri(videoId)
+    else -> Downloads.fileFor(videoId)?.let(Uri::fromFile)
+        ?: Uri.Builder().scheme(TRACK_SCHEME).authority(TRACK_HOST).appendPath(videoId).build()
+}
 
 /** The video id a [trackUri] stands for, or null for any other URI. */
 fun videoIdOf(uri: Uri): String? =
@@ -37,7 +43,8 @@ fun Song.toMediaItem(): MediaItem =
             MediaMetadata.Builder()
                 .setTitle(title)
                 .setArtist(artist)
-                .setArtworkUri(thumbnailUrl?.let(Uri::parse))
+                // A downloaded cover keeps the notification and lock screen right offline.
+                .setArtworkUri(Downloads.artFor(videoId)?.let(Uri::fromFile) ?: thumbnailUrl?.let(Uri::parse))
                 .setAlbumTitle(albumName)
                 .setExtras(
                     Bundle().apply {

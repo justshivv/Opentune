@@ -10,24 +10,31 @@ What works:
 
 - **Browse:** Home ("Listen Now" with Recents from your history), Explore
   (moods and genres), Search with suggestions, recent searches and filters,
-  album, playlist and artist pages, and a Library with Replay stats and
-  music saved on the device
+  album, playlist and artist pages, and a Library with listening cards,
+  Replay stats, downloads, local music, liked songs and playlists
 - **Playback:** a Media3 `MediaSessionService` / ExoPlayer, with YouTube
   streams resolved and deciphered via NewPipeExtractor. A queue with
   autoplay radio, shuffle and repeat, and swipe-to-queue on any song
 - **Audio:** per-network quality (defaults to the best stream YouTube
   offers), a song cache for instant replays and seeks, preloading of the
   next song for near-instant skips, a 7-band equalizer with tone and
-  balance, loudness levelling, stereo widening, skip silence, USB DAC
+  balance, loudness normalization from YouTube's own measurement, stereo widening, skip silence, USB DAC
   preference, optional 32-bit float output, and a Remix sheet for speed,
   pitch, reverb and bass (Slowed + reverb, Nightcore and more). The EQ,
-  levelling and bass run in the app's own DSP, so they work on any phone
+  and bass run in the app's own DSP, so they work on any phone
 - **Player:** artwork-tinted colors, mesh / gradient / blurred / plain
-  backgrounds, optional full-screen cover art, volume bar, "Playing from",
-  stats for nerds, swipe to skip, drag down to close
+  backgrounds, optional full-screen cover art, a queue you can reorder by
+  dragging, the current lyric line under the title, time remaining, a sleep
+  timer, the output device's name, volume bar, "Playing from", stats for
+  nerds, swipe to skip, drag down to close
+- **Account and downloads:** sign in to YouTube Music on Google's own page
+  (likes sync to the account, your playlists show in Library); download
+  songs for offline play, with a quality setting and Wi-Fi only by default.
+  The login cookie stays in app storage and is left out of backups
 - **Lyrics:** synced from [LRCLIB](https://lrclib.net), highlighted word by
   word and scrolling with the song; YouTube Music's lyrics as a fallback
-- **Look:** black-and-glass design with a floating nav bar; light, dark or
+- **Look:** black-and-glass design with a floating nav bar, Liquid Glass
+  (lens refraction on Android 13+, via Kyant's backdrop library); light, dark or
   system theme, Material You, accent colors, palette styles, pure black,
   color from artwork, reduced motion and reduced blur options
 - **Data:** listening history on the device, Replay, and export/import of
@@ -36,7 +43,7 @@ What works:
 YouTube's audio is lossy (Opus around 160 kbps; AAC 256 with Premium), so
 there is no lossless or Dolby Atmos option.
 
-Not yet built: account login, downloads, crossfade/automix, Listen
+Not yet built: crossfade/automix, Listen
 Together, Last.fm, lyric translation, app language.
 
 ## Building

@@ -6,26 +6,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material.icons.rounded.RepeatOne
-import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
@@ -39,90 +26,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.media3.common.Player
-import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.ReverbLevel
 import com.opentune.data.settings.RemixPreset
 import com.opentune.playback.SoundEffects
-import com.opentune.ui.components.SongListItem
 import kotlin.math.roundToInt
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun QueueSheet(
-    queue: List<Song>,
-    currentIndex: Int,
-    upNext: List<Int>,
-    isPlaying: Boolean,
-    shuffle: Boolean,
-    repeatMode: Int,
-    onShuffle: () -> Unit,
-    onRepeat: () -> Unit,
-    onPlayIndex: (Int) -> Unit,
-    onRemoveIndex: (Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val autoplay = AppSettings.playback.collectAsState().value.autoplay
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Up next", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    "${upNext.size} songs" + if (shuffle) " • shuffled" else "",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            FilterChip(selected = shuffle, onClick = onShuffle, label = { Text("Shuffle") }, leadingIcon = { Icon(Icons.Rounded.Shuffle, null) })
-            FilterChip(
-                selected = repeatMode != Player.REPEAT_MODE_OFF,
-                onClick = onRepeat,
-                label = { Text(if (repeatMode == Player.REPEAT_MODE_ONE) "One" else "Repeat") },
-                leadingIcon = { Icon(if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, null) },
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
-        LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
-            queue.getOrNull(currentIndex)?.let { current ->
-                item(key = "now") {
-                    Text(
-                        "Now playing",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 4.dp),
-                    )
-                    SongListItem(current, onClick = {}, isCurrent = true, isPlaying = isPlaying)
-                }
-            }
-            items(upNext, key = { "$it:${queue.getOrNull(it)?.videoId}" }) { index ->
-                val song = queue.getOrNull(index) ?: return@items
-                SongListItem(song, onClick = { onPlayIndex(index) }) {
-                    IconButton(onClick = { onRemoveIndex(index) }) { Icon(Icons.Rounded.Close, "Remove from queue") }
-                }
-            }
-            item(key = "autoplay") {
-                ListItem(
-                    headlineContent = { Text("Autoplay") },
-                    supportingContent = {
-                        Text(
-                            when {
-                                repeatMode != Player.REPEAT_MODE_OFF -> "Paused while repeat is on"
-                                autoplay -> "Similar songs keep playing when the queue runs out"
-                                else -> "Playback stops at the end of the queue"
-                            },
-                        )
-                    },
-                    trailingContent = { Switch(autoplay, AppSettings::setAutoplay) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.navigationBarsPadding(),
-                )
-            }
-        }
-    }
-}
 
 /**
  * Speed, pitch, reverb and bass, with one-tap presets. Changes apply live;

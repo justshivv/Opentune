@@ -28,6 +28,9 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Animation
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.BlurOff
@@ -89,6 +92,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
 import com.opentune.BuildConfig
+import com.opentune.data.account.AccountStore
+import com.opentune.data.download.DownloadState
+import com.opentune.data.download.Downloads
 import com.opentune.data.history.History
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.settings.AppSettings
@@ -98,7 +104,9 @@ import com.opentune.data.settings.PlayerBackground
 import com.opentune.data.settings.SEED_COLORS
 import com.opentune.data.settings.ThemeMode
 import com.opentune.playback.AudioCache
+import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.GroupCard
+import com.opentune.ui.components.liquidGlassSupported
 import com.opentune.ui.components.GroupLabel
 import com.opentune.ui.components.NavRow
 import com.opentune.ui.components.PageHeader
@@ -124,9 +132,11 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenEqualizer: () -> Unit,
     onOpenReplay: () -> Unit,
+    onSignIn: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    val sections = settingsSections(onOpenEqualizer, onOpenReplay)
+    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onSignIn, onOpenDownloads)
     val q = query.trim()
     val visible = sections.mapNotNull { s ->
         val matches = if (q.isEmpty()) s.entries else s.entries.filter {
@@ -184,7 +194,17 @@ fun SettingsScreen(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun settingsSections(onOpenEqualizer: () -> Unit, onOpenReplay: () -> Unit): List<Section> {
+private fun settingsSections(
+    onOpenEqualizer: () -> Unit,
+    onOpenReplay: () -> Unit,
+    onSignIn: () -> Unit,
+    onOpenDownloads: () -> Unit,
+): List<Section> {
+    val signedIn by AccountStore.signedIn.collectAsState()
+    val account by AccountStore.account.collectAsState()
+    val downloads by Downloads.entries.collectAsState()
+    var downloadQualityDialog by remember { mutableStateOf(false) }
+    var confirmSignOut by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val theme by AppSettings.theme.collectAsState()
@@ -239,6 +259,31 @@ private fun settingsSections(onOpenEqualizer: () -> Unit, onOpenReplay: () -> Un
             onDismiss = { qualityDialog = null },
         )
     }
+    if (downloadQualityDialog) {
+        ChoiceDialog(
+            title = "Download quality",
+            options = AudioQuality.entries,
+            selected = lib.downloadQuality,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { q -> AppSettings.updateLibrary { it.copy(downloadQuality = q) } },
+            onDismiss = { downloadQualityDialog = false },
+        )
+    }
+    if (confirmSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmSignOut = false },
+            title = { Text("Sign out?") },
+            text = { Text("Your likes and playlists on this device stay. YouTube Music stops seeing what you play here.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmSignOut = false
+                    AccountStore.signOut()
+                    android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                }) { Text("Sign out") }
+            },
+            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") } },
+        )
+    }
     if (folderDialog) {
         var folders by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
         LaunchedEffect(Unit) { folders = runCatching { LocalMusic.folders(context) }.getOrDefault(emptyList()) }
@@ -255,7 +300,31 @@ private fun settingsSections(onOpenEqualizer: () -> Unit, onOpenReplay: () -> Un
         AlertDialog(onDismissRequest = { message = null }, confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } }, text = { Text(m) })
     }
 
+    val done = downloads.values.filter { it.state == DownloadState.DONE }
     return listOf(
+        Section(
+            "Account",
+            listOfNotNull(
+                Entry("YouTube Music account", "sign in login google profile") {
+                    if (signedIn) {
+                        SettingRow(
+                            account?.name ?: "Signed in",
+                            summary = account?.email?.takeIf { it.isNotBlank() } ?: "YouTube Music",
+                            trailing = {
+                                Artwork(account?.thumbnailUrl, Modifier.size(40.dp), CircleShape)
+                            },
+                        )
+                    } else {
+                        NavRow("Sign in to YouTube Music", onSignIn, summary = "Your playlists, liked songs and recommendations", icon = Icons.Rounded.AccountCircle)
+                    }
+                },
+                if (signedIn) {
+                    Entry("Sign out", "logout account") {
+                        SettingRow("Sign out", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { confirmSignOut = true })
+                    }
+                } else null,
+            ),
+        ),
         Section(
             "Audio quality",
             listOf(
@@ -376,6 +445,17 @@ private fun settingsSections(onOpenEqualizer: () -> Unit, onOpenReplay: () -> Un
                 Entry("Reduce animation", "motion") {
                     ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes the player's moving background", icon = Icons.Rounded.Animation)
                 },
+                Entry("Liquid Glass", "glass refraction apple lens") {
+                    ToggleRow(
+                        "Liquid Glass",
+                        ui.liquidGlass && liquidGlassSupported,
+                        { v -> AppSettings.updateUi { it.copy(liquidGlass = v) } },
+                        summary = if (liquidGlassSupported) "Bends and lifts what's behind the floating bars, like Apple's glass"
+                        else "Needs Android 13 or newer; frosted glass is used instead",
+                        icon = Icons.Rounded.AutoAwesome,
+                        enabled = liquidGlassSupported && !ui.reduceBlur,
+                    )
+                },
                 Entry("Reduce dynamic blur", "glass frosted performance") {
                     ToggleRow("Reduce dynamic blur", ui.reduceBlur, { v -> AppSettings.updateUi { it.copy(reduceBlur = v) } }, summary = "Swaps frosted glass for solid fills across the app", icon = Icons.Rounded.BlurOff)
                 },
@@ -392,6 +472,25 @@ private fun settingsSections(onOpenEqualizer: () -> Unit, onOpenReplay: () -> Un
                 },
                 Entry("Lyrics sources", "lrclib youtube") {
                     SettingRow("Lyrics sources", summary = "LRCLIB, then YouTube Music", icon = Icons.Rounded.TextFields)
+                },
+            ),
+        ),
+        Section(
+            "Downloads",
+            listOf(
+                Entry("Downloaded songs", "offline saved") {
+                    NavRow(
+                        "Downloaded songs",
+                        onOpenDownloads,
+                        summary = "${done.size} songs · ${Formatter.formatShortFileSize(context, done.sumOf { it.bytes })}",
+                        icon = Icons.Rounded.DownloadDone,
+                    )
+                },
+                Entry("Download quality", "offline bitrate") {
+                    NavRow("Download quality", { downloadQualityDialog = true }, icon = Icons.Rounded.Download, value = lib.downloadQuality.label)
+                },
+                Entry("Download on Wi-Fi only", "mobile data metered") {
+                    ToggleRow("Download on Wi-Fi only", lib.downloadWifiOnly, { v -> AppSettings.updateLibrary { it.copy(downloadWifiOnly = v) } }, summary = "Waits for Wi-Fi before saving songs", icon = Icons.Rounded.Wifi)
                 },
             ),
         ),

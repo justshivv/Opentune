@@ -1,5 +1,6 @@
 package com.opentune.ui.components
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,11 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import com.opentune.data.settings.AppSettings
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
@@ -40,18 +46,54 @@ import dev.chrisbanes.haze.hazeEffect
 val LocalHazeState = staticCompositionLocalOf<HazeState?> { null }
 
 /**
- * Frosted glass: the content behind is blurred and tinted (Android 12+,
- * via Haze), with a hairline edge. With "Reduce dynamic blur" on, or without
- * a content layer to blur, it's a solid fill in the same color.
+ * The layer Liquid Glass refracts. Only floating chrome drawn outside that
+ * layer gets one (the nav pill, mini player, player buttons): glass inside
+ * the layer it samples would sample itself.
+ */
+val LocalBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
+
+/** Lens refraction needs runtime shaders, which arrived in Android 13. */
+val liquidGlassSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+
+@Composable
+fun liquidGlassOn(): Boolean {
+    val ui by AppSettings.ui.collectAsState()
+    return liquidGlassSupported && ui.liquidGlass && !ui.reduceBlur
+}
+
+/**
+ * Glass for floating controls, in three grades:
+ *
+ * - Liquid Glass (Android 13+, setting on): the content behind is blurred a
+ *   little, bent at the edges by a lens and lifted by vibrancy, with a rim
+ *   highlight, like Apple's material.
+ * - Frosted (Android 12+): blurred and tinted via Haze.
+ * - Solid: with "Reduce dynamic blur" on, or nothing to sample.
+ *
+ * Every grade keeps a hairline edge so the shape reads on any background.
  */
 @Composable
 fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surfaceContainerHigh): Modifier {
     val ui by AppSettings.ui.collectAsState()
     val haze = LocalHazeState.current
+    val backdrop = LocalBackdrop.current
     val edge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    if (backdrop != null && liquidGlassOn()) {
+        val surface = if (tint.alpha < 1f) tint else tint.copy(alpha = 0.28f)
+        return this.drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                blur(6.dp.toPx())
+                lens(14.dp.toPx(), 28.dp.toPx())
+            },
+            onDrawSurface = { drawRect(surface) },
+        )
+    }
     val base = this.clip(shape)
     val filled = if (haze == null || ui.reduceBlur) {
-        base.background(tint.copy(alpha = 0.96f))
+        base.background(if (tint.alpha < 1f) tint else tint.copy(alpha = 0.96f))
     } else {
         base.hazeEffect(
             state = haze,

@@ -7,7 +7,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -36,7 +35,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +47,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -73,65 +70,7 @@ import com.opentune.ui.components.SongRowPlaceholder
 import java.util.concurrent.TimeUnit
 
 @Composable
-fun LibraryScreen(
-    contentPadding: PaddingValues,
-    actions: SongActions,
-    onOpenLocal: () -> Unit,
-    onOpenReplay: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    val records by History.records.collectAsState()
-    val recents = remember(records) { History.recents(records, 50) }
-    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item {
-            PageHeader("Library", actions = { GlassIconButton(Icons.Rounded.Settings, "Settings", onOpenSettings) })
-        }
-        item {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                LibraryTile(Icons.Rounded.BarChart, "Replay", "${records.size} plays", onOpenReplay, Modifier.weight(1f))
-                LibraryTile(Icons.Rounded.Folder, "On this device", "Local music", onOpenLocal, Modifier.weight(1f))
-            }
-        }
-        if (recents.isEmpty()) {
-            item {
-                MessageState(Icons.Rounded.History, "Nothing played yet", Modifier.padding(top = 32.dp), message = "Songs you listen to show up here.")
-            }
-        } else {
-            item {
-                SectionHeader("Recently played", action = {
-                    PlayButtons(onPlay = { actions.playAll(recents, 0, false, "Recently played") }, onShuffle = { actions.playAll(recents, 0, true, "Recently played") }, compact = true)
-                })
-            }
-            itemsIndexed(recents, key = { i, s -> "$i:${s.videoId}" }) { i, song ->
-                SongListItem(
-                    song = song,
-                    onClick = { actions.playAll(recents, i, false, "Recently played") },
-                    isCurrent = song.videoId == actions.currentVideoId,
-                    isPlaying = actions.isPlaying,
-                    onPlayNext = { actions.playNext(song) },
-                    onAddToQueue = { actions.addToQueue(song) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibraryTile(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier) {
-        Column(Modifier.padding(18.dp)) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), Alignment.Center) {
-                Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
-            Spacer(Modifier.height(14.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun PlayButtons(onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
+internal fun PlayButtons(onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (compact) {
             GlassIconButton(Icons.Rounded.Shuffle, "Shuffle", onShuffle, size = 44.dp)

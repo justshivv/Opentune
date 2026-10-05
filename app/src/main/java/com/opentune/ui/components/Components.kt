@@ -49,12 +49,13 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -80,6 +81,8 @@ import com.opentune.data.model.BrowseType
 import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.ROW_ART_PX
 import com.opentune.data.model.Song
+import com.opentune.data.download.DownloadState
+import com.opentune.data.download.Downloads
 import com.opentune.data.model.artworkAt
 
 /** Artwork with a tinted placeholder icon while it loads or when there is none. */
@@ -128,7 +131,9 @@ fun SongListItem(
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    val hasMenu = onPlayNext != null || onAddToQueue != null
+    val hasMenu = onPlayNext != null || onAddToQueue != null || LocalSongMenu.current != null
+    val downloads by Downloads.entries.collectAsState()
+    if (menuOpen) SongMenuSheet(song, onDismiss = { menuOpen = false })
     val playback by AppSettings.playback.collectAsState()
     val onSwipe = if (playback.playNextOnSwipe) onPlayNext else onAddToQueue
     val offsetX = remember { Animatable(0f) }
@@ -212,30 +217,30 @@ fun SongListItem(
                 )
             }
             trailing()
+            val download = downloads[song.videoId]
+            if (download != null) DownloadBadge(download.state, download.progress)
             if (hasMenu) {
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "More options")
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        onPlayNext?.let {
-                            DropdownMenuItem(
-                                text = { Text("Play next") },
-                                leadingIcon = { Icon(Icons.Filled.SkipNext, null) },
-                                onClick = { menuOpen = false; it() },
-                            )
-                        }
-                        onAddToQueue?.let {
-                            DropdownMenuItem(
-                                text = { Text("Add to queue") },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) },
-                                onClick = { menuOpen = false; it() },
-                            )
-                        }
-                    }
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                 }
             }
     }
+    }
+}
+
+/** A small mark on a row: a ring while downloading, a tick once saved. */
+@Composable
+fun DownloadBadge(state: DownloadState, progress: Float) {
+    Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+        when (state) {
+            DownloadState.DONE -> Icon(Icons.Filled.DownloadDone, "Downloaded", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            DownloadState.FAILED -> Icon(Icons.Filled.ErrorOutline, "Download failed", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+            else -> CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+            )
+        }
     }
 }
 

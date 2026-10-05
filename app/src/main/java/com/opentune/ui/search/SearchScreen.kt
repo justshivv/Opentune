@@ -57,6 +57,8 @@ import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.ROW_ART_PX
 import com.opentune.data.model.SearchFilter
 import com.opentune.data.model.SearchResult
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.runtime.remember
 import com.opentune.data.model.Song
 import com.opentune.data.model.UiState
 import com.opentune.data.model.artworkAt
@@ -216,29 +218,58 @@ private fun Results(
         is UiState.Success -> if (state.data.isEmpty()) {
             MessageState(Icons.Filled.SearchOff, "No results", Modifier.padding(top = 48.dp), message = "Try different words or another filter.")
         } else {
+            // The mixed page comes back as one list; show it in sections the way
+            // YouTube Music does: songs, then artists, albums, playlists.
+            val sections = remember(state.data) { state.data.groupBy(::sectionOf).toList() }
             LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
-                items(state.data, key = { r ->
-                    when (r) {
-                        is SearchResult.TopTrack -> "t:${r.song.videoId}"
-                        is SearchResult.Track -> "v:${r.song.videoId}"
-                        is SearchResult.Browse -> "b:${r.item.browseId}"
+                sections.forEach { (title, rows) ->
+                    if (sections.size > 1) {
+                        item(key = "h:$title") {
+                            Text(
+                                title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.animateItem().padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+                            )
+                        }
                     }
-                }) { r ->
-                    when (r) {
-                        is SearchResult.TopTrack -> TopResult(r.song, onPlay = { onPlay(r.song) })
-                        is SearchResult.Track -> SongListItem(
-                            song = r.song,
-                            onClick = { onPlay(r.song) },
-                            isCurrent = r.song.videoId == currentVideoId,
-                            isPlaying = isPlaying,
-                            onPlayNext = { onPlayNext(r.song) },
-                            onAddToQueue = { onAddToQueue(r.song) },
-                        )
-                        is SearchResult.Browse -> BrowseRow(r.item, onClick = { onBrowse(r.item) })
+                    items(rows, key = { r ->
+                        when (r) {
+                            is SearchResult.TopTrack -> "t:${r.song.videoId}"
+                            is SearchResult.Track -> "v:${r.song.videoId}"
+                            is SearchResult.Browse -> "b:${r.item.browseId}"
+                        }
+                    }) { r ->
+                        Box(Modifier.animateItem()) {
+                            when (r) {
+                                is SearchResult.TopTrack -> TopResult(r.song, onPlay = { onPlay(r.song) })
+                                is SearchResult.Track -> SongListItem(
+                                    song = r.song,
+                                    onClick = { onPlay(r.song) },
+                                    isCurrent = r.song.videoId == currentVideoId,
+                                    isPlaying = isPlaying,
+                                    onPlayNext = { onPlayNext(r.song) },
+                                    onAddToQueue = { onAddToQueue(r.song) },
+                                )
+                                is SearchResult.Browse -> BrowseRow(r.item, onClick = { onBrowse(r.item) })
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+private fun sectionOf(r: SearchResult): String = when (r) {
+    is SearchResult.TopTrack -> "Top result"
+    is SearchResult.Track -> if (r.song.isVideo) "Videos" else "Songs"
+    is SearchResult.Browse -> when (r.item.type) {
+        BrowseType.ARTIST -> "Artists"
+        BrowseType.ALBUM -> "Albums"
+        BrowseType.PLAYLIST -> "Playlists"
+        else -> "More"
     }
 }
 

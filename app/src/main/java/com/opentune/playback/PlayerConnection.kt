@@ -218,6 +218,13 @@ class PlayerConnection(private val context: Context) {
         if (index != controller.currentMediaItemIndex) controller.removeMediaItem(index)
     }
 
+    /** Moves a queue entry, for drag-to-reorder in the queue. */
+    fun moveQueueItem(from: Int, to: Int) {
+        val controller = controller ?: return
+        if (from == to || from !in 0 until controller.mediaItemCount || to !in 0 until controller.mediaItemCount) return
+        controller.moveMediaItem(from, to)
+    }
+
     fun seekTo(positionMs: Long) {
         controller?.seekTo(positionMs)
     }

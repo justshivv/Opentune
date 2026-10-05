@@ -8,6 +8,7 @@ import com.opentune.data.model.HomeShelf
 import com.opentune.data.model.MoodGenreSection
 import com.opentune.data.model.SearchFilter
 import com.opentune.data.model.SearchResult
+import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -68,6 +69,11 @@ object MusicRepository {
 
     suspend fun artist(browseId: String): ArtistPage = io {
         InnertubeParser.parseArtistPage(Innertube.browse(browseId))
+    }
+
+    /** The signed-in account's playlists on YouTube Music, without the "New playlist" tile. */
+    suspend fun libraryPlaylists(): List<ShelfItem> = io {
+        InnertubeParser.parseLibraryItems(Innertube.browse("FEmusic_liked_playlists")).filter { it.browseId != null }
     }
 
     /** What a browse id opens, read off its prefix. */
