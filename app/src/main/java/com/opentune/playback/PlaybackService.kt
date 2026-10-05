@@ -24,6 +24,7 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
@@ -36,6 +37,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.opentune.MainActivity
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
+import com.opentune.data.NerdStats
 import com.opentune.data.history.History
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.innertube.Innertube
@@ -47,6 +49,7 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.playback.dsp.DspAudioProcessor
 import com.opentune.playback.dsp.DspParams
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -124,8 +127,18 @@ class PlaybackService : MediaSessionService() {
                 .build()
         }
 
+        // Start as soon as a little audio is in: the defaults wait for 2.5 s,
+        // which is video-sized caution. A stream starts after 0.75 s buffered
+        // and a local file after a quarter second.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMsForStreaming(20_000, 60_000, 750, 2_000)
+            .setBufferDurationsMsForLocalPlayback(5_000, 30_000, 250, 500)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         val player = ExoPlayer.Builder(context, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(routing))
+            .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -154,6 +167,15 @@ class PlaybackService : MediaSessionService() {
             AppSettings.playback.map { it.autoplay }.distinctUntilChanged().collect { extendQueueIfNeeded() }
         }
         scope.launch { trackListening(player) }
+        scope.launch {
+            AppSettings.playback.map { it.preloadUpcoming }.distinctUntilChanged().collect { on ->
+                // ExoPlayer prepares and buffers the next item in play order
+                // while this one plays, so it starts from memory.
+                player.preloadConfiguration =
+                    if (on) ExoPlayer.PreloadConfiguration(PRELOAD_US) else ExoPlayer.PreloadConfiguration.DEFAULT
+                if (on) warmNeighbours()
+            }
+        }
 
         audioManager = getSystemService(AudioManager::class.java)?.also { am ->
             am.registerAudioDeviceCallback(deviceCallback, null)
@@ -249,15 +271,22 @@ class PlaybackService : MediaSessionService() {
                 )
             ) {
                 extendQueueIfNeeded()
+                warmNeighbours()
             }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             finishListen()
             startListen(mediaItem?.toSong(), mediaSession?.player?.isPlaying == true)
+            // Only time starts meant to sound now, not a skip made while paused.
+            startRequestedAt = if (mediaSession?.player?.playWhenReady == true) SystemClock.elapsedRealtime() else 0L
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying && startRequestedAt > 0) {
+                NerdStats.onStartup(SystemClock.elapsedRealtime() - startRequestedAt)
+                startRequestedAt = 0
+            }
             if (isPlaying) {
                 if (listenSince < 0) listenSince = SystemClock.elapsedRealtime()
             } else {
@@ -311,6 +340,56 @@ class PlaybackService : MediaSessionService() {
             val threshold = minOf(30_000L, duration / 2)
             val heard = listenedSoFar()
             if (heard >= threshold) listenRecord = History.record(song, heard)
+        }
+    }
+
+    // ---- Latency -----------------------------------------------------------------
+
+    /** When the current item was asked for, to time how long it took to sound. */
+    private var startRequestedAt = 0L
+
+    private var warmJob: Job? = null
+
+    /** Video ids whose stream URL was warmed, and when; StreamResolver holds them 20 minutes. */
+    private val warmedAt = ConcurrentHashMap<String, Long>()
+
+    /**
+     * Resolve stream URLs for the tracks either side of this one in play
+     * order (the next two and the previous one) before they're asked for.
+     * Finding a working stream is the slow part of starting a track, a few
+     * YouTube requests; with the URL already in [StreamResolver]'s cache a
+     * skip or a jump back only has to fetch audio. ExoPlayer's own preload
+     * then buffers the very next one.
+     */
+    private fun warmNeighbours() {
+        if (!AppSettings.playback.value.preloadUpcoming) return
+        val player = mediaSession?.player ?: return
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty) return
+        val current = player.currentMediaItemIndex
+        val previous = timeline.getPreviousWindowIndex(current, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
+        val indices = player.upcomingPlayOrder().drop(1).take(WARM_AHEAD) +
+            listOfNotNull(previous.takeIf { it != C.INDEX_UNSET })
+        val now = SystemClock.elapsedRealtime()
+        val ids = indices.map { player.getMediaItemAt(it).mediaId }
+            .filter { !LocalMusic.isLocal(it) && now - (warmedAt[it] ?: 0L) > WARM_TTL_MS }
+            .distinct()
+        if (ids.isEmpty()) return
+        ids.forEach { warmedAt[it] = now }
+        if (warmedAt.size > 64) warmedAt.entries.removeAll { now - it.value > WARM_TTL_MS }
+
+        val previousJob = warmJob
+        warmJob = scope.launch(Dispatchers.IO) {
+            previousJob?.join()
+            // One at a time: these compete with the playing track for bandwidth.
+            for (id in ids) {
+                runCatching { StreamResolver.resolve(id) }
+                    .onFailure { e ->
+                        if (e is CancellationException) throw e
+                        Log.w(TAG, "Warm-up for $id failed: ${e.message}")
+                        warmedAt.remove(id)
+                    }
+            }
         }
     }
 
@@ -475,5 +554,14 @@ class PlaybackService : MediaSessionService() {
 
     private companion object {
         const val TAG = "PlaybackService"
+
+        /** How much of the next track ExoPlayer buffers ahead of time. */
+        const val PRELOAD_US = 10_000_000L
+
+        /** Tracks ahead of the current one whose stream URLs are resolved early. */
+        const val WARM_AHEAD = 2
+
+        /** A little under StreamResolver's 20-minute URL lifetime. */
+        const val WARM_TTL_MS = 15 * 60 * 1000L
     }
 }
