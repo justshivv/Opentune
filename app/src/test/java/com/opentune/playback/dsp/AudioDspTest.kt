@@ -132,3 +132,34 @@ class DspAudioProcessorTest {
         repeat(200) { val l = out.getShort(); val r = out.getShort(); assertEquals(l, r) }
     }
 }
+
+class ClarityTest {
+    private val fs = 48_000.0
+
+    /** The combined response of every clarity stage at [freq], in dB. */
+    private fun responseDb(freq: Double): Double =
+        DspParams(clarity = true).stages(fs.toInt()).sumOf { it().magnitudeDb(freq, fs) }
+
+    @Test
+    fun liftsPresenceAndAirCutsMud() {
+        assertTrue("presence lifted", responseDb(3_400.0) > 2.5)
+        assertTrue("air lifted", responseDb(14_000.0) > 3.5)
+        assertTrue("low mids cut", responseDb(280.0) < -1.5)
+        assertTrue("rumble removed", responseDb(10.0) < -10.0)
+    }
+
+    @Test
+    fun runsTheLimiterAndLeavesHeadroom() {
+        val p = DspParams(clarity = true)
+        assertTrue(p.canBoost)
+        assertTrue(!p.isNeutral)
+        assertEquals(dbToGain(-DspParams.CLARITY_HEADROOM_DB), p.preampGain, 1e-4f)
+    }
+
+    @Test
+    fun highPassIsFlatInTheBand() {
+        val hp = Biquad.highPass(fs, 24.0)
+        assertEquals(0.0, hp.magnitudeDb(1_000.0, fs), 0.05)
+        assertEquals(-3.0, hp.magnitudeDb(24.0, fs), 0.2)
+    }
+}

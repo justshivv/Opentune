@@ -62,6 +62,15 @@ class Biquad(
             return Biquad((1 + alpha * a) / a0, -2 * cw / a0, (1 - alpha * a) / a0, -2 * cw / a0, (1 - alpha / a) / a0)
         }
 
+        /** Second-order high-pass; [q] of 0.7071 is Butterworth. */
+        fun highPass(sampleRate: Double, freq: Double, q: Double = 0.7071): Biquad {
+            val w0 = 2 * PI * freq / sampleRate
+            val cw = cos(w0)
+            val alpha = sin(w0) / (2 * q)
+            val a0 = 1 + alpha
+            return Biquad((1 + cw) / 2 / a0, -(1 + cw) / a0, (1 + cw) / 2 / a0, -2 * cw / a0, (1 - alpha) / a0)
+        }
+
         fun lowShelf(sampleRate: Double, freq: Double, gainDb: Double): Biquad = shelf(sampleRate, freq, gainDb, low = true)
 
         fun highShelf(sampleRate: Double, freq: Double, gainDb: Double): Biquad = shelf(sampleRate, freq, gainDb, low = false)
@@ -101,6 +110,8 @@ data class DspParams(
     /** 0..1000 from the Remix sheet's bass boost. */
     val bassBoost: Int = 0,
     val spatial: Boolean = false,
+    /** The "Clarity" curve: firmer bass, less mud, more presence and air. */
+    val clarity: Boolean = false,
 ) {
     private val eqActive: Boolean
         get() = equalizer.enabled && (
@@ -108,7 +119,7 @@ data class DspParams(
                 equalizer.bassDb != 0f || equalizer.trebleDb != 0f || equalizer.balance != 0f
             )
 
-    val isNeutral: Boolean get() = !eqActive && bassBoost == 0 && !spatial
+    val isNeutral: Boolean get() = !eqActive && bassBoost == 0 && !spatial && !clarity
 
     /**
      * Whether anything in the chain can push a sample past full scale. Only
@@ -116,7 +127,7 @@ data class DspParams(
      * mastered.
      */
     val canBoost: Boolean
-        get() = spatial || bassBoost > 0 || (eqActive && (
+        get() = spatial || clarity || bassBoost > 0 || (eqActive && (
             equalizer.preampDb > 0 || equalizer.bassDb > 0 || equalizer.trebleDb > 0 || equalizer.bands.any { it > 0 }
             ))
 
@@ -134,6 +145,17 @@ data class DspParams(
             if (equalizer.trebleDb != 0f && 8_000.0 < nyquistSafe) out += { Biquad.highShelf(fs, 8_000.0, equalizer.trebleDb.toDouble()) }
         }
         if (bassBoost > 0) out += { Biquad.lowShelf(fs, 100.0, bassBoost / 1000.0 * MAX_BASS_BOOST_DB) }
+        if (clarity) {
+            // After LastWave's Studio Master Clarity: cut rumble below hearing,
+            // firm up the bass, clear low-mid mud and boxiness, lift the
+            // presence band and the air above 10 kHz.
+            out += { Biquad.highPass(fs, 24.0) }
+            out += { Biquad.peaking(fs, 72.0, 0.80, 3.2) }
+            out += { Biquad.peaking(fs, 280.0, 0.90, -3.0) }
+            out += { Biquad.peaking(fs, 750.0, 0.85, -1.4) }
+            if (3_400.0 < nyquistSafe) out += { Biquad.peaking(fs, 3_400.0, 0.85, 3.8) }
+            if (10_500.0 < nyquistSafe) out += { Biquad.highShelf(fs, 10_500.0, 4.8) }
+        }
         return out
     }
 
@@ -151,6 +173,9 @@ data class DspParams(
                     add(equalizer.trebleDb)
                 }
                 add((bassBoost / 1000.0 * MAX_BASS_BOOST_DB).toFloat())
+                // Clarity's biggest lift, less what the soft limiter can absorb
+                // without being heard, so it doesn't just make everything quieter.
+                if (clarity) add(CLARITY_HEADROOM_DB)
             }
             val headroom = boosts.maxOrNull()?.coerceAtLeast(0f) ?: 0f
             val user = if (eqActive) equalizer.preampDb else 0f
@@ -160,6 +185,7 @@ data class DspParams(
 
     companion object {
         const val BAND_Q = 1.1
+        const val CLARITY_HEADROOM_DB = 3.3f
         const val MAX_BASS_BOOST_DB = 12.0
     }
 }
