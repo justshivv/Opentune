@@ -1,6 +1,11 @@
 package com.opentune.ui.settings
 
 import android.content.Context
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.SystemUpdate
+import com.opentune.data.library.LibraryStore
+import com.opentune.data.UpdateCheck
+import androidx.core.net.toUri
 import kotlin.math.roundToInt
 import com.opentune.data.LogExport
 import androidx.compose.material.icons.rounded.BugReport
@@ -245,10 +250,11 @@ private fun settingsSections(
                         put("version", 1)
                         put("settings", AppSettings.exportJson())
                         put("history", History.exportJson())
+                        put("library", LibraryStore.exportJson())
                     }
                     context.contentResolver.openOutputStream(uri)?.use { it.write(doc.toString().toByteArray()) }
                 }
-                "Exported settings and history."
+                "Exported settings, history, likes and playlists."
             }.getOrElse { "Export failed: ${it.message}" }
         }
     }
@@ -261,7 +267,8 @@ private fun settingsSections(
                 } as? JsonObject ?: error("not an OpenTune export")
                 doc["settings"]?.let(AppSettings::importJson)
                 doc["history"]?.let(History::importJson)
-                "Imported settings and history."
+                doc["library"]?.let(LibraryStore::importJson)
+                "Imported settings, history, likes and playlists."
             }.getOrElse { "Import failed: ${it.message}" }
         }
     }
@@ -636,10 +643,10 @@ private fun settingsSections(
                     NavRow("Replay", onOpenReplay, summary = "Your top songs, artists and albums", icon = Icons.Rounded.BarChart)
                 },
                 Entry("Export data", "backup json") {
-                    NavRow("Export data", { exporter.launch("opentune-backup.json") }, summary = "Settings and listening history, as one JSON file", icon = Icons.Rounded.Upload)
+                    NavRow("Export data", { exporter.launch("opentune-backup.json") }, summary = "Settings, history, likes and playlists, as one JSON file", icon = Icons.Rounded.Upload)
                 },
                 Entry("Import data", "restore json") {
-                    NavRow("Import data", { importer.launch(arrayOf("application/json")) }, summary = "Replaces the settings and history on this device", icon = Icons.Rounded.Download)
+                    NavRow("Import data", { importer.launch(arrayOf("application/json")) }, summary = "Replaces the settings, history, likes and playlists on this device", icon = Icons.Rounded.Download)
                 },
                 Entry("Clear listening history", "delete history") {
                     NavRow("Clear listening history", { History.clear(); message = "Listening history cleared." }, summary = "Removes Recents and Replay data", icon = Icons.Rounded.DeleteSweep)
@@ -683,6 +690,26 @@ private fun settingsSections(
         Section(
             "Advanced",
             listOf(
+                Entry("Check for updates", "new version release download github") {
+                    NavRow("Check for updates", {
+                        scope.launch {
+                            message = when (val r = UpdateCheck.check()) {
+                                is UpdateCheck.Result.Newer -> {
+                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, r.url.toUri())) }
+                                    "OpenTune ${r.version} is out. Opening the download page."
+                                }
+                                UpdateCheck.Result.UpToDate -> "You have the latest version (${BuildConfig.VERSION_NAME})."
+                                UpdateCheck.Result.NoReleases -> "No releases are published yet. Builds are on the GitHub branch for now."
+                                is UpdateCheck.Result.Failed -> "Couldn't check: ${r.reason}"
+                            }
+                        }
+                    }, summary = "Current version: ${BuildConfig.VERSION_NAME}", icon = Icons.Rounded.SystemUpdate)
+                },
+                Entry("Source code", "github open source license gpl") {
+                    NavRow("Source code", {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/justshivv/Opentune".toUri())) }
+                    }, summary = "github.com/justshivv/Opentune · GPL v3", icon = Icons.Rounded.Code)
+                },
                 Entry("Export diagnostics", "log share troubleshooting bug report") {
                     NavRow("Export diagnostics", {
                         scope.launch {
