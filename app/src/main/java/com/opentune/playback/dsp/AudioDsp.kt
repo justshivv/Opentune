@@ -12,7 +12,6 @@ import java.nio.ByteBuffer
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.pow
 import kotlin.math.sign
 import kotlin.math.sin
@@ -102,7 +101,6 @@ data class DspParams(
     /** 0..1000 from the Remix sheet's bass boost. */
     val bassBoost: Int = 0,
     val spatial: Boolean = false,
-    val leveller: Boolean = false,
 ) {
     private val eqActive: Boolean
         get() = equalizer.enabled && (
@@ -110,7 +108,17 @@ data class DspParams(
                 equalizer.bassDb != 0f || equalizer.trebleDb != 0f || equalizer.balance != 0f
             )
 
-    val isNeutral: Boolean get() = !eqActive && bassBoost == 0 && !spatial && !leveller
+    val isNeutral: Boolean get() = !eqActive && bassBoost == 0 && !spatial
+
+    /**
+     * Whether anything in the chain can push a sample past full scale. Only
+     * then does the soft limiter run; otherwise peaks are left exactly as
+     * mastered.
+     */
+    val canBoost: Boolean
+        get() = spatial || bassBoost > 0 || (eqActive && (
+            equalizer.preampDb > 0 || equalizer.bassDb > 0 || equalizer.trebleDb > 0 || equalizer.bands.any { it > 0 }
+            ))
 
     /** The filter stages to run, given the sample rate. */
     fun stages(sampleRate: Int): List<() -> Biquad> {
@@ -132,7 +140,7 @@ data class DspParams(
     /**
      * The input gain: the user's preamp, less automatic headroom equal to the
      * largest boost in the chain, so boosting a band can't push peaks into
-     * the limiter. The leveller, when on, makes the loudness back up.
+     * the limiter.
      */
     val preampGain: Float
         get() {
@@ -159,62 +167,13 @@ data class DspParams(
 fun dbToGain(db: Float): Float = 10f.pow(db / 20f)
 
 /**
- * A slow automatic gain control that pulls every track toward the same
- * average level, the way streaming services normalize loudness, but measured
- * as it plays rather than read from metadata YouTube doesn't hand this app.
- *
- * It tracks mean-square level over a few seconds and nudges the gain toward
- * [TARGET_RMS] by no more than a fraction of a dB per block, so the change is
- * never heard as pumping. Gain is clamped to [MIN_GAIN_DB]..[MAX_GAIN_DB].
- */
-class Leveller(private val sampleRate: Int) {
-    /** Smoothed mean square of the non-silent blocks heard so far; negative until the first one. */
-    private var meanSquare = -1f
-    private var gainDb = 0f
-    private val blockSeconds = BLOCK.toFloat() / sampleRate
-    private val coeff = exp(-blockSeconds / DETECTOR_SECONDS).toFloat()
-    private var blockSum = 0f
-    private var counter = 0
-
-    val currentGain: Float get() = dbToGain(gainDb)
-
-    /** Feed one frame's mean square (across channels) before the gain. */
-    fun observe(frameMeanSquare: Float) {
-        blockSum += frameMeanSquare
-        if (++counter < BLOCK) return
-        val blockMs = blockSum / BLOCK
-        counter = 0
-        blockSum = 0f
-        // Gate out near-silence, as broadcast loudness meters do, so pauses,
-        // fade-outs and quiet intros don't drag the measurement down.
-        if (blockMs < SILENCE_RMS * SILENCE_RMS) return
-        meanSquare = if (meanSquare < 0) blockMs else coeff * meanSquare + (1 - coeff) * blockMs
-        val rms = sqrt(meanSquare.toDouble()).toFloat()
-        val wanted = (20 * kotlin.math.log10(TARGET_RMS / rms)).coerceIn(MIN_GAIN_DB, MAX_GAIN_DB)
-        val stepUp = MAX_RISE_DB_PER_S * blockSeconds
-        val stepDown = MAX_FALL_DB_PER_S * blockSeconds
-        gainDb += (wanted - gainDb).coerceIn(-stepDown, stepUp)
-    }
-
-    companion object {
-        /** About -16 dBFS RMS, roughly where -14 LUFS normalized masters sit. */
-        const val TARGET_RMS = 0.158f
-        /** About -50 dBFS. */
-        const val SILENCE_RMS = 0.003f
-        const val MIN_GAIN_DB = -12f
-        const val MAX_GAIN_DB = 6f
-        const val DETECTOR_SECONDS = 3.0
-        const val MAX_RISE_DB_PER_S = 1.5f
-        const val MAX_FALL_DB_PER_S = 4f
-        const val BLOCK = 512
-    }
-}
-
-/**
  * The app's audio chain, inserted ahead of ExoPlayer's own speed/pitch
  * processing: preamp, equalizer bands, tone shelves, bass boost, stereo
- * widening, balance, loudness levelling, then a soft limiter so boosts
- * don't clip. With everything off it copies samples through untouched.
+ * widening and balance, then a soft limiter only when one of those can
+ * boost. With everything off it copies samples through untouched, so the
+ * default path is bit-identical to the decoder's output. Loudness
+ * normalization isn't here: it's one fixed gain per track from YouTube's own
+ * measurement, applied by the service.
  *
  * [params] is swapped from the main thread; the filters are rebuilt on the
  * audio thread the next time a buffer arrives.
@@ -229,7 +188,6 @@ class DspAudioProcessor : BaseAudioProcessor() {
     private var sampleRate = 0
     private var isFloat = false
     private var filters: Array<Array<Biquad>> = emptyArray()
-    private var leveller: Leveller? = null
     private var frame = FloatArray(0)
 
     override fun onConfigure(inputAudioFormat: AudioFormat): AudioFormat {
@@ -248,8 +206,6 @@ class DspAudioProcessor : BaseAudioProcessor() {
     private fun rebuild(p: DspParams) {
         val stages = p.stages(sampleRate)
         filters = Array(channels) { Array(stages.size) { i -> stages[i]() } }
-        if (p.leveller && leveller == null) leveller = Leveller(sampleRate)
-        if (!p.leveller) leveller = null
         applied = p
     }
 
@@ -269,12 +225,12 @@ class DspAudioProcessor : BaseAudioProcessor() {
         val balance = p.balance
         val leftGain = if (balance > 0) 1 - balance else 1f
         val rightGain = if (balance < 0) 1 + balance else 1f
-        val lev = leveller
+        val limit = p.canBoost
         repeat(frames) {
             for (c in 0 until channels) {
                 frame[c] = if (isFloat) inputBuffer.getFloat() else inputBuffer.getShort() / 32768f
             }
-            processFrame(p, pre, leftGain, rightGain, lev)
+            processFrame(p, pre, leftGain, rightGain, limit)
             for (c in 0 until channels) {
                 val s = frame[c]
                 if (isFloat) out.putFloat(s) else out.putShort((s * 32767f).toInt().coerceIn(-32768, 32767).toShort())
@@ -285,13 +241,11 @@ class DspAudioProcessor : BaseAudioProcessor() {
         out.flip()
     }
 
-    private fun processFrame(p: DspParams, pre: Float, leftGain: Float, rightGain: Float, lev: Leveller?) {
-        var ms = 0f
+    private fun processFrame(p: DspParams, pre: Float, leftGain: Float, rightGain: Float, limit: Boolean) {
         for (c in 0 until channels) {
             var x = (frame[c] * pre).toDouble()
             for (f in filters[c]) x = f.process(x)
             frame[c] = x.toFloat()
-            ms += frame[c] * frame[c]
         }
         if (channels == 2) {
             if (p.spatial) {
@@ -303,12 +257,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
             frame[0] *= leftGain
             frame[1] *= rightGain
         }
-        if (lev != null) {
-            lev.observe(ms / channels)
-            val g = lev.currentGain
-            for (c in 0 until channels) frame[c] *= g
-        }
-        for (c in 0 until channels) frame[c] = softLimit(frame[c])
+        if (limit) for (c in 0 until channels) frame[c] = softLimit(frame[c])
     }
 
     override fun onFlush() {
@@ -317,7 +266,6 @@ class DspAudioProcessor : BaseAudioProcessor() {
 
     override fun onReset() {
         filters = emptyArray()
-        leveller = null
         applied = null
     }
 

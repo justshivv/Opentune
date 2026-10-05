@@ -6,6 +6,7 @@ import android.content.Intent
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.SystemClock
 import androidx.annotation.OptIn
@@ -50,6 +51,7 @@ import com.opentune.playback.dsp.DspAudioProcessor
 import com.opentune.playback.dsp.DspParams
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -155,7 +157,7 @@ class PlaybackService : MediaSessionService() {
         scope.launch { AppSettings.sound.collect(effects::apply) }
         scope.launch {
             combine(AppSettings.equalizer, AppSettings.sound, AppSettings.playback) { eq, sound, pb ->
-                DspParams(eq, sound.bassBoost, pb.spatialAudio, pb.loudnessNormalization)
+                DspParams(eq, sound.bassBoost, pb.spatialAudio)
             }.distinctUntilChanged().collect { dsp.params = it }
         }
         scope.launch {
@@ -167,6 +169,9 @@ class PlaybackService : MediaSessionService() {
             AppSettings.playback.map { it.autoplay }.distinctUntilChanged().collect { extendQueueIfNeeded() }
         }
         scope.launch { trackListening(player) }
+        scope.launch {
+            AppSettings.playback.map { it.loudnessNormalization }.distinctUntilChanged().collect { applyLoudness() }
+        }
         scope.launch {
             AppSettings.playback.map { it.preloadUpcoming }.distinctUntilChanged().collect { on ->
                 // ExoPlayer prepares and buffers the next item in play order
@@ -215,6 +220,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         finishListen()
+        loudnessEnhancer?.release()
+        loudnessEnhancer = null
         audioManager?.unregisterAudioDeviceCallback(deviceCallback)
         scope.cancel()
         soundEffects?.release()
@@ -276,6 +283,7 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            applyLoudness()
             finishListen()
             startListen(mediaItem?.toSong(), mediaSession?.player?.isPlaying == true)
             // Only time starts meant to sound now, not a skip made while paused.
@@ -295,7 +303,18 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_READY) retriedMediaId = null
+            if (playbackState == Player.STATE_READY) {
+                retriedMediaId = null
+                // The figure arrives with the stream; on a first play it's
+                // only known once the track has resolved.
+                applyLoudness()
+            }
+        }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            loudnessEnhancer?.release()
+            loudnessEnhancer = null
+            applyLoudness()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -341,6 +360,50 @@ class PlaybackService : MediaSessionService() {
             val heard = listenedSoFar()
             if (heard >= threshold) listenRecord = History.record(song, heard)
         }
+    }
+
+    // ---- Loudness ----------------------------------------------------------------
+
+    private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var loudnessSession = C.AUDIO_SESSION_ID_UNSET
+
+    /**
+     * Loudness normalization the way YouTube does it: one fixed gain per
+     * track, from YouTube's own measurement of that track ([StreamResolver.loudnessDbFor]),
+     * applied with the platform's LoudnessEnhancer. Loud masters come down to
+     * the reference and quiet ones come up a little (at most +3 dB), with no
+     * pumping and nothing touching the peaks in between. Without a figure, or
+     * with the setting off, the gain is zero and the effect is off.
+     */
+    private fun applyLoudness() {
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val session = player.audioSessionId
+        if (session == C.AUDIO_SESSION_ID_UNSET) return
+        val id = player.currentMediaItem?.mediaId
+        val db = id?.let(StreamResolver::loudnessDbFor)
+        val on = AppSettings.playback.value.loudnessNormalization && db != null
+        val enhancer = loudnessEnhancer?.takeIf { loudnessSession == session }
+            ?: runCatching { LoudnessEnhancer(session) }
+                .onFailure { Log.w(TAG, "LoudnessEnhancer unavailable", it) }
+                .getOrNull()
+                ?.also {
+                    loudnessEnhancer?.release()
+                    loudnessEnhancer = it
+                    loudnessSession = session
+                }
+            ?: return
+        runCatching {
+            if (on) {
+                val gainMb = (-db!! * 100).roundToInt().coerceIn(MIN_LOUDNESS_GAIN_MB, MAX_LOUDNESS_GAIN_MB)
+                enhancer.setTargetGain(gainMb)
+                enhancer.enabled = true
+                NerdStats.onLoudnessGain(gainMb / 100f)
+            } else {
+                enhancer.setTargetGain(0)
+                enhancer.enabled = false
+                NerdStats.onLoudnessGain(null)
+            }
+        }.onFailure { Log.w(TAG, "Couldn't apply loudness gain", it) }
     }
 
     // ---- Latency -----------------------------------------------------------------
@@ -554,6 +617,10 @@ class PlaybackService : MediaSessionService() {
 
     private companion object {
         const val TAG = "PlaybackService"
+
+        /** Bounds on the loudness gain, in millibels: down 15 dB, up 3 dB at most. */
+        const val MIN_LOUDNESS_GAIN_MB = -1500
+        const val MAX_LOUDNESS_GAIN_MB = 300
 
         /** How much of the next track ExoPlayer buffers ahead of time. */
         const val PRELOAD_US = 10_000_000L

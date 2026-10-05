@@ -16,6 +16,14 @@ object NerdStats {
         _lastPicked.value = videoId to kbps
     }
 
+    /** The loudness-normalization gain on the current track, in dB, or null when none. */
+    private val _loudnessGainDb = MutableStateFlow<Float?>(null)
+    val loudnessGainDb = _loudnessGainDb.asStateFlow()
+
+    fun onLoudnessGain(db: Float?) {
+        _loudnessGainDb.value = db
+    }
+
     private val _startupMs = MutableStateFlow<Long?>(null)
     val startupMs = _startupMs.asStateFlow()
 
