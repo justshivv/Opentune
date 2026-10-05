@@ -47,6 +47,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.opentune.ui.components.glass
 import com.opentune.ui.components.pressable
@@ -273,8 +276,14 @@ fun SeekBar(
     durationMs: Long,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    wavy: Boolean = false,
+    playing: Boolean = false,
 ) {
     var dragFraction by remember { mutableStateOf<Float?>(null) }
+    // The wave travels while music plays and flattens out when it stops.
+    // Only animated while it can be seen, so an idle bar costs no frames.
+    val phaseState = if (wavy && playing) rememberWavePhase() else null
+    val amplitude by animateFloatAsState(if (wavy && playing && dragFraction == null) 1f else 0f, tween(400), label = "amp")
     val trackHeight by animateDpAsState(if (dragFraction != null) 10.dp else 5.dp, label = "track")
     val thumbRadius by animateDpAsState(if (dragFraction != null) 0.dp else 7.dp, label = "thumb")
     val active = MaterialTheme.colorScheme.onSurface
@@ -315,7 +324,22 @@ fun SeekBar(
             val b = if (durationMs > 0) (buffered().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
             drawRoundRect(inactive, Offset(0f, y), Size(size.width, h), r)
             drawRoundRect(bufferedColor, Offset(0f, y), Size(size.width * maxOf(b, f), h), r)
-            drawRoundRect(active, Offset(0f, y), Size(size.width * f, h), r)
+            if (amplitude > 0f) {
+                // Played part as a sine wave, a stroke as thick as the track.
+                val amp = h * 0.9f * amplitude
+                val length = h * 7f
+                val wavePath = Path().apply {
+                    moveTo(0f, size.height / 2)
+                    var x = 0f
+                    while (x <= size.width * f) {
+                        lineTo(x, size.height / 2 + amp * sin(x / length * 2 * PI.toFloat() + (phaseState?.value ?: 0f)))
+                        x += 2f
+                    }
+                }
+                drawPath(wavePath, active, style = Stroke(width = h, cap = StrokeCap.Round))
+            } else {
+                drawRoundRect(active, Offset(0f, y), Size(size.width * f, h), r)
+            }
             if (thumbRadius > 0.dp) drawCircle(active, thumbRadius.toPx(), Offset(size.width * f, size.height / 2))
         }
         val elapsedSeconds by remember(durationMs) {
@@ -332,6 +356,12 @@ fun SeekBar(
         }
     }
 }
+
+/** The wave's travel, 0 to 2π, looping. */
+@Composable
+private fun rememberWavePhase(): androidx.compose.runtime.State<Float> =
+    rememberInfiniteTransition(label = "wave")
+        .animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(1_600, easing = LinearEasing)), label = "phase")
 
 /**
  * Back, play/pause and forward as large bare glyphs, Apple Music style. Each
