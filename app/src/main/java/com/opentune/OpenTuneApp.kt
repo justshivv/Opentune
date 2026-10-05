@@ -1,6 +1,9 @@
 package com.opentune
 
 import com.opentune.data.AppLog
+import com.opentune.data.subsonic.Subsonic
+import com.opentune.data.listenbrainz.ListenBrainz
+import com.opentune.data.covers.AlbumCovers
 import android.app.Application
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -32,7 +35,11 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
      */
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
-            .components { add(OkHttpNetworkFetcherFactory(callFactory = { Http.client })) }
+            .components {
+                add(OkHttpNetworkFetcherFactory(callFactory = { Http.client }))
+                // A cover on your own server is stored without credentials; sign it here.
+                add(coil3.map.Mapper<String, String> { data, _ -> if (Subsonic.isCoverRef(data)) Subsonic.resolveCover(data) else null })
+            }
             .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.2).build() }
             .diskCache {
                 DiskCache.Builder()
@@ -67,6 +74,9 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         UpgradedTracks.init(this)
         QueueStore.init(this)
         LastFm.init(this)
+        Subsonic.init(this)
+        ListenBrainz.init(this)
+        AlbumCovers.init(this)
         LibraryStore.init(this)
         Downloads.init(this)
         AccountStore.init(this)

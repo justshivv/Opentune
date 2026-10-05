@@ -23,6 +23,7 @@ import com.opentune.data.model.SearchResult
 import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.Song
 import com.opentune.data.model.artworkAt
+import com.opentune.data.subsonic.Subsonic
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -30,8 +31,8 @@ import java.util.concurrent.ConcurrentHashMap
  *
  *  - Home: YouTube Music's shelves, each shown as a titled group;
  *  - Recent: this device's listening history;
- *  - Library: Liked, Downloads, playlists made in the app and the
- *    account's YouTube playlists;
+ *  - Library: Liked, Downloads, your own music server, playlists made in
+ *    the app and the account's YouTube playlists;
  *  - search, typed or spoken.
  *
  * Albums, playlists and artists open as their own pages. A song carries the
@@ -79,6 +80,9 @@ class CarLibrary(private val context: Context) {
             parentId.startsWith(COLLECTION) ->
                 songs(parentId, MusicRepository.collection(parentId.removePrefix(COLLECTION)).songs)
             parentId.startsWith(ARTIST) -> artistItems(parentId)
+            parentId == SERVER -> serverItems()
+            parentId.startsWith(SERVER_ALBUM) -> songs(parentId, Subsonic.album(parentId.removePrefix(SERVER_ALBUM)).second)
+            parentId.startsWith(SERVER_PLAYLIST) -> songs(parentId, Subsonic.playlist(parentId.removePrefix(SERVER_PLAYLIST)).second)
             else -> emptyList()
         }
         grantArtwork(items, browser)
@@ -179,11 +183,25 @@ class CarLibrary(private val context: Context) {
         LibraryStore.playlists.value.forEach { p ->
             add(folder("$PLAYLIST${p.id}", p.name, subtitle = "${p.songs.size} songs", artwork = p.songs.firstOrNull()?.thumbnailUrl, type = MediaMetadata.MEDIA_TYPE_PLAYLIST))
         }
+        Subsonic.server.value?.let { server ->
+            add(folder(SERVER, "Your music server", subtitle = server.url.substringAfter("://"), browsableStyle = MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM))
+        }
         if (AccountStore.signedIn.value) {
             runCatching { MusicRepository.libraryPlaylists() }.getOrDefault(emptyList()).forEach { p ->
                 p.browseId?.let { add(browseFolder(it, p.title, p.subtitle, p.thumbnailUrl, null)) }
             }
         }
+    }
+
+    /** Your own server: its newest albums, then its playlists. */
+    private suspend fun serverItems(): List<MediaItem> {
+        val albums = runCatching { Subsonic.albums("newest", PER_SHELF * 4) }.getOrDefault(emptyList()).map { a ->
+            folder("$SERVER_ALBUM${a.id}", a.name, a.artist, a.cover, MediaMetadata.MEDIA_TYPE_ALBUM, group = "Recently added")
+        }
+        val playlists = runCatching { Subsonic.playlists() }.getOrDefault(emptyList()).map { p ->
+            folder("$SERVER_PLAYLIST${p.id}", p.name, "${p.songCount} songs", p.cover, MediaMetadata.MEDIA_TYPE_PLAYLIST, group = "Playlists")
+        }
+        return albums + playlists
     }
 
     private suspend fun artistItems(parentId: String): List<MediaItem> {
@@ -298,6 +316,9 @@ class CarLibrary(private val context: Context) {
         private const val PLAYLIST = "playlist:"
         private const val COLLECTION = "collection:"
         private const val ARTIST = "artist:"
+        const val SERVER = "server"
+        private const val SERVER_ALBUM = "server-album:"
+        private const val SERVER_PLAYLIST = "server-playlist:"
         private const val SEP = '|'
         private const val MAX_SONGS = 100
         private const val MAX_SHELVES = 12
@@ -319,7 +340,7 @@ object CarArtwork {
         if (videoId != null && Downloads.artFor(videoId) != null) {
             return Uri.Builder().scheme("content").authority(authority).appendPath("download").appendPath(videoId).build()
         }
-        val web = url?.artworkAt(CARD_ART_PX) ?: return null
+        val web = Subsonic.resolveCover(url, CARD_ART_PX)?.artworkAt(CARD_ART_PX) ?: return null
         return Uri.Builder().scheme("content").authority(authority).appendPath("web").appendQueryParameter("u", web).build()
     }
 }

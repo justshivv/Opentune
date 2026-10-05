@@ -43,6 +43,9 @@ import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.guava.future
 import com.opentune.MainActivity
 import com.opentune.data.DebugLog as Log
+import com.opentune.data.isYouTubeId
+import com.opentune.data.subsonic.Subsonic
+import com.opentune.data.listenbrainz.ListenBrainz
 import com.opentune.data.Http
 import com.opentune.data.download.Downloads
 import com.opentune.data.lastfm.LastFm
@@ -136,7 +139,10 @@ class PlaybackService : MediaLibraryService() {
             .setUpstreamDataSourceFactory(resolving)
             .setCacheKeyFactory { spec -> cacheKeyOf(spec.uri) ?: spec.key ?: spec.uri.toString() }
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-        val routing = SchemeRoutingDataSource.Factory(streams = cached, local = DefaultDataSource.Factory(context))
+        // Files, content:// and direct http (a song on your own server) go straight
+        // to the platform source, its http side on the app's one OkHttp client.
+        val direct = DefaultDataSource.Factory(context, OkHttpDataSource.Factory(Http.client))
+        val routing = SchemeRoutingDataSource.Factory(streams = cached, local = direct)
         val sources = DefaultMediaSourceFactory(routing)
 
         val floatOutput = AppSettings.playback.value.floatOutput
@@ -561,7 +567,10 @@ class PlaybackService : MediaLibraryService() {
         val song = listenSong ?: return
         if (nowPlayingSent) return
         nowPlayingSent = true
-        LastFm.nowPlaying(song, mediaSession?.player?.duration?.takeIf { it > 0 } ?: 0L)
+        val duration = mediaSession?.player?.duration?.takeIf { it > 0 } ?: 0L
+        LastFm.nowPlaying(song, duration)
+        ListenBrainz.playingNow(song, duration)
+        if (Subsonic.isSubsonic(song.videoId)) scope.launch { Subsonic.scrobble(song.videoId, System.currentTimeMillis(), submission = false) }
     }
 
     private fun pauseListen() {
@@ -588,6 +597,8 @@ class PlaybackService : MediaLibraryService() {
             if (!scrobbled && known != null && known > 30_000 && heard >= minOf(known / 2, 240_000L)) {
                 scrobbled = true
                 LastFm.scrobble(song, listenStartedAt, known)
+                ListenBrainz.listened(song, listenStartedAt, known)
+                if (Subsonic.isSubsonic(song.videoId)) scope.launch { Subsonic.scrobble(song.videoId, listenStartedAt, submission = true) }
             }
             if (listenRecord != null) continue
             val duration = known ?: Long.MAX_VALUE
@@ -655,7 +666,7 @@ class PlaybackService : MediaLibraryService() {
         // A track playing from the cache never resolved, so its figure may not
         // be known yet. Look it up once, a moment in, then apply it.
         loudnessRetry?.cancel()
-        if (db == null && id != null && !LocalMusic.isLocal(id) && AppSettings.playback.value.loudnessNormalization) {
+        if (db == null && id != null && isYouTubeId(id) && AppSettings.playback.value.loudnessNormalization) {
             loudnessRetry = scope.launch {
                 delay(LOUDNESS_RETRY_MS)
                 withContext(Dispatchers.IO) { runCatching { StreamResolver.resolve(id) } }
@@ -758,7 +769,7 @@ class PlaybackService : MediaLibraryService() {
             listOfNotNull(previous.takeIf { it != C.INDEX_UNSET })
         val now = SystemClock.elapsedRealtime()
         val ids = indices.map { player.getMediaItemAt(it).mediaId }
-            .filter { !LocalMusic.isLocal(it) && now - (warmedAt[it] ?: 0L) > WARM_TTL_MS }
+            .filter { isYouTubeId(it) && now - (warmedAt[it] ?: 0L) > WARM_TTL_MS }
             .distinct()
         if (ids.isEmpty()) return
         ids.forEach { warmedAt[it] = now }
@@ -834,7 +845,8 @@ class PlaybackService : MediaLibraryService() {
         val remaining = player.upcomingPlayOrder().size - 1
         if (!Autoplay.shouldExtend(remaining, player.mediaItemCount)) return
         val seed = player.getMediaItemAt(player.mediaItemCount - 1).mediaId
-        // Radio is a YouTube feature; a local file has none.
+        // Radio is a YouTube feature; a local file has none. A song on your own
+        // server carries on with more of the server's songs, picked at random.
         if (LocalMusic.isLocal(seed)) return
         if (seed in exhaustedSeeds) return
         if (radioJob?.isActive == true && radioSeed == seed) return
@@ -844,8 +856,10 @@ class PlaybackService : MediaLibraryService() {
         radioSeed = seed
         radioJob = scope.launch {
             val radio = try {
-                withContext(Dispatchers.IO) {
-                    InnertubeParser.parseWatchQueue(Innertube.next(seed))
+                if (Subsonic.isSubsonic(seed)) {
+                    Subsonic.randomSongs(RADIO_FROM_SERVER)
+                } else {
+                    withContext(Dispatchers.IO) { InnertubeParser.parseWatchQueue(Innertube.next(seed)) }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -869,14 +883,6 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    /**
-     * Retry a failed item once, then move on.
-     *
-     * The common failure is a cached stream URL that googlevideo has stopped
-     * honouring; [RefusalReportingDataSource] has already evicted it by the
-     * time this runs, so preparing again resolves a fresh one. A track the
-     * resolver has ruled unplayable is skipped without the retry.
-     */
     /**
      * What to do when the current track fails:
      *  - an upgraded stream goes back to the stream the track started on, at
@@ -1024,6 +1030,8 @@ class PlaybackService : MediaLibraryService() {
         val VOLUME_RECEIVER_FLAGS = if (android.os.Build.VERSION.SDK_INT >= 33) Context.RECEIVER_EXPORTED else 0
         const val QUEUE_SAVE_MS = 5_000L
         const val UPGRADE_DELAY_MS = 8_000L
+        /** Songs a server queue carries on with when it runs out. */
+        const val RADIO_FROM_SERVER = 25
         /** Failed tracks in a row before playback stops on the error. */
         const val MAX_FAILED_IN_ROW = 3
         /** Playing this long means the track's stream really works. */

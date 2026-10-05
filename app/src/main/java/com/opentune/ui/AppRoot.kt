@@ -1,5 +1,11 @@
 package com.opentune.ui
 
+import com.opentune.ui.server.ServerAlbumScreen
+import com.opentune.ui.server.ServerArtistScreen
+import com.opentune.ui.server.ServerArtistsScreen
+import com.opentune.ui.server.ServerNav
+import com.opentune.ui.server.ServerPlaylistScreen
+import com.opentune.ui.server.ServerScreen
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.animation.EnterExitState
 import android.net.Uri
@@ -193,7 +199,16 @@ fun AppRoot(vm: PlayerViewModel) {
         liked = { nav.navigate("liked") },
         playlist = { id -> nav.navigate("playlist/${Uri.encode(id)}") },
         browse = { id -> nav.openBrowse(id) },
+        server = { nav.navigate("server") },
     ) }
+    val serverNav = remember(nav) {
+        ServerNav(
+            album = { id -> nav.navigate("server/album/${Uri.encode(id)}") },
+            artist = { id -> nav.navigate("server/artist/${Uri.encode(id)}") },
+            playlist = { id -> nav.navigate("server/playlist/${Uri.encode(id)}") },
+            artists = { nav.navigate("server/artists") },
+        )
+    }
     // Links opened from outside: a song plays with its radio, anything else opens its page.
     val incoming by Links.incoming.collectAsState()
     LaunchedEffect(incoming) {
@@ -299,6 +314,17 @@ fun AppRoot(vm: PlayerViewModel) {
                     composable("equalizer") { EqualizerScreen(content, onBack = { nav.popBackStack() }) }
                     composable("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    composable("server") { ServerScreen(content, actions, serverNav, onBack = { nav.popBackStack() }) }
+                    composable("server/artists") { ServerArtistsScreen(content, serverNav, onBack = { nav.popBackStack() }) }
+                    composable("server/album/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                        ServerAlbumScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() }, onArtist = serverNav.artist)
+                    }
+                    composable("server/artist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                        ServerArtistScreen(e.arguments?.getString("id").orEmpty(), content, serverNav, onBack = { nav.popBackStack() })
+                    }
+                    composable("server/playlist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                        ServerPlaylistScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
+                    }
                     composable("collection/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         CollectionScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }

@@ -1,5 +1,6 @@
 package com.opentune.data.lyrics
 
+import com.opentune.data.isYouTubeId
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
 import com.opentune.data.innertube.Innertube
@@ -71,7 +72,7 @@ object LyricsRepository {
                     LyricsSource.LRCLIB -> runCatching { lookup(title, artist, durationMs) }
                         .onFailure { Log.w(TAG, "LRCLIB lookup failed for $videoId", it) }
                         .getOrNull()
-                    LyricsSource.YOUTUBE_MUSIC -> if (LocalMusic.isLocal(videoId)) null else runCatching { youTubeMusic(videoId) }
+                    LyricsSource.YOUTUBE_MUSIC -> if (!isYouTubeId(videoId)) null else runCatching { youTubeMusic(videoId) }
                         .onFailure { Log.w(TAG, "YouTube Music lyrics failed for $videoId", it) }
                         .getOrNull()
                 } ?: continue
