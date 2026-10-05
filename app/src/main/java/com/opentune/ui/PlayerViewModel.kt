@@ -60,6 +60,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             AppSettings.lyrics.map { it.ordered to it.preferWordSynced }.distinctUntilChanged(),
         ) { song, _ -> song }.collectLatest { song ->
             if (song == null) return@collectLatest
+            // A station has no fixed song to look lyrics up for.
+            if (com.opentune.data.radio.Radio.isRadio(song.videoId)) {
+                _lyrics.value = LyricsState.NotFound
+                return@collectLatest
+            }
             _lyrics.value = LyricsState.Loading
             // LRCLIB matches on duration, and the player's figure is exact
             // where the row's "3:45" is rounded. Give it a moment to arrive.

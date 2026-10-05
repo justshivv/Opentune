@@ -5,4 +5,5 @@
     <exclude domain="sharedpref" path="lastfm.xml" />
     <exclude domain="sharedpref" path="subsonic.xml" />
     <exclude domain="sharedpref" path="listenbrainz.xml" />
+    <exclude domain="sharedpref" path="spotify.xml" />
 </full-backup-content>

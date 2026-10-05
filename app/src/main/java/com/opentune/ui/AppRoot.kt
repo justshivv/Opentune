@@ -216,6 +216,7 @@ fun AppRoot(vm: PlayerViewModel) {
         playlist = { id -> nav.navigate("playlist/${Uri.encode(id)}") },
         browse = { id -> nav.openBrowse(id) },
         server = { nav.navigate("server") },
+        radio = { nav.navigate("radio") },
     ) }
     val serverNav = remember(nav) {
         ServerNav(
@@ -317,6 +318,7 @@ fun AppRoot(vm: PlayerViewModel) {
                             onOpenReplay = { nav.navigate("replay") },
                             onSignIn = { nav.navigate("login") },
                             onOpenDownloads = { nav.navigate("downloads") },
+                            onOpenSpotify = { nav.navigate("spotify") },
                         )
                     }
                     composable("login") { LoginScreen(onDone = { nav.popBackStack() }) }
@@ -330,6 +332,10 @@ fun AppRoot(vm: PlayerViewModel) {
                     composable("equalizer") { EqualizerScreen(content, onBack = { nav.popBackStack() }) }
                     composable("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    composable("spotify") {
+                        com.opentune.ui.spotify.SpotifyImportScreen(content, onBack = { nav.popBackStack() }, onOpenPlaylist = { id -> nav.navigate("playlist/${Uri.encode(id)}") })
+                    }
+                    composable("radio") { com.opentune.ui.radio.RadioScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("server") { ServerScreen(content, actions, serverNav, onBack = { nav.popBackStack() }) }
                     composable("server/artists") { ServerArtistsScreen(content, serverNav, onBack = { nav.popBackStack() }) }
                     composable("server/album/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->

@@ -1,5 +1,7 @@
 package com.opentune.ui.browse
 
+import androidx.compose.material.icons.filled.NotificationAdd
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.runtime.getValue
 import android.os.Build
 import androidx.compose.foundation.background
@@ -273,6 +275,7 @@ fun ArtistScreen(
                             listOfNotNull(page?.monthlyListenerCount, page?.subscriberCountText).firstOrNull()?.let {
                                 Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+                            if (page != null) FollowButton(browseId, page, Modifier.padding(top = 10.dp))
                         }
                     }
                 }
@@ -326,5 +329,38 @@ fun ArtistScreen(
             }
         }
         CollapsingBar(page?.name.orEmpty(), listState, onBack)
+    }
+}
+
+/**
+ * "Follow" for new-release alerts: kept on the phone, no account needed.
+ * Asks for notification permission on Android 13+ the first time.
+ */
+@Composable
+private fun FollowButton(browseId: String, page: com.opentune.data.model.ArtistPage, modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val followed by com.opentune.data.releases.NewReleases.followed.collectAsState()
+    val following = followed.any { it.browseId == browseId }
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { }
+    androidx.compose.material3.FilledTonalButton(
+        onClick = {
+            if (following) {
+                com.opentune.data.releases.NewReleases.unfollow(context, browseId)
+            } else {
+                com.opentune.data.releases.NewReleases.follow(context, browseId, page)
+                if (!com.opentune.data.releases.NewReleases.canNotify(context)) ask.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        },
+        modifier = modifier,
+    ) {
+        Icon(
+            if (following) Icons.Filled.NotificationsActive else Icons.Filled.NotificationAdd,
+            null,
+            Modifier.size(18.dp),
+        )
+        androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
+        Text(if (following) "Following" else "Follow for new releases")
     }
 }

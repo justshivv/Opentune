@@ -1,5 +1,6 @@
 package com.opentune.ui.library
 
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Dns
 import com.opentune.data.subsonic.Subsonic
 import com.opentune.ui.ScreenCache
@@ -89,6 +90,7 @@ class LibraryNav(
     val playlist: (String) -> Unit,
     val browse: (String) -> Unit,
     val server: () -> Unit,
+    val radio: () -> Unit,
 )
 
 private const val YT_PLAYLISTS = "library:ytPlaylists"
@@ -156,13 +158,16 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     Shortcut(Icons.Rounded.History, "Replay", "Your top songs", nav.replay, Modifier.weight(1f))
                 }
                 val server by Subsonic.server.collectAsState()
-                Shortcut(
-                    Icons.Rounded.Dns,
-                    "Your music server",
-                    server?.let { "${it.user} on ${it.url.substringAfter("://")}" } ?: "Navidrome, Gonic, any Subsonic server: lossless",
-                    nav.server,
-                    Modifier.fillMaxWidth(),
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Shortcut(Icons.Rounded.Radio, "Radio", "Live stations", nav.radio, Modifier.weight(1f))
+                    Shortcut(
+                        Icons.Rounded.Dns,
+                        "Music server",
+                        server?.let { it.url.substringAfter("://") } ?: "Subsonic, lossless",
+                        nav.server,
+                        Modifier.weight(1f),
+                    )
+                }
             }
         }
         item {
