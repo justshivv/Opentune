@@ -115,6 +115,7 @@ import com.opentune.data.lastfm.LastFm
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
+import com.opentune.data.settings.LyricsAnimation
 import com.opentune.data.settings.PaletteStyleOption
 import com.opentune.data.settings.PlayerBackground
 import com.opentune.data.settings.SEED_COLORS
@@ -223,6 +224,7 @@ private fun settingsSections(
     var downloadQualityDialog by remember { mutableStateOf(false) }
     var lyricsSourcesDialog by remember { mutableStateOf(false) }
     var lastFmDialog by remember { mutableStateOf(false) }
+    var lyricsAnimationDialog by remember { mutableStateOf(false) }
     val lastFm by LastFm.account.collectAsState()
     val scrobblesWaiting by LastFm.queued.collectAsState()
     val lyricsSettings by AppSettings.lyrics.collectAsState()
@@ -285,6 +287,16 @@ private fun settingsSections(
     }
     if (lyricsSourcesDialog) LyricsSourcesDialog(onDismiss = { lyricsSourcesDialog = false })
     if (lastFmDialog) LastFmDialog(onDismiss = { lastFmDialog = false })
+    if (lyricsAnimationDialog) {
+        ChoiceDialog(
+            title = "Lyrics animation",
+            options = LyricsAnimation.entries,
+            selected = ui.lyricsAnimation,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { a -> AppSettings.updateUi { it.copy(lyricsAnimation = a) } },
+            onDismiss = { lyricsAnimationDialog = false },
+        )
+    }
     if (downloadQualityDialog) {
         ChoiceDialog(
             title = "Download quality",
@@ -539,6 +551,9 @@ private fun settingsSections(
             listOf(
                 Entry("Synced lyrics", "karaoke words") {
                     ToggleRow("Synced lyrics", ui.syncedLyrics, { v -> AppSettings.updateUi { it.copy(syncedLyrics = v) } }, summary = "Lights up the words as they're sung", icon = Icons.Rounded.Lyrics)
+                },
+                Entry("Lyrics animation", "style karaoke slide zoom fluid motion") {
+                    NavRow("Lyrics animation", { lyricsAnimationDialog = true }, summary = ui.lyricsAnimation.summary, icon = Icons.Rounded.Animation, value = ui.lyricsAnimation.label)
                 },
                 Entry("Lyrics text size", "font bigger smaller") {
                     SettingRow(

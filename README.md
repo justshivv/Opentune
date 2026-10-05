@@ -51,7 +51,8 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
 - **Queue and radio.** Autoplay keeps similar songs coming. Shuffle,
   repeat, play next, add to queue, swipe-to-queue on any row, and
   drag-to-reorder in the player's queue.
-- **Sound tools.** A 7-band equalizer with tone and balance, bass boost,
+- **Sound tools.** A 15-band equalizer (ISO 25 Hz to 16 kHz) with presets,
+  tone and balance, bass boost,
   stereo widening, skip silence, USB DAC preference, optional 32-bit float
   output, and a Remix sheet for speed, pitch and reverb (Slowed + reverb,
   Nightcore and more).
@@ -87,12 +88,14 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   folds into one round button while the mini player slides into the same
   row; scroll up and it unfolds. Each part springs into place.
 - **An Apple Music-style player.** Cover, lyrics and queue modes, heart and
-  "…" buttons, the current lyric line under the title, time remaining,
+  "…" buttons, the current lyric line under the title, the artist name
+  opening their page, time remaining,
   large back/play/forward controls, a shuffle/repeat/autoplay pill, and the
   name of the output device. Drag it down and it shrinks into a card
   before it closes.
 - **Synced lyrics** from [LRCLIB](https://lrclib.net), lit word by word,
-  and YouTube Music's lyrics, in an order you set, with a per-song timing
+  and YouTube Music's lyrics, in an order you set, with five animation
+  styles (Fluid, Karaoke, Slide, Focus zoom, Minimal), a per-song timing
   offset, adjustable text size, and lyrics saved with downloads so they
   work offline.
 - **One song menu everywhere:** like, dislike (kept out of autoplay),
