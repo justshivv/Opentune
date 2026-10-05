@@ -17,6 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.doubleOrNull
@@ -397,6 +398,7 @@ object StreamResolver {
         standDownUntil.clear()
         refusalsByClient.clear()
         preferred = null
+        InnerTubeXResolver.onSessionChanged()
     }
 
     private const val UNPLAYABLE_TTL_MS = 10 * 60 * 1000L
@@ -459,14 +461,76 @@ object StreamResolver {
 
     private val resolverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** The two ways to a stream that [resolveUncached] switches between. */
+    enum class Engine(val label: String) { OWN("OpenTune"), INNERTUBEX("InnerTubeX") }
+
+    /** The engine that served the last track; the next one starts there. */
+    @Volatile
+    private var engine = Engine.OWN
+
+    private fun onEngineWorked(e: Engine) {
+        if (engine != e) TrackLog.d(TAG, "switching to ${e.label}")
+        engine = e
+        NerdStats.onEngine(e.label)
+    }
+
+    /**
+     * Asks InnerTubeX for a stream and probes it like any other URL. A client
+     * variant whose URL fails the probe is excluded and the next one asked,
+     * up to [INNERTUBEX_ATTEMPTS] times. Any failure is a null, so the other
+     * engine gets its turn.
+     */
+    private suspend fun innerTubeXStream(videoId: String, maxKbps: Int, requireM4a: Boolean = false): Stream? {
+        val skip = mutableSetOf<String>()
+        repeat(INNERTUBEX_ATTEMPTS) {
+            val found = try {
+                withTimeoutOrNull(INNERTUBEX_TIMEOUT_MS) { InnerTubeXResolver.extract(videoId, maxKbps, skip, requireM4a) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Errors as well as exceptions: it is third-party code, and a
+                // linkage error here must not take the track down with it.
+                TrackLog.w(TAG, "InnerTubeX failed for $videoId: ${e.javaClass.simpleName}: ${e.message}")
+                return null
+            } ?: return null
+            if (probe(found.url) == Probe.OK) {
+                found.loudnessDb?.let { loudness[videoId] = it }
+                TrackLog.d(TAG, "InnerTubeX served $videoId via ${found.clientName} at ${found.kbps} kbps")
+                return Stream(found.url, found.kbps, found.mimeType)
+            }
+            InnerTubeXResolver.exclude(videoId, found.profileId)
+            skip += found.profileId
+        }
+        return null
+    }
+
+    /**
+     * The headers a media fetch for [url] has to send: InnerTubeX's own for a
+     * URL it minted, otherwise the minting client's, read off the URL.
+     */
+    fun mediaHeadersFor(url: String): Map<String, String> =
+        InnerTubeXResolver.headersFor(url) ?: PlayerClient.forStreamUrl(url).mediaHeaders()
+
     private suspend fun resolveUncached(videoId: String): Stream {
         val resolveStart = SystemClock.elapsedRealtime()
         val stream = try {
-            timed("$videoId playerStream") { playerStream(videoId, ::rankForPlayback) }
-                ?: timed("$videoId authenticatedWebRemixStream") { authenticatedWebRemixStream(videoId, ::rankForPlayback) }
+            val own: suspend () -> Stream? = {
+                timed("$videoId playerStream") { playerStream(videoId, ::rankForPlayback) }
+                    ?: timed("$videoId authenticatedWebRemixStream") { authenticatedWebRemixStream(videoId, ::rankForPlayback) }
+            }
+            val itx: suspend () -> Stream? = {
+                timed("$videoId innerTubeXStream") { innerTubeXStream(videoId, AppSettings.effectiveAudioQuality.maxKbps) }
+            }
+            // Auto switch: whichever engine served the last track goes first,
+            // the other is the fallback, and NewPipe's extraction is the last resort.
+            val first = if (engine == Engine.INNERTUBEX) itx else own
+            val second = if (engine == Engine.INNERTUBEX) own else itx
+            first()?.also { onEngineWorked(if (first === itx) Engine.INNERTUBEX else Engine.OWN) }
+                ?: second()?.also { onEngineWorked(if (second === itx) Engine.INNERTUBEX else Engine.OWN) }
                 ?: run {
-                    TrackLog.w(TAG, "every player client failed for $videoId; falling back to extraction")
+                    TrackLog.w(TAG, "every player client and InnerTubeX failed for $videoId; falling back to extraction")
                     timed("$videoId newPipeStream") { newPipeStream(videoId, ::pickForQuality) }
+                        .also { onEngineWorked(Engine.OWN) }
                 }
         } catch (e: CancellationException) {
             throw e
@@ -739,8 +803,12 @@ object StreamResolver {
             // that lasts hours, and it is precisely the state [resolve] extracts its
             // way out of. The failsafe changes how the URL is found, not which
             // container the destination can accept.
+            innerTubeXStream(videoId, maxKbps, requireM4a)
+                ?.takeIf { if (requireM4a) it.downloadExtension == "m4a" else true }
+                ?.let { return@withContext it }
+
             val format = if (requireM4a) "MP4" else "Opus"
-            TrackLog.w(TAG, "no client minted a usable $format URL for $videoId; extracting")
+            TrackLog.w(TAG, "no client or InnerTubeX minted a usable $format URL for $videoId; extracting")
             runCatching {
                 newPipeStream(videoId) { candidates ->
                     // Capped the same way as the player-response selection, off
@@ -1344,7 +1412,7 @@ object StreamResolver {
     private fun probe(url: String): Probe {
         val builder = okhttp3.Request.Builder().url(url)
             .header("Range", "bytes=0-${PROBE_RANGE_BYTES - 1}")
-        PlayerClient.forStreamUrl(url).mediaHeaders().forEach { (name, value) ->
+        mediaHeadersFor(url).forEach { (name, value) ->
             builder.header(name, value)
         }
         return try {
@@ -1529,6 +1597,13 @@ object StreamResolver {
         // answering 404 stands down the client that mints most of YouTube's,
         // and the next YouTube track pays for a failure on a different server.
         if (url.toHttpUrlOrNull()?.host?.endsWith("googlevideo.com") != true) return
+        // A URL InnerTubeX minted is its refusal, not one of [CLIENTS]': it
+        // excludes that client variant, and the next track starts on our walk.
+        InnerTubeXResolver.onRefused(url)?.let { videoId ->
+            recent.remove(videoId)
+            if (engine == Engine.INNERTUBEX) engine = Engine.OWN
+            return
+        }
         val client = PlayerClient.forStreamUrl(url)
         // Keyed by videoId, and the fetch only knows the googlevideo URL it was
         // handed; the map is a latency cache of a few dozen entries, so finding
@@ -1810,6 +1885,12 @@ object StreamResolver {
 
     /** See [resolveForDownload]: one walk to burn a stale visitor id, one to use its replacement. */
     private const val DOWNLOAD_ATTEMPTS = 2
+
+    /** Client variants InnerTubeX may try per track before the other engine is asked. */
+    private const val INNERTUBEX_ATTEMPTS = 3
+
+    /** A cold InnerTubeX start (player solve plus BotGuard) runs to several seconds. */
+    private const val INNERTUBEX_TIMEOUT_MS = 15_000L
 
     /** Long enough for a freshly minted visitor id to be worth anything, short enough not to be felt. */
     private const val DOWNLOAD_RETRY_MS = 500L

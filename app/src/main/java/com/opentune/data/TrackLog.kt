@@ -27,4 +27,8 @@ object TrackLog {
     fun w(tag: String, message: String, error: Throwable) {
         Log.w(tag, message, error)
     }
+
+    fun e(tag: String, message: String) {
+        Log.e(tag, message)
+    }
 }
