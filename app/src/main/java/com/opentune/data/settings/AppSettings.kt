@@ -173,6 +173,8 @@ data class InterfaceSettings(
     val recentsAsGrid: Boolean = false,
     /** Refracting Liquid Glass on Android 13+; frosted blur otherwise. */
     val liquidGlass: Boolean = true,
+    /** Draw the played part of the seek bar as a moving wave. */
+    val wavySeekbar: Boolean = false,
     /** Lyrics text size, as a fraction of the standard size. */
     val lyricsTextScale: Float = 1f,
 )
