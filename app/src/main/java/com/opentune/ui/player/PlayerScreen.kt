@@ -3,6 +3,34 @@ package com.opentune.ui.player
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.opentune.data.library.LibraryStore
+import com.opentune.data.model.ROW_ART_PX
+import com.opentune.data.model.artworkAt
+import com.opentune.ui.components.Artwork
+import com.opentune.ui.components.LocalBackdrop
+import com.opentune.ui.components.LocalHazeState
+import com.opentune.ui.components.MenuRow
+import com.opentune.ui.components.SongMenuSheet
+import com.opentune.ui.components.glass
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -10,12 +38,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,17 +57,14 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -120,6 +143,7 @@ class PlayerActions(
     val playIndex: (Int) -> Unit,
     val removeIndex: (Int) -> Unit,
     val collapse: () -> Unit,
+    val moveIndex: (Int, Int) -> Unit = { _, _ -> },
 )
 
 @Composable
@@ -152,6 +176,7 @@ fun PlayerScreen(vm: PlayerViewModel, onCollapse: () -> Unit) {
             playIndex = vm::playQueueItem,
             removeIndex = vm::removeQueueItem,
             collapse = onCollapse,
+            moveIndex = vm::moveQueueItem,
         )
     }
     PlayerLayout(
@@ -165,6 +190,8 @@ fun PlayerScreen(vm: PlayerViewModel, onCollapse: () -> Unit) {
     )
 }
 
+private enum class Pane { COVER, LYRICS, QUEUE }
+
 @Composable
 fun PlayerLayout(
     state: PlayerUiState,
@@ -176,25 +203,24 @@ fun PlayerLayout(
     val current = state.song
     val theme = state.theme
     val sound = state.sound
-    val isPlaying = state.isPlaying
-    val isBuffering = state.isBuffering
-    val hasNext = state.hasNext
-    val shuffle = state.shuffle
-    val repeat = state.repeatMode
-    val duration = state.durationMs
-    val lyrics = state.lyrics
-    val queue = state.queue
-    val currentIndex = state.currentIndex
-    val upNext = state.upNext
 
-    var showLyrics by rememberSaveable { mutableStateOf(initialLyrics) }
-    var showQueue by remember { mutableStateOf(false) }
+    var paneName by rememberSaveable { mutableStateOf(if (initialLyrics) Pane.LYRICS.name else Pane.COVER.name) }
+    val pane = Pane.valueOf(paneName)
+    fun toggle(p: Pane) { paneName = if (pane == p) Pane.COVER.name else p.name }
     var showRemix by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showSleep by remember { mutableStateOf(false) }
+    val liked by LibraryStore.liked.collectAsState()
+    val isLiked = liked.any { it.videoId == current.videoId }
+    val device = rememberOutputDeviceName()
+    val sleepLabel = sleepTimerLabel()
 
-    // Drag down anywhere outside the lyrics list to close.
+    // Drag down anywhere outside the lyrics and queue lists to close.
     val dragOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val dismissPx = with(LocalDensity.current) { 140.dp.toPx() }
+    val backdrop = rememberLayerBackdrop()
+    val fullCover = state.ui.fullScreenCover && pane == Pane.COVER
 
     PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme) {
         Box(
@@ -217,24 +243,35 @@ fun PlayerLayout(
                     },
                 ),
         ) {
-            PlayerBackdrop(
-                theme.playerBackground,
-                current.thumbnailUrl,
-                Modifier.fillMaxSize(),
-                animate = !state.ui.reduceAnimation,
-                fullCover = state.ui.fullScreenCover && !showLyrics,
-            )
+            // The backdrop is the layer the player's Liquid Glass bends.
+            Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+                PlayerBackdrop(
+                    theme.playerBackground,
+                    current.thumbnailUrl,
+                    Modifier.fillMaxSize(),
+                    animate = !state.ui.reduceAnimation,
+                    fullCover = fullCover,
+                )
+            }
 
             // The player draws its own dark surface, so it sets its own text and
             // icon color rather than inheriting the app's (light in light theme).
-            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+            CompositionLocalProvider(
+                LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+                LocalBackdrop provides backdrop,
+                LocalHazeState provides null,
+            ) {
             Column(
                 Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(horizontal = 24.dp),
             ) {
-                // Top bar
-                Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = actions.collapse) { Icon(Icons.Rounded.KeyboardArrowDown, "Close player", Modifier.size(32.dp)) }
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                // Grab handle, then "Playing from" or the remix pill.
+                Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        Modifier.size(width = 40.dp, height = 5.dp).clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
+                            .clickable(onClick = actions.collapse),
+                    )
+                    Box(Modifier.height(40.dp), contentAlignment = Alignment.Center) {
                         AnimatedContent(sound.isDefault, label = "remixPill") { normal ->
                             if (normal) {
                                 if (!state.ui.hideSongStatus) SongStatus(state.source)
@@ -252,104 +289,162 @@ fun PlayerLayout(
                             }
                         }
                     }
-                    Spacer(Modifier.size(48.dp))
                 }
 
-                // Artwork or lyrics
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    AnimatedContent(
-                        showLyrics,
-                        transitionSpec = {
-                            (fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 12 } + scaleIn(tween(350), 0.97f)) togetherWith
-                                fadeOut(tween(200))
-                        },
-                        label = "pane",
-                    ) { lyricsMode ->
-                        if (lyricsMode) {
-                            LyricsView(
-                                lyrics,
-                                position,
-                                onSeek = actions.seekTo,
-                                modifier = Modifier.fillMaxSize(),
-                                synced = state.ui.syncedLyrics,
-                                blur = state.ui.blurLyrics,
-                            )
-                        } else if (state.ui.fullScreenCover) {
-                            // The backdrop draws the cover edge to edge; keep the space and the swipe.
-                            ArtworkSwipeArea(onSwipeNext = actions.next, onSwipePrevious = actions.previous, modifier = Modifier.fillMaxSize())
+                // Cover mode: the art fills the space and the title sits below it.
+                // Lyrics and queue: a compact header, then the list.
+                AnimatedContent(
+                    pane,
+                    transitionSpec = {
+                        (fadeIn(tween(320)) + scaleIn(tween(380, easing = FastOutSlowInEasing), 0.94f)) togetherWith
+                            (fadeOut(tween(180)) + scaleOut(tween(220), 0.98f))
+                    },
+                    label = "pane",
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                ) { p ->
+                    Column(Modifier.fillMaxSize()) {
+                        if (p == Pane.COVER) {
+                            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                if (state.ui.fullScreenCover) {
+                                    ArtworkSwipeArea(onSwipeNext = actions.next, onSwipePrevious = actions.previous, modifier = Modifier.fillMaxSize())
+                                } else {
+                                    ArtworkPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous)
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true })
                         } else {
-                            ArtworkPane(current, isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous)
+                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Artwork(current.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(64.dp), RoundedCornerShape(10.dp))
+                                Spacer(Modifier.width(14.dp))
+                                TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true }, compact = true)
+                            }
+                            if (p == Pane.LYRICS) {
+                                LyricsView(
+                                    state.lyrics,
+                                    position,
+                                    onSeek = actions.seekTo,
+                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    synced = state.ui.syncedLyrics,
+                                    blur = state.ui.blurLyrics,
+                                )
+                            } else {
+                                Text("Queue", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+                                QueuePane(
+                                    queue = state.queue,
+                                    currentIndex = state.currentIndex,
+                                    upNext = state.upNext,
+                                    isPlaying = state.isPlaying,
+                                    shuffle = state.shuffle,
+                                    onPlayIndex = actions.playIndex,
+                                    onRemoveIndex = actions.removeIndex,
+                                    onMove = actions.moveIndex,
+                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                )
+                            }
                         }
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
-                MarqueeText(current.title, Modifier.fillMaxWidth(), style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    current.artist,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-                Spacer(Modifier.height(12.dp))
-                SeekBar(position, buffered, duration, onSeek = actions.seekTo)
-                if (state.ui.statsForNerds) NerdStatsLine(state.audioFormat)
+                if (pane != Pane.LYRICS && state.ui.syncedLyrics) {
+                    LyricPreview(state.lyrics, position, onOpen = { paneName = Pane.LYRICS.name }, Modifier.padding(top = 4.dp))
+                }
                 Spacer(Modifier.height(8.dp))
+                SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo)
+                if (state.ui.statsForNerds) NerdStatsLine(state.audioFormat)
                 PlayerControls(
-                    isPlaying = isPlaying,
-                    isBuffering = isBuffering,
-                    hasNext = hasNext,
-                    shuffle = shuffle,
-                    repeatMode = repeat,
+                    isPlaying = state.isPlaying,
+                    isBuffering = state.isBuffering,
+                    hasNext = state.hasNext,
                     onTogglePlay = actions.togglePlay,
                     onNext = actions.next,
                     onPrevious = actions.previous,
-                    onShuffle = actions.toggleShuffle,
-                    onRepeat = actions.cycleRepeat,
                 )
-                if (!state.ui.hideVolumeBar) VolumeBar(Modifier.padding(top = 4.dp))
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    BottomAction(Icons.Rounded.Lyrics, "Lyrics", selected = showLyrics) { showLyrics = !showLyrics }
-                    BottomAction(Icons.Rounded.Tune, "Remix", selected = !sound.isDefault) { showRemix = true }
-                    BottomAction(Icons.AutoMirrored.Rounded.QueueMusic, "Up next", selected = false) { showQueue = true }
+                if (!state.ui.hideVolumeBar) VolumeBar(Modifier.padding(vertical = 4.dp))
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    GlassToggle(Icons.Rounded.Lyrics, "Lyrics", pane == Pane.LYRICS, { toggle(Pane.LYRICS) })
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        AnimatedContent(pane == Pane.QUEUE, label = "pill") { inQueue ->
+                            if (inQueue) {
+                                ModesPill(state.shuffle, state.repeatMode, actions.toggleShuffle, actions.cycleRepeat)
+                            } else {
+                                Row(
+                                    Modifier.height(52.dp).glass(RoundedCornerShape(30.dp), Color.White.copy(alpha = 0.10f)),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    GlassToggle(Icons.Rounded.Tune, "Remix", !sound.isDefault, { showRemix = true })
+                                    GlassToggle(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true })
+                                }
+                            }
+                        }
+                    }
+                    GlassToggle(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
                 }
-                Spacer(Modifier.height(8.dp))
+                Text(
+                    sleepLabel ?: device,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
+                )
             }
             }
         }
 
-        if (showQueue) {
-            QueueSheet(
-                queue = queue,
-                currentIndex = currentIndex,
-                upNext = upNext,
-                isPlaying = isPlaying,
-                shuffle = shuffle,
-                repeatMode = repeat,
-                onShuffle = actions.toggleShuffle,
-                onRepeat = actions.cycleRepeat,
-                onPlayIndex = actions.playIndex,
-                onRemoveIndex = actions.removeIndex,
-                onDismiss = { showQueue = false },
-            )
-        }
         if (showRemix) RemixSheet(onDismiss = { showRemix = false })
+        if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })
+        if (showMenu) {
+            SongMenuSheet(current, onDismiss = { showMenu = false }) { close ->
+                MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
+                MenuRow(Icons.Rounded.Tune, "Remix") { close(); showRemix = true }
+            }
+        }
+    }
+}
+
+/** Title and artist with the heart and "…" glass buttons on the right. */
+@Composable
+private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () -> Unit, compact: Boolean = false) {
+    Column(Modifier.weight(1f)) {
+        MarqueeText(song.title, Modifier.fillMaxWidth(), style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall)
+        Text(song.artist, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    Spacer(Modifier.width(10.dp))
+    HeartButton(liked, onLike)
+    Spacer(Modifier.width(10.dp))
+    Box(Modifier.size(46.dp).glass(CircleShape, Color.White.copy(alpha = 0.16f)).clickable(onClick = onMore), contentAlignment = Alignment.Center) {
+        Icon(Icons.Rounded.MoreHoriz, "More", Modifier.size(26.dp))
     }
 }
 
 @Composable
-private fun BottomAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    TextButton(onClick = onClick) {
-        Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.size(8.dp))
-        Text(label, color = color)
+private fun TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        TitleRow(song, liked, onLike, onMore, compact = false)
+    }
+}
+
+/** The heart pops when tapped on. */
+@Composable
+private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
+    val pop = remember { Animatable(1f) }
+    LaunchedEffect(liked) {
+        if (liked) {
+            pop.snapTo(0.7f)
+            pop.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 500f))
+        }
+    }
+    Box(
+        Modifier.size(46.dp).glass(CircleShape, Color.White.copy(alpha = 0.16f)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            if (liked) "Remove from Liked" else "Like",
+            Modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+            tint = if (liked) Color(0xFFFF4D6D) else LocalContentColor.current,
+        )
     }
 }
 

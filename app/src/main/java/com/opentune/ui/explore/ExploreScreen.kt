@@ -2,17 +2,14 @@ package com.opentune.ui.explore
 
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -20,14 +17,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
@@ -37,7 +30,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.materialkolor.ktx.harmonize
 import com.opentune.data.MusicRepository
 import com.opentune.data.model.MoodGenre
 import com.opentune.data.model.ShelfItem
@@ -48,6 +40,25 @@ import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.Placeholder
 import com.opentune.ui.components.ShelfPlaceholder
 import com.opentune.ui.home.HomeShelfView
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import com.opentune.data.model.CARD_ART_PX
+import com.opentune.data.model.artworkAt
+import com.opentune.ui.components.Artwork
+import com.opentune.ui.components.pressable
+import kotlinx.coroutines.sync.withPermit
 import com.opentune.ui.rememberLoader
 import kotlin.math.absoluteValue
 
@@ -66,7 +77,7 @@ fun ExploreScreen(contentPadding: PaddingValues, onMoodClick: (MoodGenre) -> Uni
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                items(12) { Placeholder(Modifier.fillMaxWidth().height(64.dp), MaterialTheme.shapes.medium) }
+                items(12) { Placeholder(Modifier.fillMaxWidth().height(112.dp), RoundedCornerShape(18.dp)) }
             }
             is UiState.Error -> Box(Modifier.fillMaxSize().padding(contentPadding), Alignment.Center) {
                 ErrorState(s.message, onRetry = { loader.reload() })
@@ -77,7 +88,7 @@ fun ExploreScreen(contentPadding: PaddingValues, onMoodClick: (MoodGenre) -> Uni
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(160.dp),
+                    columns = GridCells.Fixed(2),
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
@@ -94,7 +105,7 @@ fun ExploreScreen(contentPadding: PaddingValues, onMoodClick: (MoodGenre) -> Uni
                                 modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
                             )
                         }
-                        items(section.items) { mood ->
+                        items(section.items, key = { "${section.title}:${it.browseId}:${it.params}" }) { mood ->
                             MoodTile(mood, onClick = { onMoodClick(mood) })
                         }
                     }
@@ -104,28 +115,70 @@ fun ExploreScreen(contentPadding: PaddingValues, onMoodClick: (MoodGenre) -> Uni
     }
 }
 
-/** A colored tile with a stripe down its edge, hue picked from the title so it's stable. */
+/**
+ * Covers for mood tiles, fetched lazily (the first playlist on each mood's
+ * page), a few at a time, and kept for the session.
+ */
+private object MoodCovers {
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val gate = kotlinx.coroutines.sync.Semaphore(3)
+
+    fun cached(mood: MoodGenre): String? = mood.thumbnailUrl ?: cache[mood.browseId + mood.params]
+
+    suspend fun load(mood: MoodGenre): String? {
+        cached(mood)?.let { return it }
+        return gate.withPermit {
+            runCatching {
+                MusicRepository.shelves(mood.browseId, mood.params)
+                    .firstNotNullOfOrNull { shelf -> shelf.items.firstNotNullOfOrNull { it.thumbnailUrl } }
+            }.getOrNull()?.also { cache[mood.browseId + mood.params] = it }
+        }
+    }
+}
+
+/**
+ * A colored card with the mood's name and a tilted cover poking out of the
+ * corner. The hue comes from the title, so each mood keeps its color.
+ */
 @Composable
 private fun MoodTile(mood: MoodGenre, onClick: () -> Unit) {
     val hue = (mood.title.hashCode().absoluteValue % 360).toFloat()
-    val accent = Color.hsv(hue, 0.55f, 0.85f).harmonize(MaterialTheme.colorScheme.primary, true)
+    val top = Color.hsv(hue, 0.62f, 0.62f)
+    val bottom = Color.hsv((hue + 18f) % 360f, 0.70f, 0.42f)
+    var cover by remember(mood) { mutableStateOf(MoodCovers.cached(mood)) }
+    LaunchedEffect(mood) { if (cover == null) cover = MoodCovers.load(mood) }
     Box(
         Modifier
             .fillMaxWidth()
-            .height(64.dp)
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(onClick = onClick),
+            .height(112.dp)
+            .pressable(onClick)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Brush.linearGradient(listOf(top, bottom))),
     ) {
-        Box(Modifier.width(6.dp).fillMaxHeight().background(accent))
         Text(
             mood.title,
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
+            color = Color.White,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.CenterStart).padding(start = 18.dp, end = 12.dp),
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 12.dp, end = 70.dp),
         )
+        AnimatedVisibility(
+            cover != null,
+            enter = fadeIn(tween(400)) + scaleIn(tween(400), 0.8f),
+            modifier = Modifier.align(Alignment.BottomEnd),
+        ) {
+            Artwork(
+                cover.artworkAt(CARD_ART_PX),
+                Modifier
+                    .offset(x = 14.dp, y = 14.dp)
+                    .size(86.dp)
+                    .graphicsLayer { rotationZ = 22f }
+                    .shadow(10.dp, RoundedCornerShape(10.dp)),
+                RoundedCornerShape(10.dp),
+            )
+        }
     }
 }
 

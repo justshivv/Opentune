@@ -165,6 +165,8 @@ data class InterfaceSettings(
     val blurLyrics: Boolean = true,
     val statsForNerds: Boolean = false,
     val recentsAsGrid: Boolean = false,
+    /** Refracting Liquid Glass on Android 13+; frosted blur otherwise. */
+    val liquidGlass: Boolean = true,
 )
 
 @Serializable
@@ -173,6 +175,8 @@ data class LibrarySettings(
     val localFolder: String? = null,
     val filterNonMusic: Boolean = true,
     val songCacheMb: Int = 512,
+    val downloadQuality: AudioQuality = AudioQuality.MAX,
+    val downloadWifiOnly: Boolean = true,
 )
 
 /** Everything persisted, as one document: what's stored, exported and imported. */

@@ -38,6 +38,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.opentune.MainActivity
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
+import com.opentune.data.download.Downloads
 import com.opentune.data.NerdStats
 import com.opentune.data.history.History
 import com.opentune.data.local.LocalMusic
@@ -54,6 +55,10 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -182,6 +187,8 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        scope.launch { runSleepTimer(player) }
+
         audioManager = getSystemService(AudioManager::class.java)?.also { am ->
             am.registerAudioDeviceCallback(deviceCallback, null)
         }
@@ -200,6 +207,39 @@ class PlaybackService : MediaSessionService() {
             .setSessionActivity(sessionActivity)
             .setCallback(sessionCallback)
             .build()
+    }
+
+    /**
+     * Pauses at the time the sleep timer names, or at the end of the current
+     * track (ExoPlayer's own pause-at-end, so it lands on the boundary).
+     */
+    private suspend fun runSleepTimer(player: ExoPlayer) {
+        SleepTimer.state.collectLatest { state ->
+            player.pauseAtEndOfMediaItems = state is SleepTimer.State.EndOfTrack
+            when (state) {
+                is SleepTimer.State.At -> {
+                    delay((state.endsAtMs - System.currentTimeMillis()).coerceAtLeast(0))
+                    player.pause()
+                    SleepTimer.cancel()
+                }
+                SleepTimer.State.EndOfTrack -> {
+                    // pauseAtEndOfMediaItems pauses; clear the timer once it has.
+                    playWhenReadyFlow(player).first { !it }
+                    SleepTimer.cancel()
+                }
+                SleepTimer.State.Off -> Unit
+            }
+        }
+    }
+
+    /** Emits playWhenReady, now and on every change. */
+    private fun playWhenReadyFlow(player: Player) = callbackFlow {
+        trySend(player.playWhenReady)
+        val l = object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { trySend(playWhenReady) }
+        }
+        player.addListener(l)
+        awaitClose { player.removeListener(l) }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
@@ -380,7 +420,7 @@ class PlaybackService : MediaSessionService() {
         val session = player.audioSessionId
         if (session == C.AUDIO_SESSION_ID_UNSET) return
         val id = player.currentMediaItem?.mediaId
-        val db = id?.let(StreamResolver::loudnessDbFor)
+        val db = id?.let { StreamResolver.loudnessDbFor(it) ?: Downloads.loudnessFor(it) }
         val on = AppSettings.playback.value.loudnessNormalization && db != null
         val enhancer = loudnessEnhancer?.takeIf { loudnessSession == session }
             ?: runCatching { LoudnessEnhancer(session) }

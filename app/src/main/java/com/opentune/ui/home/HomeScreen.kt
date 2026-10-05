@@ -35,6 +35,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
+import com.opentune.data.account.AccountStore
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -76,6 +81,16 @@ fun HomeScreen(
     val records by History.records.collectAsState()
     val recents = remember(records) { History.recents(records, 24) }
     val ui by AppSettings.ui.collectAsState()
+    val signedIn by AccountStore.signedIn.collectAsState()
+    val account by AccountStore.account.collectAsState()
+    // Signing in or out changes what YouTube Music recommends; fetch again then.
+    var seenSignedIn by remember { mutableStateOf(signedIn) }
+    LaunchedEffect(signedIn) {
+        if (signedIn != seenSignedIn) {
+            seenSignedIn = signedIn
+            loader.reload(keepContent = true)
+        }
+    }
 
     PullToRefreshBox(
         isRefreshing = refreshing,
@@ -87,7 +102,11 @@ fun HomeScreen(
                 Column(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(top = 8.dp)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         GlassIconButton(Icons.Rounded.GraphicEq, "Settings", onOpenSettings)
-                        GlassIconButton(Icons.Rounded.Person, "Account and settings", onOpenSettings)
+                        GlassIconButton(Icons.Rounded.Person, "Account and settings", onOpenSettings) {
+                            val photo = account?.thumbnailUrl
+                            if (photo != null) Artwork(photo, Modifier.size(46.dp), CircleShape)
+                            else Icon(Icons.Rounded.Person, "Account and settings", Modifier.size(26.dp))
+                        }
                     }
                     Text(
                         "Listen Now",
