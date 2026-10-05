@@ -624,7 +624,12 @@ fun VolumeBar(modifier: Modifier = Modifier) {
 
 /** An empty area that still skips tracks on a sideways swipe, for full-screen cover mode. */
 @Composable
-fun ArtworkSwipeArea(onSwipeNext: () -> Unit, onSwipePrevious: () -> Unit, modifier: Modifier = Modifier) {
+fun ArtworkSwipeArea(
+    onSwipeNext: () -> Unit,
+    onSwipePrevious: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
+) {
     val threshold = with(LocalDensity.current) { 96.dp.toPx() }
     var dx by remember { mutableFloatStateOf(0f) }
     Box(
@@ -642,5 +647,68 @@ fun ArtworkSwipeArea(onSwipeNext: () -> Unit, onSwipePrevious: () -> Unit, modif
                 dx += amount
             }
         },
+        content = content,
     )
 }
+
+/**
+ * The cover as a record: round, with grooves and a spindle hole, turning
+ * at 33 rpm while the song plays and resting where it stopped on pause.
+ */
+@Composable
+fun VinylPane(
+    song: Song,
+    isPlaying: Boolean,
+    onSwipeNext: () -> Unit,
+    onSwipePrevious: () -> Unit,
+    animate: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    var angle by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(isPlaying, animate) {
+        if (!isPlaying || !animate) return@LaunchedEffect
+        var last = 0L
+        while (true) {
+            androidx.compose.runtime.withFrameNanos { now ->
+                if (last != 0L) angle = (angle + (now - last) / 1_000_000_000f * VINYL_DEGREES_PER_SECOND) % 360f
+                last = now
+            }
+        }
+    }
+    val groove = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
+    ArtworkSwipeArea(onSwipeNext = onSwipeNext, onSwipePrevious = onSwipePrevious, modifier = modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth(0.92f)
+                .aspectRatio(1f)
+                .align(Alignment.Center)
+                .graphicsLayer {
+                    rotationZ = angle
+                    shadowElevation = 30.dp.toPx()
+                    shape = CircleShape
+                    clip = true
+                }
+                .background(Color(0xFF111111)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Artwork(
+                song.thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
+                Modifier.fillMaxSize(0.62f).clip(CircleShape),
+                CircleShape,
+            )
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val r = size.minDimension / 2
+                // Grooves between the label and the rim.
+                var ring = r * 0.66f
+                while (ring < r * 0.98f) {
+                    drawCircle(groove, radius = ring, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2f))
+                    ring += r * 0.035f
+                }
+                drawCircle(Color(0xFF111111), radius = r * 0.045f)
+                drawCircle(Color.White.copy(alpha = 0.25f), radius = r * 0.045f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+            }
+        }
+    }
+}
+
+private const val VINYL_DEGREES_PER_SECOND = 360f * 33.3f / 60f

@@ -9,6 +9,10 @@ import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.SystemUpdate
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.UpdateCheck
+import com.opentune.data.sponsorblock.SponsorBlock
+import com.opentune.data.settings.PlayerStyle
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.FastForward
 import androidx.core.net.toUri
 import kotlin.math.roundToInt
 import com.opentune.data.LogExport
@@ -230,6 +234,9 @@ private fun settingsSections(
     var lastFmDialog by remember { mutableStateOf(false) }
     var serverDialog by remember { mutableStateOf(false) }
     var listenBrainzDialog by remember { mutableStateOf(false) }
+    var sponsorBlockDialog by remember { mutableStateOf(false) }
+    var update by remember { mutableStateOf<UpdateCheck.Release?>(null) }
+    var playerStyleDialog by remember { mutableStateOf(false) }
     val listenBrainz by ListenBrainz.account.collectAsState()
     val listensWaiting by ListenBrainz.queued.collectAsState()
     val musicServer by Subsonic.server.collectAsState()
@@ -298,6 +305,18 @@ private fun settingsSections(
     if (lastFmDialog) LastFmDialog(onDismiss = { lastFmDialog = false })
     if (serverDialog) ServerDialog(onDismiss = { serverDialog = false })
     if (listenBrainzDialog) ListenBrainzDialog(onDismiss = { listenBrainzDialog = false })
+    if (sponsorBlockDialog) SponsorBlockDialog(onDismiss = { sponsorBlockDialog = false })
+    update?.let { UpdateDialog(it, onDismiss = { update = null }) }
+    if (playerStyleDialog) {
+        ChoiceDialog(
+            title = "Player layout",
+            options = PlayerStyle.entries,
+            selected = ui.playerStyle,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v) } },
+            onDismiss = { playerStyleDialog = false },
+        )
+    }
     if (lyricsAnimationDialog) {
         ChoiceDialog(
             title = "Lyrics animation",
@@ -429,7 +448,7 @@ private fun settingsSections(
         ),
         Section(
             "Playback",
-            listOf(
+            listOfNotNull(
                 Entry("Loudness normalization", "volume level") {
                     ToggleRow("Loudness normalization", pb.loudnessNormalization, { v -> AppSettings.updatePlayback { it.copy(loudnessNormalization = v) } }, summary = "Uses YouTube's loudness measurement to set one steady volume per song", icon = Icons.AutoMirrored.Rounded.VolumeUp)
                 },
@@ -472,6 +491,18 @@ private fun settingsSections(
                 Entry("Don't repeat songs in current session", "autoplay duplicates") {
                     ToggleRow("Don't repeat songs in current session", pb.noRepeatInSession, { v -> AppSettings.updatePlayback { it.copy(noRepeatInSession = v) } }, summary = "Autoplay won't add a song already played or queued this session", icon = Icons.Rounded.History)
                 },
+                Entry("Resume when headphones connect", "bluetooth headset wired auto play resume connect car") {
+                    ToggleRow("Resume when headphones connect", pb.resumeOnConnect, { v -> AppSettings.updatePlayback { it.copy(resumeOnConnect = v) } }, summary = "Carries on playing when headphones are plugged in or a Bluetooth device connects, while OpenTune is open or in the notification", icon = Icons.Rounded.Headphones)
+                },
+                Entry("Pause at zero volume", "mute volume down silent") {
+                    ToggleRow("Pause at zero volume", pb.pauseAtZeroVolume, { v -> AppSettings.updatePlayback { it.copy(pauseAtZeroVolume = v) } }, summary = "Pauses when the volume is turned all the way down and plays again when it comes back up", icon = Icons.AutoMirrored.Rounded.VolumeOff)
+                },
+                Entry("SponsorBlock", "sponsorblock skip sponsor intro outro non-music talking music video segments") {
+                    ToggleRow("Skip non-music parts", pb.sponsorBlock, { v -> AppSettings.updatePlayback { it.copy(sponsorBlock = v) } }, summary = "Jumps over talking, skits and sponsor reads in music videos, from SponsorBlock", icon = Icons.Rounded.FastForward)
+                },
+                if (pb.sponsorBlock) Entry("SponsorBlock categories", "sponsorblock skip categories") {
+                    NavRow("What to skip", { sponsorBlockDialog = true }, summary = pb.sponsorBlockCategories.mapNotNull { SponsorBlock.CATEGORIES[it]?.label }.joinToString().ifEmpty { "Nothing" }, icon = Icons.Rounded.FastForward)
+                } else null,
                 Entry("Stop music on close from recents", "swipe away") {
                     ToggleRow("Stop music on close from recents", pb.stopOnTaskRemoved, { v -> AppSettings.updatePlayback { it.copy(stopOnTaskRemoved = v) } }, summary = "Stops playback when swiped away from recent apps", icon = Icons.Rounded.MusicOff)
                 },
@@ -525,6 +556,9 @@ private fun settingsSections(
                 },
                 Entry("Pure black", "oled amoled") {
                     ToggleRow("Pure black", theme.pureBlack, { v -> AppSettings.updateTheme { it.copy(pureBlack = v) } }, summary = "Black backgrounds with neutral gray cards in dark theme", icon = Icons.Rounded.Wallpaper)
+                },
+                Entry("Player layout", "player style layout vinyl record lyrics minimal classic screen") {
+                    NavRow("Player layout", { playerStyleDialog = true }, summary = ui.playerStyle.summary, icon = Icons.Rounded.Album, value = ui.playerStyle.label)
                 },
                 Entry("Player background", "mesh gradient blur") {
                     SettingRow("Player background", icon = Icons.Rounded.Wallpaper, below = {
@@ -592,6 +626,20 @@ private fun settingsSections(
                         { lyricsSourcesDialog = true },
                         summary = lyricsSettings.ordered.filter { it.enabled }.joinToString(", then ") { it.source.label }.ifEmpty { "None: lyrics are off" },
                         icon = Icons.Rounded.TextFields,
+                    )
+                },
+            ),
+        ),
+        Section(
+            "Content",
+            listOf(
+                Entry("Hide explicit content", "explicit clean kids family parental filter") {
+                    ToggleRow(
+                        "Hide explicit content",
+                        lib.hideExplicit,
+                        { v -> AppSettings.updateLibrary { it.copy(hideExplicit = v) } },
+                        summary = "Leaves out songs and albums marked explicit on Home, in search, on album and artist pages and in autoplay",
+                        icon = Icons.Rounded.FilterAlt,
                     )
                 },
             ),
@@ -762,17 +810,17 @@ private fun settingsSections(
                 Entry("Check for updates", "new version release download github") {
                     NavRow("Check for updates", {
                         scope.launch {
-                            message = when (val r = UpdateCheck.check()) {
-                                is UpdateCheck.Result.Newer -> {
-                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, r.url.toUri())) }
-                                    "OpenTune ${r.version} is out. Opening the download page."
-                                }
-                                UpdateCheck.Result.UpToDate -> "You have the latest version (${BuildConfig.VERSION_NAME})."
-                                UpdateCheck.Result.NoReleases -> "No releases are published yet. Builds are on the GitHub branch for now."
-                                is UpdateCheck.Result.Failed -> "Couldn't check: ${r.reason}"
+                            when (val r = UpdateCheck.check()) {
+                                is UpdateCheck.Result.Newer -> update = r.release
+                                UpdateCheck.Result.UpToDate -> message = "You have the latest version (${BuildConfig.VERSION_NAME})."
+                                UpdateCheck.Result.NoReleases -> message = "No releases are published yet. Builds are on the GitHub branch for now."
+                                is UpdateCheck.Result.Failed -> message = "Couldn't check: ${r.reason}"
                             }
                         }
                     }, summary = "Current version: ${BuildConfig.VERSION_NAME}", icon = Icons.Rounded.SystemUpdate)
+                },
+                Entry("Check for updates automatically", "update new version release auto") {
+                    ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) } }, summary = "Looks for a new release on GitHub once a day and offers to install it", icon = Icons.Rounded.SystemUpdate)
                 },
                 Entry("Source code", "github open source license gpl") {
                     NavRow("Source code", {

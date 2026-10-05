@@ -34,6 +34,9 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.LibraryResult
 import com.opentune.widget.NowPlayingWidget
+import com.opentune.data.ContentFilter
+import com.opentune.data.sponsorblock.SponsorBlock
+import android.widget.Toast
 import android.os.Bundle
 import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionCommand
@@ -573,6 +576,7 @@ class PlaybackService : MediaLibraryService() {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             applyLoudness()
             scheduleUpgrade()
+            watchSegments(mediaItem)
             // The same song on a better stream is not a new listen.
             if (mediaItem != null && mediaItem.mediaId == swappingTo) {
                 swappingTo = null
@@ -879,19 +883,103 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    // ---- SponsorBlock ------------------------------------------------------------
+
+    private var segmentsJob: Job? = null
+
+    /**
+     * Looks up [item]'s SponsorBlock segments and, while it plays, jumps
+     * over each one the first time playback enters it. Seeking back into a
+     * segment afterwards plays it: that was asked for.
+     */
+    private fun watchSegments(item: MediaItem?) {
+        segmentsJob?.cancel()
+        val id = item?.mediaId ?: return
+        val pb = AppSettings.playback.value
+        if (!pb.sponsorBlock || !isYouTubeId(id)) return
+        segmentsJob = scope.launch {
+            val segments = SponsorBlock.segments(id, pb.sponsorBlockCategories)
+            if (segments.isEmpty()) return@launch
+            val player = mediaSession?.player ?: return@launch
+            val skipped = HashSet<String>()
+            while (player.currentMediaItem?.mediaId == id && skipped.size < segments.size) {
+                delay(if (player.isPlaying) SEGMENT_POLL_MS else SEGMENT_IDLE_POLL_MS)
+                if (!player.isPlaying) continue
+                val at = player.currentPosition
+                val duration = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
+                val segment = segments.firstOrNull {
+                    it.uuid !in skipped && at >= it.startMs && at < it.endMs - SEGMENT_END_SLACK_MS && SponsorBlock.fits(it, duration)
+                } ?: continue
+                skipped += segment.uuid
+                Log.i(TAG, "SponsorBlock: skipping ${segment.category} ${segment.startMs}-${segment.endMs} ms")
+                if (duration > 0 && segment.endMs >= duration - SEGMENT_END_SLACK_MS) {
+                    // The segment runs to the end: that's the song over.
+                    if (player.hasNextMediaItem()) player.seekToNextMediaItem() else player.seekTo(duration)
+                } else {
+                    player.seekTo(segment.endMs)
+                }
+                Toast.makeText(this@PlaybackService, "Skipped ${SponsorBlock.CATEGORIES[segment.category]?.one ?: "a segment"}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // ---- Output device ---------------------------------------------------------
 
     private val deviceCallback = object : AudioDeviceCallback() {
-        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) = applyPreferredDevice()
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+            applyPreferredDevice()
+            // The callback reports every device already there as it's
+            // registered; only one that turns up afterwards is a connection.
+            if (!devicesListed) {
+                devicesListed = true
+                return
+            }
+            if (addedDevices.orEmpty().any { it.isSink && it.type in LISTENING_DEVICES }) resumeOnConnect()
+        }
+
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = applyPreferredDevice()
+    }
+    private var devicesListed = false
+
+    /**
+     * Headphones or a Bluetooth device came on: play the paused queue, if
+     * the setting is on and there's something to play. Audio routes to the
+     * new device the moment it appears, so this doesn't start on the speaker.
+     */
+    private fun resumeOnConnect() {
+        val player = mediaSession?.player ?: return
+        if (!AppSettings.playback.value.resumeOnConnect || player.mediaItemCount == 0 || player.playWhenReady) return
+        Log.i(TAG, "Output device connected; resuming")
+        if (player.playbackState == Player.STATE_IDLE) player.prepare()
+        player.play()
     }
 
     /** Bumped when the volume keys move, so the bit-perfect software volume follows. */
     private val volumeTick = MutableStateFlow(0)
 
+    /** Set while paused by "Pause at zero volume", so raising it again resumes. */
+    private var pausedAtZero = false
+
     private val volumeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             volumeTick.value++
+            if (intent?.getIntExtra(EXTRA_VOLUME_STREAM, AudioManager.STREAM_MUSIC) == AudioManager.STREAM_MUSIC) onMusicVolume()
+        }
+    }
+
+    private fun onMusicVolume() {
+        val player = mediaSession?.player ?: return
+        val volume = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: return
+        if (!AppSettings.playback.value.pauseAtZeroVolume) {
+            pausedAtZero = false
+            return
+        }
+        if (volume == 0 && player.playWhenReady) {
+            pausedAtZero = true
+            player.pause()
+        } else if (volume > 0 && pausedAtZero) {
+            pausedAtZero = false
+            player.play()
         }
     }
 
@@ -948,7 +1036,7 @@ class PlaybackService : MediaLibraryService() {
                 if (Subsonic.isSubsonic(seed)) {
                     Subsonic.randomSongs(RADIO_FROM_SERVER)
                 } else {
-                    withContext(Dispatchers.IO) { InnertubeParser.parseWatchQueue(Innertube.next(seed)) }
+                    withContext(Dispatchers.IO) { ContentFilter.songs(InnertubeParser.parseWatchQueue(Innertube.next(seed))) }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -1121,6 +1209,24 @@ class PlaybackService : MediaLibraryService() {
         const val UPGRADE_DELAY_MS = 8_000L
         /** Songs a server queue carries on with when it runs out. */
         const val RADIO_FROM_SERVER = 25
+        const val SEGMENT_POLL_MS = 250L
+        const val SEGMENT_IDLE_POLL_MS = 1_000L
+        const val SEGMENT_END_SLACK_MS = 500L
+        /** The stream a VOLUME_CHANGED_ACTION is about (a hidden AudioManager extra). */
+        const val EXTRA_VOLUME_STREAM = "android.media.EXTRA_VOLUME_STREAM_TYPE"
+        /**
+         * Outputs a person listens on privately, as opposed to the phone's
+         * speaker. The BLE types are plain ints that older Android never reports.
+         */
+        @android.annotation.SuppressLint("InlinedApi")
+        val LISTENING_DEVICES = setOf(
+            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_USB_HEADSET,
+            AudioDeviceInfo.TYPE_BLE_HEADSET,
+            AudioDeviceInfo.TYPE_BLE_SPEAKER,
+        )
         const val ACTION_LIKE = "com.opentune.LIKE"
         const val ACTION_SHUFFLE = "com.opentune.SHUFFLE"
         val LIKE_COMMAND = SessionCommand(ACTION_LIKE, Bundle.EMPTY)

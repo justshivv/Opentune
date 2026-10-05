@@ -213,6 +213,8 @@ data class BrowseItem(
     val subtitle: String,
     val thumbnailUrl: String?,
     val type: BrowseType,
+    /** YouTube Music's "E" badge on an album or single. */
+    val explicit: Boolean = false,
 )
 
 /** Search rows are heterogeneous once filters other than "Songs" are used. */
@@ -241,6 +243,8 @@ data class ShelfItem(
     val thumbnailUrl: String?,
     val videoId: String?,
     val browseId: String?,
+    /** YouTube Music's "E" badge on the card. */
+    val explicit: Boolean = false,
 )
 
 /** The signed-in Google account, as YouTube Music reports it. */

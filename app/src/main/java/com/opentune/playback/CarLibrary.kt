@@ -159,7 +159,7 @@ class CarLibrary(private val context: Context) {
     private suspend fun homeItems(): List<MediaItem> {
         val now = System.currentTimeMillis()
         val shelves = homeCache?.takeIf { now - it.first < HOME_FRESH_MS }?.second
-            ?: (MusicRepository.home() + MusicRepository.homeMore.value).also { homeCache = now to it }
+            ?: com.opentune.data.ContentFilter.shelves(MusicRepository.home() + MusicRepository.homeMore.value).also { homeCache = now to it }
         return shelves.take(MAX_SHELVES).flatMapIndexed { index, shelf ->
             val parent = "$HOME_SHELF$index"
             val shelfSongs = shelf.items.mapNotNull { it.toSongOrNull() }

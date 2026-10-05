@@ -183,6 +183,7 @@ object InnertubeParser {
                 "PLAYLIST" in pageType -> BrowseType.PLAYLIST
                 else -> BrowseType.OTHER
             },
+            explicit = renderer.hasExplicitBadge() == true,
         )
     }
 
@@ -284,7 +285,7 @@ object InnertubeParser {
                 ?: parseResponsiveListItem(item.o("musicResponsiveListItemRenderer"))
                     ?.takeUnless { it.isVideo }
                     ?.let { song ->
-                        ShelfItem(song.title, song.artist, song.thumbnailUrl, song.videoId, null)
+                        ShelfItem(song.title, song.artist, song.thumbnailUrl, song.videoId, null, explicit = song.isExplicit == true)
                     }
                 // A chart row with nothing to play — "Top artists" lists the
                 // artist alone, no track — falls through parseResponsiveListItem
@@ -300,7 +301,7 @@ object InnertubeParser {
         val items = shelf.a("contents").orEmpty().mapNotNull {
             parseResponsiveListItem(it.o("musicResponsiveListItemRenderer"))
         }.filterNot { it.isVideo }
-            .map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
+            .map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null, explicit = it.isExplicit == true) }
         return if (items.isEmpty()) null else HomeShelf(title.ifBlank { "For you" }, items)
     }
 
@@ -574,7 +575,7 @@ object InnertubeParser {
             val item = parseBrowseItem(renderer) ?: return@forEach
             out.putIfAbsent(
                 item.browseId,
-                ShelfItem(item.title, item.subtitle, item.thumbnailUrl, null, item.browseId),
+                ShelfItem(item.title, item.subtitle, item.thumbnailUrl, null, item.browseId, explicit = item.explicit),
             )
         }
         return LibraryItemPage(out.values.toList(), continuationToken(root))
@@ -771,6 +772,7 @@ object InnertubeParser {
                 "PLAYLIST" in pageType -> BrowseType.PLAYLIST
                 else -> BrowseType.OTHER
             },
+            explicit = renderer["subtitleBadges"].hasExplicitBadge() == true,
         )
     }
 
@@ -1288,6 +1290,7 @@ object InnertubeParser {
             thumbnailUrl = thumbnails.best(),
             videoId = videoId,
             browseId = resolvedBrowseId,
+            explicit = renderer["subtitleBadges"].hasExplicitBadge() == true,
         )
     }
 

@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.opentune.data.MusicRepository
+import com.opentune.data.ContentFilter
 import com.opentune.data.history.History
 import com.opentune.data.model.HomeShelf
 import com.opentune.data.model.ROW_ART_PX
@@ -79,7 +80,10 @@ fun HomeScreen(
     val loader = rememberLoader("home") { MusicRepository.home() }
     val state by loader.state.collectAsState()
     val refreshing by loader.refreshing.collectAsState()
-    val more by MusicRepository.homeMore.collectAsState()
+    val moreAll by MusicRepository.homeMore.collectAsState()
+    val library by AppSettings.library.collectAsState()
+    val hideExplicit = library.hideExplicit
+    val more = remember(moreAll, hideExplicit) { ContentFilter.shelves(moreAll, hideExplicit) }
     val records by History.records.collectAsState()
     val recents = remember(records) { History.recents(records, 24) }
     val ui by AppSettings.ui.collectAsState()
@@ -142,7 +146,8 @@ fun HomeScreen(
                     ErrorState(s.message, onRetry = { loader.reload() }, modifier = Modifier.padding(top = 24.dp))
                 }
                 is UiState.Success -> {
-                    itemsIndexed(s.data, key = { i, shelf -> "$i:${shelf.title}" }, contentType = { _, shelf -> shelfType(shelf) }) { _, shelf ->
+                    val first = ContentFilter.shelves(s.data, hideExplicit)
+                    itemsIndexed(first, key = { i, shelf -> "$i:${shelf.title}" }, contentType = { _, shelf -> shelfType(shelf) }) { _, shelf ->
                         HomeShelfView(shelf, onItemClick)
                     }
                     // The rest of Home, which arrives a page at a time after the first.
