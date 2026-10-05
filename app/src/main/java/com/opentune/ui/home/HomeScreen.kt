@@ -1,107 +1,162 @@
 package com.opentune.ui.home
 
-import androidx.compose.runtime.getValue
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.automirrored.rounded.ViewList
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.opentune.data.MusicRepository
+import com.opentune.data.history.History
 import com.opentune.data.model.HomeShelf
 import com.opentune.data.model.ROW_ART_PX
 import com.opentune.data.model.ShelfItem
+import com.opentune.data.model.Song
 import com.opentune.data.model.UiState
 import com.opentune.data.model.artworkAt
+import com.opentune.data.settings.AppSettings
+import com.opentune.ui.browse.SongActions
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.ErrorState
+import com.opentune.ui.components.GlassIconButton
 import com.opentune.ui.components.ItemCard
-import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.SectionHeader
 import com.opentune.ui.components.Shelf
 import com.opentune.ui.components.ShelfPlaceholder
+import com.opentune.ui.components.SongListItem
 import com.opentune.ui.rememberLoader
 import com.opentune.ui.type
-import java.util.Calendar
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     contentPadding: PaddingValues,
+    actions: SongActions,
     onItemClick: (ShelfItem) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val loader = rememberLoader("home") { MusicRepository.home() }
     val state by loader.state.collectAsState()
     val refreshing by loader.refreshing.collectAsState()
-    val scroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val records by History.records.collectAsState()
+    val recents = remember(records) { History.recents(records, 24) }
+    val ui by AppSettings.ui.collectAsState()
 
-    Column(Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection)) {
-        TopAppBar(
-            title = {
-                Column {
-                    Text(greeting(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("OpenTune", style = MaterialTheme.typography.headlineSmall)
-                }
-            },
-            actions = {
-                IconButton(onClick = onOpenSettings) { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }
-            },
-            scrollBehavior = scroll,
-        )
-        PullToRefreshBox(
-            isRefreshing = refreshing,
-            onRefresh = { loader.reload(keepContent = true) },
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            when (val s = state) {
-                is UiState.Loading -> LazyColumn(contentPadding = contentPadding) {
-                    items(4) { ShelfPlaceholder() }
-                }
-                is UiState.Error -> Box(Modifier.fillMaxSize().padding(contentPadding), Alignment.Center) {
-                    ErrorState(s.message, onRetry = { loader.reload() })
-                }
-                is UiState.Success -> if (s.data.isEmpty()) {
-                    Box(Modifier.fillMaxSize().padding(contentPadding), Alignment.Center) {
-                        MessageState(
-                            Icons.Filled.LibraryMusic,
-                            "Nothing here yet",
-                            message = "YouTube Music didn't send a home feed. Search for something to start listening.",
-                        )
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = { loader.reload(keepContent = true) },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+            item(key = "top") {
+                Column(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(top = 8.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        GlassIconButton(Icons.Rounded.GraphicEq, "Settings", onOpenSettings)
+                        GlassIconButton(Icons.Rounded.Person, "Account and settings", onOpenSettings)
                     }
-                } else {
-                    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-                        itemsIndexed(s.data, key = { i, shelf -> "$i:${shelf.title}" }) { _, shelf -> HomeShelfView(shelf, onItemClick) }
+                    Text(
+                        "Listen Now",
+                        style = MaterialTheme.typography.displayMedium,
+                        modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 4.dp),
+                    )
+                }
+            }
+            if (recents.isNotEmpty()) {
+                item(key = "recents") {
+                    Recents(
+                        songs = recents,
+                        asGrid = ui.recentsAsGrid,
+                        actions = actions,
+                        onToggleLayout = { AppSettings.updateUi { it.copy(recentsAsGrid = !it.recentsAsGrid) } },
+                    )
+                }
+            }
+            when (val s = state) {
+                is UiState.Loading -> items(3) { ShelfPlaceholder() }
+                is UiState.Error -> item(key = "error") {
+                    ErrorState(s.message, onRetry = { loader.reload() }, modifier = Modifier.padding(top = 24.dp))
+                }
+                is UiState.Success -> itemsIndexed(s.data, key = { i, shelf -> "$i:${shelf.title}" }) { _, shelf ->
+                    HomeShelfView(shelf, onItemClick)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Recently played, from this device's history: a paged list four rows deep,
+ * or a row of covers. The choice is remembered.
+ */
+@Composable
+private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, onToggleLayout: () -> Unit) {
+    Column {
+        SectionHeader("Recents", action = {
+            IconButton(onClick = onToggleLayout) {
+                Icon(
+                    if (asGrid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                    if (asGrid) "Show as list" else "Show as grid",
+                )
+            }
+        })
+        AnimatedContent(asGrid, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "recents") { grid ->
+            if (grid) {
+                LazyRow(contentPadding = PaddingValues(horizontal = 10.dp)) {
+                    itemsIndexed(songs) { i, song ->
+                        ItemCard(song.title, song.artist, song.thumbnailUrl, null, onClick = { actions.playAll(songs, i, false, "Recents") })
+                    }
+                }
+            } else {
+                LazyHorizontalGrid(
+                    rows = GridCells.Fixed(4),
+                    modifier = Modifier.fillMaxWidth().height(64.dp * 4),
+                ) {
+                    items(songs.size) { i ->
+                        val song = songs[i]
+                        SongListItem(
+                            song = song,
+                            onClick = { actions.playAll(songs, i, false, "Recents") },
+                            modifier = Modifier.width(340.dp),
+                            isCurrent = song.videoId == actions.currentVideoId,
+                            isPlaying = actions.isPlaying,
+                            onPlayNext = { actions.playNext(song) },
+                            onAddToQueue = { actions.addToQueue(song) },
+                        )
                     }
                 }
             }
@@ -115,11 +170,7 @@ fun HomeShelfView(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit) {
     if (songsOnly && shelf.items.size >= 4) {
         QuickPicks(shelf, onItemClick)
     } else {
-        Shelf(
-            title = shelf.title,
-            subtitle = shelf.subtitle,
-            items = shelf.items,
-        ) { item ->
+        Shelf(title = shelf.title, subtitle = shelf.subtitle, items = shelf.items) { item ->
             ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) })
         }
     }
@@ -160,11 +211,4 @@ private fun QuickPicks(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit) {
             }
         }
     }
-}
-
-private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-    in 5..11 -> "Good morning"
-    in 12..16 -> "Good afternoon"
-    in 17..21 -> "Good evening"
-    else -> "Late night listening"
 }

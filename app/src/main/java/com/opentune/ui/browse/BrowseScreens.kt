@@ -60,6 +60,7 @@ import com.opentune.data.model.Song
 import com.opentune.data.model.UiState
 import com.opentune.data.model.artworkAt
 import com.opentune.ui.components.Artwork
+import com.opentune.ui.components.GlassBackButton
 import com.opentune.ui.components.ErrorState
 import com.opentune.ui.components.ItemCard
 import com.opentune.ui.components.Placeholder
@@ -74,7 +75,8 @@ import com.opentune.ui.type
 class SongActions(
     val currentVideoId: String?,
     val isPlaying: Boolean,
-    val playAll: (List<Song>, Int, Boolean) -> Unit,
+    /** songs, start index, shuffle, "Playing from" label. */
+    val playAll: (List<Song>, Int, Boolean, String?) -> Unit,
     val playNext: (Song) -> Unit,
     val addToQueue: (Song) -> Unit,
 )
@@ -85,9 +87,7 @@ private fun CollapsingBar(title: String, listState: LazyListState, onBack: () ->
     val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     TopAppBar(
         title = { if (collapsed) Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        navigationIcon = {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
-        },
+        navigationIcon = { GlassBackButton(onBack, Modifier.padding(start = 8.dp).size(48.dp)) },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = if (collapsed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
         ),
@@ -185,8 +185,8 @@ fun CollectionScreen(
                                 }
                                 PlayShuffleButtons(
                                     enabled = !c?.songs.isNullOrEmpty(),
-                                    onPlay = { c?.let { actions.playAll(it.songs, 0, false) } },
-                                    onShuffle = { c?.let { actions.playAll(it.songs, 0, true) } },
+                                    onPlay = { c?.let { actions.playAll(it.songs, 0, false, it.title) } },
+                                    onShuffle = { c?.let { actions.playAll(it.songs, 0, true, it.title) } },
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
                                 )
                             }
@@ -198,7 +198,7 @@ fun CollectionScreen(
                         itemsIndexed(c.songs, key = { i, song -> "$i:${song.videoId}" }) { i, song ->
                             SongListItem(
                                 song = song,
-                                onClick = { actions.playAll(c.songs, i, false) },
+                                onClick = { actions.playAll(c.songs, i, false, c.title) },
                                 isCurrent = song.videoId == actions.currentVideoId,
                                 isPlaying = actions.isPlaying,
                                 leading = if (isAlbum) {
@@ -278,8 +278,8 @@ fun ArtistScreen(
                 item(key = "buttons") {
                     PlayShuffleButtons(
                         enabled = !page?.songs.isNullOrEmpty(),
-                        onPlay = { page?.let { actions.playAll(it.songs, 0, false) } },
-                        onShuffle = { page?.let { actions.playAll(it.songs, 0, true) } },
+                        onPlay = { page?.let { actions.playAll(it.songs, 0, false, it.name) } },
+                        onShuffle = { page?.let { actions.playAll(it.songs, 0, true, it.name) } },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
                     )
                 }
@@ -291,7 +291,7 @@ fun ArtistScreen(
                         itemsIndexed(page.songs, key = { i, song -> "top:$i:${song.videoId}" }) { i, song ->
                             SongListItem(
                                 song = song,
-                                onClick = { actions.playAll(page.songs, i, false) },
+                                onClick = { actions.playAll(page.songs, i, false, page.name) },
                                 isCurrent = song.videoId == actions.currentVideoId,
                                 isPlaying = actions.isPlaying,
                                 onPlayNext = { actions.playNext(song) },

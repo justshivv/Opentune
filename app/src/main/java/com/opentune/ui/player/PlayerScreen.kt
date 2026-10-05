@@ -59,7 +59,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.RemixPreset
+import com.opentune.data.settings.InterfaceSettings
 import com.opentune.data.settings.SoundSettings
+import com.opentune.playback.AudioFormatInfo
 import com.opentune.data.settings.ThemeSettings
 import com.opentune.data.model.Song
 import com.opentune.ui.LyricsState
@@ -102,6 +104,10 @@ data class PlayerUiState(
     val upNext: List<Int>,
     val sound: SoundSettings,
     val theme: ThemeSettings,
+    val ui: InterfaceSettings = InterfaceSettings(),
+    /** "Playing from" label: an album, a playlist, Search… */
+    val source: String? = null,
+    val audioFormat: AudioFormatInfo? = null,
 )
 
 class PlayerActions(
@@ -132,6 +138,9 @@ fun PlayerScreen(vm: PlayerViewModel, onCollapse: () -> Unit) {
     val queue by vm.queue.collectAsState()
     val currentIndex by vm.currentIndex.collectAsState()
     val upNext by vm.upNext.collectAsState()
+    val ui by AppSettings.ui.collectAsState()
+    val source by vm.source.collectAsState()
+    val audioFormat by vm.audioFormat.collectAsState()
     val actions = remember(vm, onCollapse) {
         PlayerActions(
             togglePlay = vm::togglePlayPause,
@@ -148,7 +157,7 @@ fun PlayerScreen(vm: PlayerViewModel, onCollapse: () -> Unit) {
     PlayerLayout(
         PlayerUiState(
             current, isPlaying, isBuffering, hasNext, shuffle, repeat, duration,
-            lyrics, queue, currentIndex, upNext, sound, theme,
+            lyrics, queue, currentIndex, upNext, sound, theme, ui, source, audioFormat,
         ),
         position = rememberPlaybackPosition(vm),
         buffered = vm::bufferedPositionMs,
@@ -208,7 +217,13 @@ fun PlayerLayout(
                     },
                 ),
         ) {
-            PlayerBackdrop(theme.playerBackground, current.thumbnailUrl, Modifier.fillMaxSize())
+            PlayerBackdrop(
+                theme.playerBackground,
+                current.thumbnailUrl,
+                Modifier.fillMaxSize(),
+                animate = !state.ui.reduceAnimation,
+                fullCover = state.ui.fullScreenCover && !showLyrics,
+            )
 
             // The player draws its own dark surface, so it sets its own text and
             // icon color rather than inheriting the app's (light in light theme).
@@ -222,7 +237,7 @@ fun PlayerLayout(
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         AnimatedContent(sound.isDefault, label = "remixPill") { normal ->
                             if (normal) {
-                                Text("Now playing", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (!state.ui.hideSongStatus) SongStatus(state.source)
                             } else {
                                 AssistChip(
                                     onClick = { showRemix = true },
@@ -251,7 +266,17 @@ fun PlayerLayout(
                         label = "pane",
                     ) { lyricsMode ->
                         if (lyricsMode) {
-                            LyricsView(lyrics, position, onSeek = actions.seekTo, modifier = Modifier.fillMaxSize())
+                            LyricsView(
+                                lyrics,
+                                position,
+                                onSeek = actions.seekTo,
+                                modifier = Modifier.fillMaxSize(),
+                                synced = state.ui.syncedLyrics,
+                                blur = state.ui.blurLyrics,
+                            )
+                        } else if (state.ui.fullScreenCover) {
+                            // The backdrop draws the cover edge to edge; keep the space and the swipe.
+                            ArtworkSwipeArea(onSwipeNext = actions.next, onSwipePrevious = actions.previous, modifier = Modifier.fillMaxSize())
                         } else {
                             ArtworkPane(current, isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous)
                         }
@@ -268,6 +293,7 @@ fun PlayerLayout(
                 )
                 Spacer(Modifier.height(12.dp))
                 SeekBar(position, buffered, duration, onSeek = actions.seekTo)
+                if (state.ui.statsForNerds) NerdStatsLine(state.audioFormat)
                 Spacer(Modifier.height(8.dp))
                 PlayerControls(
                     isPlaying = isPlaying,
@@ -281,7 +307,8 @@ fun PlayerLayout(
                     onShuffle = actions.toggleShuffle,
                     onRepeat = actions.cycleRepeat,
                 )
-                Spacer(Modifier.height(12.dp))
+                if (!state.ui.hideVolumeBar) VolumeBar(Modifier.padding(top = 4.dp))
+                Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     BottomAction(Icons.Rounded.Lyrics, "Lyrics", selected = showLyrics) { showLyrics = !showLyrics }
                     BottomAction(Icons.Rounded.Tune, "Remix", selected = !sound.isDefault) { showRemix = true }

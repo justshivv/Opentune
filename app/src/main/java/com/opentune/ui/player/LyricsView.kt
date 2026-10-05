@@ -84,6 +84,8 @@ fun LyricsView(
     position: () -> Long,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    synced: Boolean = true,
+    blur: Boolean = true,
 ) {
     Box(modifier) {
         when (state) {
@@ -96,7 +98,9 @@ fun LyricsView(
                 MessageState(Icons.Rounded.Lyrics, "No lyrics for this one", message = "LRCLIB doesn't have lyrics for this track yet.")
             }
             is LyricsState.Found -> when (val lyrics = state.lyrics) {
-                is Lyrics.Synced -> SyncedLyrics(lyrics.lines, position, onSeek)
+                is Lyrics.Synced ->
+                    if (synced) SyncedLyrics(lyrics.lines, position, onSeek, blur)
+                    else PlainLyrics(lyrics.lines.joinToString("\n") { it.text }, note = null)
                 is Lyrics.Plain -> PlainLyrics(lyrics.text)
             }
         }
@@ -104,14 +108,16 @@ fun LyricsView(
 }
 
 @Composable
-private fun PlainLyrics(text: String) {
+private fun PlainLyrics(text: String, note: String? = "These lyrics aren't synced to the music.") {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 24.dp)) {
-        Text(
-            "These lyrics aren't synced to the music.",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 16.dp),
-        )
+        if (note != null) {
+            Text(
+                note,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 16.dp),
+            )
+        }
         Text(text, style = LyricsTextStyle.copy(fontSize = LyricsTextStyle.fontSize * 0.8f, lineHeight = LyricsTextStyle.lineHeight * 0.85f))
         Credit()
     }
@@ -125,7 +131,7 @@ private fun PlainLyrics(text: String) {
  * hand pauses that for a few seconds; tapping a line jumps the song there.
  */
 @Composable
-private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (Long) -> Unit) {
+private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (Long) -> Unit, blur: Boolean) {
     val listState = rememberLazyListState()
     val active by remember(lines) { derivedStateOf { lines.activeIndex(position()) } }
     var following by remember { mutableStateOf(true) }
@@ -169,7 +175,7 @@ private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (
                     line = line,
                     distance = i - active,
                     isActive = i == active,
-                    blurEnabled = following,
+                    blurEnabled = blur && following,
                     position = position,
                     onClick = {
                         onSeek(line.startMs)

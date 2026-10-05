@@ -38,6 +38,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val repeatMode = player.repeatMode
     val durationMs = player.durationMs
     val playbackError = player.error
+    val source = player.source
+    val audioFormat = player.audioFormat
 
     private val _lyrics = MutableStateFlow<LyricsState>(LyricsState.Loading)
     val lyrics = _lyrics.asStateFlow()
@@ -60,9 +62,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun play(song: Song) = player.play(song)
-    fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false) =
-        player.playAll(songs, startIndex, shuffle)
+    fun play(song: Song, source: String? = null) = player.play(song, source)
+    fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false, source: String? = null) =
+        player.playAll(songs, startIndex, shuffle, source)
     fun playNext(song: Song) = player.playNext(song)
     fun addToQueue(song: Song) = player.addToQueue(song)
     fun togglePlayPause() = player.togglePlayPause()

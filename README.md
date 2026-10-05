@@ -8,25 +8,35 @@ your own required.
 
 What works:
 
-- Home feed, Explore (moods and genres), and search with suggestions,
-  recent searches and filters (songs, videos, albums, artists, playlists)
-- Album, playlist and artist pages with Play and Shuffle
-- Playback through a Media3 `MediaSessionService` / ExoPlayer, with stream
-  URLs resolved and deciphered via NewPipeExtractor
-- A play queue with autoplay radio, shuffle and repeat (off / all / one).
-  "Play next" and "Add to queue" on any track
-- A full-screen player with artwork-tinted colors, swipe to skip, drag down
-  to close, and a floating mini player with progress
-- Synced lyrics from [LRCLIB](https://lrclib.net), highlighted word by word,
-  scrolling with the song; tap a line to jump there
-- Remix: speed, pitch, reverb and bass boost, with presets such as Slowed +
-  reverb and Nightcore. Reverb and bass use Android's audio effects, so
-  support depends on the phone
-- Themes: light, dark or system; Material You; accent colors; palette
-  styles; pure black; color from artwork; three player backgrounds
+- **Browse:** Home ("Listen Now" with Recents from your history), Explore
+  (moods and genres), Search with suggestions, recent searches and filters,
+  album, playlist and artist pages, and a Library with Replay stats and
+  music saved on the device
+- **Playback:** a Media3 `MediaSessionService` / ExoPlayer, with YouTube
+  streams resolved and deciphered via NewPipeExtractor. A queue with
+  autoplay radio, shuffle and repeat, and swipe-to-queue on any song
+- **Audio:** per-network quality (defaults to the best stream YouTube
+  offers), a song cache for instant replays and seeks, a 7-band equalizer
+  with tone and balance, loudness levelling, stereo widening, skip silence,
+  USB DAC preference, optional 32-bit float output, and a Remix sheet for
+  speed, pitch, reverb and bass (Slowed + reverb, Nightcore and more). The
+  EQ, levelling and bass run in the app's own DSP, so they work on any phone
+- **Player:** artwork-tinted colors, mesh / gradient / blurred / plain
+  backgrounds, optional full-screen cover art, volume bar, "Playing from",
+  stats for nerds, swipe to skip, drag down to close
+- **Lyrics:** synced from [LRCLIB](https://lrclib.net), highlighted word by
+  word and scrolling with the song; YouTube Music's lyrics as a fallback
+- **Look:** black-and-glass design with a floating nav bar; light, dark or
+  system theme, Material You, accent colors, palette styles, pure black,
+  color from artwork, reduced motion and reduced blur options
+- **Data:** listening history on the device, Replay, and export/import of
+  settings and history as JSON
 
-Not yet built: downloads, library/login, Discord Rich Presence,
-scrobbling, on-device automix, and the "Listen Together" party backend.
+YouTube's audio is lossy (Opus around 160 kbps; AAC 256 with Premium), so
+there is no lossless or Dolby Atmos option.
+
+Not yet built: account login, downloads, crossfade/automix, Listen
+Together, Last.fm, lyric translation, app language.
 
 ## Building
 

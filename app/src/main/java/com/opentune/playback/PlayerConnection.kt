@@ -2,7 +2,9 @@ package com.opentune.playback
 
 import android.content.ComponentName
 import android.content.Context
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.Tracks
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -58,6 +60,14 @@ class PlayerConnection(private val context: Context) {
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
 
+    /** Where the queue came from, for the player's "Playing from" line. */
+    private val _source = MutableStateFlow<String?>(null)
+    val source = _source.asStateFlow()
+
+    /** The selected audio stream, for stats for nerds. */
+    private val _audioFormat = MutableStateFlow<AudioFormatInfo?>(null)
+    val audioFormat = _audioFormat.asStateFlow()
+
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             refresh(player)
@@ -65,6 +75,20 @@ class PlayerConnection(private val context: Context) {
 
         override fun onPlayerError(error: PlaybackException) {
             _error.value = error.cause?.message ?: error.message
+        }
+
+        override fun onTracksChanged(tracks: Tracks) {
+            val format = tracks.groups
+                .firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
+                ?.let { group -> (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let(group::getTrackFormat) }
+            _audioFormat.value = format?.let {
+                AudioFormatInfo(
+                    codec = (it.codecs ?: it.sampleMimeType?.substringAfter('/'))?.uppercase(),
+                    bitrateKbps = it.bitrate.takeIf { b -> b > 0 }?.div(1000),
+                    sampleRateHz = it.sampleRate.takeIf { r -> r > 0 },
+                    channels = it.channelCount.takeIf { c -> c > 0 },
+                )
+            }
         }
     }
 
@@ -104,9 +128,10 @@ class PlayerConnection(private val context: Context) {
      * Starts [song] on its own, replacing the queue. The service fills in
      * radio after it.
      */
-    fun play(song: Song) {
+    fun play(song: Song, source: String? = null) {
         val controller = controller ?: return
         _error.value = null
+        _source.value = source
         controller.setMediaItem(song.toMediaItem())
         controller.prepare()
         controller.play()
@@ -117,10 +142,11 @@ class PlayerConnection(private val context: Context) {
      * [shuffle], the list is shuffled up front (so turning shuffle off later
      * keeps the shuffled order) and playback starts from its first track.
      */
-    fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false) {
+    fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false, source: String? = null) {
         val controller = controller ?: return
         if (songs.isEmpty()) return
         _error.value = null
+        _source.value = source
         val ordered = if (shuffle) songs.shuffled() else songs
         controller.shuffleModeEnabled = false
         controller.setMediaItems(
@@ -200,3 +226,5 @@ class PlayerConnection(private val context: Context) {
 
     fun bufferedPositionMs(): Long = controller?.bufferedPosition ?: 0L
 }
+
+data class AudioFormatInfo(val codec: String?, val bitrateKbps: Int?, val sampleRateHz: Int?, val channels: Int?)

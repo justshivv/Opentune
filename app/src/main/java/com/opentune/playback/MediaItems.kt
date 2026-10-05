@@ -6,6 +6,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import com.opentune.data.local.LocalMusic
 import com.opentune.data.model.Song
 
 /**
@@ -17,9 +18,12 @@ import com.opentune.data.model.Song
 private const val TRACK_SCHEME = "opentune"
 private const val TRACK_HOST = "track"
 private const val EXTRA_DURATION_TEXT = "durationText"
+private const val EXTRA_ALBUM = "album"
 
+/** Local files play straight from MediaStore; everything else resolves on open. */
 fun trackUri(videoId: String): Uri =
-    Uri.Builder().scheme(TRACK_SCHEME).authority(TRACK_HOST).appendPath(videoId).build()
+    if (LocalMusic.isLocal(videoId)) LocalMusic.contentUri(videoId)
+    else Uri.Builder().scheme(TRACK_SCHEME).authority(TRACK_HOST).appendPath(videoId).build()
 
 /** The video id a [trackUri] stands for, or null for any other URI. */
 fun videoIdOf(uri: Uri): String? =
@@ -34,7 +38,13 @@ fun Song.toMediaItem(): MediaItem =
                 .setTitle(title)
                 .setArtist(artist)
                 .setArtworkUri(thumbnailUrl?.let(Uri::parse))
-                .setExtras(Bundle().apply { putString(EXTRA_DURATION_TEXT, durationText) })
+                .setAlbumTitle(albumName)
+                .setExtras(
+                    Bundle().apply {
+                        putString(EXTRA_DURATION_TEXT, durationText)
+                        putString(EXTRA_ALBUM, albumName)
+                    },
+                )
                 .build(),
         )
         .build()
@@ -46,6 +56,7 @@ fun MediaItem.toSong(): Song =
         artist = mediaMetadata.artist?.toString().orEmpty(),
         thumbnailUrl = mediaMetadata.artworkUri?.toString(),
         durationText = mediaMetadata.extras?.getString(EXTRA_DURATION_TEXT),
+        albumName = mediaMetadata.extras?.getString(EXTRA_ALBUM) ?: mediaMetadata.albumTitle?.toString(),
     )
 
 /**

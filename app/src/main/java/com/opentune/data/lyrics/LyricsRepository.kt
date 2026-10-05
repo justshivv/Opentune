@@ -2,6 +2,8 @@ package com.opentune.data.lyrics
 
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
+import com.opentune.data.innertube.Innertube
+import com.opentune.data.local.LocalMusic
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
@@ -10,6 +12,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,7 +24,8 @@ import okhttp3.Request
  *
  * Lookup order: an exact match on title, artist and duration; then a search
  * on title and artist, preferring synced results whose duration is closest;
- * then a free-text search on the cleaned title.
+ * then a free-text search on the cleaned title; and last, YouTube Music's own
+ * (unsynced) lyrics for anything that isn't a local file.
  */
 object LyricsRepository {
     private const val BASE = "https://lrclib.net/api"
@@ -38,8 +42,11 @@ object LyricsRepository {
         if (cache.containsKey(videoId)) return cache[videoId]
         val result = withContext(Dispatchers.IO) {
             runCatching { lookup(title, artist, durationMs) }
-                .onFailure { Log.w(TAG, "Lyrics lookup failed for $videoId", it) }
+                .onFailure { Log.w(TAG, "LRCLIB lookup failed for $videoId", it) }
                 .getOrNull()
+                ?: if (LocalMusic.isLocal(videoId)) null else runCatching { youTubeMusic(videoId) }
+                    .onFailure { Log.w(TAG, "YouTube Music lyrics failed for $videoId", it) }
+                    .getOrNull()
         }
         // Only remember answers; a failed request is worth retrying next time.
         if (result != null) cache[videoId] = result
@@ -65,6 +72,38 @@ object LyricsRepository {
 
         val byQuery = request("search", "q" to "${cleaned.artist} ${cleaned.title}")
         return pick(byQuery, durationS)?.let { toLyrics(it, durationMs) }
+    }
+
+    /**
+     * YouTube Music's own lyrics: unsynced text from LyricFind and others.
+     * The watch queue links a Lyrics tab by browse id (`MPLYt…`); browsing
+     * it returns the text in a description shelf.
+     */
+    private suspend fun youTubeMusic(videoId: String): Lyrics? {
+        val browseId = findString(Innertube.next(videoId)) { key, value -> key == "browseId" && value.startsWith("MPLYt") }
+            ?: return null
+        val page = Innertube.browse(browseId)
+        val shelf = findObject(page, "musicDescriptionShelfRenderer") ?: return null
+        val text = (shelf["description"] as? JsonObject)?.runsText()?.takeIf { it.isNotBlank() } ?: return null
+        return Lyrics.Plain(text.trim(), "YouTube Music")
+    }
+
+    private fun JsonObject.runsText(): String =
+        (this["runs"] as? JsonArray).orEmpty().joinToString("") { ((it as? JsonObject)?.get("text") as? JsonPrimitive)?.contentOrNull.orEmpty() }
+
+    private fun findString(node: JsonElement, match: (String, String) -> Boolean): String? = when (node) {
+        is JsonObject -> node.entries.firstNotNullOfOrNull { (k, v) ->
+            val str = (v as? JsonPrimitive)?.takeIf { it.isString }?.content
+            if (str != null && match(k, str)) str else findString(v, match)
+        }
+        is JsonArray -> node.firstNotNullOfOrNull { findString(it, match) }
+        else -> null
+    }
+
+    private fun findObject(node: JsonElement, key: String): JsonObject? = when (node) {
+        is JsonObject -> (node[key] as? JsonObject) ?: node.values.firstNotNullOfOrNull { findObject(it, key) }
+        is JsonArray -> node.firstNotNullOfOrNull { findObject(it, key) }
+        else -> null
     }
 
     private fun pick(results: JsonElement?, durationS: Double): JsonObject? {
@@ -94,6 +133,6 @@ object LyricsRepository {
         }
     }
 
-    private fun JsonObject.str(key: String): String? = (this[key] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
-    private fun JsonObject.num(key: String): Double? = (this[key] as? kotlinx.serialization.json.JsonPrimitive)?.doubleOrNull
+    private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+    private fun JsonObject.num(key: String): Double? = (this[key] as? JsonPrimitive)?.doubleOrNull
 }

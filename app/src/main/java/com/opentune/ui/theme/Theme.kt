@@ -56,13 +56,13 @@ fun OpenTuneTheme(
         isAmoled = settings.pureBlack,
         style = settings.paletteStyle.toPaletteStyle(),
     )
-    val scheme = if (useWallpaper) {
+    val base = if (useWallpaper) {
         val context = LocalContext.current
-        val wallpaper = if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        if (dark && settings.pureBlack) wallpaper.toPureBlack() else wallpaper
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
         generated
     }
+    val scheme = if (dark && settings.pureBlack) base.toPureBlack() else base
 
     MaterialTheme(
         colorScheme = scheme.animated(),
@@ -92,12 +92,24 @@ fun PlayerTheme(seed: Color?, settings: ThemeSettings, content: @Composable () -
     )
 }
 
+/**
+ * Black backgrounds with neutral gray cards, so color comes only from the
+ * accent and the artwork, never from tinted surfaces.
+ */
 private fun ColorScheme.toPureBlack(): ColorScheme = copy(
     background = Color.Black,
     surface = Color.Black,
+    surfaceVariant = Color(0xFF242426),
     surfaceContainerLowest = Color.Black,
-    surfaceContainerLow = Color(0xFF0A0A0A),
-    surfaceContainer = Color(0xFF111111),
+    surfaceContainerLow = Color(0xFF0E0E0F),
+    surfaceContainer = Color(0xFF1B1B1D),
+    surfaceContainerHigh = Color(0xFF232325),
+    surfaceContainerHighest = Color(0xFF2D2D30),
+    onSurface = Color(0xFFF2F2F3),
+    onBackground = Color(0xFFF2F2F3),
+    onSurfaceVariant = Color(0xFF9A9AA0),
+    outline = Color(0xFF4A4A4F),
+    outlineVariant = Color(0xFF2E2E32),
 )
 
 @Composable
@@ -133,22 +145,23 @@ private fun ColorScheme.animated(): ColorScheme {
     )
 }
 
-private val base = Typography()
+private val baseType = Typography()
 
 val AppTypography = Typography(
-    displaySmall = base.displaySmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
-    headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
-    headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.25).sp),
-    headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.Bold),
-    titleLarge = base.titleLarge.copy(fontWeight = FontWeight.Bold),
-    titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-    titleSmall = base.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-    bodyLarge = base.bodyLarge,
-    bodyMedium = base.bodyMedium,
-    bodySmall = base.bodySmall,
-    labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-    labelMedium = base.labelMedium,
-    labelSmall = base.labelSmall,
+    displayMedium = baseType.displayMedium.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp),
+    displaySmall = baseType.displaySmall.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.75).sp),
+    headlineLarge = baseType.headlineLarge.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp),
+    headlineMedium = baseType.headlineMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp),
+    headlineSmall = baseType.headlineSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.25).sp),
+    titleLarge = baseType.titleLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp),
+    titleMedium = baseType.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+    titleSmall = baseType.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+    bodyLarge = baseType.bodyLarge,
+    bodyMedium = baseType.bodyMedium,
+    bodySmall = baseType.bodySmall,
+    labelLarge = baseType.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+    labelMedium = baseType.labelMedium,
+    labelSmall = baseType.labelSmall,
 )
 
 /** Large, bold lyric lines. */
