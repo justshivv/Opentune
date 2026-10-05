@@ -75,6 +75,8 @@ import com.opentune.ui.LyricsState
 import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.Placeholder
 import com.opentune.ui.theme.LyricsTextStyle
+import androidx.compose.runtime.collectAsState
+import com.opentune.data.settings.AppSettings
 import kotlin.math.abs
 import kotlinx.coroutines.delay
 
@@ -118,7 +120,8 @@ private fun PlainLyrics(text: String, note: String? = "These lyrics aren't synce
                 modifier = Modifier.padding(bottom = 16.dp),
             )
         }
-        Text(text, style = LyricsTextStyle.copy(fontSize = LyricsTextStyle.fontSize * 0.8f, lineHeight = LyricsTextStyle.lineHeight * 0.85f))
+        val style = lyricsStyle()
+        Text(text, style = style.copy(fontSize = style.fontSize * 0.8f, lineHeight = style.lineHeight * 0.85f))
         Credit()
     }
 }
@@ -237,7 +240,7 @@ private fun LyricLineView(
 
     Text(
         text = if (isActive) litWords(line, position(), dim, bright) else AnnotatedString(line.text),
-        style = LyricsTextStyle,
+        style = lyricsStyle(),
         color = dim,
         modifier = Modifier
             .fillMaxWidth()
@@ -306,3 +309,10 @@ private fun Credit() {
 }
 
 private const val RESUME_FOLLOW_MS = 3_000L
+
+/** The lyrics style at the size chosen in Settings. */
+@Composable
+private fun lyricsStyle(): androidx.compose.ui.text.TextStyle {
+    val scale = AppSettings.ui.collectAsState().value.lyricsTextScale
+    return LyricsTextStyle.copy(fontSize = LyricsTextStyle.fontSize * scale, lineHeight = LyricsTextStyle.lineHeight * scale)
+}

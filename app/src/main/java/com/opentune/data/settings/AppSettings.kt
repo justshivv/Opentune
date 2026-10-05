@@ -155,6 +155,8 @@ data class PlaybackSettings(
     val qualityUpgrade: Boolean = true,
     /** Overlap the end of a song with the start of the next; 0 is off. */
     val crossfadeSeconds: Int = 0,
+    /** Let the phone's own effects (Dolby, SoundAlive, system EQ) process playback. */
+    val systemEffects: Boolean = true,
 )
 
 @Serializable
@@ -171,6 +173,8 @@ data class InterfaceSettings(
     val recentsAsGrid: Boolean = false,
     /** Refracting Liquid Glass on Android 13+; frosted blur otherwise. */
     val liquidGlass: Boolean = true,
+    /** Lyrics text size, as a fraction of the standard size. */
+    val lyricsTextScale: Float = 1f,
 )
 
 @Serializable

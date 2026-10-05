@@ -1,10 +1,13 @@
 package com.opentune.data.lyrics
 
 import java.util.Locale
+import kotlinx.serialization.Serializable
 
 /** One timed word (or syllable) inside a synced line. */
+@Serializable
 data class LyricWord(val text: String, val startMs: Long, val endMs: Long)
 
+@Serializable
 data class LyricLine(
     val startMs: Long,
     val endMs: Long,
@@ -18,10 +21,14 @@ data class LyricLine(
     val wordSynced: Boolean,
 )
 
+@Serializable
 sealed interface Lyrics {
     val source: String
 
+    @Serializable
     data class Synced(val lines: List<LyricLine>, override val source: String) : Lyrics
+
+    @Serializable
     data class Plain(val text: String, override val source: String) : Lyrics
 }
 

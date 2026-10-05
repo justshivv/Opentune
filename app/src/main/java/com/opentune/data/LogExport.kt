@@ -24,5 +24,6 @@ object LogExport {
     }
 
     private val STREAM_QUERY = Regex("""googlevideo\.com/\S*""")
-    private const val MAX_CHARS = 400_000
+    // Clipboard and share intents travel through a 1 MB binder buffer.
+    private const val MAX_CHARS = 100_000
 }
