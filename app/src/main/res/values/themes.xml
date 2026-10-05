@@ -1,3 +1,4 @@
 <resources>
-    <style name="Theme.OpenTune" parent="android:Theme.Material.DayNight.NoActionBar" />
+    <!-- The framework has no DayNight Material theme; values-night swaps the parent. -->
+    <style name="Theme.OpenTune" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>

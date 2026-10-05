@@ -43,7 +43,6 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.Locale
-import androidx.appcompat.app.AppCompatDelegate
 
 /**
  * Minimal Innertube (youtubei) client.
@@ -64,8 +63,7 @@ import androidx.appcompat.app.AppCompatDelegate
 object Innertube {
     private val currentLanguage: String
         get() {
-            val raw = AppCompatDelegate.getApplicationLocales().get(0)?.language?.ifEmpty { null }
-                ?: Locale.getDefault().language.ifEmpty { "en" }
+            val raw = Locale.getDefault().language.ifEmpty { "en" }
             return when (raw.lowercase(Locale.ROOT)) {
                 "iw" -> "he"
                 "in" -> "id"
