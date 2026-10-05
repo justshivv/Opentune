@@ -49,6 +49,11 @@
                 <data android:host="m.youtube.com" />
                 <data android:host="youtu.be" />
             </intent-filter>
+            <!-- "Play … on OpenTune" from the Assistant. -->
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
             <!-- Shared links ("Share to OpenTune"). -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -63,8 +68,25 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
+                <!-- A media library: Android Auto and other media browsers can
+                     browse Home, Recent and Library and search. -->
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Cover art for Android Auto, which only loads content:// artwork.
+             Not exported: the browser that lists items is granted read access. -->
+        <provider
+            android:name=".playback.ArtworkProvider"
+            android:authorities="${applicationId}.artwork"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!-- Shows OpenTune as a media app in Android Auto. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
 
         <!-- WorkManager's foreground service, declared for the download jobs' type. -->
         <service

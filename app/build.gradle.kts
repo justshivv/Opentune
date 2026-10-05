@@ -43,6 +43,8 @@ android {
     testOptions {
         // Lets JVM tests run code that logs through android.util.Log.
         unitTests.isReturnDefaultValues = true
+        // Robolectric tests (the media library) read the merged manifest and resources.
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -144,6 +146,8 @@ dependencies {
     implementation("org.mozilla:rhino-engine:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 }

@@ -32,9 +32,15 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.SessionError
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.LibraryParams
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.collect.ImmutableList
+import kotlinx.coroutines.guava.future
 import com.opentune.MainActivity
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
@@ -91,9 +97,12 @@ import kotlinx.coroutines.withContext
  * levelling, limiter) → ExoPlayer's silence skipping and speed/pitch → output.
  */
 @OptIn(UnstableApi::class)
-class PlaybackService : MediaSessionService() {
+class PlaybackService : MediaLibraryService() {
 
-    private var mediaSession: MediaSession? = null
+    private var mediaSession: MediaLibrarySession? = null
+
+    /** What Android Auto and other media browsers can browse; see [CarLibrary]. */
+    private val car by lazy { CarLibrary(this) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var radioJob: Job? = null
@@ -229,9 +238,8 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
-        mediaSession = MediaSession.Builder(this, player)
+        mediaSession = MediaLibrarySession.Builder(this, player, sessionCallback)
             .setSessionActivity(sessionActivity)
-            .setCallback(sessionCallback)
             .build()
 
         restoreQueue(player)
@@ -296,7 +304,7 @@ class PlaybackService : MediaSessionService() {
         awaitClose { player.removeListener(l) }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
         mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -355,19 +363,100 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
+     * The session's callback, for the app's own controller and for media
+     * browsers like Android Auto.
+     *
      * Items that arrive from a controller may have lost their URI on the way
-     * (Media3 only carries it across a binder in some cases), so rebuild it
-     * from the media id, which always survives.
+     * (Media3 only carries it across a binder in some cases), so it's rebuilt
+     * from the media id, which always survives. A browser's items carry the
+     * list they were shown in; [CarLibrary.resolve] queues that list.
      */
-    private val sessionCallback = object : MediaSession.Callback {
+    private val sessionCallback = object : MediaLibrarySession.Callback {
         override fun onAddMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>,
         ): ListenableFuture<MutableList<MediaItem>> = Futures.immediateFuture(
-            mediaItems.map { it.buildUpon().setUri(trackUri(it.mediaId)).build() }.toMutableList(),
+            mediaItems.map(car::toQueueItem).toMutableList(),
         )
+
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = scope.future {
+            car.resolve(mediaItems, startIndex, startPositionMs)
+        }
+
+        override fun onGetLibraryRoot(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<MediaItem>> = Futures.immediateFuture(
+            LibraryResult.ofItem(car.root(), LibraryParams.Builder().setExtras(car.rootExtras()).build()),
+        )
+
+        override fun onGetItem(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            mediaId: String,
+        ): ListenableFuture<LibraryResult<MediaItem>> = Futures.immediateFuture(
+            car.item(mediaId)?.let { LibraryResult.ofItem(it, null) } ?: LibraryResult.ofError(SessionError.ERROR_BAD_VALUE),
+        )
+
+        override fun onGetChildren(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = scope.future {
+            try {
+                LibraryResult.ofItemList(car.children(parentId, browser).page(page, pageSize), params)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't list $parentId for ${browser.packageName}", e)
+                LibraryResult.ofError(SessionError.ERROR_IO)
+            }
+        }
+
+        override fun onSearch(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<Void>> = scope.future {
+            val count = runCatching { car.search(query, browser).also { searchResults[query] = it }.size }
+                .onFailure { Log.w(TAG, "Search failed for ${browser.packageName}", it) }
+                .getOrDefault(0)
+            session.notifySearchResultChanged(browser, query, count, params)
+            LibraryResult.ofVoid()
+        }
+
+        override fun onGetSearchResult(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = scope.future {
+            val items = searchResults[query] ?: runCatching { car.search(query, browser) }.getOrDefault(emptyList())
+            LibraryResult.ofItemList(items.page(page, pageSize), params)
+        }
     }
+
+    /** The last browser search's results, between onSearch and onGetSearchResult. */
+    private val searchResults = object : LinkedHashMap<String, List<MediaItem>>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<MediaItem>>?) = size > 4
+    }
+
+    private fun List<MediaItem>.page(page: Int, pageSize: Int): List<MediaItem> =
+        if (pageSize <= 0 || pageSize == Int.MAX_VALUE) this else drop(page * pageSize).take(pageSize)
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {

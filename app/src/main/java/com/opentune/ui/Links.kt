@@ -1,6 +1,8 @@
 package com.opentune.ui
 
+import android.app.SearchManager
 import android.content.Intent
+import android.provider.MediaStore
 import java.net.URI
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -10,6 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 sealed interface LinkTarget {
     data class Song(val videoId: String) : LinkTarget
     data class Browse(val browseId: String) : LinkTarget
+    /** "Play … on OpenTune" from the Assistant; blank means "play some music". */
+    data class PlaySearch(val query: String) : LinkTarget
 }
 
 /**
@@ -52,6 +56,10 @@ object Links {
 
     fun receive(intent: Intent?) {
         intent ?: return
+        if (intent.action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) {
+            _incoming.value = LinkTarget.PlaySearch(intent.getStringExtra(SearchManager.QUERY).orEmpty())
+            return
+        }
         val text = when (intent.action) {
             Intent.ACTION_VIEW -> intent.dataString
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
