@@ -50,6 +50,15 @@ enum class PlayerBackground(val label: String) {
     PLAIN("Plain"),
 }
 
+/** How the full-screen player is laid out. */
+@Serializable
+enum class PlayerStyle(val label: String, val summary: String) {
+    CLASSIC("Classic", "Big cover, title, lyric preview and every control"),
+    VINYL("Vinyl", "The cover turns as a record while the song plays"),
+    LYRICS_FIRST("Lyrics first", "A small cover on top and the lyrics taking the rest"),
+    MINIMAL("Minimal", "Cover, title, seek bar and controls; lyrics and queue a tap away"),
+}
+
 @Serializable
 data class ThemeSettings(
     val mode: ThemeMode = ThemeMode.SYSTEM,
@@ -217,7 +226,17 @@ data class PlaybackSettings(
     val bitPerfectUsb: Boolean = false,
     /** Let the phone's own effects (Dolby, SoundAlive, system EQ) process playback. */
     val systemEffects: Boolean = true,
+    /** Carry on playing when headphones are plugged in or a Bluetooth device connects. */
+    val resumeOnConnect: Boolean = false,
+    /** Pause when the media volume is turned all the way down, and resume when it comes back up. */
+    val pauseAtZeroVolume: Boolean = false,
+    /** Skip the non-music parts of music videos, from SponsorBlock. */
+    val sponsorBlock: Boolean = true,
+    /** SponsorBlock categories to skip, by API name. */
+    val sponsorBlockCategories: Set<String> = DEFAULT_SPONSORBLOCK_CATEGORIES,
 )
+
+val DEFAULT_SPONSORBLOCK_CATEGORIES = setOf("music_offtopic", "sponsor", "selfpromo", "interaction")
 
 @Serializable
 data class InterfaceSettings(
@@ -240,6 +259,9 @@ data class InterfaceSettings(
     val lyricsAnimation: LyricsAnimation = LyricsAnimation.FLUID,
     /** Lyrics text size, as a fraction of the standard size. */
     val lyricsTextScale: Float = 1f,
+    val playerStyle: PlayerStyle = PlayerStyle.CLASSIC,
+    /** Look for a new release once a day when the app opens. */
+    val checkForUpdates: Boolean = true,
 )
 
 @Serializable
@@ -250,6 +272,8 @@ data class LibrarySettings(
     val songCacheMb: Int = 512,
     val downloadQuality: AudioQuality = AudioQuality.MAX,
     val downloadWifiOnly: Boolean = true,
+    /** Leave out songs and albums marked explicit; see [com.opentune.data.ContentFilter]. */
+    val hideExplicit: Boolean = false,
 )
 
 /** How synced lyrics move as the song plays. */

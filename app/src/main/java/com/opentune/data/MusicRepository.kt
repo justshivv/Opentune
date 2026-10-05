@@ -277,13 +277,15 @@ object MusicRepository {
     /** A mood or genre page is laid out like Home: carousels of playlists. */
     suspend fun shelves(browseId: String, params: String?): List<HomeShelf> = io {
         val response = Innertube.browse(browseId, params)
-        InnertubeParser.parseHome(response).ifEmpty { InnertubeParser.parseHomeContinuation(response) }
-            .filter { it.items.isNotEmpty() }
+        ContentFilter.shelves(
+            InnertubeParser.parseHome(response).ifEmpty { InnertubeParser.parseHomeContinuation(response) }
+                .filter { it.items.isNotEmpty() },
+        )
     }
 
     suspend fun search(query: String, filter: SearchFilter): List<SearchResult> = io {
         val response = Innertube.search(query, filter.params)
-        InnertubeParser.parseSearchPage(response, includeVideos = filter == SearchFilter.VIDEOS).rows
+        ContentFilter.results(InnertubeParser.parseSearchPage(response, includeVideos = filter == SearchFilter.VIDEOS).rows)
     }
 
     suspend fun suggestions(input: String): List<String> = io {
@@ -301,12 +303,12 @@ object MusicRepository {
             subtitle = header?.subtitle.orEmpty(),
             // Album rows carry no art of their own; the cover is the header's.
             thumbnailUrl = header?.thumbnailUrl,
-            songs = songs.map { song -> if (song.thumbnailUrl == null) song.copy(thumbnailUrl = header?.thumbnailUrl) else song },
+            songs = ContentFilter.songs(songs.map { song -> if (song.thumbnailUrl == null) song.copy(thumbnailUrl = header?.thumbnailUrl) else song }),
         )
     }
 
     suspend fun artist(browseId: String): ArtistPage = io {
-        InnertubeParser.parseArtistPage(Innertube.browse(browseId))
+        ContentFilter.artist(InnertubeParser.parseArtistPage(Innertube.browse(browseId)))
     }
 
     /** The signed-in account's playlists on YouTube Music, without the "New playlist" tile. */
@@ -314,9 +316,10 @@ object MusicRepository {
         InnertubeParser.parseLibraryItems(Innertube.browse("FEmusic_liked_playlists")).filter { it.browseId != null }
     }
 
-    /** The song and the radio YouTube Music queues after it. */
+    /** The song and the radio YouTube Music queues after it; the song itself is always kept. */
     suspend fun watchQueue(videoId: String): List<Song> = io {
-        InnertubeParser.parseWatchQueue(Innertube.next(videoId))
+        val queue = InnertubeParser.parseWatchQueue(Innertube.next(videoId))
+        queue.filter { it.videoId == videoId } + ContentFilter.songs(queue.filter { it.videoId != videoId })
     }
 
     /**

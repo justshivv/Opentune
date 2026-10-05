@@ -1,5 +1,7 @@
 package com.opentune.ui.components
 
+import com.opentune.data.Ringtones
+import androidx.compose.material.icons.rounded.NotificationsActive
 import com.opentune.data.isYouTubeId
 import android.content.Intent
 import androidx.compose.foundation.clickable
@@ -111,6 +113,7 @@ fun SongMenuSheet(
     // Files on this phone and songs on your server: no YouTube actions.
     val local = !isYouTubeId(song.videoId)
     var pickPlaylist by remember { mutableStateOf(false) }
+    var ringtone by remember { mutableStateOf(false) }
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val close = onDismiss
 
@@ -172,11 +175,15 @@ fun SongMenuSheet(
                 videoVersion?.let { play -> MenuRow(Icons.Rounded.Videocam, "Convert to video") { close(); play(song) } }
                 tools?.invoke(this, close)
             }
+            if (download?.state == DownloadState.DONE || (local && Ringtones.canUse(song))) {
+                MenuRow(Icons.Rounded.NotificationsActive, "Set as ringtone") { ringtone = true }
+            }
             if (actions != null) MenuRow(Icons.Rounded.ThumbDownOffAlt, "Not for me (dislike)") { close(); actions.dislike(song) }
             end?.invoke(this, close)
             Spacer(Modifier.size(12.dp))
         }
     }
+    if (ringtone) RingtoneDialog(song, onDismiss = { ringtone = false; close() })
     if (pickPlaylist) AddToPlaylistDialog(song, onDone = { pickPlaylist = false; close() }, onDismiss = { pickPlaylist = false })
 }
 

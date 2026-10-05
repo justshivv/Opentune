@@ -126,6 +126,22 @@ fun AppRoot(vm: PlayerViewModel) {
     // Scrolling any page down folds the bottom bar into one row; scrolling up unfolds it.
     val chromeScroll = rememberChromeScroll()
 
+    // Once a day at start: a newer release on GitHub, offered with an Update button.
+    val appContext = androidx.compose.ui.platform.LocalContext.current
+    var update by remember { mutableStateOf<com.opentune.data.UpdateCheck.Release?>(null) }
+    LaunchedEffect(Unit) {
+        if (com.opentune.data.settings.AppSettings.ui.value.checkForUpdates) {
+            update = com.opentune.data.UpdateCheck.checkIfDue(appContext)
+        }
+    }
+    update?.let { r ->
+        com.opentune.ui.settings.UpdateDialog(
+            r,
+            onDismiss = { update = null },
+            onNotNow = { com.opentune.data.UpdateCheck.skip(appContext, r.version); update = null },
+        )
+    }
+
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }

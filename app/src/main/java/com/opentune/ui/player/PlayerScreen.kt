@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opentune.data.library.LibraryStore
+import com.opentune.data.settings.PlayerStyle
 import com.opentune.data.model.ROW_ART_PX
 import com.opentune.data.model.artworkAt
 import com.opentune.ui.components.Artwork
@@ -263,7 +264,10 @@ fun PlayerLayout(
     val scope = rememberCoroutineScope()
     val dismissPx = with(LocalDensity.current) { 140.dp.toPx() }
     val backdrop = rememberLayerBackdrop()
-    val fullCover = state.ui.fullScreenCover && pane == Pane.COVER
+    val style = state.ui.playerStyle
+    val minimal = style == PlayerStyle.MINIMAL
+    // Full-screen cover doesn't apply where the cover is a record or a thumbnail.
+    val fullCover = state.ui.fullScreenCover && pane == Pane.COVER && style != PlayerStyle.VINYL && style != PlayerStyle.LYRICS_FIRST
 
     PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme) {
         Box(
@@ -357,12 +361,30 @@ fun PlayerLayout(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 ) { p ->
                     Column(Modifier.fillMaxSize()) {
-                        if (p == Pane.COVER) {
+                        if (p == Pane.COVER && style == PlayerStyle.LYRICS_FIRST) {
+                            // The lyrics are the page; the cover shrinks to the header.
+                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Artwork(current.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(84.dp), RoundedCornerShape(14.dp))
+                                Spacer(Modifier.width(16.dp))
+                                TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true }, compact = true)
+                            }
+                            LyricsView(
+                                state.lyrics,
+                                lyricsPosition,
+                                onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                synced = state.ui.syncedLyrics,
+                                blur = state.ui.blurLyrics,
+                            )
+                        } else if (p == Pane.COVER) {
                             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                if (state.ui.fullScreenCover) {
-                                    ArtworkSwipeArea(onSwipeNext = actions.next, onSwipePrevious = actions.previous, modifier = Modifier.fillMaxSize())
-                                } else {
-                                    ArtworkPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous)
+                                when {
+                                    fullCover ->
+                                        ArtworkSwipeArea(onSwipeNext = actions.next, onSwipePrevious = actions.previous, modifier = Modifier.fillMaxSize())
+                                    style == PlayerStyle.VINYL ->
+                                        VinylPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                    else ->
+                                        ArtworkPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous)
                                 }
                             }
                             Spacer(Modifier.height(16.dp))
@@ -400,7 +422,7 @@ fun PlayerLayout(
                     }
                 }
 
-                if (pane != Pane.LYRICS && state.ui.syncedLyrics) {
+                if (pane != Pane.LYRICS && state.ui.syncedLyrics && !minimal && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
                     LyricPreview(state.lyrics, lyricsPosition, onOpen = { paneName = Pane.LYRICS.name }, Modifier.padding(top = 4.dp))
                 }
                 Spacer(Modifier.height(8.dp))
@@ -416,7 +438,7 @@ fun PlayerLayout(
                     onNext = actions.next,
                     onPrevious = actions.previous,
                 )
-                if (!state.ui.hideVolumeBar) VolumeBar(Modifier.padding(vertical = 4.dp))
+                if (!state.ui.hideVolumeBar && !minimal) VolumeBar(Modifier.padding(vertical = 4.dp))
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     GlassToggle(Icons.Rounded.Lyrics, "Lyrics", pane == Pane.LYRICS, { toggle(Pane.LYRICS) })
@@ -437,7 +459,7 @@ fun PlayerLayout(
                     }
                     GlassToggle(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
                 }
-                Text(
+                if (!minimal) Text(
                     sleepLabel ?: device,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
