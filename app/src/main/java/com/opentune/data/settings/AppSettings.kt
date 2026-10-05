@@ -143,6 +143,8 @@ data class PlaybackSettings(
     val skipSilence: Boolean = false,
     /** Mid/side stereo widening. */
     val spatialAudio: Boolean = false,
+    /** The "Clarity" tone curve in the app's DSP. */
+    val clarity: Boolean = false,
     val autoplay: Boolean = true,
     /** Autoplay won't add anything already played or queued this session. */
     val noRepeatInSession: Boolean = false,

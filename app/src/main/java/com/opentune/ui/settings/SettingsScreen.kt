@@ -411,6 +411,9 @@ private fun settingsSections(
                 Entry("Skip silence", "gaps") {
                     ToggleRow("Skip silence", pb.skipSilence, { v -> AppSettings.updatePlayback { it.copy(skipSilence = v) } }, summary = "Trim gaps longer than a second", icon = Icons.Rounded.SpaceBar)
                 },
+                Entry("Clarity", "studio master clarity presence air bass clear enhance") {
+                    ToggleRow("Clarity", pb.clarity, { v -> AppSettings.updatePlayback { it.copy(clarity = v) } }, summary = "Firmer bass, less mud, more presence and air. Off plays the stream untouched.", icon = Icons.Rounded.AutoAwesome)
+                },
                 Entry("Spatial audio", "stereo widen immersive") {
                     ToggleRow("Spatial audio", pb.spatialAudio, { v -> AppSettings.updatePlayback { it.copy(spatialAudio = v) } }, summary = "Widens stereo tracks for a more open sound", icon = Icons.Rounded.SurroundSound)
                 },

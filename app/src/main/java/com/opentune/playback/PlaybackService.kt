@@ -169,7 +169,7 @@ class PlaybackService : MediaSessionService() {
         scope.launch { AppSettings.sound.collect(effects::apply) }
         scope.launch {
             combine(AppSettings.equalizer, AppSettings.sound, AppSettings.playback) { eq, sound, pb ->
-                DspParams(eq, sound.bassBoost, pb.spatialAudio)
+                DspParams(eq, sound.bassBoost, pb.spatialAudio, pb.clarity)
             }.distinctUntilChanged().collect { dsp.params = it }
         }
         scope.launch {
