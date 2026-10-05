@@ -29,6 +29,8 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.ThumbDownOffAlt
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -68,17 +70,30 @@ class SongMenuActions(
     val startRadio: (Song) -> Unit,
     val openAlbum: (String) -> Unit,
     val openArtist: (String) -> Unit,
+    /** Marks a song as disliked; the shell also skips it if it's playing. */
+    val dislike: (Song) -> Unit = LibraryStore::dislike,
+    /** Plays the music video's audio in place of the song. */
+    val playVideoVersion: ((Song) -> Unit)? = null,
 )
 
 val LocalSongMenu = staticCompositionLocalOf<SongMenuActions?> { null }
 
+private typealias MenuRows = @Composable ColumnScope.(close: () -> Unit) -> Unit
+
 /**
- * The long-press and "…" menu for one song. [extra] adds rows at the end,
- * which the player uses for its sleep timer and lyrics offset.
+ * The long-press and "…" menu for one song, in the same order everywhere.
+ * The player adds its own rows: [top] (Upgrade quality), [tools] (sleep
+ * timer, lyrics offset) before Share, and [end] (Copy log) after it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SongMenuSheet(song: Song, onDismiss: () -> Unit, extra: (@Composable ColumnScope.(close: () -> Unit) -> Unit)? = null) {
+fun SongMenuSheet(
+    song: Song,
+    onDismiss: () -> Unit,
+    top: MenuRows? = null,
+    tools: MenuRows? = null,
+    end: MenuRows? = null,
+) {
     val actions = LocalSongMenu.current
     val context = LocalContext.current
     val liked by LibraryStore.liked.collectAsState()
@@ -100,12 +115,20 @@ fun SongMenuSheet(song: Song, onDismiss: () -> Unit, extra: (@Composable ColumnS
                     Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+            val videoVersion = actions?.playVideoVersion?.takeIf { !local && !song.isVideo }
+            if (top != null || videoVersion != null) {
+                HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                top?.invoke(this, close)
+                videoVersion?.let { play -> MenuRow(Icons.Rounded.Videocam, "Convert to video") { close(); play(song) } }
+            }
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             MenuRow(if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (isLiked) "Remove from Liked" else "Like") {
                 LibraryStore.setLiked(song, !isLiked)
                 close()
             }
+            if (actions != null) MenuRow(Icons.Rounded.ThumbDownOffAlt, "Dislike") { close(); actions.dislike(song) }
             MenuRow(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") { pickPlaylist = true }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             if (!local) {
                 when (download?.state) {
                     DownloadState.DONE -> MenuRow(Icons.Rounded.DownloadDone, "Remove download") { Downloads.remove(context, song.videoId); close() }
@@ -117,7 +140,6 @@ fun SongMenuSheet(song: Song, onDismiss: () -> Unit, extra: (@Composable ColumnS
                     null -> MenuRow(Icons.Rounded.Download, "Download") { Downloads.enqueue(context, song); close() }
                 }
             }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             if (actions != null) {
                 if (!local) MenuRow(Icons.Rounded.Radio, "Start radio") { actions.startRadio(song); close() }
                 MenuRow(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") { actions.playNext(song); close() }
@@ -125,6 +147,7 @@ fun SongMenuSheet(song: Song, onDismiss: () -> Unit, extra: (@Composable ColumnS
                 song.albumId?.let { id -> MenuRow(Icons.Rounded.Album, "Open album") { close(); actions.openAlbum(id) } }
                 song.artistId?.let { id -> MenuRow(Icons.Rounded.Person, "Open artist") { close(); actions.openArtist(id) } }
             }
+            tools?.invoke(this, close)
             if (!local) {
                 MenuRow(Icons.Rounded.Share, "Share") {
                     val send = Intent(Intent.ACTION_SEND).setType("text/plain")
@@ -133,7 +156,7 @@ fun SongMenuSheet(song: Song, onDismiss: () -> Unit, extra: (@Composable ColumnS
                     close()
                 }
             }
-            extra?.invoke(this, close)
+            end?.invoke(this, close)
             Spacer(Modifier.size(12.dp))
         }
     }

@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.opentune.ui.components.glass
+import com.opentune.ui.components.liquidGlassOn
 
 /** Room the bar's two rows take when unfolded, for content padding. */
 val CHROME_TAB_HEIGHT = 72.dp
@@ -183,14 +184,18 @@ private class SharedKeys(private val layout: SharedTransitionScope, private val 
 @Composable
 private fun TabPill(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit, shared: SharedKeys, modifier: Modifier) {
     val haptics = LocalHapticFeedback.current
+    val liquid = liquidGlassOn()
     Row(
         with(shared) { modifier.sharedTabs() }.height(CHROME_TAB_HEIGHT).glass(RoundedCornerShape(36.dp)).padding(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         tabs.forEachIndexed { i, t ->
             val isSelected = i == selected
+            // On Liquid Glass the current tab sits in a dark scrim, as on iOS;
+            // on frosted or solid glass, a lighter inset reads better.
+            val selectedBg = if (liquid) Color.Black.copy(alpha = 0.34f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
             val bg by animateColorAsState(
-                if (isSelected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f) else Color.Transparent,
+                if (isSelected) selectedBg else Color.Transparent,
                 spring(dampingRatio = 0.72f, stiffness = 320f),
                 label = "tabBg",
             )

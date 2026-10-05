@@ -183,6 +183,32 @@ data class LibrarySettings(
     val downloadWifiOnly: Boolean = true,
 )
 
+/** Where lyrics can come from. */
+@Serializable
+enum class LyricsSource(val label: String, val summary: String) {
+    LRCLIB("LRCLIB", "Community lyrics, line by line and sometimes word by word"),
+    YOUTUBE_MUSIC("YouTube Music", "YouTube Music's own lyrics, as plain text"),
+}
+
+@Serializable
+data class LyricsSourceEntry(val source: LyricsSource, val enabled: Boolean = true)
+
+@Serializable
+data class LyricsSettings(
+    /** Tried in this order; the first with lyrics wins unless [preferWordSynced]. */
+    val sources: List<LyricsSourceEntry> = DEFAULT_LYRICS_SOURCES,
+    /** Keep looking past a line-synced match for word-by-word lyrics. */
+    val preferWordSynced: Boolean = false,
+    /** Per-song timing shift in ms, set from the player's "Lyrics offset". */
+    val offsets: Map<String, Long> = emptyMap(),
+) {
+    /** The saved order, with any source added since appended at the end. */
+    val ordered: List<LyricsSourceEntry>
+        get() = sources.distinctBy { it.source } + LyricsSource.entries.filter { s -> sources.none { it.source == s } }.map(::LyricsSourceEntry)
+}
+
+val DEFAULT_LYRICS_SOURCES = LyricsSource.entries.map(::LyricsSourceEntry)
+
 /** Everything persisted, as one document: what's stored, exported and imported. */
 @Serializable
 data class SettingsState(
@@ -192,6 +218,7 @@ data class SettingsState(
     val playback: PlaybackSettings = PlaybackSettings(),
     val ui: InterfaceSettings = InterfaceSettings(),
     val library: LibrarySettings = LibrarySettings(),
+    val lyrics: LyricsSettings = LyricsSettings(),
     val recentSearches: List<String> = emptyList(),
 )
 
@@ -235,6 +262,8 @@ object AppSettings {
     val ui: StateFlow<InterfaceSettings> = _ui.asStateFlow()
     private val _library = MutableStateFlow(LibrarySettings())
     val library: StateFlow<LibrarySettings> = _library.asStateFlow()
+    private val _lyrics = MutableStateFlow(LyricsSettings())
+    val lyrics: StateFlow<LyricsSettings> = _lyrics.asStateFlow()
     private val _recentSearches = MutableStateFlow<List<String>>(emptyList())
     val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
 
@@ -264,6 +293,7 @@ object AppSettings {
         _playback.value = s.playback
         _ui.value = s.ui
         _library.value = s.library
+        _lyrics.value = s.lyrics
         _recentSearches.value = s.recentSearches
     }
 
@@ -279,6 +309,13 @@ object AppSettings {
     fun updatePlayback(t: (PlaybackSettings) -> PlaybackSettings) = update { it.copy(playback = t(it.playback)) }
     fun updateUi(t: (InterfaceSettings) -> InterfaceSettings) = update { it.copy(ui = t(it.ui)) }
     fun updateLibrary(t: (LibrarySettings) -> LibrarySettings) = update { it.copy(library = t(it.library)) }
+    fun updateLyrics(t: (LyricsSettings) -> LyricsSettings) = update { it.copy(lyrics = t(it.lyrics)) }
+
+    fun lyricsOffsetFor(videoId: String): Long = _lyrics.value.offsets[videoId] ?: 0L
+
+    fun setLyricsOffset(videoId: String, ms: Long) = updateLyrics { l ->
+        l.copy(offsets = if (ms == 0L) l.offsets - videoId else (l.offsets + (videoId to ms)).entries.toList().takeLast(500).associate { it.toPair() })
+    }
 
     fun setAutoplay(enabled: Boolean) = updatePlayback { it.copy(autoplay = enabled) }
 

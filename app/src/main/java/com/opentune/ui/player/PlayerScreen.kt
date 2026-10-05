@@ -3,6 +3,17 @@ package com.opentune.ui.player
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.AnimatedContent
+import com.opentune.data.LogExport
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import android.content.ClipboardManager
+import android.content.ClipData
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
@@ -212,6 +223,13 @@ fun PlayerLayout(
     var showRemix by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
+    var showOffset by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val clipboard = remember { context.getSystemService(ClipboardManager::class.java) }
+    // Lyrics run on their own clock, shifted by this song's offset.
+    val lyricsSettings by AppSettings.lyrics.collectAsState()
+    val offsetMs = lyricsSettings.offsets[current.videoId] ?: 0L
+    val lyricsPosition: () -> Long = { position() + offsetMs }
     val liked by LibraryStore.liked.collectAsState()
     val isLiked = liked.any { it.videoId == current.videoId }
     val device = rememberOutputDeviceName()
@@ -335,8 +353,8 @@ fun PlayerLayout(
                             if (p == Pane.LYRICS) {
                                 LyricsView(
                                     state.lyrics,
-                                    position,
-                                    onSeek = actions.seekTo,
+                                    lyricsPosition,
+                                    onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
                                     modifier = Modifier.weight(1f).fillMaxWidth(),
                                     synced = state.ui.syncedLyrics,
                                     blur = state.ui.blurLyrics,
@@ -360,7 +378,7 @@ fun PlayerLayout(
                 }
 
                 if (pane != Pane.LYRICS && state.ui.syncedLyrics) {
-                    LyricPreview(state.lyrics, position, onOpen = { paneName = Pane.LYRICS.name }, Modifier.padding(top = 4.dp))
+                    LyricPreview(state.lyrics, lyricsPosition, onOpen = { paneName = Pane.LYRICS.name }, Modifier.padding(top = 4.dp))
                 }
                 Spacer(Modifier.height(8.dp))
                 SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo)
@@ -408,13 +426,70 @@ fun PlayerLayout(
         if (showRemix) RemixSheet(onDismiss = { showRemix = false })
         if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })
         if (showMenu) {
-            SongMenuSheet(current, onDismiss = { showMenu = false }) { close ->
-                MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
-                MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
-                MenuRow(Icons.Rounded.Tune, "Remix") { close(); showRemix = true }
-            }
+            SongMenuSheet(
+                current,
+                onDismiss = { showMenu = false },
+                top = { close -> MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() } },
+                tools = { close ->
+                    MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
+                    MenuRow(Icons.Rounded.Tune, "Lyrics offset") { close(); showOffset = true }
+                    MenuRow(Icons.Rounded.GraphicEq, "Remix") { close(); showRemix = true }
+                },
+                end = { close ->
+                    MenuRow(Icons.Rounded.BugReport, "Copy log") {
+                        close()
+                        scope.launch {
+                            val log = LogExport.recent()
+                            clipboard.setPrimaryClip(ClipData.newPlainText("OpenTune log", log))
+                            Toast.makeText(context, "Log copied", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+            )
         }
+        if (showOffset) LyricsOffsetDialog(current.videoId, onDismiss = { showOffset = false })
     }
+}
+
+/**
+ * Shifts this song's lyrics earlier or later when they run out of step with
+ * the audio. Kept per song.
+ */
+@Composable
+private fun LyricsOffsetDialog(videoId: String, onDismiss: () -> Unit) {
+    val lyrics by AppSettings.lyrics.collectAsState()
+    val ms = lyrics.offsets[videoId] ?: 0L
+    fun set(v: Long) = AppSettings.setLyricsOffset(videoId, v.coerceIn(-10_000, 10_000))
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Lyrics offset") },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    when {
+                        ms == 0L -> "In step"
+                        ms > 0 -> "%.1f s earlier".format(ms / 1000f)
+                        else -> "%.1f s later".format(-ms / 1000f)
+                    },
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Text(
+                    "Earlier if the words come after the singing, later if they come before.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 12.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(-500L to "−0.5", -100L to "−0.1", 100L to "+0.1", 500L to "+0.5").forEach { (step, label) ->
+                        OutlinedButton(onClick = { set(ms + step) }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text(label) }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        dismissButton = { TextButton(onClick = { set(0) }) { Text("Reset") } },
+    )
 }
 
 /** Title and artist with the heart and "…" glass buttons on the right. */

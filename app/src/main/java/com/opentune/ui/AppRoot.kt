@@ -52,6 +52,11 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.opentune.data.MusicRepository
+import com.opentune.data.model.SearchResult
+import com.opentune.data.model.SearchFilter
+import com.opentune.data.library.LibraryStore
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import com.opentune.data.model.BrowseItem
 import com.opentune.data.model.BrowseType
 import com.opentune.data.model.ShelfItem
@@ -103,6 +108,7 @@ fun AppRoot(vm: PlayerViewModel) {
     var playerOpen by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val haze = rememberHazeState()
+    val uiScope = rememberCoroutineScope()
     val backdrop = rememberLayerBackdrop()
     val liquid = liquidGlassOn()
     // Scrolling any page down folds the bottom bar into one row; scrolling up unfolds it.
@@ -138,6 +144,25 @@ fun AppRoot(vm: PlayerViewModel) {
         startRadio = vm::startRadio,
         openAlbum = { id -> playerOpen = false; nav.openBrowse(id, BrowseType.ALBUM) },
         openArtist = { id -> playerOpen = false; nav.openBrowse(id, BrowseType.ARTIST) },
+        dislike = { s ->
+            LibraryStore.dislike(s)
+            if (s.videoId == song?.videoId) vm.skipNext()
+            uiScope.launch { snackbar.showSnackbar("You won't hear \"${s.title}\" in autoplay again") }
+        },
+        playVideoVersion = { s ->
+            uiScope.launch {
+                val video = runCatching { MusicRepository.search("${s.title} ${s.artist}", SearchFilter.VIDEOS) }.getOrNull()
+                    ?.firstNotNullOfOrNull { (it as? SearchResult.Track)?.song?.takeIf { v -> v.videoId != s.videoId } }
+                when {
+                    video == null -> snackbar.showSnackbar("Couldn't find a music video for this song")
+                    s.videoId == song?.videoId -> {
+                        vm.playNext(video)
+                        vm.skipNext()
+                    }
+                    else -> vm.play(video, "Video version")
+                }
+            }
+        },
     )
     val libraryNav = LibraryNav(
         downloads = { nav.navigate("downloads") },
