@@ -442,7 +442,7 @@ private fun settingsSections(
                     ToggleRow("Spatial audio", pb.spatialAudio, { v -> AppSettings.updatePlayback { it.copy(spatialAudio = v) } }, summary = "Widens stereo tracks for a more open sound", icon = Icons.Rounded.SurroundSound)
                 },
                 Entry("Equalizer", "eq bands tone balance bass treble") {
-                    NavRow("Equalizer", onOpenEqualizer, summary = "Seven bands, tone and balance", icon = Icons.Rounded.Equalizer)
+                    NavRow("Equalizer", onOpenEqualizer, summary = "Fifteen bands, tone and balance", icon = Icons.Rounded.Equalizer)
                 },
                 Entry("Autoplay", "radio continue") {
                     ToggleRow("Autoplay", pb.autoplay, AppSettings::setAutoplay, summary = "Keep playing similar songs when the queue ends", icon = Icons.AutoMirrored.Rounded.PlaylistPlay)

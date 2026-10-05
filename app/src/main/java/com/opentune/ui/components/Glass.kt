@@ -56,7 +56,7 @@ val LocalHazeState = staticCompositionLocalOf<HazeState?> { null }
 val LocalBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
 
 /** How much Liquid Glass frosts what's behind it; Apple's bars sit around here. */
-private val LIQUID_BLUR = 16.dp
+private val LIQUID_BLUR = 22.dp
 
 /** Lens refraction needs runtime shaders, which arrived in Android 13. */
 val liquidGlassSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU

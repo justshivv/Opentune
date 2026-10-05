@@ -74,6 +74,8 @@ class SongMenuActions(
     val dislike: (Song) -> Unit = LibraryStore::dislike,
     /** Plays the music video's audio in place of the song. */
     val playVideoVersion: ((Song) -> Unit)? = null,
+    /** Opens the song's artist, finding the page when the row didn't say which. */
+    val viewArtist: ((Song) -> Unit)? = null,
 )
 
 val LocalSongMenu = staticCompositionLocalOf<SongMenuActions?> { null }
@@ -145,7 +147,10 @@ fun SongMenuSheet(
                 MenuRow(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") { actions.playNext(song); close() }
                 MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue") { actions.addToQueue(song); close() }
                 song.albumId?.let { id -> MenuRow(Icons.Rounded.Album, "Open album") { close(); actions.openAlbum(id) } }
-                song.artistId?.let { id -> MenuRow(Icons.Rounded.Person, "Open artist") { close(); actions.openArtist(id) } }
+                when {
+                    actions.viewArtist != null && !local -> MenuRow(Icons.Rounded.Person, "View artist") { close(); actions.viewArtist.invoke(song) }
+                    song.artistId != null -> MenuRow(Icons.Rounded.Person, "View artist") { close(); actions.openArtist(song.artistId) }
+                }
             }
             tools?.invoke(this, close)
             if (!local) {

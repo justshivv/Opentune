@@ -106,6 +106,21 @@ object MusicRepository {
         InnertubeParser.parseWatchQueue(Innertube.next(videoId))
     }
 
+    /**
+     * The artist page for [song]: its own id when the row carried one, else
+     * the one YouTube Music's watch data credits, else the top artist result
+     * for the name.
+     */
+    suspend fun artistIdFor(song: Song): String? = song.artistId ?: io {
+        runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId)).firstOrNull { it.videoId == song.videoId }?.artistId }
+            .getOrNull()
+            ?: runCatching {
+                val name = song.artist.split(", ", " & ").first().trim()
+                InnertubeParser.parseSearchPage(Innertube.search(name, SearchFilter.ARTISTS.params)).rows
+                    .firstNotNullOfOrNull { (it as? SearchResult.Browse)?.item?.takeIf { b -> b.type == BrowseType.ARTIST }?.browseId }
+            }.getOrNull()
+    }
+
     /** What a browse id opens, read off its prefix. */
     fun typeOf(browseId: String): BrowseType = when {
         browseId.startsWith("UC") -> BrowseType.ARTIST

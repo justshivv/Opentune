@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -75,15 +77,19 @@ fun EqualizerScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
         item {
             GroupCard {
                 ResponseCurve(eq, Modifier.fillMaxWidth().height(120.dp).padding(16.dp))
-                Row(Modifier.fillMaxWidth().height(240.dp).padding(horizontal = 8.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                // Fifteen sliders don't fit across a phone, so the row scrolls.
+                Row(
+                    Modifier.fillMaxWidth().height(240.dp).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     eq.bands.forEachIndexed { i, gain ->
-                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(Modifier.width(46.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(formatDb(gain), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             VerticalGainSlider(
                                 value = gain,
                                 enabled = eq.enabled,
                                 onChange = { v -> AppSettings.updateEqualizer { s -> s.copy(bands = s.bands.toMutableList().also { it[i] = v }) } },
-                                modifier = Modifier.weight(1f).width(36.dp).padding(vertical = 6.dp),
+                                modifier = Modifier.weight(1f).width(34.dp).padding(vertical = 6.dp),
                             )
                             Text(formatHz(EQ_BANDS_HZ[i]), style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
                         }
