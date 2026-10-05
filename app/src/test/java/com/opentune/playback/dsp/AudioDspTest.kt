@@ -92,35 +92,23 @@ class DspAudioProcessorTest {
     }
 
     @Test
-    fun levellerBringsALoudTrackDownTowardTheTarget() {
-        val lev = Leveller(48_000)
-        // A sine at -3 dBFS peak: RMS about 0.5, far above the target.
-        repeat(48_000 * 20) { i ->
-            val x = sin(2 * PI * 220 * i / 48_000).toFloat() * 0.707f
-            lev.observe(x * x)
-        }
-        val rmsOut = 0.5f * lev.currentGain
-        assertEquals(Leveller.TARGET_RMS, rmsOut, 0.02f)
+    fun cutsOnlyLeaveFullScalePeaksUntouched() {
+        // A cut can't clip, so nothing should limit. A 1 kHz cut has unity gain
+        // at DC, so near-full-scale DC must come out at the same level; with the
+        // limiter engaged it would be squeezed to about 0.95.
+        val p = configured(DspParams(EqualizerSettings(enabled = true, bands = listOf(0f, 0f, 0f, -3f, 0f, 0f, 0f))))
+        val out = run(p, pcm16Stereo(5_000) { 0.99f })
+        var last = 0
+        while (out.hasRemaining()) last = out.getShort().toInt()
+        assertTrue("got $last", last > 32_300)
     }
 
     @Test
-    fun levellerLeavesSilenceAlone() {
-        val lev = Leveller(48_000)
-        repeat(48_000 * 10) { lev.observe(0f) }
-        assertEquals(1f, lev.currentGain, 1e-3f)
-    }
-
-    @Test
-    fun levellerIgnoresAQuietIntroBeforeTheMusic() {
-        val lev = Leveller(48_000)
-        repeat(48_000 * 5) { lev.observe(1e-7f) } // near-silent intro
-        assertEquals(1f, lev.currentGain, 1e-3f)
-        repeat(48_000 * 20) { i ->
-            val x = sin(2 * PI * 220 * i / 48_000).toFloat() * 0.3f
-            lev.observe(x * x)
-        }
-        // RMS 0.21 is a little loud for the target: brought down, not up.
-        assertTrue(lev.currentGain < 1f)
+    fun onlyBoostingChainsUseTheLimiter() {
+        assertTrue(!DspParams().canBoost)
+        assertTrue(!DspParams(EqualizerSettings(enabled = true, bands = listOf(-2f, 0f, 0f, 0f, 0f, 0f, 0f))).canBoost)
+        assertTrue(DspParams(EqualizerSettings(enabled = true, bassDb = 2f)).canBoost)
+        assertTrue(DspParams(bassBoost = 100).canBoost)
     }
 
     @Test

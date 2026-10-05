@@ -525,12 +525,14 @@ fun SongStatus(source: String?) {
 fun NerdStatsLine(format: AudioFormatInfo?) {
     val picked by NerdStats.lastPicked.collectAsState()
     val startup by NerdStats.startupMs.collectAsState()
+    val gain by NerdStats.loudnessGainDb.collectAsState()
     val kbps = format?.bitrateKbps ?: picked?.second
     val parts = listOfNotNull(
         format?.codec,
         kbps?.let { "$it kbps" },
         format?.sampleRateHz?.let { "%.1f kHz".format(it / 1000f) },
         format?.channels?.let { if (it == 2) "stereo" else if (it == 1) "mono" else "$it ch" },
+        gain?.let { "normalized %+.1f dB".format(it) },
         startup?.let { "started in $it ms" },
     )
     Text(

@@ -19,6 +19,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.ConnectionPool
@@ -997,7 +998,29 @@ object StreamResolver {
         val isOpus: Boolean get() = "opus" in mimeType.lowercase(Locale.ROOT)
     }
 
-    private fun audioFormats(response: JsonObject): List<Audio> =
+    private fun audioFormats(response: JsonObject): List<Audio> {
+        rememberLoudness(response)
+        return audioFormatList(response)
+    }
+
+    /**
+     * YouTube's loudness figure for each track it answered, in dB relative to
+     * its playback reference (positive is louder). Kept for the process's
+     * lifetime; [com.opentune.playback.PlaybackService] turns it into one fixed
+     * gain per track, the way YouTube itself normalizes.
+     */
+    private val loudness = ConcurrentHashMap<String, Double>()
+
+    fun loudnessDbFor(videoId: String): Double? = loudness[videoId]
+
+    private fun rememberLoudness(response: JsonObject) {
+        val id = response["videoDetails"]?.jsonObject?.str("videoId") ?: return
+        val db = response["playerConfig"]?.jsonObject?.get("audioConfig")?.jsonObject
+            ?.get("loudnessDb")?.jsonPrimitive?.doubleOrNull ?: return
+        loudness[id] = db
+    }
+
+    private fun audioFormatList(response: JsonObject): List<Audio> =
         response["streamingData"]?.jsonObject
             ?.get("adaptiveFormats")?.jsonArray
             ?.map { it.jsonObject }

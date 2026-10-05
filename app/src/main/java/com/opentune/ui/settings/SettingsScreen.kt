@@ -291,7 +291,7 @@ private fun settingsSections(onOpenEqualizer: () -> Unit, onOpenReplay: () -> Un
             "Playback",
             listOf(
                 Entry("Loudness normalization", "volume level") {
-                    ToggleRow("Loudness normalization", pb.loudnessNormalization, { v -> AppSettings.updatePlayback { it.copy(loudnessNormalization = v) } }, summary = "Levels every track to about the same loudness", icon = Icons.AutoMirrored.Rounded.VolumeUp)
+                    ToggleRow("Loudness normalization", pb.loudnessNormalization, { v -> AppSettings.updatePlayback { it.copy(loudnessNormalization = v) } }, summary = "Uses YouTube's loudness measurement to set one steady volume per song", icon = Icons.AutoMirrored.Rounded.VolumeUp)
                 },
                 Entry("Preload upcoming songs", "latency fast skip instant buffer") {
                     ToggleRow("Preload upcoming songs", pb.preloadUpcoming, { v -> AppSettings.updatePlayback { it.copy(preloadUpcoming = v) } }, summary = "Next and previous songs start almost instantly. Uses a little extra data.", icon = Icons.Rounded.Speed)
