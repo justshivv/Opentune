@@ -1,5 +1,6 @@
 package com.opentune
 
+import com.opentune.data.AppLog
 import android.app.Application
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -42,8 +43,24 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
             .crossfade(200)
             .build()
 
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
+        // Media3's warnings and errors (a failed load, a decoder that won't
+        // start) into the app's own log as well as logcat, for "Copy log".
+        androidx.media3.common.util.Log.setLogger(object : androidx.media3.common.util.Log.Logger {
+            private val system = androidx.media3.common.util.Log.Logger.DEFAULT
+            override fun d(tag: String, message: String, throwable: Throwable?) = system.d(tag, message, throwable)
+            override fun i(tag: String, message: String, throwable: Throwable?) = system.i(tag, message, throwable)
+            override fun w(tag: String, message: String, throwable: Throwable?) {
+                AppLog.add('W', tag, message, throwable)
+                system.w(tag, message, throwable)
+            }
+            override fun e(tag: String, message: String, throwable: Throwable?) {
+                AppLog.add('E', tag, message, throwable)
+                system.e(tag, message, throwable)
+            }
+        })
         AppSettings.init(this)
         History.init(this)
         LoudnessStore.init(this)
