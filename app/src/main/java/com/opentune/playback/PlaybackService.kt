@@ -56,6 +56,10 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.media3.common.Tracks
+import android.content.IntentFilter
+import android.content.BroadcastReceiver
 import android.media.audiofx.AudioEffect
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
@@ -168,8 +172,13 @@ class PlaybackService : MediaSessionService() {
         soundEffects = effects
         scope.launch { AppSettings.sound.collect(effects::apply) }
         scope.launch {
-            combine(AppSettings.equalizer, AppSettings.sound, AppSettings.playback) { eq, sound, pb ->
-                DspParams(eq, sound.bassBoost, pb.spatialAudio, pb.clarity)
+            combine(AppSettings.equalizer, AppSettings.sound, AppSettings.playback, BitPerfectUsb.status, volumeTick) { eq, sound, pb, bp, _ ->
+                // Bit-perfect means nothing but the volume touches the samples.
+                if (bp is BitPerfectUsb.Status.Active) {
+                    DspParams(outputGainDb = audioManager?.let(BitPerfectUsb::softwareGainDb) ?: 0f)
+                } else {
+                    DspParams(eq, sound.bassBoost, pb.spatialAudio, pb.clarity)
+                }
             }.distinctUntilChanged().collect { dsp.params = it }
         }
         scope.launch {
@@ -207,6 +216,10 @@ class PlaybackService : MediaSessionService() {
         scope.launch {
             AppSettings.playback.map { it.preferUsbDac }.distinctUntilChanged().collect { applyPreferredDevice() }
         }
+        scope.launch {
+            AppSettings.playback.map { it.bitPerfectUsb to it.floatOutput }.distinctUntilChanged().collect { applyBitPerfect() }
+        }
+        registerReceiver(volumeReceiver, IntentFilter("android.media.VOLUME_CHANGED_ACTION"), VOLUME_RECEIVER_FLAGS)
 
         val sessionActivity = PendingIntent.getActivity(
             this,
@@ -309,6 +322,8 @@ class PlaybackService : MediaSessionService() {
         loudnessEnhancer?.release()
         loudnessEnhancer = null
         audioManager?.unregisterAudioDeviceCallback(deviceCallback)
+        runCatching { unregisterReceiver(volumeReceiver) }
+        audioManager?.let { BitPerfectUsb.apply(it, wanted = false, sampleRate = outputRate, float = false) }
         scope.cancel()
         soundEffects?.release()
         soundEffects = null
@@ -405,6 +420,16 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        override fun onTracksChanged(tracks: Tracks) {
+            val rate = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
+                ?.let { g -> (0 until g.length).firstOrNull(g::isTrackSelected)?.let(g::getTrackFormat) }
+                ?.sampleRate?.takeIf { it > 0 } ?: return
+            if (rate != outputRate) {
+                outputRate = rate
+                if (AppSettings.playback.value.bitPerfectUsb) applyBitPerfect()
+            }
+        }
+
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             loudnessEnhancer?.release()
             loudnessEnhancer = null
@@ -482,7 +507,7 @@ class PlaybackService : MediaSessionService() {
     private var effectSession = C.AUDIO_SESSION_ID_UNSET
 
     private fun openEffectSession(session: Int) {
-        if (!AppSettings.playback.value.systemEffects) return closeEffectSession()
+        if (!AppSettings.playback.value.systemEffects || BitPerfectUsb.active) return closeEffectSession()
         if (session == C.AUDIO_SESSION_ID_UNSET || session == effectSession) return
         closeEffectSession()
         effectSession = session
@@ -523,7 +548,7 @@ class PlaybackService : MediaSessionService() {
                 if (player.currentMediaItem?.mediaId == id && StreamResolver.loudnessDbFor(id) != null) applyLoudness()
             }
         }
-        val on = AppSettings.playback.value.loudnessNormalization && db != null
+        val on = AppSettings.playback.value.loudnessNormalization && db != null && !BitPerfectUsb.active
         val enhancer = loudnessEnhancer?.takeIf { loudnessSession == session }
             ?: runCatching { LoudnessEnhancer(session) }
                 .onFailure { Log.w(TAG, "LoudnessEnhancer unavailable", it) }
@@ -647,8 +672,29 @@ class PlaybackService : MediaSessionService() {
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = applyPreferredDevice()
     }
 
+    /** Bumped when the volume keys move, so the bit-perfect software volume follows. */
+    private val volumeTick = MutableStateFlow(0)
+
+    private val volumeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            volumeTick.value++
+        }
+    }
+
+    /** The decoder's output rate for the current track, for the bit-perfect mixer. */
+    private var outputRate = 48_000
+
+    private fun applyBitPerfect() {
+        val am = audioManager ?: return
+        val pb = AppSettings.playback.value
+        BitPerfectUsb.apply(am, pb.bitPerfectUsb, outputRate, pb.floatOutput)
+        applyLoudness()
+        mediaSession?.player?.let { openEffectSession((it as ExoPlayer).audioSessionId) }
+    }
+
     /** Route to a USB DAC when one is plugged in and the setting asks for it. */
     private fun applyPreferredDevice() {
+        applyBitPerfect()
         val player = mediaSession?.player as? ExoPlayer ?: return
         val usb = if (AppSettings.playback.value.preferUsbDac) {
             audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)?.firstOrNull {
@@ -804,6 +850,11 @@ class PlaybackService : MediaSessionService() {
 
         /** Bounds on the loudness gain, in millibels: down 15 dB, up 3 dB at most. */
         const val LOUDNESS_RETRY_MS = 6_000L
+        /**
+         * The volume broadcast comes from the system, so the receiver is
+         * exported; a spoofed one only makes the gain re-read the real volume.
+         */
+        val VOLUME_RECEIVER_FLAGS = if (android.os.Build.VERSION.SDK_INT >= 33) Context.RECEIVER_EXPORTED else 0
         const val QUEUE_SAVE_MS = 5_000L
         const val UPGRADE_DELAY_MS = 8_000L
         const val UPGRADE_MIN_REMAINING_MS = 20_000L

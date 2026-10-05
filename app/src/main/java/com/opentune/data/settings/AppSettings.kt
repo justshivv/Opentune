@@ -157,6 +157,8 @@ data class PlaybackSettings(
     val qualityUpgrade: Boolean = true,
     /** Overlap the end of a song with the start of the next; 0 is off. */
     val crossfadeSeconds: Int = 0,
+    /** Bit-perfect output to a USB DAC (Android 14+): no mixing, effects or resampling. */
+    val bitPerfectUsb: Boolean = false,
     /** Let the phone's own effects (Dolby, SoundAlive, system EQ) process playback. */
     val systemEffects: Boolean = true,
 )

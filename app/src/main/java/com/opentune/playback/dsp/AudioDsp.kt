@@ -1,5 +1,7 @@
 package com.opentune.playback.dsp
 
+import com.opentune.playback.BitPerfectUsb
+
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
@@ -112,6 +114,8 @@ data class DspParams(
     val spatial: Boolean = false,
     /** The "Clarity" curve: firmer bass, less mud, more presence and air. */
     val clarity: Boolean = false,
+    /** A plain level change, never above 0 dB: the volume while bit-perfect. */
+    val outputGainDb: Float = 0f,
 ) {
     private val eqActive: Boolean
         get() = equalizer.enabled && (
@@ -119,7 +123,7 @@ data class DspParams(
                 equalizer.bassDb != 0f || equalizer.trebleDb != 0f || equalizer.balance != 0f
             )
 
-    val isNeutral: Boolean get() = !eqActive && bassBoost == 0 && !spatial && !clarity
+    val isNeutral: Boolean get() = !eqActive && bassBoost == 0 && !spatial && !clarity && outputGainDb == 0f
 
     /**
      * Whether anything in the chain can push a sample past full scale. Only
@@ -179,7 +183,8 @@ data class DspParams(
             }
             val headroom = boosts.maxOrNull()?.coerceAtLeast(0f) ?: 0f
             val user = if (eqActive) equalizer.preampDb else 0f
-            return dbToGain(user - headroom)
+            if (outputGainDb <= BitPerfectUsb.SILENT_DB) return 0f
+            return dbToGain(user - headroom + outputGainDb.coerceAtMost(0f))
         }
     val balance: Float get() = if (equalizer.enabled) equalizer.balance.coerceIn(-1f, 1f) else 0f
 

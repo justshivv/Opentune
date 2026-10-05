@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.opentune.data.NerdStats
 import com.opentune.data.settings.AppSettings
 import com.opentune.playback.AudioFormatInfo
+import com.opentune.playback.BitPerfectUsb
 
 /**
  * Every stage the sound passes through, from the stream to the speaker, with
@@ -43,6 +44,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
     val picked by NerdStats.lastPicked.collectAsState()
     val gain by NerdStats.loudnessGainDb.collectAsState()
     val device = rememberOutputDeviceName()
+    val bitPerfect by BitPerfectUsb.status.collectAsState()
     val mixerRate = am?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull()
     val volume = am?.getStreamVolume(AudioManager.STREAM_MUSIC)
     val maxVolume = am?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -97,7 +99,19 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
                         else -> "$mixerRate Hz, no resampling"
                     } + if (pb.floatOutput) " · 32-bit float" else " · 16-bit",
                 )
-                Stage(Tone.INFO, "System volume", if (volume != null && maxVolume != null) "$volume of $maxVolume" else "Unknown")
+                when (val bp = bitPerfect) {
+                    is BitPerfectUsb.Status.Active -> Stage(Tone.CLEAN, "Bit-perfect", "On: ${bp.device} gets ${bp.sampleRate} Hz ${bp.bits}-bit untouched by Android")
+                    is BitPerfectUsb.Status.NoMatch -> Stage(Tone.CHANGED, "Bit-perfect", "The DAC doesn't offer ${bp.sampleRate} Hz bit-perfect; using the normal mixer")
+                    BitPerfectUsb.Status.NoDac -> Stage(Tone.INFO, "Bit-perfect", "Waiting for a USB DAC")
+                    BitPerfectUsb.Status.Unsupported -> Stage(Tone.INFO, "Bit-perfect", "Needs Android 14 or newer")
+                    BitPerfectUsb.Status.Off -> Unit
+                }
+                Stage(
+                    if (bitPerfect is BitPerfectUsb.Status.Active && volume != maxVolume) Tone.CHANGED else Tone.INFO,
+                    "System volume",
+                    (if (volume != null && maxVolume != null) "$volume of $maxVolume" else "Unknown") +
+                        if (bitPerfect is BitPerfectUsb.Status.Active) " · applied by the app; full volume is bit-exact" else "",
+                )
                 Stage(Tone.INFO, "Output", device)
             }
         },
