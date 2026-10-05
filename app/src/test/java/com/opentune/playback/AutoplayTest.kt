@@ -12,19 +12,19 @@ class AutoplayTest {
 
     @Test
     fun emptyQueueNeverExtends() {
-        assertFalse(Autoplay.shouldExtend(currentIndex = 0, queueSize = 0))
+        assertFalse(Autoplay.shouldExtend(remaining = 0, queueSize = 0))
     }
 
     @Test
     fun singleTrackExtendsSoTappingASongStartsRadio() {
-        assertTrue(Autoplay.shouldExtend(currentIndex = 0, queueSize = 1))
+        assertTrue(Autoplay.shouldExtend(remaining = 0, queueSize = 1))
     }
 
     @Test
-    fun extendsOnSecondToLastAndLastTrack() {
-        assertFalse(Autoplay.shouldExtend(currentIndex = 2, queueSize = 5))
-        assertTrue(Autoplay.shouldExtend(currentIndex = 3, queueSize = 5))
-        assertTrue(Autoplay.shouldExtend(currentIndex = 4, queueSize = 5))
+    fun extendsWithOneOrNoTracksLeftInPlayOrder() {
+        assertFalse(Autoplay.shouldExtend(remaining = 2, queueSize = 5))
+        assertTrue(Autoplay.shouldExtend(remaining = 1, queueSize = 5))
+        assertTrue(Autoplay.shouldExtend(remaining = 0, queueSize = 5))
     }
 
     @Test

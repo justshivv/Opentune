@@ -15,8 +15,12 @@ object Autoplay {
      */
     const val TRACKS_BEFORE_END = 1
 
-    fun shouldExtend(currentIndex: Int, queueSize: Int): Boolean =
-        queueSize > 0 && currentIndex >= queueSize - 1 - TRACKS_BEFORE_END
+    /**
+     * @param remaining tracks still to play after the current one, in play
+     *   order (which differs from queue order while shuffle is on).
+     */
+    fun shouldExtend(remaining: Int, queueSize: Int): Boolean =
+        queueSize > 0 && remaining <= TRACKS_BEFORE_END
 
     /**
      * The radio tracks worth appending: anything not already queued, once

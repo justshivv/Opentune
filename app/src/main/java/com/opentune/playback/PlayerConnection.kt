@@ -33,8 +33,21 @@ class PlayerConnection(private val context: Context) {
     private val _currentIndex = MutableStateFlow(0)
     val currentIndex = _currentIndex.asStateFlow()
 
+    /** Queue indices still to play after the current one, in play order. */
+    private val _upNext = MutableStateFlow<List<Int>>(emptyList())
+    val upNext = _upNext.asStateFlow()
+
     private val _hasNext = MutableStateFlow(false)
     val hasNext = _hasNext.asStateFlow()
+
+    private val _shuffleEnabled = MutableStateFlow(false)
+    val shuffleEnabled = _shuffleEnabled.asStateFlow()
+
+    private val _repeatMode = MutableStateFlow(Player.REPEAT_MODE_OFF)
+    val repeatMode = _repeatMode.asStateFlow()
+
+    private val _durationMs = MutableStateFlow(0L)
+    val durationMs = _durationMs.asStateFlow()
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
@@ -75,7 +88,11 @@ class PlayerConnection(private val context: Context) {
         _queue.value = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toSong() }
         _currentIndex.value = player.currentMediaItemIndex
         _currentSong.value = player.currentMediaItem?.toSong()
+        _upNext.value = player.upcomingPlayOrder().drop(1)
         _hasNext.value = player.hasNextMediaItem()
+        _shuffleEnabled.value = player.shuffleModeEnabled
+        _repeatMode.value = player.repeatMode
+        _durationMs.value = player.duration.takeIf { it > 0 } ?: 0L
         _isPlaying.value = player.isPlaying
         _isBuffering.value = player.playbackState == Player.STATE_BUFFERING
         // A track that started, or a recovery the service made on its own,
@@ -93,6 +110,41 @@ class PlayerConnection(private val context: Context) {
         controller.setMediaItem(song.toMediaItem())
         controller.prepare()
         controller.play()
+    }
+
+    /**
+     * Replaces the queue with [songs], starting at [startIndex]. With
+     * [shuffle], the list is shuffled up front (so turning shuffle off later
+     * keeps the shuffled order) and playback starts from its first track.
+     */
+    fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false) {
+        val controller = controller ?: return
+        if (songs.isEmpty()) return
+        _error.value = null
+        val ordered = if (shuffle) songs.shuffled() else songs
+        controller.shuffleModeEnabled = false
+        controller.setMediaItems(
+            ordered.map { it.toMediaItem() },
+            if (shuffle) 0 else startIndex.coerceIn(songs.indices),
+            0L,
+        )
+        controller.prepare()
+        controller.play()
+    }
+
+    fun toggleShuffle() {
+        val controller = controller ?: return
+        controller.shuffleModeEnabled = !controller.shuffleModeEnabled
+    }
+
+    /** Off, then repeat the whole queue, then repeat the current track. */
+    fun cycleRepeatMode() {
+        val controller = controller ?: return
+        controller.repeatMode = when (controller.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
     }
 
     /** Queues [song] right after the current track. */
@@ -146,5 +198,5 @@ class PlayerConnection(private val context: Context) {
 
     fun currentPositionMs(): Long = controller?.currentPosition ?: 0L
 
-    fun durationMs(): Long = controller?.duration?.takeIf { it > 0 } ?: 0L
+    fun bufferedPositionMs(): Long = controller?.bufferedPosition ?: 0L
 }

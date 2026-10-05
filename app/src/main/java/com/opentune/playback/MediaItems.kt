@@ -3,7 +3,9 @@ package com.opentune.playback
 import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
+import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import com.opentune.data.model.Song
 
 /**
@@ -45,3 +47,20 @@ fun MediaItem.toSong(): Song =
         thumbnailUrl = mediaMetadata.artworkUri?.toString(),
         durationText = mediaMetadata.extras?.getString(EXTRA_DURATION_TEXT),
     )
+
+/**
+ * Queue indices in the order they will play from here: the current item
+ * first, then what follows it with shuffle applied and repeat ignored.
+ */
+fun Player.upcomingPlayOrder(): List<Int> {
+    val timeline = currentTimeline
+    if (timeline.isEmpty) return emptyList()
+    val out = mutableListOf(currentMediaItemIndex)
+    var index = currentMediaItemIndex
+    while (true) {
+        index = timeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, shuffleModeEnabled)
+        if (index == C.INDEX_UNSET || out.size > timeline.windowCount) break
+        out += index
+    }
+    return out
+}
