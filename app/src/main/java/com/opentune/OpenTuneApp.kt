@@ -4,6 +4,7 @@ import com.opentune.data.AppLog
 import com.opentune.data.subsonic.Subsonic
 import com.opentune.data.listenbrainz.ListenBrainz
 import com.opentune.data.covers.AlbumCovers
+import com.opentune.data.autoeq.AutoEq
 import android.app.Application
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -77,6 +78,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         Subsonic.init(this)
         ListenBrainz.init(this)
         AlbumCovers.init(this)
+        AutoEq.init(this)
         LibraryStore.init(this)
         Downloads.init(this)
         AccountStore.init(this)

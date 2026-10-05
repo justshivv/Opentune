@@ -56,6 +56,9 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   stereo widening, skip silence, USB DAC preference, optional 32-bit float
   output, and a Remix sheet for speed, pitch and reverb (Slowed + reverb,
   Nightcore and more).
+- **Headphone correction.** Pick your headphones from AutoEq's 8,000+
+  measurements and their parametric correction runs ahead of your own EQ,
+  so you start from a neutral sound.
 - **Sleep timer.** Stop after 15 to 90 minutes, or at the end of the song.
 - **Picks up where you left off.** The queue, song and position come back
   at launch, paused, without fetching anything until you press play.
@@ -205,7 +208,8 @@ SIL Open Font License 1.1 (`third_party/outfit/OFL.txt`). Album covers
 come from the [Cover Art Archive](https://coverartarchive.org) through
 [MusicBrainz](https://musicbrainz.org), and recommendations from
 [ListenBrainz](https://listenbrainz.org), all run by the MetaBrainz
-Foundation.
+Foundation. Headphone corrections come from
+[AutoEq](https://github.com/jaakkopasanen/AutoEq) by Jaakko Pasanen (MIT).
 
 OpenTune is licensed under the GNU General Public License v3.0. See
 [LICENSE](LICENSE).
