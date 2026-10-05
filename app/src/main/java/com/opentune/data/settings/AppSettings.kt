@@ -149,6 +149,8 @@ data class PlaybackSettings(
     val stopOnTaskRemoved: Boolean = false,
     /** Swiping a row queues it to play next; off queues it at the end. */
     val playNextOnSwipe: Boolean = true,
+    /** Buffer the next track and resolve its neighbours early, for instant skips. */
+    val preloadUpcoming: Boolean = true,
 )
 
 @Serializable

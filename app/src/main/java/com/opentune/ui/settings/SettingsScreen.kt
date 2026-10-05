@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.NetworkCell
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SpaceBar
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.SurroundSound
 import androidx.compose.material.icons.rounded.TextFields
@@ -291,6 +292,9 @@ private fun settingsSections(onOpenEqualizer: () -> Unit, onOpenReplay: () -> Un
             listOf(
                 Entry("Loudness normalization", "volume level") {
                     ToggleRow("Loudness normalization", pb.loudnessNormalization, { v -> AppSettings.updatePlayback { it.copy(loudnessNormalization = v) } }, summary = "Levels every track to about the same loudness", icon = Icons.AutoMirrored.Rounded.VolumeUp)
+                },
+                Entry("Preload upcoming songs", "latency fast skip instant buffer") {
+                    ToggleRow("Preload upcoming songs", pb.preloadUpcoming, { v -> AppSettings.updatePlayback { it.copy(preloadUpcoming = v) } }, summary = "Next and previous songs start almost instantly. Uses a little extra data.", icon = Icons.Rounded.Speed)
                 },
                 Entry("Skip silence", "gaps") {
                     ToggleRow("Skip silence", pb.skipSilence, { v -> AppSettings.updatePlayback { it.copy(skipSilence = v) } }, summary = "Trim gaps longer than a second", icon = Icons.Rounded.SpaceBar)

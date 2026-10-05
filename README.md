@@ -18,7 +18,9 @@ What works:
 - **Audio:** per-network quality (defaults to the best stream YouTube
   offers), a song cache for instant replays and seeks, a 7-band equalizer
   with tone and balance, loudness levelling, stereo widening, skip silence,
-  USB DAC preference, optional 32-bit float output, and a Remix sheet for
+  USB DAC preference, optional 32-bit float output, preloading of the next
+  song (and early stream lookup either side) for near-instant skips, and a
+  Remix sheet for
   speed, pitch, reverb and bass (Slowed + reverb, Nightcore and more). The
   EQ, levelling and bass run in the app's own DSP, so they work on any phone
 - **Player:** artwork-tinted colors, mesh / gradient / blurred / plain
