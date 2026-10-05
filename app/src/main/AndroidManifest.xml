@@ -89,6 +89,29 @@
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
 
+        <!-- The home-screen widget. -->
+        <receiver
+            android:name=".widget.NowPlayingWidget"
+            android:exported="false"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_now_playing_info" />
+        </receiver>
+
+        <!-- Media buttons (the widget's, a headset's after the app was closed)
+             start the player and resume the saved queue. -->
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
         <!-- WorkManager's foreground service, declared for the download jobs' type. -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

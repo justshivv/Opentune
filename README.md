@@ -62,6 +62,12 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
 - **Sleep timer.** Stop after 15 to 90 minutes, or at the end of the song.
 - **Picks up where you left off.** The queue, song and position come back
   at launch, paused, without fetching anything until you press play.
+- **Home-screen widget.** Cover, title and artist, with previous,
+  play/pause, next and like. Play on the widget, or on a Bluetooth headset,
+  starts the saved queue even after the app was closed.
+- **Like and shuffle in the notification.** Both sit in the media
+  notification's extra buttons and in Android Auto, and stay in step with the
+  app.
 - **Android Auto.** Browse Home, Recent and Library (Liked, Downloads,
   playlists) on the car screen, search by typing or voice ("play … on
   OpenTune"), and tap a song to play its list from there. Sideloaded

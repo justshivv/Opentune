@@ -33,6 +33,11 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.LibraryResult
+import com.opentune.widget.NowPlayingWidget
+import android.os.Bundle
+import androidx.media3.session.SessionResult
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.CommandButton
 import androidx.media3.session.SessionError
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.LibraryParams
@@ -247,6 +252,8 @@ class PlaybackService : MediaLibraryService() {
         mediaSession = MediaLibrarySession.Builder(this, player, sessionCallback)
             .setSessionActivity(sessionActivity)
             .build()
+        // Likes changed anywhere (the app, the widget) show on the heart at once.
+        scope.launch { LibraryStore.liked.collect { refreshButtons() } }
 
         restoreQueue(player)
         scope.launch { keepQueueSaved(player) }
@@ -330,6 +337,7 @@ class PlaybackService : MediaLibraryService() {
         (mediaSession?.player as? ExoPlayer)?.takeIf { it.mediaItemCount > 0 }?.let { p ->
             QueueStore.save(QueueStore.Saved((0 until p.mediaItemCount).map { SongRef.of(p.getMediaItemAt(it).toSong()) }, p.currentMediaItemIndex, p.currentPosition))
         }
+        NowPlayingWidget.stopped(this)
         crossfade?.release()
         crossfade = null
         closeEffectSession()
@@ -378,6 +386,54 @@ class PlaybackService : MediaLibraryService() {
      * list they were shown in; [CarLibrary.resolve] queues that list.
      */
     private val sessionCallback = object : MediaLibrarySession.Callback {
+        /** Every controller (notification, Android Auto, Bluetooth) also gets Like and Shuffle. */
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
+                .add(LIKE_COMMAND)
+                .add(SHUFFLE_COMMAND)
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .setMediaButtonPreferences(mediaButtons())
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            val player = session.player
+            when (customCommand.customAction) {
+                ACTION_LIKE -> player.currentMediaItem?.toSong()?.let { song ->
+                    LibraryStore.setLiked(song, !LibraryStore.isLiked(song.videoId))
+                }
+                ACTION_SHUFFLE -> player.shuffleModeEnabled = !player.shuffleModeEnabled
+                else -> return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+            }
+            refreshButtons()
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+
+        /**
+         * "Resume" from the system's media controls or a Bluetooth play button
+         * when the app isn't running: the queue saved last time, where it was.
+         */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val saved = QueueStore.load()
+                ?: return Futures.immediateFailedFuture(UnsupportedOperationException("Nothing to resume"))
+            val items = saved.songs.map { it.toSong().toMediaItem() }
+            if (items.isEmpty()) return Futures.immediateFailedFuture(UnsupportedOperationException("Nothing to resume"))
+            return Futures.immediateFuture(
+                MediaSession.MediaItemsWithStartPosition(items, saved.index.coerceIn(items.indices), saved.positionMs.coerceAtLeast(0)),
+            )
+        }
+
         override fun onAddMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
@@ -456,6 +512,30 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    /** Like (heart) and Shuffle, as the notification and Android Auto show them now. */
+    private fun mediaButtons(): List<CommandButton> {
+        val player = mediaSession?.player
+        val liked = player?.currentMediaItem?.mediaId?.let(LibraryStore::isLiked) == true
+        val shuffle = player?.shuffleModeEnabled == true
+        return listOf(
+            CommandButton.Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+                .setDisplayName(if (liked) "Remove from Liked" else "Like")
+                .setSessionCommand(LIKE_COMMAND)
+                .setSlots(CommandButton.SLOT_OVERFLOW)
+                .build(),
+            CommandButton.Builder(if (shuffle) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF)
+                .setDisplayName(if (shuffle) "Shuffle off" else "Shuffle on")
+                .setSessionCommand(SHUFFLE_COMMAND)
+                .setSlots(CommandButton.SLOT_OVERFLOW)
+                .build(),
+        )
+    }
+
+    private fun refreshButtons() {
+        mediaSession?.setMediaButtonPreferences(mediaButtons())
+        NowPlayingWidget.refresh(this, mediaSession?.player)
+    }
+
     /** The last browser search's results, between onSearch and onGetSearchResult. */
     private val searchResults = object : LinkedHashMap<String, List<MediaItem>>(8, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<MediaItem>>?) = size > 4
@@ -468,6 +548,15 @@ class PlaybackService : MediaLibraryService() {
         override fun onEvents(player: Player, events: Player.Events) {
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
                 for (i in 0 until player.mediaItemCount) sessionIds += player.getMediaItemAt(i).mediaId
+            }
+            if (events.containsAny(
+                    Player.EVENT_MEDIA_ITEM_TRANSITION,
+                    Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                    Player.EVENT_IS_PLAYING_CHANGED,
+                    Player.EVENT_MEDIA_METADATA_CHANGED,
+                )
+            ) {
+                refreshButtons()
             }
             if (events.containsAny(
                     Player.EVENT_MEDIA_ITEM_TRANSITION,
@@ -1032,6 +1121,10 @@ class PlaybackService : MediaLibraryService() {
         const val UPGRADE_DELAY_MS = 8_000L
         /** Songs a server queue carries on with when it runs out. */
         const val RADIO_FROM_SERVER = 25
+        const val ACTION_LIKE = "com.opentune.LIKE"
+        const val ACTION_SHUFFLE = "com.opentune.SHUFFLE"
+        val LIKE_COMMAND = SessionCommand(ACTION_LIKE, Bundle.EMPTY)
+        val SHUFFLE_COMMAND = SessionCommand(ACTION_SHUFFLE, Bundle.EMPTY)
         /** Failed tracks in a row before playback stops on the error. */
         const val MAX_FAILED_IN_ROW = 3
         /** Playing this long means the track's stream really works. */
