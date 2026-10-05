@@ -1,5 +1,7 @@
 package com.opentune.ui
 
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.animation.EnterExitState
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -109,6 +111,7 @@ fun AppRoot(vm: PlayerViewModel) {
     val isPlaying by vm.isPlaying.collectAsState()
     val playbackError by vm.playbackError.collectAsState()
     var playerOpen by rememberSaveable { mutableStateOf(false) }
+    var playerCovers by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val haze = rememberHazeState()
     val uiScope = rememberCoroutineScope()
@@ -125,23 +128,27 @@ fun AppRoot(vm: PlayerViewModel) {
         chromeScroll.expand()
     }
     LaunchedEffect(playbackError) { playbackError?.let { snackbar.showSnackbar(it) } }
-    BackHandler(enabled = playerOpen) { playerOpen = false }
 
-    val actions = SongActions(
-        currentVideoId = song?.videoId,
-        isPlaying = isPlaying,
-        playAll = { songs, index, shuffle, source -> vm.playAll(songs, index, shuffle, source) },
-        playNext = vm::playNext,
-        addToQueue = vm::addToQueue,
-    )
-    val openItem: (ShelfItem) -> Unit = { item ->
+    // Kept across recompositions (opening the player, play/pause): a new
+    // instance each time would recompose every screen and list handed one.
+    val actions = remember(song?.videoId, isPlaying) {
+        SongActions(
+            currentVideoId = song?.videoId,
+            isPlaying = isPlaying,
+            playAll = { songs, index, shuffle, source -> vm.playAll(songs, index, shuffle, source) },
+            playNext = vm::playNext,
+            addToQueue = vm::addToQueue,
+        )
+    }
+    val openItem: (ShelfItem) -> Unit = remember(nav, vm) { { item ->
         val browseId = item.browseId
         when {
             browseId != null -> nav.openBrowse(browseId)
             else -> item.toSong()?.let { vm.play(it, "Home") }
         }
-    }
-    val songMenu = SongMenuActions(
+    } }
+    // `song` is read when a menu action runs, so the menu doesn't need rebuilding as songs change.
+    val songMenu = remember(nav, vm) { SongMenuActions(
         playNext = vm::playNext,
         addToQueue = vm::addToQueue,
         startRadio = vm::startRadio,
@@ -177,8 +184,8 @@ fun AppRoot(vm: PlayerViewModel) {
                 }
             }
         },
-    )
-    val libraryNav = LibraryNav(
+    ) }
+    val libraryNav = remember(nav) { LibraryNav(
         downloads = { nav.navigate("downloads") },
         local = { nav.navigate("local") },
         replay = { nav.navigate("replay") },
@@ -186,7 +193,7 @@ fun AppRoot(vm: PlayerViewModel) {
         liked = { nav.navigate("liked") },
         playlist = { id -> nav.navigate("playlist/${Uri.encode(id)}") },
         browse = { id -> nav.openBrowse(id) },
-    )
+    ) }
     // Links opened from outside: a song plays with its radio, anything else opens its page.
     val incoming by Links.incoming.collectAsState()
     LaunchedEffect(incoming) {
@@ -204,7 +211,7 @@ fun AppRoot(vm: PlayerViewModel) {
         }
         Links.consumed()
     }
-    val chromeVisible = route != "login"
+    val chromeVisible = route != "login" && !playerCovers
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val content = PaddingValues(bottom = navInset + CHROME_TAB_HEIGHT + 24.dp + if (song != null) CHROME_MINI_HEIGHT + 8.dp else 0.dp)
 
@@ -352,7 +359,16 @@ fun AppRoot(vm: PlayerViewModel) {
                 enter = slideInVertically(spring(dampingRatio = 0.86f, stiffness = 380f)) { it } + fadeIn(),
                 exit = slideOutVertically(tween(280)) { it } + fadeOut(tween(280)),
             ) {
-                PlayerScreen(vm, onCollapse = { playerOpen = false })
+                // Registered after the NavHost's own handler, so back closes the
+                // player first instead of popping the page behind it.
+                BackHandler(enabled = playerOpen) { playerOpen = false }
+                // Once the player has slid fully over the page, the chrome under it is
+                // taken out: no second position loop or glass redrawn behind it.
+                val settled = transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible
+                var still by remember { mutableStateOf(true) }
+                LaunchedEffect(settled, still) { playerCovers = settled && still }
+                DisposableEffect(Unit) { onDispose { playerCovers = false } }
+                PlayerScreen(vm, onCollapse = { playerOpen = false }, onCovering = { still = it })
             }
         }
     }

@@ -55,6 +55,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,6 +113,10 @@ fun QueuePane(
     var dragging by remember { mutableStateOf<Int?>(null) }
     var dragStartPos by remember { mutableIntStateOf(0) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    // Drag gestures outlive the list they started with (a row keeps its key
+    // when the song ends and the queue moves on), so they read the latest.
+    val currentUpNext by rememberUpdatedState(upNext)
+    val currentOnMove by rememberUpdatedState(onMove)
     LaunchedEffect(upNext) {
         if (dragging == null) {
             order.clear()
@@ -170,12 +175,12 @@ fun QueuePane(
                                 onDragEnd = {
                                     val from = dragStartPos
                                     val to = order.indexOf(index)
-                                    if (from >= 0 && to >= 0 && from != to) onMove(upNext[from], upNext[to])
+                                    if (from >= 0 && to >= 0 && from != to) currentOnMove(currentUpNext[from], currentUpNext[to])
                                     dragging = null
                                     dragOffset = 0f
                                 },
                                 onDragCancel = {
-                                    order.clear(); order.addAll(upNext)
+                                    order.clear(); order.addAll(currentUpNext)
                                     dragging = null
                                     dragOffset = 0f
                                 },
@@ -230,10 +235,12 @@ private fun QueueRow(song: Song, isCurrent: Boolean, isPlaying: Boolean, handle:
 /** The line being sung right now, under the title; tap to open the lyrics. */
 @Composable
 fun LyricPreview(lyrics: LyricsState, position: () -> Long, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    // The position function changes with the lyrics offset; read the latest.
+    val pos by rememberUpdatedState(position)
     val synced = (lyrics as? LyricsState.Found)?.lyrics as? Lyrics.Synced ?: return
     val line by remember(synced) {
         derivedStateOf {
-            val p = position()
+            val p = pos()
             synced.lines.lastOrNull { it.startMs <= p && it.text.isNotBlank() }?.text ?: synced.lines.firstOrNull { it.text.isNotBlank() }?.text
         }
     }
