@@ -43,6 +43,7 @@ import com.opentune.data.model.MoodGenre
 import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.UiState
 import com.opentune.ui.components.ErrorState
+import com.opentune.ui.components.PageHeader
 import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.Placeholder
 import com.opentune.ui.components.ShelfPlaceholder
@@ -57,7 +58,7 @@ fun ExploreScreen(contentPadding: PaddingValues, onMoodClick: (MoodGenre) -> Uni
     val state by loader.state.collectAsState()
 
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("Explore", style = MaterialTheme.typography.headlineSmall) })
+        PageHeader("Explore")
         when (val s = state) {
             is UiState.Loading -> LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
@@ -142,12 +143,7 @@ fun MoodScreen(
     val loader = rememberLoader("mood:$browseId:$params") { MusicRepository.shelves(browseId, params) }
     val state by loader.state.collectAsState()
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(title) },
-            navigationIcon = {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
-            },
-        )
+        PageHeader(title, onBack = onBack)
         when (val s = state) {
             is UiState.Loading -> LazyColumn { items(3) { ShelfPlaceholder() } }
             is UiState.Error -> Box(Modifier.fillMaxSize().padding(contentPadding), Alignment.Center) {

@@ -2,9 +2,14 @@ package com.opentune.ui.player
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import android.media.AudioManager
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -33,6 +38,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeDown
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
@@ -47,7 +54,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,31 +65,52 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
+import com.opentune.data.NerdStats
 import com.opentune.data.model.ROW_ART_PX
+import com.opentune.playback.AudioFormatInfo
 import com.opentune.data.model.Song
 import com.opentune.data.model.artworkAt
 import com.opentune.data.settings.PlayerBackground
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.formatTime
+import kotlin.math.PI
+import kotlin.math.roundToInt
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The full player's backdrop, in the style chosen in settings. */
+/**
+ * The full player's backdrop, in the style chosen in settings. With
+ * [fullCover] the artwork itself runs edge to edge across the top and fades
+ * into the background below it.
+ */
 @Composable
-fun PlayerBackdrop(style: PlayerBackground, artworkUrl: String?, modifier: Modifier = Modifier) {
+fun PlayerBackdrop(
+    style: PlayerBackground,
+    artworkUrl: String?,
+    modifier: Modifier = Modifier,
+    animate: Boolean = true,
+    fullCover: Boolean = false,
+) {
     val scheme = MaterialTheme.colorScheme
     Box(modifier.background(scheme.surface)) {
         val blur = style == PlayerBackground.BLUR && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -95,6 +126,7 @@ fun PlayerBackdrop(style: PlayerBackground, artworkUrl: String?, modifier: Modif
                 Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.45f)))
             }
             style == PlayerBackground.PLAIN -> Unit
+            style == PlayerBackground.MESH -> MeshGradient(animate, Modifier.matchParentSize())
             else -> Box(
                 Modifier.matchParentSize().background(
                     Brush.verticalGradient(
@@ -105,6 +137,62 @@ fun PlayerBackdrop(style: PlayerBackground, artworkUrl: String?, modifier: Modif
                 ),
             )
         }
+        if (fullCover) {
+            AnimatedContent(artworkUrl, transitionSpec = { fadeIn(tween(600)) togetherWith fadeOut(tween(600)) }, label = "cover") { url ->
+                // The cover fades out into whatever backdrop is below it, with a
+                // light scrim at the top so the status line stays readable.
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(0.9f)
+                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                Brush.verticalGradient(0.6f to Color.Black, 1f to Color.Transparent),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        },
+                ) {
+                    Artwork(url.artworkAt(com.opentune.data.model.PLAYER_ART_PX), Modifier.matchParentSize(), shape = RectangleShape)
+                    Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.2f to Color.Transparent)))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Soft blobs of the artwork's colors drifting slowly over a dark base, like
+ * Apple Music's animated backgrounds. Still when [animate] is false.
+ */
+@Composable
+private fun MeshGradient(animate: Boolean, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val colors = listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.primaryContainer)
+    val transition = rememberInfiniteTransition(label = "mesh")
+    val t by if (animate) {
+        transition.animateFloat(0f, 1f, infiniteRepeatable(tween(24_000, easing = LinearEasing)), label = "meshT")
+    } else {
+        remember { mutableFloatStateOf(0.15f) }
+    }
+    Canvas(modifier) {
+        drawRect(scheme.surface)
+        val w = size.width
+        val h = size.height
+        colors.forEachIndexed { i, color ->
+            val phase = (t + i * 0.25f) * 2 * PI.toFloat()
+            val cx = w * (0.5f + 0.38f * cos(phase + i))
+            val cy = h * (0.32f + 0.3f * sin(phase * (if (i % 2 == 0) 1f else -1f) + i * 1.3f))
+            val radius = maxOf(w, h) * (0.55f + 0.1f * sin(phase * 2))
+            drawCircle(
+                Brush.radialGradient(listOf(color.copy(alpha = 0.55f), Color.Transparent), center = Offset(cx, cy), radius = radius),
+                radius = radius,
+                center = Offset(cx, cy),
+            )
+        }
+        // Keep the lower half calm so the controls stay readable.
+        drawRect(Brush.verticalGradient(0.35f to Color.Transparent, 1f to scheme.surface.copy(alpha = 0.85f)))
     }
 }
 
@@ -417,4 +505,108 @@ fun MiniPlayer(
             }
         }
     }
+}
+
+/** "Playing from" and the queue's origin, or just "Now playing" when there isn't one. */
+@Composable
+fun SongStatus(source: String?) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        if (source.isNullOrBlank()) {
+            Text("Now playing", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            Text("PLAYING FROM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(source, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Codec, bitrate, sample rate and channels of what's actually playing. */
+@Composable
+fun NerdStatsLine(format: AudioFormatInfo?) {
+    val picked by NerdStats.lastPicked.collectAsState()
+    val kbps = format?.bitrateKbps ?: picked?.second
+    val parts = listOfNotNull(
+        format?.codec,
+        kbps?.let { "$it kbps" },
+        format?.sampleRateHz?.let { "%.1f kHz".format(it / 1000f) },
+        format?.channels?.let { if (it == 2) "stereo" else if (it == 1) "mono" else "$it ch" },
+    )
+    Text(
+        parts.joinToString(" · ").ifEmpty { "Waiting for stream…" },
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+    )
+}
+
+/** The phone's media volume, kept in step with the hardware buttons. */
+@Composable
+fun VolumeBar(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val am = remember { context.getSystemService(AudioManager::class.java) }
+    val max = remember { am?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)?.coerceAtLeast(1) ?: 1 }
+    var volume by remember { mutableFloatStateOf(am?.getStreamVolume(AudioManager.STREAM_MUSIC)?.toFloat() ?: 0f) }
+    var dragging by remember { mutableStateOf(false) }
+    LaunchedEffect(am) {
+        while (true) {
+            if (!dragging) volume = am?.getStreamVolume(AudioManager.STREAM_MUSIC)?.toFloat() ?: volume
+            delay(400)
+        }
+    }
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.AutoMirrored.Rounded.VolumeDown, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+        val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
+        val fill = MaterialTheme.colorScheme.onSurface
+        fun set(x: Float, width: Int) {
+            volume = (x / width).coerceIn(0f, 1f) * max
+            am?.setStreamVolume(AudioManager.STREAM_MUSIC, volume.roundToInt(), 0)
+        }
+        Canvas(
+            Modifier
+                .weight(1f)
+                .padding(horizontal = 10.dp)
+                .height(28.dp)
+                .pointerInput(max) { detectTapGestures { set(it.x, size.width) } }
+                .pointerInput(max) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { dragging = true },
+                        onDragEnd = { dragging = false },
+                        onDragCancel = { dragging = false },
+                    ) { change, _ ->
+                        change.consume()
+                        set(change.position.x, size.width)
+                    }
+                },
+        ) {
+            val h = 4.dp.toPx()
+            val y = (size.height - h) / 2
+            val f = (volume / max).coerceIn(0f, 1f)
+            drawRoundRect(track, Offset(0f, y), Size(size.width, h), CornerRadius(h / 2))
+            drawRoundRect(fill, Offset(0f, y), Size(size.width * f, h), CornerRadius(h / 2))
+        }
+        Icon(Icons.AutoMirrored.Rounded.VolumeUp, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** An empty area that still skips tracks on a sideways swipe, for full-screen cover mode. */
+@Composable
+fun ArtworkSwipeArea(onSwipeNext: () -> Unit, onSwipePrevious: () -> Unit, modifier: Modifier = Modifier) {
+    val threshold = with(LocalDensity.current) { 96.dp.toPx() }
+    var dx by remember { mutableFloatStateOf(0f) }
+    Box(
+        modifier.pointerInput(Unit) {
+            detectHorizontalDragGestures(
+                onDragStart = { dx = 0f },
+                onDragEnd = {
+                    when {
+                        dx < -threshold -> onSwipeNext()
+                        dx > threshold -> onSwipePrevious()
+                    }
+                },
+            ) { change, amount ->
+                change.consume()
+                dx += amount
+            }
+        },
+    )
 }

@@ -2,22 +2,34 @@ package com.opentune.data.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 
-/** Audio quality ceilings [StreamResolver][com.opentune.data.innertube.StreamResolver] ranks candidate formats against. */
-enum class AudioQuality(val label: String, val maxKbps: Int) {
-    LOW("Low", 64),
-    NORMAL("Normal", 128),
-    HIGH("High", 256),
-    AUTO("Best available", Int.MAX_VALUE),
+/**
+ * Stream quality ceilings [StreamResolver][com.opentune.data.innertube.StreamResolver]
+ * ranks YouTube's formats against. YouTube's audio is lossy: Opus at about
+ * 130-160 kbps is the best most accounts get, AAC 256 only with Premium.
+ */
+@Serializable
+enum class AudioQuality(val label: String, val summary: String, val maxKbps: Int) {
+    LOW("Low", "About 64 kbps", 64),
+    NORMAL("Normal", "About 128 kbps", 128),
+    HIGH("High", "Opus up to 160 kbps", 160),
+    MAX("Max", "Best stream offered", Int.MAX_VALUE),
 }
 
+@Serializable
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
 
 /** Mirrors com.materialkolor.PaletteStyle by name, so this layer stays free of UI types. */
+@Serializable
 enum class PaletteStyleOption(val label: String) {
     TonalSpot("Tonal"),
     Vibrant("Vibrant"),
@@ -30,12 +42,15 @@ enum class PaletteStyleOption(val label: String) {
     Monochrome("Monochrome"),
 }
 
+@Serializable
 enum class PlayerBackground(val label: String) {
-    GRADIENT("Artwork gradient"),
-    BLUR("Blurred artwork"),
+    MESH("Mesh"),
+    GRADIENT("Gradient"),
+    BLUR("Blur"),
     PLAIN("Plain"),
 }
 
+@Serializable
 data class ThemeSettings(
     val mode: ThemeMode = ThemeMode.SYSTEM,
     /** Material You wallpaper colors, on Android 12 and later. */
@@ -44,13 +59,14 @@ data class ThemeSettings(
     val seedColor: Int = SEED_COLORS.first(),
     val paletteStyle: PaletteStyleOption = PaletteStyleOption.TonalSpot,
     /** True black surfaces in dark mode, for OLED screens. */
-    val pureBlack: Boolean = false,
+    val pureBlack: Boolean = true,
     /** Re-seed the whole app from the playing track's artwork. */
     val colorFromArtwork: Boolean = true,
-    val playerBackground: PlayerBackground = PlayerBackground.GRADIENT,
+    val playerBackground: PlayerBackground = PlayerBackground.MESH,
 )
 
 /** Reverb presets map onto android.media.audiofx.PresetReverb's. */
+@Serializable
 enum class ReverbLevel(val label: String, val preset: Short) {
     OFF("Off", 0),
     SMALL_ROOM("Small room", 1),
@@ -61,11 +77,12 @@ enum class ReverbLevel(val label: String, val preset: Short) {
     PLATE("Plate", 6),
 }
 
+@Serializable
 data class SoundSettings(
     val speed: Float = 1f,
     val pitch: Float = 1f,
     val reverb: ReverbLevel = ReverbLevel.OFF,
-    /** 0..1000, android.media.audiofx.BassBoost's strength scale. */
+    /** 0..1000; drives the low-shelf in [com.opentune.playback.dsp.AudioDsp]. */
     val bassBoost: Int = 0,
 ) {
     val isDefault: Boolean get() = this == SoundSettings()
@@ -87,6 +104,87 @@ enum class RemixPreset(val label: String, val sound: SoundSettings) {
     }
 }
 
+/** Band centres for the 7-band equalizer, in Hz. */
+val EQ_BANDS_HZ = listOf(60f, 150f, 400f, 1_000f, 2_400f, 6_000f, 15_000f)
+
+@Serializable
+data class EqualizerSettings(
+    val enabled: Boolean = false,
+    /** Gain per band in dB, -12..12, one per [EQ_BANDS_HZ]. */
+    val bands: List<Float> = List(EQ_BANDS_HZ.size) { 0f },
+    val preampDb: Float = 0f,
+    /** Tone controls: shelves at 120 Hz and 8 kHz, dB. */
+    val bassDb: Float = 0f,
+    val trebleDb: Float = 0f,
+    /** -1 (left only) .. 1 (right only). */
+    val balance: Float = 0f,
+)
+
+enum class EqPreset(val label: String, val bands: List<Float>) {
+    FLAT("Flat", listOf(0f, 0f, 0f, 0f, 0f, 0f, 0f)),
+    BASS("Bass", listOf(6f, 4f, 1f, 0f, 0f, 0f, 0f)),
+    WARM("Warm", listOf(3f, 2f, 1f, 0f, -1f, -2f, -2f)),
+    VOCAL("Vocal", listOf(-2f, -1f, 1f, 3f, 3f, 1f, 0f)),
+    BRIGHT("Bright", listOf(-1f, 0f, 0f, 1f, 2f, 4f, 5f)),
+    LOUDNESS("Loudness", listOf(5f, 3f, 0f, -1f, 0f, 3f, 4f)),
+    ELECTRONIC("Electronic", listOf(5f, 3f, 0f, -2f, 1f, 3f, 4f)),
+    ACOUSTIC("Acoustic", listOf(3f, 2f, 1f, 1f, 2f, 2f, 1f)),
+}
+
+@Serializable
+data class PlaybackSettings(
+    val wifiQuality: AudioQuality = AudioQuality.MAX,
+    val mobileQuality: AudioQuality = AudioQuality.MAX,
+    /** Keep hi-res local files in 32-bit float to the output; bypasses effects for them. */
+    val floatOutput: Boolean = false,
+    val preferUsbDac: Boolean = true,
+    /** Slowly level every track toward the same loudness. */
+    val loudnessNormalization: Boolean = true,
+    val skipSilence: Boolean = false,
+    /** Mid/side stereo widening. */
+    val spatialAudio: Boolean = false,
+    val autoplay: Boolean = true,
+    /** Autoplay won't add anything already played or queued this session. */
+    val noRepeatInSession: Boolean = false,
+    val stopOnTaskRemoved: Boolean = false,
+    /** Swiping a row queues it to play next; off queues it at the end. */
+    val playNextOnSwipe: Boolean = true,
+)
+
+@Serializable
+data class InterfaceSettings(
+    val reduceAnimation: Boolean = false,
+    /** Solid fills instead of frosted glass. */
+    val reduceBlur: Boolean = false,
+    val fullScreenCover: Boolean = false,
+    val hideVolumeBar: Boolean = false,
+    val hideSongStatus: Boolean = false,
+    val syncedLyrics: Boolean = true,
+    val blurLyrics: Boolean = true,
+    val statsForNerds: Boolean = false,
+    val recentsAsGrid: Boolean = false,
+)
+
+@Serializable
+data class LibrarySettings(
+    /** A MediaStore relative path ("Music/"), or null for every folder. */
+    val localFolder: String? = null,
+    val filterNonMusic: Boolean = true,
+    val songCacheMb: Int = 512,
+)
+
+/** Everything persisted, as one document: what's stored, exported and imported. */
+@Serializable
+data class SettingsState(
+    val theme: ThemeSettings = ThemeSettings(),
+    val sound: SoundSettings = SoundSettings(),
+    val equalizer: EqualizerSettings = EqualizerSettings(),
+    val playback: PlaybackSettings = PlaybackSettings(),
+    val ui: InterfaceSettings = InterfaceSettings(),
+    val library: LibrarySettings = LibrarySettings(),
+    val recentSearches: List<String> = emptyList(),
+)
+
 /** Accent choices offered when Material You is off. */
 val SEED_COLORS = listOf(
     0xFFE53935.toInt(), // red
@@ -102,127 +200,119 @@ val SEED_COLORS = listOf(
 )
 
 /**
- * App-wide settings, kept in SharedPreferences and exposed as StateFlows so the
- * UI and [PlaybackService][com.opentune.playback.PlaybackService] (same
- * process) both react to changes. [init] runs from the Application.
+ * App-wide settings, stored as one JSON document in SharedPreferences and
+ * exposed as StateFlows so the UI and the playback service (same process)
+ * both react to changes. [init] runs from the Application.
  */
 object AppSettings {
-    private lateinit var prefs: SharedPreferences
+    private var prefs: SharedPreferences? = null
+    private var connectivity: ConnectivityManager? = null
+
+    val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    private val _state = MutableStateFlow(SettingsState())
+    val state: StateFlow<SettingsState> = _state.asStateFlow()
 
     private val _theme = MutableStateFlow(ThemeSettings())
     val theme: StateFlow<ThemeSettings> = _theme.asStateFlow()
-
     private val _sound = MutableStateFlow(SoundSettings())
     val sound: StateFlow<SoundSettings> = _sound.asStateFlow()
-
-    private val _autoplay = MutableStateFlow(true)
-    val autoplay: StateFlow<Boolean> = _autoplay.asStateFlow()
-
-    private val _audioQuality = MutableStateFlow(AudioQuality.AUTO)
-    val audioQuality: StateFlow<AudioQuality> = _audioQuality.asStateFlow()
-
+    private val _equalizer = MutableStateFlow(EqualizerSettings())
+    val equalizer: StateFlow<EqualizerSettings> = _equalizer.asStateFlow()
+    private val _playback = MutableStateFlow(PlaybackSettings())
+    val playback: StateFlow<PlaybackSettings> = _playback.asStateFlow()
+    private val _ui = MutableStateFlow(InterfaceSettings())
+    val ui: StateFlow<InterfaceSettings> = _ui.asStateFlow()
+    private val _library = MutableStateFlow(LibrarySettings())
+    val library: StateFlow<LibrarySettings> = _library.asStateFlow()
     private val _recentSearches = MutableStateFlow<List<String>>(emptyList())
     val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
 
-    /** Read by StreamResolver on every resolve. */
-    val effectiveAudioQuality: AudioQuality get() = _audioQuality.value
+    /** Read by StreamResolver on every resolve: the ceiling for the network in use. */
+    val effectiveAudioQuality: AudioQuality
+        get() = _playback.value.let { if (onMeteredNetwork()) it.mobileQuality else it.wifiQuality }
+
+    fun onMeteredNetwork(): Boolean {
+        val cm = connectivity ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+    }
 
     fun init(context: Context) {
-        prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-        _theme.value = ThemeSettings(
-            mode = enumOf(prefs.getString(K_THEME_MODE, null), ThemeMode.SYSTEM),
-            dynamicColor = prefs.getBoolean(K_DYNAMIC, false),
-            seedColor = prefs.getInt(K_SEED, SEED_COLORS.first()),
-            paletteStyle = enumOf(prefs.getString(K_STYLE, null), PaletteStyleOption.TonalSpot),
-            pureBlack = prefs.getBoolean(K_PURE_BLACK, false),
-            colorFromArtwork = prefs.getBoolean(K_ART_COLOR, true),
-            playerBackground = enumOf(prefs.getString(K_PLAYER_BG, null), PlayerBackground.GRADIENT),
+        val p = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+        prefs = p
+        connectivity = context.getSystemService(ConnectivityManager::class.java)
+        val stored = p.getString(K_STATE, null)?.let { runCatching { json.decodeFromString<SettingsState>(it) }.getOrNull() }
+        publish(stored ?: migrateLegacy(p))
+    }
+
+    private fun publish(s: SettingsState) {
+        _state.value = s
+        _theme.value = s.theme
+        _sound.value = s.sound
+        _equalizer.value = s.equalizer
+        _playback.value = s.playback
+        _ui.value = s.ui
+        _library.value = s.library
+        _recentSearches.value = s.recentSearches
+    }
+
+    private fun update(transform: (SettingsState) -> SettingsState) {
+        val s = transform(_state.value)
+        publish(s)
+        prefs?.edit { putString(K_STATE, json.encodeToString(SettingsState.serializer(), s)) }
+    }
+
+    fun updateTheme(t: (ThemeSettings) -> ThemeSettings) = update { it.copy(theme = t(it.theme)) }
+    fun updateSound(t: (SoundSettings) -> SoundSettings) = update { it.copy(sound = t(it.sound)) }
+    fun updateEqualizer(t: (EqualizerSettings) -> EqualizerSettings) = update { it.copy(equalizer = t(it.equalizer)) }
+    fun updatePlayback(t: (PlaybackSettings) -> PlaybackSettings) = update { it.copy(playback = t(it.playback)) }
+    fun updateUi(t: (InterfaceSettings) -> InterfaceSettings) = update { it.copy(ui = t(it.ui)) }
+    fun updateLibrary(t: (LibrarySettings) -> LibrarySettings) = update { it.copy(library = t(it.library)) }
+
+    fun setAutoplay(enabled: Boolean) = updatePlayback { it.copy(autoplay = enabled) }
+
+    fun addRecentSearch(query: String) = update { s ->
+        s.copy(recentSearches = (listOf(query) + s.recentSearches.filterNot { it.equals(query, true) }).take(MAX_RECENT))
+    }
+
+    fun removeRecentSearch(query: String) = update { it.copy(recentSearches = it.recentSearches - query) }
+
+    fun clearRecentSearches() = update { it.copy(recentSearches = emptyList()) }
+
+    fun exportJson(): JsonElement = json.encodeToJsonElement(SettingsState.serializer(), _state.value)
+
+    fun importJson(element: JsonElement) {
+        val s = json.decodeFromJsonElement(SettingsState.serializer(), element)
+        update { s }
+    }
+
+    /** Settings saved by the previous version, one key per value. */
+    private fun migrateLegacy(p: SharedPreferences): SettingsState {
+        fun <E : Enum<E>> enumOf(values: Array<E>, name: String?, default: E): E =
+            values.firstOrNull { it.name == name } ?: default
+        if (!p.contains("theme_mode")) return SettingsState()
+        return SettingsState(
+            theme = ThemeSettings(
+                mode = enumOf(ThemeMode.entries.toTypedArray(), p.getString("theme_mode", null), ThemeMode.SYSTEM),
+                dynamicColor = p.getBoolean("dynamic_color", false),
+                seedColor = p.getInt("seed_color", SEED_COLORS.first()),
+                paletteStyle = enumOf(PaletteStyleOption.entries.toTypedArray(), p.getString("palette_style", null), PaletteStyleOption.TonalSpot),
+                pureBlack = p.getBoolean("pure_black", true),
+                colorFromArtwork = p.getBoolean("color_from_artwork", true),
+                playerBackground = enumOf(PlayerBackground.entries.toTypedArray(), p.getString("player_background", null), PlayerBackground.MESH),
+            ),
+            sound = SoundSettings(
+                speed = p.getFloat("sound_speed", 1f),
+                pitch = p.getFloat("sound_pitch", 1f),
+                reverb = enumOf(ReverbLevel.entries.toTypedArray(), p.getString("sound_reverb", null), ReverbLevel.OFF),
+                bassBoost = p.getInt("sound_bass", 0),
+            ),
+            playback = PlaybackSettings(autoplay = p.getBoolean("autoplay", true)),
+            recentSearches = p.getString("recent_searches", null)?.split('\u001F')?.filter { it.isNotBlank() }.orEmpty(),
         )
-        _sound.value = SoundSettings(
-            speed = prefs.getFloat(K_SPEED, 1f),
-            pitch = prefs.getFloat(K_PITCH, 1f),
-            reverb = enumOf(prefs.getString(K_REVERB, null), ReverbLevel.OFF),
-            bassBoost = prefs.getInt(K_BASS, 0),
-        )
-        _autoplay.value = prefs.getBoolean(K_AUTOPLAY, true)
-        _audioQuality.value = enumOf(prefs.getString(K_QUALITY, null), AudioQuality.AUTO)
-        _recentSearches.value = prefs.getString(K_RECENT, null)
-            ?.split(RECENT_SEPARATOR)?.filter { it.isNotBlank() }.orEmpty()
     }
-
-    fun updateTheme(transform: (ThemeSettings) -> ThemeSettings) {
-        val t = transform(_theme.value)
-        _theme.value = t
-        prefs.edit {
-            putString(K_THEME_MODE, t.mode.name)
-            putBoolean(K_DYNAMIC, t.dynamicColor)
-            putInt(K_SEED, t.seedColor)
-            putString(K_STYLE, t.paletteStyle.name)
-            putBoolean(K_PURE_BLACK, t.pureBlack)
-            putBoolean(K_ART_COLOR, t.colorFromArtwork)
-            putString(K_PLAYER_BG, t.playerBackground.name)
-        }
-    }
-
-    fun updateSound(transform: (SoundSettings) -> SoundSettings) {
-        val s = transform(_sound.value)
-        _sound.value = s
-        prefs.edit {
-            putFloat(K_SPEED, s.speed)
-            putFloat(K_PITCH, s.pitch)
-            putString(K_REVERB, s.reverb.name)
-            putInt(K_BASS, s.bassBoost)
-        }
-    }
-
-    fun setAutoplay(enabled: Boolean) {
-        _autoplay.value = enabled
-        prefs.edit {
-            putBoolean(K_AUTOPLAY, enabled)
-        }
-    }
-
-    fun setAudioQuality(quality: AudioQuality) {
-        _audioQuality.value = quality
-        prefs.edit {
-            putString(K_QUALITY, quality.name)
-        }
-    }
-
-    fun addRecentSearch(query: String) {
-        val list = (listOf(query) + _recentSearches.value.filterNot { it.equals(query, true) })
-            .take(MAX_RECENT)
-        saveRecent(list)
-    }
-
-    fun removeRecentSearch(query: String) = saveRecent(_recentSearches.value - query)
-
-    fun clearRecentSearches() = saveRecent(emptyList())
-
-    private fun saveRecent(list: List<String>) {
-        _recentSearches.value = list
-        prefs.edit {
-            putString(K_RECENT, list.joinToString(RECENT_SEPARATOR))
-        }
-    }
-
-    private inline fun <reified E : Enum<E>> enumOf(name: String?, default: E): E =
-        name?.let { runCatching { enumValueOf<E>(it) }.getOrNull() } ?: default
 
     private const val MAX_RECENT = 12
-    private const val RECENT_SEPARATOR = "\u001F"
-    private const val K_THEME_MODE = "theme_mode"
-    private const val K_DYNAMIC = "dynamic_color"
-    private const val K_SEED = "seed_color"
-    private const val K_STYLE = "palette_style"
-    private const val K_PURE_BLACK = "pure_black"
-    private const val K_ART_COLOR = "color_from_artwork"
-    private const val K_PLAYER_BG = "player_background"
-    private const val K_SPEED = "sound_speed"
-    private const val K_PITCH = "sound_pitch"
-    private const val K_REVERB = "sound_reverb"
-    private const val K_BASS = "sound_bass"
-    private const val K_AUTOPLAY = "autoplay"
-    private const val K_QUALITY = "audio_quality"
-    private const val K_RECENT = "recent_searches"
+    private const val K_STATE = "state_v2"
 }

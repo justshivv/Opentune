@@ -65,7 +65,7 @@ fun QueueSheet(
     onRemoveIndex: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val autoplay by AppSettings.autoplay.collectAsState()
+    val autoplay = AppSettings.playback.collectAsState().value.autoplay
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -133,7 +133,6 @@ fun QueueSheet(
 fun RemixSheet(onDismiss: () -> Unit) {
     val sound by AppSettings.sound.collectAsState()
     val reverbAvailable by SoundEffects.reverbAvailable.collectAsState()
-    val bassAvailable by SoundEffects.bassAvailable.collectAsState()
     var linked by rememberSaveable { mutableStateOf(sound.speed == sound.pitch) }
     val preset = RemixPreset.matching(sound)
 
@@ -199,9 +198,8 @@ fun RemixSheet(onDismiss: () -> Unit) {
             ValueSlider("Bass boost", sound.bassBoost / 1000f, 0f..1f, format = { "${(it * 100).roundToInt()}%" }) { v ->
                 AppSettings.updateSound { it.copy(bassBoost = (v * 1000).roundToInt()) }
             }
-            if (!bassAvailable) Unsupported("This device doesn't offer bass boost.")
             Text(
-                "Reverb and bass use Android's built-in audio effects, which vary by phone.",
+                "Speed, pitch and bass work on every phone. Reverb uses Android's built-in effect, which some phones don't have.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),

@@ -1,7 +1,13 @@
 package com.opentune.playback
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.net.Uri
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
@@ -15,8 +21,13 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.TransferListener
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -25,11 +36,16 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.opentune.MainActivity
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
+import com.opentune.data.history.History
+import com.opentune.data.local.LocalMusic
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.innertube.InnertubeParser
 import com.opentune.data.innertube.PlayerClient
 import com.opentune.data.innertube.StreamResolver
+import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
+import com.opentune.playback.dsp.DspAudioProcessor
+import com.opentune.playback.dsp.DspParams
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -37,22 +53,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 /**
- * Foreground media session hosting playback, the queue, and autoplay.
+ * Foreground media session hosting playback, the queue, autoplay, the audio
+ * chain and listening history.
  *
- * Queue entries carry a [trackUri], not a stream URL. The data source below
- * resolves it through [StreamResolver] when ExoPlayer opens the item, which
- * happens on ExoPlayer's loader thread, so blocking there is fine.
+ * Data path: an `opentune://track/<id>` item is looked up in [AudioCache]
+ * first, by video id; only on a miss is it resolved through [StreamResolver]
+ * and fetched. Local files (`content://`) skip both.
  *
- * Autoplay and error recovery live here rather than in the UI so they keep
- * working when the activity is gone and only the notification is left.
+ * Audio path: decoder → [DspAudioProcessor] (EQ, tone, balance, widening,
+ * levelling, limiter) → ExoPlayer's silence skipping and speed/pitch → output.
  */
-// The data source plumbing (ResolvingDataSource, OkHttpDataSource, DataSpec
-// headers) is all marked unstable by Media3; there is no stable equivalent.
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
 
@@ -65,26 +85,47 @@ class PlaybackService : MediaSessionService() {
     /** Seeds whose radio added nothing new; asking again would only repeat that. */
     private val exhaustedSeeds = mutableSetOf<String>()
 
+    /** Every track queued since the service started, for "don't repeat songs". */
+    private val sessionIds = mutableSetOf<String>()
+
     /** The item a failed load was last retried for. See [recover]. */
     private var retriedMediaId: String? = null
 
     private var soundEffects: SoundEffects? = null
+    private val dsp = DspAudioProcessor()
+    private var audioManager: AudioManager? = null
 
     override fun onCreate() {
         super.onCreate()
+        val context: Context = this
 
         // The same OkHttp client Innertube and the stream resolver use — a
         // stream URL is bound to the connection context of the request that
         // minted it, so a separate HTTP stack here risks a 403 on playback.
         // No fixed User-Agent: [resolveTrack] sends the minting client's own.
-        val httpFactory = OkHttpDataSource.Factory(Http.client)
-        val dataSourceFactory = ResolvingDataSource.Factory(
-            DefaultDataSource.Factory(this, RefusalReportingDataSource.Factory(httpFactory)),
-            ::resolveTrack,
-        )
+        val http = RefusalReportingDataSource.Factory(OkHttpDataSource.Factory(Http.client))
+        val resolving = ResolvingDataSource.Factory(http, ::resolveTrack)
+        val cached = CacheDataSource.Factory()
+            .setCache(AudioCache.get(context))
+            .setUpstreamDataSourceFactory(resolving)
+            .setCacheKeyFactory { spec -> videoIdOf(spec.uri) ?: spec.key ?: spec.uri.toString() }
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        val routing = SchemeRoutingDataSource.Factory(streams = cached, local = DefaultDataSource.Factory(context))
 
-        val player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+        val floatOutput = AppSettings.playback.value.floatOutput
+        val renderers = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): AudioSink = DefaultAudioSink.Builder(context)
+                .setEnableFloatOutput(floatOutput)
+                .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain(dsp))
+                .build()
+        }
+
+        val player = ExoPlayer.Builder(context, renderers)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(routing))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -99,9 +140,27 @@ class PlaybackService : MediaSessionService() {
         val effects = SoundEffects(player)
         soundEffects = effects
         scope.launch { AppSettings.sound.collect(effects::apply) }
+        scope.launch {
+            combine(AppSettings.equalizer, AppSettings.sound, AppSettings.playback) { eq, sound, pb ->
+                DspParams(eq, sound.bassBoost, pb.spatialAudio, pb.loudnessNormalization)
+            }.distinctUntilChanged().collect { dsp.params = it }
+        }
+        scope.launch {
+            AppSettings.playback.map { it.skipSilence }.distinctUntilChanged().collect { player.skipSilenceEnabled = it }
+        }
         // Turning autoplay back on near the end of the queue should fetch now,
         // not at the next track change.
-        scope.launch { AppSettings.autoplay.collect { extendQueueIfNeeded() } }
+        scope.launch {
+            AppSettings.playback.map { it.autoplay }.distinctUntilChanged().collect { extendQueueIfNeeded() }
+        }
+        scope.launch { trackListening(player) }
+
+        audioManager = getSystemService(AudioManager::class.java)?.also { am ->
+            am.registerAudioDeviceCallback(deviceCallback, null)
+        }
+        scope.launch {
+            AppSettings.playback.map { it.preferUsbDac }.distinctUntilChanged().collect { applyPreferredDevice() }
+        }
 
         val sessionActivity = PendingIntent.getActivity(
             this,
@@ -120,13 +179,21 @@ class PlaybackService : MediaSessionService() {
         mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val session = mediaSession ?: return
-        if (!session.player.playWhenReady || session.player.mediaItemCount == 0) {
+        val player = mediaSession?.player ?: return
+        if (AppSettings.playback.value.stopOnTaskRemoved) {
+            player.pause()
+            player.stop()
+            stopSelf()
+            return
+        }
+        if (!player.playWhenReady || player.mediaItemCount == 0) {
             stopSelf()
         }
     }
 
     override fun onDestroy() {
+        finishListen()
+        audioManager?.unregisterAudioDeviceCallback(deviceCallback)
         scope.cancel()
         soundEffects?.release()
         soundEffects = null
@@ -171,6 +238,9 @@ class PlaybackService : MediaSessionService() {
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
+            if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
+                for (i in 0 until player.mediaItemCount) sessionIds += player.getMediaItemAt(i).mediaId
+            }
             if (events.containsAny(
                     Player.EVENT_MEDIA_ITEM_TRANSITION,
                     Player.EVENT_TIMELINE_CHANGED,
@@ -182,8 +252,17 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
-        override fun onAudioSessionIdChanged(audioSessionId: Int) {
-            soundEffects?.onAudioSessionIdChanged()
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            finishListen()
+            startListen(mediaItem?.toSong(), mediaSession?.player?.isPlaying == true)
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+                if (listenSince < 0) listenSince = SystemClock.elapsedRealtime()
+            } else {
+                pauseListen()
+            }
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -195,6 +274,68 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    // ---- Listening history ---------------------------------------------------
+
+    private var listenSong: Song? = null
+    private var listenedMs = 0L
+    private var listenSince = -1L
+    private var listenRecord: Long? = null
+
+    private fun startListen(song: Song?, playing: Boolean) {
+        listenSong = song
+        listenedMs = 0
+        listenSince = if (playing) SystemClock.elapsedRealtime() else -1
+        listenRecord = null
+    }
+
+    private fun pauseListen() {
+        if (listenSince >= 0) listenedMs += SystemClock.elapsedRealtime() - listenSince
+        listenSince = -1
+    }
+
+    private fun listenedSoFar(): Long =
+        listenedMs + if (listenSince >= 0) SystemClock.elapsedRealtime() - listenSince else 0
+
+    private fun finishListen() {
+        listenRecord?.let { History.updateListened(it, listenedSoFar()) }
+        listenRecord = null
+    }
+
+    /** A track counts as played after 30 seconds, or half its length if shorter. */
+    private suspend fun trackListening(player: Player) {
+        while (scope.isActive) {
+            delay(5_000)
+            val song = listenSong ?: continue
+            if (listenRecord != null) continue
+            val duration = player.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+            val threshold = minOf(30_000L, duration / 2)
+            val heard = listenedSoFar()
+            if (heard >= threshold) listenRecord = History.record(song, heard)
+        }
+    }
+
+    // ---- Output device ---------------------------------------------------------
+
+    private val deviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) = applyPreferredDevice()
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = applyPreferredDevice()
+    }
+
+    /** Route to a USB DAC when one is plugged in and the setting asks for it. */
+    private fun applyPreferredDevice() {
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val usb = if (AppSettings.playback.value.preferUsbDac) {
+            audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)?.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_USB_DEVICE || it.type == AudioDeviceInfo.TYPE_USB_HEADSET
+            }
+        } else {
+            null
+        }
+        player.setPreferredAudioDevice(usb)
+    }
+
+    // ---- Autoplay ----------------------------------------------------------------
+
     /**
      * Append radio for the last queued track once playback nears the end, so
      * the music doesn't stop. Starting a single song goes through here too:
@@ -203,10 +344,12 @@ class PlaybackService : MediaSessionService() {
      */
     private fun extendQueueIfNeeded() {
         val player = mediaSession?.player ?: return
-        if (!AppSettings.autoplay.value || player.repeatMode != Player.REPEAT_MODE_OFF) return
+        if (!AppSettings.playback.value.autoplay || player.repeatMode != Player.REPEAT_MODE_OFF) return
         val remaining = player.upcomingPlayOrder().size - 1
         if (!Autoplay.shouldExtend(remaining, player.mediaItemCount)) return
         val seed = player.getMediaItemAt(player.mediaItemCount - 1).mediaId
+        // Radio is a YouTube feature; a local file has none.
+        if (LocalMusic.isLocal(seed)) return
         if (seed in exhaustedSeeds) return
         if (radioJob?.isActive == true && radioSeed == seed) return
 
@@ -230,6 +373,7 @@ class PlaybackService : MediaSessionService() {
             if (count == 0 || player.getMediaItemAt(count - 1).mediaId != seed) return@launch
 
             val queued = (0 until count).mapTo(HashSet()) { player.getMediaItemAt(it).mediaId }
+            if (AppSettings.playback.value.noRepeatInSession) queued += sessionIds
             val additions = Autoplay.newTracks(queued, radio)
             if (additions.isEmpty()) {
                 exhaustedSeeds += seed
@@ -283,6 +427,49 @@ class PlaybackService : MediaSessionService() {
         class Factory(private val upstream: HttpDataSource.Factory) : DataSource.Factory {
             override fun createDataSource(): DataSource =
                 RefusalReportingDataSource(upstream.createDataSource())
+        }
+    }
+
+    /**
+     * Sends streamed tracks through the cache and resolver, and anything else
+     * (local `content://` files) straight to the platform data source, so local
+     * files neither fill the cache nor go looking for a YouTube stream.
+     */
+    private class SchemeRoutingDataSource(
+        private val streams: DataSource,
+        private val local: DataSource,
+    ) : DataSource {
+        private var active: DataSource? = null
+
+        override fun addTransferListener(transferListener: TransferListener) {
+            streams.addTransferListener(transferListener)
+            local.addTransferListener(transferListener)
+        }
+
+        override fun open(dataSpec: DataSpec): Long {
+            val target = if (videoIdOf(dataSpec.uri) != null) streams else local
+            active = target
+            return target.open(dataSpec)
+        }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+            active?.read(buffer, offset, length) ?: C.RESULT_END_OF_INPUT
+
+        override fun getUri(): Uri? = active?.uri
+
+        override fun getResponseHeaders(): Map<String, List<String>> = active?.responseHeaders.orEmpty()
+
+        override fun close() {
+            active?.close()
+            active = null
+        }
+
+        class Factory(
+            private val streams: DataSource.Factory,
+            private val local: DataSource.Factory,
+        ) : DataSource.Factory {
+            override fun createDataSource(): DataSource =
+                SchemeRoutingDataSource(streams.createDataSource(), local.createDataSource())
         }
     }
 

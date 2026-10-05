@@ -1,246 +1,521 @@
 package com.opentune.ui.settings
 
-import androidx.compose.runtime.getValue
+import android.content.Context
+import android.media.AudioManager
 import android.os.Build
-import androidx.compose.animation.AnimatedVisibility
+import android.text.format.Formatter
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.Animation
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.BlurOff
+import androidx.compose.material.icons.rounded.BlurOn
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.FilterAlt
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.MusicOff
+import androidx.compose.material.icons.rounded.NetworkCell
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SpaceBar
+import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.SurroundSound
+import androidx.compose.material.icons.rounded.TextFields
+import androidx.compose.material.icons.rounded.Upload
+import androidx.compose.material.icons.rounded.Usb
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.Wallpaper
+import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil3.SingletonImageLoader
 import com.opentune.BuildConfig
+import com.opentune.data.history.History
+import com.opentune.data.local.LocalMusic
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
 import com.opentune.data.settings.PaletteStyleOption
 import com.opentune.data.settings.PlayerBackground
 import com.opentune.data.settings.SEED_COLORS
 import com.opentune.data.settings.ThemeMode
+import com.opentune.playback.AudioCache
+import com.opentune.ui.components.GroupCard
+import com.opentune.ui.components.GroupLabel
+import com.opentune.ui.components.NavRow
+import com.opentune.ui.components.PageHeader
+import com.opentune.ui.components.PillSegmented
+import com.opentune.ui.components.RowDivider
+import com.opentune.ui.components.SettingRow
+import com.opentune.ui.components.ToggleRow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+/** One searchable row: what it's called and the words it can be found by. */
+private class Entry(val title: String, val summary: String = "", val content: @Composable () -> Unit)
+
+private class Section(val title: String, val entries: List<Entry>)
+
 @Composable
-fun SettingsScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
-    val theme by AppSettings.theme.collectAsState()
-    val autoplay by AppSettings.autoplay.collectAsState()
-    val quality by AppSettings.audioQuality.collectAsState()
-    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val wallpaperAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+fun SettingsScreen(
+    contentPadding: PaddingValues,
+    onBack: () -> Unit,
+    onOpenEqualizer: () -> Unit,
+    onOpenReplay: () -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val sections = settingsSections(onOpenEqualizer, onOpenReplay)
+    val q = query.trim()
+    val visible = sections.mapNotNull { s ->
+        val matches = if (q.isEmpty()) s.entries else s.entries.filter {
+            it.title.contains(q, true) || it.summary.contains(q, true) || s.title.contains(q, true)
+        }
+        if (matches.isEmpty()) null else Section(s.title, matches)
+    }
 
-    Column(Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection)) {
-        androidx.compose.material3.LargeTopAppBar(
-            title = { Text("Settings") },
-            navigationIcon = {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
-            },
-            scrollBehavior = scroll,
-        )
-        LazyColumn(contentPadding = contentPadding) {
-            item { ThemePreview() }
-
-            item { Group("Appearance") }
+    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+        item { PageHeader("Settings", onBack = onBack) }
+        item {
+            TextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                placeholder = { Text("Search settings") },
+                leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
+                shape = RoundedCornerShape(20.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                ),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        if (visible.isEmpty()) {
             item {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Label("Theme")
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        ThemeMode.entries.forEachIndexed { i, mode ->
-                            SegmentedButton(
-                                selected = theme.mode == mode,
-                                onClick = { AppSettings.updateTheme { it.copy(mode = mode) } },
-                                shape = SegmentedButtonDefaults.itemShape(i, ThemeMode.entries.size),
-                            ) { Text(mode.label) }
-                        }
+                Text("No settings match \"$q\".", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp))
+            }
+        }
+        visible.forEach { section ->
+            item(key = "label:${section.title}") { GroupLabel(section.title) }
+            item(key = "card:${section.title}") {
+                GroupCard {
+                    section.entries.forEachIndexed { i, entry ->
+                        if (i > 0) RowDivider()
+                        entry.content()
                     }
                 }
             }
-            item {
-                Toggle(
-                    "Color from artwork",
-                    "Tint the app with the playing song's cover",
-                    theme.colorFromArtwork,
-                ) { v -> AppSettings.updateTheme { it.copy(colorFromArtwork = v) } }
-            }
-            if (wallpaperAvailable) {
-                item {
-                    Toggle(
-                        "Material You",
-                        "Use your wallpaper's colors when nothing is playing",
-                        theme.dynamicColor,
-                    ) { v -> AppSettings.updateTheme { it.copy(dynamicColor = v) } }
+        }
+        item {
+            Text(
+                "OpenTune ${BuildConfig.VERSION_NAME} • GNU GPL v3 • Lyrics from LRCLIB",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(28.dp),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun settingsSections(onOpenEqualizer: () -> Unit, onOpenReplay: () -> Unit): List<Section> {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val theme by AppSettings.theme.collectAsState()
+    val pb by AppSettings.playback.collectAsState()
+    val ui by AppSettings.ui.collectAsState()
+    val lib by AppSettings.library.collectAsState()
+    val metered = remember { AppSettings.onMeteredNetwork() }
+    var qualityDialog by remember { mutableStateOf<Boolean?>(null) } // true = Wi-Fi, false = mobile
+    var folderDialog by remember { mutableStateOf(false) }
+    var cacheBytes by remember { mutableLongStateOf(0L) }
+    var message by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { cacheBytes = withContext(Dispatchers.IO) { AudioCache.usedBytes(context) } }
+
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            message = runCatching {
+                withContext(Dispatchers.IO) {
+                    val doc = buildJsonObject {
+                        put("app", "OpenTune")
+                        put("version", 1)
+                        put("settings", AppSettings.exportJson())
+                        put("history", History.exportJson())
+                    }
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(doc.toString().toByteArray()) }
                 }
-            }
-            item {
-                AnimatedVisibility(!theme.dynamicColor || !wallpaperAvailable) {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Label("Accent color")
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                "Exported settings and history."
+            }.getOrElse { "Export failed: ${it.message}" }
+        }
+    }
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            message = runCatching {
+                val doc = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { AppSettings.json.parseToJsonElement(it.readBytes().decodeToString()) }
+                } as? JsonObject ?: error("not an OpenTune export")
+                doc["settings"]?.let(AppSettings::importJson)
+                doc["history"]?.let(History::importJson)
+                "Imported settings and history."
+            }.getOrElse { "Import failed: ${it.message}" }
+        }
+    }
+
+    qualityDialog?.let { wifi ->
+        ChoiceDialog(
+            title = if (wifi) "Quality on Wi-Fi" else "Quality on mobile data",
+            options = AudioQuality.entries,
+            selected = if (wifi) pb.wifiQuality else pb.mobileQuality,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { q -> AppSettings.updatePlayback { if (wifi) it.copy(wifiQuality = q) else it.copy(mobileQuality = q) } },
+            onDismiss = { qualityDialog = null },
+        )
+    }
+    if (folderDialog) {
+        var folders by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
+        LaunchedEffect(Unit) { folders = runCatching { LocalMusic.folders(context) }.getOrDefault(emptyList()) }
+        ChoiceDialog(
+            title = "Local music folder",
+            options = listOf<String?>(null) + folders.map { it.first },
+            selected = lib.localFolder,
+            label = { f -> f?.let { name -> "$name (${folders.firstOrNull { it.first == name }?.second ?: 0})" } ?: "All audio folders" },
+            onSelect = { f -> AppSettings.updateLibrary { it.copy(localFolder = f) } },
+            onDismiss = { folderDialog = false },
+        )
+    }
+    message?.let { m ->
+        AlertDialog(onDismissRequest = { message = null }, confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } }, text = { Text(m) })
+    }
+
+    return listOf(
+        Section(
+            "Audio quality",
+            listOf(
+                Entry("On Wi-Fi", "stream quality bitrate") {
+                    NavRow("On Wi-Fi", { qualityDialog = true }, icon = Icons.Rounded.Wifi, value = pb.wifiQuality.label)
+                },
+                Entry("On mobile data", "stream quality bitrate cellular") {
+                    SettingRow(
+                        "On mobile data",
+                        icon = Icons.Rounded.NetworkCell,
+                        onClick = { qualityDialog = false },
+                        summary = if (metered) "In use now" else null,
+                        trailing = { Text(pb.mobileQuality.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    )
+                },
+                Entry("Output precision", "16-bit 32-bit float sample rate") {
+                    SettingRow("Output precision", summary = outputSummary(context, pb.floatOutput), icon = Icons.Rounded.GraphicEq, below = {
+                        PillSegmented(listOf(false, true), pb.floatOutput, { if (it) "32-bit float" else "16-bit PCM" }, { v -> AppSettings.updatePlayback { it.copy(floatOutput = v) } })
+                        Text(
+                            "Float keeps hi-res local files in 32-bit to the output and plays them without effects. Takes effect after a restart.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    })
+                },
+                Entry("Prefer USB DAC", "external dac usb audio") {
+                    ToggleRow("Prefer USB DAC", pb.preferUsbDac, { v -> AppSettings.updatePlayback { it.copy(preferUsbDac = v) } }, summary = "Send audio to a USB DAC whenever one is plugged in", icon = Icons.Rounded.Usb)
+                },
+            ),
+        ),
+        Section(
+            "Playback",
+            listOf(
+                Entry("Loudness normalization", "volume level") {
+                    ToggleRow("Loudness normalization", pb.loudnessNormalization, { v -> AppSettings.updatePlayback { it.copy(loudnessNormalization = v) } }, summary = "Levels every track to about the same loudness", icon = Icons.AutoMirrored.Rounded.VolumeUp)
+                },
+                Entry("Skip silence", "gaps") {
+                    ToggleRow("Skip silence", pb.skipSilence, { v -> AppSettings.updatePlayback { it.copy(skipSilence = v) } }, summary = "Trim gaps longer than a second", icon = Icons.Rounded.SpaceBar)
+                },
+                Entry("Spatial audio", "stereo widen immersive") {
+                    ToggleRow("Spatial audio", pb.spatialAudio, { v -> AppSettings.updatePlayback { it.copy(spatialAudio = v) } }, summary = "Widens stereo tracks for a more open sound", icon = Icons.Rounded.SurroundSound)
+                },
+                Entry("Equalizer", "eq bands tone balance bass treble") {
+                    NavRow("Equalizer", onOpenEqualizer, summary = "Seven bands, tone and balance", icon = Icons.Rounded.Equalizer)
+                },
+                Entry("Autoplay", "radio continue") {
+                    ToggleRow("Autoplay", pb.autoplay, AppSettings::setAutoplay, summary = "Keep playing similar songs when the queue ends", icon = Icons.AutoMirrored.Rounded.PlaylistPlay)
+                },
+                Entry("Don't repeat songs in current session", "autoplay duplicates") {
+                    ToggleRow("Don't repeat songs in current session", pb.noRepeatInSession, { v -> AppSettings.updatePlayback { it.copy(noRepeatInSession = v) } }, summary = "Autoplay won't add a song already played or queued this session", icon = Icons.Rounded.History)
+                },
+                Entry("Stop music on close from recents", "swipe away") {
+                    ToggleRow("Stop music on close from recents", pb.stopOnTaskRemoved, { v -> AppSettings.updatePlayback { it.copy(stopOnTaskRemoved = v) } }, summary = "Stops playback when swiped away from recent apps", icon = Icons.Rounded.MusicOff)
+                },
+            ),
+        ),
+        Section(
+            "Appearance",
+            listOf(
+                Entry("Theme", "dark light system") {
+                    SettingRow("Theme", icon = Icons.Rounded.Palette, below = {
+                        PillSegmented(ThemeMode.entries, theme.mode, { it.label }, { m -> AppSettings.updateTheme { it.copy(mode = m) } })
+                    })
+                },
+                Entry("Color from artwork", "tint album cover") {
+                    ToggleRow("Color from artwork", theme.colorFromArtwork, { v -> AppSettings.updateTheme { it.copy(colorFromArtwork = v) } }, summary = "Tint the app with the playing song's cover", icon = Icons.Rounded.AutoAwesome)
+                },
+                Entry("Material You", "wallpaper dynamic color") {
+                    val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                    ToggleRow(
+                        "Material You",
+                        theme.dynamicColor,
+                        { v -> AppSettings.updateTheme { it.copy(dynamicColor = v) } },
+                        summary = if (supported) "Use your wallpaper's colors when nothing is playing" else "Needs Android 12",
+                        icon = Icons.Rounded.Wallpaper,
+                        enabled = supported,
+                    )
+                },
+                Entry("Accent color", "color") {
+                    SettingRow("Accent color", icon = Icons.Rounded.Palette, below = {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             SEED_COLORS.forEach { argb ->
                                 val selected = theme.seedColor == argb
                                 Box(
-                                    Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(argb))
-                                        .border(
-                                            width = if (selected) 3.dp else 0.dp,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            shape = CircleShape,
-                                        )
+                                    Modifier.size(38.dp).clip(CircleShape).background(Color(argb))
+                                        .border(if (selected) 3.dp else 0.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
                                         .clickable { AppSettings.updateTheme { it.copy(seedColor = argb) } },
                                     contentAlignment = Alignment.Center,
-                                ) {
-                                    if (selected) Icon(Icons.Filled.Check, null, tint = Color.White)
-                                }
+                                ) { if (selected) Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
                             }
                         }
-                    }
-                }
-            }
-            item {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Label("Palette style")
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PaletteStyleOption.entries.forEach { style ->
-                            FilterChip(
-                                selected = theme.paletteStyle == style,
-                                onClick = { AppSettings.updateTheme { it.copy(paletteStyle = style) } },
-                                label = { Text(style.label) },
+                    })
+                },
+                Entry("Palette style", "tonal vibrant expressive") {
+                    SettingRow("Palette style", icon = Icons.Rounded.Palette, below = {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PaletteStyleOption.entries.forEach { s ->
+                                FilterChip(theme.paletteStyle == s, { AppSettings.updateTheme { it.copy(paletteStyle = s) } }, label = { Text(s.label) })
+                            }
+                        }
+                    })
+                },
+                Entry("Pure black", "oled amoled") {
+                    ToggleRow("Pure black", theme.pureBlack, { v -> AppSettings.updateTheme { it.copy(pureBlack = v) } }, summary = "Black backgrounds with neutral gray cards in dark theme", icon = Icons.Rounded.Wallpaper)
+                },
+                Entry("Player background", "mesh gradient blur") {
+                    SettingRow("Player background", icon = Icons.Rounded.Wallpaper, below = {
+                        PillSegmented(PlayerBackground.entries, theme.playerBackground, { it.label }, { b -> AppSettings.updateTheme { it.copy(playerBackground = b) } })
+                    })
+                },
+                Entry("Full-screen cover art", "artwork edge") {
+                    ToggleRow("Full-screen cover art", ui.fullScreenCover, { v -> AppSettings.updateUi { it.copy(fullScreenCover = v) } }, summary = "Runs the cover to the edges of the player instead of a square sleeve", icon = Icons.Rounded.Fullscreen)
+                },
+                Entry("Reduce animation", "motion") {
+                    ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes the player's moving background", icon = Icons.Rounded.Animation)
+                },
+                Entry("Reduce dynamic blur", "glass frosted performance") {
+                    ToggleRow("Reduce dynamic blur", ui.reduceBlur, { v -> AppSettings.updateUi { it.copy(reduceBlur = v) } }, summary = "Swaps frosted glass for solid fills across the app", icon = Icons.Rounded.BlurOff)
+                },
+            ),
+        ),
+        Section(
+            "Lyrics",
+            listOf(
+                Entry("Synced lyrics", "karaoke words") {
+                    ToggleRow("Synced lyrics", ui.syncedLyrics, { v -> AppSettings.updateUi { it.copy(syncedLyrics = v) } }, summary = "Lights up the words as they're sung", icon = Icons.Rounded.Lyrics)
+                },
+                Entry("Blur unfocused lyrics", "spotlight") {
+                    ToggleRow("Blur unfocused lyrics", ui.blurLyrics, { v -> AppSettings.updateUi { it.copy(blurLyrics = v) } }, summary = "Keeps the spotlight on the current line", icon = Icons.Rounded.BlurOn)
+                },
+                Entry("Lyrics sources", "lrclib youtube") {
+                    SettingRow("Lyrics sources", summary = "LRCLIB, then YouTube Music", icon = Icons.Rounded.TextFields)
+                },
+            ),
+        ),
+        Section(
+            "Local music",
+            listOf(
+                Entry("Local music folder", "device files") {
+                    NavRow("Local music folder", { folderDialog = true }, summary = lib.localFolder ?: "All audio folders", icon = Icons.Rounded.Folder)
+                },
+                Entry("Filter non-music audio", "recordings voice notes") {
+                    ToggleRow("Filter non-music audio", lib.filterNonMusic, { v -> AppSettings.updateLibrary { it.copy(filterNonMusic = v) } }, summary = "Hides clips under 30 seconds, WAV files, voice notes, recordings and system sounds", icon = Icons.Rounded.FilterAlt)
+                },
+            ),
+        ),
+        Section(
+            "Storage",
+            listOf(
+                Entry("Song cache limit", "disk offline seeking") {
+                    var draft by remember(lib.songCacheMb) { mutableFloatStateOf(lib.songCacheMb.toFloat()) }
+                    SettingRow(
+                        "Song cache limit",
+                        summary = "Keeps played audio on disk for instant seeking and replays. Takes effect after a restart.",
+                        icon = Icons.Rounded.Storage,
+                        trailing = { Text(formatMb(draft.toInt()), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal) },
+                        below = {
+                            Slider(
+                                value = draft,
+                                onValueChange = { draft = (it / 128).toInt().coerceAtLeast(1) * 128f },
+                                onValueChangeFinished = { AppSettings.updateLibrary { it.copy(songCacheMb = draft.toInt()) } },
+                                valueRange = 128f..4096f,
                             )
+                        },
+                    )
+                },
+                Entry("Clear song cache", "free space") {
+                    NavRow("Clear song cache", {
+                        scope.launch {
+                            withContext(Dispatchers.IO) { AudioCache.clear(context) }
+                            cacheBytes = withContext(Dispatchers.IO) { AudioCache.usedBytes(context) }
                         }
-                    }
-                }
-            }
-            item {
-                Toggle("Pure black", "True black backgrounds in dark theme, for OLED screens", theme.pureBlack) { v ->
-                    AppSettings.updateTheme { it.copy(pureBlack = v) }
-                }
-            }
-            item {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Label("Player background")
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        PlayerBackground.entries.forEachIndexed { i, bg ->
-                            SegmentedButton(
-                                selected = theme.playerBackground == bg,
-                                onClick = { AppSettings.updateTheme { it.copy(playerBackground = bg) } },
-                                shape = SegmentedButtonDefaults.itemShape(i, PlayerBackground.entries.size),
-                            ) { Text(bg.label.substringBefore(' ').replaceFirstChar { it.uppercase() }) }
-                        }
-                    }
-                }
-            }
-
-            item { Group("Playback") }
-            item {
-                Toggle("Autoplay", "Keep playing similar songs when the queue ends", autoplay, AppSettings::setAutoplay)
-            }
-            item {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Label("Audio quality")
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AudioQuality.entries.forEach { q ->
-                            FilterChip(selected = quality == q, onClick = { AppSettings.setAudioQuality(q) }, label = { Text(q.label) })
-                        }
-                    }
-                }
-            }
-
-            item { Group("About") }
-            item {
-                ListItem(
-                    headlineContent = { Text("OpenTune ${BuildConfig.VERSION_NAME}") },
-                    supportingContent = { Text("Free software under the GNU GPL v3. Lyrics from LRCLIB.") },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                )
-            }
-        }
-    }
-}
-
-/** A small card showing the scheme the current choices produce. */
-@Composable
-private fun ThemePreview() {
-    val c = MaterialTheme.colorScheme
-    Surface(
-        color = c.surfaceContainerHigh,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-    ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(64.dp).clip(MaterialTheme.shapes.medium).background(c.primaryContainer), Alignment.Center) {
-                Box(Modifier.size(28.dp).clip(CircleShape).background(c.primary))
-            }
-            Column(Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.fillMaxWidth(0.7f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(c.onSurface.copy(alpha = 0.8f)))
-                Box(Modifier.fillMaxWidth(0.45f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(c.onSurfaceVariant.copy(alpha = 0.5f)))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(c.primary, c.secondary, c.tertiary, c.secondaryContainer, c.tertiaryContainer).forEach {
-                        Box(Modifier.size(18.dp).clip(CircleShape).background(it))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Group(title: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 4.dp),
+                    }, summary = "Using ${Formatter.formatShortFileSize(context, cacheBytes)}", icon = Icons.Rounded.DeleteSweep)
+                },
+                Entry("Clear image cache", "artwork") {
+                    NavRow("Clear image cache", {
+                        val loader = SingletonImageLoader.get(context)
+                        loader.memoryCache?.clear()
+                        scope.launch { withContext(Dispatchers.IO) { loader.diskCache?.clear() } }
+                        message = "Image cache cleared."
+                    }, summary = "Frees space used by album artwork", icon = Icons.Rounded.DeleteSweep)
+                },
+            ),
+        ),
+        Section(
+            "Your data",
+            listOf(
+                Entry("Replay", "stats top songs artists") {
+                    NavRow("Replay", onOpenReplay, summary = "Your top songs, artists and albums", icon = Icons.Rounded.BarChart)
+                },
+                Entry("Export data", "backup json") {
+                    NavRow("Export data", { exporter.launch("opentune-backup.json") }, summary = "Settings and listening history, as one JSON file", icon = Icons.Rounded.Upload)
+                },
+                Entry("Import data", "restore json") {
+                    NavRow("Import data", { importer.launch(arrayOf("application/json")) }, summary = "Replaces the settings and history on this device", icon = Icons.Rounded.Download)
+                },
+                Entry("Clear listening history", "delete history") {
+                    NavRow("Clear listening history", { History.clear(); message = "Listening history cleared." }, summary = "Removes Recents and Replay data", icon = Icons.Rounded.DeleteSweep)
+                },
+            ),
+        ),
+        Section(
+            "Miscellaneous",
+            listOf(
+                Entry("Play next on swipe", "gesture queue") {
+                    ToggleRow("Play next on swipe", pb.playNextOnSwipe, { v -> AppSettings.updatePlayback { it.copy(playNextOnSwipe = v) } }, summary = "When off, swiping a song adds it to the end of the queue", icon = Icons.AutoMirrored.Rounded.PlaylistPlay)
+                },
+                Entry("Hide volume bar", "player slider") {
+                    ToggleRow("Hide volume bar", ui.hideVolumeBar, { v -> AppSettings.updateUi { it.copy(hideVolumeBar = v) } }, summary = "Removes the volume slider from the player", icon = Icons.AutoMirrored.Rounded.VolumeOff)
+                },
+                Entry("Hide song status", "playing from") {
+                    ToggleRow("Hide song status", ui.hideSongStatus, { v -> AppSettings.updateUi { it.copy(hideSongStatus = v) } }, summary = "Hides the \"Playing from\" line in the player", icon = Icons.Rounded.VisibilityOff)
+                },
+            ),
+        ),
+        Section(
+            "Advanced",
+            listOf(
+                Entry("Show stats for nerds", "codec bitrate sample rate debug") {
+                    ToggleRow("Show stats for nerds", ui.statsForNerds, { v -> AppSettings.updateUi { it.copy(statsForNerds = v) } }, summary = "Codec, bitrate and sample rate under the seek bar", icon = Icons.Rounded.Info)
+                },
+            ),
+        ),
     )
 }
 
-@Composable
-private fun Label(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 10.dp))
+private fun outputSummary(context: Context, float: Boolean): String {
+    val am = context.getSystemService(AudioManager::class.java)
+    val rate = am?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull()
+    val khz = rate?.let { "%.1f kHz".format(it / 1000f) } ?: "unknown rate"
+    return "AudioTrack · ${Build.MODEL} · $khz · ${if (float) "32-bit float" else "16-bit PCM"}"
 }
 
+private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 1024f) else "$mb MB"
+
 @Composable
-private fun Toggle(title: String, summary: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(summary) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onChange) },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable { onChange(!checked) },
+private fun <T> ChoiceDialog(
+    title: String,
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            LazyColumn {
+                items(options) { o ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onSelect(o); onDismiss() }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = o == selected, onClick = { onSelect(o); onDismiss() })
+                        Text(label(o), modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
 }

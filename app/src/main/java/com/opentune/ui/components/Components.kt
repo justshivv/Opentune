@@ -3,6 +3,18 @@ package com.opentune.ui.components
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.opentune.data.settings.AppSettings
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -117,70 +129,113 @@ fun SongListItem(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val hasMenu = onPlayNext != null || onAddToQueue != null
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = { if (hasMenu) menuOpen = true })
-            .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        if (leading != null) {
-            leading()
-        } else {
-            Box(Modifier.size(52.dp)) {
-                Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.fillMaxSize())
-                if (isCurrent) {
-                    Box(
-                        Modifier.fillMaxSize().clip(MaterialTheme.shapes.small).background(Color.Black.copy(alpha = 0.45f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        NowPlayingBars(playing = isPlaying, color = Color.White)
+    val playback by AppSettings.playback.collectAsState()
+    val onSwipe = if (playback.playNextOnSwipe) onPlayNext else onAddToQueue
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    val threshold = with(LocalDensity.current) { 88.dp.toPx() }
+    Box(modifier.fillMaxWidth()) {
+        if (onSwipe != null && offsetX.value > 1f) {
+            val reached = offsetX.value >= threshold
+            Box(
+                Modifier.matchParentSize().background(
+                    if (reached) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                ),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Icon(
+                    if (playback.playNextOnSwipe) Icons.Filled.SkipNext else Icons.AutoMirrored.Filled.QueueMusic,
+                    null,
+                    tint = if (reached) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 24.dp),
+                )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer { translationX = offsetX.value }
+                .background(if (offsetX.value > 1f) MaterialTheme.colorScheme.background else Color.Transparent)
+                .then(
+                    if (onSwipe == null) Modifier else Modifier.pointerInput(onSwipe) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (offsetX.value >= threshold) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onSwipe()
+                                }
+                                scope.launch { offsetX.animateTo(0f, spring(dampingRatio = 0.7f)) }
+                            },
+                            onDragCancel = { scope.launch { offsetX.animateTo(0f) } },
+                        ) { change, amount ->
+                            change.consume()
+                            scope.launch { offsetX.snapTo((offsetX.value + amount * 0.8f).coerceIn(0f, threshold * 1.6f)) }
+                        }
+                    },
+                )
+                .combinedClickable(onClick = onClick, onLongClick = { if (hasMenu) menuOpen = true })
+                .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            if (leading != null) {
+                leading()
+            } else {
+                Box(Modifier.size(52.dp)) {
+                    Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.fillMaxSize())
+                    if (isCurrent) {
+                        Box(
+                            Modifier.fillMaxSize().clip(MaterialTheme.shapes.small).background(Color.Black.copy(alpha = 0.45f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            NowPlayingBars(playing = isPlaying, color = Color.White)
+                        }
                     }
                 }
             }
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                song.title,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                listOfNotNull(song.artist.takeIf { it.isNotBlank() }, song.durationText).joinToString(" • "),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        trailing()
-        if (hasMenu) {
-            Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More options")
-                }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    onPlayNext?.let {
-                        DropdownMenuItem(
-                            text = { Text("Play next") },
-                            leadingIcon = { Icon(Icons.Filled.SkipNext, null) },
-                            onClick = { menuOpen = false; it() },
-                        )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    song.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    listOfNotNull(song.artist.takeIf { it.isNotBlank() }, song.durationText).joinToString(" • "),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            trailing()
+            if (hasMenu) {
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                     }
-                    onAddToQueue?.let {
-                        DropdownMenuItem(
-                            text = { Text("Add to queue") },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) },
-                            onClick = { menuOpen = false; it() },
-                        )
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        onPlayNext?.let {
+                            DropdownMenuItem(
+                                text = { Text("Play next") },
+                                leadingIcon = { Icon(Icons.Filled.SkipNext, null) },
+                                onClick = { menuOpen = false; it() },
+                            )
+                        }
+                        onAddToQueue?.let {
+                            DropdownMenuItem(
+                                text = { Text("Add to queue") },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) },
+                                onClick = { menuOpen = false; it() },
+                            )
+                        }
                     }
                 }
             }
-        }
+    }
     }
 }
 
@@ -245,7 +300,7 @@ fun SectionHeader(
     action: (@Composable () -> Unit)? = null,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 20.dp, bottom = 8.dp),
+        modifier = modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {

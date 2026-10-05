@@ -93,6 +93,8 @@ dependencies {
     // Full Material 3 color schemes from one seed color: accent picker and
     // artwork-tinted themes. Also quantizes artwork into a seed.
     implementation("com.materialkolor:material-kolor:4.0.0")
+    // Frosted glass behind the floating nav bar and mini player.
+    implementation("dev.chrisbanes.haze:haze:1.7.1")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
@@ -105,6 +107,7 @@ dependencies {
     implementation("androidx.media3:media3-session:1.11.0")
     implementation("androidx.media3:media3-common:1.11.0")
     implementation("androidx.media3:media3-datasource-okhttp:1.11.0")
+    implementation("androidx.media3:media3-database:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.9.0")
 
     // ---- Images ----
