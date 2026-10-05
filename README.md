@@ -79,6 +79,18 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   artist), shortcuts to Liked, Downloads, On this phone and Replay, then
   your playlists from the app and from YouTube in one list.
 - **Replay:** top songs, artists and albums from this device's history.
+- **Your own music server** (optional): Navidrome, Gonic, Airsonic,
+  Nextcloud Music or any Subsonic-compatible server. Browse recently added
+  and most played albums, artists and playlists, search, and play songs
+  as they're stored, so FLAC and hi-res files stay lossless. Also in
+  Android Auto. Only a sign-in token is kept, never the password, and it's
+  left out of backups.
+- **ListenBrainz** (optional): send what you play to your open
+  ListenBrainz history with your user token, and get its recommendations
+  as a shelf on Home.
+- **Album covers from MusicBrainz**: for music videos and local files
+  without art, the player shows the album's cover from the Cover Art
+  Archive instead of a video frame, when MusicBrainz has a confident match.
 - **Last.fm scrobbling** (optional), with your own free Last.fm API key.
   The password is only used once to get a session and isn't stored.
 - **Export and import** of settings, history, likes and playlists as JSON.
@@ -173,7 +185,11 @@ are used as libraries under GPLv3. Liquid Glass uses Kyant's
 [backdrop](https://github.com/Kyant0/AndroidLiquidGlass) library, and
 frosted glass uses [Haze](https://github.com/chrisbanes/haze). The
 [Outfit](https://github.com/Outfitio/Outfit-Fonts) font is used under the
-SIL Open Font License 1.1 (`third_party/outfit/OFL.txt`).
+SIL Open Font License 1.1 (`third_party/outfit/OFL.txt`). Album covers
+come from the [Cover Art Archive](https://coverartarchive.org) through
+[MusicBrainz](https://musicbrainz.org), and recommendations from
+[ListenBrainz](https://listenbrainz.org), all run by the MetaBrainz
+Foundation.
 
 OpenTune is licensed under the GNU General Public License v3.0. See
 [LICENSE](LICENSE).

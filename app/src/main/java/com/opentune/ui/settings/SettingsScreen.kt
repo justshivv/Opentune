@@ -1,5 +1,9 @@
 package com.opentune.ui.settings
 
+import androidx.compose.material.icons.rounded.Dns
+import com.opentune.data.subsonic.Subsonic
+import androidx.compose.material.icons.rounded.Album
+import com.opentune.data.listenbrainz.ListenBrainz
 import android.content.Context
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.SystemUpdate
@@ -224,6 +228,11 @@ private fun settingsSections(
     var downloadQualityDialog by remember { mutableStateOf(false) }
     var lyricsSourcesDialog by remember { mutableStateOf(false) }
     var lastFmDialog by remember { mutableStateOf(false) }
+    var serverDialog by remember { mutableStateOf(false) }
+    var listenBrainzDialog by remember { mutableStateOf(false) }
+    val listenBrainz by ListenBrainz.account.collectAsState()
+    val listensWaiting by ListenBrainz.queued.collectAsState()
+    val musicServer by Subsonic.server.collectAsState()
     var lyricsAnimationDialog by remember { mutableStateOf(false) }
     val lastFm by LastFm.account.collectAsState()
     val scrobblesWaiting by LastFm.queued.collectAsState()
@@ -287,6 +296,8 @@ private fun settingsSections(
     }
     if (lyricsSourcesDialog) LyricsSourcesDialog(onDismiss = { lyricsSourcesDialog = false })
     if (lastFmDialog) LastFmDialog(onDismiss = { lastFmDialog = false })
+    if (serverDialog) ServerDialog(onDismiss = { serverDialog = false })
+    if (listenBrainzDialog) ListenBrainzDialog(onDismiss = { listenBrainzDialog = false })
     if (lyricsAnimationDialog) {
         ChoiceDialog(
             title = "Lyrics animation",
@@ -526,6 +537,9 @@ private fun settingsSections(
                 Entry("Wavy seek bar", "wave progress slider") {
                     ToggleRow("Wavy seek bar", ui.wavySeekbar, { v -> AppSettings.updateUi { it.copy(wavySeekbar = v) } }, summary = "The played part of the bar ripples while music plays", icon = Icons.Rounded.Waves)
                 },
+                Entry("Album covers", "artwork cover musicbrainz cover art archive video thumbnail") {
+                    ToggleRow("Album covers from MusicBrainz", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "Shows the album's cover in the player instead of a video frame, and for local files without one", icon = Icons.Rounded.Album)
+                },
                 Entry("Reduce animation", "motion") {
                     ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes the player's moving background", icon = Icons.Rounded.Animation)
                 },
@@ -668,6 +682,27 @@ private fun settingsSections(
             ),
         ),
         Section(
+            "Your music server",
+            listOfNotNull(
+                Entry("Music server", "subsonic navidrome gonic airsonic jellyfin flac lossless server") {
+                    val connected = musicServer
+                    if (connected == null) {
+                        NavRow("Connect a server", { serverDialog = true }, summary = "Stream your own FLAC and hi-res files from any Subsonic server", icon = Icons.Rounded.Dns)
+                    } else {
+                        NavRow(
+                            "${connected.user} on ${connected.url.substringAfter("://")}",
+                            { serverDialog = true },
+                            summary = "Streams stored files as they are. Tap to sign in again.",
+                            icon = Icons.Rounded.Dns,
+                        )
+                    }
+                },
+                if (musicServer != null) Entry("Disconnect server", "sign out subsonic") {
+                    SettingRow("Disconnect server", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { Subsonic.disconnect() })
+                } else null,
+            ),
+        ),
+        Section(
             "Last.fm (optional)",
             listOfNotNull(
                 Entry("Last.fm scrobbling", "scrobble lastfm audioscrobbler history") {
@@ -684,6 +719,26 @@ private fun settingsSections(
                 },
                 if (lastFm != null) Entry("Disconnect Last.fm", "sign out lastfm") {
                     SettingRow("Disconnect Last.fm", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { LastFm.signOut() })
+                } else null,
+            ),
+        ),
+        Section(
+            "ListenBrainz (optional)",
+            listOfNotNull(
+                Entry("ListenBrainz", "listenbrainz scrobble history recommendations metabrainz") {
+                    val who = listenBrainz
+                    if (who == null) {
+                        NavRow("Connect ListenBrainz", { listenBrainzDialog = true }, summary = "Free, open listening history, and recommendations on Home", icon = Icons.Rounded.History)
+                    } else {
+                        SettingRow(
+                            "Sending listens as ${who.user}",
+                            summary = if (listensWaiting > 0) "$listensWaiting listens waiting to send" else "Recommendations from your listens show on Home",
+                            icon = Icons.Rounded.History,
+                        )
+                    }
+                },
+                if (listenBrainz != null) Entry("Disconnect ListenBrainz", "sign out listenbrainz") {
+                    SettingRow("Disconnect ListenBrainz", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { ListenBrainz.signOut() })
                 } else null,
             ),
         ),

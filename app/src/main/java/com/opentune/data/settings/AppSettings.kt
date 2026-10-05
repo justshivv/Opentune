@@ -214,6 +214,8 @@ data class InterfaceSettings(
     val liquidGlass: Boolean = true,
     /** Draw the played part of the seek bar as a moving wave. */
     val wavySeekbar: Boolean = false,
+    /** Proper album covers from MusicBrainz for music videos and local files without art. */
+    val albumCovers: Boolean = true,
     val lyricsAnimation: LyricsAnimation = LyricsAnimation.FLUID,
     /** Lyrics text size, as a fraction of the standard size. */
     val lyricsTextScale: Float = 1f,

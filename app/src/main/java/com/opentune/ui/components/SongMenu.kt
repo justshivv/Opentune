@@ -1,5 +1,6 @@
 package com.opentune.ui.components
 
+import com.opentune.data.isYouTubeId
 import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
@@ -107,7 +108,8 @@ fun SongMenuSheet(
     val downloads by Downloads.entries.collectAsState()
     val isLiked = liked.any { it.videoId == song.videoId }
     val download = downloads[song.videoId]
-    val local = LocalMusic.isLocal(song.videoId)
+    // Files on this phone and songs on your server: no YouTube actions.
+    val local = !isYouTubeId(song.videoId)
     var pickPlaylist by remember { mutableStateOf(false) }
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val close = onDismiss

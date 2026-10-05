@@ -3,4 +3,6 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="account.xml" />
     <exclude domain="sharedpref" path="lastfm.xml" />
+    <exclude domain="sharedpref" path="subsonic.xml" />
+    <exclude domain="sharedpref" path="listenbrainz.xml" />
 </full-backup-content>

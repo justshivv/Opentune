@@ -14,6 +14,7 @@ import android.content.Context
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import com.opentune.data.history.History
+import com.opentune.data.listenbrainz.ListenBrainz
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitAll
@@ -139,7 +140,7 @@ object MusicRepository {
     }
 
     /** Where Home's extra shelves come from, in the order they're shown. */
-    private enum class HomeSource { RADIO, ARTISTS, NEW_RELEASES, CHARTS, EXPLORE, MOODS }
+    private enum class HomeSource { RADIO, LISTENBRAINZ, ARTISTS, NEW_RELEASES, CHARTS, EXPLORE, MOODS }
 
     private class Fetched(val shelves: List<HomeShelf>, val at: Long)
     private val extrasCache = java.util.concurrent.ConcurrentHashMap<HomeSource, Fetched>()
@@ -154,6 +155,7 @@ object MusicRepository {
         val shelves = try {
             when (source) {
                 HomeSource.RADIO -> radioShelf()
+                HomeSource.LISTENBRAINZ -> listenBrainzShelf()
                 HomeSource.ARTISTS -> artistShelves()
                 HomeSource.NEW_RELEASES -> shelvesOf("FEmusic_new_releases")
                 HomeSource.CHARTS -> shelvesOf("FEmusic_charts")
@@ -185,6 +187,34 @@ object MusicRepository {
         if (songs.size < 4) return emptyList()
         val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
         return listOf(HomeShelf("Because you played ${last.title}", items, "Picked for you"))
+    }
+
+    /**
+     * ListenBrainz's picks for the signed-in user, each found on YouTube
+     * Music so it plays like any other song. Nothing until ListenBrainz has
+     * enough listens to recommend from.
+     */
+    private suspend fun listenBrainzShelf(): List<HomeShelf> = coroutineScope {
+        if (ListenBrainz.account.value == null) return@coroutineScope emptyList()
+        val picks = ListenBrainz.recommendations(MAX_PICKS)
+        val gate = kotlinx.coroutines.sync.Semaphore(4)
+        val songs = picks.map { pick ->
+            async {
+                gate.acquire()
+                try {
+                    runCatching {
+                        val response = Innertube.search("${pick.title} ${pick.artist}", SearchFilter.SONGS.params)
+                        InnertubeParser.parseSearchPage(response, includeVideos = false).rows
+                            .firstNotNullOfOrNull { (it as? SearchResult.Track)?.song }
+                    }.getOrNull()
+                } finally {
+                    gate.release()
+                }
+            }
+        }.awaitAll().filterNotNull().distinctBy { it.videoId }
+        if (songs.size < 4) return@coroutineScope emptyList()
+        val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
+        listOf(HomeShelf("Recommended by ListenBrainz", items, "From your listens"))
     }
 
     /** Albums, singles and look-alikes for the two artists played most this month. */
@@ -238,6 +268,7 @@ object MusicRepository {
 
     private const val MAX_HOME_PAGES = 8
     private const val EXTRAS_FRESH_MS = 30 * 60 * 1000L
+    private const val MAX_PICKS = 16
 
     suspend fun moodsAndGenres(): List<MoodGenreSection> = io {
         InnertubeParser.parseMoodAndGenres(Innertube.browse("FEmusic_moods_and_genres"))

@@ -10,6 +10,7 @@ import com.opentune.data.download.Downloads
 import com.opentune.data.innertube.UpgradedTracks
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.model.Song
+import com.opentune.data.subsonic.Subsonic
 
 /**
  * Queue entries point at `opentune://track/<videoId>` rather than at a stream
@@ -21,6 +22,7 @@ private const val TRACK_SCHEME = "opentune"
 private const val TRACK_HOST = "track"
 private const val EXTRA_DURATION_TEXT = "durationText"
 private const val EXTRA_ALBUM = "album"
+private const val EXTRA_THUMB = "thumb"
 
 /**
  * Local files play straight from MediaStore and downloads from their file;
@@ -28,6 +30,9 @@ private const val EXTRA_ALBUM = "album"
  */
 fun trackUri(videoId: String): Uri = when {
     LocalMusic.isLocal(videoId) -> LocalMusic.contentUri(videoId)
+    // Your own server streams the stored file directly; Uri.EMPTY fails the
+    // item cleanly if the server has been disconnected since it was queued.
+    Subsonic.isSubsonic(videoId) -> Subsonic.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
     else -> Downloads.fileFor(videoId)?.let(Uri::fromFile)
         ?: streamUri(videoId, upgraded = UpgradedTracks.contains(videoId))
 }
@@ -59,12 +64,14 @@ fun Song.toMediaItem(): MediaItem =
                 .setTitle(title)
                 .setArtist(artist)
                 // A downloaded cover keeps the notification and lock screen right offline.
-                .setArtworkUri(Downloads.artFor(videoId)?.let(Uri::fromFile) ?: thumbnailUrl?.let(Uri::parse))
+                .setArtworkUri(Downloads.artFor(videoId)?.let(Uri::fromFile) ?: Subsonic.resolveCover(thumbnailUrl)?.let(Uri::parse))
                 .setAlbumTitle(albumName)
                 .setExtras(
                     Bundle().apply {
                         putString(EXTRA_DURATION_TEXT, durationText)
                         putString(EXTRA_ALBUM, albumName)
+                        // The cover as the song stores it: a server's carries no credentials.
+                        putString(EXTRA_THUMB, thumbnailUrl)
                     },
                 )
                 .build(),
@@ -76,7 +83,7 @@ fun MediaItem.toSong(): Song =
         videoId = mediaId,
         title = mediaMetadata.title?.toString().orEmpty(),
         artist = mediaMetadata.artist?.toString().orEmpty(),
-        thumbnailUrl = mediaMetadata.artworkUri?.toString(),
+        thumbnailUrl = mediaMetadata.extras?.getString(EXTRA_THUMB) ?: mediaMetadata.artworkUri?.toString(),
         durationText = mediaMetadata.extras?.getString(EXTRA_DURATION_TEXT),
         albumName = mediaMetadata.extras?.getString(EXTRA_ALBUM) ?: mediaMetadata.albumTitle?.toString(),
     )

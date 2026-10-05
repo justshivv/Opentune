@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
  * process. Info lines from logcat are left out; on Android 15 they are mostly
  * one line per frame from the view system. Cookies are never logged, and
  * lines carrying a stream URL are cut at the query so its signature doesn't
- * travel.
+ * travel. A music server URL's token and salt are blanked out too.
  */
 object LogExport {
     suspend fun recent(): String = withContext(Dispatchers.IO) {
@@ -32,10 +32,12 @@ object LogExport {
             process.inputStream.bufferedReader().use { it.readText() }.takeLast(SYSTEM_CHARS)
         }.getOrElse { "Couldn't read logcat: ${it.message}" }
         val text = "$header\n== App log ==\n$own\n\n== System warnings and errors ==\n$system"
-        STREAM_QUERY.replace(text, "googlevideo.com/…")
+        STREAM_QUERY.replace(text, "googlevideo.com/…").replace(SERVER_SECRET, "$1…")
     }
 
     private val STREAM_QUERY = Regex("""googlevideo\.com/\S*""")
+    /** A music server URL's token, salt and password, which let anyone sign in to it. */
+    private val SERVER_SECRET = Regex("""([?&](?:t|s|p)=)[^&\s]+""")
     // Clipboard and share intents travel through a 1 MB binder buffer.
     private const val OWN_CHARS = 80_000
     private const val SYSTEM_CHARS = 20_000

@@ -8,6 +8,7 @@ import android.os.ParcelFileDescriptor
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
 import com.opentune.data.download.Downloads
+import com.opentune.data.subsonic.Subsonic
 import java.io.File
 import java.io.FileNotFoundException
 import java.security.MessageDigest
@@ -20,9 +21,9 @@ import okhttp3.Request
  *
  * `download/<videoId>` is a downloaded song's own cover file. `web?u=<url>`
  * is fetched once into the cache and served from there. Only YouTube's image
- * hosts are fetched, so nothing can use this as a general web proxy. The
- * provider isn't exported: the browser that asked for a list is granted
- * read access to the artwork in it.
+ * hosts and your own music server are fetched, so nothing can use this as a
+ * general web proxy. The provider isn't exported: the browser that asked
+ * for a list is granted read access to the artwork in it.
  */
 class ArtworkProvider : ContentProvider() {
     override fun onCreate(): Boolean = true
@@ -40,8 +41,12 @@ class ArtworkProvider : ContentProvider() {
     }
 
     private fun cached(url: String): File? {
-        val host = url.toHttpUrlOrNull()?.takeIf { it.scheme == "https" }?.host ?: return null
-        if (ALLOWED_HOSTS.none { host == it || host.endsWith(".$it") }) return null
+        val parsed = url.toHttpUrlOrNull() ?: return null
+        // https only, except your own server, which may be on a home network.
+        if (parsed.scheme != "https" && parsed.host != Subsonic.host()) return null
+        val host = parsed.host
+        // YouTube's image hosts, and your own music server's covers.
+        if (ALLOWED_HOSTS.none { host == it || host.endsWith(".$it") } && host != Subsonic.host()) return null
         val context = context ?: return null
         val dir = File(context.cacheDir, "car-art").apply { mkdirs() }
         val file = File(dir, sha1(url))
