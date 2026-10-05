@@ -1,5 +1,25 @@
 package com.opentune.ui
 
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -9,10 +29,8 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -57,7 +75,9 @@ import com.opentune.ui.components.glass
 val CHROME_TAB_HEIGHT = 64.dp
 val CHROME_MINI_HEIGHT = 64.dp
 private val BUBBLE = 62.dp
-private val DOCK_SHAPE = RoundedCornerShape(24.dp)
+private val DOCK_SHAPE = RoundedCornerShape(32.dp)
+private val LENS_SHAPE = RoundedCornerShape(26.dp)
+private val DOCK_INSET = 6.dp
 
 /**
  * Tucks the dock away while content scrolls down and brings it back when it
@@ -96,7 +116,8 @@ fun rememberChromeScroll(threshold: Dp = 48.dp): ChromeScrollConnection {
     return remember(px) { ChromeScrollConnection(px) }
 }
 
-class ChromeTab(val label: String, val icon: ImageVector)
+/** A destination in the dock: its name, its outline icon, and the filled one shown while it's open. */
+class ChromeTab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector = icon)
 
 /**
  * OpenTune's bottom chrome: the now-playing card over one dock that holds
@@ -169,58 +190,132 @@ private class SharedMini(private val layout: SharedTransitionScope, private val 
     }
 }
 
-/** Home, Search, then the other destinations, in one bar. */
+/**
+ * The dock: a floating glass pill holding the destinations, each an icon
+ * over its name, with a soft lens of the accent colour that slides to the
+ * open one; and Search in its own round button beside it.
+ */
 @Composable
 private fun Dock(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit, searchSelected: Boolean, onSearch: () -> Unit) {
     val haptics = LocalHapticFeedback.current
-    val items = buildList {
-        tabs.forEachIndexed { i, t -> add(Triple(t, i == selected) { onSelect(i) }) }
-        add(1.coerceAtMost(size), Triple(ChromeTab("Search", Icons.Rounded.Search), searchSelected, onSearch))
-    }
-    Row(
-        Modifier.fillMaxWidth().height(CHROME_TAB_HEIGHT).glass(DOCK_SHAPE).padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        items.forEach { (tab, isSelected, onClick) ->
-            DockItem(tab, isSelected) {
-                if (!isSelected) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
+    Row(Modifier.fillMaxWidth().height(CHROME_TAB_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+        BoxWithConstraints(
+            Modifier.weight(1f).fillMaxHeight().dockShadow(DOCK_SHAPE).glass(DOCK_SHAPE).dockHighlight(DOCK_SHAPE).padding(DOCK_INSET),
+        ) {
+            val slot = maxWidth / tabs.size
+            val shown = selected?.takeIf { it in tabs.indices }
+            // The lens rests where it last was while Search is open, faded out.
+            var resting by remember { mutableIntStateOf(shown ?: 0) }
+            if (shown != null) resting = shown
+            val x by animateDpAsState(slot * resting, spring(dampingRatio = 0.72f, stiffness = 380f), label = "lensX")
+            val lensAlpha by animateFloatAsState(if (shown != null) 1f else 0f, spring(stiffness = 500f), label = "lensAlpha")
+            val accent = MaterialTheme.colorScheme.primary
+            Box(
+                Modifier
+                    .offset { androidx.compose.ui.unit.IntOffset(x.roundToPx(), 0) }
+                    .width(slot)
+                    .fillMaxHeight()
+                    .graphicsLayer { alpha = lensAlpha }
+                    .clip(LENS_SHAPE)
+                    .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.24f), accent.copy(alpha = 0.14f))))
+                    .border(1.dp, Brush.verticalGradient(listOf(accent.copy(alpha = 0.45f), accent.copy(alpha = 0.08f))), LENS_SHAPE),
+            )
+            Row(Modifier.fillMaxSize()) {
+                tabs.forEachIndexed { i, tab ->
+                    DockItem(tab, i == shown, Modifier.width(slot).fillMaxHeight()) {
+                        if (i != shown) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSelect(i)
+                    }
+                }
             }
+        }
+        Spacer(Modifier.width(10.dp))
+        SearchOrb(searchSelected) {
+            if (!searchSelected) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onSearch()
         }
     }
 }
 
+/** One destination: the icon, filled and lifted a little when open, over its name. */
 @Composable
-private fun DockItem(tab: ChromeTab, selected: Boolean, onClick: () -> Unit) {
-    val bg by animateColorAsState(
-        if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-        spring(stiffness = 500f),
-        label = "dockBg",
+private fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        when {
+            pressed -> 0.86f
+            selected -> 1.08f
+            else -> 1f
+        },
+        spring(dampingRatio = 0.5f, stiffness = 600f),
+        label = "dockScale",
     )
     val fg by animateColorAsState(
-        if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        spring(stiffness = 500f),
         label = "dockFg",
     )
-    Row(
-        Modifier
-            .height(46.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        modifier
+            .clip(LENS_SHAPE)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .semantics { role = Role.Tab; this.selected = selected },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Icon(tab.icon, tab.label, tint = fg, modifier = Modifier.size(24.dp))
-        AnimatedVisibility(
-            selected,
-            enter = fadeIn() + expandHorizontally(spring(dampingRatio = 0.8f, stiffness = 500f)),
-            exit = fadeOut() + shrinkHorizontally(spring(dampingRatio = 0.9f, stiffness = 600f)),
-        ) {
-            Row {
-                Spacer(Modifier.width(8.dp))
-                Text(tab.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = fg)
-            }
+        Crossfade(selected, animationSpec = spring(stiffness = 600f), label = "dockIcon") { on ->
+            Icon(
+                if (on) tab.selectedIcon else tab.icon,
+                null,
+                tint = fg,
+                modifier = Modifier.size(25.dp).graphicsLayer { scaleX = scale; scaleY = scale },
+            )
         }
+        Text(
+            tab.label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = fg,
+            maxLines = 1,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
+
+/** Search on its own: a glass circle that fills with the accent while search is open. */
+@Composable
+private fun SearchOrb(selected: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "orbScale")
+    val fill by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, spring(stiffness = 500f), label = "orbFill")
+    val fg by animateColorAsState(if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, label = "orbFg")
+    Box(
+        Modifier
+            .size(CHROME_TAB_HEIGHT)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .dockShadow(CircleShape)
+            .glass(CircleShape)
+            .dockHighlight(CircleShape)
+            .padding(DOCK_INSET)
+            .clip(CircleShape)
+            .background(fill)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .semantics { role = Role.Tab; this.selected = selected },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Rounded.Search, "Search", tint = fg, modifier = Modifier.size(26.dp))
+    }
+}
+
+/** A hairline of light along the top edge, fading down, so the glass reads as lit from above. */
+@Composable
+private fun Modifier.dockHighlight(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val light = Color.White.copy(alpha = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) 0.22f else 0.6f)
+    return this.border(1.dp, Brush.verticalGradient(listOf(light, Color.Transparent, Color.Transparent)), shape)
+}
+
+/** A soft drop shadow so the dock floats over the page. */
+private fun Modifier.dockShadow(shape: androidx.compose.ui.graphics.Shape): Modifier =
+    shadow(18.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.45f))

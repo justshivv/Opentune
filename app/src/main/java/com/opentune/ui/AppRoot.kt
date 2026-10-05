@@ -1,5 +1,10 @@
 package com.opentune.ui
 
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Podcasts
+import androidx.compose.material.icons.outlined.LibraryMusic
+import androidx.compose.material.icons.rounded.Podcasts
 import com.opentune.ui.server.ServerAlbumScreen
 import com.opentune.ui.server.ServerArtistScreen
 import com.opentune.ui.server.ServerArtistsScreen
@@ -100,15 +105,16 @@ import com.opentune.ui.settings.SettingsScreen
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
-private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
-    HOME("home", "Home", Icons.Rounded.Home),
-    EXPLORE("explore", "Explore", Icons.Rounded.Explore),
-    LIBRARY("library", "Library", Icons.Rounded.LibraryMusic),
+private enum class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
+    HOME("home", "Home", Icons.Outlined.Home, Icons.Rounded.Home),
+    EXPLORE("explore", "Explore", Icons.Outlined.Explore, Icons.Rounded.Explore),
+    PODCASTS("podcasts", "Podcasts", Icons.Outlined.Podcasts, Icons.Rounded.Podcasts),
+    LIBRARY("library", "Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
 }
 
 private const val SEARCH_ROUTE = "search"
 
-private val chromeTabs = Tab.entries.map { ChromeTab(it.label, it.icon) }
+private val chromeTabs = Tab.entries.map { ChromeTab(it.label, it.icon, it.selectedIcon) }
 
 @Composable
 fun AppRoot(vm: PlayerViewModel) {
@@ -294,7 +300,19 @@ fun AppRoot(vm: PlayerViewModel) {
                     composable(Tab.EXPLORE.route) {
                         ExploreScreen(content, onMoodClick = { mood ->
                             nav.navigate("mood/${Uri.encode(mood.browseId)}?params=${Uri.encode(mood.params.orEmpty())}&title=${Uri.encode(mood.title)}")
-                        })
+                        }, onItemClick = openItem)
+                    }
+                    composable(Tab.PODCASTS.route) {
+                        com.opentune.ui.podcasts.PodcastsScreen(content, actions, onOpenShow = { id -> nav.navigate("podcast/${Uri.encode(id)}") })
+                    }
+                    composable("podcast/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                        com.opentune.ui.podcasts.PodcastShowScreen(
+                            e.arguments?.getString("id").orEmpty(),
+                            content,
+                            actions,
+                            onBack = { nav.popBackStack() },
+                            onOpenShow = { id -> nav.navigate("podcast/${Uri.encode(id)}") },
+                        )
                     }
                     composable(Tab.LIBRARY.route) {
                         LibraryScreen(contentPadding = content, actions = actions, nav = libraryNav)
@@ -436,6 +454,8 @@ fun AppRoot(vm: PlayerViewModel) {
 
 private fun NavHostController.openBrowse(browseId: String, type: BrowseType = MusicRepository.typeOf(browseId)) {
     val id = Uri.encode(browseId)
+    // A podcast show has its own page.
+    if (browseId.startsWith("MPSP")) return navigate("podcast/$id")
     when (type) {
         BrowseType.ARTIST -> navigate("artist/$id")
         else -> navigate("collection/$id")

@@ -1,5 +1,6 @@
 package com.opentune.ui.spotify
 
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -53,7 +54,7 @@ fun SpotifyImportScreen(contentPadding: PaddingValues, onBack: () -> Unit, onOpe
     var signIn by remember { mutableStateOf(false) }
     var playlists by remember { mutableStateOf<List<Spotify.Playlist>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var attempt by remember { mutableStateOf(0) }
+    var attempt by remember { mutableIntStateOf(0) }
     if (signIn) SpotifyDialog(onDismiss = { signIn = false })
 
     LaunchedEffect(account, attempt) {

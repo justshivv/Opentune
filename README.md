@@ -69,6 +69,12 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   on when headphones are plugged in or a Bluetooth device connects, and
   pause when the volume is turned all the way down, playing again when it
   comes back up.
+- **Podcasts.** A tab of its own: search shows or episodes, browse
+  topics, popular episodes and shows to try from YouTube Music, and show
+  pages with every episode. Subscribe to shows (kept on the phone, no
+  account needed) to see their newest episodes up top. Episodes pick up
+  where you stopped, with "Continue listening" for the ones in progress
+  and a played mark for the ones finished.
 - **Internet radio.** 50,000+ live stations from
   [Radio Browser](https://www.radio-browser.info), the free community
   directory: stations near you, the most played, genres and search, with
@@ -145,18 +151,24 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
 - **Liquid Glass.** The floating bars and player buttons frost and bend
   what's behind them, like Apple's material (Android 13 and newer; frosted
   glass below that, solid with "Reduce dynamic blur").
-- **A dock that gets out of the way.** One glass dock holds every
-  destination, Search included; the current one is a filled capsule with
-  its name. The now-playing card above it takes its tint from the cover and
-  has the play button inside a progress ring. Scroll down and the dock
-  tucks away while the card shrinks into a round cover bubble in the
-  corner, still ringed by progress; scroll up and both come back.
+- **A dock that gets out of the way.** Home, Explore, Podcasts and Library
+  sit in a floating glass pill, each an icon over its name; a soft lens of
+  the accent colour slides to the open one and its icon fills in. Search
+  has its own round button beside the pill. The now-playing card above
+  takes its tint from the cover and has the play button inside a progress
+  ring. Scroll down and the dock tucks away while the card shrinks into a
+  round cover bubble in the corner, still ringed by progress; scroll up and
+  both come back.
 - **Its own typeface.** Every screen is set in [Outfit](https://github.com/Outfitio/Outfit-Fonts).
 - **Home greets you** by the time of day and your name, with your avatar
   leading to settings. Below YouTube Music's own shelves it adds a radio
   of your last song, albums, singles and similar artists for the artists
   you play most, new releases, the charts, Explore, and playlists for a
-  couple of moods that change daily. Explore's moods are full-cover cards.
+  couple of moods that change daily.
+- **Explore as a board.** Pills for artists to jump to (the ones you play
+  most first, then the charts' top artists), chips to narrow it to moods,
+  genres, new releases or charts, and a two-column board of mood cards,
+  new albums and chart playlists at different heights, Pinterest-style.
 - **An Apple Music-style player.** Cover, lyrics and queue modes, heart and
   "…" buttons, the current lyric line under the title, the artist name
   opening their page, time remaining,

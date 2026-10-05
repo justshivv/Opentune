@@ -1,5 +1,6 @@
 package com.opentune.ui.radio
 
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -79,7 +80,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     var query by rememberSaveable { mutableStateOf("") }
     var view by remember { mutableStateOf<RadioView>(if (favourites.isNotEmpty()) RadioView.Favourites else RadioView.NearYou) }
     var load by remember { mutableStateOf<Load>(Load.Loading) }
-    var attempt by remember { mutableStateOf(0) }
+    var attempt by remember { mutableIntStateOf(0) }
     val country = remember { Locale.getDefault().country.takeIf { it.length == 2 } }
 
     LaunchedEffect(query, view, attempt) {
