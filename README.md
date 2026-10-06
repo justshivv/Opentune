@@ -122,14 +122,14 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   Archive instead of a video frame, when MusicBrainz has a confident match.
 - **Last.fm scrobbling** (optional), with your own free Last.fm API key.
   The password is only used once to get a session and isn't stored.
-- **Import from Spotify** (optional). Sign in on Spotify's own login page
-  and bring playlists and liked songs over as playlists on the phone: each
-  track is looked up on YouTube Music and the closest catalogue match is
-  kept, with the misses listed. Nothing streams from Spotify. Spotify only
-  lets registered apps sign in, so you create a free app at
-  developer.spotify.com, add the redirect URI `opentune://spotify-auth`,
-  and paste its Client ID into OpenTune. Tokens are kept in app-private
-  storage and left out of backups.
+- **Import from Spotify by link.** Paste a link to a public playlist,
+  album or song, or share one to OpenTune from the Spotify app; no sign-in
+  or setup. The list is read from Spotify's public embed page, each song is
+  looked up on YouTube Music, and the closest catalogue matches are saved
+  as a playlist on the phone, with any misses listed. A song link plays
+  straight away. Nothing streams from Spotify. Without signing in, Spotify
+  only shows a playlist's first 100 songs, so longer playlists come over in
+  part; private playlists and liked songs can't be read this way.
 - **New-release alerts.** Follow an artist from their page (no account
   needed) and a notification tells you when they put out an album or
   single. Checked twice a day.

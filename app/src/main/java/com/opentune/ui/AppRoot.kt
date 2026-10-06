@@ -245,6 +245,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 playerOpen = true
             }
             is LinkTarget.Browse -> nav.openBrowse(link.browseId)
+            is LinkTarget.SpotifyImport -> nav.navigate("spotify?link=${Uri.encode(link.text)}")
             is LinkTarget.PlaySearch -> {
                 vm.player.connected.first { it }
                 if (link.query.isBlank()) {
@@ -350,8 +351,17 @@ fun AppRoot(vm: PlayerViewModel) {
                     composable("equalizer") { EqualizerScreen(content, onBack = { nav.popBackStack() }) }
                     composable("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }) }
-                    composable("spotify") {
-                        com.opentune.ui.spotify.SpotifyImportScreen(content, onBack = { nav.popBackStack() }, onOpenPlaylist = { id -> nav.navigate("playlist/${Uri.encode(id)}") })
+                    composable(
+                        "spotify?link={link}",
+                        listOf(navArgument("link") { type = NavType.StringType; nullable = true; defaultValue = null }),
+                    ) { e ->
+                        com.opentune.ui.spotify.SpotifyImportScreen(
+                            content,
+                            actions,
+                            initialLink = e.arguments?.getString("link"),
+                            onBack = { nav.popBackStack() },
+                            onOpenPlaylist = { id -> nav.navigate("playlist/${Uri.encode(id)}") },
+                        )
                     }
                     composable("radio") { com.opentune.ui.radio.RadioScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("server") { ServerScreen(content, actions, serverNav, onBack = { nav.popBackStack() }) }
