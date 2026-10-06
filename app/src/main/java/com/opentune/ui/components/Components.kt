@@ -139,6 +139,8 @@ fun SongListItem(
     leading: (@Composable () -> Unit)? = null,
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
+    /** Off for rows inside a sideways-scrolling list, whose scroll the swipe would otherwise take. */
+    swipeToQueue: Boolean = true,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -147,7 +149,11 @@ fun SongListItem(
         .collectAsState(Downloads.entryNow(song.videoId))
     if (menuOpen) SongMenuSheet(song, onDismiss = { menuOpen = false })
     val playback by AppSettings.playback.collectAsState()
-    val onSwipe = if (playback.playNextOnSwipe) onPlayNext else onAddToQueue
+    val onSwipe = when {
+        !swipeToQueue -> null
+        playback.playNextOnSwipe -> onPlayNext
+        else -> onAddToQueue
+    }
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptics = com.opentune.ui.components.rememberHaptics()

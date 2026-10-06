@@ -3,6 +3,8 @@ package com.opentune.ui.settings
 import androidx.compose.material.icons.rounded.Dns
 import com.opentune.data.subsonic.Subsonic
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Dock
+import com.opentune.data.settings.DockMotion
 import com.opentune.data.listenbrainz.ListenBrainz
 import android.content.Context
 import androidx.compose.material.icons.rounded.Code
@@ -250,6 +252,7 @@ private fun settingsSections(
     val listensWaiting by ListenBrainz.queued.collectAsState()
     val musicServer by Subsonic.server.collectAsState()
     var lyricsAnimationDialog by remember { mutableStateOf(false) }
+    var dockMotionDialog by remember { mutableStateOf(false) }
     val lastFm by LastFm.account.collectAsState()
     val scrobblesWaiting by LastFm.queued.collectAsState()
     val lyricsSettings by AppSettings.lyrics.collectAsState()
@@ -325,6 +328,16 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v) } },
             onDismiss = { playerStyleDialog = false },
+        )
+    }
+    if (dockMotionDialog) {
+        ChoiceDialog(
+            title = "Dock animation",
+            options = DockMotion.entries,
+            selected = ui.dockMotion,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { m -> AppSettings.updateUi { it.copy(dockMotion = m) } },
+            onDismiss = { dockMotionDialog = false },
         )
     }
     if (lyricsAnimationDialog) {
@@ -569,6 +582,9 @@ private fun settingsSections(
                 },
                 Entry("Player layout", "player style layout vinyl record lyrics minimal classic screen") {
                     NavRow("Player layout", { playerStyleDialog = true }, summary = ui.playerStyle.summary, icon = Icons.Rounded.Album, value = ui.playerStyle.label)
+                },
+                Entry("Dock animation", "navigation bar dock fold hide scroll animation motion") {
+                    NavRow("Dock animation", { dockMotionDialog = true }, summary = ui.dockMotion.summary, icon = Icons.Rounded.Dock, value = ui.dockMotion.label)
                 },
                 Entry("Player background", "mesh gradient blur") {
                     SettingRow("Player background", icon = Icons.Rounded.Wallpaper, below = {

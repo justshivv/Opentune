@@ -131,6 +131,7 @@ fun AppRoot(vm: PlayerViewModel) {
     val liquid = liquidGlassOn()
     // Scrolling any page down folds the bottom bar into one row; scrolling up unfolds it.
     val chromeScroll = rememberChromeScroll()
+    val chromeUi by com.opentune.data.settings.AppSettings.ui.collectAsState()
 
     // Once a day at start: a newer release on GitHub, offered with an Update button.
     val appContext = androidx.compose.ui.platform.LocalContext.current
@@ -448,6 +449,8 @@ fun AppRoot(vm: PlayerViewModel) {
                     searchSelected = route == SEARCH_ROUTE,
                     onSearch = { if (route != SEARCH_ROUTE) nav.navigate(SEARCH_ROUTE) { launchSingleTop = true } },
                     mini = if (song == null) null else { folded, m -> MiniPlayerBar(vm, onExpand = { playerOpen = true }, modifier = m, inline = folded) },
+                    motion = chromeUi.dockMotion,
+                    reduceMotion = chromeUi.reduceAnimation,
                 )
             }
             }

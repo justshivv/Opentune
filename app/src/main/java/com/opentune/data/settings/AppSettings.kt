@@ -263,6 +263,7 @@ data class InterfaceSettings(
     /** Lyrics text size, as a fraction of the standard size. */
     val lyricsTextScale: Float = 1f,
     val playerStyle: PlayerStyle = PlayerStyle.CLASSIC,
+    val dockMotion: DockMotion = DockMotion.FOLD,
     /** How strong taps and buzzes are, 0 (off) to 1. */
     val hapticStrength: Float = 0.6f,
     /** Look for a new release once a day when the app opens. */
@@ -282,6 +283,16 @@ data class LibrarySettings(
     /** Notify about new albums and singles from followed artists. */
     val releaseAlerts: Boolean = true,
 )
+
+/** How the dock tucks away while a page scrolls down, and comes back. */
+@Serializable
+enum class DockMotion(val label: String, val summary: String) {
+    FOLD("Fold", "The dock sinks and fades as the card shrinks to a bubble"),
+    GLIDE("Glide", "The dock slides off the bottom and springs back up"),
+    RETRACT("Retract", "The dock pulls into the corner and unrolls from it"),
+    CASCADE("Cascade", "The tabs drop away one by one and come back in a wave"),
+    DISSOLVE("Dissolve", "The dock blurs away and sharpens back into place"),
+}
 
 /** How synced lyrics move as the song plays. */
 @Serializable

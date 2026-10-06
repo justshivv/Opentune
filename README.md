@@ -245,7 +245,10 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   takes its tint from the cover and has the play button inside a progress
   ring. Scroll down and the dock tucks away while the card shrinks into a
   round cover bubble in the corner, still ringed by progress; scroll up and
-  both come back.
+  both come back. Pick how the dock goes: Fold, Glide (off the bottom and
+  back on a spring), Retract (into the corner and unrolling from it),
+  Cascade (tabs drop one by one and return in a wave) or Dissolve (blurs
+  away and sharpens back, Android 12+).
 - **Its own typeface.** Every screen is set in [Outfit](https://github.com/Outfitio/Outfit-Fonts).
 - **Home greets you** by the time of day and your name, with your avatar
   leading to settings. Below YouTube Music's own shelves it adds a radio

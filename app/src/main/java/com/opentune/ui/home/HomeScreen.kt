@@ -197,6 +197,9 @@ private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, on
                             isPlaying = actions.isPlaying,
                             onPlayNext = { actions.playNext(song) },
                             onAddToQueue = { actions.addToQueue(song) },
+                            // A sideways drag here scrolls the grid; Play next and
+                            // Add to queue stay in the long-press menu.
+                            swipeToQueue = false,
                         )
                     }
                 }

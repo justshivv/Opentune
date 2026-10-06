@@ -21,6 +21,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import com.opentune.data.settings.DockMotion
 import java.io.File
 import org.junit.Rule
 import org.junit.Test
@@ -64,12 +72,56 @@ class DockScreenshotTest {
         save("dock")
     }
 
-    private fun save(name: String) {
-        compose.waitForIdle()
+    /**
+     * Each dock motion part of the way through folding and unfolding, to
+     * build/screenshots/motion, so the frames can be looked over.
+     */
+    @Test fun motions() {
+        var inline by mutableStateOf(false)
+        var motion by mutableStateOf(DockMotion.FOLD)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65))) { androidx.compose.material3.Surface(color = Color(0xFF0B0B0E)) {
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF3A2A4A), Color(0xFF101014)))).padding(bottom = 24.dp), contentAlignment = Alignment.BottomCenter) {
+                    BottomChrome(
+                        inline = inline,
+                        tabs = tabs,
+                        selected = 1,
+                        onSelect = {},
+                        onExpand = {},
+                        searchSelected = false,
+                        onSearch = {},
+                        mini = { _, m -> Box(m.clip(RoundedCornerShape(20.dp)).background(Color(0xFF6E4AA8))) },
+                        motion = motion,
+                    )
+                }
+            }
+            }
+        }
+        val frames = listOf(0L, 60, 120, 200, 300, 420, 600, 900)
+        DockMotion.entries.forEach { m ->
+            motion = m
+            inline = false
+            compose.mainClock.advanceTimeBy(2_000)
+            for ((dir, target) in listOf("fold" to true, "open" to false)) {
+                inline = target
+                var at = 0L
+                frames.forEach { t ->
+                    compose.mainClock.advanceTimeBy(t - at)
+                    at = t
+                    save("motion/${m.name.lowercase()}-$dir-${"%03d".format(t)}", idle = false)
+                }
+                compose.mainClock.advanceTimeBy(2_000)
+            }
+        }
+    }
+
+    private fun save(name: String, idle: Boolean = true) {
+        if (idle) compose.waitForIdle()
         val view = compose.activity.window.decorView
         val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
         view.draw(android.graphics.Canvas(bitmap))
-        val dir = File("build/screenshots").apply { mkdirs() }
-        File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val file = File("build/screenshots/$name.png").apply { parentFile!!.mkdirs() }
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }

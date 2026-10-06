@@ -81,6 +81,28 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.runtime.State
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import com.opentune.data.settings.DockMotion
 import com.opentune.ui.components.glass
 
 /** Room the chrome takes when shown, for content padding. */
@@ -97,6 +119,18 @@ private val FOLD_EASING = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 private val DOCK_SHAPE = RoundedCornerShape(32.dp)
 private val LENS_SHAPE = RoundedCornerShape(26.dp)
 private val DOCK_INSET = 6.dp
+
+/** Timings for the other ways the dock can fold; see [DockMotion]. */
+private const val RETRACT_MS = 520
+private const val CASCADE_STEP_MS = 40
+private const val CASCADE_DROP_MS = 220
+private const val CASCADE_RISE_MS = 420
+private const val CASCADE_LEAD_MS = 40
+private const val DISSOLVE_MS = 420
+private val DISSOLVE_BLUR = 22.dp
+
+/** Ends a touch past the target and eases back, for tabs landing in [DockMotion.CASCADE]. */
+private val BACK_OUT = CubicBezierEasing(0.34f, 1.4f, 0.64f, 1f)
 
 /**
  * Tucks the dock away while content scrolls down and brings it back when it
@@ -146,7 +180,9 @@ class ChromeTab(val label: String, val icon: ImageVector, val selectedIcon: Imag
  * While a page scrolls down, the dock tucks away and the now-playing card
  * shrinks into a round bubble of the cover, ringed by the song's progress,
  * in the corner. Scrolling back up brings both back. The card and the bubble
- * are one shared element, so the cover travels between them.
+ * are one shared element, so the cover travels between them. [motion] picks
+ * how the dock itself goes and comes back; [reduceMotion] swaps all of it
+ * for a short crossfade.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -160,28 +196,29 @@ fun BottomChrome(
     onSearch: () -> Unit,
     mini: (@Composable (inline: Boolean, modifier: Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
+    motion: DockMotion = DockMotion.FOLD,
+    reduceMotion: Boolean = false,
 ) {
+    val style = if (reduceMotion) null else motion
     SharedTransitionLayout(modifier) {
         AnimatedContent(
             inline,
-            transitionSpec = {
-                // One unhurried curve for every part: the incoming chrome rises a
-                // little and fades in once the outgoing one has mostly faded,
-                // while the size change and the cover glide on the same timing.
-                val enter = fadeIn(tween(FOLD_FADE_IN_MS, delayMillis = FOLD_FADE_DELAY_MS, easing = LinearOutSlowInEasing)) +
-                    slideInVertically(tween(FOLD_MS, easing = FOLD_EASING)) { it / 4 } +
-                    scaleIn(tween(FOLD_MS, easing = FOLD_EASING), initialScale = 0.94f, transformOrigin = TransformOrigin(1f, 1f))
-                val exit = fadeOut(tween(FOLD_FADE_OUT_MS, easing = FastOutLinearInEasing)) +
-                    slideOutVertically(tween(FOLD_MS, easing = FOLD_EASING)) { it / 5 } +
-                    scaleOut(tween(FOLD_MS, easing = FOLD_EASING), targetScale = 0.96f, transformOrigin = TransformOrigin(1f, 1f))
-                (enter togetherWith exit).using(SizeTransform(clip = false) { _, _ -> tween(FOLD_MS, easing = FOLD_EASING) })
-            },
+            transitionSpec = { foldTransform(style, tabs.size + 1) },
             contentAlignment = Alignment.BottomEnd,
             label = "chrome",
         ) { folded ->
-            val shared = SharedMini(this@SharedTransitionLayout, this)
+            val shared = SharedMini(this@SharedTransitionLayout, this, boundsSpec(style))
+            val mist = if (style == DockMotion.DISSOLVE) {
+                transition.animateFloat({ tween(DISSOLVE_MS, easing = FOLD_EASING) }, label = "mist") { if (it == EnterExitState.Visible) 0f else 1f }
+            } else {
+                null
+            }
+            val dissolve = if (mist == null) Modifier else Modifier.graphicsLayer {
+                val blur = mist.value * DISSOLVE_BLUR.toPx()
+                renderEffect = if (blur > 0.5f) BlurEffect(blur, blur, TileMode.Decal) else null
+            }
             if (folded) {
-                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.BottomEnd) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).then(dissolve), contentAlignment = Alignment.BottomEnd) {
                     if (mini != null) {
                         mini(true, with(shared) { Modifier.sharedMini() }.size(BUBBLE))
                     } else {
@@ -196,24 +233,114 @@ fun BottomChrome(
                     }
                 }
             } else {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).then(dissolve), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (mini != null) mini(false, with(shared) { Modifier.sharedMini() }.fillMaxWidth().height(CHROME_MINI_HEIGHT))
-                    Dock(tabs, selected, onSelect, searchSelected, onSearch)
+                    Dock(tabs, selected, onSelect, searchSelected, onSearch, style, this@AnimatedContent)
                 }
             }
         }
     }
 }
 
+/**
+ * How the chrome swaps between the full dock and the corner bubble, for
+ * each [DockMotion]. Null [motion] is the reduced-motion version: a quick
+ * crossfade. [steps] is how many pieces the dock has (tabs plus Search),
+ * which sets how long a cascade takes to finish.
+ */
+private fun AnimatedContentTransitionScope<Boolean>.foldTransform(motion: DockMotion?, steps: Int): ContentTransform {
+    val transform = when (motion) {
+        null -> fadeIn(tween(160)) togetherWith fadeOut(tween(120))
+        DockMotion.FOLD -> {
+            // One unhurried curve for every part: the incoming chrome rises a
+            // little and fades in once the outgoing one has mostly faded,
+            // while the size change and the cover glide on the same timing.
+            val enter = fadeIn(tween(FOLD_FADE_IN_MS, delayMillis = FOLD_FADE_DELAY_MS, easing = LinearOutSlowInEasing)) +
+                slideInVertically(tween(FOLD_MS, easing = FOLD_EASING)) { it / 4 } +
+                scaleIn(tween(FOLD_MS, easing = FOLD_EASING), initialScale = 0.94f, transformOrigin = TransformOrigin(1f, 1f))
+            val exit = fadeOut(tween(FOLD_FADE_OUT_MS, easing = FastOutLinearInEasing)) +
+                slideOutVertically(tween(FOLD_MS, easing = FOLD_EASING)) { it / 5 } +
+                scaleOut(tween(FOLD_MS, easing = FOLD_EASING), targetScale = 0.96f, transformOrigin = TransformOrigin(1f, 1f))
+            enter togetherWith exit
+        }
+        // Down past the edge without a bounce; back up on a spring that
+        // carries a little past its place and settles.
+        DockMotion.GLIDE ->
+            (slideInVertically(spring(dampingRatio = 0.72f, stiffness = 320f, visibilityThreshold = IntOffset.VisibilityThreshold)) { it } + fadeIn(tween(160))) togetherWith
+                (slideOutVertically(spring(dampingRatio = 1f, stiffness = 380f, visibilityThreshold = IntOffset.VisibilityThreshold)) { it * 3 / 2 } + fadeOut(tween(220, delayMillis = 140)))
+        // The dock clips itself (see Dock); the swap only has to wait for it.
+        DockMotion.RETRACT -> fadeIn(tween(140)) togetherWith fadeOut(tween(180, delayMillis = RETRACT_MS - 180))
+        // The tabs move themselves (see Dock); the glass sinks after them,
+        // starting once half have dropped so it's never left standing empty.
+        DockMotion.CASCADE -> {
+            val glassDelay = steps * CASCADE_STEP_MS / 2 + 40
+            fadeIn(tween(220)) togetherWith
+                (fadeOut(tween(CASCADE_DROP_MS + 60, glassDelay, FastOutLinearInEasing)) + slideOutVertically(tween(CASCADE_DROP_MS + 60, glassDelay, FastOutLinearInEasing)) { it / 6 })
+        }
+        // Blurred in BottomChrome; here it fades and grows a touch as it goes.
+        DockMotion.DISSOLVE ->
+            (fadeIn(tween(DISSOLVE_MS, easing = LinearOutSlowInEasing)) + scaleIn(tween(DISSOLVE_MS, easing = FOLD_EASING), initialScale = 1.05f)) togetherWith
+                (fadeOut(tween(DISSOLVE_MS * 3 / 4, easing = FastOutLinearInEasing)) + scaleOut(tween(DISSOLVE_MS, easing = FOLD_EASING), targetScale = 1.06f))
+    }
+    val size: FiniteAnimationSpec<IntSize> = when (motion) {
+        null -> tween(200, easing = FOLD_EASING)
+        DockMotion.GLIDE -> spring(dampingRatio = 1f, stiffness = 380f, visibilityThreshold = IntSize.VisibilityThreshold)
+        DockMotion.RETRACT -> tween(RETRACT_MS, easing = FastOutSlowInEasing)
+        else -> tween(FOLD_MS, easing = FOLD_EASING)
+    }
+    return transform.using(SizeTransform(clip = false) { _, _ -> size })
+}
+
+/** How the now-playing card travels between its full size and the bubble. */
+private fun boundsSpec(motion: DockMotion?): FiniteAnimationSpec<Rect> = when (motion) {
+    null -> tween(200, easing = FOLD_EASING)
+    DockMotion.GLIDE -> spring(dampingRatio = 0.82f, stiffness = 300f, visibilityThreshold = Rect.VisibilityThreshold)
+    DockMotion.RETRACT -> tween(RETRACT_MS, easing = FastOutSlowInEasing)
+    DockMotion.DISSOLVE -> tween(DISSOLVE_MS + 80, easing = FOLD_EASING)
+    else -> tween(FOLD_MS, easing = FOLD_EASING)
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
-private class SharedMini(private val layout: SharedTransitionScope, private val scope: AnimatedVisibilityScope) {
+private class SharedMini(
+    private val layout: SharedTransitionScope,
+    private val scope: AnimatedVisibilityScope,
+    private val spec: FiniteAnimationSpec<Rect>,
+) {
     @Composable
     fun Modifier.sharedMini(): Modifier = with(layout) {
         this@sharedMini.sharedElement(
             rememberSharedContentState("mini"),
             scope,
-            boundsTransform = { _, _ -> tween(FOLD_MS, easing = FOLD_EASING) },
+            boundsTransform = { _, _ -> spec },
         )
+    }
+}
+
+/**
+ * For [DockMotion.CASCADE]: piece [i] of the dock drops into the glass a
+ * beat after the one before it, and on the way back rises a beat later,
+ * landing just past its place and easing back.
+ */
+private fun cascade(i: Int): Pair<EnterTransition, ExitTransition> {
+    val inDelay = CASCADE_LEAD_MS + i * CASCADE_STEP_MS
+    val outDelay = i * CASCADE_STEP_MS
+    val enter = slideInVertically(tween(CASCADE_RISE_MS, inDelay, BACK_OUT)) { it } + fadeIn(tween(180, inDelay))
+    val exit = slideOutVertically(tween(CASCADE_DROP_MS, outDelay, FastOutLinearInEasing)) { it } + fadeOut(tween(CASCADE_DROP_MS, outDelay))
+    return enter to exit
+}
+
+/**
+ * For [DockMotion.RETRACT]: a pill that keeps its end on the Search side
+ * (the right, or the left in right-to-left languages) and its round ends
+ * while the far edge slides over, down to a circle at [progress] 0, so the
+ * dock pulls into the Search button.
+ */
+private class RetractShape(private val progress: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val width = size.height + (size.width - size.height) * progress.coerceIn(0f, 1f)
+        val radius = CornerRadius(size.height / 2f)
+        val left = if (layoutDirection == LayoutDirection.Rtl) 0f else size.width - width
+        return Outline.Rounded(RoundRect(left, 0f, left + width, size.height, radius))
     }
 }
 
@@ -223,9 +350,42 @@ private class SharedMini(private val layout: SharedTransitionScope, private val 
  * open one; and Search in its own round button beside it.
  */
 @Composable
-private fun Dock(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit, searchSelected: Boolean, onSearch: () -> Unit) {
+private fun Dock(
+    tabs: List<ChromeTab>,
+    selected: Int?,
+    onSelect: (Int) -> Unit,
+    searchSelected: Boolean,
+    onSearch: () -> Unit,
+    motion: DockMotion?,
+    scope: AnimatedVisibilityScope,
+) {
     val haptics = com.opentune.ui.components.rememberHaptics()
-    Row(Modifier.fillMaxWidth().height(CHROME_TAB_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+    val reveal: State<Float>? = if (motion == DockMotion.RETRACT) {
+        // Even in and out, so the edge is seen travelling rather than snapping most of the way at once.
+        scope.transition.animateFloat({ tween(RETRACT_MS, easing = FastOutSlowInEasing) }, label = "retract") { if (it == EnterExitState.Visible) 1f else 0f }
+    } else {
+        null
+    }
+    // Piece i of the dock in a cascade; nothing for the other motions.
+    val wave: (Int) -> Modifier = { i ->
+        if (motion != DockMotion.CASCADE) Modifier else with(scope) {
+            val (enter, exit) = cascade(i)
+            Modifier.animateEnterExit(enter, exit, label = "wave$i")
+        }
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(CHROME_TAB_HEIGHT)
+            .then(
+                if (reveal == null) Modifier else Modifier.graphicsLayer {
+                    val r = reveal.value
+                    clip = r < 1f
+                    if (r < 1f) shape = RetractShape(r)
+                },
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         BoxWithConstraints(
             Modifier.weight(1f).fillMaxHeight().dockShadow(DOCK_SHAPE).glass(DOCK_SHAPE).dockHighlight(DOCK_SHAPE).padding(DOCK_INSET),
         ) {
@@ -239,6 +399,7 @@ private fun Dock(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit,
             val accent = MaterialTheme.colorScheme.primary
             Box(
                 Modifier
+                    .then(wave(resting))
                     .offset { androidx.compose.ui.unit.IntOffset(left().roundToPx(), 0) }
                     .layout { measurable, constraints ->
                         val w = (right() - left()).roundToPx().coerceAtLeast(0)
@@ -256,9 +417,10 @@ private fun Dock(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit,
                     .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.24f), accent.copy(alpha = 0.14f))))
                     .border(1.dp, Brush.verticalGradient(listOf(accent.copy(alpha = 0.45f), accent.copy(alpha = 0.08f))), LENS_SHAPE),
             )
-            Row(Modifier.fillMaxSize()) {
+            // Clipped to the glass, so tabs in a cascade sink into it rather than below it.
+            Row(Modifier.fillMaxSize().clip(LENS_SHAPE)) {
                 tabs.forEachIndexed { i, tab ->
-                    DockItem(tab, i == shown, Modifier.width(slot).fillMaxHeight()) {
+                    DockItem(tab, i == shown, wave(i).width(slot).fillMaxHeight()) {
                         if (i != shown) haptics.tick()
                         onSelect(i)
                     }
@@ -266,7 +428,7 @@ private fun Dock(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit,
             }
         }
         Spacer(Modifier.width(10.dp))
-        SearchOrb(searchSelected) {
+        SearchOrb(searchSelected, wave(tabs.size)) {
             if (!searchSelected) haptics.tick()
             onSearch()
         }
@@ -322,14 +484,14 @@ private fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, onCl
 
 /** Search on its own: a glass circle that fills with the accent while search is open. */
 @Composable
-private fun SearchOrb(selected: Boolean, onClick: () -> Unit) {
+private fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "orbScale")
     val fill by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, spring(stiffness = 500f), label = "orbFill")
     val fg by animateColorAsState(if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, label = "orbFg")
     Box(
-        Modifier
+        modifier
             .size(CHROME_TAB_HEIGHT)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .dockShadow(CircleShape)
