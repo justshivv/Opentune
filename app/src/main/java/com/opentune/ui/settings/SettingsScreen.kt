@@ -12,7 +12,6 @@ import com.opentune.data.UpdateCheck
 import com.opentune.data.sponsorblock.SponsorBlock
 import com.opentune.data.settings.PlayerStyle
 import com.opentune.data.releases.NewReleases
-import com.opentune.data.spotify.Spotify
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Person
@@ -245,8 +244,6 @@ private fun settingsSections(
     var update by remember { mutableStateOf<UpdateCheck.Release?>(null) }
     var playerStyleDialog by remember { mutableStateOf(false) }
     var followedDialog by remember { mutableStateOf(false) }
-    var spotifyDialog by remember { mutableStateOf(false) }
-    val spotify by Spotify.account.collectAsState()
     val followedArtists by NewReleases.followed.collectAsState()
     val listenBrainz by ListenBrainz.account.collectAsState()
     val listensWaiting by ListenBrainz.queued.collectAsState()
@@ -319,7 +316,6 @@ private fun settingsSections(
     if (sponsorBlockDialog) SponsorBlockDialog(onDismiss = { sponsorBlockDialog = false })
     update?.let { UpdateDialog(it, onDismiss = { update = null }) }
     if (followedDialog) FollowedArtistsDialog(onDismiss = { followedDialog = false })
-    if (spotifyDialog) SpotifyDialog(onDismiss = { spotifyDialog = false })
     if (playerStyleDialog) {
         ChoiceDialog(
             title = "Player layout",
@@ -824,19 +820,11 @@ private fun settingsSections(
             ),
         ),
         Section(
-            "Spotify (optional)",
-            listOfNotNull(
-                Entry("Spotify", "spotify import playlists liked songs transfer migrate sign in") {
-                    val who = spotify
-                    if (who == null) {
-                        NavRow("Sign in to Spotify", { spotifyDialog = true }, summary = "Bring your Spotify playlists and liked songs over, played from YouTube Music", icon = Icons.AutoMirrored.Rounded.QueueMusic)
-                    } else {
-                        NavRow("Import from Spotify", onOpenSpotify, summary = "Signed in as ${who.name}", icon = Icons.AutoMirrored.Rounded.QueueMusic)
-                    }
+            "Spotify",
+            listOf(
+                Entry("Import from Spotify", "spotify import playlist album link transfer migrate") {
+                    NavRow("Import from Spotify", onOpenSpotify, summary = "Paste a public playlist or album link; the songs play from YouTube Music", icon = Icons.AutoMirrored.Rounded.QueueMusic)
                 },
-                if (spotify != null) Entry("Sign out of Spotify", "spotify logout") {
-                    SettingRow("Sign out of Spotify", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { Spotify.signOut() })
-                } else null,
             ),
         ),
         Section(

@@ -6,13 +6,11 @@
         <exclude domain="sharedpref" path="lastfm.xml" />
         <exclude domain="sharedpref" path="subsonic.xml" />
         <exclude domain="sharedpref" path="listenbrainz.xml" />
-        <exclude domain="sharedpref" path="spotify.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="account.xml" />
         <exclude domain="sharedpref" path="lastfm.xml" />
         <exclude domain="sharedpref" path="subsonic.xml" />
         <exclude domain="sharedpref" path="listenbrainz.xml" />
-        <exclude domain="sharedpref" path="spotify.xml" />
     </device-transfer>
 </data-extraction-rules>

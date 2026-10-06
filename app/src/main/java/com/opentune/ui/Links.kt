@@ -14,6 +14,8 @@ sealed interface LinkTarget {
     data class Browse(val browseId: String) : LinkTarget
     /** "Play … on OpenTune" from the Assistant; blank means "play some music". */
     data class PlaySearch(val query: String) : LinkTarget
+    /** A Spotify playlist, album or song shared to the app, to bring over. */
+    data class SpotifyImport(val text: String) : LinkTarget
 }
 
 /**
@@ -64,6 +66,10 @@ object Links {
             Intent.ACTION_VIEW -> intent.dataString
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
             else -> null
+        }
+        if (text != null && com.opentune.data.spotify.Spotify.looksLikeSpotify(text)) {
+            _incoming.value = LinkTarget.SpotifyImport(text)
+            return
         }
         parse(text)?.let { _incoming.value = it }
     }

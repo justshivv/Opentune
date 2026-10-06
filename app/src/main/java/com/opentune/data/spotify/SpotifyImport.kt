@@ -50,7 +50,7 @@ object SpotifyImport {
 
     val running get() = job?.isActive == true
 
-    /** Imports [name]'s tracks, fetched by [tracks], into a new phone playlist called [name]. */
+    /** Finds [tracks] on YouTube Music and saves them as a new phone playlist called [name]. */
     fun start(name: String, tracks: suspend () -> List<Spotify.Track>) {
         if (running) return
         _progress.value = Progress(name, total = 0)

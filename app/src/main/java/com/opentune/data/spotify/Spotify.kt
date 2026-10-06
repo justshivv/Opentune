@@ -1,244 +1,116 @@
 package com.opentune.data.spotify
 
-import android.content.Context
-import android.content.SharedPreferences
-import android.net.Uri
-import android.util.Base64
-import androidx.core.content.edit
-import androidx.core.net.toUri
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
 import java.io.IOException
-import java.security.MessageDigest
-import java.security.SecureRandom
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
-import okhttp3.FormBody
 import okhttp3.Request
 
 /**
- * Spotify sign-in through Spotify's own login page (OAuth with PKCE), to
- * read your playlists and liked songs so they can be brought over. Nothing
- * plays from Spotify: imported songs are found on YouTube Music.
+ * Public Spotify playlists, albums and songs by link, with no sign-in.
  *
- * Spotify only lets registered apps sign in, so you register one for
- * yourself (free, at developer.spotify.com) and give OpenTune its Client
- * ID. No client secret is involved. Tokens stay in app-private storage
- * left out of backups.
+ * The track list is read from Spotify's own embed page (the player that
+ * websites put on their pages), which any visitor can load. It names each
+ * song, its artists and length; nothing is streamed from Spotify. The embed
+ * shows a playlist's first 100 songs, so longer playlists come over in part.
  */
 object Spotify {
     private const val TAG = "Spotify"
-    const val REDIRECT_URI = "opentune://spotify-auth"
-    private const val AUTHORIZE = "https://accounts.spotify.com/authorize"
-    private const val TOKEN = "https://accounts.spotify.com/api/token"
-    private const val API = "https://api.spotify.com/v1"
-    private const val SCOPES = "playlist-read-private playlist-read-collaborative user-library-read"
+    private const val UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36"
+    /** The most songs the embed page lists for a playlist. */
+    const val EMBED_LIMIT = 100
 
-    data class Account(val name: String)
-    data class Playlist(val id: String, val name: String, val owner: String, val tracks: Int, val image: String?)
+    enum class Kind { PLAYLIST, ALBUM, TRACK }
+
+    data class Link(val kind: Kind, val id: String)
+
     data class Track(val title: String, val artists: List<String>, val album: String?, val durationMs: Long)
 
+    data class Collection(
+        val link: Link,
+        val name: String,
+        /** Who made the playlist, or the album's artist. */
+        val subtitle: String,
+        val imageUrl: String?,
+        val tracks: List<Track>,
+    ) {
+        /** A playlist cut off at the embed's limit; the rest isn't visible without signing in. */
+        val maybeTruncated get() = link.kind == Kind.PLAYLIST && tracks.size >= EMBED_LIMIT
+    }
+
     private val json = Json { ignoreUnknownKeys = true }
-    private val refreshing = Mutex()
-    private var prefs: SharedPreferences? = null
+    private val PATH = Regex("""open\.spotify\.com/(?:intl-[a-z]{2}(?:-[a-zA-Z]{2})?/)?(?:embed/)?(playlist|album|track)/([A-Za-z0-9]{22})""")
+    private val URI = Regex("""spotify:(playlist|album|track):([A-Za-z0-9]{22})""")
+    private val SHORT = Regex("""https?://(?:spotify\.link|spotify\.app\.link)/\S+""")
+    private val NEXT_DATA = Regex("""<script id="__NEXT_DATA__" type="application/json">(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
 
-    private val _account = MutableStateFlow<Account?>(null)
-    val account: StateFlow<Account?> = _account.asStateFlow()
-
-    fun init(context: Context) {
-        val p = context.getSharedPreferences("spotify", Context.MODE_PRIVATE)
-        prefs = p
-        p.getString(K_NAME, null)?.takeIf { p.getString(K_REFRESH, null) != null }?.let { _account.value = Account(it) }
+    /** The playlist, album or song a pasted or shared text points at, without going online. */
+    fun parse(text: String): Link? {
+        val m = PATH.find(text) ?: URI.find(text) ?: return null
+        return Link(Kind.valueOf(m.groupValues[1].uppercase()), m.groupValues[2])
     }
 
-    val clientId: String? get() = prefs?.getString(K_CLIENT, null)
+    /** Whether [text] holds something [resolve] might turn into a link (including spotify.link short links). */
+    fun looksLikeSpotify(text: String) = parse(text) != null || SHORT.containsMatchIn(text)
 
-    /**
-     * The login page to open in the browser. Remembers the PKCE verifier and
-     * state for [finishSignIn], which receives Spotify's redirect.
-     */
-    fun authorizeUrl(clientId: String): Uri {
-        val verifier = randomString(64)
-        val state = randomString(16)
-        prefs?.edit {
-            putString(K_CLIENT, clientId.trim())
-            putString(K_VERIFIER, verifier)
-            putString(K_STATE, state)
-        }
-        return AUTHORIZE.toUri().buildUpon()
-            .appendQueryParameter("client_id", clientId.trim())
-            .appendQueryParameter("response_type", "code")
-            .appendQueryParameter("redirect_uri", REDIRECT_URI)
-            .appendQueryParameter("code_challenge_method", "S256")
-            .appendQueryParameter("code_challenge", challenge(verifier))
-            .appendQueryParameter("state", state)
-            .appendQueryParameter("scope", SCOPES)
-            .build()
-    }
-
-    fun isRedirect(uri: Uri?) = uri?.scheme == "opentune" && uri.host == "spotify-auth"
-
-    /** Trades the code in Spotify's redirect for tokens, and reads who signed in. */
-    suspend fun finishSignIn(redirect: Uri): Result<Account> = withContext(Dispatchers.IO) {
+    /** [parse], following a spotify.link short link to where it leads. */
+    suspend fun resolve(text: String): Link? = parse(text) ?: withContext(Dispatchers.IO) {
+        val short = SHORT.find(text)?.value ?: return@withContext null
         runCatching {
-            val p = prefs ?: error("Not ready")
-            redirect.getQueryParameter("error")?.let { throw IOException(if (it == "access_denied") "Sign-in was cancelled" else "Spotify said: $it") }
-            if (redirect.getQueryParameter("state") != p.getString(K_STATE, null)) throw IOException("This sign-in link doesn't match; try again")
-            val code = redirect.getQueryParameter("code") ?: throw IOException("Spotify sent no code")
-            val client = p.getString(K_CLIENT, null) ?: throw IOException("No Client ID")
-            val verifier = p.getString(K_VERIFIER, null) ?: throw IOException("Sign-in expired; try again")
-            token(
-                FormBody.Builder()
-                    .add("grant_type", "authorization_code")
-                    .add("code", code)
-                    .add("redirect_uri", REDIRECT_URI)
-                    .add("client_id", client)
-                    .add("code_verifier", verifier)
-                    .build(),
-            )
-            p.edit { remove(K_VERIFIER); remove(K_STATE) }
-            val me = get("$API/me")
-            val name = me.str("display_name") ?: me.str("id") ?: "Spotify user"
-            p.edit { putString(K_NAME, name) }
-            Account(name).also { _account.value = it }
-        }.onFailure { Log.w(TAG, "sign-in failed", it) }
-    }
-
-    fun signOut() {
-        val client = clientId
-        prefs?.edit { clear(); client?.let { putString(K_CLIENT, it) } }
-        _account.value = null
-    }
-
-    /** Every playlist in the account's library, its own and followed ones. */
-    suspend fun playlists(): List<Playlist> = withContext(Dispatchers.IO) {
-        pages("$API/me/playlists?limit=50").mapNotNull { e ->
-            val o = e as? JsonObject ?: return@mapNotNull null
-            Playlist(
-                id = o.str("id") ?: return@mapNotNull null,
-                name = o.str("name").orEmpty(),
-                owner = (o["owner"] as? JsonObject)?.str("display_name").orEmpty(),
-                tracks = ((o["tracks"] as? JsonObject)?.get("total") as? JsonPrimitive)?.intOrNull ?: 0,
-                image = ((o["images"] as? JsonArray)?.firstOrNull() as? JsonObject)?.str("url"),
-            )
-        }
-    }
-
-    suspend fun playlistTracks(id: String): List<Track> = withContext(Dispatchers.IO) {
-        pages("$API/playlists/$id/tracks?limit=100&fields=items(track(name,type,duration_ms,artists(name),album(name))),next").mapNotNull(::track)
-    }
-
-    suspend fun likedTracks(): List<Track> = withContext(Dispatchers.IO) {
-        pages("$API/me/tracks?limit=50").mapNotNull(::track)
-    }
-
-    /** A playlist or library item's track; podcast episodes and local files left out. */
-    internal fun track(item: kotlinx.serialization.json.JsonElement): Track? {
-        val t = (item as? JsonObject)?.get("track") as? JsonObject ?: return null
-        if ((t.str("type") ?: "track") != "track") return null
-        val title = t.str("name")?.takeIf { it.isNotBlank() } ?: return null
-        return Track(
-            title = title,
-            artists = (t["artists"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.str("name") },
-            album = (t["album"] as? JsonObject)?.str("name"),
-            durationMs = (t["duration_ms"] as? JsonPrimitive)?.longOrNull ?: 0,
-        )
-    }
-
-    /** Follows "next" links to the end of a paged list. */
-    private suspend fun pages(first: String): List<kotlinx.serialization.json.JsonElement> {
-        val out = mutableListOf<kotlinx.serialization.json.JsonElement>()
-        var next: String? = first
-        var count = 0
-        while (next != null && count < MAX_PAGES) {
-            val page = get(next)
-            out += (page["items"] as? JsonArray).orEmpty()
-            next = page.str("next")
-            count++
-        }
-        return out
-    }
-
-    private suspend fun get(url: String): JsonObject {
-        val response = call(url, accessToken())
-        if (response.first == 401) return call(url, accessToken(force = true)).let { (code, body) ->
-            if (code !in 200..299) throw IOException("Spotify answered $code")
-            body
-        }
-        if (response.first == 429) throw IOException("Spotify asks to slow down; try again in a minute")
-        if (response.first !in 200..299) throw IOException("Spotify answered ${response.first}")
-        return response.second
-    }
-
-    private fun call(url: String, token: String): Pair<Int, JsonObject> =
-        Http.client.newCall(Request.Builder().url(url).header("Authorization", "Bearer $token").build()).execute().use { r ->
-            val body = r.body?.string().orEmpty()
-            r.code to (runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull() ?: JsonObject(emptyMap()))
-        }
-
-    /** A valid access token, refreshed with the refresh token when it has run out. */
-    private suspend fun accessToken(force: Boolean = false): String = refreshing.withLock {
-        val p = prefs ?: throw IOException("Not signed in")
-        val token = p.getString(K_ACCESS, null)
-        if (!force && token != null && System.currentTimeMillis() < p.getLong(K_EXPIRES, 0) - 60_000) return token
-        val refresh = p.getString(K_REFRESH, null) ?: throw IOException("Not signed in")
-        val client = p.getString(K_CLIENT, null) ?: throw IOException("No Client ID")
-        token(FormBody.Builder().add("grant_type", "refresh_token").add("refresh_token", refresh).add("client_id", client).build())
-        p.getString(K_ACCESS, null) ?: throw IOException("Spotify gave no token")
-    }
-
-    private fun token(form: FormBody) {
-        Http.client.newCall(Request.Builder().url(TOKEN).post(form).build()).execute().use { r ->
-            val body = runCatching { json.parseToJsonElement(r.body?.string().orEmpty()).jsonObject }.getOrNull()
-            if (!r.isSuccessful || body == null) {
-                val reason = body?.str("error_description") ?: body?.str("error") ?: "code ${r.code}"
-                if (body?.str("error") == "invalid_grant") {
-                    prefs?.edit { remove(K_REFRESH); remove(K_ACCESS) }
-                    _account.value = null
-                }
-                throw IOException("Spotify refused: $reason")
+            Http.client.newCall(Request.Builder().url(short).header("User-Agent", UA).build()).execute().use { r ->
+                // OkHttp follows the redirects; the final address, or the page's own links, name the target.
+                parse(r.request.url.toString()) ?: parse(r.body?.string().orEmpty())
             }
-            val access = body.str("access_token") ?: throw IOException("Spotify gave no token")
-            val expires = (body["expires_in"] as? JsonPrimitive)?.longOrNull ?: 3600
-            prefs?.edit {
-                putString(K_ACCESS, access)
-                putLong(K_EXPIRES, System.currentTimeMillis() + expires * 1000)
-                // Spotify may or may not send a new refresh token; keep the old one if not.
-                body.str("refresh_token")?.let { putString(K_REFRESH, it) }
-            }
+        }.onFailure { Log.w(TAG, "short link failed", it) }.getOrNull()
+    }
+
+    /** The name, cover and songs behind [link]. */
+    suspend fun load(link: Link): Collection = withContext(Dispatchers.IO) {
+        val url = "https://open.spotify.com/embed/${link.kind.name.lowercase()}/${link.id}"
+        val html = Http.client.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r ->
+            if (r.code == 404) throw IOException("Spotify doesn't have this, or it's private")
+            if (!r.isSuccessful) throw IOException("Spotify answered ${r.code}")
+            r.body?.string().orEmpty()
         }
+        parseEmbed(html, link) ?: throw IOException("Couldn't read this from Spotify. Private playlists can't be imported.")
     }
 
-    internal fun challenge(verifier: String): String =
-        Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray()), Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
-
-    private fun randomString(length: Int): String {
-        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-        val random = SecureRandom()
-        return String(CharArray(length) { chars[random.nextInt(chars.length)] })
+    /** The collection described by an embed page, or null if the page isn't one. */
+    internal fun parseEmbed(html: String, link: Link): Collection? {
+        val data = NEXT_DATA.find(html)?.groupValues?.get(1) ?: return null
+        val entity = runCatching {
+            json.parseToJsonElement(data).jsonObject.o("props").o("pageProps").o("state").o("data").o("entity")
+        }.getOrNull() ?: return null
+        val name = entity.str("name") ?: entity.str("title") ?: return null
+        val subtitle = entity.str("subtitle").orEmpty()
+        val image = (entity.o("coverArt")?.get("sources") as? JsonArray)?.firstOrNull()?.let { (it as? JsonObject)?.str("url") }
+        val tracks = if (link.kind == Kind.TRACK) {
+            listOf(Track(name, artists(subtitle), null, (entity["duration"] as? JsonPrimitive)?.longOrNull ?: 0))
+        } else {
+            (entity["trackList"] as? JsonArray).orEmpty().mapNotNull { t -> track(t, album = name.takeIf { link.kind == Kind.ALBUM }) }
+        }
+        return Collection(link, name, subtitle, image, tracks)
     }
 
+    private fun track(e: JsonElement, album: String?): Track? {
+        val o = e as? JsonObject ?: return null
+        if ((o.str("entityType") ?: "track") != "track") return null // podcast episodes and the like
+        val title = o.str("title")?.takeIf { it.isNotBlank() } ?: return null
+        return Track(title, artists(o.str("subtitle").orEmpty()), album, (o["duration"] as? JsonPrimitive)?.longOrNull ?: 0)
+    }
+
+    /** "KAROL G, Judeline, rusowsky" as three names. */
+    internal fun artists(subtitle: String) = subtitle.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+
+    private fun JsonObject?.o(key: String): JsonObject? = this?.get(key) as? JsonObject
     private fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull
-
-    private const val MAX_PAGES = 100
-    private const val K_CLIENT = "clientId"
-    private const val K_VERIFIER = "verifier"
-    private const val K_STATE = "state"
-    private const val K_ACCESS = "access"
-    private const val K_REFRESH = "refresh"
-    private const val K_EXPIRES = "expiresAt"
-    private const val K_NAME = "name"
 }
