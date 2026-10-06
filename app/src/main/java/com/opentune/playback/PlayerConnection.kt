@@ -61,6 +61,10 @@ class PlayerConnection(private val context: Context) {
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering = _isBuffering.asStateFlow()
 
+    /** Whether playback is meant to be running, buffering or not. */
+    private val _playWhenReady = MutableStateFlow(false)
+    val playWhenReady = _playWhenReady.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
 
@@ -125,6 +129,7 @@ class PlayerConnection(private val context: Context) {
         _durationMs.value = player.duration.takeIf { it > 0 } ?: 0L
         _isPlaying.value = player.isPlaying
         _isBuffering.value = player.playbackState == Player.STATE_BUFFERING
+        _playWhenReady.value = player.playWhenReady
         // A track that started, or a recovery the service made on its own,
         // makes the last error stale.
         if (player.isPlaying) _error.value = null
@@ -148,7 +153,7 @@ class PlayerConnection(private val context: Context) {
      * [shuffle], the list is shuffled up front (so turning shuffle off later
      * keeps the shuffled order) and playback starts from its first track.
      */
-    fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false, source: String? = null) {
+    fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false, source: String? = null, startPositionMs: Long = 0L) {
         val controller = controller ?: return
         if (songs.isEmpty()) return
         _error.value = null
@@ -158,7 +163,7 @@ class PlayerConnection(private val context: Context) {
         controller.setMediaItems(
             ordered.map { it.toMediaItem() },
             if (shuffle) 0 else startIndex.coerceIn(songs.indices),
-            0L,
+            startPositionMs.coerceAtLeast(0L),
         )
         controller.prepare()
         controller.play()
@@ -202,6 +207,31 @@ class PlayerConnection(private val context: Context) {
             if (controller.playbackState == Player.STATE_IDLE) controller.prepare()
             controller.play()
         }
+    }
+
+    fun play() {
+        val controller = controller ?: return
+        if (controller.playbackState == Player.STATE_IDLE) controller.prepare()
+        controller.play()
+    }
+
+    fun pause() {
+        controller?.pause()
+    }
+
+    /** Swaps everything after the current track for [songs], leaving the current one playing. */
+    fun replaceUpcoming(songs: List<Song>) {
+        val controller = controller ?: return
+        val from = controller.currentMediaItemIndex + 1
+        if (from < controller.mediaItemCount) controller.removeMediaItems(from, controller.mediaItemCount)
+        if (songs.isNotEmpty()) controller.addMediaItems(songs.map { it.toMediaItem() })
+    }
+
+    /** Jumps to queue entry [index] at [positionMs]. */
+    fun seekToItem(index: Int, positionMs: Long) {
+        val controller = controller ?: return
+        if (index !in 0 until controller.mediaItemCount) return
+        controller.seekTo(index, positionMs.coerceAtLeast(0L))
     }
 
     fun skipNext() {

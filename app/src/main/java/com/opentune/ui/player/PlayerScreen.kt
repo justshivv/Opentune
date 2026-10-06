@@ -76,6 +76,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AssistChip
@@ -109,6 +110,7 @@ import com.opentune.data.settings.ThemeSettings
 import com.opentune.data.model.Song
 import com.opentune.ui.LyricsState
 import com.opentune.ui.PlayerViewModel
+import com.opentune.data.together.Together
 import com.opentune.ui.components.MarqueeText
 import com.opentune.ui.theme.PlayerTheme
 import com.opentune.ui.theme.rememberArtworkSeed
@@ -164,6 +166,7 @@ class PlayerActions(
     val removeIndex: (Int) -> Unit,
     val collapse: () -> Unit,
     val moveIndex: (Int, Int) -> Unit = { _, _ -> },
+    val openTogether: () -> Unit = {},
 )
 
 @Composable
@@ -172,6 +175,7 @@ fun PlayerScreen(
     onCollapse: () -> Unit,
     /** True while the player sits fully open, not being dragged down. */
     onCovering: (Boolean) -> Unit = {},
+    onTogether: () -> Unit = {},
 ) {
     val song by vm.currentSong.collectAsState()
     val current = song ?: return
@@ -207,6 +211,7 @@ fun PlayerScreen(
             removeIndex = vm::removeQueueItem,
             collapse = onCollapse,
             moveIndex = vm::moveQueueItem,
+            openTogether = onTogether,
         )
     }
     PlayerLayout(
@@ -336,8 +341,11 @@ fun PlayerLayout(
                             .clickable(onClick = actions.collapse),
                     )
                     Box(Modifier.height(40.dp), contentAlignment = Alignment.Center) {
+                        val room by Together.room.collectAsState()
                         AnimatedContent(sound.isDefault, label = "remixPill") { normal ->
-                            if (normal) {
+                            if (room != null) {
+                                TogetherPill(room!!, actions.openTogether)
+                            } else if (normal) {
                                 if (!state.ui.hideSongStatus) SongStatus(state.source)
                             } else {
                                 AssistChip(
@@ -487,6 +495,7 @@ fun PlayerLayout(
                 top = { close -> MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() } },
                 tools = { close ->
                     MenuRow(Icons.Rounded.GraphicEq, "Signal path") { close(); showSignal = true }
+                    MenuRow(Icons.Rounded.Groups, "Listen together") { close(); actions.openTogether() }
                     MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
                     MenuRow(Icons.Rounded.Tune, "Lyrics offset") { close(); showOffset = true }
                     MenuRow(Icons.Rounded.GraphicEq, "Remix") { close(); showRemix = true }
@@ -625,5 +634,29 @@ fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier 
         onClick = onExpand,
         modifier = modifier,
         inline = inline,
+    )
+}
+
+/** Shown where "Playing from" goes while in a room: whose room, and how many are in. */
+@Composable
+private fun TogetherPill(room: Together.Room, onClick: () -> Unit) {
+    AssistChip(
+        onClick = onClick,
+        label = {
+            Text(
+                when {
+                    room.hosting -> "Your room · ${room.members.size} listening"
+                    room.holding -> "Paused for you · ${room.hostName ?: "room"}"
+                    room.phase == Together.Phase.Live -> "With ${room.hostName ?: "the host"} · ${room.members.size} listening"
+                    else -> "Listening together"
+                },
+            )
+        },
+        leadingIcon = { Icon(Icons.Rounded.Groups, null, Modifier.size(18.dp)) },
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
     )
 }

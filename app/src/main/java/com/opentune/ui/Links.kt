@@ -16,6 +16,8 @@ sealed interface LinkTarget {
     data class PlaySearch(val query: String) : LinkTarget
     /** A Spotify playlist, album or song shared to the app, to bring over. */
     data class SpotifyImport(val text: String) : LinkTarget
+    /** An invite to a Listen together room. */
+    data class Together(val code: String) : LinkTarget
 }
 
 /**
@@ -66,6 +68,10 @@ object Links {
             Intent.ACTION_VIEW -> intent.dataString
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
             else -> null
+        }
+        com.opentune.data.together.RoomCode.find(text)?.let {
+            _incoming.value = LinkTarget.Together(it.raw)
+            return
         }
         if (text != null && com.opentune.data.spotify.Spotify.looksLikeSpotify(text)) {
             _incoming.value = LinkTarget.SpotifyImport(text)
