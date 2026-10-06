@@ -29,6 +29,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -96,6 +97,8 @@ fun LyricsView(
     modifier: Modifier = Modifier,
     synced: Boolean = true,
     blur: Boolean = true,
+    /** Long-press on a line: it's being sung now, so the song's lyrics move to match. */
+    onSyncLine: ((Long) -> Unit)? = null,
 ) {
     Box(modifier) {
         when (state) {
@@ -109,7 +112,7 @@ fun LyricsView(
             }
             is LyricsState.Found -> when (val lyrics = state.lyrics) {
                 is Lyrics.Synced ->
-                    if (synced) SyncedLyrics(lyrics.lines, position, onSeek, blur, lyrics.source)
+                    if (synced) SyncedLyrics(lyrics.lines, position, onSeek, blur, lyrics.source, onSyncLine)
                     else PlainLyrics(lyrics.lines.joinToString("\n") { it.text }, lyrics.source, note = null)
                 is Lyrics.Plain -> PlainLyrics(lyrics.text, lyrics.source)
             }
@@ -142,12 +145,20 @@ private fun PlainLyrics(text: String, source: String, note: String? = "These lyr
  * hand pauses that for a few seconds; tapping a line jumps the song there.
  */
 @Composable
-private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (Long) -> Unit, blur: Boolean, source: String) {
+private fun SyncedLyrics(
+    lines: List<LyricLine>,
+    position: () -> Long,
+    onSeek: (Long) -> Unit,
+    blur: Boolean,
+    source: String,
+    onSyncLine: ((Long) -> Unit)? = null,
+) {
     val animation = AppSettings.ui.collectAsState().value.lyricsAnimation
     val listState = rememberLazyListState()
     // The position function changes with the lyrics offset; read the latest.
     val pos by rememberUpdatedState(position)
-    val active by remember(lines) { derivedStateOf { lines.activeIndex(pos()) } }
+    // A line lights a moment before its timestamp, so it's there as the singer starts it.
+    val active by remember(lines) { derivedStateOf { lines.activeIndex(pos() + LINE_LEAD_MS) } }
     var following by remember { mutableStateOf(true) }
     var autoScrolling by remember { mutableStateOf(false) }
 
@@ -196,6 +207,7 @@ private fun SyncedLyrics(lines: List<LyricLine>, position: () -> Long, onSeek: (
                         onSeek(line.startMs)
                         following = true
                     },
+                    onLongClick = onSyncLine?.let { sync -> { sync(line.startMs); following = true } },
                 )
             }
             item(key = "credit") { Credit(source) }
@@ -254,6 +266,7 @@ private fun LyricLineView(
     blurEnabled: Boolean,
     position: () -> Long,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val motion = motionOf(animation)
     val bright = MaterialTheme.colorScheme.onSurface
@@ -304,7 +317,7 @@ private fun LyricLineView(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .combinedClickable(remember { MutableInteractionSource() }, indication = null, onLongClick = onLongClick, onClick = onClick)
             .padding(vertical = 10.dp)
             .graphicsLayer {
                 scaleX = scale
@@ -387,9 +400,17 @@ private fun Credit(source: String) {
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    Text(
+        "Out of time? Long-press the line being sung to line them up.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+        modifier = Modifier.padding(top = 4.dp),
+    )
 }
 
 private const val RESUME_FOLLOW_MS = 3_000L
+/** How far ahead of its timestamp a line lights up. */
+private const val LINE_LEAD_MS = 150L
 
 /** The lyrics style at the size chosen in Settings. */
 @Composable

@@ -67,8 +67,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             _lyrics.value = LyricsState.Loading
             // LRCLIB matches on duration, and the player's figure is exact
-            // where the row's "3:45" is rounded. Give it a moment to arrive.
-            val duration = withTimeoutOrNull(4_000) { durationMs.first { it > 0 } } ?: 0L
+            // where the row's "3:45" is rounded. Without it any version's
+            // lyrics can match, so wait for it while the stream starts.
+            val duration = withTimeoutOrNull(20_000) { durationMs.first { it > 0 } } ?: 0L
             val found = LyricsRepository.lyricsFor(song.videoId, song.title, song.artist, duration)
             _lyrics.value = found?.let(LyricsState::Found) ?: LyricsState.NotFound
         }

@@ -250,6 +250,12 @@ fun PlayerLayout(
     val lyricsSettings by AppSettings.lyrics.collectAsState()
     val offsetMs = lyricsSettings.offsets[current.videoId] ?: 0L
     val lyricsPosition: () -> Long = { position() + offsetMs }
+    // Long-press on the line being sung: shift this song's lyrics so that line starts now.
+    val syncLine: (Long) -> Unit = { lineStart ->
+        val shift = lineStart - position()
+        AppSettings.setLyricsOffset(current.videoId, shift)
+        Toast.makeText(context, "Lyrics moved %+.1f s for this song".format(shift / 1000f), Toast.LENGTH_SHORT).show()
+    }
     val liked by LibraryStore.liked.collectAsState()
     val isLiked = liked.any { it.videoId == current.videoId }
     val device = rememberOutputDeviceName()
@@ -375,6 +381,7 @@ fun PlayerLayout(
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
                                 synced = state.ui.syncedLyrics,
                                 blur = state.ui.blurLyrics,
+                                onSyncLine = syncLine,
                             )
                         } else if (p == Pane.COVER) {
                             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -403,6 +410,7 @@ fun PlayerLayout(
                                     modifier = Modifier.weight(1f).fillMaxWidth(),
                                     synced = state.ui.syncedLyrics,
                                     blur = state.ui.blurLyrics,
+                                    onSyncLine = syncLine,
                                 )
                             } else {
                                 Text("Queue", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
