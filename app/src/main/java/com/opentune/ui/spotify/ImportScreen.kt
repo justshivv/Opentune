@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
@@ -58,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.opentune.data.spotify.PlaylistCsv
+import com.opentune.data.spotify.ExportedPlaylists
 import com.opentune.data.spotify.PlaylistImport
 import com.opentune.data.spotify.Spotify
 import com.opentune.data.spotify.YouTubePlaylists
@@ -97,6 +99,14 @@ private sealed interface Found {
         override val count get() = p.songs.size
     }
 
+    data class FromBundle(val playlists: List<ExportedPlaylists.Exported>) : Found {
+        override val name get() = "${playlists.size} playlists"
+        override val subtitle get() = "From Exportify"
+        override val imageUrl: String? get() = null
+        override val label get() = "Exported playlists"
+        override val count get() = playlists.sumOf { it.tracks.size }
+    }
+
     data class FromCsv(override val name: String, val tracks: List<Spotify.Track>) : Found {
         override val subtitle get() = "CSV file"
         override val imageUrl: String? get() = null
@@ -125,6 +135,7 @@ fun ImportScreen(
     initialLink: String?,
     onBack: () -> Unit,
     onOpenPlaylist: (String) -> Unit,
+    onOpenExportify: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -133,10 +144,19 @@ fun ImportScreen(
     var preview by remember { mutableStateOf<Preview>(Preview.Empty) }
     var playing by remember { mutableStateOf(false) }
 
+    // Coming back from the in-app Exportify page with what it caught.
+    val pending by ExportedPlaylists.pending.collectAsState()
+    LaunchedEffect(pending) {
+        val caught = ExportedPlaylists.take() ?: return@LaunchedEffect
+        text = ""
+        preview = Preview.Ready(if (caught.size == 1) Found.FromCsv(caught.first().name, caught.first().tracks) else Found.FromBundle(caught))
+    }
+
     LaunchedEffect(text) {
         val t = text.trim()
         if (t.isEmpty()) {
-            if (preview !is Preview.Ready || (preview as Preview.Ready).found !is Found.FromCsv) preview = Preview.Empty
+            val kept = (preview as? Preview.Ready)?.found
+            if (kept !is Found.FromCsv && kept !is Found.FromBundle) preview = Preview.Empty
             return@LaunchedEffect
         }
         val youtube = YouTubePlaylists.parse(t)
@@ -224,10 +244,18 @@ fun ImportScreen(
                 }
             }
         }
+        item {
+            // Exportify inside the app: sign in with Spotify there, tap Export, and the file comes straight here.
+            Button(onClick = onOpenExportify, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Export from Spotify (whole playlists, Liked Songs)")
+            }
+        }
         progress?.let { p -> item { ProgressCard(p, actions, onOpenPlaylist) } }
 
         when (val p = preview) {
-            Preview.Empty -> item { CsvHelp() }
+            Preview.Empty -> item { CsvHelp(onOpenExportify) }
             is Preview.Loading -> item {
                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
@@ -251,7 +279,7 @@ fun ImportScreen(
                         }
                     }
                 }
-                if (f is Found.FromSpotify && f.c.maybeTruncated) item { FullPlaylistNote() }
+                if (f is Found.FromSpotify && f.c.maybeTruncated) item { FullPlaylistNote(onOpenExportify) }
                 item {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         when {
@@ -277,6 +305,11 @@ fun ImportScreen(
                                 onClick = { PlaylistImport.start(f.c.name) { f.c.tracks } },
                                 modifier = Modifier.weight(1f),
                             ) { Text("Import as playlist") }
+                            f is Found.FromBundle -> Button(
+                                enabled = !PlaylistImport.running,
+                                onClick = { PlaylistImport.startAll(f.playlists.map { e -> e.name to suspend { e.tracks } }) },
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Import all ${f.playlists.size}") }
                             f is Found.FromCsv -> Button(
                                 enabled = !PlaylistImport.running,
                                 onClick = { PlaylistImport.start(f.name) { f.tracks } },
@@ -289,6 +322,7 @@ fun ImportScreen(
                     is Found.FromSpotify -> if (f.c.link.kind == Spotify.Kind.TRACK) emptyList() else f.c.tracks.map { it.title to it.artists.joinToString() }
                     is Found.FromYouTube -> f.p.songs.map { it.title to it.artist }
                     is Found.FromCsv -> f.tracks.map { it.title to it.artists.joinToString() }
+                    is Found.FromBundle -> f.playlists.map { it.name to "${it.tracks.size} songs" }
                 }
                 items(rows.take(300)) { (title, artist) ->
                     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
@@ -306,8 +340,7 @@ fun ImportScreen(
 
 /** How to bring a whole Spotify playlist, or Liked Songs, over as a CSV. */
 @Composable
-private fun CsvHelp() {
-    val context = LocalContext.current
+private fun CsvHelp(onOpenExportify: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -316,29 +349,28 @@ private fun CsvHelp() {
             Text("Big playlists and Liked Songs", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(
                 "A Spotify link brings up to the first ${Spotify.EMBED_LIMIT} songs of a playlist, which is all Spotify shows without signing in. " +
-                    "For every song, or for your Liked Songs, export the playlist at exportify.app (sign in there with Spotify), then pick the CSV file here.",
+                    "For every song, or your Liked Songs, tap Export from Spotify: Exportify opens here, you sign in with Spotify and tap Export, and the playlist comes straight back ready to import.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://exportify.app".toUri())) } }) { Text("Open Exportify") }
+            TextButton(onClick = onOpenExportify) { Text("Export from Spotify") }
         }
     }
 }
 
 @Composable
-private fun FullPlaylistNote() {
-    val context = LocalContext.current
+private fun FullPlaylistNote(onOpenExportify: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                "This shows the first ${Spotify.EMBED_LIMIT} songs, Spotify's limit without signing in. To bring every song, export it at exportify.app and pick the CSV with \"CSV file\" above.",
+                "This shows the first ${Spotify.EMBED_LIMIT} songs, Spotify's limit without signing in. Export from Spotify brings every song.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
-            TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://exportify.app".toUri())) } }) { Text("Open Exportify") }
+            TextButton(onClick = onOpenExportify) { Text("Export from Spotify") }
         }
     }
 }

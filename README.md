@@ -130,10 +130,12 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
     on YouTube Music and the closest catalogue match kept, with misses
     listed. A song link plays straight away. Without signing in, Spotify
     only shows a playlist's first 100 songs;
-  - a **CSV export**, for every song of a Spotify playlist or your Liked
-    Songs: export at [exportify.app](https://exportify.app) and pick the
-    file. TuneMyMusic, Soundiiz and other exports work too; columns are
-    found by their headers.
+  - **Export from Spotify**, for every song of any playlist or your Liked
+    Songs: [Exportify](https://exportify.app) opens inside OpenTune, you
+    sign in with Spotify there and tap Export (or Export All), and the
+    playlist comes straight back ready to import, with no file to find.
+    A CSV from Exportify, TuneMyMusic, Soundiiz and others can also be
+    picked from the phone; columns are found by their headers.
 
   Nothing streams from Spotify.
 - **New-release alerts.** Follow an artist from their page (no account
