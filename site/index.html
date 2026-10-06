@@ -1,0 +1,1156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenTune for Android</title>
+<meta name="description" content="OpenTune is a free, open-source music player for Android that plays the YouTube Music catalogue, with synced lyrics, live radio, podcasts and rooms where friends listen in step.">
+<meta name="theme-color" content="#121013">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Crect width='108' height='108' rx='30' fill='%23E53935'/%3E%3Ccircle cx='54' cy='54' r='24' fill='none' stroke='white' stroke-width='5'/%3E%3Cpath d='M48 42 66 54 48 66Z' fill='white'/%3E%3C/svg%3E">
+<link rel="canonical" href="https://justshivv.github.io/Opentune/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="OpenTune: free, open-source music for Android">
+<meta property="og:description" content="OpenTune is a free, open-source music player for Android that plays the YouTube Music catalogue, with synced lyrics, live radio, podcasts and rooms where friends listen in step.">
+<meta property="og:url" content="https://justshivv.github.io/Opentune/">
+<meta property="og:image" content="https://justshivv.github.io/Opentune/img/share.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a record-shop counter. Oversized type on the left, a working
+   now-playing phone on a flat colour plate on the right. The plate, the
+   buttons and every accent take their colour from the cover that's playing,
+   the way the app's player does. Flat colour only, no gradients. */
+@property --wash {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #E5483A;
+}
+@property --tint {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #E5483A;
+}
+:root {
+  --bg: #121013;
+  --surface: #1B181C;
+  --raise: #242026;
+  --line: #2E2930;
+  --fg: #F4F1F5;
+  --muted: #A69FA9;
+  --brand: #E53935;
+  --tint: #E5483A;
+  --ink: #160E10;
+  --screen-base: #0F0D10;
+  --display: "Outfit", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "Hanken Grotesk", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 22px;
+  --gutter: clamp(16px, 4vw, 40px);
+  color-scheme: dark;
+  transition: --tint 900ms cubic-bezier(.2, 0, 0, 1);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #F3F1F4; --surface: #FFFFFF; --raise: #EAE6EC; --line: #DCD7DF;
+    --fg: #17131A; --muted: #5F5864; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #F3F1F4; --surface: #FFFFFF; --raise: #EAE6EC; --line: #DCD7DF;
+  --fg: #17131A; --muted: #5F5864; color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 17px/1.6 var(--body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+a { color: inherit; }
+img { max-width: 100%; display: block; }
+:focus-visible { outline: 2px solid var(--tint); outline-offset: 3px; border-radius: 8px; }
+.wrap { max-width: 1180px; margin-inline: auto; padding-inline: var(--gutter); }
+
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.02em; }
+h1 { font-size: clamp(44px, 7.4vw, 92px); line-height: .98; font-weight: 700; }
+h2 { font-size: clamp(32px, 4.6vw, 56px); line-height: 1.02; font-weight: 700; }
+h3 { font-size: 21px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; }
+p { margin: 0; }
+.lede { font-size: clamp(18px, 1.7vw, 21px); color: var(--muted); max-width: 34ch; }
+.eyebrow {
+  font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); display: flex; align-items: center; gap: 10px;
+}
+.eyebrow::before { content: ""; width: 18px; height: 2px; background: var(--tint); border-radius: 2px; }
+.mono { font-family: var(--mono); font-size: 13px; letter-spacing: .02em; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---------- nav ---------- */
+.nav {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font: 700 21px/1 var(--display); letter-spacing: -0.02em; }
+.brand svg { width: 32px; height: 32px; flex: none; }
+.nav nav { display: flex; gap: 24px; margin-left: auto; }
+.nav nav a { text-decoration: none; font-weight: 500; font-size: 15px; color: var(--muted); transition: color .2s; }
+.nav nav a:hover { color: var(--fg); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 24px;
+  border-radius: 999px; font: 600 16px/1 var(--display); text-decoration: none; white-space: nowrap;
+  transition: transform .25s cubic-bezier(.2, 0, 0, 1), background-color .25s;
+}
+.btn svg { width: 20px; height: 20px; flex: none; }
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: translateY(0) scale(.97); }
+.btn-primary { background: var(--tint); color: var(--ink); }
+.btn-ghost { border: 1.5px solid var(--line); color: var(--fg); }
+.btn-ghost:hover { border-color: var(--muted); }
+.btn-small { height: 40px; padding: 0 18px; font-size: 14px; }
+
+/* ---------- hero ---------- */
+.hero { padding-block: clamp(40px, 7vw, 96px) clamp(56px, 8vw, 110px); }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
+.hero-copy { display: grid; gap: 28px; min-width: 0; }
+.hero h1 .soft { color: var(--muted); }
+.hero h1 .lit { color: var(--tint); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 500 13px/1 var(--mono); padding: 9px 12px; border-radius: 999px; background: var(--raise); color: var(--fg); }
+.ctas { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+.plate {
+  position: relative; aspect-ratio: 1 / 1.08; max-width: 100%;
+  border-radius: 40px; background: var(--tint);
+  display: grid; place-items: center; isolation: isolate;
+}
+/* A record's grooves, drawn in the plate's own colour, turning slowly. */
+.plate canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: inherit; z-index: -1; }
+
+.phone {
+  width: min(292px, 70vw); aspect-ratio: 9 / 19; border-radius: 44px;
+  background: color-mix(in srgb, var(--tint) 20%, var(--screen-base));
+  border: 9px solid #0A090B; color: #F6F3F7; position: relative;
+  box-shadow: 0 40px 80px -30px rgba(0, 0, 0, .55);
+  display: flex; flex-direction: column; padding: 18px 18px 16px; gap: 12px; overflow: hidden;
+  transform: rotate(-3deg); will-change: transform;
+}
+.plate { perspective: 1000px; will-change: transform; }
+.hero h1 .hl { display: block; will-change: transform; }
+.island { width: 78px; height: 22px; border-radius: 12px; background: #0A090B; margin: -6px auto 2px; flex: none; }
+.from { text-align: center; font: 500 9px/1.3 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: rgba(246, 243, 247, .55); }
+.from b { display: block; font: 600 12px/1.3 var(--display); letter-spacing: 0; text-transform: none; color: #F6F3F7; margin-top: 2px; }
+.art { position: relative; aspect-ratio: 1; border-radius: 16px; overflow: hidden; background: #000; flex: none; }
+.art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity .9s cubic-bezier(.2, 0, 0, 1), transform 1.4s cubic-bezier(.2, 0, 0, 1); }
+.art img.out { opacity: 0; transform: scale(1.06); }
+.song { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.song .names { flex: 1; min-width: 0; overflow: hidden; }
+.song .names div { transition: transform .6s cubic-bezier(.2, 0, 0, 1), opacity .6s; }
+.song .names.swap div { transform: translateY(-10px); opacity: 0; }
+.song .t { font: 600 17px/1.2 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song .a { font-size: 13px; color: rgba(246, 243, 247, .62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.round { width: 30px; height: 30px; border-radius: 50%; background: rgba(255, 255, 255, .12); display: grid; place-items: center; flex: none; }
+.round svg { width: 16px; height: 16px; }
+.bar { height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .18); position: relative; overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; width: 0; background: #F6F3F7; border-radius: inherit; }
+.times { display: flex; justify-content: space-between; font: 500 10px/1 var(--mono); color: rgba(246, 243, 247, .55); margin-top: -4px; font-variant-numeric: tabular-nums; }
+.controls { display: flex; align-items: center; justify-content: space-evenly; margin-top: 2px; }
+.controls button { background: none; border: 0; padding: 6px; color: inherit; cursor: pointer; border-radius: 50%; transition: transform .25s cubic-bezier(.3, 1.6, .5, 1); }
+.controls button:active { transform: scale(.84); }
+.controls .skip svg { width: 30px; height: 30px; }
+.controls .pp svg { width: 44px; height: 44px; }
+.dockrow { display: flex; justify-content: space-between; margin-top: auto; color: rgba(246, 243, 247, .7); }
+.dockrow svg { width: 18px; height: 18px; }
+
+.tag {
+  position: absolute; display: flex; align-items: center; gap: 8px;
+  background: var(--surface); color: var(--fg); padding: 10px 14px; border-radius: 14px;
+  font: 500 13px/1.2 var(--body); box-shadow: 0 16px 40px -18px rgba(0, 0, 0, .5); white-space: nowrap;
+  animation: bob 6s ease-in-out infinite;
+}
+.tag .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--tint); box-shadow: 0 0 0 3px var(--raise); }
+.tag-a { left: -14px; top: 18%; }
+.tag-b { right: -10px; bottom: 16%; animation-delay: -3s; }
+@keyframes bob { 50% { transform: translateY(-8px); } }
+
+/* ---------- section scaffolding ---------- */
+section.block { padding-block: clamp(64px, 9vw, 120px); border-top: 1px solid var(--line); overflow-x: clip; }
+.head { display: grid; gap: 18px; margin-bottom: clamp(36px, 5vw, 56px); max-width: 720px; }
+.head p { color: var(--muted); font-size: 18px; max-width: 58ch; }
+
+/* ---------- lyrics ---------- */
+.lyrics .wrap { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: clamp(32px, 6vw, 80px); align-items: center; }
+.lyric-card { background: var(--surface); border-radius: 28px; padding: 26px 28px 30px; border: 1px solid var(--line); min-width: 0; }
+.lyric-top { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.lyric-top img { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; }
+.lyric-top b { font: 600 17px/1.2 var(--display); display: block; }
+.lyric-top span { font-size: 14px; color: var(--muted); }
+.lines { height: 304px; overflow: hidden; position: relative; }
+.lines-inner { transition: transform .7s cubic-bezier(.2, 0, 0, 1); }
+.line {
+  font: 600 clamp(22px, 2.4vw, 28px)/1.25 var(--display); letter-spacing: -0.01em;
+  padding-block: 9px; color: var(--muted); opacity: .38;
+  transition: opacity .5s, transform .6s cubic-bezier(.2, 0, 0, 1);
+  transform-origin: left center;
+}
+.line.now { opacity: 1; transform: scale(1.04); }
+.line.past { opacity: .22; }
+.line .w { transition: color .25s; }
+.line.now .w.on { color: var(--fg); }
+.credit { margin-top: 18px; }
+.points { display: grid; gap: 22px; }
+.point { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; align-items: start; }
+.point p { color: var(--muted); }
+
+/* ---------- icons ---------- */
+.ico {
+  width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--tint) 16%, var(--surface)); color: var(--tint);
+}
+.ico svg { width: 22px; height: 22px; }
+svg.line-ico { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- features ---------- */
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+.feature { padding: 30px 28px 34px 0; display: grid; gap: 14px; align-content: start; border-bottom: 1px solid var(--line); min-width: 0; }
+.feature:not(:nth-child(3n + 1)) { padding-left: 28px; border-left: 1px solid var(--line); }
+.feature p { color: var(--muted); font-size: 16px; }
+.feature .mono { margin-top: 4px; }
+
+/* ---------- together ---------- */
+.room { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; gap: 0; }
+.mini {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 18px;
+  display: grid; gap: 12px; min-width: 0;
+}
+.mini .who { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 600 13px/1 var(--display); color: var(--ink); background: var(--tint); flex: none; }
+.avatar.alt { background: var(--raise); color: var(--fg); }
+.mini .who small { font: 500 11px/1 var(--mono); color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-left: auto; }
+.mini img { border-radius: 14px; aspect-ratio: 1; object-fit: cover; width: 100%; }
+.mini .t { font: 600 16px/1.2 var(--display); }
+.mini .a { font-size: 13px; color: var(--muted); margin-top: -8px; }
+.mini .bar { background: var(--raise); }
+.mini .bar i { background: var(--tint); }
+.link { position: relative; height: 120px; display: grid; place-items: center; }
+.link svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.link .wire { stroke: var(--line); stroke-width: 2; stroke-dasharray: 2 8; stroke-linecap: round; fill: none; }
+.link .packet { fill: var(--tint); }
+.code { position: relative; background: var(--bg); padding: 10px 16px; border-radius: 14px; border: 1px solid var(--line); text-align: center; }
+.code b { display: block; font: 500 clamp(16px, 1.8vw, 21px)/1.2 var(--mono); letter-spacing: .08em; color: var(--fg); }
+.code span { font: 500 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.room-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-top: 44px; }
+.room-notes div { display: grid; gap: 8px; }
+.room-notes p { color: var(--muted); font-size: 16px; }
+
+/* ---------- sound ---------- */
+.sound .wrap { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: clamp(32px, 6vw, 80px); align-items: center; }
+.eq-card { background: var(--surface); border: 1px solid var(--line); border-radius: 28px; padding: 24px 22px 18px; min-width: 0; }
+.eq-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; gap: 12px; }
+.eq-head b { font: 600 18px/1 var(--display); }
+.preset { font: 500 13px/1 var(--mono); color: var(--tint); transition: opacity .3s; }
+.eq { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 4px; height: 230px; position: relative; }
+.eq::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--line); }
+.band { position: relative; display: grid; justify-items: center; }
+.band .track { width: 3px; height: 100%; background: var(--raise); border-radius: 3px; }
+.band .knob {
+  position: absolute; top: 50%; left: 50%; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px;
+  border-radius: 50%; background: var(--tint); box-shadow: 0 0 0 4px var(--surface);
+  transition: transform 1.1s cubic-bezier(.3, 1.3, .4, 1);
+}
+.hz { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 4px; margin-top: 12px; }
+.hz span { font: 500 9.5px/1 var(--mono); color: var(--muted); text-align: center; white-space: nowrap; }
+.specs { list-style: none; margin: 28px 0 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--line); }
+.specs li { display: flex; justify-content: space-between; gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.specs li span:first-child { font-weight: 500; }
+.specs li span:last-child { font-family: var(--mono); font-size: 14px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- screens ---------- */
+.rail-wrap { overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 8px; }
+.rail-wrap::-webkit-scrollbar { display: none; }
+.rail { display: flex; gap: 20px; width: max-content; padding-inline: var(--gutter); margin-inline: auto; }
+.rail figure { margin: 0; width: clamp(200px, 22vw, 250px); scroll-snap-align: center; display: grid; gap: 12px; }
+.rail img { border-radius: 30px; transition: transform .5s cubic-bezier(.2, 0, 0, 1); }
+.rail figure:hover img { transform: translateY(-8px); }
+.rail figcaption { font-size: 15px; color: var(--muted); padding-left: 6px; }
+
+/* ---------- install ---------- */
+.install-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; display: grid; gap: 12px; align-content: start; }
+.step .n { font: 600 14px/1 var(--mono); color: var(--tint); }
+.step p { color: var(--muted); font-size: 16px; }
+.step code { font-family: var(--mono); font-size: 14px; color: var(--fg); background: var(--raise); padding: 2px 6px; border-radius: 6px; }
+.install-cta { margin-top: 36px; display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; }
+
+/* ---------- footer ---------- */
+footer { border-top: 1px solid var(--line); padding-block: 40px 56px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: flex-start; justify-content: space-between; }
+footer p { color: var(--muted); font-size: 14px; max-width: 52ch; }
+footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
+footer nav a { font-size: 15px; color: var(--muted); text-decoration: none; }
+footer nav a:hover { color: var(--fg); }
+
+/* ---------- entrance ---------- */
+.rise { animation: rise .9s cubic-bezier(.2, 0, 0, 1) both; }
+.rise.d1 { animation-delay: .08s; } .rise.d2 { animation-delay: .16s; } .rise.d3 { animation-delay: .24s; }
+@keyframes rise { from { transform: translateY(18px); opacity: .25; } }
+
+/* ---------- scroll-driven pieces ---------- */
+.readline { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--tint); transform-origin: left; transform: scaleX(0); }
+.bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+.bars i { width: 3px; height: 100%; border-radius: 2px; background: var(--tint); transform-origin: bottom; animation: hop 1s ease-in-out infinite; }
+.bars i:nth-child(2) { animation-delay: -.35s; } .bars i:nth-child(3) { animation-delay: -.7s; } .bars i:nth-child(4) { animation-delay: -.2s; }
+@keyframes hop { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+
+/* Headings rise a word at a time; blocks below the fold rise as they arrive. */
+h2 .wd { display: inline-block; }
+h2.pre .wd { transform: translateY(.45em); opacity: .15; }
+h2.in .wd { transition: transform .9s cubic-bezier(.2, 0, 0, 1), opacity .9s; transition-delay: calc(var(--i) * 45ms); }
+.lift.pre { transform: translateY(28px); opacity: .2; }
+.lift.in { transition: transform 1s cubic-bezier(.2, 0, 0, 1), opacity 1s; transition-delay: var(--d, 0ms); }
+.feature .ico svg, .point .ico svg, .room-notes .ico svg { stroke-dasharray: 80; stroke-dashoffset: 0; }
+.lift.pre .ico svg { stroke-dashoffset: 80; }
+.lift.in .ico svg { transition: stroke-dashoffset 1.4s cubic-bezier(.4, 0, .2, 1); transition-delay: calc(var(--d, 0ms) + 250ms); }
+
+/* The colour chapter: a stack of covers dealt by scrolling, the whole stage washed in each cover's colour. */
+.crate { position: relative; height: 320vh; background: var(--wash); color: var(--ink); transition: --wash .8s cubic-bezier(.2, 0, 0, 1); }
+.crate-stage { position: sticky; top: 0; height: 100vh; height: 100svh; display: grid; align-items: center; overflow: hidden; }
+.crate-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(28px, 6vw, 90px); align-items: center; }
+.crate .eyebrow { color: color-mix(in srgb, var(--ink) 70%, transparent); }
+.crate .eyebrow::before { background: var(--ink); }
+.crate h2 { margin-block: 16px 18px; }
+.crate p { color: color-mix(in srgb, var(--ink) 72%, transparent); font-size: 18px; max-width: 46ch; }
+.crate-steps { list-style: none; margin: 30px 0 0; padding: 0; display: grid; gap: 4px; }
+.crate-steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); opacity: .42; transition: opacity .5s, transform .6s cubic-bezier(.2, 0, 0, 1); }
+.crate-steps li.on { opacity: 1; transform: translateX(8px); }
+.crate-steps .sw { width: 28px; height: 28px; border-radius: 9px; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ink) 35%, transparent); }
+.crate-steps b { font: 600 17px/1.2 var(--display); display: block; }
+.crate-steps span { font-size: 14px; }
+.crate-steps code { font: 500 13px/1 var(--mono); letter-spacing: .04em; }
+.stack { position: relative; width: min(420px, 74vw); aspect-ratio: 1; justify-self: center; }
+.stack .card { position: absolute; inset: 0; border-radius: 22px; overflow: hidden; box-shadow: 0 30px 60px -24px rgba(0, 0, 0, .55); will-change: transform, opacity; }
+.stack .card img { width: 100%; height: 100%; object-fit: cover; }
+
+/* A wall of covers drifting both ways, quicker while the page scrolls. */
+.wall { padding-block: clamp(44px, 6vw, 72px); display: grid; gap: 14px; overflow: hidden; border-top: 1px solid var(--line); }
+.wall .row { display: flex; gap: 14px; width: max-content; will-change: transform; }
+.wall img { width: clamp(108px, 12vw, 150px); aspect-ratio: 1; border-radius: 14px; object-fit: cover; flex: none; }
+.wall-note { text-align: center; margin-top: 10px; }
+
+/* Screens pinned on wide screens: scrolling down moves the rail sideways. */
+.screens.pinned .rail-wrap { overflow: hidden; scroll-snap-type: none; }
+.screens.pinned .pin-stage { position: sticky; top: 64px; height: calc(100vh - 64px); display: flex; align-items: center; }
+.screens.pinned .rail { margin-inline: 0; will-change: transform; }
+.screens.pinned .rail figure { will-change: transform; }
+.screens.pinned .rail figure:hover img { transform: none; }
+
+.install-grid { position: relative; padding-top: 26px; }
+.thread { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.thread i { position: absolute; inset: 0; background: var(--tint); transform-origin: left; transform: scaleX(1); }
+.step .n { transition: color .4s; }
+.steps-live .step:not(.lit) .n { color: var(--muted); }
+
+/* The send-off: the name rising letter by letter. */
+.outro { padding-block: clamp(70px, 10vw, 130px) clamp(40px, 6vw, 70px); border-top: 1px solid var(--line); overflow: hidden; }
+.outro .ctas { justify-content: center; margin-top: 26px; }
+.outro p { text-align: center; color: var(--muted); font-size: 18px; }
+.word { display: flex; justify-content: center; font: 800 clamp(60px, 15.5vw, 230px)/.9 var(--display); letter-spacing: -0.055em; color: var(--tint); overflow: hidden; padding-bottom: .06em; margin-bottom: 18px; }
+.word span { display: inline-block; will-change: transform; }
+.eq .band .spec { position: absolute; bottom: 0; left: 18%; right: 18%; height: 100%; border-radius: 4px 4px 0 0; background: color-mix(in srgb, var(--tint) 14%, transparent); transform-origin: bottom; transform: scaleY(.3); }
+
+/* ---------- narrow ---------- */
+@media (max-width: 900px) {
+  .hero .wrap, .lyrics .wrap, .sound .wrap { grid-template-columns: minmax(0, 1fr); }
+  .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .feature, .feature:not(:nth-child(3n + 1)) { padding: 26px 22px 30px 0; border-left: 0; }
+  .feature:nth-child(2n) { padding-left: 22px; border-left: 1px solid var(--line); }
+  .install-grid, .room-notes { grid-template-columns: minmax(0, 1fr); }
+  .nav nav { display: none; }
+  .nav .btn { margin-left: auto; }
+  .plate { max-width: 520px; width: 100%; justify-self: center; aspect-ratio: auto; padding-block: 44px; }
+  .crate { height: 300vh; }
+  .crate-grid { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .stack { width: min(300px, 62vw); grid-row: 1; }
+  .crate h2 { font-size: clamp(28px, 7vw, 40px); margin-block: 10px 10px; }
+  .crate p { font-size: 15px; }
+  .crate-steps { margin-top: 14px; }
+  .crate-steps li { padding: 6px 0; }
+}
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  .features { grid-template-columns: minmax(0, 1fr); }
+  .feature, .feature:nth-child(2n) { padding: 24px 0 26px; border-left: 0; }
+  .room { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .link { height: 110px; }
+  .tag-a { left: 10px; top: 12px; }
+  .tag-b { right: 10px; bottom: 12px; }
+  .eq { height: 190px; }
+  .hz span { font-size: 8px; }
+  .hz span:nth-child(2n) { visibility: hidden; }
+}
+@media (max-width: 640px) {
+  .crate p { display: none; }
+  .crate-steps span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .crate { height: auto; }
+  .crate-stage { position: static; height: auto; padding-block: 64px; }
+  :root { transition: none; }
+  *, *::before, *::after { animation: none !important; transition-duration: 1ms !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Line icons, drawn once and used by reference. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 7 3.5 12l5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15"/></symbol>
+    <symbol id="i-together" viewBox="0 0 24 24"><circle cx="8" cy="8.5" r="3"/><circle cx="16.5" cy="8.5" r="3"/><path d="M2.5 19.5c.4-3.2 2.7-5.2 5.5-5.2s5.1 2 5.5 5.2M11.4 15.2c1.1-.6 2.3-.9 3.6-.9 2.8 0 5.1 2 5.5 5.2"/></symbol>
+    <symbol id="i-radio" viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="11" rx="2.5"/><path d="M7 9 17 4"/><circle cx="8.5" cy="14.5" r="2.5"/><path d="M14 13h4M14 16.5h4"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/></symbol>
+    <symbol id="i-eq" viewBox="0 0 24 24"><path d="M6 4v5M6 13v7M12 4v11M12 19v1M18 4v2M18 10v10"/><circle cx="6" cy="11" r="2"/><circle cx="12" cy="17" r="2"/><circle cx="18" cy="8" r="2"/></symbol>
+    <symbol id="i-offline" viewBox="0 0 24 24"><path d="M12 3.5v10M8 10l4 4 4-4"/><path d="M4 15.5v2A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5v-2"/></symbol>
+    <symbol id="i-noaccount" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-3.6 3.4-6 7-6 1.6 0 3 .4 4.2 1.2M4 4l16 16"/></symbol>
+    <symbol id="i-car" viewBox="0 0 24 24"><path d="M5 15.5 6.6 10a2 2 0 0 1 1.9-1.5h7a2 2 0 0 1 1.9 1.5l1.6 5.5"/><rect x="3" y="15.5" width="18" height="4" rx="1.5"/><path d="M6 19.5v1.5M18 19.5v1.5"/><circle cx="7.5" cy="17.5" r=".6"/><circle cx="16.5" cy="17.5" r=".6"/></symbol>
+    <symbol id="i-lyrics" viewBox="0 0 24 24"><path d="M4 6.5h10M4 11h10M4 15.5h6"/><path d="M18 16V5.5l3 1"/><circle cx="16" cy="16.5" r="2.2"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5M12 14.5v2"/></symbol>
+    <symbol id="i-queue" viewBox="0 0 24 24"><path d="M4 7h11M4 12h11M4 17h7M17 15v5l4-2.5z"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.3 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10Z"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5Z"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  </defs>
+</svg>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="OpenTune home">
+      <svg viewBox="0 0 108 108" aria-hidden="true"><rect width="108" height="108" rx="30" fill="#E53935"/><circle cx="54" cy="54" r="24" fill="none" stroke="#fff" stroke-width="5"/><path d="M48 42 66 54 48 66Z" fill="#fff"/></svg>
+      OpenTune
+    </a>
+    <nav aria-label="Sections">
+      <a href="#lyrics">Lyrics</a>
+      <a href="#features">Features</a>
+      <a href="#together">Listen together</a>
+      <a href="#sound">Sound</a>
+      <a href="#install">Install</a>
+    </nav>
+    <a class="btn btn-primary btn-small" href="https://github.com/justshivv/Opentune/releases/latest" target="_blank" rel="noopener">
+      <svg class="line-ico"><use href="#i-download"/></svg>Download
+    </a>
+  </div>
+  <i class="readline" id="readline" aria-hidden="true"></i>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-copy">
+        <div class="chips rise">
+          <span class="chip">Free</span>
+          <span class="chip">Open source, GPL-3.0</span>
+          <span class="chip">Android 8.0+</span>
+        </div>
+        <h1 class="rise d1"><span class="hl">Every song.</span><span class="hl soft">No ads.</span><span class="hl lit">No account.</span></h1>
+        <p class="lede rise d2">OpenTune is a music player for Android that plays the YouTube Music catalogue, with synced lyrics, live radio, podcasts and rooms where friends listen in step.</p>
+        <div class="ctas rise d3">
+          <a class="btn btn-primary" href="https://github.com/justshivv/Opentune/releases/latest" target="_blank" rel="noopener">
+            <svg class="line-ico"><use href="#i-download"/></svg>Download for Android
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/justshivv/Opentune" target="_blank" rel="noopener">
+            <svg class="line-ico"><use href="#i-code"/></svg>Source on GitHub
+          </a>
+        </div>
+        <p class="mono rise d3">v0.2.0 &middot; arm64 APK 9.8 MB &middot; updates itself from Settings</p>
+      </div>
+
+      <div class="plate rise d2" id="plate">
+        <canvas id="grooves" aria-hidden="true"></canvas>
+        <div class="phone" role="group" aria-label="A preview of the OpenTune player">
+          <div class="island"></div>
+          <div class="from">Playing from<b id="album">After Hours</b></div>
+          <div class="art" id="art"></div>
+          <div class="song">
+            <div class="names" id="names"><div class="t" id="title">Blinding Lights</div><div class="a" id="artist">The Weeknd</div></div>
+            <span class="round"><svg class="line-ico"><use href="#i-heart"/></svg></span>
+            <span class="round"><svg class="line-ico"><use href="#i-more"/></svg></span>
+          </div>
+          <div class="bar"><i id="progress"></i></div>
+          <div class="times"><span id="pos">1:04</span><span id="left">-2:16</span></div>
+          <div class="controls">
+            <button class="skip" id="prev" aria-label="Previous song"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.5 6v12L3 12zM20.5 6v12L12 12z"/></svg></button>
+            <button class="pp" id="pp" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><path id="ppa"/><path id="ppb"/></svg></button>
+            <button class="skip" id="next" aria-label="Next song"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 6v12L12 12zM12.5 6v12L21 12z"/></svg></button>
+          </div>
+          <div class="dockrow">
+            <svg class="line-ico"><use href="#i-lyrics"/></svg>
+            <svg class="line-ico"><use href="#i-sliders"/></svg>
+            <svg class="line-ico"><use href="#i-moon"/></svg>
+            <svg class="line-ico"><use href="#i-queue"/></svg>
+          </div>
+        </div>
+        <div class="tag tag-a"><span class="dot"></span>Coloured from the cover</div>
+        <div class="tag tag-b"><span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Opus &middot; 48 kHz</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="crate" id="colour" aria-label="Coloured from the cover">
+    <div class="crate-stage">
+      <div class="wrap crate-grid">
+        <div>
+          <div class="eyebrow">Coloured from the cover</div>
+          <h2>Every cover sets the colour.</h2>
+          <p>OpenTune finds the main colour of each cover and builds the player around it: the background, the buttons and the seek bar all change with the song.</p>
+          <ol class="crate-steps" id="crate-steps"></ol>
+        </div>
+        <div class="stack" id="stack"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wall" aria-label="Album covers">
+    <div class="row" id="row-a"></div>
+    <div class="row" id="row-b"></div>
+    <p class="mono wall-note">Search the whole YouTube Music catalogue</p>
+  </section>
+
+  <section class="block lyrics" id="lyrics">
+    <div class="wrap">
+      <div class="lyric-card">
+        <div class="lyric-top">
+          <img src="img/cover-danny.jpg" alt="American IV: The Man Comes Around cover">
+          <div><b>Danny Boy</b><span>Johnny Cash</span></div>
+        </div>
+        <div class="lines" aria-live="off"><div class="lines-inner" id="lines"></div></div>
+        <p class="mono credit">Words by Frederic Weatherly, 1913, public domain</p>
+      </div>
+      <div>
+        <div class="head">
+          <div class="eyebrow">Synced lyrics</div>
+          <h2>Sing along, word by word.</h2>
+          <p>Lyrics follow the song a word at a time, and you can tap any line to jump there. Pick how they move, from a soft glow to words that bounce as they're sung.</p>
+        </div>
+        <div class="points">
+          <div class="point"><span class="ico"><svg class="line-ico"><use href="#i-lyrics"/></svg></span><div><h3>Two sources</h3><p>LRCLIB's community lyrics, line by line and often word by word, with YouTube Music's own lyrics as a fallback.</p></div></div>
+          <div class="point"><span class="ico"><svg class="line-ico"><use href="#i-offline"/></svg></span><div><h3>Saved with downloads</h3><p>Lyrics are kept with every downloaded song, so they still work on a plane.</p></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="features">
+    <div class="wrap">
+      <div class="head">
+        <div class="eyebrow">What's inside</div>
+        <h2>Everything a music app should do, and nothing it shouldn't.</h2>
+      </div>
+      <div class="features">
+        <article class="feature">
+          <span class="ico"><svg class="line-ico"><use href="#i-noaccount"/></svg></span>
+          <h3>No account, no ads</h3>
+          <p>Open it and play. Sign in only if you want your likes and playlists, and bring playlists over from Spotify or YouTube.</p>
+        </article>
+        <article class="feature">
+          <span class="ico"><svg class="line-ico"><use href="#i-radio"/></svg></span>
+          <h3>Live radio near you</h3>
+          <p>Stations from Radio Browser, nearest first, found by your area or by name. Add any stream your city's station publishes.</p>
+          <span class="mono">50,000+ stations</span>
+        </article>
+        <article class="feature">
+          <span class="ico"><svg class="line-ico"><use href="#i-mic"/></svg></span>
+          <h3>Podcasts</h3>
+          <p>A tab of its own. Search shows and episodes, subscribe without an account, and pick up an episode where you left it.</p>
+        </article>
+        <article class="feature">
+          <span class="ico"><svg class="line-ico"><use href="#i-offline"/></svg></span>
+          <h3>Downloads</h3>
+          <p>Save songs for offline listening at the quality you choose. Wi-Fi only by default, and they keep going after you close the app.</p>
+        </article>
+        <article class="feature">
+          <span class="ico"><svg class="line-ico"><use href="#i-car"/></svg></span>
+          <h3>In the car and on the home screen</h3>
+          <p>Android Auto with Home, Library, radio and voice search, plus a widget with like, previous, play and next.</p>
+        </article>
+        <article class="feature">
+          <span class="ico"><svg class="line-ico"><use href="#i-code"/></svg></span>
+          <h3>Open source</h3>
+          <p>Every line is on GitHub under GPL-3.0. Each release lists SHA-256 checksums, and the app checks them when it updates itself.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="together">
+    <div class="wrap">
+      <div class="head">
+        <div class="eyebrow">Listen together</div>
+        <h2>Share a code. Hear the same second.</h2>
+        <p>Start a room and send the code. Friends who join hear what you play, in step, each phone streaming the music itself. They can add songs and chat, and you can hand them the controls.</p>
+      </div>
+      <div class="room">
+        <div class="mini">
+          <div class="who"><span class="avatar">A</span>Asha<small>Host</small></div>
+          <img src="img/cover-00hd.jpg" alt="After Hours cover">
+          <div class="t">Blinding Lights</div>
+          <div class="a">The Weeknd</div>
+          <div class="bar"><i class="sync"></i></div>
+        </div>
+        <div class="link">
+          <svg viewBox="0 0 300 120" preserveAspectRatio="none" aria-hidden="true">
+            <path class="wire" id="wire" d="M0 60 C 80 10, 220 110, 300 60"/>
+            <circle class="packet" r="5"><animateMotion dur="1.6s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".4 0 .2 1"><mpath href="#wire"/></animateMotion></circle>
+            <circle class="packet" r="3.5" opacity=".6"><animateMotion dur="1.6s" begin="-.8s" repeatCount="indefinite" keyPoints="1;0" keyTimes="0;1" calcMode="spline" keySplines=".4 0 .2 1"><mpath href="#wire"/></animateMotion></circle>
+          </svg>
+          <div class="code"><span>Room code</span><b>K7QX-M2PA-9DTE</b></div>
+        </div>
+        <div class="mini">
+          <div class="who"><span class="avatar alt">R</span>Ravi<small>Guest</small></div>
+          <img src="img/cover-00hd.jpg" alt="After Hours cover">
+          <div class="t">Blinding Lights</div>
+          <div class="a">The Weeknd</div>
+          <div class="bar"><i class="sync"></i></div>
+        </div>
+      </div>
+      <div class="room-notes">
+        <div><span class="ico"><svg class="line-ico"><use href="#i-lock"/></svg></span><h3>Private by design</h3><p>Messages are encrypted with a key that comes from the room code. The relays carrying them only see scrambled text.</p></div>
+        <div><span class="ico"><svg class="line-ico"><use href="#i-together"/></svg></span><h3>Stays in step</h3><p>Guests close small gaps by playing a touch faster or slower, so the music never stops to catch up.</p></div>
+        <div><span class="ico"><svg class="line-ico"><use href="#i-queue"/></svg></span><h3>A shared queue</h3><p>Anyone can add a song to what plays next. The host decides whether guests can also pause and skip.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block sound" id="sound">
+    <div class="wrap">
+      <div>
+        <div class="head">
+          <div class="eyebrow">Sound</div>
+          <h2>Best audio first, then make it yours.</h2>
+          <p>Streams are ranked by how they sound, not by raw bitrate. With effects off, audio goes to your speakers untouched. With them on, the app leaves headroom so boosts don't clip.</p>
+        </div>
+        <ul class="specs">
+          <li><span>Equalizer</span><span>15 bands, 25 Hz to 16 kHz</span></li>
+          <li><span>Headphone correction</span><span>AutoEq, 8,000+ models</span></li>
+          <li><span>Crossfade</span><span>1 to 12 s</span></li>
+          <li><span>Loudness</span><span>levelled per song</span></li>
+          <li><span>USB DAC</span><span>bit-perfect, Android 14+</span></li>
+        </ul>
+      </div>
+      <div class="eq-card">
+        <div class="eq-head"><b>Equalizer</b><span class="preset" id="preset">Flat</span></div>
+        <div class="eq" id="eq"></div>
+        <div class="hz" id="hz"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block screens" id="screens">
+    <div class="wrap">
+      <div class="head">
+        <div class="eyebrow">Screens</div>
+        <h2>Made to be looked at.</h2>
+        <p>Liquid glass controls, a dock that tucks away as you scroll, and a player that takes its colours from the cover.</p>
+      </div>
+    </div>
+    <div class="pin" id="pin"><div class="pin-stage">
+    <div class="rail-wrap" tabindex="0" aria-label="Screenshots, scroll sideways">
+      <div class="rail">
+        <figure><img src="img/01-player.jpg" alt="The player, coloured from the cover"><figcaption>The player</figcaption></figure>
+        <figure><img src="img/02-lyrics.jpg" alt="Synced lyrics"><figcaption>Synced lyrics</figcaption></figure>
+        <figure><img src="img/03-explore.jpg" alt="Explore as a mood board"><figcaption>Explore</figcaption></figure>
+        <figure><img src="img/04-radio.jpg" alt="Live radio near you"><figcaption>Radio near you</figcaption></figure>
+        <figure><img src="img/05-together.jpg" alt="A listen together room"><figcaption>Listen together</figcaption></figure>
+        <figure><img src="img/06-podcasts.jpg" alt="Podcasts"><figcaption>Podcasts</figcaption></figure>
+      </div>
+    </div>
+    </div></div>
+  </section>
+
+  <section class="block" id="install">
+    <div class="wrap">
+      <div class="head">
+        <div class="eyebrow">Install</div>
+        <h2>On your phone in a minute.</h2>
+      </div>
+      <div class="install-grid" id="install-grid">
+        <div class="thread" aria-hidden="true"><i id="thread"></i></div>
+        <div class="step"><span class="n">Step 1</span><h3>Download the APK</h3><p>Open the latest release and pick <code>arm64-v8a</code>, which fits almost every recent phone, or <code>universal</code>, which runs on anything.</p></div>
+        <div class="step"><span class="n">Step 2</span><h3>Allow the install</h3><p>Open the file. When Android asks, let your browser or file manager install apps.</p></div>
+        <div class="step"><span class="n">Step 3</span><h3>Play</h3><p>That's all. OpenTune looks for a new release once a day and can update itself from Settings.</p></div>
+      </div>
+      <div class="install-cta">
+        <a class="btn btn-primary" href="https://github.com/justshivv/Opentune/releases/latest" target="_blank" rel="noopener"><svg class="line-ico"><use href="#i-download"/></svg>Get the latest release</a>
+        <span class="mono">Android 8.0 or newer &middot; checksums in SHA256SUMS.txt</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="outro" id="outro">
+    <div class="wrap">
+      <div class="word" id="word" aria-label="OpenTune"></div>
+      <p>Free, open source, and yours to keep.</p>
+      <div class="ctas">
+        <a class="btn btn-primary" href="https://github.com/justshivv/Opentune/releases/latest" target="_blank" rel="noopener"><svg class="line-ico"><use href="#i-download"/></svg>Download for Android</a>
+        <a class="btn btn-ghost" href="https://github.com/justshivv/Opentune" target="_blank" rel="noopener"><svg class="line-ico"><use href="#i-code"/></svg>Source on GitHub</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div style="display:grid;gap:12px">
+      <a class="brand" href="#top"><svg viewBox="0 0 108 108" aria-hidden="true"><rect width="108" height="108" rx="30" fill="#E53935"/><circle cx="54" cy="54" r="24" fill="none" stroke="#fff" stroke-width="5"/><path d="M48 42 66 54 48 66Z" fill="#fff"/></svg>OpenTune</a>
+      <p>Free software under GPL-3.0. OpenTune isn't affiliated with or endorsed by YouTube, Google, Spotify or any artist or label shown.</p>
+    </div>
+    <nav aria-label="Project links">
+      <a href="https://github.com/justshivv/Opentune" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/justshivv/Opentune/releases" target="_blank" rel="noopener">Releases</a>
+      <a href="https://github.com/justshivv/Opentune/issues" target="_blank" rel="noopener">Report a problem</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const $ = (id) => document.getElementById(id);
+  const root = document.documentElement;
+
+  /* ---------- the hero player ---------- */
+  const songs = [
+    { t: "Blinding Lights", a: "The Weeknd", al: "After Hours", img: "img/cover-00hd.jpg", tint: "#E5483A", dur: 200, at: 64 },
+    { t: "Levitating", a: "Dua Lipa", al: "Future Nostalgia", img: "img/cover-01.jpg", tint: "#E46AA2", dur: 203, at: 41 },
+    { t: "As It Was", a: "Harry Styles", al: "Harry's House", img: "img/cover-16.jpg", tint: "#5B86D6", dur: 167, at: 22 },
+    { t: "Do I Wanna Know?", a: "Arctic Monkeys", al: "AM", img: "img/cover-08.jpg", tint: "#B7C1CC", dur: 272, at: 95 },
+  ];
+  const art = $("art");
+  const imgs = songs.map((s, i) => {
+    const im = new Image();
+    im.src = s.img; im.alt = s.al + " cover";
+    if (i) im.className = "out";
+    art.appendChild(im);
+    return im;
+  });
+  const fmt = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+  let index = 0, playing = true, shownAt = performance.now(), base = songs[0].at;
+  const HOLD = 6500;
+
+  function show(i) {
+    const prev = index;
+    index = (i + songs.length) % songs.length;
+    const s = songs[index];
+    imgs[prev].classList.add("out");
+    imgs[index].classList.remove("out");
+    root.style.setProperty("--tint", s.tint);
+    const names = $("names");
+    names.classList.add("swap");
+    setTimeout(() => {
+      $("title").textContent = s.t; $("artist").textContent = s.a; $("album").textContent = s.al;
+      names.classList.remove("swap");
+    }, still ? 0 : 260);
+    base = s.at; shownAt = performance.now();
+  }
+
+  // Play and pause are one shape: each half of the triangle travels to a bar.
+  const PLAY = [[6, 4, 12, 7.8, 12, 16.2, 6, 20], [12, 7.8, 19, 12, 19, 12, 12, 16.2]];
+  const PAUSE = [[6, 4.5, 10, 4.5, 10, 19.5, 6, 19.5], [14, 4.5, 18, 4.5, 18, 19.5, 14, 19.5]];
+  let morph = 1, morphTo = 1;
+  function drawPP(p) {
+    ["ppa", "ppb"].forEach((id, k) => {
+      const a = PLAY[k], b = PAUSE[k], pts = [];
+      for (let j = 0; j < 8; j += 2) pts.push((a[j] + (b[j] - a[j]) * p).toFixed(2) + " " + (a[j + 1] + (b[j + 1] - a[j + 1]) * p).toFixed(2));
+      $(id).setAttribute("d", "M" + pts.join("L") + "Z");
+    });
+  }
+  drawPP(1);
+
+  $("pp").addEventListener("click", () => {
+    if (playing) base = position(); else shownAt = performance.now();
+    playing = !playing;
+    morphTo = playing ? 1 : 0;
+    $("pp").setAttribute("aria-label", playing ? "Pause" : "Play");
+  });
+  $("next").addEventListener("click", () => show(index + 1));
+  $("prev").addEventListener("click", () => show(index - 1));
+
+  function position() {
+    return playing ? base + (performance.now() - shownAt) / 1000 : base;
+  }
+
+  /* ---------- grooves on the plate ---------- */
+  const cv = $("grooves"), cx = cv.getContext("2d");
+  function sizeCanvas() {
+    const r = cv.getBoundingClientRect(), d = Math.min(devicePixelRatio || 1, 2);
+    cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
+  }
+  sizeCanvas();
+  addEventListener("resize", sizeCanvas);
+  function grooves(t) {
+    const w = cv.width, h = cv.height;
+    cx.clearRect(0, 0, w, h);
+    const ox = w * 0.5, oy = h * 0.5, max = Math.hypot(w, h) * 0.62;
+    cx.strokeStyle = "rgba(0,0,0,0.075)";
+    cx.lineWidth = Math.max(1, w / 520);
+    for (let r = max * 0.18; r < max; r += max * 0.034) {
+      const wob = Math.sin(t / 2600 + r / 40) * 0.012;
+      cx.beginPath();
+      cx.arc(ox, oy, r, t / 9000 + r, t / 9000 + r + Math.PI * (1.3 + wob * 20));
+      cx.stroke();
+    }
+  }
+
+  /* ---------- listen together bars ---------- */
+  const syncBars = document.querySelectorAll(".sync");
+  const roomStart = performance.now(), ROOM_AT = 52, ROOM_DUR = 200;
+
+  /* ---------- lyrics ---------- */
+  const lyric = [
+    "Oh Danny boy, the pipes, the pipes are calling",
+    "From glen to glen, and down the mountain side",
+    "The summer's gone, and all the roses falling",
+    "'Tis you, 'tis you must go and I must bide",
+    "But come ye back when summer's in the meadow",
+    "Or when the valley's hushed and white with snow",
+    "'Tis I'll be here in sunshine or in shadow",
+    "Oh Danny boy, oh Danny boy, I love you so",
+  ];
+  const lines = $("lines");
+  const lineEls = lyric.map((text) => {
+    const d = document.createElement("div");
+    d.className = "line";
+    text.split(" ").forEach((w, i) => {
+      const s = document.createElement("span");
+      s.className = "w"; s.textContent = (i ? " " : "") + w;
+      d.appendChild(s);
+    });
+    lines.appendChild(d);
+    return d;
+  });
+  let li = 0, wi = 0, lastWord = 0;
+  const WORD_MS = 330, LINE_PAUSE = 900;
+  function setLine(n) {
+    lineEls.forEach((el, k) => {
+      el.classList.toggle("now", k === n);
+      el.classList.toggle("past", k < n);
+      if (k !== n) el.querySelectorAll(".w").forEach((w) => w.classList.remove("on"));
+    });
+    const top = lineEls[n].offsetTop - lineEls[0].offsetTop;
+    lines.style.transform = "translateY(" + (-Math.max(0, top - 62)) + "px)";
+  }
+  setLine(0);
+  if (still) lineEls[0].querySelectorAll(".w").forEach((w) => w.classList.add("on"));
+  function lyricsTick(t) {
+    const words = lineEls[li].querySelectorAll(".w");
+    const wait = wi >= words.length ? LINE_PAUSE : WORD_MS;
+    if (t - lastWord < wait) return;
+    lastWord = t;
+    if (wi < words.length) { words[wi].classList.add("on"); wi++; return; }
+    li = (li + 1) % lineEls.length; wi = 0;
+    setLine(li);
+  }
+
+  /* ---------- equalizer ---------- */
+  const HZ = ["25", "40", "63", "100", "160", "250", "400", "630", "1k", "1.6k", "2.5k", "4k", "6.3k", "10k", "16k"];
+  const PRESETS = [
+    ["Flat", HZ.map(() => 0)],
+    ["Bass boost", [7, 6.5, 6, 5, 3.5, 2, .5, 0, 0, 0, 0, 0, 0, 0, 0]],
+    ["Clarity", [-5, -1.5, 2, 2, .5, -1.5, -2, -.5, .5, 1.5, 2.5, 3, 3, 3.5, 4]],
+    ["Vocal", [-2, -2, -1.5, -1, 0, 1.5, 3, 4, 4.5, 4, 2.5, 1, 0, -.5, -1]],
+  ];
+  const eq = $("eq"), hz = $("hz");
+  const knobs = HZ.map((f) => {
+    const b = document.createElement("div");
+    b.className = "band";
+    b.innerHTML = '<div class="track"></div><div class="knob"></div>';
+    eq.appendChild(b);
+    const l = document.createElement("span"); l.textContent = f; hz.appendChild(l);
+    return b.querySelector(".knob");
+  });
+  let pi = 0;
+  function applyPreset(n) {
+    const [name, gains] = PRESETS[n];
+    const h = eq.clientHeight / 2 - 10;
+    knobs.forEach((k, i) => { k.style.transform = "translateY(" + (-gains[i] / 12 * h).toFixed(1) + "px)"; });
+    const label = $("preset");
+    label.style.opacity = 0;
+    setTimeout(() => { label.textContent = name; label.style.opacity = 1; }, still ? 0 : 250);
+  }
+  applyPreset(1); pi = 1;
+
+  /* ---------- one clock for everything ---------- */
+  let lastSwitch = performance.now(), lastEq = performance.now(), visible = true;
+  document.addEventListener("visibilitychange", () => { visible = !document.hidden; });
+
+  function frame(t) {
+    const s = songs[index], pos = Math.min(position(), s.dur);
+    $("progress").style.width = (pos / s.dur * 100).toFixed(2) + "%";
+    $("pos").textContent = fmt(pos);
+    $("left").textContent = "-" + fmt(s.dur - pos);
+    if (morph !== morphTo) {
+      morph += (morphTo - morph) * 0.22;
+      if (Math.abs(morphTo - morph) < 0.004) morph = morphTo;
+      drawPP(morph);
+    }
+    if (still) return;
+    if (playing && t - shownAt > HOLD && t - lastSwitch > HOLD) { lastSwitch = t; show(index + 1); }
+    if (visible) grooves(t);
+    const roomPos = ROOM_AT + (t - roomStart) / 1000;
+    syncBars.forEach((b) => { b.style.width = ((roomPos % ROOM_DUR) / ROOM_DUR * 100).toFixed(2) + "%"; });
+    lyricsTick(t);
+    if (t - lastEq > 3600) { lastEq = t; pi = (pi + 1) % PRESETS.length; applyPreset(pi); }
+    requestAnimationFrame(frame);
+  }
+  if (still) {
+    frame(performance.now());
+    grooves(0);
+    syncBars.forEach((b) => { b.style.width = "26%"; });
+  } else {
+    requestAnimationFrame(frame);
+  }
+  // With motion reduced the button still changes, at once.
+  if (still) $("pp").addEventListener("click", () => { morph = morphTo; drawPP(morph); frame(performance.now()); });
+})();
+</script>
+
+<script>
+(() => {
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const ease = (x) => 1 - Math.pow(1 - x, 3);
+
+  /* ---------- the colour chapter ---------- */
+  const deck = [
+    { t: "Blinding Lights", a: "The Weeknd", img: "img/cover-00hd.jpg", tint: "#E5483A" },
+    { t: "Levitating", a: "Dua Lipa", img: "img/cover-01.jpg", tint: "#E46AA2" },
+    { t: "As It Was", a: "Harry Styles", img: "img/cover-16.jpg", tint: "#5B86D6" },
+    { t: "Do I Wanna Know?", a: "Arctic Monkeys", img: "img/cover-08.jpg", tint: "#B7C1CC" },
+  ];
+  const crate = $("colour"), stack = $("stack"), stepsEl = $("crate-steps");
+  const cards = deck.map((d, i) => {
+    const c = document.createElement("div");
+    c.className = "card";
+    c.innerHTML = '<img src="' + d.img + '" alt="' + d.t + ' cover">';
+    c.style.zIndex = deck.length - i;
+    stack.appendChild(c);
+    const li = document.createElement("li");
+    li.innerHTML = '<i class="sw" style="background:' + d.tint + '"></i><div><b>' + d.t + '</b><span>' + d.a + '</span></div><code>' + d.tint + '</code>';
+    stepsEl.appendChild(li);
+    return c;
+  });
+  const steps = [...stepsEl.children];
+  let shownStep = -1;
+  function crateFx(vh) {
+    const r = crate.getBoundingClientRect();
+    const p = still ? 0 : clamp(-r.top / Math.max(1, r.height - vh));
+    const pos = p * (deck.length - 1);
+    cards.forEach((c, i) => {
+      const d = i - pos;
+      let tx = 0, ty = 0, rot = 0, sc = 1, op = 1;
+      if (d < 0) {
+        const q = ease(clamp(-d));
+        tx = -q * 118; ty = q * 6; rot = -q * 16; op = 1 - q;
+      } else {
+        sc = 1 - Math.min(d, 3) * 0.075;
+        ty = -Math.min(d, 3) * 6;
+        rot = Math.min(d, 3) * (i % 2 ? 3.5 : -3.5);
+      }
+      c.style.transform = "translate(" + tx.toFixed(2) + "%," + ty.toFixed(2) + "%) rotate(" + rot.toFixed(2) + "deg) scale(" + sc.toFixed(4) + ")";
+      c.style.opacity = op.toFixed(3);
+    });
+    const now = Math.min(deck.length - 1, Math.round(pos));
+    if (now !== shownStep) {
+      shownStep = now;
+      crate.style.setProperty("--wash", deck[now].tint);
+      steps.forEach((li, k) => li.classList.toggle("on", k === now));
+    }
+  }
+
+  /* ---------- wall of covers ---------- */
+  const wall = ["02", "03", "04", "05", "06", "07", "09", "10", "11", "12", "14", "15", "18", "19", "20", "22", "23", "24", "25", "26", "27", "28"];
+  const rows = [$("row-a"), $("row-b")];
+  rows.forEach((row, k) => {
+    const set = k ? wall.slice(11).concat(wall.slice(0, 11)) : wall;
+    for (let rep = 0; rep < 2; rep++) set.forEach((n) => {
+      const im = new Image();
+      im.src = "img/wall-" + n + ".jpg"; im.alt = ""; im.decoding = "async";
+      row.appendChild(im);
+    });
+  });
+  const off = [0, -400];
+
+  /* ---------- headings and blocks that rise in ---------- */
+  document.querySelectorAll("h2").forEach((h) => {
+    const words = h.textContent.trim().split(/\s+/);
+    h.textContent = "";
+    words.forEach((w, i) => {
+      const s = document.createElement("span");
+      s.className = "wd"; s.style.setProperty("--i", i); s.textContent = w;
+      h.appendChild(s);
+      if (i < words.length - 1) h.appendChild(document.createTextNode(" "));
+    });
+  });
+  const risers = ".feature, .point, .room-notes > div, .step, .specs li, .eq-card, .lyric-card";
+  document.querySelectorAll(risers).forEach((el) => {
+    el.classList.add("lift");
+    const sibs = [...el.parentElement.children].filter((x) => x.matches(risers));
+    el.style.setProperty("--d", (sibs.indexOf(el) % 3) * 90 + "ms");
+  });
+  if (!still && "IntersectionObserver" in window) {
+    const io = new IntersectionObserver((es) => es.forEach((e) => {
+      if (e.isIntersecting) { e.target.classList.add("in"); e.target.classList.remove("pre"); io.unobserve(e.target); }
+    }), { rootMargin: "0px 0px -10% 0px" });
+    document.querySelectorAll("h2, .lift").forEach((el) => {
+      // Only what starts below the fold waits to rise; the first screen is whole from the start.
+      if (el.getBoundingClientRect().top > innerHeight && !el.closest(".crate")) { el.classList.add("pre"); io.observe(el); }
+    });
+  }
+
+  /* ---------- the closing word ---------- */
+  const word = $("word");
+  const letters = [..."OpenTune"].map((ch) => {
+    const s = document.createElement("span");
+    s.textContent = ch; s.setAttribute("aria-hidden", "true");
+    word.appendChild(s);
+    return s;
+  });
+
+  /* ---------- live spectrum behind the equalizer ---------- */
+  const specs = [...document.querySelectorAll("#eq .band")].map((b) => {
+    const s = document.createElement("div");
+    s.className = "spec";
+    b.prepend(s);
+    return s;
+  });
+
+  /* ---------- pinned screens ---------- */
+  const screens = $("screens"), pin = $("pin"), rail = pin.querySelector(".rail"), figs = [...rail.children];
+  let pinned = false, railTravel = 0;
+  function layout() {
+    pinned = !still && innerWidth >= 900;
+    screens.classList.toggle("pinned", pinned);
+    if (pinned) {
+      railTravel = Math.max(0, rail.scrollWidth - innerWidth);
+      pin.style.height = (railTravel + innerHeight - 64) + "px";
+    } else {
+      pin.style.height = "";
+      rail.style.transform = "";
+      figs.forEach((f) => { f.style.transform = ""; });
+    }
+  }
+  layout();
+  addEventListener("resize", layout);
+  addEventListener("load", layout);
+
+  /* ---------- hero: lift on scroll, tilt toward the pointer ---------- */
+  const hero = document.querySelector(".hero"), plate = $("plate"), phone = plate.querySelector(".phone");
+  const heroLines = [...document.querySelectorAll(".hero h1 .hl")];
+  let rx = 0, ry = 0, tx = 0, ty = 0;
+  plate.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const r = plate.getBoundingClientRect();
+    tx = ((e.clientY - r.top) / r.height - 0.5) * -12;
+    ty = ((e.clientX - r.left) / r.width - 0.5) * 16;
+  });
+  plate.addEventListener("pointerleave", () => { tx = 0; ty = 0; });
+
+  const minis = [...document.querySelectorAll(".mini")], room = document.querySelector(".room");
+  const grid = $("install-grid"), thread = $("thread"), stepEls = [...grid.querySelectorAll(".step")];
+  const outro = $("outro"), readline = $("readline");
+
+  let lastY = scrollY, vel = 0, lastT = performance.now();
+  function frame(t) {
+    const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
+    const vh = innerHeight, y = scrollY;
+    vel += ((y - lastY) / Math.max(dt, 0.001) - vel) * 0.15; lastY = y;
+
+    const doc = document.documentElement.scrollHeight - vh;
+    readline.style.transform = "scaleX(" + (doc > 0 ? y / doc : 0).toFixed(4) + ")";
+
+    // Hero
+    const hp = clamp(y / Math.max(1, hero.offsetHeight));
+    heroLines.forEach((l, i) => { l.style.transform = "translateY(" + (-hp * (i + 1) * 26).toFixed(1) + "px)"; });
+    rx += (tx - rx) * 0.08; ry += (ty - ry) * 0.08;
+    phone.style.transform = "translateY(" + (-hp * 70).toFixed(1) + "px) rotate(" + (-3 + hp * 3).toFixed(2) + "deg) rotateX(" + rx.toFixed(2) + "deg) rotateY(" + ry.toFixed(2) + "deg)";
+    plate.style.transform = "translateY(" + (hp * 34).toFixed(1) + "px) scale(" + (1 - hp * 0.05).toFixed(4) + ")";
+
+    crateFx(vh);
+
+    // Wall: a slow drift that speeds up with scrolling.
+    const speed = 28 + Math.min(900, Math.abs(vel)) * 0.5;
+    rows.forEach((row, k) => {
+      const half = row.scrollWidth / 2 || 1;
+      off[k] += speed * dt * (k ? 1 : -1);
+      if (off[k] <= -half) off[k] += half;
+      if (off[k] > 0) off[k] -= half;
+      row.style.transform = "translateX(" + off[k].toFixed(1) + "px)";
+    });
+
+    // Together: the two phones slide in as the room comes up.
+    if (innerWidth > 640) {
+      const rr = room.getBoundingClientRect();
+      const rp = ease(clamp((vh - rr.top) / (vh * 0.75)));
+      minis[0].style.transform = "translateX(" + (-(1 - rp) * 90).toFixed(1) + "px) rotate(" + (-(1 - rp) * 7).toFixed(2) + "deg)";
+      minis[1].style.transform = "translateX(" + ((1 - rp) * 90).toFixed(1) + "px) rotate(" + ((1 - rp) * 7).toFixed(2) + "deg)";
+    } else minis.forEach((m) => { m.style.transform = ""; });
+
+    // Screens
+    if (pinned) {
+      const pr = pin.getBoundingClientRect();
+      const pp = clamp(-pr.top / Math.max(1, pr.height - (vh - 64)));
+      rail.style.transform = "translateX(" + (-pp * railTravel).toFixed(1) + "px)";
+      figs.forEach((f) => {
+        const fr = f.getBoundingClientRect();
+        const c = clamp((fr.left + fr.width / 2 - innerWidth / 2) / innerWidth, -1, 1);
+        f.style.transform = "perspective(1000px) rotateY(" + (c * -24).toFixed(2) + "deg) translateY(" + (Math.abs(c) * 34).toFixed(1) + "px) scale(" + (1 - Math.abs(c) * 0.08).toFixed(3) + ")";
+      });
+    }
+
+    // Install: the thread draws across the steps.
+    const gr = grid.getBoundingClientRect();
+    const ip = clamp((vh * 0.85 - gr.top) / (vh * 0.55));
+    thread.style.transform = "scaleX(" + ip.toFixed(4) + ")";
+    grid.classList.add("steps-live");
+    stepEls.forEach((s, i) => s.classList.toggle("lit", ip > i / stepEls.length + 0.05));
+
+    // The closing word
+    const or = outro.getBoundingClientRect();
+    const op = clamp((vh - or.top) / (vh * 0.8));
+    letters.forEach((l, i) => {
+      const q = ease(clamp(op * 1.6 - i * 0.075));
+      l.style.transform = "translateY(" + ((1 - q) * 105).toFixed(1) + "%) rotate(" + ((1 - q) * 8).toFixed(2) + "deg)";
+    });
+
+    // Spectrum
+    specs.forEach((s, i) => {
+      const v = 0.5 + 0.28 * Math.sin(t * 0.0042 * (1 + i * 0.11) + i * 1.9) + 0.2 * Math.sin(t * 0.0071 + i * 0.7);
+      s.style.transform = "scaleY(" + (clamp(v) * (1 - i / 22) * 0.9 + 0.08).toFixed(3) + ")";
+    });
+
+    requestAnimationFrame(frame);
+  }
+  if (still) {
+    crateFx(innerHeight);
+  } else {
+    requestAnimationFrame(frame);
+  }
+})();
+</script>
+</body>
+</html>

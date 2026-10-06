@@ -5,6 +5,8 @@
 <p align="center">
   <a href="https://github.com/justshivv/Opentune/releases/latest"><b>Download the latest APK</b></a>
   &nbsp;·&nbsp;
+  <a href="https://justshivv.github.io/Opentune/">Website</a>
+  &nbsp;·&nbsp;
   <a href="#features">Features</a>
   &nbsp;·&nbsp;
   <a href="#building">Build it yourself</a>
