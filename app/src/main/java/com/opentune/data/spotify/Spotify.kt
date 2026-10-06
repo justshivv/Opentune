@@ -16,12 +16,14 @@ import kotlinx.serialization.json.longOrNull
 import okhttp3.Request
 
 /**
- * Public Spotify playlists, albums and songs by link, with no sign-in.
+ * Spotify playlists, albums and songs by link.
  *
- * The track list is read from Spotify's own embed page (the player that
- * websites put on their pages), which any visitor can load. It names each
- * song, its artists and length; nothing is streamed from Spotify. The embed
- * shows a playlist's first 100 songs, so longer playlists come over in part.
+ * Signed in with Spotify ([SpotifyAccount]), a playlist is read in full
+ * through Spotify's Web API. Otherwise, and for albums, songs and the
+ * editorial playlists the Web API keeps to itself, the list comes from
+ * Spotify's own embed page (the player websites put on their pages), which
+ * any visitor can load; it shows a playlist's first 100 songs. Either way
+ * only names, artists and lengths are read; nothing streams from Spotify.
  */
 object Spotify {
     private const val TAG = "Spotify"
@@ -42,9 +44,11 @@ object Spotify {
         val subtitle: String,
         val imageUrl: String?,
         val tracks: List<Track>,
+        /** Read in full through the signed-in account rather than the embed. */
+        val complete: Boolean = false,
     ) {
-        /** A playlist cut off at the embed's limit; the rest isn't visible without signing in. */
-        val maybeTruncated get() = link.kind == Kind.PLAYLIST && tracks.size >= EMBED_LIMIT
+        /** A playlist cut off at the embed's limit; signing in brings the rest. */
+        val maybeTruncated get() = !complete && link.kind == Kind.PLAYLIST && tracks.size >= EMBED_LIMIT
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -73,8 +77,22 @@ object Spotify {
         }.onFailure { Log.w(TAG, "short link failed", it) }.getOrNull()
     }
 
-    /** The name, cover and songs behind [link]. */
-    suspend fun load(link: Link): Collection = withContext(Dispatchers.IO) {
+    /** The name, cover and songs behind [link]: the whole playlist when signed in. */
+    suspend fun load(link: Link): Collection {
+        if (link.kind == Kind.PLAYLIST && SpotifyAccount.account.value != null) {
+            try {
+                return SpotifyAccount.playlist(link.id)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Spotify's own editorial playlists aren't served to apps; the embed still lists them.
+                Log.w(TAG, "account read of ${link.id} failed; using the embed", e)
+            }
+        }
+        return loadEmbed(link)
+    }
+
+    private suspend fun loadEmbed(link: Link): Collection = withContext(Dispatchers.IO) {
         val url = "https://open.spotify.com/embed/${link.kind.name.lowercase()}/${link.id}"
         val html = Http.client.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r ->
             if (r.code == 404) throw IOException("Spotify doesn't have this, or it's private")
