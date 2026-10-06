@@ -46,4 +46,39 @@ class RadioTest {
         assertEquals("radio:d28420a4-eccf-47a2-ace1-088c7e7cb7e0", song.videoId)
         assertEquals("Live radio", song.artist)
     }
+
+    private val nearby = javaClass.classLoader!!.getResource("radio-browser-nearby.json")!!.readText()
+
+    @Test fun nearbyStationsComeNearestFirstWithTheirDistance() {
+        val found = Radio.parseNearby(nearby, 28.61, 77.21)
+        assertEquals(8, found.size)
+        assertEquals("AIR Delhi FM Gold", found.first().station.name)
+        assertEquals(0.19, found.first().distanceKm, 0.01)
+        assertTrue(found.zipWithNext().all { (a, b) -> a.distanceKm <= b.distanceKm })
+        assertEquals("Delhi", found.first().station.state)
+    }
+
+    @Test fun distanceFallsBackToTheStationsCoordinates() {
+        val body = """[{"stationuuid":"x","name":"Somewhere FM","url_resolved":"https://x/s","geo_lat":28.7,"geo_long":77.1,"geo_distance":null}]"""
+        val km = Radio.parseNearby(body, 28.61, 77.21).single().distanceKm
+        assertEquals(Radio.distanceKm(28.61, 77.21, 28.7, 77.1), km, 1e-9)
+        assertEquals(14.6, km, 0.3)
+    }
+
+    @Test fun stationsWithoutAPlaceAreLeftOutOfNearby() {
+        assertTrue(Radio.parseNearby(fixture, 28.61, 77.21).all { it.station.latitude != null })
+    }
+
+    @Test fun onlyARoughPositionIsSent() {
+        assertEquals(28.61, Radio.coarse(28.613456), 0.0)
+        assertEquals(-73.98, Radio.coarse(-73.97538), 0.0)
+    }
+
+    @Test fun distancesReadNaturally() {
+        assertEquals("Under 1 km", Radio.formatDistance(0.19))
+        assertEquals("4.2 km", Radio.formatDistance(4.24))
+        assertEquals("37 km", Radio.formatDistance(36.6))
+        val s = Radio.parseNearby(nearby, 28.61, 77.21).first()
+        assertEquals("Under 1 km · AAC+ · 32 kbps · Delhi", s.station.nearbyDetails(s.distanceKm))
+    }
 }
