@@ -20,8 +20,8 @@ import com.opentune.data.settings.AppSettings
  * The app's taps and buzzes, at the strength chosen in Settings.
  *
  * Where the phone can play haptic primitives (Android 11+ on most recent
- * phones) they're scaled to the setting, which feels crisp at any level.
- * Otherwise a short pulse at a matching amplitude, and on phones without
+ * phones) each tap is a full click with a low thump after it, scaled to the
+ * setting. Otherwise a pulse at a matching amplitude, and on phones without
  * amplitude control, the system's own feedback. Nothing plays at zero, or
  * when touch feedback is off in the phone's settings.
  */
@@ -41,32 +41,42 @@ class Haptics internal constructor(private val view: View, private val strength:
         if (s <= 0f || !systemFeedbackOn(view.context)) return
         val v = vibrator
         if (v != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val primitive = if (kind == Kind.TICK) VibrationEffect.Composition.PRIMITIVE_TICK else VibrationEffect.Composition.PRIMITIVE_CLICK
-            if (v.areAllPrimitivesSupported(primitive)) {
-                v.vibrate(VibrationEffect.startComposition().addPrimitive(primitive, primitiveScale(kind, s)).compose())
-                return
-            }
+            composition(v, kind, s)?.let { v.vibrate(it); return }
         }
         when {
             v != null && v.hasAmplitudeControl() ->
                 v.vibrate(VibrationEffect.createOneShot(pulseMs(kind), amplitude(kind, s)))
             else -> view.performHapticFeedback(
-                when {
-                    kind == Kind.PRESS -> HapticFeedbackConstants.LONG_PRESS
-                    s < 0.5f -> HapticFeedbackConstants.CLOCK_TICK
-                    else -> HapticFeedbackConstants.KEYBOARD_TAP
-                },
+                if (kind == Kind.PRESS || s >= 0.5f) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.VIRTUAL_KEY,
             )
         }
+    }
+
+    /**
+     * A full click with a low thump under it, so a tap lands with weight
+     * instead of a thin buzz. The thump (Android 12+) is left out where the
+     * phone can't play it.
+     */
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+    private fun composition(v: Vibrator, kind: Kind, s: Float): VibrationEffect? {
+        val click = VibrationEffect.Composition.PRIMITIVE_CLICK
+        if (!v.areAllPrimitivesSupported(click)) return null
+        val low = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (kind == Kind.PRESS) VibrationEffect.Composition.PRIMITIVE_THUD else VibrationEffect.Composition.PRIMITIVE_LOW_TICK
+        } else null
+        val c = VibrationEffect.startComposition().addPrimitive(click, primitiveScale(kind, s))
+        if (low != null && v.areAllPrimitivesSupported(low)) c.addPrimitive(low, lowScale(kind, s))
+        return c.compose()
     }
 
     companion object {
         /** Default strength: noticeable without being loud. */
         const val DEFAULT = 0.6f
 
-        internal fun primitiveScale(kind: Kind, s: Float) = if (kind == Kind.TICK) s else (0.35f + 0.65f * s)
-        internal fun amplitude(kind: Kind, s: Float) = ((if (kind == Kind.TICK) 30 + 170 * s else 70 + 185 * s).toInt()).coerceIn(1, 255)
-        internal fun pulseMs(kind: Kind) = if (kind == Kind.TICK) 10L else 22L
+        internal fun primitiveScale(kind: Kind, s: Float) = (if (kind == Kind.TICK) 0.45f + 0.55f * s else 0.7f + 0.3f * s).coerceAtMost(1f)
+        internal fun lowScale(kind: Kind, s: Float) = (if (kind == Kind.TICK) 0.3f + 0.7f * s else 0.55f + 0.45f * s).coerceAtMost(1f)
+        internal fun amplitude(kind: Kind, s: Float) = ((if (kind == Kind.TICK) 110 + 145 * s else 160 + 95 * s).toInt()).coerceIn(1, 255)
+        internal fun pulseMs(kind: Kind) = if (kind == Kind.TICK) 18L else 40L
 
         /** "Off", "Light", "Medium", "Strong" for a strength. */
         fun label(s: Float) = when {
