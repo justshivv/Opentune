@@ -1,6 +1,17 @@
 package com.opentune.ui.radio
 
+import android.content.Intent
+import androidx.core.net.toUri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.rounded.LocationOff
+import androidx.compose.material.icons.rounded.NearMe
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.platform.LocalContext
+import com.opentune.data.radio.ApproxLocation
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -59,8 +70,19 @@ import kotlinx.coroutines.delay
 private sealed interface RadioView {
     data object Favourites : RadioView
     data object NearYou : RadioView
+    data object Country : RadioView
     data object Popular : RadioView
     data class Genre(val tag: String) : RadioView
+}
+
+/** Where the "Near you" list is up to. */
+private sealed interface Near {
+    data class NeedsPermission(val refused: Boolean) : Near
+    data object LocationOff : Near
+    data object Locating : Near
+    data object NoFix : Near
+    data class Done(val stations: List<Radio.Nearby>) : Near
+    data class Failed(val message: String) : Near
 }
 
 private sealed interface Load {
@@ -82,17 +104,45 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     var load by remember { mutableStateOf<Load>(Load.Loading) }
     var attempt by remember { mutableIntStateOf(0) }
     val country = remember { Locale.getDefault().country.takeIf { it.length == 2 } }
+    val countryName = remember(country) { country?.let { Locale.Builder().setRegion(it).build().displayCountry }?.takeIf { it.isNotBlank() } }
+    val context = LocalContext.current
+    var near by remember { mutableStateOf<Near>(Near.Locating) }
+    var refused by remember { mutableStateOf(false) }
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        refused = !ok
+        attempt++
+    }
+
+    LaunchedEffect(query, view, attempt) {
+        if (query.isNotBlank() || view != RadioView.NearYou) return@LaunchedEffect
+        near = when {
+            !ApproxLocation.granted(context) -> Near.NeedsPermission(refused)
+            !ApproxLocation.enabled(context) -> Near.LocationOff
+            else -> {
+                near = Near.Locating
+                val here = ApproxLocation.get(context)
+                if (here == null) Near.NoFix
+                else try {
+                    Near.Done(Radio.nearby(here.latitude, here.longitude))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Near.Failed(e.message ?: "No connection")
+                }
+            }
+        }
+    }
 
     LaunchedEffect(query, view, attempt) {
         val q = query.trim()
-        if (q.isEmpty() && view == RadioView.Favourites) return@LaunchedEffect
+        if (q.isEmpty() && (view == RadioView.Favourites || view == RadioView.NearYou)) return@LaunchedEffect
         load = Load.Loading
         if (q.isNotEmpty()) delay(350)
         load = try {
             Load.Done(
                 when {
                     q.isNotEmpty() -> Radio.search(q)
-                    view == RadioView.NearYou && country != null -> Radio.inCountry(country)
+                    view == RadioView.Country && country != null -> Radio.inCountry(country)
                     view is RadioView.Genre -> Radio.byTag((view as RadioView.Genre).tag)
                     else -> Radio.popular()
                 },
@@ -136,7 +186,15 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item { FilterChip(view == RadioView.Favourites, { view = RadioView.Favourites }, { Text("Favourites") }) }
-                    if (country != null) item { FilterChip(view == RadioView.NearYou, { view = RadioView.NearYou }, { Text("Near you") }) }
+                    item {
+                        FilterChip(
+                            view == RadioView.NearYou,
+                            { view = RadioView.NearYou },
+                            { Text("Near you") },
+                            leadingIcon = { Icon(Icons.Rounded.NearMe, null, Modifier.size(18.dp)) },
+                        )
+                    }
+                    if (countryName != null) item { FilterChip(view == RadioView.Country, { view = RadioView.Country }, { Text(countryName) }) }
                     item { FilterChip(view == RadioView.Popular, { view = RadioView.Popular }, { Text("Popular") }) }
                     items(Radio.GENRES) { tag ->
                         FilterChip(view == RadioView.Genre(tag), { view = RadioView.Genre(tag) }, { Text(tag.replaceFirstChar { it.titlecase() }) })
@@ -163,6 +221,73 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 item { SectionHeader("Recently played") }
                 items(others, key = { "r:${it.uuid}" }) { StationRow(it, actions.currentVideoId == it.id, ::play) }
             }
+        } else if (query.isBlank() && view == RadioView.NearYou) {
+            val toCountry: (() -> Unit)? = countryName?.let { { view = RadioView.Country } }
+            when (val n = near) {
+                is Near.NeedsPermission -> item {
+                    NearbyPrompt(
+                        refused = n.refused,
+                        countryName = countryName,
+                        onAllow = { askLocation.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION) },
+                        onOpenSettings = {
+                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
+                        },
+                        onCountry = toCountry,
+                    )
+                }
+                Near.LocationOff -> item {
+                    MessageState(
+                        Icons.Rounded.LocationOff,
+                        "Location is off",
+                        message = "Turn on location to find stations around you.",
+                        action = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }) { Text("Location settings") }
+                                OutlinedButton(onClick = { attempt++ }) { Text("Try again") }
+                            }
+                        },
+                    )
+                }
+                Near.Locating -> item {
+                    Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(Modifier.size(12.dp))
+                        Text("Finding stations near you…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Near.NoFix -> item {
+                    MessageState(
+                        Icons.Rounded.LocationOff,
+                        "Couldn't find where you are",
+                        message = "Your phone didn't give a location in time.",
+                        action = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { attempt++ }) { Text("Try again") }
+                                toCountry?.let { OutlinedButton(onClick = it) { Text("$countryName instead") } }
+                            }
+                        },
+                    )
+                }
+                is Near.Failed -> item { ErrorState(n.message, onRetry = { attempt++ }) }
+                is Near.Done -> {
+                    if (n.stations.isEmpty()) {
+                        item {
+                            MessageState(
+                                Icons.Rounded.Radio,
+                                "No stations listed near you",
+                                message = "Radio Browser has no stations with a location close by.",
+                                action = toCountry?.let { { OutlinedButton(onClick = it) { Text("Stations in $countryName") } } },
+                            )
+                        }
+                    } else {
+                        val reach = Radio.formatDistance(n.stations.maxOf { it.distanceKm }).removePrefix("Under ")
+                        item { SectionHeader("Live near you", subtitle = "${n.stations.size} stations within $reach") }
+                        items(n.stations, key = { "n:${it.station.uuid}" }) {
+                            StationRow(it.station, actions.currentVideoId == it.station.id, ::play, details = it.station.nearbyDetails(it.distanceKm))
+                        }
+                    }
+                }
+            }
         } else {
             when (val l = load) {
                 Load.Loading -> item {
@@ -187,7 +312,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
 }
 
 @Composable
-private fun StationRow(station: Radio.Station, playing: Boolean, onPlay: (Radio.Station) -> Unit) {
+internal fun StationRow(station: Radio.Station, playing: Boolean, onPlay: (Radio.Station) -> Unit, details: String = station.details) {
     val favourites by Radio.favourites.collectAsState()
     val favourite = favourites.any { it.uuid == station.uuid }
     Row(
@@ -206,7 +331,7 @@ private fun StationRow(station: Radio.Station, playing: Boolean, onPlay: (Radio.
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                station.details,
+                details,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -221,4 +346,32 @@ private fun StationRow(station: Radio.Station, playing: Boolean, onPlay: (Radio.
             )
         }
     }
+}
+
+/** Asks for approximate location, saying what it's for and what leaves the phone. */
+@Composable
+internal fun NearbyPrompt(
+    refused: Boolean,
+    countryName: String?,
+    onAllow: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onCountry: (() -> Unit)?,
+) {
+    MessageState(
+        Icons.Rounded.NearMe,
+        "Radio stations near you",
+        message = if (refused) {
+            "Location access is turned off for OpenTune. You can allow approximate location in the app's settings."
+        } else {
+            "OpenTune uses your approximate location once to find stations around you. " +
+                "Only a rounded position goes to Radio Browser, and it isn't saved."
+        },
+        action = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (refused) Button(onClick = onOpenSettings) { Text("Open settings") }
+                else Button(onClick = onAllow) { Text("Use my location") }
+                if (onCountry != null && countryName != null) OutlinedButton(onClick = onCountry) { Text("Stations in $countryName") }
+            }
+        },
+    )
 }

@@ -77,8 +77,11 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   and a played mark for the ones finished.
 - **Internet radio.** 50,000+ live stations from
   [Radio Browser](https://www.radio-browser.info), the free community
-  directory: stations near you, the most played, genres and search, with
-  favourites. The song on air shows in the player and notification when
+  directory: stations near you, your country's most played, worldwide
+  favourites, genres and search. "Near you" uses approximate location,
+  only when you ask, sends Radio Browser a position rounded to about a
+  kilometre and keeps nothing; it lists stations nearest first with how far
+  away they are. The song on air shows in the player and notification when
   the station sends it. Favourite stations are in Android Auto too.
 - **Picks up where you left off.** The queue, song and position come back
   at launch, paused, without fetching anything until you press play.

@@ -21,6 +21,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -39,6 +40,10 @@ object Radio {
     private const val PREFIX = "radio:"
     private const val TAG = "Radio"
     private const val MAX_RECENT = 50
+    /** How far the nearby search reaches, widening in steps when little turns up. */
+    private val RADII_KM = listOf(50, 150, 400)
+    const val NEAR_KM = 50
+    private const val ENOUGH = 8
     /** The directory's mirrors; the first that answers is used. */
     private val SERVERS = listOf("de1.api.radio-browser.info", "de2.api.radio-browser.info", "fi1.api.radio-browser.info", "nl1.api.radio-browser.info")
 
@@ -55,6 +60,9 @@ object Radio {
         val codec: String? = null,
         val bitrate: Int = 0,
         val hls: Boolean = false,
+        val state: String? = null,
+        val latitude: Double? = null,
+        val longitude: Double? = null,
     ) {
         val id get() = "$PREFIX$uuid"
 
@@ -67,8 +75,19 @@ object Radio {
                 tags.take(3).joinToString(", ").takeIf { it.isNotBlank() },
             ).joinToString(" · ")
 
+        /** "4.2 km · AAC · 128 kbps · Delhi", for a station found nearby. */
+        fun nearbyDetails(km: Double): String = listOfNotNull(
+            formatDistance(km),
+            codec?.takeIf { it.isNotBlank() && it != "UNKNOWN" },
+            bitrate.takeIf { it > 0 }?.let { "$it kbps" },
+            (state ?: country)?.takeIf { it.isNotBlank() },
+        ).joinToString(" · ")
+
         fun toSong() = Song(videoId = id, title = name, artist = "Live radio", thumbnailUrl = favicon?.takeIf { it.isNotBlank() })
     }
+
+    /** A station found around a place, with how far away it is. */
+    data class Nearby(val station: Station, val distanceKm: Double)
 
     @Serializable
     private class Saved(val favourites: List<Station> = emptyList(), val recent: List<Station> = emptyList())
@@ -159,6 +178,67 @@ object Radio {
         },
     )
 
+    /**
+     * Stations around a place, nearest first. The search starts at
+     * [NEAR_KM] and widens until enough stations turn up. Only a rounded
+     * position (two decimals, about a kilometre) leaves the phone.
+     */
+    suspend fun nearby(latitude: Double, longitude: Double): List<Nearby> {
+        val lat = coarse(latitude)
+        val lon = coarse(longitude)
+        var found = emptyList<Nearby>()
+        for (km in RADII_KM) {
+            val body = withContext(Dispatchers.IO) {
+                get(
+                    url("json/stations/search") {
+                        addQueryParameter("geo_lat", lat.toString())
+                        addQueryParameter("geo_long", lon.toString())
+                        addQueryParameter("geo_distance", (km * 1000).toString())
+                        addQueryParameter("has_geo_info", "true")
+                        addQueryParameter("hidebroken", "true")
+                        addQueryParameter("order", "clickcount")
+                        addQueryParameter("reverse", "true")
+                        addQueryParameter("limit", "100")
+                    },
+                )
+            }
+            found = parseNearby(body, lat, lon)
+            if (found.size >= ENOUGH) break
+        }
+        return found
+    }
+
+    /** Stations out of a geo search, nearest first, with their distance from ([lat], [lon]). */
+    internal fun parseNearby(body: String, lat: Double, lon: Double): List<Nearby> {
+        val metres = runCatching { json.parseToJsonElement(body) as? JsonArray }.getOrNull().orEmpty()
+            .mapNotNull { e -> (e as? JsonObject)?.let { o -> o.str("stationuuid")?.let { it to o.dbl("geo_distance") } } }
+            .toMap()
+        return parse(body).mapNotNull { s ->
+            val km = metres[s.uuid]?.div(1000)
+                ?: if (s.latitude != null && s.longitude != null) distanceKm(lat, lon, s.latitude, s.longitude) else null
+            km?.let { Nearby(s, it) }
+        }.sortedBy { it.distanceKm }
+    }
+
+    /** Great-circle distance in kilometres. */
+    internal fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = Math.sin(dLat / 2).let { it * it } +
+            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.sin(dLon / 2).let { it * it }
+        return 2 * 6371.0 * Math.asin(Math.sqrt(a.coerceIn(0.0, 1.0)))
+    }
+
+    /** "Under 1 km", "4.2 km", "37 km". */
+    internal fun formatDistance(km: Double): String = when {
+        km < 1 -> "Under 1 km"
+        km < 10 -> String.format(java.util.Locale.ROOT, "%.1f km", km)
+        else -> "${Math.round(km)} km"
+    }
+
+    /** A coordinate rounded to two decimals, so the directory only learns the rough area. */
+    internal fun coarse(v: Double) = Math.round(v * 100) / 100.0
+
     private suspend fun list(url: HttpUrl): List<Station> = withContext(Dispatchers.IO) { parse(get(url)) }
 
     /** [path] on the current mirror, each segment encoded. */
@@ -213,6 +293,9 @@ object Radio {
                 codec = o.str("codec"),
                 bitrate = (o["bitrate"] as? JsonPrimitive)?.intOrNull ?: 0,
                 hls = (o["hls"] as? JsonPrimitive)?.intOrNull == 1,
+                state = o.str("state")?.trim()?.takeIf { it.isNotEmpty() },
+                latitude = o.dbl("geo_lat"),
+                longitude = o.dbl("geo_long"),
             )
         }.distinctBy { it.uuid }
     }
@@ -230,6 +313,7 @@ object Radio {
     }
 
     private fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull
+    private fun JsonObject.dbl(key: String) = (this[key] as? JsonPrimitive)?.doubleOrNull
 
     /** Genres offered as chips on the radio page, by Radio Browser tag. */
     val GENRES = listOf("pop", "rock", "jazz", "classical", "electronic", "hiphop", "lofi", "news", "talk", "ambient", "country", "bollywood", "chillout", "dance", "80s", "90s")
