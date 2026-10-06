@@ -1,3 +1,22 @@
+<p align="center">
+  <img src="docs/banner.jpg" alt="OpenTune: a free, open-source music player for Android, built on YouTube Music" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/justshivv/Opentune/releases/latest"><b>Download the latest APK</b></a>
+  &nbsp;·&nbsp;
+  <a href="#features">Features</a>
+  &nbsp;·&nbsp;
+  <a href="#building">Build it yourself</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/justshivv/Opentune/actions/workflows/ci.yml"><img src="https://github.com/justshivv/Opentune/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+">
+  <img src="https://img.shields.io/badge/Kotlin-Compose-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin and Jetpack Compose">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0"></a>
+</p>
+
 # OpenTune
 
 An Android music player for YouTube Music. It talks to YouTube's internal
@@ -5,6 +24,52 @@ An Android music player for YouTube Music. It talks to YouTube's internal
 no server of your own. Sign in if you want your likes and playlists.
 
 Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
+
+## See it
+
+<p align="center">
+  <a href="docs/media/opentune-reel.mp4"><img src="docs/media/preview.gif" alt="OpenTune in 30 seconds" width="300"></a>
+  <br>
+  <sub><a href="docs/media/opentune-reel.mp4">Watch the 30-second video</a> (MP4, with sound)</sub>
+</p>
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/01-player.jpg" alt="Player, coloured from the cover"></td>
+    <td><img src="docs/screenshots/02-lyrics.jpg" alt="Synced lyrics"></td>
+    <td><img src="docs/screenshots/03-explore.jpg" alt="Explore as a mood board"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/04-radio.jpg" alt="Live radio near you"></td>
+    <td><img src="docs/screenshots/05-together.jpg" alt="Listen together room"></td>
+    <td><img src="docs/screenshots/06-podcasts.jpg" alt="Podcasts"></td>
+  </tr>
+</table>
+
+## Install
+
+1. Open the [latest release](https://github.com/justshivv/Opentune/releases/latest)
+   and download the APK for your phone. `arm64-v8a` fits almost every phone
+   from the last several years; `universal` runs on anything.
+2. Open the file and allow your browser or file manager to install apps
+   when Android asks.
+3. That's it. OpenTune checks this repository for new releases once a day
+   and can update itself from Settings.
+
+Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
+
+## Highlights
+
+- **No ads in the app, no account, no server.** Signing in is optional and
+  only brings your likes and playlists along.
+- **Best audio by default**, with crossfade, loudness levelling, a 15-band
+  equalizer and AutoEq correction for 8,000+ headphones.
+- **Synced lyrics**, lit word by word, that also work offline with downloads.
+- **Listen together**: share a room code and friends hear the same song,
+  in step, on their own phones.
+- **Live radio** from 50,000+ stations, nearest first.
+- **Podcasts**, downloads, Android Auto, a home-screen widget and imports
+  from Spotify and YouTube playlists.
 
 ## Features
 
@@ -228,8 +293,7 @@ animated "Canvas" covers, and doesn't take lyrics from Apple Music, Spotify
 or Musixmatch through proxies or scraped secrets. Those depend on getting
 around a service's protection or terms, so they stay out.
 
-Not built yet: Listen Together, lyric translation and an in-app language
-setting.
+Not built yet: lyric translation and an in-app language setting.
 
 ## Building
 
@@ -273,7 +337,12 @@ app/src/main/java/com/opentune/
   playback/         PlaybackService (ExoPlayer, cache, loudness, upgrade, sleep timer),
                     Crossfade, DSP
   ui/               Compose screens: home, explore, search, library, player, settings
+docs/               README banner, screenshots and the 30-second video
 ```
+
+The README's screenshots are drawn from the app's own screens by
+`ReadmeScreenshotTest`, which runs when `OPENTUNE_SHOT_ART` points at a
+folder of cover images (they aren't kept in the repository).
 
 ## Attribution
 
@@ -298,6 +367,11 @@ Foundation. Headphone corrections come from
 Skip segments come from [SponsorBlock](https://sponsor.ajay.app) (data
 under CC BY-NC-SA 4.0), and radio stations from the
 [Radio Browser](https://www.radio-browser.info) community directory.
+
+The screenshots and video show real albums, artists and songs to show the
+app as it's used. Cover art, names and recordings belong to their owners.
+OpenTune isn't affiliated with or endorsed by YouTube, Google, Spotify or
+any artist or label shown.
 
 OpenTune is licensed under the GNU General Public License v3.0. See
 [LICENSE](LICENSE).
