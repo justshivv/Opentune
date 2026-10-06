@@ -139,6 +139,7 @@ import com.opentune.data.settings.SEED_COLORS
 import com.opentune.data.settings.ThemeMode
 import com.opentune.playback.AudioCache
 import com.opentune.playback.BitPerfectUsb
+import com.opentune.ui.components.ChoiceSheet
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.GroupCard
 import com.opentune.ui.components.liquidGlassSupported
@@ -307,7 +308,7 @@ private fun settingsSections(
     }
 
     qualityDialog?.let { wifi ->
-        ChoiceDialog(
+        ChoiceSheet(
             title = if (wifi) "Quality on Wi-Fi" else "Quality on mobile data",
             options = AudioQuality.entries,
             selected = if (wifi) pb.wifiQuality else pb.mobileQuality,
@@ -324,7 +325,7 @@ private fun settingsSections(
     update?.let { UpdateDialog(it, onDismiss = { update = null }) }
     if (followedDialog) FollowedArtistsDialog(onDismiss = { followedDialog = false })
     if (playerStyleDialog) {
-        ChoiceDialog(
+        ChoiceSheet(
             title = "Player layout",
             options = PlayerStyle.entries,
             selected = ui.playerStyle,
@@ -334,7 +335,7 @@ private fun settingsSections(
         )
     }
     if (controlStyleDialog) {
-        ChoiceDialog(
+        ChoiceSheet(
             title = "Player buttons",
             options = ControlStyle.entries,
             selected = ui.controlStyle,
@@ -344,7 +345,7 @@ private fun settingsSections(
         )
     }
     if (dockMotionDialog) {
-        ChoiceDialog(
+        ChoiceSheet(
             title = "Dock animation",
             options = DockMotion.entries,
             selected = ui.dockMotion,
@@ -354,7 +355,7 @@ private fun settingsSections(
         )
     }
     if (lyricsAnimationDialog) {
-        ChoiceDialog(
+        ChoiceSheet(
             title = "Lyrics animation",
             options = LyricsAnimation.entries,
             selected = ui.lyricsAnimation,
@@ -364,7 +365,7 @@ private fun settingsSections(
         )
     }
     if (downloadQualityDialog) {
-        ChoiceDialog(
+        ChoiceSheet(
             title = "Download quality",
             options = AudioQuality.entries,
             selected = lib.downloadQuality,
@@ -391,11 +392,16 @@ private fun settingsSections(
     if (folderDialog) {
         var folders by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
         LaunchedEffect(Unit) { folders = runCatching { LocalMusic.folders(context) }.getOrDefault(emptyList()) }
-        ChoiceDialog(
+        ChoiceSheet(
             title = "Local music folder",
             options = listOf<String?>(null) + folders.map { it.first },
             selected = lib.localFolder,
-            label = { f -> f?.let { name -> "$name (${folders.firstOrNull { it.first == name }?.second ?: 0})" } ?: "All audio folders" },
+            label = { f ->
+                f?.let { name ->
+                    val n = folders.firstOrNull { it.first == name }?.second ?: 0
+                    "$name · $n ${if (n == 1) "song" else "songs"}"
+                } ?: "All audio folders · Every song on the phone"
+            },
             onSelect = { f -> AppSettings.updateLibrary { it.copy(localFolder = f) } },
             onDismiss = { folderDialog = false },
         )
@@ -946,32 +952,3 @@ private fun outputSummary(context: Context, float: Boolean): String {
 }
 
 private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 1024f) else "$mb MB"
-
-@Composable
-private fun <T> ChoiceDialog(
-    title: String,
-    options: List<T>,
-    selected: T,
-    label: (T) -> String,
-    onSelect: (T) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            LazyColumn {
-                items(options) { o ->
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onSelect(o); onDismiss() }.padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = o == selected, onClick = { onSelect(o); onDismiss() })
-                        Text(label(o), modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-    )
-}
