@@ -171,7 +171,7 @@ data class DspParams(
         }
         if (bassBoost > 0) out += { Biquad.lowShelf(fs, 100.0, bassBoost / 1000.0 * MAX_BASS_BOOST_DB) }
         if (clarity) {
-            // After LastWave's Studio Master Clarity: cut rumble below hearing,
+            // Cut rumble below hearing,
             // firm up the bass, clear low-mid mud and boxiness, lift the
             // presence band and the air above 10 kHz.
             out += { Biquad.highPass(fs, 24.0) }

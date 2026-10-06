@@ -183,7 +183,7 @@ enum class FilterType { PEAK, LOW_SHELF, HIGH_SHELF }
 
 enum class EqPreset(val label: String, val bands: List<Float>) {
     FLAT("Flat", List(15) { 0f }),
-    /** After LastWave's Studio Master curve: deep, clean lows and open highs. */
+    /** Deep, clean lows and open highs. */
     STUDIO("Studio", listOf(2.6f, 2.8f, 2.2f, 0.6f, -1.8f, -2.6f, -1.2f, 0f, 1.2f, 2.4f, 3.6f, 4.0f, 4.2f, 4.5f, 4.8f)),
     BASS("Bass", resampleBands(listOf(6f, 4f, 1f, 0f, 0f, 0f, 0f))),
     DEEP_BASS("Deep bass", listOf(6f, 5.5f, 4.5f, 3f, 1.5f, 0f, -1f, -1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)),

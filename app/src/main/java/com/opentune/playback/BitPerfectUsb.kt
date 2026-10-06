@@ -106,7 +106,7 @@ object BitPerfectUsb {
 
     /**
      * The volume the app applies while bit-perfect: 0 dB at the top step,
-     * falling on the curve LastWave uses (-62 dB + 62 dB * v^0.75), silent at 0.
+     * falling on a power curve (-62 dB + 62 dB * v^0.75), silent at 0.
      */
     fun softwareGainDb(am: AudioManager): Float {
         val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)

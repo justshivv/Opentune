@@ -78,7 +78,7 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 ### Listening
 
 - **Two stream engines that switch on their own.**
-  [InnerTubeX](https://github.com/MetrolistGroup/innertubex) leads and
+  InnerTubeX leads and
   OpenTune's own client walk backs it up; after a failure the walk leads
   for ten minutes, then InnerTubeX gets its turn back. NewPipeExtractor is
   the last resort. Every stream URL is
@@ -108,9 +108,9 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   song at its own rate with no mixing, resampling or effects, through
   Android's bit-perfect mixer. The app applies the volume, and at full
   volume the signal is bit-exact.
-- **Clarity** (optional). A tone curve after LastWave's Studio Master
-  Clarity: rumble cut, firmer bass, less mud, more presence and air, with
-  headroom and a soft limiter so peaks stay clean.
+- **Clarity** (optional). A tone curve that cuts rumble, firms up the
+  bass, clears mud and adds presence and air, with headroom and a soft
+  limiter so peaks stay clean.
 - **Fast starts and skips.** Playback begins after half a second of audio.
   The songs either side of the current one are found before you get to
   them, and the next one is buffered while this one plays. Played songs
@@ -259,7 +259,7 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   back on a spring), Retract (into the corner and unrolling from it),
   Cascade (tabs drop one by one and return in a wave) or Dissolve (blurs
   away and sharpens back, Android 12+).
-- **Its own typeface.** Every screen is set in [Outfit](https://github.com/Outfitio/Outfit-Fonts).
+- **Its own typeface.** Every screen is set in Outfit.
 - **Home greets you** by the time of day and your name, with your avatar
   leading to settings. Below YouTube Music's own shelves it adds a radio
   of your last song, albums, singles and similar artists for the artists
@@ -371,34 +371,16 @@ The README's screenshots are drawn from the app's own screens by
 `ReadmeScreenshotTest`, which runs when `OPENTUNE_SHOT_ART` points at a
 folder of cover images (they aren't kept in the repository).
 
-## Attribution
-
-The Innertube client, response parser and YouTube stream resolver under
-`data/innertube/` are adapted from
-[BitChord](https://github.com/kushagrasinghx/BitChord), used under its
-GPLv3 license. The InnerTubeX glue and the PoToken WebView
-(`data/innertube/InnerTubeXResolver.kt`, `data/innertube/potoken/`,
-`assets/po_token.html`) also come from BitChord; the PoToken code follows
-NewPipe's design. [InnerTubeX](https://github.com/MetrolistGroup/innertubex)
-by MetrolistGroup and [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)
-are used as libraries under GPLv3. Liquid Glass uses Kyant's
-[backdrop](https://github.com/Kyant0/AndroidLiquidGlass) library, and
-frosted glass uses [Haze](https://github.com/chrisbanes/haze). The
-[Outfit](https://github.com/Outfitio/Outfit-Fonts) font is used under the
-SIL Open Font License 1.1 (`third_party/outfit/OFL.txt`). Album covers
-come from the [Cover Art Archive](https://coverartarchive.org) through
-[MusicBrainz](https://musicbrainz.org), and recommendations from
-[ListenBrainz](https://listenbrainz.org), all run by the MetaBrainz
-Foundation. Headphone corrections come from
-[AutoEq](https://github.com/jaakkopasanen/AutoEq) by Jaakko Pasanen (MIT).
-Skip segments come from [SponsorBlock](https://sponsor.ajay.app) (data
-under CC BY-NC-SA 4.0), and radio stations from the
-[Radio Browser](https://www.radio-browser.info) community directory.
+## Disclaimer
 
 The screenshots and video show real albums, artists and songs to show the
 app as it's used. Cover art, names and recordings belong to their owners.
 OpenTune isn't affiliated with or endorsed by YouTube, Google, Spotify or
 any artist or label shown.
 
+## License
+
 OpenTune is licensed under the GNU General Public License v3.0. See
-[LICENSE](LICENSE).
+[LICENSE](LICENSE). Code, libraries, fonts and data from other projects
+are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), as their
+licences require.
