@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.opentune.data.lyrics.Lyrics
 import com.opentune.data.lyrics.LyricsRepository
 import com.opentune.data.model.Song
+import com.opentune.data.together.Together
 import com.opentune.playback.PlayerConnection
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +50,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val lyrics = _lyrics.asStateFlow()
 
     init {
+        Together.attach(player)
         viewModelScope.launch { player.connect() }
         viewModelScope.launch { watchLyrics() }
     }
@@ -75,26 +77,32 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun play(song: Song, source: String? = null) = player.play(song, source)
-    fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false, source: String? = null) =
-        player.playAll(songs, startIndex, shuffle, source)
-    fun playNext(song: Song) = player.playNext(song)
-    fun addToQueue(song: Song) = player.addToQueue(song)
-    fun togglePlayPause() = player.togglePlayPause()
-    fun skipNext() = player.skipNext()
-    fun skipPrevious() = player.skipPrevious()
+    /** In someone else's room, picking a song sends it to the room rather than playing it here. */
+    private fun toRoom(song: Song?): Boolean = song != null && Together.room.value?.following == true && Together.suggest(song)
+
+    fun play(song: Song, source: String? = null) { if (!toRoom(song)) player.play(song, source) }
+    fun playAll(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false, source: String? = null) {
+        if (!toRoom(songs.getOrNull(if (shuffle) 0 else startIndex))) player.playAll(songs, startIndex, shuffle, source)
+    }
+    fun playNext(song: Song) { if (!toRoom(song)) player.playNext(song) }
+    fun addToQueue(song: Song) { if (!toRoom(song)) player.addToQueue(song) }
+    // In someone else's room these go to the host instead (see Together.intercept).
+    fun togglePlayPause() { if (!Together.intercept(Together.Control.PlayPause)) player.togglePlayPause() }
+    fun skipNext() { if (!Together.intercept(Together.Control.Next)) player.skipNext() }
+    fun skipPrevious() { if (!Together.intercept(Together.Control.Previous)) player.skipPrevious() }
     fun toggleShuffle() = player.toggleShuffle()
     fun cycleRepeatMode() = player.cycleRepeatMode()
     fun playQueueItem(index: Int) = player.playQueueItem(index)
     fun removeQueueItem(index: Int) = player.removeQueueItem(index)
     fun moveQueueItem(from: Int, to: Int) = player.moveQueueItem(from, to)
     /** A song on its own; the service follows it with radio. */
-    fun startRadio(song: Song) = player.play(song, "${song.title} radio")
-    fun seekTo(positionMs: Long) = player.seekTo(positionMs)
+    fun startRadio(song: Song) { if (!toRoom(song)) player.play(song, "${song.title} radio") }
+    fun seekTo(positionMs: Long) { if (!Together.intercept(Together.Control.Seek(positionMs))) player.seekTo(positionMs) }
     fun positionMs(): Long = player.currentPositionMs()
     fun bufferedPositionMs(): Long = player.bufferedPositionMs()
 
     override fun onCleared() {
+        Together.detach()
         player.disconnect()
         super.onCleared()
     }

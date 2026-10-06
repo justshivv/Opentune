@@ -74,6 +74,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         LoudnessStore.init(this)
         UpgradedTracks.init(this)
         QueueStore.init(this)
+        com.opentune.data.together.Together.init(this)
         LastFm.init(this)
         Subsonic.init(this)
         ListenBrainz.init(this)

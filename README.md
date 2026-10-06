@@ -86,6 +86,14 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   frequency when the name carries one. Stations the directory lacks can be
   added by stream address, or suggested to Radio Browser. The song on air shows in the player and notification when
   the station sends it. Favourite stations are in Android Auto too.
+- **Listen together.** Start a room and share its code; friends who join
+  hear what you play, in step, each phone streaming the music itself. Guests
+  can add songs to the room's queue and chat, and the host can let everyone
+  play, pause, seek and skip. Pausing without control pauses just for you;
+  "Catch up" puts you back in step. Rooms run over public Nostr relays with
+  no account or server: messages are encrypted with a key from the room
+  code and sent as ephemeral events that relays don't keep. Invites open
+  with an `opentune://together/<code>` link or by typing the code.
 - **Picks up where you left off.** The queue, song and position come back
   at launch, paused, without fetching anything until you press play.
 - **Home-screen widget.** Cover, title and artist, with previous,

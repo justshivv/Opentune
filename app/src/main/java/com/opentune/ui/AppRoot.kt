@@ -156,6 +156,7 @@ fun AppRoot(vm: PlayerViewModel) {
         chromeScroll.expand()
     }
     LaunchedEffect(playbackError) { playbackError?.let { snackbar.showSnackbar(it) } }
+    LaunchedEffect(Unit) { com.opentune.data.together.Together.notices.collect { snackbar.showSnackbar(it) } }
 
     // Kept across recompositions (opening the player, play/pause): a new
     // instance each time would recompose every screen and list handed one.
@@ -223,6 +224,7 @@ fun AppRoot(vm: PlayerViewModel) {
         browse = { id -> nav.openBrowse(id) },
         server = { nav.navigate("server") },
         radio = { nav.navigate("radio") },
+        together = { nav.navigate("together") },
     ) }
     val serverNav = remember(nav) {
         ServerNav(
@@ -246,6 +248,7 @@ fun AppRoot(vm: PlayerViewModel) {
             }
             is LinkTarget.Browse -> nav.openBrowse(link.browseId)
             is LinkTarget.SpotifyImport -> nav.navigate("import?link=${Uri.encode(link.text)}")
+            is LinkTarget.Together -> { playerOpen = false; nav.navigate("together?code=${link.code}") }
             is LinkTarget.PlaySearch -> {
                 vm.player.connected.first { it }
                 if (link.query.isBlank()) {
@@ -365,6 +368,12 @@ fun AppRoot(vm: PlayerViewModel) {
                         )
                     }
                     composable("radio") { com.opentune.ui.radio.RadioScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    composable(
+                        "together?code={code}",
+                        arguments = listOf(androidx.navigation.navArgument("code") { nullable = true; defaultValue = null }),
+                    ) { entry ->
+                        com.opentune.ui.together.TogetherScreen(content, entry.arguments?.getString("code"), onBack = { nav.popBackStack() })
+                    }
                     composable("server") { ServerScreen(content, actions, serverNav, onBack = { nav.popBackStack() }) }
                     composable("server/artists") { ServerArtistsScreen(content, serverNav, onBack = { nav.popBackStack() }) }
                     composable("server/album/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
@@ -457,7 +466,12 @@ fun AppRoot(vm: PlayerViewModel) {
                 var still by remember { mutableStateOf(true) }
                 LaunchedEffect(settled, still) { playerCovers = settled && still }
                 DisposableEffect(Unit) { onDispose { playerCovers = false } }
-                PlayerScreen(vm, onCollapse = { playerOpen = false }, onCovering = { still = it })
+                PlayerScreen(
+                    vm,
+                    onCollapse = { playerOpen = false },
+                    onCovering = { still = it },
+                    onTogether = { playerOpen = false; nav.navigate("together") },
+                )
             }
         }
     }

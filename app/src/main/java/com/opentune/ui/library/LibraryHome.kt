@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Settings
@@ -91,6 +92,7 @@ class LibraryNav(
     val browse: (String) -> Unit,
     val server: () -> Unit,
     val radio: () -> Unit,
+    val together: () -> Unit = {},
 )
 
 private const val YT_PLAYLISTS = "library:ytPlaylists"
@@ -165,6 +167,16 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         "Music server",
                         server?.let { it.url.substringAfter("://") } ?: "Subsonic, lossless",
                         nav.server,
+                        Modifier.weight(1f),
+                    )
+                }
+                val room by com.opentune.data.together.Together.room.collectAsState()
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Shortcut(
+                        Icons.Rounded.Groups,
+                        "Listen together",
+                        room?.let { if (it.hosting) "Your room · ${it.members.size} in" else "In ${it.hostName ?: "a friend"}'s room" } ?: "Rooms with friends, in sync",
+                        nav.together,
                         Modifier.weight(1f),
                     )
                 }
