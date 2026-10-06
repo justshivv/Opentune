@@ -81,4 +81,41 @@ class RadioTest {
         val s = Radio.parseNearby(nearby, 28.61, 77.21).first()
         assertEquals("Under 1 km · AAC+ · 32 kbps · Delhi", s.station.nearbyDetails(s.distanceKm))
     }
+
+    @Test fun frequenciesComeOutOfStationNames() {
+        assertEquals("93.5 FM", Radio.frequencyIn("Red FM 93.5"))
+        assertEquals("92.7 FM", Radio.frequencyIn("BIG 92.7 FM"))
+        assertEquals("91.9 FM", Radio.frequencyIn("Radio Indigo 91.9 FM in Panaji/Bangalore"))
+        assertEquals("95 FM", Radio.frequencyIn("95 FM Tadka"))
+        assertEquals("104.8 FM", Radio.frequencyIn("Ishq 104,8"))
+        assertEquals(null, Radio.frequencyIn("Radio 24"))
+        assertEquals(null, Radio.frequencyIn("Radio 88 Jazz"))
+        assertEquals(null, Radio.frequencyIn("Top 100 Hits 2024.1"))
+        assertEquals(null, Radio.frequencyIn("AIR Delhi FM Gold"))
+    }
+
+    @Test fun theFrequencyLeadsAStationsDetails() {
+        val s = Radio.Station(uuid = "u", name = "BIG 92.7 FM", streamUrl = "https://x/s", codec = "MP3", bitrate = 128, state = "Jammu and Kashmir")
+        assertEquals("92.7 FM · MP3 · 128 kbps · Jammu and Kashmir", s.nearbyDetails(null))
+        assertTrue(s.details.startsWith("92.7 FM · MP3"))
+    }
+
+    @Test fun onlyStreamAddressesCanBeAdded() {
+        assertTrue(Radio.isStreamUrl("https://stream.example.com/live.mp3"))
+        assertTrue(Radio.isStreamUrl(" http://1.2.3.4:8000/stream "))
+        assertFalse(Radio.isStreamUrl("redfm.in"))
+        assertFalse(Radio.isStreamUrl("https://"))
+        assertFalse(Radio.isStreamUrl("https://a b.com/x"))
+    }
+
+    @Test fun anAddedStationIsAFavouriteThatPlaysAndIsMarkedAsYours() {
+        val s = Radio.addCustom("  My FM 93.5 ", "https://stream.example.com/live.m3u8")
+        assertTrue(s.custom)
+        assertTrue(s.hls)
+        assertEquals("My FM 93.5", s.name)
+        assertTrue(Radio.isFavourite(s.uuid))
+        assertEquals("https://stream.example.com/live.m3u8", Radio.streamUrl(s.id))
+        assertTrue(s.details.startsWith("93.5 FM · Added by you"))
+        Radio.setFavourite(s, false)
+    }
 }

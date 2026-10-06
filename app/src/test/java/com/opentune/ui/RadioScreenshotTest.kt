@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.opentune.data.radio.Radio
 import com.opentune.ui.components.SectionHeader
-import com.opentune.ui.radio.NearbyPrompt
+import com.opentune.ui.radio.MissingStation
 import com.opentune.ui.radio.StationRow
 import java.io.File
 import org.junit.Rule
@@ -35,9 +35,14 @@ class RadioScreenshotTest {
             MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65))) {
                 androidx.compose.material3.Surface(color = Color(0xFF0B0B0E), contentColor = Color(0xFFECE6F0)) {
                     Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0E))) {
-                        NearbyPrompt(refused = false, countryName = "India", onAllow = {}, onOpenSettings = {}, onCountry = {})
                         SectionHeader("Live near you", subtitle = "${found.size} stations within 36 km")
-                        found.take(5).forEach { StationRow(it.station, false, {}, details = it.station.nearbyDetails(it.distanceKm)) }
+                        found.take(4).forEach { StationRow(it.station, false, {}, details = it.station.nearbyDetails(it.distanceKm)) }
+                        SectionHeader("More in New Delhi", subtitle = "Listed for your area, without a map location")
+                        listOf(
+                            Radio.Station("a", "Air FM Rainbow Delhi", "https://x/1", codec = "AAC", bitrate = 64, state = "Delhi"),
+                            Radio.Station("b", "Radio Indigo 91.9 FM", "https://x/2", codec = "MP3", bitrate = 128, state = "Karnataka"),
+                        ).forEach { StationRow(it, false, {}, details = it.nearbyDetails(null)) }
+                        MissingStation(onAdd = {}, onSuggest = {})
                     }
                 }
             }

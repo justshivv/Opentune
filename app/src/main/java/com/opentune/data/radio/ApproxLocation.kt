@@ -4,13 +4,16 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.os.CancellationSignal
 import kotlin.coroutines.resume
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -54,6 +57,18 @@ object ApproxLocation {
                 LocationManagerCompat.getCurrentLocation(lm, provider, signal, ContextCompat.getMainExecutor(context)) { cont.resume(it) }
             }.onFailure { if (cont.isActive) cont.resume(null) }
         }
+
+    /** The city, state and country around a position, from the phone's geocoder. */
+    data class Place(val city: String?, val state: String?, val countryCode: String?)
+
+    /** Names the area around a rounded position; null when the phone has no geocoder or it doesn't answer. */
+    suspend fun place(context: Context, latitude: Double, longitude: Double): Place? = withContext(Dispatchers.IO) {
+        if (!Geocoder.isPresent()) return@withContext null
+        runCatching {
+            @Suppress("DEPRECATION")
+            Geocoder(context, java.util.Locale.ENGLISH).getFromLocation(Radio.coarse(latitude), Radio.coarse(longitude), 1)?.firstOrNull()
+        }.getOrNull()?.let { Place(it.locality ?: it.subAdminArea, it.adminArea, it.countryCode) }
+    }
 
     private const val FUSED = "fused"
 }
