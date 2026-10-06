@@ -1,5 +1,9 @@
 package com.opentune
 
+import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
+import com.opentune.data.spotify.SpotifyAccount
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import android.content.Intent
 import android.os.Bundle
@@ -41,5 +45,20 @@ class MainActivity : ComponentActivity() {
         receive(intent)
     }
 
-    private fun receive(intent: Intent?) = Links.receive(intent)
+    /** Spotify's sign-in comes back here; anything else is a link to open. */
+    private fun receive(intent: Intent?) {
+        val data = intent?.data
+        if (SpotifyAccount.isRedirect(data)) {
+            lifecycleScope.launch {
+                val result = SpotifyAccount.finishSignIn(data!!)
+                Toast.makeText(
+                    this@MainActivity,
+                    result.fold({ "Signed in to Spotify as ${it.name}" }, { it.message ?: "Spotify sign-in failed" }),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            return
+        }
+        Links.receive(intent)
+    }
 }

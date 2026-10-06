@@ -126,16 +126,17 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   - a **YouTube Music or YouTube playlist link**, read in full however long
     it is, and saved as a playlist on the phone (or played straight away);
   - a **Spotify playlist, album or song link**, pasted or shared to
-    OpenTune from the Spotify app, with no sign-in. Each song is looked up
-    on YouTube Music and the closest catalogue match kept, with misses
-    listed. A song link plays straight away. Without signing in, Spotify
-    only shows a playlist's first 100 songs;
-  - a **CSV export**, for every song of a Spotify playlist or your Liked
-    Songs: export at [exportify.app](https://exportify.app) and pick the
-    file. TuneMyMusic, Soundiiz and other exports work too; columns are
-    found by their headers.
+    OpenTune from the Spotify app. Each song is looked up on YouTube Music
+    and the closest catalogue match kept, with misses listed. A song link
+    plays straight away;
+  - **Sign in with Spotify** (one tap, Spotify's own login page) to bring
+    whole playlists of any length, your own playlists and your Liked Songs.
+    Signed out, Spotify only shows a playlist's first 100 songs, and its
+    own editorial playlists stay at that even signed in, since Spotify
+    doesn't give them to apps.
 
-  Nothing streams from Spotify.
+  Nothing streams from Spotify. The sign-in is in builds made with a
+  Spotify Client ID; see [Spotify sign-in](#spotify-sign-in).
 - **New-release alerts.** Follow an artist from their page (no account
   needed) and a notification tells you when they put out an album or
   single. Checked twice a day.
@@ -246,6 +247,22 @@ secrets `OPENTUNE_KEYSTORE_BASE64`, `OPENTUNE_KEYSTORE_PASSWORD`,
 debug key otherwise. Set the secrets before the first release: the in-app
 updater can only install a release signed with the same key as the copy
 already on the phone, and a CI runner's debug key changes from run to run.
+
+### Spotify sign-in
+
+Sign-in goes through a Spotify app registered for your build. Once:
+
+1. At [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard),
+   create an app, tick **Web API**, and add the redirect URI
+   `opentune://spotify-auth`.
+2. Copy its **Client ID** into the `OPENTUNE_SPOTIFY_CLIENT_ID` repository
+   secret (for CI and releases) or `spotifyClientId=…` in
+   `~/.gradle/gradle.properties` (for local builds).
+
+The Client ID isn't a secret (sign-in uses PKCE, with no client secret),
+but it does tie sign-ins to that Spotify app. A new Spotify app starts in
+development mode, where only accounts added under its User Management
+(up to 25) can sign in.
 
 ## Project layout
 

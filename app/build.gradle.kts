@@ -18,6 +18,14 @@ android {
         versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // The Spotify app OpenTune signs in through (developer.spotify.com),
+        // from the OPENTUNE_SPOTIFY_CLIENT_ID environment variable or the
+        // spotifyClientId Gradle property. A client ID isn't a secret: sign-in
+        // uses PKCE, with no client secret anywhere. Blank hides the sign-in.
+        val spotifyClientId = (System.getenv("OPENTUNE_SPOTIFY_CLIENT_ID") ?: providers.gradleProperty("spotifyClientId").orNull)
+            ?.trim()?.takeIf { Regex("[0-9a-fA-F]{32}").matches(it) }.orEmpty()
+        buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"$spotifyClientId\"")
     }
 
     // A release key from the environment (CI secrets) when there is one;
