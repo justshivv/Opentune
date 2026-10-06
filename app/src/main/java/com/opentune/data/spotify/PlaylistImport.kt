@@ -51,35 +51,49 @@ object PlaylistImport {
     val running get() = job?.isActive == true
 
     /** Finds [tracks] on YouTube Music and saves them as a new phone playlist called [name]. */
-    fun start(name: String, tracks: suspend () -> List<Spotify.Track>) {
-        if (running) return
-        _progress.value = Progress(name, total = 0)
+    fun start(name: String, tracks: suspend () -> List<Spotify.Track>) = startAll(listOf(name to tracks))
+
+    /**
+     * Imports several playlists one after another, each its own phone
+     * playlist. Progress counts every song across all of them; [Progress.name]
+     * names the one being worked on.
+     */
+    fun startAll(playlists: List<Pair<String, suspend () -> List<Spotify.Track>>>) {
+        if (running || playlists.isEmpty()) return
+        val title = if (playlists.size == 1) playlists.first().first else "${playlists.size} playlists"
+        _progress.value = Progress(title, total = 0)
         job = scope.launch {
             try {
-                val list = tracks()
-                _progress.value = Progress(name, total = list.size)
+                val lists = playlists.map { (name, load) -> name to load() }
+                _progress.value = Progress(title, total = lists.sumOf { it.second.size })
                 val gate = Semaphore(PARALLEL)
-                val found = list.map { t ->
-                    async {
-                        val song = gate.withPermit { runCatching { match(t) }.getOrNull() }
-                        _progress.update { p ->
-                            p?.copy(
-                                done = p.done + 1,
-                                matched = p.matched + if (song != null) 1 else 0,
-                                missed = if (song == null) p.missed + "${t.artists.firstOrNull().orEmpty()} – ${t.title}" else p.missed,
-                            )
+                var lastId: String? = null
+                lists.forEachIndexed { i, (name, list) ->
+                    if (lists.size > 1) _progress.update { it?.copy(name = "$name (${i + 1} of ${lists.size})") }
+                    val found = list.map { t ->
+                        async {
+                            val song = gate.withPermit { runCatching { match(t) }.getOrNull() }
+                            _progress.update { p ->
+                                p?.copy(
+                                    done = p.done + 1,
+                                    matched = p.matched + if (song != null) 1 else 0,
+                                    missed = if (song == null) p.missed + "${t.artists.firstOrNull().orEmpty()} – ${t.title}" else p.missed,
+                                )
+                            }
+                            song
                         }
-                        song
-                    }
-                }.awaitAll().filterNotNull()
-                val id = LibraryStore.createPlaylist(name)
-                LibraryStore.addAllToPlaylist(id, found)
-                _progress.update { it?.copy(playlistId = id, finished = true) }
+                    }.awaitAll().filterNotNull()
+                    val id = LibraryStore.createPlaylist(name)
+                    LibraryStore.addAllToPlaylist(id, found)
+                    lastId = id
+                }
+                // With several, "Open" goes to Library's list rather than the last one.
+                _progress.update { it?.copy(name = title, playlistId = lastId.takeIf { lists.size == 1 }, finished = true) }
             } catch (e: CancellationException) {
                 _progress.update { it?.copy(finished = true, error = "Cancelled") }
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "import of $name failed", e)
+                Log.w(TAG, "import of $title failed", e)
                 _progress.update { it?.copy(finished = true, error = e.message ?: "Import failed") }
             }
         }
