@@ -265,6 +265,8 @@ data class InterfaceSettings(
     val playerStyle: PlayerStyle = PlayerStyle.CLASSIC,
     val dockMotion: DockMotion = DockMotion.FOLD,
     val controlStyle: ControlStyle = ControlStyle.CLASSIC,
+    /** The cover drifts and zooms slowly in the player while a song plays. */
+    val movingCover: Boolean = true,
     /** How strong taps and buzzes are, 0 (off) to 1. */
     val hapticStrength: Float = 0.6f,
     /** Look for a new release once a day when the app opens. */
@@ -322,6 +324,7 @@ enum class LyricsAnimation(val label: String, val summary: String) {
 @Serializable
 enum class LyricsSource(val label: String, val summary: String) {
     LRCLIB("LRCLIB", "Community lyrics, line by line and sometimes word by word"),
+    KUGOU("KuGou", "Line-synced lyrics from KuGou's large catalogue, strong on Asian music"),
     YOUTUBE_MUSIC("YouTube Music", "YouTube Music's own lyrics, as plain text"),
 }
 

@@ -1,5 +1,7 @@
 package com.opentune.ui.player
 
+import com.opentune.ui.components.livingArt
+
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
@@ -119,6 +121,9 @@ fun PlayerBackdrop(
     fullCover: Boolean = false,
     /** Where the player's cover area ends, from the top; the full cover runs a little past it. */
     fullCoverBottom: Dp? = null,
+    /** Let the full cover drift and zoom while playing (see livingArt). */
+    movingCover: Boolean = false,
+    playing: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(modifier.background(scheme.surface)) {
@@ -168,7 +173,12 @@ fun PlayerBackdrop(
                             )
                         },
                 ) {
-                    Artwork(url.artworkAt(com.opentune.data.model.PLAYER_ART_PX), Modifier.matchParentSize(), shape = RectangleShape)
+                    Artwork(
+                        url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
+                        Modifier.matchParentSize(),
+                        shape = RectangleShape,
+                        imageModifier = Modifier.livingArt(playing, movingCover),
+                    )
                     Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.2f to Color.Transparent)))
                 }
                 }
@@ -234,6 +244,7 @@ fun ArtworkPane(
     onSwipeNext: () -> Unit,
     onSwipePrevious: () -> Unit,
     modifier: Modifier = Modifier,
+    moving: Boolean = false,
 ) {
     val scale by animateFloatAsState(
         if (isPlaying) 1f else 0.86f,
@@ -287,6 +298,7 @@ fun ArtworkPane(
                         clip = true
                     },
                 shape = MaterialTheme.shapes.extraLarge,
+                imageModifier = Modifier.livingArt(isPlaying, moving),
             )
         }
     }

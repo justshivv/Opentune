@@ -239,7 +239,15 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 
 - **Liquid Glass.** The floating bars and player buttons frost and bend
   what's behind them, like Apple's material (Android 13 and newer; frosted
-  glass below that, solid with "Reduce dynamic blur").
+  glass below that, solid with "Reduce dynamic blur"). Album, playlist and
+  artist pages get a frosted top bar once the header scrolls away, with
+  the list showing faintly through it.
+- **Moving cover art.** In the player the cover drifts and zooms slowly
+  while the song plays and settles when you pause; it works on the
+  full-screen cover too. It's made from the cover itself, so it works for
+  every song. Off in Settings, or with reduced motion.
+- **Skeleton loading.** Pages show the shape of what's coming while they
+  load, with one soft band of light sweeping across every placeholder.
 - **A dock that gets out of the way.** Home, Explore, Podcasts and Library
   sit in a floating glass pill, each an icon over its name; a soft lens of
   the accent colour slides to the open one and its icon fills in. Search
@@ -267,8 +275,10 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   large back/play/forward controls, a shuffle/repeat/autoplay pill, and the
   name of the output device. Drag it down and it shrinks into a card
   before it closes.
-- **Synced lyrics** from [LRCLIB](https://lrclib.net), lit word by word,
-  and YouTube Music's lyrics, in an order you set, with eight animation
+- **Synced lyrics** from [LRCLIB](https://lrclib.net) (word by word where
+  it has the timing), KuGou (line-synced, strong on Asian music) and
+  YouTube Music (unsynced), in an order you set, each credited under the
+  lyrics, with eight animation
   styles (Fluid, Karaoke, Slide, Focus zoom, Minimal, and three where the
   words themselves move: Bounce, Pop and Reveal), a per-song timing
   offset, adjustable text size, and lyrics saved with downloads so they

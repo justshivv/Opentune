@@ -327,6 +327,8 @@ fun PlayerLayout(
                     animate = !state.ui.reduceAnimation,
                     fullCover = fullCover,
                     fullCoverBottom = with(LocalDensity.current) { coverBottomPx.takeIf { it > 0f }?.toDp() },
+                    movingCover = state.ui.movingCover && !state.ui.reduceAnimation,
+                    playing = state.isPlaying,
                 )
             }
 
@@ -425,7 +427,10 @@ fun PlayerLayout(
                                     style == PlayerStyle.POLAROID ->
                                         PolaroidPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
                                     else ->
-                                        ArtworkPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous)
+                                        ArtworkPane(
+                                            current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous,
+                                            moving = state.ui.movingCover && !state.ui.reduceAnimation,
+                                        )
                                 }
                             }
                             Spacer(Modifier.height(16.dp))

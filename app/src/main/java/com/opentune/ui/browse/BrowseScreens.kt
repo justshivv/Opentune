@@ -1,5 +1,7 @@
 package com.opentune.ui.browse
 
+import com.opentune.ui.components.glass
+
 import androidx.compose.material.icons.filled.NotificationAdd
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.runtime.getValue
@@ -88,13 +90,30 @@ class SongActions(
 @Composable
 private fun CollapsingBar(title: String, listState: LazyListState, onBack: () -> Unit) {
     val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
-    TopAppBar(
-        title = { if (collapsed) Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        navigationIcon = { GlassBackButton(onBack, Modifier.padding(start = 8.dp).size(48.dp)) },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = if (collapsed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
-        ),
-    )
+    // Frosted, Telegram style: once the header scrolls away the bar fades in
+    // as translucent glass, so the list stays faintly visible under it.
+    val frost by androidx.compose.animation.core.animateFloatAsState(if (collapsed) 1f else 0f, androidx.compose.animation.core.tween(260), label = "frost")
+    Box {
+        if (frost > 0f) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer { alpha = frost }
+                    .glass(androidx.compose.ui.graphics.RectangleShape, MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+            )
+        }
+        TopAppBar(
+            title = {
+                androidx.compose.animation.AnimatedVisibility(
+                    collapsed,
+                    enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { it / 2 },
+                    exit = androidx.compose.animation.fadeOut(),
+                ) { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            },
+            navigationIcon = { GlassBackButton(onBack, Modifier.padding(start = 8.dp).size(48.dp)) },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+        )
+    }
 }
 
 @Composable

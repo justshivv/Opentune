@@ -25,7 +25,8 @@ import okhttp3.Request
 
 /**
  * Lyrics from LRCLIB (lrclib.net): free, keyless, and mostly line-synced, with
- * word sync for some tracks.
+ * word sync for some tracks; from KuGou (see [KuGou]), line-synced; and from
+ * YouTube Music, unsynced.
  *
  * Sources are tried in the order set in Settings › Lyrics sources. Within
  * LRCLIB: an exact match on title, artist and duration; then a search on
@@ -73,6 +74,9 @@ object LyricsRepository {
                 val found = when (entry.source) {
                     LyricsSource.LRCLIB -> runCatching { lookup(title, artist, durationMs) }
                         .onFailure { Log.w(TAG, "LRCLIB lookup failed for $videoId", it) }
+                        .getOrNull()
+                    LyricsSource.KUGOU -> runCatching { KuGou.lookup(title, artist, durationMs) }
+                        .onFailure { Log.w(TAG, "KuGou lookup failed for $videoId", it) }
                         .getOrNull()
                     LyricsSource.YOUTUBE_MUSIC -> if (!isYouTubeId(videoId)) null else runCatching { youTubeMusic(videoId) }
                         .onFailure { Log.w(TAG, "YouTube Music lyrics failed for $videoId", it) }

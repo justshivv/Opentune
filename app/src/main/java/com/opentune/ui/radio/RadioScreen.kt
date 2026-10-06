@@ -278,12 +278,15 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                         },
                     )
                 }
-                Near.Locating -> item {
-                    Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.size(12.dp))
-                        Text("Finding stations near you…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Near.Locating -> {
+                    item {
+                        Text(
+                            "Finding stations near you…",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        )
                     }
+                    items(6) { com.opentune.ui.components.SongRowPlaceholder() }
                 }
                 Near.NoFix -> item {
                     MessageState(
@@ -328,9 +331,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
             }
         } else {
             when (val l = load) {
-                Load.Loading -> item {
-                    Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
-                }
+                Load.Loading -> items(8) { com.opentune.ui.components.SongRowPlaceholder() }
                 is Load.Failed -> item { ErrorState(l.message, onRetry = { attempt++ }) }
                 is Load.Done -> {
                     if (l.stations.isEmpty()) item { MessageState(Icons.Rounded.Radio, "No stations found") }

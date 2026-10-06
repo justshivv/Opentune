@@ -607,6 +607,9 @@ private fun settingsSections(
                         PillSegmented(PlayerBackground.entries, theme.playerBackground, { it.label }, { b -> AppSettings.updateTheme { it.copy(playerBackground = b) } })
                     })
                 },
+                Entry("Moving cover art", "motion artwork canvas animated cover drift zoom") {
+                    ToggleRow("Moving cover art", ui.movingCover, { v -> AppSettings.updateUi { it.copy(movingCover = v) } }, summary = "The cover drifts and zooms slowly in the player while a song plays", icon = Icons.Rounded.Animation)
+                },
                 Entry("Full-screen cover art", "artwork edge") {
                     ToggleRow("Full-screen cover art", ui.fullScreenCover, { v -> AppSettings.updateUi { it.copy(fullScreenCover = v) } }, summary = "Runs the cover to the edges of the player instead of a square sleeve", icon = Icons.Rounded.Fullscreen)
                 },

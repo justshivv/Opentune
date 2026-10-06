@@ -87,6 +87,12 @@ import com.opentune.data.model.Song
 import com.opentune.data.download.DownloadState
 import com.opentune.data.download.Downloads
 import com.opentune.data.model.artworkAt
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.runtime.mutableFloatStateOf
 
 /**
  * Artwork with a tinted placeholder icon while it loads or when there is none.
@@ -101,6 +107,8 @@ fun Artwork(
     modifier: Modifier = Modifier,
     shape: Shape = MaterialTheme.shapes.small,
     placeholder: ImageVector = Icons.Filled.MusicNote,
+    /** Applied to the image inside the clipped frame, e.g. to move it within it. */
+    imageModifier: Modifier = Modifier,
 ) {
     var loaded by remember(url) { mutableStateOf(false) }
     Box(
@@ -120,7 +128,7 @@ fun Artwork(
                 model = url,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
+                modifier = Modifier.matchParentSize().then(imageModifier),
                 onState = { loaded = it is AsyncImagePainter.State.Success },
             )
         }
@@ -395,22 +403,46 @@ private fun Bars(color: Color, modifier: Modifier, height: (Int) -> Float) {
     }
 }
 
-/** A pulsing gray block standing in for content that is loading. */
+/**
+ * A skeleton block standing in for content that is loading: a soft band of
+ * light sweeps across it. The band is placed by the block's position on
+ * screen and one clock, so every skeleton on a page shines as one sheet
+ * rather than each on its own. Still when animations are reduced.
+ */
 @Composable
 fun Placeholder(modifier: Modifier = Modifier, shape: Shape = MaterialTheme.shapes.small) {
-    val transition = rememberInfiniteTransition(label = "placeholder")
-    val alpha by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
-        label = "alpha",
-    )
+    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    val base = MaterialTheme.colorScheme.surfaceContainerHighest
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val sheen = Color.White.copy(alpha = if (dark) 0.07f else 0.55f)
+    val screenPx = with(LocalDensity.current) { androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    var left by remember { mutableFloatStateOf(0f) }
+    // Only here to redraw every frame; the band's place comes from the shared clock.
+    val tick = if (ui.reduceAnimation) null else rememberInfiniteTransition(label = "skeleton")
+        .animateFloat(0f, 1f, infiniteRepeatable(tween(SHIMMER_MS.toInt(), easing = LinearEasing)), label = "tick")
     Box(
         modifier
+            .onGloballyPositioned { left = it.positionInWindow().x }
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)),
+            .drawBehind {
+                drawRect(base)
+                if (tick == null) return@drawBehind
+                tick.value
+                val band = 220.dp.toPx()
+                val phase = (android.os.SystemClock.uptimeMillis() % SHIMMER_MS) / SHIMMER_MS.toFloat()
+                val x = -band + phase * (screenPx + band * 2) - left
+                drawRect(
+                    Brush.linearGradient(
+                        0f to Color.Transparent, 0.5f to sheen, 1f to Color.Transparent,
+                        start = androidx.compose.ui.geometry.Offset(x - band / 2, 0f),
+                        end = androidx.compose.ui.geometry.Offset(x + band / 2, size.height * 0.35f),
+                    ),
+                )
+            },
     )
 }
+
+private const val SHIMMER_MS = 1_500L
 
 @Composable
 fun ShelfPlaceholder() {
