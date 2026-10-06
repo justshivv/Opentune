@@ -66,19 +66,25 @@ class RoomSessionTest {
         override val currentIndex = _index.asStateFlow()
         override val playWhenReady = _pwr.asStateFlow()
         override val isBuffering = MutableStateFlow(false).asStateFlow()
+        private val _seeks = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+        override val seeks: SharedFlow<Unit> = _seeks
         private var base = 0L
         private var baseAt = 0L
         var skips = 0
+        var seekCount = 0
+        var rate = 1f
+            private set
 
-        override fun currentPositionMs() = if (_pwr.value) base + (System.currentTimeMillis() - baseAt) else base
+        override fun currentPositionMs() = if (_pwr.value) base + ((System.currentTimeMillis() - baseAt) * rate).toLong() else base
         private fun rebase(pos: Long) { base = pos; baseAt = System.currentTimeMillis() }
+        override fun setRate(rate: Float) { rebase(currentPositionMs()); this.rate = rate }
         private fun refresh() {
             _song.value = _queue.value.getOrNull(_index.value)
             _upNext.value = ((_index.value + 1) until _queue.value.size).toList()
         }
         override fun play() { rebase(currentPositionMs()); _pwr.value = true }
         override fun pause() { rebase(currentPositionMs()); _pwr.value = false }
-        override fun seekTo(positionMs: Long) = rebase(positionMs)
+        override fun seekTo(positionMs: Long) { seekCount++; rebase(positionMs); _seeks.tryEmit(Unit) }
         override fun seekToItem(index: Int, positionMs: Long) { _index.value = index; rebase(positionMs); refresh() }
         override fun playAll(songs: List<Song>, startIndex: Int, shuffle: Boolean, source: String?, startPositionMs: Long) {
             _queue.value = songs; _index.value = startIndex; rebase(startPositionMs); _pwr.value = true; refresh()
@@ -172,6 +178,56 @@ class RoomSessionTest {
         onThread { host.stop(saying = true) }
         waitFor("guest sees the end") { guestState.value!!.phase == Together.Phase.Ended }
         assertTrue(guestState.value!!.endedReason!!.contains("Asha"))
+    }
+
+    /** Two phones in one room, the guest already in step. */
+    private suspend fun joined(): Triple<FakePlayer, FakePlayer, RoomSession> {
+        val hub = Hub()
+        val code = RoomCode.generate()
+        val hostPlayer = FakePlayer()
+        val guestPlayer = FakePlayer()
+        lateinit var host: RoomSession
+        lateinit var guest: RoomSession
+        onThread {
+            hostPlayer.playAll(listOf(a, b, c), 0, false, null, 30_000)
+            host = RoomSession(code, "Asha", true, hostPlayer, hub.transport(), MutableStateFlow(Together.Room(code, true, "Asha")), {}, scope).also { it.start() }
+            guest = RoomSession(code, "Ravi", false, guestPlayer, hub.transport(), MutableStateFlow(Together.Room(code, false, "Ravi")), {}, scope).also { it.start() }
+        }
+        waitFor("in step") {
+            guestPlayer.currentSong.value?.videoId == a.videoId && abs(guestPlayer.currentPositionMs() - hostPlayer.currentPositionMs()) < IN_STEP_MS * 2
+        }
+        onThread { host.setOpen(true) }
+        return Triple(hostPlayer, guestPlayer, guest)
+    }
+
+    @Test fun aSmallDriftClosesWithoutASeek() = runBlocking {
+        val (hostPlayer, guestPlayer, _) = joined()
+        // Knock the guest 250 ms behind, as a slow phone or a hiccup would.
+        val seeksBefore = onThread {
+            guestPlayer.seekTo(guestPlayer.currentPositionMs() - 250)
+            guestPlayer.seekCount
+        }
+        waitFor("drift closed", 10_000) { abs(guestPlayer.currentPositionMs() - hostPlayer.currentPositionMs()) <= IN_STEP_MS }
+        assertEquals("closed by speed, not by seeking", seeksBefore, onThread { guestPlayer.seekCount })
+        waitFor("back to normal speed") { guestPlayer.rate == 1f }
+    }
+
+    @Test fun aGuestsButtonsActAtOnce() = runBlocking {
+        val (hostPlayer, guestPlayer, guest) = joined()
+        delay(500) // the guest learns it may control
+        onThread {
+            assertTrue(guest.intercept(Together.Control.PlayPause))
+            // Paused here straight away, before any message has gone anywhere.
+            assertFalse(guestPlayer.playWhenReady.value)
+        }
+        waitFor("host paused too") { !hostPlayer.playWhenReady.value }
+        delay(600)
+        assertFalse("an older state mustn't start it again", onThread { guestPlayer.playWhenReady.value })
+        onThread {
+            guest.intercept(Together.Control.Next)
+            assertEquals(b.videoId, guestPlayer.currentSong.value?.videoId)
+        }
+        waitFor("host on song B") { hostPlayer.currentSong.value?.videoId == b.videoId }
     }
 
     @Test fun aGuestLeavingIsNoticed() = runBlocking {

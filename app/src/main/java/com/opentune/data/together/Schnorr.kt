@@ -7,8 +7,11 @@ import java.security.SecureRandom
 /**
  * BIP-340 Schnorr signatures over secp256k1, which is what Nostr relays
  * check every event against. Written out here rather than pulled in as a
- * native library: rooms sign a handful of small events a minute, so plain
- * [BigInteger] arithmetic is fast enough and adds nothing to the APK.
+ * native library, in plain [BigInteger] arithmetic, so it adds nothing to
+ * the APK. Signing only ever multiplies the fixed point G, so that is done
+ * from a table of G's multiples built once ([G_TABLE]), and the session's
+ * public key is kept: a signature costs about 64 point additions instead
+ * of three full multiplications, which keeps room messages quick.
  */
 object Schnorr {
     private val P = BigInteger("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 16)
@@ -43,11 +46,13 @@ object Schnorr {
     private fun add(a: Jac, b: Jac): Jac {
         if (a.infinite) return b
         if (b.infinite) return a
+        // b with z = 1 (the table's points) skips four multiplications.
+        val bAffine = b.z == BigInteger.ONE
         val z1z1 = a.z.multiply(a.z).mod(P)
-        val z2z2 = b.z.multiply(b.z).mod(P)
-        val u1 = a.x.multiply(z2z2).mod(P)
+        val z2z2 = if (bAffine) BigInteger.ONE else b.z.multiply(b.z).mod(P)
+        val u1 = if (bAffine) a.x else a.x.multiply(z2z2).mod(P)
         val u2 = b.x.multiply(z1z1).mod(P)
-        val s1 = a.y.multiply(b.z).multiply(z2z2).mod(P)
+        val s1 = if (bAffine) a.y else a.y.multiply(b.z).multiply(z2z2).mod(P)
         val s2 = b.y.multiply(a.z).multiply(z1z1).mod(P)
         if (u1 == u2) return if (s1 == s2) double(a) else INF
         val h = u2.subtract(u1).mod(P)
@@ -69,6 +74,45 @@ object Schnorr {
             q = double(q)
         }
         return r
+    }
+
+    /** j·16^i·G for i in 0..63 and j in 1..15, with z = 1; see [mulG]. */
+    private val G_TABLE: Array<Array<Jac>> by lazy {
+        var base = G
+        Array(64) {
+            val row = arrayOfNulls<Jac>(15)
+            var acc = base
+            for (j in 0 until 15) {
+                row[j] = acc
+                acc = add(acc, base)
+            }
+            base = acc // 16·base
+            Array(15) { j -> affine(row[j]!!)!!.let { a -> Jac(a.x, a.y, BigInteger.ONE) } }
+        }
+    }
+
+    /** k·G from the table: one addition per non-zero hex digit of k, no doublings. */
+    private fun mulG(k: BigInteger): Jac {
+        var r = INF
+        for (i in 0 until 64) {
+            var nibble = 0
+            for (b in 0 until 4) if (k.testBit(4 * i + b)) nibble = nibble or (1 shl b)
+            if (nibble != 0) r = add(r, G_TABLE[i][nibble - 1])
+        }
+        return r
+    }
+
+    /** Builds the table ahead of time, so a room's first message isn't the slow one. */
+    fun warmUp() {
+        G_TABLE.size
+    }
+
+    // The last key's public point; a session signs everything with one key.
+    @Volatile private var lastKey: Pair<BigInteger, Affine>? = null
+
+    private fun publicPoint(d: BigInteger): Affine {
+        lastKey?.let { (k, pub) -> if (k == d) return pub }
+        return affine(mulG(d))!!.also { lastKey = d to it }
     }
 
     private fun affine(p: Jac): Affine? {
@@ -115,20 +159,20 @@ object Schnorr {
     }
 
     /** The x-only public key for [privateKey]. */
-    fun publicKey(privateKey: ByteArray): ByteArray = bytes32(affine(mul(G, int(privateKey)))!!.x)
+    fun publicKey(privateKey: ByteArray): ByteArray = bytes32(publicPoint(int(privateKey)).x)
 
     /** Signs the 32-byte [message]; [aux] is fresh randomness, fixed only in tests. */
     fun sign(message: ByteArray, privateKey: ByteArray, aux: ByteArray = ByteArray(32).also(random::nextBytes)): ByteArray {
         require(message.size == 32 && aux.size == 32)
         val d0 = int(privateKey)
         require(d0.signum() > 0 && d0 < N) { "bad key" }
-        val pub = affine(mul(G, d0))!!
+        val pub = publicPoint(d0)
         val d = if (pub.y.testBit(0)) N.subtract(d0) else d0
         val px = bytes32(pub.x)
         val t = bytes32(d.xor(int(taggedHash("BIP0340/aux", aux))))
         val k0 = int(taggedHash("BIP0340/nonce", t, px, message)).mod(N)
         require(k0.signum() != 0)
-        val r = affine(mul(G, k0))!!
+        val r = affine(mulG(k0))!!
         val k = if (r.y.testBit(0)) N.subtract(k0) else k0
         val rx = bytes32(r.x)
         val e = int(taggedHash("BIP0340/challenge", rx, px, message)).mod(N)
@@ -142,7 +186,7 @@ object Schnorr {
         val s = int(signature.copyOfRange(32, 64))
         if (r >= P || s >= N) return false
         val e = int(taggedHash("BIP0340/challenge", signature.copyOfRange(0, 32), publicKey, message)).mod(N)
-        val sum = affine(add(mul(G, s), mul(Jac(pt.x, pt.y, BigInteger.ONE), N.subtract(e)))) ?: return false
+        val sum = affine(add(mulG(s), mul(Jac(pt.x, pt.y, BigInteger.ONE), N.subtract(e)))) ?: return false
         return !sum.y.testBit(0) && sum.x == r
     }
 }

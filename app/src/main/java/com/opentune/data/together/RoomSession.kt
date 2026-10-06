@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** What a room needs from the player. */
 internal interface RoomPlayer {
@@ -33,7 +34,11 @@ internal interface RoomPlayer {
     val currentIndex: StateFlow<Int>
     val playWhenReady: StateFlow<Boolean>
     val isBuffering: StateFlow<Boolean>
+    /** Fires when the position is moved by hand. */
+    val seeks: SharedFlow<Unit>
     fun currentPositionMs(): Long
+    /** Plays a touch faster or slower than normal; 1 is normal. */
+    fun setRate(rate: Float)
     fun play()
     fun pause()
     fun seekTo(positionMs: Long)
@@ -54,7 +59,9 @@ internal class ConnectionPlayer(private val c: PlayerConnection) : RoomPlayer {
     override val currentIndex get() = c.currentIndex
     override val playWhenReady get() = c.playWhenReady
     override val isBuffering get() = c.isBuffering
+    override val seeks get() = c.seeks
     override fun currentPositionMs() = c.currentPositionMs()
+    override fun setRate(rate: Float) = c.setSyncRate(rate)
     override fun play() = c.play()
     override fun pause() = c.pause()
     override fun seekTo(positionMs: Long) = c.seekTo(positionMs)
@@ -76,15 +83,28 @@ internal interface RoomTransport {
     fun close()
 }
 
-private const val HEARTBEAT_MS = 4_000L
+private const val HEARTBEAT_MS = 2_000L
 private const val HERE_MS = 20_000L
 private const val MEMBER_TIMEOUT_MS = 50_000L
 private const val HOST_TIMEOUT_MS = 25_000L
 private const val MAX_CHAT = 100
 private const val TAG = "Together"
-/** How far a guest may drift before it seeks back into step. */
-internal const val DRIFT_MS = 1_200L
-
+/**
+ * How far a guest may drift before it seeks back into step. Inside this it
+ * plays up to [MAX_NUDGE] faster or slower until it's within [IN_STEP_MS],
+ * which can't be heard and doesn't stop the music the way a seek does.
+ */
+internal const val DRIFT_MS = 400L
+internal const val IN_STEP_MS = 25L
+private const val MAX_NUDGE = 0.05f
+/** A drift this size gets the whole [MAX_NUDGE]; smaller ones a share of it. */
+private const val NUDGE_FULL_MS = 120f
+/** How often a guest checks itself against the host. */
+private const val SYNC_TICK_MS = 250L
+/** After a seek or a new song, how long to let the player settle before checking again. */
+private const val SETTLE_MS = 500L
+/** After a guest's own button, how long to wait for the host to catch up before following it again. */
+private const val LOCAL_MS = 1_500L
 private class Member0(val name: String, var lastSeen: Long)
 
 /**
@@ -122,14 +142,33 @@ internal class RoomSession(
     private var bestRtt = Long.MAX_VALUE
     private var settleUntil = 0L
     private var holding = false
+    private var rate = 1f
+    // How far ahead of the target to seek, to cover the time the seek itself
+    // takes; learned from how far off each seek lands.
+    private var seekLead = 150L
+    private var measureSeek = false
+    // A guest's own button, done here at once: until the host's state agrees
+    // with it (or [LOCAL_MS] passes), states from before it aren't followed.
+    private var localUntil = 0L
 
     fun start() {
         pool.start()
         jobs += main.launch { pool.connected.collect { n -> update { it.copy(relays = n, phase = if (it.phase == Phase.Connecting && n > 0) (if (hosting) Phase.Live else Phase.FindingHost) else it.phase) } } }
-        jobs += main.launch { pool.events.collect(::receive) }
+        // Opening a message is AES and JSON (and, the first time, the room
+        // key's derivation): done off the main thread, handled on it in order.
+        jobs += main.launch {
+            pool.events.collect { event ->
+                if (event.pubkey == me) return@collect
+                val msg = withContext(Dispatchers.Default) { code.open(event.content)?.let(Msg::decode) } ?: return@collect
+                if (hosting) hostHandle(event.pubkey, msg) else guestHandle(event.pubkey, msg)
+            }
+        }
         // Signing is BigInteger work; keep it off the main thread, in order.
         // Not in [jobs]: it has to outlive stop() long enough to send the goodbye.
         CoroutineScope(Dispatchers.Default).launch {
+            // The signing table and the room key, ready before the first message.
+            Schnorr.warmUp()
+            code.seal("")
             for (m in outbox) {
                 val content = code.seal(Msg.encode(m))
                 val event = NostrEvent.signed(key, Together.KIND, listOf(listOf("t", code.tag)), content)
@@ -141,6 +180,7 @@ internal class RoomSession(
 
     fun stop(saying: Boolean) {
         if (saying) send(if (hosting) Msg.End else Msg.Bye)
+        setRate(1f)
         main.launch {
             delay(600) // let the goodbye go out
             outbox.close()
@@ -159,10 +199,11 @@ internal class RoomSession(
 
     private fun addChat(line: ChatLine) = update { it.copy(chat = (it.chat + line).takeLast(MAX_CHAT)) }
 
-    private fun receive(event: NostrEvent) {
-        if (event.pubkey == me) return
-        val msg = code.open(event.content)?.let(Msg::decode) ?: return
-        if (hosting) hostHandle(event.pubkey, msg) else guestHandle(event.pubkey, msg)
+    private fun setRate(r: Float) {
+        // Changes under half a percent aren't worth a call across to the player service.
+        if (kotlin.math.abs(r - rate) < 0.005f && !(r == 1f && rate != 1f)) return
+        rate = r
+        player.setRate(r)
     }
 
     // ---------------- host ----------------
@@ -179,13 +220,15 @@ internal class RoomSession(
                 p.queue.map { q -> q.map { it.videoId } },
                 p.currentIndex,
             ) { a, b, c, d, e -> listOf(a, b, c, d, e) }.collectLatest {
-                delay(150) // one message for a burst of changes
+                delay(40) // one message for a burst of changes
                 sendState()
             }
         }
+        // A seek goes out at once rather than waiting for the check below.
+        jobs += main.launch { p.seeks.collect { sendState() } }
         jobs += main.launch {
             while (isActive) {
-                delay(1_000)
+                delay(500)
                 val now = System.currentTimeMillis()
                 val sent = lastSent
                 val pos = p.currentPositionMs()
@@ -295,19 +338,26 @@ internal class RoomSession(
             }
         }
         jobs += main.launch {
-            while (isActive && hostKey == null) delay(250)
-            while (isActive) {
+            while (isActive && hostKey == null) delay(100)
+            // A quick burst first, keeping the fastest round trip, so the
+            // clock gap is known well within a second or two of joining.
+            repeat(6) {
                 send(Msg.Ping(System.currentTimeMillis()))
-                delay(if (bestRtt == Long.MAX_VALUE) 3_000 else 30_000)
+                delay(300)
+            }
+            while (isActive) {
+                delay(15_000)
+                send(Msg.Ping(System.currentTimeMillis()))
             }
         }
         jobs += main.launch {
             while (isActive) {
-                delay(1_000)
+                delay(SYNC_TICK_MS)
                 val r = state.value ?: continue
                 if (r.phase == Phase.Live && System.currentTimeMillis() - lastAt > HOST_TIMEOUT_MS) {
                     update { it.copy(phase = Phase.LostHost) }
                     notice("Lost touch with the host")
+                    setRate(1f)
                 }
                 if (r.phase == Phase.Live) last?.let { follow(it, fresh = false) }
             }
@@ -354,44 +404,82 @@ internal class RoomSession(
         }
     }
 
-    /** Brings this phone in line with the host's [s]. */
+    /**
+     * Brings this phone in line with the host's [s]: the same song, playing
+     * or not, and the same spot. Run on each state and every [SYNC_TICK_MS].
+     * A big gap is a seek, aimed [seekLead] ahead so it lands in step; a
+     * small one is closed by playing a touch faster or slower.
+     */
     private fun follow(s: Msg.State, fresh: Boolean) {
         val p = player
         if (!p.connected.value) return
+        val now = System.currentTimeMillis()
+        if (now < localUntil) {
+            // Our own button got here first; wait for the host to agree.
+            if (agrees(s, now)) localUntil = 0 else return
+        }
         val track = s.track
         if (track == null) {
+            setRate(1f)
             if (s.private && p.playWhenReady.value && !holding) p.pause()
             return
         }
-        val now = System.currentTimeMillis()
         val target = targetPosition(s, now, offset)
         val current = p.currentSong.value?.videoId
         if (current != track.id) {
             if (!fresh && now < settleUntil) return
             track.station?.let(Radio::played)
             s.next.forEach { t -> t.station?.let(Radio::played) }
+            setRate(1f)
+            val start = if (s.playing) target + seekLead else target
             val index = p.queue.value.indexOfFirst { it.videoId == track.id }
-            if (index >= 0) p.seekToItem(index, target)
-            else p.playAll(listOf(track.toSong()) + s.next.map { it.toSong() }, 0, false, "Listening together", target)
-            settleUntil = now + 4_000
+            if (index >= 0) p.seekToItem(index, start)
+            else p.playAll(listOf(track.toSong()) + s.next.map { it.toSong() }, 0, false, "Listening together", start)
+            settleUntil = now + SETTLE_MS
+            measureSeek = s.playing
             if (!s.playing || holding) p.pause() else p.play()
             return
         }
         // Same song: keep what comes next the same, so the next song starts in step too.
         val after = p.upNext.value.mapNotNull { p.queue.value.getOrNull(it)?.videoId }
         if (fresh && after.take(s.next.size) != s.next.map { it.id }) p.replaceUpcoming(s.next.map { it.toSong() })
-        if (holding) return
+        if (holding) {
+            setRate(1f)
+            return
+        }
         if (s.playing) {
             if (!p.playWhenReady.value) p.play()
             if (p.isBuffering.value || now < settleUntil) return
-            if (kotlin.math.abs(p.currentPositionMs() - target) > DRIFT_MS) {
-                p.seekTo(target)
-                settleUntil = now + 2_500
+            val drift = p.currentPositionMs() - target
+            if (measureSeek) {
+                // Where the last seek landed says how much lead the next one needs.
+                measureSeek = false
+                seekLead = (seekLead - drift).coerceIn(0L, 3_000L)
+            }
+            when {
+                kotlin.math.abs(drift) > DRIFT_MS -> {
+                    setRate(1f)
+                    p.seekTo(target + seekLead)
+                    settleUntil = now + SETTLE_MS
+                    measureSeek = true
+                }
+                kotlin.math.abs(drift) > IN_STEP_MS -> setRate(1f - MAX_NUDGE * (drift / NUDGE_FULL_MS).coerceIn(-1f, 1f))
+                else -> setRate(1f)
             }
         } else {
+            setRate(1f)
             if (p.playWhenReady.value) p.pause()
-            if (kotlin.math.abs(p.currentPositionMs() - s.pos) > DRIFT_MS) p.seekTo(s.pos)
+            // Paused, a seek can't be heard, so line up exactly.
+            if (kotlin.math.abs(p.currentPositionMs() - s.pos) > 100) p.seekTo(s.pos)
         }
+    }
+
+    /** Whether the host's [s] has caught up with what this phone is doing after a button press here. */
+    private fun agrees(s: Msg.State, now: Long): Boolean {
+        val p = player
+        return s.track?.id == p.currentSong.value?.videoId &&
+            s.playing == p.playWhenReady.value &&
+            kotlin.math.abs(targetPosition(s, now, offset) - p.currentPositionMs()) < 1_500
     }
 
     fun intercept(control: Control): Boolean {
@@ -399,15 +487,18 @@ internal class RoomSession(
         val r = state.value ?: return false
         if (r.phase != Phase.Live) return false
         if (r.open) {
-            val playing = last?.playing == true
-            send(
-                when (control) {
-                    Control.PlayPause -> Msg.Ask(if (playing) "pause" else "play")
-                    Control.Next -> Msg.Ask("next")
-                    Control.Previous -> Msg.Ask("prev")
-                    is Control.Seek -> Msg.Ask("seek", control.positionMs)
-                },
-            )
+            // Done here at once, so the button answers like it does alone,
+            // and asked of the host, who does it for everyone.
+            val p = player
+            val ask = when (control) {
+                Control.PlayPause -> if (p.playWhenReady.value) { p.pause(); Msg.Ask("pause") } else { p.play(); Msg.Ask("play") }
+                Control.Next -> { p.skipNext(); Msg.Ask("next") }
+                Control.Previous -> { p.skipPrevious(); Msg.Ask("prev") }
+                is Control.Seek -> { p.seekTo(control.positionMs); Msg.Ask("seek", control.positionMs) }
+            }
+            setRate(1f)
+            localUntil = System.currentTimeMillis() + LOCAL_MS
+            send(ask)
             return true
         }
         when (control) {

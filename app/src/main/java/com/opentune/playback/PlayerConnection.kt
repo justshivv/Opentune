@@ -4,12 +4,15 @@ import android.content.ComponentName
 import android.content.Context
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.opentune.data.model.Song
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.guava.await
 
@@ -76,9 +79,17 @@ class PlayerConnection(private val context: Context) {
     private val _audioFormat = MutableStateFlow<AudioFormatInfo?>(null)
     val audioFormat = _audioFormat.asStateFlow()
 
+    /** Fires each time the position is moved by hand, here or from the notification. */
+    private val _seeks = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    val seeks = _seeks.asSharedFlow()
+
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             refresh(player)
+        }
+
+        override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) _seeks.tryEmit(Unit)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -266,6 +277,18 @@ class PlayerConnection(private val context: Context) {
     }
 
     fun currentPositionMs(): Long = controller?.currentPosition ?: 0L
+
+    /**
+     * Plays at [rate] times the Remix speed, pitch unchanged. Listening
+     * together nudges this a few percent either way to close a small gap
+     * with the host without the jump of a seek; 1 puts it back.
+     */
+    fun setSyncRate(rate: Float) {
+        val c = controller ?: return
+        val sound = com.opentune.data.settings.AppSettings.sound.value
+        val speed = sound.speed * rate
+        if (kotlin.math.abs(c.playbackParameters.speed - speed) > 0.001f) c.playbackParameters = PlaybackParameters(speed, sound.pitch)
+    }
 
     fun bufferedPositionMs(): Long = controller?.bufferedPosition ?: 0L
 }
