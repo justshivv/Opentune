@@ -45,12 +45,12 @@ class SpotifyTest {
         val cover = Song("cover000001", "Blinding Lights", "Some Cover Band", null, durationText = "3:31")
         val real = Song("real0000001", "Blinding Lights", "The Weeknd", null, durationText = "3:20")
         val other = Song("other000001", "Save Your Tears", "The Weeknd", null, durationText = "3:35")
-        assertEquals(real, SpotifyImport.best(want, listOf(cover, other, real)))
-        assertNull(SpotifyImport.best(want, listOf(other)))
+        assertEquals(real, PlaylistImport.best(want, listOf(cover, other, real)))
+        assertNull(PlaylistImport.best(want, listOf(other)))
     }
 
     @Test fun ignoresRemasterAndFeatureTags() {
-        assertEquals(SpotifyImport.key("Here Comes the Sun"), SpotifyImport.key("Here Comes The Sun - Remastered 2009"))
-        assertEquals(SpotifyImport.key("Stay"), SpotifyImport.key("Stay (feat. Justin Bieber)"))
+        assertEquals(PlaylistImport.key("Here Comes the Sun"), PlaylistImport.key("Here Comes The Sun - Remastered 2009"))
+        assertEquals(PlaylistImport.key("Stay"), PlaylistImport.key("Stay (feat. Justin Bieber)"))
     }
 }

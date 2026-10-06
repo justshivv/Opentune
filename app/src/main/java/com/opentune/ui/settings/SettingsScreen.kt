@@ -820,10 +820,10 @@ private fun settingsSections(
             ),
         ),
         Section(
-            "Spotify",
+            "Import",
             listOf(
-                Entry("Import from Spotify", "spotify import playlist album link transfer migrate") {
-                    NavRow("Import from Spotify", onOpenSpotify, summary = "Paste a public playlist or album link; the songs play from YouTube Music", icon = Icons.AutoMirrored.Rounded.QueueMusic)
+                Entry("Import a playlist", "spotify youtube music import playlist album link csv exportify transfer migrate") {
+                    NavRow("Import a playlist", onOpenSpotify, summary = "From a Spotify or YouTube Music link, or a CSV export", icon = Icons.AutoMirrored.Rounded.QueueMusic)
                 },
             ),
         ),
