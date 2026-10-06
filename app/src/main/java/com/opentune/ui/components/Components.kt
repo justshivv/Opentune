@@ -13,10 +13,8 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import com.opentune.data.settings.AppSettings
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.RepeatMode
@@ -152,7 +150,7 @@ fun SongListItem(
     val onSwipe = if (playback.playNextOnSwipe) onPlayNext else onAddToQueue
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    val haptics = LocalHapticFeedback.current
+    val haptics = com.opentune.ui.components.rememberHaptics()
     val threshold = with(LocalDensity.current) { 88.dp.toPx() }
     Box(modifier.fillMaxWidth()) {
         if (onSwipe != null && offsetX.value > 1f) {
@@ -181,7 +179,7 @@ fun SongListItem(
                         detectHorizontalDragGestures(
                             onDragEnd = {
                                 if (offsetX.value >= threshold) {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    haptics.press()
                                     onSwipe()
                                 }
                                 scope.launch { offsetX.animateTo(0f, spring(dampingRatio = 0.7f)) }

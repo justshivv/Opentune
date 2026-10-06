@@ -263,8 +263,9 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   name of the output device. Drag it down and it shrinks into a card
   before it closes.
 - **Synced lyrics** from [LRCLIB](https://lrclib.net), lit word by word,
-  and YouTube Music's lyrics, in an order you set, with five animation
-  styles (Fluid, Karaoke, Slide, Focus zoom, Minimal), a per-song timing
+  and YouTube Music's lyrics, in an order you set, with eight animation
+  styles (Fluid, Karaoke, Slide, Focus zoom, Minimal, and three where the
+  words themselves move: Bounce, Pop and Reveal), a per-song timing
   offset, adjustable text size, and lyrics saved with downloads so they
   work offline.
 - **One song menu everywhere:** round buttons up top for like, download,
@@ -274,13 +275,20 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   signal path, sleep timer, lyrics offset and copy log in the player.
 - **Player layouts:** Classic; Vinyl, where the cover turns as a record
   while the song plays; Lyrics first, with a small cover on top and the
-  lyrics taking the rest; and Minimal, with just the cover, title, seek bar
-  and controls.
+  lyrics taking the rest; Minimal, with just the cover, title, seek bar
+  and controls; Cassette, a tape whose reels turn and wind from one side to
+  the other as the song goes on; Halo, a round cover in a ring of moving
+  bars; and Polaroid, the cover as an instant photo that sways gently.
 - **Wavy seek bar** (optional) that ripples while music plays.
 - **Quick screens.** Home opens on the last copy saved while the fresh one
   loads; pages you've visited and searches you've made come back at once
   and refresh in the background.
 - **iOS-style bounce** at the ends of every list.
+- **Smooth tab changes.** The dock's highlight stretches toward the tab
+  you pick and settles into it, without overshooting.
+- **Haptic feedback you can tune**, from off to strong. Taps use the phone's
+  crisp haptic primitives where it has them, and follow the system's touch
+  feedback switch.
 - **Themes:** light, dark or system, Material You, accent colors, palette
   styles, pure black, color from artwork, and reduced motion and blur.
 

@@ -86,6 +86,7 @@ import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material.icons.rounded.Usb
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Wallpaper
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.AlertDialog
@@ -599,6 +600,25 @@ private fun settingsSections(
                 },
                 Entry("Reduce dynamic blur", "glass frosted performance") {
                     ToggleRow("Reduce dynamic blur", ui.reduceBlur, { v -> AppSettings.updateUi { it.copy(reduceBlur = v) } }, summary = "Swaps frosted glass for solid fills across the app", icon = Icons.Rounded.BlurOff)
+                },
+                Entry("Haptic feedback", "vibration haptics strength tap buzz intensity") {
+                    val haptics = com.opentune.ui.components.rememberHaptics()
+                    SettingRow(
+                        "Haptic feedback",
+                        summary = com.opentune.ui.components.Haptics.label(ui.hapticStrength) +
+                            if (ui.hapticStrength > 0f) " · ${(ui.hapticStrength * 100).roundToInt()}%" else " · No taps or buzzes",
+                        icon = Icons.Rounded.Vibration,
+                        below = {
+                            Slider(
+                                value = ui.hapticStrength,
+                                onValueChange = { v -> AppSettings.updateUi { it.copy(hapticStrength = (v * 10).roundToInt() / 10f) } },
+                                // Let go and feel the new strength.
+                                onValueChangeFinished = { haptics.press() },
+                                valueRange = 0f..1f,
+                                steps = 9,
+                            )
+                        },
+                    )
                 },
             ),
         ),

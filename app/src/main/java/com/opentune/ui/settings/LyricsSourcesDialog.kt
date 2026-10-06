@@ -30,10 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,7 +51,7 @@ private val ROW = 68.dp
 @Composable
 fun LyricsSourcesDialog(onDismiss: () -> Unit) {
     val settings by AppSettings.lyrics.collectAsState()
-    val haptics = LocalHapticFeedback.current
+    val haptics = com.opentune.ui.components.rememberHaptics()
     val rowPx = with(LocalDensity.current) { ROW.toPx() }
     var dragged by remember { mutableStateOf<Int?>(null) }
     var offset by remember { mutableFloatStateOf(0f) }
@@ -103,7 +101,7 @@ fun LyricsSourcesDialog(onDismiss: () -> Unit) {
                                 .pointerInput(entry.source) {
                                     detectDragGestures(
                                         onDragStart = {
-                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            haptics.press()
                                             dragged = latest.indexOfFirst { it.source == entry.source }
                                             offset = 0f
                                         },
@@ -118,7 +116,7 @@ fun LyricsSourcesDialog(onDismiss: () -> Unit) {
                                             save(latest.toMutableList().apply { add(target, removeAt(at)) })
                                             offset -= (target - at) * rowPx
                                             dragged = target
-                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            haptics.tick()
                                         }
                                     }
                                 },

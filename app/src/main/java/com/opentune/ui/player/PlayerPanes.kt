@@ -63,11 +63,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -106,7 +104,7 @@ fun QueuePane(
     modifier: Modifier = Modifier,
 ) {
     val autoplay = AppSettings.playback.collectAsState().value.autoplay
-    val haptics = LocalHapticFeedback.current
+    val haptics = com.opentune.ui.components.rememberHaptics()
     val rowPx = with(LocalDensity.current) { QUEUE_ROW.toPx() }
     // A local copy of the upcoming order, so a drag can move rows before the player hears of it.
     val order = remember { mutableStateListOf<Int>() }
@@ -167,7 +165,7 @@ fun QueuePane(
                         if (!canDrag) Modifier else Modifier.pointerInput(index) {
                             detectDragGesturesAfterLongPress(
                                 onDragStart = {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    haptics.press()
                                     dragging = index
                                     dragStartPos = order.indexOf(index)
                                     dragOffset = 0f
@@ -193,7 +191,7 @@ fun QueuePane(
                                 if (target != at) {
                                     order.add(target, order.removeAt(at))
                                     dragOffset -= (target - at) * rowPx
-                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    haptics.tick()
                                 }
                             }
                         },

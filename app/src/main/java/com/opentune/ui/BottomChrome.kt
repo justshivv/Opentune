@@ -12,6 +12,11 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
+import androidx.compose.ui.layout.layout
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.shadow
@@ -70,11 +75,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -221,7 +224,7 @@ private class SharedMini(private val layout: SharedTransitionScope, private val 
  */
 @Composable
 private fun Dock(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit, searchSelected: Boolean, onSearch: () -> Unit) {
-    val haptics = LocalHapticFeedback.current
+    val haptics = com.opentune.ui.components.rememberHaptics()
     Row(Modifier.fillMaxWidth().height(CHROME_TAB_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
         BoxWithConstraints(
             Modifier.weight(1f).fillMaxHeight().dockShadow(DOCK_SHAPE).glass(DOCK_SHAPE).dockHighlight(DOCK_SHAPE).padding(DOCK_INSET),
@@ -231,15 +234,24 @@ private fun Dock(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit,
             // The lens rests where it last was while Search is open, faded out.
             var resting by remember { mutableIntStateOf(shown ?: 0) }
             if (shown != null) resting = shown
-            val x by animateDpAsState(slot * resting, spring(dampingRatio = 0.72f, stiffness = 380f), label = "lensX")
-            val lensAlpha by animateFloatAsState(if (shown != null) 1f else 0f, spring(stiffness = 500f), label = "lensAlpha")
+            val (left, right) = rememberStretchingLens(resting, slot)
+            val lensAlpha by animateFloatAsState(if (shown != null) 1f else 0f, tween(260, easing = FastOutSlowInEasing), label = "lensAlpha")
             val accent = MaterialTheme.colorScheme.primary
             Box(
                 Modifier
-                    .offset { androidx.compose.ui.unit.IntOffset(x.roundToPx(), 0) }
-                    .width(slot)
+                    .offset { androidx.compose.ui.unit.IntOffset(left().roundToPx(), 0) }
+                    .layout { measurable, constraints ->
+                        val w = (right() - left()).roundToPx().coerceAtLeast(0)
+                        val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+                        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                    }
                     .fillMaxHeight()
-                    .graphicsLayer { alpha = lensAlpha }
+                    .graphicsLayer {
+                        alpha = lensAlpha
+                        // A touch thinner while it's stretched, like a drop pulled sideways.
+                        val stretch = ((right() - left()) / slot - 1f).coerceIn(0f, 1f)
+                        scaleY = 1f - 0.08f * stretch
+                    }
                     .clip(LENS_SHAPE)
                     .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.24f), accent.copy(alpha = 0.14f))))
                     .border(1.dp, Brush.verticalGradient(listOf(accent.copy(alpha = 0.45f), accent.copy(alpha = 0.08f))), LENS_SHAPE),
@@ -247,7 +259,7 @@ private fun Dock(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit,
             Row(Modifier.fillMaxSize()) {
                 tabs.forEachIndexed { i, tab ->
                     DockItem(tab, i == shown, Modifier.width(slot).fillMaxHeight()) {
-                        if (i != shown) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (i != shown) haptics.tick()
                         onSelect(i)
                     }
                 }
@@ -255,7 +267,7 @@ private fun Dock(tabs: List<ChromeTab>, selected: Int?, onSelect: (Int) -> Unit,
         }
         Spacer(Modifier.width(10.dp))
         SearchOrb(searchSelected) {
-            if (!searchSelected) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (!searchSelected) haptics.tick()
             onSearch()
         }
     }
@@ -268,16 +280,16 @@ private fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, onCl
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
         when {
-            pressed -> 0.86f
-            selected -> 1.08f
+            pressed -> 0.9f
+            selected -> 1.06f
             else -> 1f
         },
-        spring(dampingRatio = 0.5f, stiffness = 600f),
+        spring(dampingRatio = 0.85f, stiffness = 320f),
         label = "dockScale",
     )
     val fg by animateColorAsState(
         if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        spring(stiffness = 500f),
+        tween(320, easing = FastOutSlowInEasing),
         label = "dockFg",
     )
     Column(
@@ -288,7 +300,7 @@ private fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, onCl
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Crossfade(selected, animationSpec = spring(stiffness = 600f), label = "dockIcon") { on ->
+        Crossfade(selected, animationSpec = tween(280, easing = FastOutSlowInEasing), label = "dockIcon") { on ->
             Icon(
                 if (on) tab.selectedIcon else tab.icon,
                 null,
@@ -299,7 +311,8 @@ private fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, onCl
         Text(
             tab.label,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            // One weight either way, so the name doesn't change width as it's picked.
+            fontWeight = FontWeight.SemiBold,
             color = fg,
             maxLines = 1,
             modifier = Modifier.padding(top = 2.dp),
@@ -343,3 +356,25 @@ private fun Modifier.dockHighlight(shape: androidx.compose.ui.graphics.Shape): M
 /** A soft drop shadow so the dock floats over the page. */
 private fun Modifier.dockShadow(shape: androidx.compose.ui.graphics.Shape): Modifier =
     shadow(18.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.45f))
+
+/**
+ * The lens's two edges, which travel separately: the edge in the direction
+ * of travel leads and the far edge follows, so the lens stretches toward the
+ * new tab and settles into it rather than sliding over as one block. Both
+ * are critically damped, so it never overshoots.
+ */
+@Composable
+private fun rememberStretchingLens(index: Int, slot: Dp): Pair<() -> Dp, () -> Dp> {
+    val left = remember { Animatable(slot.value * index) }
+    val right = remember { Animatable(slot.value * (index + 1)) }
+    LaunchedEffect(index, slot) {
+        val toLeft = slot.value * index
+        val toRight = slot.value * (index + 1)
+        val movingRight = toLeft > left.value
+        val lead = spring<Float>(dampingRatio = 1f, stiffness = 520f)
+        val follow = spring<Float>(dampingRatio = 1f, stiffness = 170f)
+        launch { left.animateTo(toLeft, if (movingRight) follow else lead) }
+        launch { right.animateTo(toRight, if (movingRight) lead else follow) }
+    }
+    return ({ left.value.dp } to { right.value.dp })
+}

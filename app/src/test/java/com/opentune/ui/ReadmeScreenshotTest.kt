@@ -120,17 +120,40 @@ class ReadmeScreenshotTest {
     )
     private val noActions = PlayerActions({}, {}, {}, {}, {}, {}, {}, {}, {})
 
-    private fun player(song: Song, lyrics: com.opentune.ui.LyricsState, initialLyrics: Boolean, position: Long) = PlayerUiState(
+    private fun player(
+        song: Song,
+        lyrics: com.opentune.ui.LyricsState,
+        initialLyrics: Boolean,
+        position: Long,
+        style: com.opentune.data.settings.PlayerStyle = com.opentune.data.settings.PlayerStyle.CLASSIC,
+    ) = PlayerUiState(
         song = song, isPlaying = true, isBuffering = false, hasNext = true, shuffle = false, repeatMode = Player.REPEAT_MODE_OFF,
         durationMs = 200_000, lyrics = lyrics, queue = queue, currentIndex = 0, upNext = listOf(1, 2, 3),
         sound = SoundSettings(), theme = ThemeSettings(), source = song.albumName,
         // Liquid Glass needs the GPU's shaders, which this software drawing can't run; the frosted look stands in.
-        ui = com.opentune.data.settings.InterfaceSettings(liquidGlass = false),
+        // The new designs move every frame while playing; a still needs that held, or the test never goes idle.
+        ui = com.opentune.data.settings.InterfaceSettings(liquidGlass = false, playerStyle = style, reduceAnimation = style != com.opentune.data.settings.PlayerStyle.CLASSIC),
     ).let { state -> @Composable { PlayerLayout(state, position = { position }, buffered = { position + 30_000 }, actions = noActions, initialLyrics = initialLyrics) } }
 
     @Test fun nowPlaying() = shoot("player", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000))
 
-    @Test fun lyrics() {
+    @Test fun cassette() = shoot("style-cassette", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, com.opentune.data.settings.PlayerStyle.CASSETTE))
+    @Test fun halo() = shoot("style-halo", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, com.opentune.data.settings.PlayerStyle.HALO))
+    @Test fun polaroid() = shoot("style-polaroid", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, com.opentune.data.settings.PlayerStyle.POLAROID))
+
+    @Test fun lyricsBounce() {
+        AppSettings.updateUi { it.copy(lyricsAnimation = com.opentune.data.settings.LyricsAnimation.BOUNCE) }
+        try { lyricsShot("lyrics-bounce") } finally { AppSettings.updateUi { it.copy(lyricsAnimation = com.opentune.data.settings.LyricsAnimation.FLUID) } }
+    }
+
+    @Test fun lyricsReveal() {
+        AppSettings.updateUi { it.copy(lyricsAnimation = com.opentune.data.settings.LyricsAnimation.REVEAL) }
+        try { lyricsShot("lyrics-reveal") } finally { AppSettings.updateUi { it.copy(lyricsAnimation = com.opentune.data.settings.LyricsAnimation.FLUID) } }
+    }
+
+    @Test fun lyrics() = lyricsShot("lyrics")
+
+    private fun lyricsShot(name: String) {
         // Words by Frederic Weatherly, 1913: in the public domain.
         val text = listOf(
             "Oh Danny boy, the pipes, the pipes are calling",
@@ -146,7 +169,7 @@ class ReadmeScreenshotTest {
             LyricLine(start, start + 7_000, t, words.mapIndexed { j, w -> LyricWord("$w ", start + j * 7_000L / words.size, start + (j + 1) * 7_000L / words.size) }, wordSynced = true)
         }
         val danny = Song("dannyboycash", "Danny Boy", "Johnny Cash", cover("danny"), "3:20", albumName = "American IV: The Man Comes Around")
-        shoot("lyrics", content = player(danny, com.opentune.ui.LyricsState.Found(Lyrics.Synced(lines, "LRCLIB")), true, 25_500))
+        shoot(name, content = player(danny, com.opentune.ui.LyricsState.Found(Lyrics.Synced(lines, "LRCLIB")), true, 25_500))
     }
 
     @Test fun explore() {

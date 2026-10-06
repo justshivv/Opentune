@@ -277,8 +277,8 @@ fun PlayerLayout(
     val backdrop = rememberLayerBackdrop()
     val style = state.ui.playerStyle
     val minimal = style == PlayerStyle.MINIMAL
-    // Full-screen cover doesn't apply where the cover is a record or a thumbnail.
-    val fullCover = state.ui.fullScreenCover && pane == Pane.COVER && style != PlayerStyle.VINYL && style != PlayerStyle.LYRICS_FIRST
+    // Full-screen cover only fits the layouts built around a plain square cover.
+    val fullCover = state.ui.fullScreenCover && pane == Pane.COVER && (style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
 
     PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme) {
         Box(
@@ -398,6 +398,16 @@ fun PlayerLayout(
                                         ArtworkSwipeArea(onSwipeNext = actions.next, onSwipePrevious = actions.previous, modifier = Modifier.fillMaxSize())
                                     style == PlayerStyle.VINYL ->
                                         VinylPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                    style == PlayerStyle.CASSETTE ->
+                                        CassettePane(
+                                            current, state.isPlaying,
+                                            progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
+                                            onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation,
+                                        )
+                                    style == PlayerStyle.HALO ->
+                                        HaloPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                    style == PlayerStyle.POLAROID ->
+                                        PolaroidPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
                                     else ->
                                         ArtworkPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous)
                                 }

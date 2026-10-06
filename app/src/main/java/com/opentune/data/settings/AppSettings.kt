@@ -57,6 +57,9 @@ enum class PlayerStyle(val label: String, val summary: String) {
     VINYL("Vinyl", "The cover turns as a record while the song plays"),
     LYRICS_FIRST("Lyrics first", "A small cover on top and the lyrics taking the rest"),
     MINIMAL("Minimal", "Cover, title, seek bar and controls; lyrics and queue a tap away"),
+    CASSETTE("Cassette", "A tape whose reels turn and wind on as the song plays"),
+    HALO("Halo", "A round cover inside a ring of moving bars"),
+    POLAROID("Polaroid", "The cover as an instant photo, swaying gently"),
 }
 
 @Serializable
@@ -260,6 +263,8 @@ data class InterfaceSettings(
     /** Lyrics text size, as a fraction of the standard size. */
     val lyricsTextScale: Float = 1f,
     val playerStyle: PlayerStyle = PlayerStyle.CLASSIC,
+    /** How strong taps and buzzes are, 0 (off) to 1. */
+    val hapticStrength: Float = 0.6f,
     /** Look for a new release once a day when the app opens. */
     val checkForUpdates: Boolean = true,
 )
@@ -286,6 +291,9 @@ enum class LyricsAnimation(val label: String, val summary: String) {
     SLIDE("Slide", "The current line glides into place"),
     ZOOM("Focus zoom", "A big current line, the rest blurred away"),
     MINIMAL("Minimal", "Only the colour changes"),
+    BOUNCE("Bounce", "Each word hops up as it's sung"),
+    POP("Pop", "Words swell and glow as they're sung"),
+    REVEAL("Reveal", "Words appear only as they're sung"),
 }
 
 /** Where lyrics can come from. */

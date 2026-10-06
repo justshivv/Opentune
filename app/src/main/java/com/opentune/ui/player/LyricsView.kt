@@ -83,6 +83,11 @@ import com.opentune.ui.components.Placeholder
 import com.opentune.ui.theme.LyricsTextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import com.opentune.data.settings.LyricsAnimation
 import androidx.compose.runtime.collectAsState
 import com.opentune.data.settings.AppSettings
@@ -239,7 +244,7 @@ private suspend fun glideTo(state: LazyListState, index: Int) {
     }
 }
 
-/** How one [LyricsAnimation] treats lines: sizes, blur per line away, slide and glow. */
+/** How one [LyricsAnimation] treats lines: sizes, blur per line away, slide and glow, and how words move. */
 private class LineMotion(
     val activeScale: Float,
     val inactiveScale: Float,
@@ -247,7 +252,29 @@ private class LineMotion(
     val slide: Dp,
     val glow: Boolean,
     val inactiveAlpha: Float,
+    val word: WordMotion = WordMotion.NONE,
 )
+
+/** What a word of the current line does while it's sung. */
+internal enum class WordMotion { NONE, BOUNCE, POP, REVEAL }
+
+/** One word's lift (dp, up is positive), scale, glow and opacity, [t] of the way through singing it. */
+internal class WordPose(val lift: Float, val scale: Float, val glow: Float, val alpha: Float)
+
+internal fun wordPose(motion: WordMotion, t: Float): WordPose {
+    val p = t.coerceIn(0f, 1f)
+    val bell = kotlin.math.sin(Math.PI * p).toFloat()
+    return when (motion) {
+        WordMotion.NONE -> WordPose(0f, 1f, 0f, 1f)
+        WordMotion.BOUNCE -> WordPose(7f * bell, 1f, 0f, 1f)
+        WordMotion.POP -> WordPose(1.5f * bell, 1f + 0.14f * bell, bell, 1f)
+        // Not there before its time, then up from a little below.
+        WordMotion.REVEAL -> if (t <= 0f) WordPose(0f, 1f, 0f, 0f) else {
+            val e = 1f - (1f - (p * 2f).coerceAtMost(1f)).let { it * it }
+            WordPose(-8f * (1f - e), 1f, 0f, (p * 3f).coerceAtMost(1f))
+        }
+    }
+}
 
 private fun motionOf(animation: LyricsAnimation) = when (animation) {
     LyricsAnimation.FLUID -> LineMotion(1f, 0.93f, 1.1f, 0.dp, glow = false, inactiveAlpha = 0.8f)
@@ -255,6 +282,9 @@ private fun motionOf(animation: LyricsAnimation) = when (animation) {
     LyricsAnimation.SLIDE -> LineMotion(1f, 0.96f, 0.6f, 18.dp, glow = false, inactiveAlpha = 0.7f)
     LyricsAnimation.ZOOM -> LineMotion(1.08f, 0.86f, 1.9f, 0.dp, glow = false, inactiveAlpha = 0.6f)
     LyricsAnimation.MINIMAL -> LineMotion(1f, 1f, 0f, 0.dp, glow = false, inactiveAlpha = 0.6f)
+    LyricsAnimation.BOUNCE -> LineMotion(1f, 0.94f, 1f, 0.dp, glow = false, inactiveAlpha = 0.75f, word = WordMotion.BOUNCE)
+    LyricsAnimation.POP -> LineMotion(1f, 0.96f, 0.8f, 0.dp, glow = false, inactiveAlpha = 0.6f, word = WordMotion.POP)
+    LyricsAnimation.REVEAL -> LineMotion(1f, 0.95f, 1.2f, 0.dp, glow = false, inactiveAlpha = 0.5f, word = WordMotion.REVEAL)
 }
 
 @Composable
@@ -308,6 +338,20 @@ private fun LyricLineView(
         }
     }
     val sweep = isActive && line.words.isNotEmpty()
+    // Words that move are drawn one by one, each measured on its own and set where the line put it.
+    val perWord = sweep && motion.word != WordMotion.NONE
+    val measurer = rememberTextMeasurer()
+    val words = remember(layout, line, style, perWord) {
+        val l = layout
+        if (!perWord || l == null) return@remember emptyList()
+        var start = 0
+        line.words.map { w ->
+            val at = start.coerceAtMost(text.length)
+            start = (start + w.text.length).coerceAtMost(text.length)
+            val row = l.getLineForOffset(at)
+            measurer.measure(AnnotatedString(w.text), style) to Offset(l.getHorizontalPosition(at, usePrimaryDirection = true), l.getLineTop(row))
+        }
+    }
 
     Text(
         text = text,
@@ -329,7 +373,13 @@ private fun LyricLineView(
                 if (sweep) compositingStrategy = CompositingStrategy.Offscreen
             }
             .then(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blur > 0.dp) Modifier.blur(blur) else Modifier)
-            .then(if (sweep) Modifier.drawWithContent { drawContent(); sweepWords(line, wordBoxes, position()) } else Modifier),
+            .then(
+                when {
+                    perWord && words.isNotEmpty() -> Modifier.drawWithContent { drawMovingWords(line, words, position(), motion.word, bright, dim) }
+                    sweep -> Modifier.drawWithContent { drawContent(); sweepWords(line, wordBoxes, position()) }
+                    else -> Modifier
+                },
+            ),
     )
 }
 
@@ -359,6 +409,44 @@ private fun DrawScope.sweepWords(line: LyricLine, boxes: List<Rect>, positionMs:
             size = Size(box.width, box.height),
             blendMode = BlendMode.DstOut,
         )
+    }
+}
+
+/**
+ * The current line for the word-motion styles: each word drawn in its place,
+ * moved and lit by how far through it the singer is. Sung words are bright,
+ * the word being sung fills from the left, and the rest are dim.
+ */
+private fun DrawScope.drawMovingWords(
+    line: LyricLine,
+    words: List<Pair<TextLayoutResult, Offset>>,
+    positionMs: Long,
+    motion: WordMotion,
+    bright: Color,
+    dim: Color,
+) {
+    line.words.forEachIndexed { i, word ->
+        val (laid, at) = words.getOrNull(i) ?: return@forEachIndexed
+        val span = (word.endMs - word.startMs).coerceAtLeast(1)
+        val raw = (positionMs - word.startMs).toFloat() / span
+        val t = raw.coerceIn(0f, 1f)
+        val pose = wordPose(motion, raw)
+        if (pose.alpha <= 0f) return@forEachIndexed
+        val w = laid.size.width.toFloat()
+        val fill = easeOut(t)
+        val brush = when {
+            t >= 1f || motion == WordMotion.REVEAL -> SolidColor(bright)
+            t <= 0f -> SolidColor(dim)
+            else -> Brush.horizontalGradient(0f to bright, fill to bright, (fill + 0.12f).coerceAtMost(1f) to dim, 1f to dim, startX = 0f, endX = w)
+        }
+        val liftPx = pose.lift.dp.toPx()
+        withTransform({
+            translate(at.x, at.y - liftPx)
+            scale(pose.scale, pose.scale, pivot = Offset(w / 2f, laid.size.height / 2f))
+        }) {
+            if (pose.glow > 0.01f) drawText(laid, color = bright.copy(alpha = 0.5f * pose.glow), shadow = Shadow(bright.copy(alpha = 0.8f * pose.glow), blurRadius = 26f))
+            drawText(laid, brush = brush, alpha = pose.alpha)
+        }
     }
 }
 
