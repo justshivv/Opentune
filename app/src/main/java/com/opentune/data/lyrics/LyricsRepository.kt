@@ -40,6 +40,8 @@ object LyricsRepository {
 
     /** A search hit further than this from the track's duration is a different recording. */
     private const val DURATION_TOLERANCE_S = 8.0
+    /** Within this, a hit is the same recording. */
+    private const val CLOSE_S = 2.0
 
     private val json = Json { ignoreUnknownKeys = true }
     private val cache = ConcurrentHashMap<String, Lyrics?>()
@@ -83,8 +85,9 @@ object LyricsRepository {
             }
             best
         }
-        // Only remember answers; a failed request is worth retrying next time.
-        if (result != null) cache[key] = result
+        // Only remember answers, and only ones matched on the song's length:
+        // without it any version's lyrics can match, timed for another cut.
+        if (result != null && durationMs > 0) cache[key] = result
         return result
     }
 
@@ -149,11 +152,21 @@ object LyricsRepository {
         else -> null
     }
 
-    private fun pick(results: JsonElement?, durationS: Double): JsonObject? {
-        val candidates = (results as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
-            .filter { durationS <= 0 || abs((it.num("duration") ?: durationS) - durationS) <= DURATION_TOLERANCE_S }
-        return candidates.firstOrNull { !it.str("syncedLyrics").isNullOrBlank() }
-            ?: candidates.firstOrNull { !it.str("plainLyrics").isNullOrBlank() }
+    /**
+     * The best search hit for a track [durationS] long: the synced result
+     * closest in length within [CLOSE_S], else the closest synced one within
+     * [DURATION_TOLERANCE_S], else the closest plain one. A recording a few
+     * seconds longer (an intro, a radio edit) puts every line off by that
+     * much, so length matters more than the order LRCLIB lists them in.
+     */
+    internal fun pick(results: JsonElement?, durationS: Double): JsonObject? {
+        val all = (results as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
+        fun gap(o: JsonObject) = if (durationS <= 0) 0.0 else abs((o.num("duration") ?: durationS) - durationS)
+        val near = all.filter { durationS <= 0 || gap(it) <= DURATION_TOLERANCE_S }.sortedBy(::gap)
+        val synced = near.filter { !it.str("syncedLyrics").isNullOrBlank() }
+        return synced.firstOrNull { gap(it) <= CLOSE_S }
+            ?: synced.firstOrNull()
+            ?: near.firstOrNull { !it.str("plainLyrics").isNullOrBlank() }
     }
 
     private fun toLyrics(obj: JsonObject, durationMs: Long): Lyrics? {
