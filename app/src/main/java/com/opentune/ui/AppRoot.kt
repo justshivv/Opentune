@@ -361,11 +361,8 @@ fun AppRoot(vm: PlayerViewModel) {
                             initialLink = e.arguments?.getString("link"),
                             onBack = { nav.popBackStack() },
                             onOpenPlaylist = { id -> nav.navigate("playlist/${Uri.encode(id)}") },
-                            onOpenExportify = { nav.navigate("exportify") },
+                            onOpenExportify = { appContext.startActivity(android.content.Intent(appContext, com.opentune.ui.spotify.ExportifyActivity::class.java)) },
                         )
-                    }
-                    composable("exportify") {
-                        com.opentune.ui.spotify.ExportifyScreen(content, onBack = { nav.popBackStack() }, onCaught = { nav.popBackStack() })
                     }
                     composable("radio") { com.opentune.ui.radio.RadioScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("server") { ServerScreen(content, actions, serverNav, onBack = { nav.popBackStack() }) }

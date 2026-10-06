@@ -95,6 +95,13 @@
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
 
+        <!-- Exportify in its own screen, for "Export from Spotify". -->
+        <activity
+            android:name=".ui.spotify.ExportifyActivity"
+            android:exported="false"
+            android:theme="@style/Theme.OpenTune"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- The home-screen widget. -->
         <receiver
             android:name=".widget.NowPlayingWidget"
