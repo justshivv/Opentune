@@ -7,11 +7,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.rounded.LocationOff
 import androidx.compose.material.icons.rounded.NearMe
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalContext
 import com.opentune.data.radio.ApproxLocation
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,6 +69,8 @@ import com.opentune.ui.components.PageHeader
 import com.opentune.ui.components.SectionHeader
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 
 /** What the list under the chips shows. */
@@ -81,7 +88,8 @@ private sealed interface Near {
     data object LocationOff : Near
     data object Locating : Near
     data object NoFix : Near
-    data class Done(val stations: List<Radio.Nearby>) : Near
+    /** Stations with a map location nearby, and ones only listed for the city or state. */
+    data class Done(val stations: List<Radio.Nearby>, val area: List<Radio.Station>, val areaName: String?) : Near
     data class Failed(val message: String) : Near
 }
 
@@ -108,6 +116,8 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     val context = LocalContext.current
     var near by remember { mutableStateOf<Near>(Near.Locating) }
     var refused by remember { mutableStateOf(false) }
+    var adding by remember { mutableStateOf(false) }
+    val suggest = { context.startActivity(Intent(Intent.ACTION_VIEW, "https://www.radio-browser.info/add".toUri())) }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         refused = !ok
         attempt++
@@ -122,12 +132,19 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 near = Near.Locating
                 val here = ApproxLocation.get(context)
                 if (here == null) Near.NoFix
-                else try {
-                    Near.Done(Radio.nearby(here.latitude, here.longitude))
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Near.Failed(e.message ?: "No connection")
+                else coroutineScope {
+                    val place = ApproxLocation.place(context, here.latitude, here.longitude)
+                    val code = place?.countryCode ?: country
+                    val mapped = async { runCatching { Radio.nearby(here.latitude, here.longitude) } }
+                    val listed = async { runCatching { code?.let { Radio.inArea(it, place?.city, place?.state) }.orEmpty() } }
+                    val m = mapped.await()
+                    val l = listed.await()
+                    (m.exceptionOrNull() ?: l.exceptionOrNull())?.let { if (it is CancellationException) throw it }
+                    if (m.isFailure && l.isFailure) Near.Failed(m.exceptionOrNull()?.message ?: "No connection")
+                    else {
+                        val near = m.getOrDefault(emptyList())
+                        Near.Done(near, l.getOrDefault(emptyList()).filterNot { a -> near.any { it.station.uuid == a.uuid } }, place?.city ?: place?.state)
+                    }
                 }
             }
         }
@@ -157,6 +174,18 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     fun play(station: Radio.Station) {
         Radio.played(station)
         actions.playAll(listOf(station.toSong()), 0, false, "Radio")
+    }
+
+    if (adding) {
+        AddStationDialog(
+            onDismiss = { adding = false },
+            onAdd = { name, url ->
+                Radio.addCustom(name, url)
+                adding = false
+                query = ""
+                view = RadioView.Favourites
+            },
+        )
     }
 
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -221,6 +250,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 item { SectionHeader("Recently played") }
                 items(others, key = { "r:${it.uuid}" }) { StationRow(it, actions.currentVideoId == it.id, ::play) }
             }
+            item { MissingStation(onAdd = { adding = true }, onSuggest = suggest) }
         } else if (query.isBlank() && view == RadioView.NearYou) {
             val toCountry: (() -> Unit)? = countryName?.let { { view = RadioView.Country } }
             when (val n = near) {
@@ -270,22 +300,30 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 }
                 is Near.Failed -> item { ErrorState(n.message, onRetry = { attempt++ }) }
                 is Near.Done -> {
-                    if (n.stations.isEmpty()) {
+                    if (n.stations.isEmpty() && n.area.isEmpty()) {
                         item {
                             MessageState(
                                 Icons.Rounded.Radio,
                                 "No stations listed near you",
-                                message = "Radio Browser has no stations with a location close by.",
+                                message = "Radio Browser has no stations for this area yet.",
                                 action = toCountry?.let { { OutlinedButton(onClick = it) { Text("Stations in $countryName") } } },
                             )
                         }
-                    } else {
+                    }
+                    if (n.stations.isNotEmpty()) {
                         val reach = Radio.formatDistance(n.stations.maxOf { it.distanceKm }).removePrefix("Under ")
                         item { SectionHeader("Live near you", subtitle = "${n.stations.size} stations within $reach") }
                         items(n.stations, key = { "n:${it.station.uuid}" }) {
                             StationRow(it.station, actions.currentVideoId == it.station.id, ::play, details = it.station.nearbyDetails(it.distanceKm))
                         }
                     }
+                    if (n.area.isNotEmpty()) {
+                        item { SectionHeader(n.areaName?.let { "More in $it" } ?: "More around you", subtitle = "Listed for your area, without a map location") }
+                        items(n.area, key = { "a:${it.uuid}" }) {
+                            StationRow(it, actions.currentVideoId == it.id, ::play, details = it.nearbyDetails(null))
+                        }
+                    }
+                    item { MissingStation(onAdd = { adding = true }, onSuggest = suggest) }
                 }
             }
         } else {
@@ -373,5 +411,63 @@ internal fun NearbyPrompt(
                 if (onCountry != null && countryName != null) OutlinedButton(onClick = onCountry) { Text("Stations in $countryName") }
             }
         },
+    )
+}
+
+/** What to do when a station isn't listed: add its stream, or suggest it to the directory. */
+@Composable
+internal fun MissingStation(onAdd: () -> Unit, onSuggest: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(24.dp))
+            .padding(20.dp),
+    ) {
+        Text("Can't find a station?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.size(6.dp))
+        Text(
+            "Some FM channels keep their stream inside their own app, so the open directory doesn't list them. " +
+                "If you have a station's stream address, add it here. You can also suggest a station to Radio Browser.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.size(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onAdd) {
+                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Add a stream")
+            }
+            OutlinedButton(onClick = onSuggest) { Text("Suggest a station") }
+        }
+    }
+}
+
+/** A name and a stream address for a station the directory doesn't have. */
+@Composable
+private fun AddStationDialog(onDismiss: () -> Unit, onAdd: (String, String) -> Unit) {
+    var name by rememberSaveable { mutableStateOf("") }
+    var url by rememberSaveable { mutableStateOf("") }
+    val ok = name.isNotBlank() && Radio.isStreamUrl(url)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add a station") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(name, { name = it }, label = { Text("Name, like Red FM 93.5") }, singleLine = true)
+                OutlinedTextField(
+                    url,
+                    { url = it },
+                    label = { Text("Stream address") },
+                    placeholder = { Text("https://…") },
+                    singleLine = true,
+                    isError = url.isNotBlank() && !Radio.isStreamUrl(url),
+                    supportingText = { Text("The address of the audio stream (MP3, AAC or .m3u8), not the station's web page.") },
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onAdd(name, url) }, enabled = ok) { Text("Add") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

@@ -38,6 +38,7 @@ import okhttp3.Request
  */
 object Radio {
     private const val PREFIX = "radio:"
+    private const val CUSTOM = "custom-"
     private const val TAG = "Radio"
     private const val MAX_RECENT = 50
     /** How far the nearby search reaches, widening in steps when little turns up. */
@@ -66,9 +67,17 @@ object Radio {
     ) {
         val id get() = "$PREFIX$uuid"
 
+        /** Added by hand from a stream address, not from the directory. */
+        val custom get() = uuid.startsWith(CUSTOM)
+
+        /** The FM frequency in the station's name, like "93.5 FM", when it has one. */
+        val frequency: String? get() = frequencyIn(name)
+
         /** "MP3 · 128 kbps · Germany · jazz, smooth" */
         val details: String
             get() = listOfNotNull(
+                frequency,
+                "Added by you".takeIf { custom },
                 codec?.takeIf { it.isNotBlank() && it != "UNKNOWN" },
                 bitrate.takeIf { it > 0 }?.let { "$it kbps" },
                 country?.takeIf { it.isNotBlank() },
@@ -76,8 +85,9 @@ object Radio {
             ).joinToString(" · ")
 
         /** "4.2 km · AAC · 128 kbps · Delhi", for a station found nearby. */
-        fun nearbyDetails(km: Double): String = listOfNotNull(
-            formatDistance(km),
+        fun nearbyDetails(km: Double?): String = listOfNotNull(
+            frequency,
+            km?.let { formatDistance(it) },
             codec?.takeIf { it.isNotBlank() && it != "UNKNOWN" },
             bitrate.takeIf { it > 0 }?.let { "$it kbps" },
             (state ?: country)?.takeIf { it.isNotBlank() },
@@ -140,9 +150,48 @@ object Radio {
     fun played(station: Station) {
         _recent.value = (listOf(station) + _recent.value.filterNot { it.uuid == station.uuid }).take(MAX_RECENT)
         save()
+        if (station.custom) return
         scope.launch {
             runCatching { withContext(Dispatchers.IO) { get(url("json/url/${station.uuid}")) } }.onFailure { Log.w(TAG, "click count failed", it) }
         }
+    }
+
+    /** Keeps a station from a stream address someone already has, as a favourite. */
+    fun addCustom(name: String, streamUrl: String): Station {
+        val station = Station(
+            uuid = CUSTOM + java.util.UUID.randomUUID().toString(),
+            name = name.trim(),
+            streamUrl = streamUrl.trim(),
+            hls = streamUrl.contains(".m3u8", ignoreCase = true),
+        )
+        setFavourite(station, true)
+        return station
+    }
+
+    /** Whether [url] looks like something a station could stream from. */
+    fun isStreamUrl(url: String) = url.trim().let { (it.startsWith("http://") || it.startsWith("https://")) && it.length > 10 && ' ' !in it }
+
+    /**
+     * Stations listed for a city or state, which catches the ones the
+     * directory has no coordinates for. Searched by state and by the city's
+     * name in station names, inside the country.
+     */
+    suspend fun inArea(countryCode: String, city: String?, state: String?): List<Station> {
+        suspend fun q(key: String, value: String) = list(
+            url("json/stations/search") {
+                addQueryParameter(key, value)
+                addQueryParameter("countrycode", countryCode.uppercase())
+                addQueryParameter("hidebroken", "true")
+                addQueryParameter("order", "clickcount")
+                addQueryParameter("reverse", "true")
+                addQueryParameter("limit", "100")
+            },
+        )
+        val found = buildList {
+            if (!city.isNullOrBlank()) addAll(runCatching { q("name", city) }.getOrDefault(emptyList()))
+            if (!state.isNullOrBlank()) addAll(runCatching { q("state", state) }.getOrDefault(emptyList()))
+        }
+        return found.distinctBy { it.uuid }
     }
 
     suspend fun search(query: String, limit: Int = 60): List<Station> = list(
@@ -228,6 +277,14 @@ object Radio {
             Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.sin(dLon / 2).let { it * it }
         return 2 * 6371.0 * Math.asin(Math.sqrt(a.coerceIn(0.0, 1.0)))
     }
+
+    private val DECIMAL_FM = Regex("""(?<![\d.])(8[7-9]|9\d|10[0-8])[.,](\d)(?![\d.])""")
+    private val WHOLE_FM = Regex("""(?<![\d.])(8[7-9]|9\d|10[0-8])\s?(?:FM|MHz)\b""", RegexOption.IGNORE_CASE)
+
+    /** "93.5 FM" out of "Red FM 93.5", "95 FM" out of "95 FM Tadka"; null when the name has none. */
+    internal fun frequencyIn(name: String): String? =
+        DECIMAL_FM.find(name)?.let { "${it.groupValues[1]}.${it.groupValues[2]} FM" }
+            ?: WHOLE_FM.find(name)?.let { "${it.groupValues[1]} FM" }
 
     /** "Under 1 km", "4.2 km", "37 km". */
     internal fun formatDistance(km: Double): String = when {

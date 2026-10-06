@@ -81,7 +81,10 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
   favourites, genres and search. "Near you" uses approximate location,
   only when you ask, sends Radio Browser a position rounded to about a
   kilometre and keeps nothing; it lists stations nearest first with how far
-  away they are. The song on air shows in the player and notification when
+  away they are, then stations listed for your city or state that have no
+  map location (often the public broadcaster's FM channels), with the FM
+  frequency when the name carries one. Stations the directory lacks can be
+  added by stream address, or suggested to Radio Browser. The song on air shows in the player and notification when
   the station sends it. Favourite stations are in Android Auto too.
 - **Picks up where you left off.** The queue, song and position come back
   at launch, paused, without fetching anything until you press play.
