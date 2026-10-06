@@ -28,8 +28,8 @@ import kotlinx.coroutines.sync.withPermit
  * the closest catalogue song is kept. Runs on its own scope so leaving the
  * screen doesn't stop it.
  */
-object SpotifyImport {
-    private const val TAG = "SpotifyImport"
+object PlaylistImport {
+    private const val TAG = "PlaylistImport"
     private const val PARALLEL = 4
 
     data class Progress(
@@ -83,6 +83,14 @@ object SpotifyImport {
                 _progress.update { it?.copy(finished = true, error = e.message ?: "Import failed") }
             }
         }
+    }
+
+    /** Saves songs that are already YouTube Music songs, with nothing to look up. */
+    fun saveSongs(name: String, songs: List<Song>) {
+        if (running) return
+        val id = LibraryStore.createPlaylist(name)
+        LibraryStore.addAllToPlaylist(id, songs)
+        _progress.value = Progress(name, total = songs.size, done = songs.size, matched = songs.size, playlistId = id, finished = true)
     }
 
     fun cancel() = job?.cancel()

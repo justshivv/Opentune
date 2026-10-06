@@ -245,7 +245,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 playerOpen = true
             }
             is LinkTarget.Browse -> nav.openBrowse(link.browseId)
-            is LinkTarget.SpotifyImport -> nav.navigate("spotify?link=${Uri.encode(link.text)}")
+            is LinkTarget.SpotifyImport -> nav.navigate("import?link=${Uri.encode(link.text)}")
             is LinkTarget.PlaySearch -> {
                 vm.player.connected.first { it }
                 if (link.query.isBlank()) {
@@ -337,7 +337,7 @@ fun AppRoot(vm: PlayerViewModel) {
                             onOpenReplay = { nav.navigate("replay") },
                             onSignIn = { nav.navigate("login") },
                             onOpenDownloads = { nav.navigate("downloads") },
-                            onOpenSpotify = { nav.navigate("spotify") },
+                            onOpenSpotify = { nav.navigate("import") },
                         )
                     }
                     composable("login") { LoginScreen(onDone = { nav.popBackStack() }) }
@@ -352,10 +352,10 @@ fun AppRoot(vm: PlayerViewModel) {
                     composable("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable(
-                        "spotify?link={link}",
+                        "import?link={link}",
                         listOf(navArgument("link") { type = NavType.StringType; nullable = true; defaultValue = null }),
                     ) { e ->
-                        com.opentune.ui.spotify.SpotifyImportScreen(
+                        com.opentune.ui.spotify.ImportScreen(
                             content,
                             actions,
                             initialLink = e.arguments?.getString("link"),

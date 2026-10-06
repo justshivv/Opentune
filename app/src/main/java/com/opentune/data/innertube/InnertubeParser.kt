@@ -553,6 +553,24 @@ object InnertubeParser {
         return PlaylistShelfPage(songs, suggested, token)
     }
 
+    /**
+     * A later page of a playlist's songs. YouTube Music answers a playlist
+     * continuation in either of two shapes: the older `continuationContents`
+     * (handled by [parsePlaylistShelf]) or `onResponseReceivedActions` with an
+     * `appendContinuationItemsAction`, which is what it sends now.
+     */
+    fun parsePlaylistContinuation(root: JsonObject): PlaylistShelfPage {
+        parsePlaylistShelf(root)?.let { return it }
+        val items = root.a("onResponseReceivedActions").orEmpty()
+            .mapNotNull { it.o("appendContinuationItemsAction") }
+            .flatMap { it.a("continuationItems").orEmpty() }
+        val songs = items.mapNotNull { parseResponsiveListItem(it.o("musicResponsiveListItemRenderer")) }.distinctBy { it.videoId }
+        val token = items.firstNotNullOfOrNull {
+            it.o("continuationItemRenderer").o("continuationEndpoint").o("continuationCommand").s("token")
+        }
+        return PlaylistShelfPage(songs, emptyList(), token)
+    }
+
     /** One page of saved library cards, plus the token for the next page. */
     data class LibraryItemPage(val items: List<ShelfItem>, val continuation: String?)
 
