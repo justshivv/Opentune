@@ -264,6 +264,7 @@ data class InterfaceSettings(
     val lyricsTextScale: Float = 1f,
     val playerStyle: PlayerStyle = PlayerStyle.CLASSIC,
     val dockMotion: DockMotion = DockMotion.FOLD,
+    val controlStyle: ControlStyle = ControlStyle.CLASSIC,
     /** How strong taps and buzzes are, 0 (off) to 1. */
     val hapticStrength: Float = 0.6f,
     /** Look for a new release once a day when the app opens. */
@@ -283,6 +284,16 @@ data class LibrarySettings(
     /** Notify about new albums and singles from followed artists. */
     val releaseAlerts: Boolean = true,
 )
+
+/** How the player's back, play/pause and forward buttons look and move. */
+@Serializable
+enum class ControlStyle(val label: String, val summary: String) {
+    CLASSIC("Classic", "Big bare glyphs; play and pause cross-fade"),
+    MORPH("Morph", "Play folds into pause and the skip arrows roll on"),
+    DISC("Disc", "Play and pause in a solid round button that pops"),
+    SQUIRCLE("Squircle", "A rounded square that turns round while playing"),
+    GLASS("Glass", "Each button in its own glass bubble"),
+}
 
 /** How the dock tucks away while a page scrolls down, and comes back. */
 @Serializable

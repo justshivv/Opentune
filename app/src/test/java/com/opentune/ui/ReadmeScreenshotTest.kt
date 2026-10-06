@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
@@ -102,6 +104,10 @@ class ReadmeScreenshotTest {
                 }
             }
         }
+        capture(name)
+    }
+
+    private fun capture(name: String) {
         compose.mainClock.advanceTimeBy(3_000)
         compose.waitForIdle()
         val view = compose.activity.window.decorView
@@ -126,16 +132,35 @@ class ReadmeScreenshotTest {
         initialLyrics: Boolean,
         position: Long,
         style: com.opentune.data.settings.PlayerStyle = com.opentune.data.settings.PlayerStyle.CLASSIC,
+        fullCover: Boolean = false,
+        controls: com.opentune.data.settings.ControlStyle = com.opentune.data.settings.ControlStyle.CLASSIC,
+        playing: Boolean = true,
     ) = PlayerUiState(
-        song = song, isPlaying = true, isBuffering = false, hasNext = true, shuffle = false, repeatMode = Player.REPEAT_MODE_OFF,
+        song = song, isPlaying = playing, isBuffering = false, hasNext = true, shuffle = false, repeatMode = Player.REPEAT_MODE_OFF,
         durationMs = 200_000, lyrics = lyrics, queue = queue, currentIndex = 0, upNext = listOf(1, 2, 3),
         sound = SoundSettings(), theme = ThemeSettings(), source = song.albumName,
         // Liquid Glass needs the GPU's shaders, which this software drawing can't run; the frosted look stands in.
         // The new designs move every frame while playing; a still needs that held, or the test never goes idle.
-        ui = com.opentune.data.settings.InterfaceSettings(liquidGlass = false, playerStyle = style, reduceAnimation = style != com.opentune.data.settings.PlayerStyle.CLASSIC),
+        ui = com.opentune.data.settings.InterfaceSettings(liquidGlass = false, playerStyle = style, reduceAnimation = style != com.opentune.data.settings.PlayerStyle.CLASSIC, fullScreenCover = fullCover, controlStyle = controls),
     ).let { state -> @Composable { PlayerLayout(state, position = { position }, buffered = { position + 30_000 }, actions = noActions, initialLyrics = initialLyrics) } }
 
     @Test fun nowPlaying() = shoot("player", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000))
+
+    @Test fun fullCover() = shoot("player-full-cover", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, fullCover = true))
+
+    /** Each button design, playing and paused, swapped into one composition (a test can set content only once). */
+    @Test fun buttons() {
+        var shown by androidx.compose.runtime.mutableStateOf<@Composable () -> Unit>({})
+        var first = true
+        com.opentune.data.settings.ControlStyle.entries.forEach { c ->
+            listOf(true, false).forEach { playing ->
+                shown = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, controls = c, playing = playing)
+                val name = "buttons-${c.name.lowercase()}-${if (playing) "playing" else "paused"}"
+                if (first) shoot(name) { shown() } else capture(name)
+                first = false
+            }
+        }
+    }
 
     @Test fun cassette() = shoot("style-cassette", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, com.opentune.data.settings.PlayerStyle.CASSETTE))
     @Test fun halo() = shoot("style-halo", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, com.opentune.data.settings.PlayerStyle.HALO))

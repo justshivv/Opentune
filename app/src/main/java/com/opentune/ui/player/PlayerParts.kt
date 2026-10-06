@@ -117,6 +117,8 @@ fun PlayerBackdrop(
     modifier: Modifier = Modifier,
     animate: Boolean = true,
     fullCover: Boolean = false,
+    /** Where the player's cover area ends, from the top; the full cover runs a little past it. */
+    fullCoverBottom: Dp? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(modifier.background(scheme.surface)) {
@@ -146,17 +148,22 @@ fun PlayerBackdrop(
         }
         if (fullCover) {
             AnimatedContent(artworkUrl, transitionSpec = { fadeIn(tween(600)) togetherWith fadeOut(tween(600)) }, label = "cover") { url ->
-                // The cover fades out into whatever backdrop is below it, with a
-                // light scrim at the top so the status line stays readable.
+                // The cover runs from the top down to just behind the title and
+                // fades out there into whatever backdrop is below it, with a light
+                // scrim at the top so the status line stays readable. It's never
+                // shorter than it is wide; taller, it's cropped at the sides.
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
+                val solid = (1f - FULL_COVER_FADE / height).coerceIn(0.4f, 0.8f)
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .aspectRatio(0.9f)
+                        .height(height)
                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                         .drawWithContent {
                             drawContent()
                             drawRect(
-                                Brush.verticalGradient(0.6f to Color.Black, 1f to Color.Transparent),
+                                Brush.verticalGradient(solid to Color.Black, 1f to Color.Transparent),
                                 blendMode = BlendMode.DstIn,
                             )
                         },
@@ -164,10 +171,15 @@ fun PlayerBackdrop(
                     Artwork(url.artworkAt(com.opentune.data.model.PLAYER_ART_PX), Modifier.matchParentSize(), shape = RectangleShape)
                     Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.2f to Color.Transparent)))
                 }
+                }
             }
         }
     }
 }
+
+/** How far a full-screen cover runs past its area, under the title, and how long its fade is. */
+private val FULL_COVER_OVERLAP = 44.dp
+private val FULL_COVER_FADE = 210.dp
 
 /**
  * Soft blobs of the artwork's colors drifting slowly over a dark base, like
@@ -382,8 +394,9 @@ private fun rememberWavePhase(): androidx.compose.runtime.State<Float> =
         .animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(1_600, easing = LinearEasing)), label = "phase")
 
 /**
- * Back, play/pause and forward as large bare glyphs, Apple Music style. Each
- * sinks under the finger; play and pause cross-fade with a little scale.
+ * Back, play/pause and forward. Classic is large bare glyphs, Apple Music
+ * style: each sinks under the finger, and play and pause cross-fade with a
+ * little scale. The other [style]s are in [StyledControls].
  */
 @Composable
 fun PlayerControls(
@@ -394,7 +407,13 @@ fun PlayerControls(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     modifier: Modifier = Modifier,
+    style: com.opentune.data.settings.ControlStyle = com.opentune.data.settings.ControlStyle.CLASSIC,
+    animate: Boolean = true,
 ) {
+    if (style != com.opentune.data.settings.ControlStyle.CLASSIC) {
+        StyledControls(style, isPlaying, isBuffering, hasNext, onTogglePlay, onNext, onPrevious, animate, modifier)
+        return
+    }
     Row(
         modifier.fillMaxWidth().height(96.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,

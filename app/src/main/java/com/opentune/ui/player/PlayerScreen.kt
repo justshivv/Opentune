@@ -100,6 +100,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.RemixPreset
@@ -279,6 +280,10 @@ fun PlayerLayout(
     val minimal = style == PlayerStyle.MINIMAL
     // Full-screen cover only fits the layouts built around a plain square cover.
     val fullCover = state.ui.fullScreenCover && pane == Pane.COVER && (style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    // Where the cover area ends, measured from the top of the player, so a
+    // full-screen cover can run down to the title on any screen height.
+    var playerCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    var coverBottomPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme) {
         Box(
@@ -310,7 +315,8 @@ fun PlayerLayout(
                             dragOffset.animateTo(0f, spring(dampingRatio = 0.82f, stiffness = 420f))
                         }
                     },
-                ),
+                )
+                .onGloballyPositioned { playerCoords = it },
         ) {
             // The backdrop is the layer the player's Liquid Glass bends.
             Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
@@ -320,6 +326,7 @@ fun PlayerLayout(
                     Modifier.fillMaxSize(),
                     animate = !state.ui.reduceAnimation,
                     fullCover = fullCover,
+                    fullCoverBottom = with(LocalDensity.current) { coverBottomPx.takeIf { it > 0f }?.toDp() },
                 )
             }
 
@@ -395,7 +402,16 @@ fun PlayerLayout(
                             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 when {
                                     fullCover ->
-                                        ArtworkSwipeArea(onSwipeNext = actions.next, onSwipePrevious = actions.previous, modifier = Modifier.fillMaxSize())
+                                        ArtworkSwipeArea(
+                                            onSwipeNext = actions.next,
+                                            onSwipePrevious = actions.previous,
+                                            modifier = Modifier.fillMaxSize().onGloballyPositioned { c ->
+                                                val root = playerCoords ?: return@onGloballyPositioned
+                                                if (root.isAttached && c.isAttached) {
+                                                    coverBottomPx = root.localPositionOf(c, androidx.compose.ui.geometry.Offset(0f, c.size.height.toFloat())).y
+                                                }
+                                            },
+                                        )
                                     style == PlayerStyle.VINYL ->
                                         VinylPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
                                     style == PlayerStyle.CASSETTE ->
@@ -463,6 +479,8 @@ fun PlayerLayout(
                     onTogglePlay = actions.togglePlay,
                     onNext = actions.next,
                     onPrevious = actions.previous,
+                    style = state.ui.controlStyle,
+                    animate = !state.ui.reduceAnimation,
                 )
                 if (!state.ui.hideVolumeBar && !minimal) VolumeBar(Modifier.padding(vertical = 4.dp))
                 Spacer(Modifier.height(10.dp))

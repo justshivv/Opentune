@@ -289,6 +289,10 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **iOS-style bounce** at the ends of every list.
 - **Smooth tab changes.** The dock's highlight stretches toward the tab
   you pick and settles into it, without overshooting.
+- **Player buttons in five designs.** Classic glyphs; Morph, where play
+  folds into pause and the skip arrows roll a step on each tap; Disc, a
+  solid round play button that pops; Squircle, a rounded square that turns
+  round while the song plays; and Glass, each button in its own bubble.
 - **Haptic feedback you can tune**, from off to strong. Taps use the phone's
   crisp haptic primitives where it has them, and follow the system's touch
   feedback switch.

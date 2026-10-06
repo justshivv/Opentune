@@ -5,6 +5,8 @@ import com.opentune.data.subsonic.Subsonic
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Dock
 import com.opentune.data.settings.DockMotion
+import com.opentune.data.settings.ControlStyle
+import androidx.compose.material.icons.rounded.PlayCircle
 import com.opentune.data.listenbrainz.ListenBrainz
 import android.content.Context
 import androidx.compose.material.icons.rounded.Code
@@ -253,6 +255,7 @@ private fun settingsSections(
     val musicServer by Subsonic.server.collectAsState()
     var lyricsAnimationDialog by remember { mutableStateOf(false) }
     var dockMotionDialog by remember { mutableStateOf(false) }
+    var controlStyleDialog by remember { mutableStateOf(false) }
     val lastFm by LastFm.account.collectAsState()
     val scrobblesWaiting by LastFm.queued.collectAsState()
     val lyricsSettings by AppSettings.lyrics.collectAsState()
@@ -328,6 +331,16 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v) } },
             onDismiss = { playerStyleDialog = false },
+        )
+    }
+    if (controlStyleDialog) {
+        ChoiceDialog(
+            title = "Player buttons",
+            options = ControlStyle.entries,
+            selected = ui.controlStyle,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { c -> AppSettings.updateUi { it.copy(controlStyle = c) } },
+            onDismiss = { controlStyleDialog = false },
         )
     }
     if (dockMotionDialog) {
@@ -582,6 +595,9 @@ private fun settingsSections(
                 },
                 Entry("Player layout", "player style layout vinyl record lyrics minimal classic screen") {
                     NavRow("Player layout", { playerStyleDialog = true }, summary = ui.playerStyle.summary, icon = Icons.Rounded.Album, value = ui.playerStyle.label)
+                },
+                Entry("Player buttons", "play pause next previous skip controls buttons design morph disc squircle glass") {
+                    NavRow("Player buttons", { controlStyleDialog = true }, summary = ui.controlStyle.summary, icon = Icons.Rounded.PlayCircle, value = ui.controlStyle.label)
                 },
                 Entry("Dock animation", "navigation bar dock fold hide scroll animation motion") {
                     NavRow("Dock animation", { dockMotionDialog = true }, summary = ui.dockMotion.summary, icon = Icons.Rounded.Dock, value = ui.dockMotion.label)
