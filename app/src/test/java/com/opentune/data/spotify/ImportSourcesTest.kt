@@ -29,4 +29,24 @@ class ImportSourcesTest {
         assertTrue(second.songs.none { s -> first.songs.any { it.videoId == s.videoId } })
         assertNull(second.continuation)
     }
+
+    @Test fun readsAnExportifyCsv() {
+        val csv = "\uFEFF\"Track URI\",\"Track Name\",\"Album Name\",\"Artist Name(s)\",\"Release Date\",\"Duration (ms)\"\r\n" +
+            "\"spotify:track:1\",\"Blinding Lights\",\"After Hours\",\"The Weeknd\",\"2020-03-20\",\"200040\"\r\n" +
+            "\"spotify:track:2\",\"Stay (with Justin Bieber)\",\"F*CK LOVE 3\",\"The Kid LAROI,Justin Bieber\",\"2021-07-23\",\"141805\"\r\n" +
+            "\"spotify:track:3\",\"Say \"\"Hello\"\"\",\"Album, with comma\",\"Someone\",\"2001\",\"\"\r\n"
+        val tracks = PlaylistCsv.parse(csv)
+        assertEquals(3, tracks.size)
+        assertEquals(Spotify.Track("Blinding Lights", listOf("The Weeknd"), "After Hours", 200_040), tracks[0])
+        assertEquals(listOf("The Kid LAROI", "Justin Bieber"), tracks[1].artists)
+        assertEquals("Say \"Hello\"", tracks[2].title)
+        assertEquals("Album, with comma", tracks[2].album)
+        assertEquals(0L, tracks[2].durationMs)
+    }
+
+    @Test fun readsOtherExportersByHeader() {
+        val csv = "Track name,Artist name,Album,Playlist name,Type,ISRC\nLevitating,Dua Lipa,Future Nostalgia,Mine,Playlist,GBAHT2000942\n"
+        assertEquals(listOf(Spotify.Track("Levitating", listOf("Dua Lipa"), "Future Nostalgia", 0)), PlaylistCsv.parse(csv))
+        assertTrue(PlaylistCsv.parse("a,b\n1,2\n").isEmpty())
+    }
 }

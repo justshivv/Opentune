@@ -33,10 +33,6 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # The Spotify app OpenTune signs in through; blank leaves sign-in out of the build.
-      - name: Spotify Client ID
-        run: echo "OPENTUNE_SPOTIFY_CLIENT_ID=${{ secrets.OPENTUNE_SPOTIFY_CLIENT_ID }}" >> "$GITHUB_ENV"
-
       - name: Build, unit tests and lint
         run: ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
 

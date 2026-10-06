@@ -2,7 +2,11 @@ package com.opentune.ui.spotify
 
 import android.content.ClipboardManager
 import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -30,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -50,15 +56,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import com.opentune.data.spotify.PlaylistCsv
 import com.opentune.data.spotify.PlaylistImport
 import com.opentune.data.spotify.Spotify
-import com.opentune.data.spotify.SpotifyAccount
 import com.opentune.data.spotify.YouTubePlaylists
 import com.opentune.ui.browse.SongActions
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.PageHeader
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Something ready to bring over, whatever it came from. */
 private sealed interface Found {
@@ -87,6 +96,13 @@ private sealed interface Found {
         override val label get() = "YouTube Music playlist"
         override val count get() = p.songs.size
     }
+
+    data class FromCsv(override val name: String, val tracks: List<Spotify.Track>) : Found {
+        override val subtitle get() = "CSV file"
+        override val imageUrl: String? get() = null
+        override val label get() = "Exported playlist"
+        override val count get() = tracks.size
+    }
 }
 
 private sealed interface Preview {
@@ -98,8 +114,9 @@ private sealed interface Preview {
 
 /**
  * Bring a playlist over: a Spotify playlist, album or song link, a YouTube
- * Music playlist link, or (signed in with Spotify) your Liked Songs and
- * playlists. The result is a playlist on the phone.
+ * Music playlist link, or a CSV export (Exportify and the like, for whole
+ * Spotify playlists and Liked Songs). Paste a link, share one to OpenTune,
+ * or pick a file; the result is a playlist on the phone.
  */
 @Composable
 fun ImportScreen(
@@ -116,10 +133,12 @@ fun ImportScreen(
     var preview by remember { mutableStateOf<Preview>(Preview.Empty) }
     var playing by remember { mutableStateOf(false) }
 
-    val signedIn by SpotifyAccount.account.collectAsState()
-    LaunchedEffect(text, signedIn) {
+    LaunchedEffect(text) {
         val t = text.trim()
-        if (t.isEmpty()) { preview = Preview.Empty; return@LaunchedEffect }
+        if (t.isEmpty()) {
+            if (preview !is Preview.Ready || (preview as Preview.Ready).found !is Found.FromCsv) preview = Preview.Empty
+            return@LaunchedEffect
+        }
         val youtube = YouTubePlaylists.parse(t)
         if (youtube == null && !Spotify.looksLikeSpotify(t)) {
             preview = Preview.Failed("Paste a Spotify playlist, album or song link, or a YouTube Music playlist link.")
@@ -140,6 +159,20 @@ fun ImportScreen(
         }
     }
 
+    val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            preview = Preview.Loading()
+            preview = runCatching {
+                val (name, body) = withContext(Dispatchers.IO) { fileName(context, uri) to context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() } }
+                val tracks = PlaylistCsv.parse(body)
+                if (tracks.isEmpty()) error("No songs found in that file. It needs track name and artist columns.")
+                text = ""
+                Preview.Ready(Found.FromCsv(name.substringBeforeLast('.').ifBlank { "Imported playlist" }, tracks))
+            }.getOrElse { Preview.Failed(it.message ?: "Couldn't read that file.") }
+        }
+    }
+
     fun pasteFromClipboard() {
         val clip = context.getSystemService(ClipboardManager::class.java)?.primaryClip
         val pasted = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()
@@ -150,7 +183,7 @@ fun ImportScreen(
         item { PageHeader("Import a playlist", onBack = onBack) }
         item {
             Text(
-                "Paste a Spotify or YouTube Music link, or share one to OpenTune. Songs play from YouTube Music.",
+                "Paste a Spotify or YouTube Music link, share one to OpenTune, or pick a CSV export. Songs play from YouTube Music. No sign-in needed.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -184,12 +217,17 @@ fun ImportScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("Paste link")
                 }
+                OutlinedButton(onClick = { csvPicker.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "*/*")) }) {
+                    Icon(Icons.Rounded.Description, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("CSV file")
+                }
             }
         }
         progress?.let { p -> item { ProgressCard(p, actions, onOpenPlaylist) } }
 
         when (val p = preview) {
-            Preview.Empty -> spotifyLibrary()
+            Preview.Empty -> item { CsvHelp() }
             is Preview.Loading -> item {
                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
@@ -239,12 +277,18 @@ fun ImportScreen(
                                 onClick = { PlaylistImport.start(f.c.name) { f.c.tracks } },
                                 modifier = Modifier.weight(1f),
                             ) { Text("Import as playlist") }
+                            f is Found.FromCsv -> Button(
+                                enabled = !PlaylistImport.running,
+                                onClick = { PlaylistImport.start(f.name) { f.tracks } },
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Import as playlist") }
                         }
                     }
                 }
                 val rows: List<Pair<String, String>> = when (f) {
                     is Found.FromSpotify -> if (f.c.link.kind == Spotify.Kind.TRACK) emptyList() else f.c.tracks.map { it.title to it.artists.joinToString() }
                     is Found.FromYouTube -> f.p.songs.map { it.title to it.artist }
+                    is Found.FromCsv -> f.tracks.map { it.title to it.artists.joinToString() }
                 }
                 items(rows.take(300)) { (title, artist) ->
                     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
@@ -260,104 +304,41 @@ fun ImportScreen(
     }
 }
 
-/**
- * The Spotify account part of the page: a sign-in button, or once signed
- * in, Liked Songs and the account's playlists, each one tap to bring over.
- */
-private fun androidx.compose.foundation.lazy.LazyListScope.spotifyLibrary() {
-    if (!SpotifyAccount.available) return
-    item { SpotifyAccountCard() }
-    item { SpotifyPlaylists() }
-}
-
+/** How to bring a whole Spotify playlist, or Liked Songs, over as a CSV. */
 @Composable
-private fun SpotifyAccountCard() {
+private fun CsvHelp() {
     val context = LocalContext.current
-    val account by SpotifyAccount.account.collectAsState()
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth().padding(16.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val who = account
-            if (who == null) {
-                Text("Your Spotify", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Sign in to bring over whole playlists of any length, your own playlists and your Liked Songs.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, SpotifyAccount.authorizeUrl())) } }) {
-                    Text("Sign in with Spotify")
-                }
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Signed in to Spotify as ${who.name}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    TextButton(onClick = SpotifyAccount::signOut) { Text("Sign out") }
-                }
-            }
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Big playlists and Liked Songs", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "A Spotify link brings up to the first ${Spotify.EMBED_LIMIT} songs of a playlist, which is all Spotify shows without signing in. " +
+                    "For every song, or for your Liked Songs, export the playlist at exportify.app (sign in there with Spotify), then pick the CSV file here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://exportify.app".toUri())) } }) { Text("Open Exportify") }
         }
     }
 }
 
-/** Liked Songs and the signed-in account's playlists. */
-@Composable
-private fun SpotifyPlaylists() {
-    val account by SpotifyAccount.account.collectAsState()
-    if (account == null) return
-    var playlists by remember { mutableStateOf<List<SpotifyAccount.Playlist>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(account) {
-        runCatching { SpotifyAccount.playlists() }.fold({ playlists = it }, { error = it.message ?: "Couldn't load your playlists" })
-    }
-    Column {
-        LibraryRow(null, "Liked Songs", "Your saved songs on Spotify", enabled = !PlaylistImport.running) {
-            PlaylistImport.start("Liked on Spotify") { SpotifyAccount.likedSongs() }
-        }
-        when {
-            error != null -> Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(20.dp))
-            playlists == null -> Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
-            else -> playlists!!.forEach { p ->
-                LibraryRow(p.image, p.name, listOf("${p.tracks} songs", p.owner).filter { it.isNotBlank() }.joinToString(" · "), enabled = !PlaylistImport.running) {
-                    PlaylistImport.start(p.name) { SpotifyAccount.playlist(p.id).tracks }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibraryRow(image: String?, title: String, subtitle: String, enabled: Boolean, onImport: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Artwork(image, Modifier.size(52.dp), RoundedCornerShape(10.dp), placeholder = Icons.AutoMirrored.Rounded.QueueMusic)
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        TextButton(onClick = onImport, enabled = enabled) { Text("Import") }
-    }
-}
-
-/** A Spotify playlist read without signing in, cut off at the embed's limit. */
 @Composable
 private fun FullPlaylistNote() {
     val context = LocalContext.current
-    val account by SpotifyAccount.account.collectAsState()
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                if (SpotifyAccount.available) "This shows the first ${Spotify.EMBED_LIMIT} songs, all Spotify shows without signing in. Sign in with Spotify and paste the link again to bring every song."
-                else "This shows the first ${Spotify.EMBED_LIMIT} songs, all Spotify shows without signing in.",
+                "This shows the first ${Spotify.EMBED_LIMIT} songs, Spotify's limit without signing in. To bring every song, export it at exportify.app and pick the CSV with \"CSV file\" above.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
-            if (SpotifyAccount.available && account == null) {
-                TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, SpotifyAccount.authorizeUrl())) } }) { Text("Sign in with Spotify") }
-            }
+            TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://exportify.app".toUri())) } }) { Text("Open Exportify") }
         }
     }
 }
@@ -403,3 +384,10 @@ private fun ProgressCard(p: PlaylistImport.Progress, actions: SongActions, onOpe
         }
     }
 }
+
+/** A picked file's own name, for the playlist's name. */
+private fun fileName(context: android.content.Context, uri: Uri): String =
+    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+        if (c.moveToFirst()) c.getString(0) else null
+    } ?: uri.lastPathSegment.orEmpty()
+
