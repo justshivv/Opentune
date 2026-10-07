@@ -1,9 +1,7 @@
 package com.opentune.ui.home
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,6 +67,11 @@ import com.opentune.ui.components.ShelfPlaceholder
 import com.opentune.ui.components.SongListItem
 import com.opentune.ui.rememberLoader
 import com.opentune.ui.type
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.Surface
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import com.opentune.ui.components.contentSwap
 
 @Composable
 fun HomeScreen(
@@ -76,6 +79,7 @@ fun HomeScreen(
     actions: SongActions,
     onItemClick: (ShelfItem) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSearch: () -> Unit = {},
 ) {
     val loader = rememberLoader("home") { MusicRepository.home() }
     val state by loader.state.collectAsState()
@@ -121,7 +125,7 @@ fun HomeScreen(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(greeting, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                        Text(firstName ?: "What's playing?", style = MaterialTheme.typography.displaySmall)
+                        Text(firstName ?: "What's playing?", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
                     }
                     GlassIconButton(Icons.Rounded.Person, "Account and settings", onOpenSettings, size = 52.dp) {
                         val photo = account?.thumbnailUrl
@@ -130,7 +134,27 @@ fun HomeScreen(
                     }
                 }
             }
+            item(key = "search") {
+                Surface(
+                    onClick = onOpenSearch,
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Rounded.Search, null, tint = MaterialTheme.colorScheme.primary)
+                        Text("Search songs, albums, artists", style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
             if (recents.isNotEmpty()) {
+                item(key = "recentListening") {
+                    RecentListeningCard(
+                        song = recents.first(),
+                        onPlay = { actions.playAll(recents, 0, false, "Recently played") },
+                        onShuffle = { actions.playAll(recents, 0, true, "Recently played") },
+                    )
+                }
                 item(key = "recents") {
                     Recents(
                         songs = recents,
@@ -148,11 +172,11 @@ fun HomeScreen(
                 is UiState.Success -> {
                     val first = ContentFilter.shelves(s.data, hideExplicit)
                     itemsIndexed(first, key = { i, shelf -> "$i:${shelf.title}" }, contentType = { _, shelf -> shelfType(shelf) }) { _, shelf ->
-                        HomeShelfView(shelf, onItemClick)
+                        HomeShelfView(shelf, onItemClick, Modifier.animateItem(placementSpec = if (ui.reduceAnimation) null else spring()))
                     }
                     // The rest of Home, which arrives a page at a time after the first.
                     itemsIndexed(more, key = { i, shelf -> "more$i:${shelf.title}" }, contentType = { _, shelf -> shelfType(shelf) }) { _, shelf ->
-                        HomeShelfView(shelf, onItemClick, Modifier.animateItem())
+                        HomeShelfView(shelf, onItemClick, Modifier.animateItem(placementSpec = if (ui.reduceAnimation) null else spring()))
                     }
                 }
             }
@@ -166,8 +190,9 @@ fun HomeScreen(
  */
 @Composable
 private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, onToggleLayout: () -> Unit) {
+    val ui by AppSettings.ui.collectAsState()
     Column {
-        SectionHeader("Recents", action = {
+        SectionHeader("Recently played", action = {
             IconButton(onClick = onToggleLayout) {
                 Icon(
                     if (asGrid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
@@ -175,10 +200,10 @@ private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, on
                 )
             }
         })
-        AnimatedContent(asGrid, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "recents") { grid ->
+        AnimatedContent(asGrid, transitionSpec = { contentSwap(ui.reduceAnimation) }, label = "recents") { grid ->
             if (grid) {
                 LazyRow(contentPadding = PaddingValues(horizontal = 10.dp)) {
-                    itemsIndexed(songs) { i, song ->
+                    itemsIndexed(songs, key = { _, song -> song.videoId }) { i, song ->
                         ItemCard(song.title, song.artist, song.thumbnailUrl, null, onClick = { actions.playAll(songs, i, false, "Recents") })
                     }
                 }

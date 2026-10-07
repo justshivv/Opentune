@@ -457,7 +457,7 @@ fun PlayerControls(
 @Composable
 private fun GlyphButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, size: androidx.compose.ui.unit.Dp, enabled: Boolean = true, onClick: () -> Unit) {
     val alpha = if (enabled) 1f else 0.35f
-    Box(Modifier.size(size + 12.dp).pressable({ if (enabled) onClick() }, 0.82f), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(size + 12.dp).pressable(onClick, 0.92f, enabled = enabled, onClickLabel = label), contentAlignment = Alignment.Center) {
         Icon(icon, label, Modifier.size(size), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
     }
 }

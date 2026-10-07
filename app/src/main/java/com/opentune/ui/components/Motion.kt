@@ -2,32 +2,69 @@ package com.opentune.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import com.opentune.data.settings.AppSettings
 
 /**
- * A click that sinks a little under the finger and springs back, the way
- * iOS tiles do. Use on cards and tiles; list rows keep their ripple.
+ * A card click with a gentle spring and a ripple. Reduced animation removes
+ * the scale, while disabled controls keep their disabled accessibility state.
  */
 @Composable
-fun Modifier.pressable(onClick: () -> Unit, pressedScale: Float = 0.95f): Modifier {
+fun Modifier.pressable(
+    onClick: () -> Unit,
+    pressedScale: Float = 0.97f,
+    enabled: Boolean = true,
+    onClickLabel: String? = null,
+): Modifier {
+    val ui by AppSettings.ui.collectAsState()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        if (pressed) pressedScale else 1f,
-        spring(dampingRatio = 0.55f, stiffness = 600f),
+    val scale = animateFloatAsState(
+        if (pressed && enabled && !ui.reduceAnimation) pressedScale else 1f,
+        if (ui.reduceAnimation) snap() else spring(dampingRatio = 0.85f, stiffness = 500f),
         label = "press",
     )
     return this
-        .graphicsLayer { scaleX = scale; scaleY = scale }
-        .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+        .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
+        .clickable(
+            interactionSource = interaction,
+            indication = LocalIndication.current,
+            enabled = enabled,
+            role = Role.Button,
+            onClickLabel = onClickLabel,
+            onClick = onClick,
+        )
+}
+
+/** A short dissolve with a small rise; reduced motion keeps only the dissolve. */
+fun contentSwap(reducedMotion: Boolean): ContentTransform {
+    val enter = fadeIn(tween(180, delayMillis = 50))
+    val arrival = if (reducedMotion) enter else enter +
+        slideInVertically(tween(240, easing = FastOutSlowInEasing)) { it / 32 }
+    return ContentTransform(
+        targetContentEnter = arrival,
+        initialContentExit = fadeOut(tween(100)),
+        sizeTransform = if (reducedMotion) null else SizeTransform(clip = false) { _, _ -> tween(240) },
+    )
 }
 
 /**
@@ -39,7 +76,8 @@ fun Modifier.pressable(onClick: () -> Unit, pressedScale: Float = 0.95f): Modifi
  */
 @androidx.compose.runtime.Composable
 fun Modifier.livingArt(playing: Boolean, enabled: Boolean): Modifier {
-    if (!enabled) return this
+    val ui by AppSettings.ui.collectAsState()
+    if (!enabled || ui.reduceAnimation) return this
     var t by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val amount by animateFloatAsState(if (playing) 1f else 0f, androidx.compose.animation.core.tween(1_400), label = "livingArt")
     androidx.compose.runtime.LaunchedEffect(playing) {
@@ -63,4 +101,3 @@ fun Modifier.livingArt(playing: Boolean, enabled: Boolean): Modifier {
         translationY = size.height * room * (0.7f * kotlin.math.cos(t * 0.11f) + 0.3f * kotlin.math.sin(t * 0.27f + 0.4f))
     }
 }
-

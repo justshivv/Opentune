@@ -301,6 +301,7 @@ fun AppRoot(vm: PlayerViewModel) {
                             actions = actions,
                             onItemClick = openItem,
                             onOpenSettings = { nav.navigate("settings") },
+                            onOpenSearch = { nav.navigate(SEARCH_ROUTE) { launchSingleTop = true } },
                         )
                     }
                     composable(Tab.EXPLORE.route) {

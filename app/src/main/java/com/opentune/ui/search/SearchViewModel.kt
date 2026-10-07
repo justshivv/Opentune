@@ -51,11 +51,20 @@ class SearchViewModel : ViewModel() {
                 _suggestions.value = emptyList()
                 return@collectLatest
             }
-            _suggestions.value = runCatching { MusicRepository.suggestions(q) }.getOrDefault(_suggestions.value)
+            val suggestions = try {
+                MusicRepository.suggestions(q)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
+            }
+            // A reply can arrive during the next query's debounce window.
+            if (_query.value.trim() == q && q != _submitted.value) _suggestions.value = suggestions
         }
     }
 
     fun onQueryChange(value: String) {
+        if (value.trim() != _query.value.trim()) _suggestions.value = emptyList()
         _query.value = value
     }
 

@@ -93,6 +93,13 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 
 /**
  * Artwork with a tinted placeholder icon while it loads or when there is none.
@@ -111,6 +118,11 @@ fun Artwork(
     imageModifier: Modifier = Modifier,
 ) {
     var loaded by remember(url) { mutableStateOf(false) }
+    val context = LocalContext.current
+    val ui by AppSettings.ui.collectAsState()
+    val request = remember(context, url, ui.reduceAnimation) {
+        ImageRequest.Builder(context).data(url).crossfade(if (ui.reduceAnimation) 0 else 220).build()
+    }
     Box(
         modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
@@ -125,7 +137,7 @@ fun Artwork(
         }
         if (url != null) {
             AsyncImage(
-                model = url,
+                model = request,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize().then(imageModifier),
@@ -157,6 +169,12 @@ fun SongListItem(
         .collectAsState(Downloads.entryNow(song.videoId))
     if (menuOpen) SongMenuSheet(song, onDismiss = { menuOpen = false })
     val playback by AppSettings.playback.collectAsState()
+    val ui by AppSettings.ui.collectAsState()
+    val rowColor by animateColorAsState(
+        if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f) else Color.Transparent,
+        tween(if (ui.reduceAnimation) 0 else 220),
+        label = "currentSong",
+    )
     val onSwipe = when {
         !swipeToQueue -> null
         playback.playNextOnSwipe -> onPlayNext
@@ -186,8 +204,11 @@ fun SongListItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .semantics {
+                    if (isCurrent) stateDescription = if (isPlaying) "Now playing" else "Paused"
+                }
                 .graphicsLayer { translationX = offsetX.value }
-                .background(if (offsetX.value > 1f) MaterialTheme.colorScheme.background else Color.Transparent)
+                .background(if (offsetX.value > 1f) MaterialTheme.colorScheme.background else rowColor)
                 .then(
                     if (onSwipe == null) Modifier else Modifier.pointerInput(onSwipe) {
                         detectHorizontalDragGestures(
@@ -285,8 +306,9 @@ fun ItemCard(
         modifier = modifier
             .width(width)
             .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick)
+            .pressable(onClick, onClickLabel = "Open $title")
             .padding(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Artwork(
             thumbnailUrl.artworkAt(CARD_ART_PX),
@@ -299,7 +321,7 @@ fun ItemCard(
                 else -> Icons.Filled.MusicNote
             },
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             title,
             maxLines = 2,
@@ -307,6 +329,7 @@ fun ItemCard(
             style = MaterialTheme.typography.titleSmall,
             textAlign = if (round) TextAlign.Center else TextAlign.Start,
             modifier = Modifier.fillMaxWidth(),
+            fontWeight = FontWeight.SemiBold,
         )
         if (subtitle.isNotBlank()) {
             Text(
@@ -341,7 +364,7 @@ fun SectionHeader(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
         }
         action?.invoke()
     }
@@ -359,7 +382,7 @@ fun <T> Shelf(
         SectionHeader(title, subtitle = subtitle)
         LazyRow(
             contentPadding = PaddingValues(horizontal = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items(items) { card(it) }
         }
@@ -369,7 +392,8 @@ fun <T> Shelf(
 /** Three bars bouncing out of phase; still when paused. */
 @Composable
 fun NowPlayingBars(playing: Boolean, color: Color, modifier: Modifier = Modifier) {
-    if (playing) {
+    val ui by AppSettings.ui.collectAsState()
+    if (playing && !ui.reduceAnimation) {
         val transition = rememberInfiniteTransition(label = "bars")
         val heights = listOf(0, 180, 360).map { delay ->
             transition.animateFloat(

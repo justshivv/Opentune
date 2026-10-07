@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -203,11 +205,16 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         }
         if (playlists.isEmpty() && ytPlaylists.isEmpty()) {
             item {
-                Text(
-                    "Make one with New, bring one over from Spotify or YouTube Music with Import, or add any song from its menu.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                MessageState(
+                    Icons.Rounded.LibraryMusic,
+                    "Make room for your favorites",
+                    message = "Create your first playlist, or import one from Spotify or YouTube Music.",
+                    action = {
+                        FilledTonalButton(onClick = { naming = true }) {
+                            Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                            Text("Create playlist", Modifier.padding(start = 8.dp))
+                        }
+                    },
                 )
             }
         }
@@ -282,19 +289,19 @@ private fun Stat(value: String, label: String, modifier: Modifier) {
 private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier) {
     Row(
         modifier
-            .height(72.dp)
+            .heightIn(min = 80.dp)
             .pressable(onClick, 0.96f)
             .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(MaterialTheme.colorScheme.primary), Alignment.Center) {
             Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
         }
-        Column(Modifier.padding(start = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -325,8 +332,8 @@ internal fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, o
     FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
-        text = { OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("Name") }) },
-        confirmButton = { SheetButton("Save", onClick = { onConfirm(name) }) },
+        text = { OutlinedTextField(name, { name = it }, singleLine = true, label = { Text("Playlist name") }, supportingText = { Text("Choose a name for your collection") }) },
+        confirmButton = { SheetButton("Save", enabled = name.isNotBlank(), onClick = { onConfirm(name.trim()) }) },
         dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
     )
 }

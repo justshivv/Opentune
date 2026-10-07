@@ -702,7 +702,7 @@ private fun settingsSections(
                     ToggleRow("Album covers from MusicBrainz", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "Shows the album's cover in the player instead of a video frame, and for local files without one", icon = Icons.Rounded.Album)
                 },
                 Entry("Reduce animation", "motion") {
-                    ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes the player's moving background", icon = Icons.Rounded.Animation)
+                    ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Keeps artwork and playing indicators still, and reduces card and screen motion", icon = Icons.Rounded.Animation)
                 },
                 Entry("Liquid Glass", "glass refraction apple lens") {
                     ToggleRow(

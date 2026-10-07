@@ -68,6 +68,17 @@ import com.opentune.ui.components.ErrorState
 import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.SongListItem
 import com.opentune.ui.components.SongRowPlaceholder
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.runtime.key
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import com.opentune.ui.components.contentSwap
 
 @Composable
 fun SearchScreen(
@@ -87,17 +98,26 @@ fun SearchScreen(
     val results by vm.results.collectAsState()
     val recent by AppSettings.recentSearches.collectAsState()
     val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val ui by AppSettings.ui.collectAsState()
 
     fun submit(q: String) {
+        if (q.isBlank()) return
+        keyboard?.hide()
         focus.clearFocus()
         vm.submit(q)
     }
 
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 6.dp)) {
+            Text("Search", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
+            Text("Find your next repeat.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         TextField(
             value = query,
             onValueChange = vm::onQueryChange,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
+                .semantics { contentDescription = "Search songs, albums, artists or playlists" },
             singleLine = true,
             shape = CircleShape,
             placeholder = { Text("Songs, albums, artists") },
@@ -117,8 +137,14 @@ fun SearchScreen(
             keyboardActions = KeyboardActions(onSearch = { submit(query) }),
         )
 
-        when {
-            submitted == null || submitted != query.trim() -> Typing(
+        val showResults = submitted != null && submitted == query.trim()
+        AnimatedContent(
+            targetState = showResults,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            transitionSpec = { contentSwap(ui.reduceAnimation) },
+            label = "searchMode",
+        ) { showingResults ->
+            if (!showingResults) Typing(
                 query = query,
                 suggestions = suggestions,
                 recent = recent,
@@ -126,23 +152,30 @@ fun SearchScreen(
                 onPick = ::submit,
                 onFill = vm::onQueryChange,
             )
-            else -> Column {
+            else Column {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(SearchFilter.entries) { f ->
-                        FilterChip(selected = f == filter, onClick = { vm.setFilter(f) }, label = { Text(f.label) })
+                    items(SearchFilter.entries, key = { it.name }) { f ->
+                        FilterChip(
+                            selected = f == filter,
+                            onClick = { vm.setFilter(f) },
+                            label = { Text(f.label) },
+                            leadingIcon = if (f == filter) ({ Icon(Icons.Filled.Check, null, Modifier.size(18.dp)) }) else null,
+                        )
                     }
                 }
-                Results(results, contentPadding, currentVideoId, isPlaying, onPlay, onPlayNext, onAddToQueue, onBrowse, vm::retry)
+                key(submitted, filter) {
+                    Results(results, contentPadding, currentVideoId, isPlaying, onPlay, onPlayNext, onAddToQueue, onBrowse, vm::retry)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun Typing(
+internal fun Typing(
     query: String,
     suggestions: List<String>,
     recent: List<String>,
@@ -150,6 +183,7 @@ private fun Typing(
     onPick: (String) -> Unit,
     onFill: (String) -> Unit,
 ) {
+    val ui by AppSettings.ui.collectAsState()
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         if (query.isBlank()) {
             if (recent.isEmpty()) {
@@ -168,14 +202,21 @@ private fun Typing(
                         TextButton(onClick = AppSettings::clearRecentSearches) { Text("Clear all") }
                     }
                 }
-                items(recent) { q ->
-                    QueryRow(q, Icons.Filled.History, onClick = { onPick(q) }) {
+                items(recent.distinct(), key = { "recent:$it" }) { q ->
+                    QueryRow(q, Icons.Filled.History, onClick = { onPick(q) }, modifier = Modifier.animateItem(placementSpec = if (ui.reduceAnimation) null else spring())) {
                         IconButton(onClick = { AppSettings.removeRecentSearch(q) }) { Icon(Icons.Filled.Close, "Remove") }
                     }
                 }
             }
         } else {
-            items(suggestions) { s ->
+            item(key = "submitQuery") {
+                QueryRow("Search for “${query.trim()}”", Icons.Filled.Search, onClick = { onPick(query) }) {
+                    IconButton(onClick = { onPick(query) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, "Search now", Modifier.size(20.dp))
+                    }
+                }
+            }
+            items(suggestions.distinct().filter { it != query.trim() }, key = { "suggestion:$it" }) { s ->
                 QueryRow(s, Icons.Filled.Search, onClick = { onPick(s) }) {
                     IconButton(onClick = { onFill(s) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, "Use this", modifier = Modifier.size(20.dp))
@@ -187,9 +228,9 @@ private fun Typing(
 }
 
 @Composable
-private fun QueryRow(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit, trailing: @Composable () -> Unit) {
+private fun QueryRow(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier, trailing: @Composable () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 20.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(start = 20.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -210,6 +251,7 @@ private fun Results(
     onBrowse: (BrowseItem) -> Unit,
     onRetry: () -> Unit,
 ) {
+    val ui by AppSettings.ui.collectAsState()
     when (state) {
         is UiState.Loading -> Column(Modifier.padding(top = 8.dp)) { repeat(8) { SongRowPlaceholder() } }
         is UiState.Error -> Box(Modifier.fillMaxSize().padding(contentPadding), Alignment.Center) {
@@ -230,7 +272,7 @@ private fun Results(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.animateItem().padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+                                modifier = Modifier.animateItem(placementSpec = if (ui.reduceAnimation) null else spring()).padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
                             )
                         }
                     }
@@ -241,7 +283,7 @@ private fun Results(
                             is SearchResult.Browse -> "b:${r.item.browseId}"
                         }
                     }) { r ->
-                        Box(Modifier.animateItem()) {
+                        Box(Modifier.animateItem(placementSpec = if (ui.reduceAnimation) null else spring())) {
                             when (r) {
                                 is SearchResult.TopTrack -> TopResult(r.song, onPlay = { onPlay(r.song) })
                                 is SearchResult.Track -> SongListItem(
