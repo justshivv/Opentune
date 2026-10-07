@@ -89,11 +89,11 @@ private class RubberBandOverscroll : OverscrollEffect {
 
     override suspend fun applyToFling(velocity: Velocity, performFling: suspend (Velocity) -> Velocity) {
         settling?.cancel()
-        // Flicking further out keeps the stretch and springs back from there;
-        // flicking back in runs the fling, which takes up the offset first.
-        val outward = (offsetY != 0f && sign(velocity.y) == sign(offsetY)) ||
-            (offsetX != 0f && sign(velocity.x) == sign(offsetX))
-        val left = if (outward) velocity else performFling(velocity)
+        // The fling always runs: at the end of the list it can't move and
+        // hands all of its velocity back, and anywhere else it scrolls as
+        // usual. Flicking back in takes up the offset first, in applyToScroll.
+        // performFling returns what it used, so the rest is what bounces.
+        val left = velocity - performFling(velocity)
         // The spring runs on the effect's own node, so a new touch elsewhere
         // that cancels this fling can't leave the content parked off its place.
         val scope = node.takeIf { it.isAttached }?.coroutineScope
