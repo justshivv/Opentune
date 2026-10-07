@@ -20,6 +20,14 @@ object NerdStats {
     private val _loudnessGainDb = MutableStateFlow<Float?>(null)
     val loudnessGainDb = _loudnessGainDb.asStateFlow()
 
+    /** True while normalization is on but held off because the sound is on the phone speaker. */
+    private val _loudnessOffOnSpeaker = MutableStateFlow(false)
+    val loudnessOffOnSpeaker = _loudnessOffOnSpeaker.asStateFlow()
+
+    fun onLoudnessOffOnSpeaker(off: Boolean) {
+        _loudnessOffOnSpeaker.value = off
+    }
+
     fun onLoudnessGain(db: Float?) {
         _loudnessGainDb.value = db
     }

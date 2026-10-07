@@ -208,6 +208,11 @@ data class PlaybackSettings(
     val preferUsbDac: Boolean = true,
     /** Slowly level every track toward the same loudness. */
     val loudnessNormalization: Boolean = true,
+    /**
+     * Level songs on the phone's own speaker too. Off by default: there it
+     * mostly turns loud masters down, and a small speaker needs the level.
+     */
+    val normalizeOnSpeaker: Boolean = false,
     val skipSilence: Boolean = false,
     /** Mid/side stereo widening. */
     val spatialAudio: Boolean = false,

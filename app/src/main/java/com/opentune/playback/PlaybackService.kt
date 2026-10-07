@@ -217,7 +217,7 @@ class PlaybackService : MediaLibraryService() {
         }
         scope.launch { trackListening(player) }
         scope.launch {
-            AppSettings.playback.map { it.loudnessNormalization }.distinctUntilChanged().collect { applyLoudness() }
+            AppSettings.playback.map { it.loudnessNormalization to it.normalizeOnSpeaker }.distinctUntilChanged().collect { applyLoudness() }
         }
         scope.launch {
             AppSettings.playback.map { it.preloadUpcoming }.distinctUntilChanged().collect { on ->
@@ -799,7 +799,12 @@ class PlaybackService : MediaLibraryService() {
                 if (player.currentMediaItem?.mediaId == id && StreamResolver.loudnessDbFor(id) != null) applyLoudness()
             }
         }
-        val on = AppSettings.playback.value.loudnessNormalization && db != null && !BitPerfectUsb.active
+        // On the phone's own speaker, levelling only takes the loud masters
+        // down, and a small speaker needs every dB; there it waits for headphones.
+        val pb = AppSettings.playback.value
+        val speakerHold = pb.loudnessNormalization && !pb.normalizeOnSpeaker && onPhoneSpeaker()
+        NerdStats.onLoudnessOffOnSpeaker(speakerHold)
+        val on = pb.loudnessNormalization && !speakerHold && db != null && !BitPerfectUsb.active
         val enhancer = loudnessEnhancer?.takeIf { loudnessSession == session }
             ?: runCatching { LoudnessEnhancer(session) }
                 .onFailure { Log.w(TAG, "LoudnessEnhancer unavailable", it) }
@@ -1025,6 +1030,16 @@ class PlaybackService : MediaLibraryService() {
         BitPerfectUsb.apply(am, pb.bitPerfectUsb, outputRate, pb.floatOutput)
         applyLoudness()
         mediaSession?.player?.let { openEffectSession((it as ExoPlayer).audioSessionId) }
+    }
+
+    /**
+     * Whether sound is going to the phone's own speaker: no headphones,
+     * Bluetooth audio, USB, HDMI, dock or line output is connected. Android
+     * routes media to any of those as soon as it appears.
+     */
+    private fun onPhoneSpeaker(): Boolean {
+        val outputs = audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS) ?: return false
+        return outputs.none { it.isSink && it.type in EXTERNAL_OUTPUTS }
     }
 
     /** Route to a USB DAC when one is plugged in and the setting asks for it. */
@@ -1261,6 +1276,16 @@ class PlaybackService : MediaLibraryService() {
             AudioDeviceInfo.TYPE_USB_HEADSET,
             AudioDeviceInfo.TYPE_BLE_HEADSET,
             AudioDeviceInfo.TYPE_BLE_SPEAKER,
+        )
+        /** Outputs that take media away from the phone's speaker. */
+        val EXTERNAL_OUTPUTS = LISTENING_DEVICES + setOf(
+            AudioDeviceInfo.TYPE_USB_DEVICE,
+            AudioDeviceInfo.TYPE_USB_ACCESSORY,
+            AudioDeviceInfo.TYPE_HDMI,
+            AudioDeviceInfo.TYPE_LINE_ANALOG,
+            AudioDeviceInfo.TYPE_LINE_DIGITAL,
+            AudioDeviceInfo.TYPE_AUX_LINE,
+            AudioDeviceInfo.TYPE_DOCK,
         )
         const val ACTION_LIKE = "com.opentune.LIKE"
         const val ACTION_SHUFFLE = "com.opentune.SHUFFLE"

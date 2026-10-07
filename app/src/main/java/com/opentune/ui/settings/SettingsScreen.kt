@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Dock
+import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material.icons.rounded.Flare
 import androidx.compose.material.icons.rounded.FormatAlignCenter
 import androidx.compose.material.icons.rounded.Gradient
@@ -550,6 +551,16 @@ private fun settingsSections(
                 Entry("Loudness normalization", "volume level") {
                     ToggleRow("Loudness normalization", pb.loudnessNormalization, { v -> AppSettings.updatePlayback { it.copy(loudnessNormalization = v) } }, summary = "Uses YouTube's loudness measurement to set one steady volume per song", icon = Icons.AutoMirrored.Rounded.VolumeUp)
                 },
+                if (pb.loudnessNormalization) Entry("Normalize on the phone speaker", "loudness volume speaker louder quiet normalization level") {
+                    ToggleRow(
+                        "Normalize on the phone speaker",
+                        pb.normalizeOnSpeaker,
+                        { v -> AppSettings.updatePlayback { it.copy(normalizeOnSpeaker = v) } },
+                        summary = if (pb.normalizeOnSpeaker) "Songs are levelled on the speaker too, which makes most of them quieter"
+                        else "Off: the speaker plays every song at full level; headphones and Bluetooth are still levelled",
+                        icon = Icons.Rounded.Speaker,
+                    )
+                } else null,
                 Entry("Preload upcoming songs", "latency fast skip instant buffer") {
                     ToggleRow("Preload upcoming songs", pb.preloadUpcoming, { v -> AppSettings.updatePlayback { it.copy(preloadUpcoming = v) } }, summary = "Next and previous songs start almost instantly. Uses a little extra data.", icon = Icons.Rounded.Speed)
                 },

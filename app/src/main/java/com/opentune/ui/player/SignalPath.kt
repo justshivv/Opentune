@@ -43,6 +43,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
     val engine by NerdStats.engine.collectAsState()
     val picked by NerdStats.lastPicked.collectAsState()
     val gain by NerdStats.loudnessGainDb.collectAsState()
+    val speakerHold by NerdStats.loudnessOffOnSpeaker.collectAsState()
     val device = rememberOutputDeviceName()
     val bitPerfect by BitPerfectUsb.status.collectAsState()
     val mixerRate = am?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull()
@@ -81,6 +82,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
                     "Loudness",
                     when {
                         !pb.loudnessNormalization -> "Off: every song at its own level"
+                        speakerHold -> "Off on the phone speaker: full level until headphones connect"
                         gain == null -> "No figure for this song yet"
                         else -> "%+.1f dB to YouTube's reference level".format(gain)
                     },
