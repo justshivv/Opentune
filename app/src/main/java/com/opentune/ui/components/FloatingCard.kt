@@ -3,6 +3,15 @@ package com.opentune.ui.components
 import android.os.Build
 import android.view.WindowManager
 import androidx.compose.animation.core.Animatable
+import kotlinx.coroutines.Job
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.foundation.layout.height
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -106,6 +115,10 @@ fun FloatingCard(
     dismissible: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp),
     actions: (@Composable RowScope.() -> Unit)? = null,
+    /** Stays put above [content] and, like the handle, pulls the card up and down. */
+    header: (@Composable ColumnScope.() -> Unit)? = null,
+    /** Opens at half height; dragging the top, or scrolling the content, takes it up to nearly full. */
+    expandable: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val ui by AppSettings.ui.collectAsState()
@@ -114,7 +127,12 @@ fun FloatingCard(
     val dismiss by rememberUpdatedState(onDismiss)
     var open by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
-    val drag = remember { Animatable(0f) }
+    // Written straight from the finger, so a release spring can't be cancelled
+    // by a drag step that arrives after it starts.
+    var drag by remember { mutableFloatStateOf(0f) }
+    // How far an expandable card has been pulled up past its half height, in px.
+    var extra by remember { mutableFloatStateOf(0f) }
+    var settling by remember { mutableStateOf<Job?>(null) }
     LaunchedEffect(Unit) { open = true }
     val card = remember {
         FloatingCardScope { after ->
@@ -127,7 +145,7 @@ fun FloatingCard(
                     // Still here a moment later: whoever owns the popup kept it
                     // open (a download running, say), so it comes back.
                     delay(KEPT_MS)
-                    drag.snapTo(0f)
+                    drag = 0f
                     closing = false
                     open = true
                 }
@@ -159,6 +177,64 @@ fun FloatingCard(
                 val maxCard = maxHeight
                 val shape = RoundedCornerShape(32.dp)
                 val density = LocalDensity.current
+                val halfPx = with(density) { (maxCard * 0.5f).toPx() }
+                val range = with(density) { (maxCard * 0.9f).toPx() } - halfPx
+                fun settle(velocity: Float) {
+                    settling?.cancel()
+                    settling = scope.launch {
+                        val target = when {
+                            !expandable -> 0f
+                            velocity < -FLING -> range
+                            velocity > FLING -> 0f
+                            else -> if (extra > range / 2) range else 0f
+                        }
+                        launch { animate(drag, 0f, velocity, spring(dampingRatio = 0.75f, stiffness = 500f)) { v, _ -> drag = v } }
+                        if (expandable) animate(extra, target, -velocity, spring(dampingRatio = 0.85f, stiffness = 420f)) { v, _ -> extra = v.coerceIn(0f, range) }
+                    }
+                }
+                /** Moves the card by [d] px (down positive): an expandable one grows or shrinks first, then the rest pulls it down. */
+                fun pull(d: Float) {
+                    var left = d
+                    if (expandable) {
+                        if (left < 0 && drag <= 0f) {
+                            val take = minOf(-left, range - extra)
+                            extra += take
+                            left += take
+                        } else if (left > 0 && extra > 0f && drag <= 0f) {
+                            val take = minOf(left, extra)
+                            extra -= take
+                            left -= take
+                        }
+                    }
+                    if (left != 0f) drag = (drag + if (drag + left < 0) left * 0.2f else left).coerceAtLeast(-24f)
+                }
+                // Scrolling the content up grows the card first; pulling it down
+                // at the top of the list shrinks it back to half.
+                val grow = remember(expandable, range) {
+                    object : NestedScrollConnection {
+                        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                            if (!expandable || source != NestedScrollSource.UserInput || available.y >= 0 || extra >= range) return Offset.Zero
+                            settling?.cancel()
+                            val take = minOf(-available.y, range - extra)
+                            extra += take
+                            return Offset(0f, -take)
+                        }
+
+                        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                            if (!expandable || source != NestedScrollSource.UserInput || available.y <= 0 || extra <= 0f) return Offset.Zero
+                            settling?.cancel()
+                            val take = minOf(available.y, extra)
+                            extra -= take
+                            return Offset(0f, take)
+                        }
+
+                        override suspend fun onPreFling(available: Velocity): Velocity {
+                            if (!expandable || extra <= 0f || extra >= range) return Velocity.Zero
+                            settle(available.y)
+                            return available
+                        }
+                    }
+                }
                 Column(
                     Modifier
                         .statusBarsPadding()
@@ -167,10 +243,13 @@ fun FloatingCard(
                         .padding(12.dp)
                         .widthIn(max = 560.dp)
                         .fillMaxWidth()
-                        .heightIn(max = maxCard * 0.9f)
+                        .then(
+                            if (expandable) Modifier.height(with(density) { (halfPx + extra).toDp() })
+                            else Modifier.heightIn(max = maxCard * 0.9f),
+                        )
                         .graphicsLayer {
                             transformOrigin = TransformOrigin(0.5f, 1f)
-                            translationY = (1f - shown) * size.height * 0.5f + drag.value
+                            translationY = (1f - shown) * size.height * 0.5f + drag
                             val s = 0.92f + 0.08f * shown
                             scaleX = s
                             scaleY = s
@@ -189,12 +268,13 @@ fun FloatingCard(
                         Modifier.fillMaxWidth().draggable(
                             orientation = Orientation.Vertical,
                             enabled = dismissible,
-                            state = rememberDraggableState { d ->
-                                scope.launch { drag.snapTo((drag.value + if (drag.value + d < 0) d * 0.2f else d).coerceAtLeast(-24f)) }
-                            },
+                            state = rememberDraggableState { d -> pull(d) },
+                            onDragStarted = { settling?.cancel() },
                             onDragStopped = { v ->
-                                if (drag.value > with(density) { 110.dp.toPx() } || v > 1400f) card.close()
-                                else drag.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
+                                // Down hard from half height, or pulled well past it, closes; an
+                                // expanded card flung down only drops back to half.
+                                if (drag > with(density) { 110.dp.toPx() } || (v > 1400f && extra <= 1f)) card.close()
+                                else settle(v)
                             },
                         ),
                     ) {
@@ -230,12 +310,13 @@ fun FloatingCard(
                         } else {
                             Spacer(Modifier.size(4.dp))
                         }
+                        if (header != null) header()
                     }
                     // The body rises in just behind the card.
                     val rise = remember { Animatable(if (still) 1f else 0f) }
                     LaunchedEffect(Unit) { if (!still) { delay(50); rise.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 300f)) } }
                     Column(
-                        Modifier.weight(1f, fill = false).fillMaxWidth().padding(contentPadding).graphicsLayer {
+                        Modifier.weight(1f, fill = expandable).fillMaxWidth().nestedScroll(grow).padding(contentPadding).graphicsLayer {
                             alpha = rise.value.coerceIn(0f, 1f)
                             translationY = (1f - rise.value) * 16.dp.toPx()
                         },
@@ -388,3 +469,5 @@ internal fun FrostBehind(enabled: Boolean) {
 
 private const val EXIT_MS = 200L
 private const val KEPT_MS = 120L
+/** A release faster than this, in px/s, decides an expandable card's height on its own. */
+private const val FLING = 800f

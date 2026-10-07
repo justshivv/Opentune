@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import com.opentune.data.settings.AudioQuality
 import com.opentune.playback.SleepTimer
 import com.opentune.ui.components.ChoiceSheet
@@ -98,6 +100,26 @@ class ChoiceSheetScreenshotTest {
     @Test fun remix() {
         show { RemixSheet(onDismiss = {}) }
         save("remix_sheet")
+    }
+
+    /** The song menu opens at half height, and dragging its top takes it up. */
+    @Test fun songMenuHalfThenFull() {
+        com.opentune.data.library.LibraryStore.init(compose.activity)
+        val song = com.opentune.data.model.Song("4NRXx6U8ABQ", "Blinding Lights", "The Weeknd", null, "3:20")
+        val menu = com.opentune.ui.components.SongMenuActions({}, {}, {}, {}, {}, dislike = {}, playVideoVersion = {})
+        show {
+            androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongMenu provides menu) {
+                com.opentune.ui.components.SongMenuSheet(song.copy(artistId = "UC1", albumId = "MPRE1"), onDismiss = {})
+            }
+        }
+        save("song_menu_half")
+        val cardTop = { compose.onNodeWithText("Blinding Lights").fetchSemanticsNode().boundsInRoot.top }
+        val before = cardTop()
+        compose.onNodeWithText("Blinding Lights").performTouchInput { swipeUp(startY = centerY, endY = centerY - 900f, durationMillis = 300) }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        save("song_menu_full")
+        assertTrue("the menu should grow when its top is dragged up ($before -> ${cardTop()})", cardTop() < before - 200f)
     }
 
     private fun show(content: @androidx.compose.runtime.Composable () -> Unit) {

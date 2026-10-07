@@ -268,10 +268,14 @@ fun PlayerLayout(
     val sleepLabel = sleepTimerLabel()
 
     // Drag down anywhere outside the lyrics and queue lists to close.
-    val dragOffset = remember { Animatable(0f) }
+    // Plain state, written straight from the drag: the release spring then
+    // can't be cancelled by a drag step still on its way, which used to leave
+    // the player parked part-way down after a short pull.
+    var dragOffset by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var settling by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val covering by rememberUpdatedState(onCovering)
-    LaunchedEffect(dragOffset) {
-        snapshotFlow { dragOffset.value == 0f }.distinctUntilChanged().collect { covering(it) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { dragOffset == 0f }.distinctUntilChanged().collect { covering(it) }
     }
     val scope = rememberCoroutineScope()
     val dismissPx = with(LocalDensity.current) { 140.dp.toPx() }
@@ -293,8 +297,8 @@ fun PlayerLayout(
                     // Dragging down turns the player into a card over the app,
                     // the way iOS sheets do: it shrinks from the top edge and
                     // its corners round, so the screen behind shows around it.
-                    val p = (dragOffset.value / (dismissPx * 2)).coerceIn(0f, 1f)
-                    translationY = dragOffset.value * 0.9f
+                    val p = (dragOffset / (dismissPx * 2)).coerceIn(0f, 1f)
+                    translationY = dragOffset * 0.9f
                     val scale = 1f - 0.12f * p
                     scaleX = scale
                     scaleY = scale
@@ -305,14 +309,21 @@ fun PlayerLayout(
                 .draggable(
                     orientation = Orientation.Vertical,
                     state = rememberDraggableState { delta ->
-                        scope.launch { dragOffset.snapTo((dragOffset.value + delta).coerceAtLeast(0f)) }
+                        dragOffset = (dragOffset + delta).coerceAtLeast(0f)
                     },
+                    // A finger landing on the card mid-spring takes hold of it where it is.
+                    onDragStarted = { settling?.cancel() },
                     onDragStopped = { velocity ->
-                        if (dragOffset.value > dismissPx || velocity > 2_000f) {
+                        if (dragOffset > dismissPx || velocity > 2_000f) {
                             // Leave the card as it is: the exit slide carries it away from here.
                             actions.collapse()
                         } else {
-                            dragOffset.animateTo(0f, spring(dampingRatio = 0.82f, stiffness = 420f))
+                            settling = scope.launch {
+                                androidx.compose.animation.core.animate(dragOffset, 0f, velocity, spring(dampingRatio = 0.82f, stiffness = 420f)) { v, _ ->
+                                    dragOffset = v.coerceAtLeast(0f)
+                                }
+                                dragOffset = 0f
+                            }
                         }
                     },
                 )

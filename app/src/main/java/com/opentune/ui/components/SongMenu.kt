@@ -112,11 +112,14 @@ fun SongMenuSheet(
     var ringtone by remember { mutableStateOf(false) }
     val close = onDismiss
 
-    FloatingCard(onDismiss = onDismiss, contentPadding = PaddingValues(0.dp)) {
-        // Menu picks play the card out as they act.
-        val card = LocalFloatingCard.current
-        val close: () -> Unit = { card?.close() ?: onDismiss() }
-        Column(Modifier.verticalScroll(rememberScrollState())) {
+    FloatingCard(
+        onDismiss = onDismiss,
+        contentPadding = PaddingValues(0.dp),
+        expandable = true,
+        // The song and its four quick actions stay put; the rest of the menu scrolls under them.
+        header = {
+            val card = LocalFloatingCard.current
+            val close: () -> Unit = { card?.close() ?: onDismiss() }
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(56.dp))
                 Spacer(Modifier.size(14.dp))
@@ -156,6 +159,12 @@ fun SongMenuSheet(
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        },
+    ) {
+        // Menu picks play the card out as they act.
+        val card = LocalFloatingCard.current
+        val close: () -> Unit = { card?.close() ?: onDismiss() }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             if (actions != null) {
                 MenuRow(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") { actions.playNext(song); close() }
                 MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue") { actions.addToQueue(song); close() }
