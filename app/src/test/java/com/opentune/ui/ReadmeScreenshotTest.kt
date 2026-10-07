@@ -258,4 +258,10 @@ class ReadmeScreenshotTest {
             }
         }
     }
+
+    @Test fun library() {
+        val actions = SongActions(null, false, { _, _, _, _ -> }, {}, {})
+        val nav = com.opentune.ui.library.LibraryNav({}, {}, {}, {}, {}, {}, {}, {}, {})
+        shoot("library") { com.opentune.ui.library.LibraryScreen(androidx.compose.foundation.layout.PaddingValues(), actions, nav) }
+    }
 }

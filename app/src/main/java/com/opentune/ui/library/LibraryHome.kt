@@ -95,6 +95,7 @@ class LibraryNav(
     val server: () -> Unit,
     val radio: () -> Unit,
     val together: () -> Unit = {},
+    val importPlaylist: () -> Unit = {},
 )
 
 private const val YT_PLAYLISTS = "library:ytPlaylists"
@@ -186,17 +187,24 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         }
         item {
             SectionHeader("Playlists", action = {
-                TextButton(onClick = { naming = true }) {
-                    Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("New")
+                Row {
+                    TextButton(onClick = nav.importPlaylist) {
+                        Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Import")
+                    }
+                    TextButton(onClick = { naming = true }) {
+                        Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("New")
+                    }
                 }
             })
         }
         if (playlists.isEmpty() && ytPlaylists.isEmpty()) {
             item {
                 Text(
-                    "Make one with New, or add any song from its menu.",
+                    "Make one with New, bring one over from Spotify or YouTube Music with Import, or add any song from its menu.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),

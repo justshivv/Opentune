@@ -226,6 +226,7 @@ fun AppRoot(vm: PlayerViewModel) {
         server = { nav.navigate("server") },
         radio = { nav.navigate("radio") },
         together = { nav.navigate("together") },
+        importPlaylist = { nav.navigate("import") },
     ) }
     val serverNav = remember(nav) {
         ServerNav(
