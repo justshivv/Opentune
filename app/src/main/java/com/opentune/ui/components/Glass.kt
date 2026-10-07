@@ -126,7 +126,9 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     }
     val base = this.clip(shape)
     val filled = if (haze == null || ui.reduceBlur) {
-        base.background(if (tint.alpha < 1f) tint else colour.copy(alpha = 0.96f))
+        // Without a blurred backdrop, transparency leaves sharp text and artwork
+        // competing with labels on floating controls. Use a fully opaque fill.
+        base.background(colour.copy(alpha = 1f))
     } else {
         base.hazeEffect(
             state = haze,

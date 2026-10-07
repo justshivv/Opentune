@@ -122,7 +122,7 @@ class VisualRefreshTest {
                             PageHeader("Your soundtrack", subtitle = "Good evening")
                             RecentListeningCard(song, {}, {})
                             SectionHeader("Made for your mood", subtitle = "A little discovery")
-                            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
+                            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
                                 item { ItemCard("Night drive", "A little after dark", song.thumbnailUrl, BrowseType.PLAYLIST, {}, width = 160.dp) }
                                 item { ItemCard("Slow mornings", "Start on a softer note", song.thumbnailUrl, BrowseType.PLAYLIST, {}, width = 160.dp) }
                             }
@@ -160,7 +160,6 @@ class VisualRefreshTest {
     @Test fun searchAndTabsShareOneIndicatorInRtlWithReducedMotion() {
         var selected by mutableIntStateOf(0)
         var search by mutableStateOf(false)
-        compose.mainClock.autoAdvance = false
         compose.setContent {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 MaterialTheme {
@@ -170,7 +169,6 @@ class VisualRefreshTest {
         }
         listOf("Search", "Library", "Home").forEach { label ->
             compose.onNodeWithTag("dock:$label").performClick()
-            compose.mainClock.advanceTimeByFrame()
             compose.onNodeWithTag("dock:$label").assertIsSelected()
             val target = compose.onNodeWithTag("dock:$label").fetchSemanticsNode().boundsInRoot
             val indicator = compose.onNodeWithTag("dockIndicator", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot

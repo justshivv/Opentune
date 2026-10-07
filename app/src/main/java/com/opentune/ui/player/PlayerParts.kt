@@ -417,9 +417,9 @@ private fun rememberWavePhase(): androidx.compose.runtime.State<Float> =
         .animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(1_600, easing = LinearEasing)), label = "phase")
 
 /**
- * Back, play/pause and forward. Classic is large bare glyphs, Apple Music
- * style: each sinks under the finger, and play and pause cross-fade with a
- * little scale. The other [style]s are in [StyledControls].
+ * Back, play/pause and forward. Classic has an accent play button that
+ * softly changes shape, with smaller rounded skip controls.
+ * The other [style]s are in [StyledControls].
  */
 @Composable
 fun PlayerControls(
@@ -587,8 +587,8 @@ fun MiniPlayer(
                 }
             }
             Canvas(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 20.dp).height(3.dp)) {
-                drawLine(track, Offset.Zero, Offset(size.width, 0f), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
-                drawLine(accent, Offset.Zero, Offset(size.width * progress().coerceIn(0f, 1f), 0f), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+                drawLine(track, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+                drawLine(accent, Offset(0f, size.height / 2), Offset(size.width * progress().coerceIn(0f, 1f), size.height / 2), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
             }
         }
     }
