@@ -12,6 +12,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.opentune.data.account.AccountStore
 import com.opentune.data.settings.AppSettings
 import com.opentune.ui.AppRoot
 import com.opentune.ui.Links
@@ -34,6 +35,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // The process may have started in the background, offline (after an update, say).
+        AccountStore.ensureProfile()
     }
 
     override fun onNewIntent(intent: Intent) {
