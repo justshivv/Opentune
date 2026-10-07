@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -105,7 +106,7 @@ class UiInteractionTest {
         compose.setContent {
             Box(Modifier.size(64.dp).testTag("control").pressable({ clicks++ }, enabled = false))
         }
-        compose.onNodeWithTag("control").assertIsNotEnabled().performClick()
+        compose.onNodeWithTag("control").assertIsNotEnabled().performTouchInput { click() }
         assertEquals(0, clicks)
     }
 
