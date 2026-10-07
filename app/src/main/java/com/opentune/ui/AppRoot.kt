@@ -290,10 +290,10 @@ fun AppRoot(vm: PlayerViewModel) {
                 NavHost(
                     navController = nav,
                     startDestination = Tab.HOME.route,
-                    enterTransition = { fadeIn(tween(220)) + slideInHorizontally(tween(260)) { it / 10 } },
-                    exitTransition = { fadeOut(tween(160)) },
-                    popEnterTransition = { fadeIn(tween(220)) },
-                    popExitTransition = { fadeOut(tween(160)) + slideOutHorizontally(tween(260)) { it / 10 } },
+                    enterTransition = { PageMotion.enter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                    exitTransition = { PageMotion.exit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                    popEnterTransition = { PageMotion.popEnter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                    popExitTransition = { PageMotion.popExit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
                 ) {
                     composable(Tab.HOME.route) {
                         HomeScreen(
@@ -414,6 +414,9 @@ fun AppRoot(vm: PlayerViewModel) {
                 }
             }
 
+            // Pages blur and fade as they pass under the status bar.
+            if (route != "login") com.opentune.ui.components.TopEdgeFrost(Modifier.align(Alignment.TopCenter))
+
             // Floating chrome: the mini player above the nav pill and search button.
             // It sits outside the recorded layer, so its Liquid Glass can sample it.
             if (chromeVisible) CompositionLocalProvider(LocalBackdrop provides backdrop.takeIf { liquid }) {
@@ -451,6 +454,7 @@ fun AppRoot(vm: PlayerViewModel) {
                     onSearch = { if (route != SEARCH_ROUTE) nav.navigate(SEARCH_ROUTE) { launchSingleTop = true } },
                     mini = if (song == null) null else { folded, m -> MiniPlayerBar(vm, onExpand = { playerOpen = true }, modifier = m, inline = folded) },
                     motion = chromeUi.dockMotion,
+                    lens = chromeUi.dockLens,
                     reduceMotion = chromeUi.reduceAnimation,
                 )
             }
@@ -458,8 +462,8 @@ fun AppRoot(vm: PlayerViewModel) {
 
             AnimatedVisibility(
                 visible = playerOpen && song != null,
-                enter = slideInVertically(spring(dampingRatio = 0.86f, stiffness = 380f)) { it } + fadeIn(),
-                exit = slideOutVertically(tween(280)) { it } + fadeOut(tween(280)),
+                enter = PageMotion.playerIn(chromeUi.playerMotion, chromeUi.reduceAnimation),
+                exit = PageMotion.playerOut(chromeUi.playerMotion, chromeUi.reduceAnimation),
             ) {
                 // Registered after the NavHost's own handler, so back closes the
                 // player first instead of popping the page behind it.

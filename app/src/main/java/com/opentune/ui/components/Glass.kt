@@ -1,6 +1,12 @@
 package com.opentune.ui.components
 
 import android.os.Build
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.graphics.Brush
+import dev.chrisbanes.haze.HazeInputScale
+import dev.chrisbanes.haze.HazeProgressive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -41,6 +47,7 @@ import com.kyant.backdrop.shadow.Shadow
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import com.opentune.data.settings.AppSettings
+import com.opentune.data.settings.GlassStyle
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -85,22 +92,28 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     val haze = LocalHazeState.current
     val backdrop = LocalBackdrop.current
     val edge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
+    val look = glassLook(ui.glassStyle)
+    // A caller's own see-through tint wins; otherwise the style colours the glass.
+    val colour = if (tint.alpha < 1f) tint else styleTint(ui.glassStyle, tint, MaterialTheme.colorScheme.primary, dark)
     if (backdrop != null && liquidGlassOn()) {
         // A see-through dark (or light) film rather than the theme's grey, so
-        // the colour behind comes through; callers can pass their own tint.
-        val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
-        // OpenTune's film carries a little of the accent, so the glass reads
-        // as part of the theme rather than plain smoke.
+        // the colour behind comes through. OpenTune's film carries a little of
+        // the accent, so the glass reads as part of the theme rather than plain smoke.
         val neutral = if (dark) Color(0xFF101014) else Color(0xFFF7F7FA)
-        val film = if (tint.alpha < 1f) tint else lerp(neutral, MaterialTheme.colorScheme.primary, 0.14f).copy(alpha = 0.42f)
+        val film = when {
+            tint.alpha < 1f -> tint
+            ui.glassStyle == GlassStyle.FROSTED -> lerp(neutral, MaterialTheme.colorScheme.primary, 0.14f).copy(alpha = look.filmAlpha)
+            else -> lerp(neutral, colour, 0.6f).copy(alpha = look.filmAlpha)
+        }
         return this.drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
             effects = {
                 // Saturated and frosted, then bent at the edges with a little
                 // colour fringing, the way Apple's glass reads over artwork.
-                colorControls(saturation = 1.5f)
-                blur(LIQUID_BLUR.toPx())
+                colorControls(saturation = look.saturation)
+                blur(look.liquidBlur.toPx())
                 lens(24.dp.toPx(), 24.dp.toPx(), depthEffect = true, chromaticAberration = true)
             },
             highlight = { Highlight.Default },
@@ -110,19 +123,75 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     }
     val base = this.clip(shape)
     val filled = if (haze == null || ui.reduceBlur) {
-        base.background(if (tint.alpha < 1f) tint else tint.copy(alpha = 0.96f))
+        base.background(if (tint.alpha < 1f) tint else colour.copy(alpha = 0.96f))
     } else {
         base.hazeEffect(
             state = haze,
             style = HazeStyle(
                 backgroundColor = MaterialTheme.colorScheme.background,
-                tint = HazeTint(tint.copy(alpha = 0.62f)),
-                blurRadius = 28.dp,
-                noiseFactor = 0.06f,
+                tint = HazeTint(if (tint.alpha < 1f) tint else colour.copy(alpha = look.tintAlpha)),
+                blurRadius = look.blur,
+                noiseFactor = look.noise,
             ),
         )
     }
     return filled.border(0.75.dp, edge, shape)
+}
+
+/** The numbers behind a [GlassStyle], for frosted glass and for Liquid Glass. */
+internal data class GlassLook(
+    val blur: Dp,
+    val tintAlpha: Float,
+    val noise: Float,
+    val liquidBlur: Dp,
+    val filmAlpha: Float,
+    val saturation: Float,
+)
+
+internal fun glassLook(style: GlassStyle): GlassLook = when (style) {
+    GlassStyle.FROSTED -> GlassLook(28.dp, 0.62f, 0.06f, LIQUID_BLUR, 0.42f, 1.5f)
+    GlassStyle.CLEAR -> GlassLook(16.dp, 0.30f, 0f, 10.dp, 0.22f, 1.7f)
+    GlassStyle.HEAVY -> GlassLook(44.dp, 0.82f, 0.09f, 36.dp, 0.64f, 1.2f)
+    GlassStyle.TINTED -> GlassLook(30.dp, 0.58f, 0.05f, LIQUID_BLUR, 0.46f, 1.6f)
+    GlassStyle.SMOKE -> GlassLook(34.dp, 0.70f, 0.04f, 26.dp, 0.58f, 1.1f)
+}
+
+/** The colour a [GlassStyle] washes the glass with, from the surface [base] and the [accent]. */
+internal fun styleTint(style: GlassStyle, base: Color, accent: Color, dark: Boolean): Color = when (style) {
+    GlassStyle.FROSTED, GlassStyle.CLEAR, GlassStyle.HEAVY -> base
+    GlassStyle.TINTED -> lerp(base, accent, if (dark) 0.32f else 0.22f)
+    // Smoke stays dark in both themes, a little lighter in the light one so it isn't a hole.
+    GlassStyle.SMOKE -> if (dark) lerp(base, Color.Black, 0.65f) else lerp(base, Color(0xFF3A3A42), 0.3f)
+}
+
+/**
+ * A strip under the status bar where pages blur and fade out as they scroll
+ * beneath it, strongest at the top edge and gone 28dp below the bar. With
+ * blur reduced it's only the fade. Draws nothing when the setting is off.
+ */
+@Composable
+fun TopEdgeFrost(modifier: Modifier = Modifier) {
+    val ui by AppSettings.ui.collectAsState()
+    if (!ui.frostedTopEdge) return
+    val haze = LocalHazeState.current
+    val page = MaterialTheme.colorScheme.background
+    val height = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 28.dp
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(height)
+            .then(
+                if (haze == null || ui.reduceBlur) Modifier else Modifier.hazeEffect(haze) {
+                    backgroundColor = page
+                    tints = emptyList()
+                    blurRadius = 20.dp
+                    noiseFactor = 0f
+                    inputScale = HazeInputScale.Fixed(0.5f)
+                    progressive = HazeProgressive.verticalGradient(easing = EaseOutCubic, startIntensity = 1f, endIntensity = 0f)
+                },
+            )
+            .background(Brush.verticalGradient(0f to page.copy(alpha = 0.6f), 0.55f to page.copy(alpha = 0.25f), 1f to Color.Transparent)),
+    )
 }
 
 /** A round glass button holding one icon, as used for back, menu and search. */

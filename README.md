@@ -257,8 +257,18 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   round cover bubble in the corner, still ringed by progress; scroll up and
   both come back. Pick how the dock goes: Fold, Glide (off the bottom and
   back on a spring), Retract (into the corner and unrolling from it),
-  Cascade (tabs drop one by one and return in a wave) or Dissolve (blurs
-  away and sharpens back, Android 12+).
+  Cascade (tabs drop one by one and return in a wave), Dissolve (blurs
+  away and sharpens back, Android 12+), Squash (flattens into a line and
+  springs back) or Pop (shrinks into its middle and pops back out). The
+  lens can Stretch like a drop, wobble like Jelly or Glide in one piece.
+- **Glass styles.** The dock, buttons and bars come in Frosted, Clear,
+  Heavy frost, Tinted (washed with the accent) or Smoke, for Liquid Glass
+  and frosted glass alike. Pages also blur and fade as they scroll under
+  the status bar; that's a switch of its own.
+- **Motion to taste.** Pages can Slide, Fade, Zoom or Rise into view, and
+  the player can open on a Spring, a Smooth glide, a Bouncy overshoot or
+  Snappy. On phones with 90 or 120 Hz screens the app asks for the fastest
+  rate, which can be turned off to save battery.
 - **Its own typeface.** Every screen is set in Outfit.
 - **Home greets you** by the time of day and your name, with your avatar
   leading to settings. Below YouTube Music's own shelves it adds a radio
@@ -281,8 +291,8 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   lyrics, with eight animation
   styles (Fluid, Karaoke, Slide, Focus zoom, Minimal, and three where the
   words themselves move: Bounce, Pop and Reveal), a per-song timing
-  offset, adjustable text size, and lyrics saved with downloads so they
-  work offline.
+  offset, adjustable text size, left or centred lines, an optional glow on
+  the sung line, and lyrics saved with downloads so they work offline.
 - **One song menu everywhere:** round buttons up top for like, download,
   add to playlist and share, then play next, add to queue, start radio,
   view artist, open album, convert to the music video, and dislike (kept

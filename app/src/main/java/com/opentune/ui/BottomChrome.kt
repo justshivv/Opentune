@@ -42,6 +42,7 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -102,6 +103,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import com.opentune.data.settings.DockLens
 import com.opentune.data.settings.DockMotion
 import com.opentune.ui.components.glass
 
@@ -127,6 +129,8 @@ private const val CASCADE_DROP_MS = 220
 private const val CASCADE_RISE_MS = 420
 private const val CASCADE_LEAD_MS = 40
 private const val DISSOLVE_MS = 420
+private const val SQUASH_OUT_MS = 200
+private const val POP_OUT_MS = 180
 private val DISSOLVE_BLUR = 22.dp
 
 /** Ends a touch past the target and eases back, for tabs landing in [DockMotion.CASCADE]. */
@@ -197,6 +201,7 @@ fun BottomChrome(
     mini: (@Composable (inline: Boolean, modifier: Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
     motion: DockMotion = DockMotion.FOLD,
+    lens: DockLens = DockLens.STRETCH,
     reduceMotion: Boolean = false,
 ) {
     val style = if (reduceMotion) null else motion
@@ -217,8 +222,28 @@ fun BottomChrome(
                 val blur = mist.value * DISSOLVE_BLUR.toPx()
                 renderEffect = if (blur > 0.5f) BlurEffect(blur, blur, TileMode.Decal) else null
             }
+            // Squash: flattens into a line on the way out and springs back past full height on the way in.
+            val squash = if (style == DockMotion.SQUASH) {
+                transition.animateFloat(
+                    {
+                        if (targetState == EnterExitState.Visible) spring(dampingRatio = 0.45f, stiffness = 420f)
+                        else tween(SQUASH_OUT_MS, easing = FastOutLinearInEasing)
+                    },
+                    label = "squash",
+                ) { if (it == EnterExitState.Visible) 1f else 0f }
+            } else {
+                null
+            }
+            val flatten = if (squash == null) Modifier else Modifier.graphicsLayer {
+                val v = squash.value
+                transformOrigin = TransformOrigin(0.5f, 1f)
+                scaleY = (0.06f + 0.94f * v).coerceAtLeast(0.02f)
+                // Wider as it flattens, the way a pressed drop spreads.
+                scaleX = 1f + 0.08f * (1f - v.coerceIn(0f, 1f))
+                alpha = (v * 2.5f).coerceIn(0f, 1f)
+            }
             if (folded) {
-                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).then(dissolve), contentAlignment = Alignment.BottomEnd) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).then(dissolve).then(flatten), contentAlignment = Alignment.BottomEnd) {
                     if (mini != null) {
                         mini(true, with(shared) { Modifier.sharedMini() }.size(BUBBLE))
                     } else {
@@ -233,9 +258,9 @@ fun BottomChrome(
                     }
                 }
             } else {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).then(dissolve), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).then(dissolve).then(flatten), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (mini != null) mini(false, with(shared) { Modifier.sharedMini() }.fillMaxWidth().height(CHROME_MINI_HEIGHT))
-                    Dock(tabs, selected, onSelect, searchSelected, onSearch, style, this@AnimatedContent)
+                    Dock(tabs, selected, onSelect, searchSelected, onSearch, style, lens, this@AnimatedContent)
                 }
             }
         }
@@ -281,11 +306,18 @@ private fun AnimatedContentTransitionScope<Boolean>.foldTransform(motion: DockMo
         DockMotion.DISSOLVE ->
             (fadeIn(tween(DISSOLVE_MS, easing = LinearOutSlowInEasing)) + scaleIn(tween(DISSOLVE_MS, easing = FOLD_EASING), initialScale = 1.05f)) togetherWith
                 (fadeOut(tween(DISSOLVE_MS * 3 / 4, easing = FastOutLinearInEasing)) + scaleOut(tween(DISSOLVE_MS, easing = FOLD_EASING), targetScale = 1.06f))
+        // Flattened in BottomChrome; the swap waits until the line has all but gone.
+        DockMotion.SQUASH -> fadeIn(tween(1)) togetherWith fadeOut(tween(90, delayMillis = SQUASH_OUT_MS - 40))
+        // Into its middle and back out past full size, on a spring.
+        DockMotion.POP ->
+            (scaleIn(spring(dampingRatio = 0.5f, stiffness = 380f), initialScale = 0.55f, transformOrigin = TransformOrigin(0.5f, 1f)) + fadeIn(tween(140))) togetherWith
+                (scaleOut(tween(POP_OUT_MS, easing = FastOutLinearInEasing), targetScale = 0.6f, transformOrigin = TransformOrigin(0.5f, 1f)) + fadeOut(tween(POP_OUT_MS)))
     }
     val size: FiniteAnimationSpec<IntSize> = when (motion) {
         null -> tween(200, easing = FOLD_EASING)
         DockMotion.GLIDE -> spring(dampingRatio = 1f, stiffness = 380f, visibilityThreshold = IntSize.VisibilityThreshold)
         DockMotion.RETRACT -> tween(RETRACT_MS, easing = FastOutSlowInEasing)
+        DockMotion.POP, DockMotion.SQUASH -> spring(dampingRatio = 0.8f, stiffness = 420f, visibilityThreshold = IntSize.VisibilityThreshold)
         else -> tween(FOLD_MS, easing = FOLD_EASING)
     }
     return transform.using(SizeTransform(clip = false) { _, _ -> size })
@@ -297,6 +329,7 @@ private fun boundsSpec(motion: DockMotion?): FiniteAnimationSpec<Rect> = when (m
     DockMotion.GLIDE -> spring(dampingRatio = 0.82f, stiffness = 300f, visibilityThreshold = Rect.VisibilityThreshold)
     DockMotion.RETRACT -> tween(RETRACT_MS, easing = FastOutSlowInEasing)
     DockMotion.DISSOLVE -> tween(DISSOLVE_MS + 80, easing = FOLD_EASING)
+    DockMotion.POP, DockMotion.SQUASH -> spring(dampingRatio = 0.72f, stiffness = 360f, visibilityThreshold = Rect.VisibilityThreshold)
     else -> tween(FOLD_MS, easing = FOLD_EASING)
 }
 
@@ -357,6 +390,7 @@ private fun Dock(
     searchSelected: Boolean,
     onSearch: () -> Unit,
     motion: DockMotion?,
+    lens: DockLens,
     scope: AnimatedVisibilityScope,
 ) {
     val haptics = com.opentune.ui.components.rememberHaptics()
@@ -394,7 +428,7 @@ private fun Dock(
             // The lens rests where it last was while Search is open, faded out.
             var resting by remember { mutableIntStateOf(shown ?: 0) }
             if (shown != null) resting = shown
-            val (left, right) = rememberStretchingLens(resting, slot)
+            val (left, right) = rememberStretchingLens(resting, slot, if (motion == null) DockLens.GLIDE else lens)
             val lensAlpha by animateFloatAsState(if (shown != null) 1f else 0f, tween(260, easing = FastOutSlowInEasing), label = "lensAlpha")
             val accent = MaterialTheme.colorScheme.primary
             Box(
@@ -526,17 +560,25 @@ private fun Modifier.dockShadow(shape: androidx.compose.ui.graphics.Shape): Modi
  * are critically damped, so it never overshoots.
  */
 @Composable
-private fun rememberStretchingLens(index: Int, slot: Dp): Pair<() -> Dp, () -> Dp> {
+private fun rememberStretchingLens(index: Int, slot: Dp, style: DockLens = DockLens.STRETCH): Pair<() -> Dp, () -> Dp> {
     val left = remember { Animatable(slot.value * index) }
     val right = remember { Animatable(slot.value * (index + 1)) }
     LaunchedEffect(index, slot) {
         val toLeft = slot.value * index
         val toRight = slot.value * (index + 1)
         val movingRight = toLeft > left.value
-        val lead = spring<Float>(dampingRatio = 1f, stiffness = 520f)
-        val follow = spring<Float>(dampingRatio = 1f, stiffness = 170f)
+        val (lead, follow) = lensSprings(style)
         launch { left.animateTo(toLeft, if (movingRight) follow else lead) }
         launch { right.animateTo(toRight, if (movingRight) lead else follow) }
     }
     return ({ left.value.dp } to { right.value.dp })
+}
+
+/** The springs for the lens's leading and trailing edges, for each [DockLens]. */
+internal fun lensSprings(style: DockLens): Pair<SpringSpec<Float>, SpringSpec<Float>> = when (style) {
+    DockLens.STRETCH -> spring<Float>(dampingRatio = 1f, stiffness = 520f) to spring(dampingRatio = 1f, stiffness = 170f)
+    // Underdamped edges: the front overshoots, the back catches up late and both wobble home.
+    DockLens.JELLY -> spring<Float>(dampingRatio = 0.5f, stiffness = 480f) to spring(dampingRatio = 0.55f, stiffness = 190f)
+    // Both edges on the same spring, so the lens keeps its width.
+    DockLens.GLIDE -> spring<Float>(dampingRatio = 0.86f, stiffness = 360f).let { it to it }
 }

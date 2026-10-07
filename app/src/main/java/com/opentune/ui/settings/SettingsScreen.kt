@@ -47,6 +47,12 @@ import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Dock
+import androidx.compose.material.icons.rounded.Flare
+import androidx.compose.material.icons.rounded.FormatAlignCenter
+import androidx.compose.material.icons.rounded.Gradient
+import androidx.compose.material.icons.rounded.UnfoldMore
+import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material.icons.rounded.Lens
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Equalizer
@@ -126,6 +132,11 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
 import com.opentune.data.settings.ControlStyle
 import com.opentune.data.settings.DockMotion
+import com.opentune.data.settings.LyricsAlign
+import com.opentune.data.settings.PlayerMotion
+import com.opentune.data.settings.PageTransition
+import com.opentune.data.settings.GlassStyle
+import com.opentune.data.settings.DockLens
 import com.opentune.data.settings.LyricsAnimation
 import com.opentune.data.settings.PaletteStyleOption
 import com.opentune.data.settings.PlayerBackground
@@ -257,6 +268,10 @@ private fun settingsSections(
     val musicServer by Subsonic.server.collectAsState()
     var lyricsAnimationDialog by remember { mutableStateOf(false) }
     var dockMotionDialog by remember { mutableStateOf(false) }
+    var dockLensDialog by remember { mutableStateOf(false) }
+    var glassStyleDialog by remember { mutableStateOf(false) }
+    var pageTransitionDialog by remember { mutableStateOf(false) }
+    var playerMotionDialog by remember { mutableStateOf(false) }
     var controlStyleDialog by remember { mutableStateOf(false) }
     val lastFm by LastFm.account.collectAsState()
     val scrobblesWaiting by LastFm.queued.collectAsState()
@@ -353,6 +368,46 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { m -> AppSettings.updateUi { it.copy(dockMotion = m) } },
             onDismiss = { dockMotionDialog = false },
+        )
+    }
+    if (dockLensDialog) {
+        ChoiceSheet(
+            title = "Dock lens",
+            options = DockLens.entries,
+            selected = ui.dockLens,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { l -> AppSettings.updateUi { it.copy(dockLens = l) } },
+            onDismiss = { dockLensDialog = false },
+        )
+    }
+    if (glassStyleDialog) {
+        ChoiceSheet(
+            title = "Glass style",
+            options = GlassStyle.entries,
+            selected = ui.glassStyle,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { g -> AppSettings.updateUi { it.copy(glassStyle = g) } },
+            onDismiss = { glassStyleDialog = false },
+        )
+    }
+    if (pageTransitionDialog) {
+        ChoiceSheet(
+            title = "Page transitions",
+            options = PageTransition.entries,
+            selected = ui.pageTransition,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { t -> AppSettings.updateUi { it.copy(pageTransition = t) } },
+            onDismiss = { pageTransitionDialog = false },
+        )
+    }
+    if (playerMotionDialog) {
+        ChoiceSheet(
+            title = "Player opening",
+            options = PlayerMotion.entries,
+            selected = ui.playerMotion,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { m -> AppSettings.updateUi { it.copy(playerMotion = m) } },
+            onDismiss = { playerMotionDialog = false },
         )
     }
     if (lyricsAnimationDialog) {
@@ -606,8 +661,17 @@ private fun settingsSections(
                 Entry("Player buttons", "play pause next previous skip controls buttons design morph disc squircle glass") {
                     NavRow("Player buttons", { controlStyleDialog = true }, summary = ui.controlStyle.summary, icon = Icons.Rounded.PlayCircle, value = ui.controlStyle.label)
                 },
-                Entry("Dock animation", "navigation bar dock fold hide scroll animation motion") {
+                Entry("Dock animation", "navigation bar dock fold hide scroll animation motion squash pop") {
                     NavRow("Dock animation", { dockMotionDialog = true }, summary = ui.dockMotion.summary, icon = Icons.Rounded.Dock, value = ui.dockMotion.label)
+                },
+                Entry("Dock lens", "navigation bar dock tab highlight selection pill indicator jelly stretch glide") {
+                    NavRow("Dock lens", { dockLensDialog = true }, summary = ui.dockLens.summary, icon = Icons.Rounded.Lens, value = ui.dockLens.label)
+                },
+                Entry("Page transitions", "navigation animation screen open back slide fade zoom rise") {
+                    NavRow("Page transitions", { pageTransitionDialog = true }, summary = ui.pageTransition.summary, icon = Icons.Rounded.SwapHoriz, value = ui.pageTransition.label)
+                },
+                Entry("Player opening", "now playing sheet open close animation spring smooth bouncy snappy") {
+                    NavRow("Player opening", { playerMotionDialog = true }, summary = ui.playerMotion.summary, icon = Icons.Rounded.UnfoldMore, value = ui.playerMotion.label)
                 },
                 Entry("Player background", "mesh gradient blur") {
                     SettingRow("Player background", icon = Icons.Rounded.Wallpaper, below = {
@@ -639,6 +703,15 @@ private fun settingsSections(
                         icon = Icons.Rounded.AutoAwesome,
                         enabled = liquidGlassSupported && !ui.reduceBlur,
                     )
+                },
+                Entry("Glass style", "glass frosted blur clear heavy tinted smoke theme material") {
+                    NavRow("Glass style", { glassStyleDialog = true }, summary = ui.glassStyle.summary, icon = Icons.Rounded.BlurOn, value = ui.glassStyle.label)
+                },
+                Entry("Frosted top edge", "status bar blur fade top scroll glass") {
+                    ToggleRow("Frosted top edge", ui.frostedTopEdge, { v -> AppSettings.updateUi { it.copy(frostedTopEdge = v) } }, summary = "Pages blur and fade as they scroll under the status bar", icon = Icons.Rounded.Gradient)
+                },
+                Entry("High refresh rate", "120hz 90hz smooth fps refresh rate frame rate scrolling performance") {
+                    ToggleRow("High refresh rate", ui.highRefreshRate, { v -> AppSettings.updateUi { it.copy(highRefreshRate = v) } }, summary = "Runs the screen at its fastest rate while OpenTune is open, for smoother scrolling", icon = Icons.Rounded.Speed)
                 },
                 Entry("Reduce dynamic blur", "glass frosted performance") {
                     ToggleRow("Reduce dynamic blur", ui.reduceBlur, { v -> AppSettings.updateUi { it.copy(reduceBlur = v) } }, summary = "Swaps frosted glass for solid fills across the app", icon = Icons.Rounded.BlurOff)
@@ -687,6 +760,14 @@ private fun settingsSections(
                             )
                         },
                     )
+                },
+                Entry("Lyrics alignment", "lyrics center centre left align") {
+                    SettingRow("Lyrics alignment", icon = Icons.Rounded.FormatAlignCenter, below = {
+                        PillSegmented(LyricsAlign.entries, ui.lyricsAlign, { it.label }, { a -> AppSettings.updateUi { it.copy(lyricsAlign = a) } })
+                    })
+                },
+                Entry("Glow on the sung line", "lyrics glow shine highlight") {
+                    ToggleRow("Glow on the sung line", ui.lyricsGlow, { v -> AppSettings.updateUi { it.copy(lyricsGlow = v) } }, summary = "A soft halo around the line being sung, with any animation", icon = Icons.Rounded.Flare)
                 },
                 Entry("Blur unfocused lyrics", "spotlight") {
                     ToggleRow("Blur unfocused lyrics", ui.blurLyrics, { v -> AppSettings.updateUi { it.copy(blurLyrics = v) } }, summary = "Keeps the spotlight on the current line", icon = Icons.Rounded.BlurOn)

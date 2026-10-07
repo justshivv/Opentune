@@ -72,6 +72,34 @@ class DockScreenshotTest {
         save("dock")
     }
 
+    /** The dock in each glass style, over a bright cover-like background. */
+    @Test fun glassStyles() {
+        com.opentune.data.settings.AppSettings.init(compose.activity)
+        compose.setContent {
+            MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65))) { androidx.compose.material3.Surface(color = Color(0xFF0B0B0E)) {
+                Box(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(Color(0xFFE0457B), Color(0xFF3A7BD5), Color(0xFFF2C14E)))).padding(vertical = 24.dp)) {
+                    BottomChrome(
+                        inline = false,
+                        tabs = tabs,
+                        selected = 1,
+                        onSelect = {},
+                        onExpand = {},
+                        searchSelected = false,
+                        onSearch = {},
+                        mini = null,
+                    )
+                }
+            }
+            }
+        }
+        com.opentune.data.settings.GlassStyle.entries.forEach { g ->
+            com.opentune.data.settings.AppSettings.updateUi { it.copy(glassStyle = g) }
+            compose.mainClock.advanceTimeBy(1_000)
+            save("glass/${g.name.lowercase()}")
+        }
+        com.opentune.data.settings.AppSettings.updateUi { it.copy(glassStyle = com.opentune.data.settings.GlassStyle.FROSTED) }
+    }
+
     /**
      * Each dock motion part of the way through folding and unfolding, to
      * build/screenshots/motion, so the frames can be looked over.

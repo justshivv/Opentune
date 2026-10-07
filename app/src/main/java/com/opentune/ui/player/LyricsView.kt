@@ -67,6 +67,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -91,6 +92,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import com.opentune.data.settings.LyricsAnimation
 import androidx.compose.runtime.collectAsState
 import com.opentune.data.settings.AppSettings
+import com.opentune.data.settings.LyricsAlign
 import kotlin.math.abs
 import kotlinx.coroutines.delay
 
@@ -137,7 +139,7 @@ private fun PlainLyrics(text: String, source: String, note: String? = "These lyr
             )
         }
         val style = lyricsStyle()
-        Text(text, style = style.copy(fontSize = style.fontSize * 0.8f, lineHeight = style.lineHeight * 0.85f))
+        Text(text, Modifier.fillMaxWidth(), style = style.copy(fontSize = style.fontSize * 0.8f, lineHeight = style.lineHeight * 0.85f))
         Credit(source)
     }
 }
@@ -322,8 +324,10 @@ private fun LyricLineView(
         spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow),
         label = "lineShift",
     )
+    val ui by AppSettings.ui.collectAsState()
+    val centred = ui.lyricsAlign == LyricsAlign.CENTER
     val base = lyricsStyle()
-    val style = if (motion.glow && isActive) base.copy(shadow = Shadow(bright.copy(alpha = 0.55f), blurRadius = 24f)) else base
+    val style = if ((motion.glow || ui.lyricsGlow) && isActive) base.copy(shadow = Shadow(bright.copy(alpha = 0.55f), blurRadius = 24f)) else base
     val text = remember(line) { if (line.words.isEmpty()) line.text else line.words.joinToString("") { it.text } }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     // Where each word sits, worked out once per layout rather than every frame.
@@ -368,7 +372,7 @@ private fun LyricLineView(
                 scaleY = scale
                 this.alpha = alpha
                 translationX = shift.toPx()
-                transformOrigin = TransformOrigin(0f, 0.5f)
+                transformOrigin = TransformOrigin(if (centred) 0.5f else 0f, 0.5f)
                 // The sweep below cuts into the text's own pixels, so it needs a layer of its own.
                 if (sweep) compositingStrategy = CompositingStrategy.Offscreen
             }
@@ -500,9 +504,14 @@ private const val RESUME_FOLLOW_MS = 3_000L
 /** How far ahead of its timestamp a line lights up. */
 private const val LINE_LEAD_MS = 150L
 
-/** The lyrics style at the size chosen in Settings. */
+/** The lyrics style at the size and alignment chosen in Settings. */
 @Composable
 private fun lyricsStyle(): androidx.compose.ui.text.TextStyle {
-    val scale = AppSettings.ui.collectAsState().value.lyricsTextScale
-    return LyricsTextStyle.copy(fontSize = LyricsTextStyle.fontSize * scale, lineHeight = LyricsTextStyle.lineHeight * scale)
+    val ui = AppSettings.ui.collectAsState().value
+    val scale = ui.lyricsTextScale
+    return LyricsTextStyle.copy(
+        fontSize = LyricsTextStyle.fontSize * scale,
+        lineHeight = LyricsTextStyle.lineHeight * scale,
+        textAlign = if (ui.lyricsAlign == LyricsAlign.CENTER) TextAlign.Center else TextAlign.Start,
+    )
 }

@@ -271,7 +271,64 @@ data class InterfaceSettings(
     val hapticStrength: Float = 0.6f,
     /** Look for a new release once a day when the app opens. */
     val checkForUpdates: Boolean = true,
+    /** How the glass of the dock, buttons and bars looks. */
+    val glassStyle: GlassStyle = GlassStyle.FROSTED,
+    /** Pages blur and fade out as they scroll under the status bar. */
+    val frostedTopEdge: Boolean = true,
+    /** How the dock's highlight travels between tabs. */
+    val dockLens: DockLens = DockLens.STRETCH,
+    /** How one page gives way to the next. */
+    val pageTransition: PageTransition = PageTransition.SLIDE,
+    val lyricsAlign: LyricsAlign = LyricsAlign.LEFT,
+    /** A soft glow around the line being sung, whatever the lyrics animation. */
+    val lyricsGlow: Boolean = false,
+    /** Ask for the screen's fastest refresh rate while the app is open. */
+    val highRefreshRate: Boolean = true,
+    /** How the full player rises over the page and drops away. */
+    val playerMotion: PlayerMotion = PlayerMotion.SPRING,
 )
+
+/** How the full-screen player opens and closes. */
+@Serializable
+enum class PlayerMotion(val label: String, val summary: String) {
+    SPRING("Spring", "Rises quickly and settles with a hint of give"),
+    SMOOTH("Smooth", "One slow, even glide with no bounce"),
+    BOUNCY("Bouncy", "Overshoots the top a little and bounces into place"),
+    SNAPPY("Snappy", "Up and down in a blink"),
+}
+
+/** The glass the floating parts of the app are made of. */
+@Serializable
+enum class GlassStyle(val label: String, val summary: String) {
+    FROSTED("Frosted", "Soft blur under a light film"),
+    CLEAR("Clear", "Thin glass that lets most of the colour through"),
+    HEAVY("Heavy frost", "Thick, milky glass that hides what's behind it"),
+    TINTED("Tinted", "Glass washed with your accent colour"),
+    SMOKE("Smoke", "Dark smoked glass with deep contrast"),
+}
+
+/** How the dock's highlight moves to the tab you pick. */
+@Serializable
+enum class DockLens(val label: String, val summary: String) {
+    STRETCH("Stretch", "The front edge leads and the back catches up, like a drop pulled along"),
+    JELLY("Jelly", "Stretches, overshoots and wobbles into place"),
+    GLIDE("Glide", "Slides across in one piece"),
+}
+
+/** How pages come and go. */
+@Serializable
+enum class PageTransition(val label: String, val summary: String) {
+    SLIDE("Slide", "New pages slide in a little from the side"),
+    FADE("Fade", "Pages cross-fade in place"),
+    ZOOM("Zoom", "New pages grow into view; going back, they shrink away"),
+    RISE("Rise", "New pages rise up from below"),
+}
+
+@Serializable
+enum class LyricsAlign(val label: String) {
+    LEFT("Left"),
+    CENTER("Centre"),
+}
 
 @Serializable
 data class LibrarySettings(
@@ -305,6 +362,8 @@ enum class DockMotion(val label: String, val summary: String) {
     RETRACT("Retract", "The dock pulls into the corner and unrolls from it"),
     CASCADE("Cascade", "The tabs drop away one by one and come back in a wave"),
     DISSOLVE("Dissolve", "The dock blurs away and sharpens back into place"),
+    SQUASH("Squash", "The dock flattens into a line and springs back up"),
+    POP("Pop", "The dock shrinks into its middle and pops back out"),
 }
 
 /** How synced lyrics move as the song plays. */
