@@ -12,11 +12,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,7 +74,7 @@ fun RingtoneDialog(song: Song, onDismiss: () -> Unit) {
         else Toast.makeText(context, "OpenTune needs \"Modify system settings\" to change the ringtone", Toast.LENGTH_LONG).show()
     }
 
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Use as") },
         text = {
@@ -101,14 +99,14 @@ fun RingtoneDialog(song: Song, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(enabled = !busy, onClick = {
+            SheetButton("Set", enabled = !busy, onClick = {
                 if (Ringtones.allowed(context)) {
                     proceed()
                 } else {
                     systemSettings.launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, "package:${context.packageName}".toUri()))
                 }
-            }) { Text("Set") }
+            })
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
     )
 }

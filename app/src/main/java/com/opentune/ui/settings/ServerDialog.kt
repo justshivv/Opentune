@@ -4,12 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +18,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.opentune.data.subsonic.Subsonic
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.SheetButton
 import kotlinx.coroutines.launch
 
 /** Connects a Subsonic-compatible music server: Navidrome, Gonic, Airsonic, Nextcloud Music… */
@@ -33,7 +32,7 @@ fun ServerDialog(onDismiss: () -> Unit, onConnected: () -> Unit = {}) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Connect your music server") },
         text = {
@@ -69,7 +68,9 @@ fun ServerDialog(onDismiss: () -> Unit, onConnected: () -> Unit = {}) {
             }
         },
         confirmButton = {
-            TextButton(
+            SheetButton(
+                text = "Connect",
+                loading = busy,
                 enabled = !busy && address.isNotBlank() && user.isNotBlank() && password.isNotEmpty(),
                 onClick = {
                     busy = true
@@ -81,8 +82,8 @@ fun ServerDialog(onDismiss: () -> Unit, onConnected: () -> Unit = {}) {
                         busy = false
                     }
                 },
-            ) { if (busy) CircularProgressIndicator() else Text("Connect") }
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
     )
 }

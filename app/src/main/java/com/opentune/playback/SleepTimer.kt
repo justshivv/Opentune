@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 object SleepTimer {
     sealed interface State {
         data object Off : State
-        data class At(val endsAtMs: Long) : State
+        data class At(val endsAtMs: Long, val startedAtMs: Long = System.currentTimeMillis()) : State
         data object EndOfTrack : State
     }
 
@@ -20,6 +20,12 @@ object SleepTimer {
 
     fun startMinutes(minutes: Int) {
         _state.value = State.At(System.currentTimeMillis() + minutes * 60_000L)
+    }
+
+    /** Pushes a running timer back by [minutes]. */
+    fun addMinutes(minutes: Int) {
+        val s = _state.value as? State.At ?: return
+        _state.value = s.copy(endsAtMs = s.endsAtMs + minutes * 60_000L)
     }
 
     fun endOfTrack() {

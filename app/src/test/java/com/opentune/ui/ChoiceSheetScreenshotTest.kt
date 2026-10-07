@@ -18,7 +18,14 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.opentune.data.settings.AudioQuality
+import com.opentune.playback.SleepTimer
 import com.opentune.ui.components.ChoiceSheet
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.SheetButton
+import com.opentune.ui.components.SheetTone
+import com.opentune.ui.player.RemixSheet
+import com.opentune.ui.player.SleepTimerDialog
+import androidx.compose.material3.Text
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -65,6 +72,45 @@ class ChoiceSheetScreenshotTest {
         compose.waitForIdle()
         assertEquals(target, quality)
         assertTrue(!open)
+    }
+
+    @Test fun sleepTimer() {
+        SleepTimer.startMinutes(30)
+        SleepTimer.addMinutes(-12)
+        show { SleepTimerDialog(onDismiss = {}) }
+        save("sleep_timer")
+        SleepTimer.cancel()
+    }
+
+    @Test fun confirm() {
+        show {
+            FloatingDialog(
+                onDismissRequest = {},
+                title = { Text("Delete playlist?") },
+                text = { Text("Late night drive and its 42 songs go from this phone. Songs you saved stay saved.") },
+                confirmButton = { SheetButton("Delete", tone = SheetTone.Danger, onClick = {}) },
+                dismissButton = { SheetButton("Cancel", onClick = {}, closes = true) },
+            )
+        }
+        save("confirm_dialog")
+    }
+
+    @Test fun remix() {
+        show { RemixSheet(onDismiss = {}) }
+        save("remix_sheet")
+    }
+
+    private fun show(content: @androidx.compose.runtime.Composable () -> Unit) {
+        compose.setContent {
+            MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65), onPrimary = Color(0xFF3A1206))) {
+                Surface(color = Color(0xFF0B0B0E)) {
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF3A2A4A), Color(0xFF101014)))))
+                    content()
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
     }
 
     private fun save(name: String) {

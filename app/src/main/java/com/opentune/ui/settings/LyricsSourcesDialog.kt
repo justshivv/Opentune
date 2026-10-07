@@ -12,20 +12,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DragHandle
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +38,8 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.DEFAULT_LYRICS_SOURCES
 import com.opentune.data.settings.LyricsSourceEntry
 import com.opentune.ui.components.AppSwitch
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.SheetButton
 import kotlin.math.roundToInt
 
 private val ROW = 68.dp
@@ -60,7 +60,7 @@ fun LyricsSourcesDialog(onDismiss: () -> Unit) {
 
     fun save(list: List<LyricsSourceEntry>) = AppSettings.updateLyrics { it.copy(sources = list) }
 
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Lyrics sources", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
         text = {
@@ -158,11 +158,9 @@ fun LyricsSourcesDialog(onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { SheetButton("Done", onClick = onDismiss, closes = true) },
         dismissButton = {
-            TextButton(onClick = { AppSettings.updateLyrics { it.copy(sources = DEFAULT_LYRICS_SOURCES, preferWordSynced = false) } }) {
-                Text("Reset to default")
-            }
+            SheetButton("Reset to default", onClick = { AppSettings.updateLyrics { it.copy(sources = DEFAULT_LYRICS_SOURCES, preferWordSynced = false) } })
         },
     )
 }

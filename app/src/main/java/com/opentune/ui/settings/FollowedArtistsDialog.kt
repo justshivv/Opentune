@@ -13,12 +13,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,6 +31,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.opentune.data.releases.NewReleases
 import com.opentune.ui.components.Artwork
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.SheetButton
 import kotlinx.coroutines.launch
 
 /** The artists followed for new-release alerts, with unfollow and a check right now. */
@@ -42,7 +42,7 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     val followed by NewReleases.followed.collectAsState()
     var status by remember { mutableStateOf<String?>(null) }
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Followed artists") },
         text = {
@@ -62,10 +62,10 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { SheetButton("Done", onClick = onDismiss, closes = true) },
         dismissButton = {
             if (followed.isNotEmpty()) {
-                TextButton(onClick = {
+                SheetButton("Check now", onClick = {
                     status = "Checking…"
                     scope.launch {
                         status = runCatching { NewReleases.check() }.fold(
@@ -76,7 +76,7 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
                             { "Couldn't check: ${it.message}" },
                         )
                     }
-                }) { Text("Check now") }
+                })
             }
         },
     )

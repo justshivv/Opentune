@@ -36,12 +36,10 @@ import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -79,10 +77,12 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.playback.SleepTimer
 import com.opentune.ui.LyricsState
 import com.opentune.ui.components.Artwork
+import com.opentune.ui.components.FloatingDialog
 import com.opentune.ui.components.NowPlayingBars
+import com.opentune.ui.components.SheetButton
 import com.opentune.ui.components.glass
-import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private val QUEUE_ROW = 64.dp
 
@@ -345,34 +345,3 @@ fun sleepTimerLabel(): String? {
     }
 }
 
-@Composable
-fun SleepTimerDialog(onDismiss: () -> Unit) {
-    val state by SleepTimer.state.collectAsState()
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Rounded.Bedtime, null) },
-        title = { Text("Sleep timer") },
-        text = {
-            Column {
-                listOf(15, 30, 45, 60, 90).forEach { m ->
-                    TimerOption("$m minutes") { SleepTimer.startMinutes(m); onDismiss() }
-                }
-                TimerOption("End of this song") { SleepTimer.endOfTrack(); onDismiss() }
-                sleepTimerLabel()?.let { Text(it, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp)) }
-            }
-        },
-        confirmButton = {
-            if (state != SleepTimer.State.Off) TextButton(onClick = { SleepTimer.cancel(); onDismiss() }) { Text("Turn off") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-    )
-}
-
-@Composable
-private fun TimerOption(label: String, onClick: () -> Unit) {
-    Text(
-        label,
-        style = MaterialTheme.typography.bodyLarge,
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 12.dp, horizontal = 4.dp),
-    )
-}

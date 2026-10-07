@@ -1,28 +1,24 @@
 package com.opentune.ui.components
 
-import com.opentune.data.Ringtones
-import androidx.compose.material.icons.rounded.NotificationsActive
-import com.opentune.data.isYouTubeId
 import android.content.Intent
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
@@ -34,21 +30,18 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.ThumbDownOffAlt
 import androidx.compose.material.icons.rounded.Videocam
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,13 +51,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.opentune.data.Ringtones
 import com.opentune.data.download.DownloadState
 import com.opentune.data.download.Downloads
+import com.opentune.data.isYouTubeId
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.model.ROW_ART_PX
@@ -114,11 +110,13 @@ fun SongMenuSheet(
     val local = !isYouTubeId(song.videoId)
     var pickPlaylist by remember { mutableStateOf(false) }
     var ringtone by remember { mutableStateOf(false) }
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val close = onDismiss
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState())) {
+    FloatingCard(onDismiss = onDismiss, contentPadding = PaddingValues(0.dp)) {
+        // Menu picks play the card out as they act.
+        val card = LocalFloatingCard.current
+        val close: () -> Unit = { card?.close() ?: onDismiss() }
+        Column(Modifier.verticalScroll(rememberScrollState())) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(56.dp))
                 Spacer(Modifier.size(14.dp))
@@ -223,7 +221,7 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
     val playlists by LibraryStore.playlists.collectAsState()
     var naming by remember { mutableStateOf(playlists.isEmpty()) }
     var name by remember { mutableStateOf("") }
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (naming) "New playlist" else "Add to playlist") },
         text = {
@@ -243,9 +241,9 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
         },
         confirmButton = {
             if (naming) {
-                TextButton(onClick = { LibraryStore.createPlaylist(name, song); onDone() }) { Text("Create") }
+                SheetButton("Create", onClick = { LibraryStore.createPlaylist(name, song); onDone() })
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
     )
 }

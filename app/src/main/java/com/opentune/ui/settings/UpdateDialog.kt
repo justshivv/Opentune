@@ -8,11 +8,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +24,8 @@ import androidx.core.net.toUri
 import com.opentune.BuildConfig
 import com.opentune.data.UpdateCheck
 import com.opentune.data.Updater
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.SheetButton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -67,7 +67,7 @@ fun UpdateDialog(release: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: 
         }
     }
 
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = { if (progress == null) onDismiss() },
         title = { Text("OpenTune ${release.version}") },
         text = {
@@ -93,19 +93,19 @@ fun UpdateDialog(release: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: 
         },
         confirmButton = {
             if (apk == null) {
-                TextButton(onClick = {
+                SheetButton("Open release page", onClick = {
                     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, release.page.toUri())) }
                     onDismiss()
-                }) { Text("Open release page") }
+                })
             } else {
-                TextButton(enabled = progress == null, onClick = ::start) { Text("Update") }
+                SheetButton("Update", enabled = progress == null, onClick = ::start)
             }
         },
         dismissButton = {
             if (progress != null) {
-                TextButton(onClick = { job?.cancel() }) { Text("Cancel") }
+                SheetButton("Cancel", onClick = { job?.cancel() })
             } else {
-                TextButton(onClick = onNotNow) { Text("Not now") }
+                SheetButton("Not now", onClick = onNotNow, closes = true)
             }
         },
     )

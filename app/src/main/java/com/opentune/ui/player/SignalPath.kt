@@ -9,10 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -27,6 +25,8 @@ import com.opentune.data.NerdStats
 import com.opentune.data.settings.AppSettings
 import com.opentune.playback.AudioFormatInfo
 import com.opentune.playback.BitPerfectUsb
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.SheetButton
 
 /**
  * Every stage the sound passes through, from the stream to the speaker, with
@@ -59,7 +59,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
     val kbps = format?.bitrateKbps ?: picked?.second
     val rate = format?.sampleRateHz
 
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Signal path") },
         text = {
@@ -115,7 +115,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
                 Stage(Tone.INFO, "Output", device)
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { SheetButton("Close", onClick = onDismiss, closes = true) },
     )
 }
 

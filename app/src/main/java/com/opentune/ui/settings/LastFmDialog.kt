@@ -5,12 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +21,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.opentune.data.lastfm.LastFm
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.SheetButton
 import kotlinx.coroutines.launch
 
 /**
@@ -41,7 +40,7 @@ fun LastFmDialog(onDismiss: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Connect Last.fm") },
         text = {
@@ -50,9 +49,9 @@ fun LastFmDialog(onDismiss: () -> Unit) {
                     "Create a free API account at last.fm/api, then paste its key and secret here and sign in with your Last.fm login.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                TextButton(onClick = {
+                SheetButton("Get an API key", onClick = {
                     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://www.last.fm/api/account/create".toUri())) }
-                }) { Text("Get an API key") }
+                })
                 OutlinedTextField(key, { key = it }, label = { Text("API key") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(secret, { secret = it }, label = { Text("Shared secret") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(user, { user = it }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -68,7 +67,9 @@ fun LastFmDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(
+            SheetButton(
+                text = "Sign in",
+                loading = busy,
                 enabled = !busy && key.isNotBlank() && secret.isNotBlank() && user.isNotBlank() && password.isNotEmpty(),
                 onClick = {
                     busy = true
@@ -80,8 +81,8 @@ fun LastFmDialog(onDismiss: () -> Unit) {
                         busy = false
                     }
                 },
-            ) { if (busy) CircularProgressIndicator() else Text("Sign in") }
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
     )
 }

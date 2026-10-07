@@ -1,9 +1,5 @@
 package com.opentune.ui.library
 
-import androidx.compose.material.icons.rounded.Radio
-import androidx.compose.material.icons.rounded.Dns
-import com.opentune.data.subsonic.Subsonic
-import com.opentune.ui.ScreenCache
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +24,7 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
@@ -35,8 +32,8 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -70,12 +67,17 @@ import com.opentune.data.library.LibraryStore
 import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.artworkAt
+import com.opentune.data.subsonic.Subsonic
+import com.opentune.ui.ScreenCache
 import com.opentune.ui.browse.SongActions
 import com.opentune.ui.components.Artwork
+import com.opentune.ui.components.FloatingDialog
 import com.opentune.ui.components.GlassIconButton
 import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.PageHeader
 import com.opentune.ui.components.SectionHeader
+import com.opentune.ui.components.SheetButton
+import com.opentune.ui.components.SheetTone
 import com.opentune.ui.components.SongListItem
 import com.opentune.ui.components.pressable
 import java.util.Calendar
@@ -312,12 +314,12 @@ private fun PlaylistRow(art: String?, title: String, subtitle: String, onClick: 
 @Composable
 internal fun NameDialog(title: String, initial: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var name by remember { mutableStateOf(initial) }
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("Name") }) },
-        confirmButton = { TextButton(onClick = { onConfirm(name) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { SheetButton("Save", onClick = { onConfirm(name) }) },
+        dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
     )
 }
 
@@ -418,12 +420,12 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     val songs = remember(playlist) { playlist.songs.map { it.toSong() } }
     if (renaming) NameDialog("Rename playlist", playlist.name, onDismiss = { renaming = false }) { LibraryStore.renamePlaylist(id, it); renaming = false }
     if (deleting) {
-        AlertDialog(
+        FloatingDialog(
             onDismissRequest = { deleting = false },
             title = { Text("Delete \"${playlist.name}\"?") },
             text = { Text("The songs stay where they are; only this list goes.") },
-            confirmButton = { TextButton(onClick = { deleting = false; LibraryStore.deletePlaylist(id) }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancel") } },
+            confirmButton = { SheetButton("Delete", tone = SheetTone.Danger, onClick = { deleting = false; LibraryStore.deletePlaylist(id) }) },
+            dismissButton = { SheetButton("Cancel", onClick = { deleting = false }, closes = true) },
         )
     }
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {

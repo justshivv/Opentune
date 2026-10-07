@@ -1,36 +1,38 @@
 package com.opentune.ui.player
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.opentune.data.settings.AppSettings
-import com.opentune.data.settings.ReverbLevel
 import com.opentune.data.settings.RemixPreset
+import com.opentune.data.settings.ReverbLevel
 import com.opentune.playback.SoundEffects
+import com.opentune.ui.components.FloatingCard
+import com.opentune.ui.components.SheetButton
+import com.opentune.ui.components.SheetTone
 import kotlin.math.roundToInt
 
 /**
@@ -45,23 +47,21 @@ fun RemixSheet(onDismiss: () -> Unit) {
     var linked by rememberSaveable { mutableStateOf(sound.speed == sound.pitch) }
     val preset = RemixPreset.matching(sound)
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    FloatingCard(
+        onDismiss = onDismiss,
+        title = "Remix",
+        icon = Icons.Rounded.GraphicEq,
+        subtitle = preset?.label ?: "Custom",
+        contentPadding = PaddingValues(0.dp),
+        actions = {
+            SheetButton("Reset", onClick = { AppSettings.updateSound { RemixPreset.NORMAL.sound } }, modifier = Modifier.weight(1f), enabled = !sound.isDefault)
+            SheetButton("Done", onClick = onDismiss, modifier = Modifier.weight(1f), tone = SheetTone.Primary, closes = true)
+        },
+    ) {
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding(),
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Remix", style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        preset?.label ?: "Custom",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = { AppSettings.updateSound { RemixPreset.NORMAL.sound } }, enabled = !sound.isDefault) { Text("Reset") }
-            }
-
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RemixPreset.entries.forEach { p ->
                     FilterChip(

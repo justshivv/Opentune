@@ -5,12 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +21,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.opentune.data.listenbrainz.ListenBrainz
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.SheetButton
 import kotlinx.coroutines.launch
 
 /** Connects ListenBrainz with the user token from listenbrainz.org/settings. */
@@ -35,7 +34,7 @@ fun ListenBrainzDialog(onDismiss: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Connect ListenBrainz") },
         text = {
@@ -45,9 +44,9 @@ fun ListenBrainzDialog(onDismiss: () -> Unit) {
                         "Sign in there, copy your user token from the settings page, and paste it here.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                TextButton(onClick = {
+                SheetButton("Get your token", onClick = {
                     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://listenbrainz.org/settings/".toUri())) }
-                }) { Text("Get your token") }
+                })
                 OutlinedTextField(
                     token, { token = it },
                     label = { Text("User token") },
@@ -60,7 +59,9 @@ fun ListenBrainzDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(
+            SheetButton(
+                text = "Connect",
+                loading = busy,
                 enabled = !busy && token.isNotBlank(),
                 onClick = {
                     busy = true
@@ -72,8 +73,8 @@ fun ListenBrainzDialog(onDismiss: () -> Unit) {
                         busy = false
                     }
                 },
-            ) { if (busy) CircularProgressIndicator() else Text("Connect") }
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
     )
 }

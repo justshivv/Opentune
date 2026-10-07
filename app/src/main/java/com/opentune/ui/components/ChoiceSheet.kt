@@ -16,13 +16,13 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -78,10 +78,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Pick one of a few options, as a card that floats up from the bottom over
- * a frosted blur of the app (dimmed where the phone can't blur behind a
- * window). Each option is a tile with its name and, after " · " in
- * [label], a line about it. A tinted lens marks the current choice; tapping
+ * Pick one of a few options, in a [FloatingCard]. Each option is a tile
+ * with its name and, after " · " in [label], a line about it. A tinted lens marks the current choice; tapping
  * another slides the lens there on a spring, pops a check in and closes a
  * moment later, so the change is seen to land.
  */
@@ -98,87 +96,22 @@ fun <T> ChoiceSheet(
     val still = ui.reduceAnimation
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
-    var open by remember { mutableStateOf(false) }
     var picked by remember { mutableStateOf(selected) }
-    var closing by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { open = true }
-    fun close() {
-        if (closing) return
-        closing = true
-        scope.launch {
-            open = false
-            if (!still) delay(EXIT_MS)
-            onDismiss()
-        }
-    }
-
-    Dialog(
-        onDismissRequest = ::close,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        FrostBehind(enabled = !ui.reduceBlur)
-        // A dialog's content sits outside the app's Surface, so it needs its own text colour.
-        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-        val shown by animateFloatAsState(
-            if (open) 1f else 0f,
-            if (still) snap() else if (open) spring(dampingRatio = 0.8f, stiffness = 360f) else tween(EXIT_MS.toInt()),
-            label = "sheet",
-        )
-        Box(
-            Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { close() } },
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            val shape = RoundedCornerShape(32.dp)
-            Column(
-                Modifier
-                    .navigationBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 12.dp)
-                    .widthIn(max = 560.dp)
-                    .fillMaxWidth()
-                    .graphicsLayer {
-                        transformOrigin = TransformOrigin(0.5f, 1f)
-                        translationY = (1f - shown) * size.height * 0.5f
-                        val s = 0.92f + 0.08f * shown
-                        scaleX = s
-                        scaleY = s
-                        alpha = shown.coerceIn(0f, 1f)
-                    }
-                    .shadow(32.dp, shape, ambientColor = MaterialTheme.colorScheme.scrim, spotColor = MaterialTheme.colorScheme.scrim)
-                    .clip(shape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f))
-                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape)
-                    // Taps on the card stay on the card.
-                    .pointerInput(Unit) { detectTapGestures { } }
-                    .padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 14.dp),
-            ) {
-                Box(
-                    Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp)
-                        .size(width = 36.dp, height = 4.dp).clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)),
-                )
-                Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                    Box(
-                        Modifier.size(40.dp).clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                            .clickable(onClickLabel = "Close", role = Role.Button) { close() },
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Rounded.Close, "Close", Modifier.size(20.dp)) }
-                }
-                Options(options, picked, label, still) { o ->
-                    if (closing) return@Options
-                    if (o != picked) {
-                        haptics.tick()
-                        picked = o
-                        onSelect(o)
-                    }
-                    scope.launch {
-                        if (!still) delay(SETTLE_MS)
-                        close()
-                    }
-                }
+    var done by remember { mutableStateOf(false) }
+    FloatingCard(onDismiss = onDismiss, title = title, contentPadding = PaddingValues(0.dp)) {
+        val card = LocalFloatingCard.current
+        Options(options, picked, label, still) { o ->
+            if (done) return@Options
+            done = true
+            if (o != picked) {
+                haptics.tick()
+                picked = o
+                onSelect(o)
             }
-        }
+            scope.launch {
+                if (!still) delay(SETTLE_MS)
+                card?.close() ?: onDismiss()
+            }
         }
     }
 }
@@ -305,24 +238,5 @@ private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolea
     }
 }
 
-/** Frosts what's behind the dialog's window where the phone allows it; dims it either way. */
-@Composable
-private fun FrostBehind(enabled: Boolean) {
-    val view = LocalView.current
-    val density = LocalDensity.current
-    DisposableEffect(view, enabled) {
-        val window = (view.parent as? DialogWindowProvider)?.window
-        if (window != null) {
-            window.setDimAmount(if (enabled) 0.35f else 0.55f)
-            if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && window.windowManager.isCrossWindowBlurEnabled) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-                window.attributes = window.attributes.apply { blurBehindRadius = with(density) { 36.dp.roundToPx() } }
-            }
-        }
-        onDispose { }
-    }
-}
-
-private const val EXIT_MS = 200L
 /** How long the lens and check get to land before the sheet closes. */
 private const val SETTLE_MS = 300L

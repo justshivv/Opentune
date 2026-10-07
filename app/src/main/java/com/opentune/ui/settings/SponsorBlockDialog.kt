@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,12 +18,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.sponsorblock.SponsorBlock
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.SheetButton
 
 /** Which SponsorBlock categories are skipped. */
 @Composable
 fun SponsorBlockDialog(onDismiss: () -> Unit) {
     val pb by AppSettings.playback.collectAsState()
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Skip in music videos") },
         text = {
@@ -56,6 +56,6 @@ fun SponsorBlockDialog(onDismiss: () -> Unit) {
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { SheetButton("Done", onClick = onDismiss, closes = true) },
     )
 }

@@ -1,69 +1,29 @@
 package com.opentune.ui.player
 
-import androidx.compose.runtime.produceState
-import com.opentune.data.covers.AlbumCovers
-import kotlinx.coroutines.flow.distinctUntilChanged
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.animation.AnimatedContent
-import com.opentune.data.LogExport
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material.icons.rounded.BugReport
-import androidx.compose.ui.platform.LocalContext
-import android.widget.Toast
-import android.content.ClipboardManager
 import android.content.ClipData
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.rounded.Bedtime
-import androidx.compose.material.icons.rounded.HighQuality
-import com.opentune.playback.PlaybackRequests
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.opentune.data.library.LibraryStore
-import com.opentune.data.settings.PlayerStyle
-import com.opentune.data.model.ROW_ART_PX
-import com.opentune.data.model.artworkAt
-import com.opentune.ui.components.Artwork
-import com.opentune.ui.components.LocalBackdrop
-import com.opentune.ui.components.LocalHazeState
-import com.opentune.ui.components.LocalSongMenu
-import com.opentune.ui.components.MenuRow
-import com.opentune.ui.components.SongMenuSheet
-import com.opentune.ui.components.glass
+import android.content.ClipboardManager
+import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -72,50 +32,90 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.opentune.data.settings.AppSettings
-import com.opentune.data.settings.RemixPreset
-import com.opentune.data.settings.InterfaceSettings
-import com.opentune.data.settings.SoundSettings
-import com.opentune.playback.AudioFormatInfo
-import com.opentune.data.settings.ThemeSettings
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.opentune.data.LogExport
+import com.opentune.data.covers.AlbumCovers
+import com.opentune.data.library.LibraryStore
+import com.opentune.data.model.ROW_ART_PX
 import com.opentune.data.model.Song
+import com.opentune.data.model.artworkAt
+import com.opentune.data.settings.AppSettings
+import com.opentune.data.settings.InterfaceSettings
+import com.opentune.data.settings.PlayerStyle
+import com.opentune.data.settings.RemixPreset
+import com.opentune.data.settings.SoundSettings
+import com.opentune.data.settings.ThemeSettings
+import com.opentune.data.together.Together
+import com.opentune.playback.AudioFormatInfo
+import com.opentune.playback.PlaybackRequests
 import com.opentune.ui.LyricsState
 import com.opentune.ui.PlayerViewModel
-import com.opentune.data.together.Together
+import com.opentune.ui.components.Artwork
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.LocalBackdrop
+import com.opentune.ui.components.LocalHazeState
+import com.opentune.ui.components.LocalSongMenu
 import com.opentune.ui.components.MarqueeText
+import com.opentune.ui.components.MenuRow
+import com.opentune.ui.components.SheetButton
+import com.opentune.ui.components.SongMenuSheet
+import com.opentune.ui.components.glass
 import com.opentune.ui.theme.PlayerTheme
 import com.opentune.ui.theme.rememberArtworkSeed
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -559,7 +559,7 @@ private fun LyricsOffsetDialog(videoId: String, onDismiss: () -> Unit) {
     val lyrics by AppSettings.lyrics.collectAsState()
     val ms = lyrics.offsets[videoId] ?: 0L
     fun set(v: Long) = AppSettings.setLyricsOffset(videoId, v.coerceIn(-10_000, 10_000))
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Lyrics offset") },
         text = {
@@ -586,8 +586,8 @@ private fun LyricsOffsetDialog(videoId: String, onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
-        dismissButton = { TextButton(onClick = { set(0) }) { Text("Reset") } },
+        confirmButton = { SheetButton("Done", onClick = onDismiss, closes = true) },
+        dismissButton = { SheetButton("Reset", onClick = { set(0) }) },
     )
 }
 

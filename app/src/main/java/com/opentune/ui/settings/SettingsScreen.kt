@@ -1,37 +1,11 @@
 package com.opentune.ui.settings
 
-import androidx.compose.material.icons.rounded.Dns
-import com.opentune.data.subsonic.Subsonic
-import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.Dock
-import com.opentune.data.settings.DockMotion
-import com.opentune.data.settings.ControlStyle
-import androidx.compose.material.icons.rounded.PlayCircle
-import com.opentune.data.listenbrainz.ListenBrainz
 import android.content.Context
-import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.SystemUpdate
-import com.opentune.data.library.LibraryStore
-import com.opentune.data.UpdateCheck
-import com.opentune.data.sponsorblock.SponsorBlock
-import com.opentune.data.settings.PlayerStyle
-import com.opentune.data.releases.NewReleases
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.NotificationsActive
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Headphones
-import androidx.compose.material.icons.rounded.FastForward
-import androidx.core.net.toUri
-import kotlin.math.roundToInt
-import com.opentune.data.LogExport
-import androidx.compose.material.icons.rounded.BugReport
-import androidx.compose.material.icons.rounded.FormatSize
-import androidx.compose.material.icons.rounded.BatteryChargingFull
-import android.provider.Settings
-import android.os.PowerManager
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,47 +27,60 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.AccountCircle
-import androidx.compose.material.icons.rounded.DownloadDone
-import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.BlurOff
 import androidx.compose.material.icons.rounded.BlurOn
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.material.icons.rounded.Dock
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MusicOff
 import androidx.compose.material.icons.rounded.NetworkCell
+import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SpaceBar
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.SurroundSound
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material.icons.rounded.Usb
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Wallpaper
-import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material.icons.rounded.Wifi
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -101,7 +88,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -122,34 +108,49 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coil3.SingletonImageLoader
 import com.opentune.BuildConfig
+import com.opentune.data.LogExport
+import com.opentune.data.UpdateCheck
 import com.opentune.data.account.AccountStore
 import com.opentune.data.download.DownloadState
 import com.opentune.data.download.Downloads
 import com.opentune.data.history.History
 import com.opentune.data.lastfm.LastFm
+import com.opentune.data.library.LibraryStore
+import com.opentune.data.listenbrainz.ListenBrainz
 import com.opentune.data.local.LocalMusic
+import com.opentune.data.releases.NewReleases
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
+import com.opentune.data.settings.ControlStyle
+import com.opentune.data.settings.DockMotion
 import com.opentune.data.settings.LyricsAnimation
 import com.opentune.data.settings.PaletteStyleOption
 import com.opentune.data.settings.PlayerBackground
+import com.opentune.data.settings.PlayerStyle
 import com.opentune.data.settings.SEED_COLORS
 import com.opentune.data.settings.ThemeMode
+import com.opentune.data.sponsorblock.SponsorBlock
+import com.opentune.data.subsonic.Subsonic
 import com.opentune.playback.AudioCache
 import com.opentune.playback.BitPerfectUsb
-import com.opentune.ui.components.ChoiceSheet
 import com.opentune.ui.components.Artwork
+import com.opentune.ui.components.ChoiceSheet
+import com.opentune.ui.components.FloatingDialog
 import com.opentune.ui.components.GroupCard
-import com.opentune.ui.components.liquidGlassSupported
 import com.opentune.ui.components.GroupLabel
 import com.opentune.ui.components.NavRow
 import com.opentune.ui.components.PageHeader
 import com.opentune.ui.components.PillSegmented
 import com.opentune.ui.components.RowDivider
 import com.opentune.ui.components.SettingRow
+import com.opentune.ui.components.SheetButton
+import com.opentune.ui.components.SheetTone
 import com.opentune.ui.components.ToggleRow
+import com.opentune.ui.components.liquidGlassSupported
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -375,18 +376,18 @@ private fun settingsSections(
         )
     }
     if (confirmSignOut) {
-        AlertDialog(
+        FloatingDialog(
             onDismissRequest = { confirmSignOut = false },
             title = { Text("Sign out?") },
             text = { Text("Your likes and playlists on this device stay. YouTube Music stops seeing what you play here.") },
             confirmButton = {
-                TextButton(onClick = {
+                SheetButton("Sign out", tone = SheetTone.Danger, onClick = {
                     confirmSignOut = false
                     AccountStore.signOut()
                     android.webkit.CookieManager.getInstance().removeAllCookies(null)
-                }) { Text("Sign out") }
+                })
             },
-            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") } },
+            dismissButton = { SheetButton("Cancel", onClick = { confirmSignOut = false }, closes = true) },
         )
     }
     if (folderDialog) {
@@ -407,7 +408,7 @@ private fun settingsSections(
         )
     }
     message?.let { m ->
-        AlertDialog(onDismissRequest = { message = null }, confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } }, text = { Text(m) })
+        FloatingDialog(onDismissRequest = { message = null }, confirmButton = { SheetButton("OK", onClick = { message = null }, closes = true) }, text = { Text(m) })
     }
 
     return listOf(

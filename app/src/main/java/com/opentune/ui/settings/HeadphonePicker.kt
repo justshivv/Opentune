@@ -10,13 +10,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.opentune.data.autoeq.AutoEq
 import com.opentune.data.settings.AppSettings
+import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.SheetButton
 import kotlinx.coroutines.launch
 
 /**
@@ -48,7 +48,7 @@ fun HeadphonePickerDialog(onDismiss: () -> Unit) {
     val results = remember(index, query) { index?.let { AutoEq.search(it, query) }.orEmpty() }
     LaunchedEffect(query) { error = null }
 
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Your headphones") },
         text = {
@@ -93,6 +93,6 @@ fun HeadphonePickerDialog(onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { SheetButton("Close", onClick = onDismiss, closes = true) },
     )
 }

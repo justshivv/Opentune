@@ -1,21 +1,9 @@
 package com.opentune.ui.radio
 
 import android.content.Intent
-import androidx.core.net.toUri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.rounded.LocationOff
-import androidx.compose.material.icons.rounded.NearMe
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TextButton
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.platform.LocalContext
-import com.opentune.data.radio.ApproxLocation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,16 +21,21 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.LocationOff
+import androidx.compose.material.icons.rounded.NearMe
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -50,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -57,16 +51,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import com.opentune.data.radio.ApproxLocation
 import com.opentune.data.radio.Radio
 import com.opentune.ui.browse.SongActions
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.ErrorState
+import com.opentune.ui.components.FloatingDialog
 import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.PageHeader
 import com.opentune.ui.components.SectionHeader
+import com.opentune.ui.components.SheetButton
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -451,7 +450,7 @@ private fun AddStationDialog(onDismiss: () -> Unit, onAdd: (String, String) -> U
     var name by rememberSaveable { mutableStateOf("") }
     var url by rememberSaveable { mutableStateOf("") }
     val ok = name.isNotBlank() && Radio.isStreamUrl(url)
-    AlertDialog(
+    FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add a station") },
         text = {
@@ -468,7 +467,7 @@ private fun AddStationDialog(onDismiss: () -> Unit, onAdd: (String, String) -> U
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onAdd(name, url) }, enabled = ok) { Text("Add") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { SheetButton("Add", onClick = { onAdd(name, url) }, enabled = ok) },
+        dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
     )
 }
