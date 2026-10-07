@@ -115,7 +115,7 @@ internal fun ExploreBoard(
         verticalItemSpacing = 10.dp,
         modifier = Modifier.fillMaxSize(),
     ) {
-        item(span = StaggeredGridItemSpan.FullLine, key = "header") { PageHeader("Explore") }
+        item(span = StaggeredGridItemSpan.FullLine, key = "header") { PageHeader("Explore", subtitle = "A new mood. A new favorite.") }
         if (canvas == null) {
             item(span = StaggeredGridItemSpan.FullLine, key = "pillsLoading") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 4.dp)) {

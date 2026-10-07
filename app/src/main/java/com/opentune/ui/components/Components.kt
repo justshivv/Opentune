@@ -299,15 +299,16 @@ fun ItemCard(
     type: BrowseType?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    width: Dp = 156.dp,
+    width: Dp = 164.dp,
 ) {
     val round = type == BrowseType.ARTIST
     Column(
         modifier = modifier
             .width(width)
             .clip(MaterialTheme.shapes.medium)
+            .background(if (round) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow)
             .pressable(onClick, onClickLabel = "Open $title")
-            .padding(6.dp),
+            .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Artwork(
@@ -381,8 +382,8 @@ fun <T> Shelf(
     Column {
         SectionHeader(title, subtitle = subtitle)
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(items) { card(it) }
         }

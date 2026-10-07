@@ -37,6 +37,9 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -224,24 +227,30 @@ fun GlassBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 
 /** A page's top: optional glass back button and a large title. Draws under the status bar inset. */
 @Composable
-fun PageHeader(title: String, onBack: (() -> Unit)? = null, actions: (@Composable () -> Unit)? = null) {
-    Column(
+fun PageHeader(title: String, onBack: (() -> Unit)? = null, subtitle: String? = null, actions: (@Composable () -> Unit)? = null) {
+    Row(
         Modifier
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(top = 8.dp),
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 16.dp, top = 24.dp, bottom = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (onBack != null) GlassBackButton(onBack) else Box(Modifier.size(56.dp))
-            Box(Modifier.weight(1f))
-            actions?.invoke()
+        if (onBack != null) GlassBackButton(onBack, Modifier.padding(end = 12.dp))
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(
+                title,
+                style = if (onBack == null) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.headlineSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { heading() },
+            )
+            if (!subtitle.isNullOrBlank()) Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
-        Text(
-            title,
-            style = MaterialTheme.typography.displaySmall,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
-        )
+        actions?.invoke()
     }
 }

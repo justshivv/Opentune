@@ -27,31 +27,33 @@ import com.opentune.data.settings.PlayerMotion
 internal object PageMotion {
     fun enter(t: PageTransition, still: Boolean): EnterTransition = when {
         still -> fadeIn(tween(160))
-        t == PageTransition.SLIDE -> fadeIn(tween(220)) + slideInHorizontally(tween(260)) { it / 10 }
-        t == PageTransition.FADE -> fadeIn(tween(240, delayMillis = 60))
-        t == PageTransition.ZOOM -> fadeIn(tween(240)) + scaleIn(tween(320, easing = FastOutSlowInEasing), initialScale = 0.92f)
-        else -> fadeIn(tween(220)) + slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it / 8 }
+        t == PageTransition.SLIDE -> fadeIn(tween(220)) + slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { it / 16 }
+        t == PageTransition.FADE -> fadeIn(tween(220))
+        t == PageTransition.ZOOM -> fadeIn(tween(220)) + scaleIn(tween(300, easing = FastOutSlowInEasing), initialScale = 0.97f)
+        else -> fadeIn(tween(220)) + slideInVertically(tween(300, easing = FastOutSlowInEasing)) { it / 16 }
     }
 
     fun exit(t: PageTransition, still: Boolean): ExitTransition = when {
         still -> fadeOut(tween(120))
-        t == PageTransition.ZOOM -> fadeOut(tween(200)) + scaleOut(tween(320, easing = FastOutSlowInEasing), targetScale = 1.04f)
+        t == PageTransition.SLIDE -> fadeOut(tween(160)) + slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 32 }
+        t == PageTransition.ZOOM -> fadeOut(tween(180)) + scaleOut(tween(300, easing = FastOutSlowInEasing), targetScale = 1.02f)
         else -> fadeOut(tween(160))
     }
 
     fun popEnter(t: PageTransition, still: Boolean): EnterTransition = when {
         still -> fadeIn(tween(160))
-        t == PageTransition.ZOOM -> fadeIn(tween(240)) + scaleIn(tween(320, easing = FastOutSlowInEasing), initialScale = 1.04f)
-        t == PageTransition.FADE -> fadeIn(tween(240, delayMillis = 60))
+        t == PageTransition.SLIDE -> fadeIn(tween(220)) + slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 32 }
+        t == PageTransition.ZOOM -> fadeIn(tween(220)) + scaleIn(tween(300, easing = FastOutSlowInEasing), initialScale = 1.02f)
+        t == PageTransition.FADE -> fadeIn(tween(220))
         else -> fadeIn(tween(220))
     }
 
     fun popExit(t: PageTransition, still: Boolean): ExitTransition = when {
         still -> fadeOut(tween(120))
-        t == PageTransition.SLIDE -> fadeOut(tween(160)) + slideOutHorizontally(tween(260)) { it / 10 }
+        t == PageTransition.SLIDE -> fadeOut(tween(180)) + slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { it / 16 }
         t == PageTransition.FADE -> fadeOut(tween(160))
-        t == PageTransition.ZOOM -> fadeOut(tween(200)) + scaleOut(tween(280, easing = FastOutSlowInEasing), targetScale = 0.92f)
-        else -> fadeOut(tween(200)) + slideOutVertically(tween(280, easing = FastOutSlowInEasing)) { it / 8 }
+        t == PageTransition.ZOOM -> fadeOut(tween(180)) + scaleOut(tween(280, easing = FastOutSlowInEasing), targetScale = 0.97f)
+        else -> fadeOut(tween(180)) + slideOutVertically(tween(280, easing = FastOutSlowInEasing)) { it / 16 }
     }
 
     /** The full player rising over the page. */

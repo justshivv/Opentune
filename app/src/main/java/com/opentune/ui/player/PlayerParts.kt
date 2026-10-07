@@ -19,12 +19,15 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -64,6 +67,14 @@ import com.opentune.ui.components.glass
 import com.opentune.ui.components.pressable
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.contentDescription
+import com.opentune.data.settings.AppSettings
+import com.opentune.ui.components.contentSwap
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -426,45 +437,62 @@ fun PlayerControls(
         StyledControls(style, isPlaying, isBuffering, hasNext, onTogglePlay, onNext, onPrevious, animate, modifier)
         return
     }
+    val corner by animateDpAsState(
+        if (isPlaying) 28.dp else 42.dp,
+        if (animate) spring(dampingRatio = 0.9f, stiffness = 380f) else snap(),
+        label = "playShape",
+    )
     Row(
         modifier.fillMaxWidth().height(96.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GlyphButton(Icons.Rounded.FastRewind, "Previous", 64.dp, onClick = onPrevious)
+        GlyphButton(Icons.Rounded.SkipPrevious, "Previous", 30.dp, onClick = onPrevious)
         Box(contentAlignment = Alignment.Center) {
             if (isBuffering) {
-                CircularProgressIndicator(Modifier.size(84.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                CircularProgressIndicator(Modifier.size(94.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
             }
-            Box(Modifier.size(84.dp).pressable(onTogglePlay, 0.86f), contentAlignment = Alignment.Center) {
-                AnimatedContent(
-                    isPlaying,
-                    transitionSpec = { (scaleIn(initialScale = 0.6f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.6f) + fadeOut()) },
-                    label = "playIcon",
-                ) { playing ->
-                    Icon(
-                        if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        if (playing) "Pause" else "Play",
-                        Modifier.size(80.dp),
-                    )
-                }
+            Box(
+                Modifier.size(84.dp).clip(RoundedCornerShape(corner))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .pressable(onTogglePlay, 0.94f),
+                contentAlignment = Alignment.Center,
+            ) {
+                PlaybackGlyph(isPlaying, animate, Modifier.size(42.dp), MaterialTheme.colorScheme.onPrimary)
             }
         }
-        GlyphButton(Icons.Rounded.FastForward, "Next", 64.dp, enabled = hasNext, onClick = onNext)
+        GlyphButton(Icons.Rounded.SkipNext, "Next", 30.dp, enabled = hasNext, onClick = onNext)
     }
 }
 
 @Composable
 private fun GlyphButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, size: androidx.compose.ui.unit.Dp, enabled: Boolean = true, onClick: () -> Unit) {
     val alpha = if (enabled) 1f else 0.35f
-    Box(Modifier.size(size + 12.dp).pressable(onClick, 0.92f, enabled = enabled, onClickLabel = label), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)).pressable(onClick, 0.92f, enabled = enabled, onClickLabel = label), contentAlignment = Alignment.Center) {
         Icon(icon, label, Modifier.size(size), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
+    }
+}
+
+/** One play/pause treatment shared by the compact and full player. */
+@Composable
+private fun PlaybackGlyph(playing: Boolean, animate: Boolean, modifier: Modifier, tint: Color) {
+    AnimatedContent(
+        playing,
+        modifier = modifier,
+        transitionSpec = {
+            if (!animate) (fadeIn(tween(0)) togetherWith fadeOut(tween(0))).using(null)
+            else ((fadeIn(tween(140)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.8f)) togetherWith
+                (fadeOut(tween(90)) + scaleOut(tween(140), targetScale = 0.8f))).using(null)
+        },
+        label = "playbackGlyph",
+    ) { on ->
+        Icon(if (on) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (on) "Pause" else "Play", Modifier.fillMaxSize(), tint = tint)
     }
 }
 
 /**
  * Now playing, above the dock: a card tinted with the cover's colour, with
- * the song's progress as a ring around the play button. Swipe it sideways to
+ * a slim progress line along its bottom edge. Swipe it sideways to
  * skip. [inline] is the round bubble the card becomes while a page scrolls:
  * the cover in a circle, ringed by progress; tap it to open the player.
  */
@@ -483,18 +511,25 @@ fun MiniPlayer(
     inline: Boolean = false,
 ) {
     val offsetX = remember { Animatable(0f) }
+    val ui by AppSettings.ui.collectAsState()
+    val next by rememberUpdatedState(onNext)
+    val previous by rememberUpdatedState(onPrevious)
     val scope = rememberCoroutineScope()
     val threshold = with(LocalDensity.current) { 72.dp.toPx() }
     val accent = MaterialTheme.colorScheme.primary
     val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
     // The cover's own colour, faded into the glass, so each song tints the card.
     val seed = rememberArtworkSeed(song.thumbnailUrl)
-    val tint by animateColorAsState((seed ?: MaterialTheme.colorScheme.surfaceContainerHigh).copy(alpha = 0.38f), tween(600), label = "miniTint")
+    val tint by animateColorAsState(
+        lerp(MaterialTheme.colorScheme.surfaceContainerHigh, seed ?: accent, 0.16f).copy(alpha = 0.94f),
+        tween(if (ui.reduceAnimation) 0 else 450), label = "miniTint",
+    )
 
     if (inline) {
         Box(
             modifier
                 .glass(CircleShape, tint)
+                .semantics { contentDescription = "Open player: ${song.title}, ${song.artist}" }
                 .clickable(onClick = onClick)
                 .padding(4.dp),
             contentAlignment = Alignment.Center,
@@ -506,7 +541,7 @@ fun MiniPlayer(
         return
     }
 
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(24.dp)
     Surface(
         onClick = onClick,
         shape = shape,
@@ -514,40 +549,46 @@ fun MiniPlayer(
         modifier = modifier
             .graphicsLayer { translationX = offsetX.value }
             .glass(shape, tint)
-            .pointerInput(Unit) {
+            .border(0.75.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), shape)
+            .semantics { stateDescription = if (isBuffering) "Buffering" else if (isPlaying) "Playing" else "Paused" }
+            .pointerInput(hasNext) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
                         when {
-                            offsetX.value < -threshold -> onNext()
-                            offsetX.value > threshold -> onPrevious()
+                            offsetX.value < -threshold && hasNext -> next()
+                            offsetX.value > threshold -> previous()
                         }
-                        scope.launch { offsetX.animateTo(0f, spring(dampingRatio = 0.7f)) }
+                        scope.launch { offsetX.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 500f)) }
                     },
                     onDragCancel = { scope.launch { offsetX.animateTo(0f) } },
                 ) { change, amount ->
                     change.consume()
-                    scope.launch { offsetX.snapTo(offsetX.value + amount * 0.6f) }
+                    scope.launch { offsetX.snapTo((offsetX.value + amount * 0.6f).coerceIn(-threshold * 1.5f, threshold * 1.5f)) }
                 }
             },
     ) {
-        Row(Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(44.dp), RoundedCornerShape(12.dp))
-                    Column(Modifier.padding(start = 12.dp)) {
-                        Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxSize().padding(start = 12.dp, end = 8.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                AnimatedContent(song, transitionSpec = { contentSwap(ui.reduceAnimation).using(null) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(48.dp), RoundedCornerShape(14.dp))
+                        Column(Modifier.weight(1f).padding(start = 12.dp, end = 8.dp)) {
+                            Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
+                Box(Modifier.size(48.dp).clip(CircleShape).background(accent).pressable(onTogglePlay), contentAlignment = Alignment.Center) {
+                    if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize().padding(3.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    PlaybackGlyph(isPlaying, !ui.reduceAnimation, Modifier.size(26.dp), MaterialTheme.colorScheme.onPrimary)
+                }
+                IconButton(onClick = onNext, enabled = hasNext) {
+                    Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(26.dp))
+                }
             }
-            // Play inside the progress ring.
-            Box(Modifier.size(46.dp).clip(CircleShape).clickable(onClick = onTogglePlay), contentAlignment = Alignment.Center) {
-                ProgressRing(progress, accent, track, stroke = 2.5.dp, modifier = Modifier.matchParentSize().padding(3.dp))
-                if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize().padding(3.dp), strokeWidth = 2.5.dp, color = accent)
-                Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", Modifier.size(24.dp))
-            }
-            IconButton(onClick = onNext, enabled = hasNext) {
-                Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(26.dp))
+            Canvas(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 20.dp).height(3.dp)) {
+                drawLine(track, Offset.Zero, Offset(size.width, 0f), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+                drawLine(accent, Offset.Zero, Offset(size.width * progress().coerceIn(0f, 1f), 0f), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
             }
         }
     }

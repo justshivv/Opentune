@@ -116,7 +116,7 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
     }
 
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item { PageHeader("Podcasts") }
+        item { PageHeader("Podcasts", subtitle = "Stories worth staying for.") }
         item {
             TextField(
                 value = query,

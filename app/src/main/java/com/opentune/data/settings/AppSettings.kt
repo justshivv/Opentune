@@ -258,8 +258,10 @@ data class InterfaceSettings(
     val blurLyrics: Boolean = true,
     val statsForNerds: Boolean = false,
     val recentsAsGrid: Boolean = false,
-    /** Refracting Liquid Glass on Android 13+; frosted blur otherwise. */
-    val liquidGlass: Boolean = true,
+    /** Retained for backup compatibility; shader refraction has been retired. */
+    val liquidGlass: Boolean = false,
+    /** Fold navigation after deliberate scrolling; off keeps every destination in reach. */
+    val autoHideDock: Boolean = true,
     /** Draw the played part of the seek bar as a moving wave. */
     val wavySeekbar: Boolean = false,
     /** Proper album covers from MusicBrainz for music videos and local files without art. */
@@ -352,7 +354,7 @@ data class LibrarySettings(
 /** How the player's back, play/pause and forward buttons look and move. */
 @Serializable
 enum class ControlStyle(val label: String, val summary: String) {
-    CLASSIC("Classic", "Big bare glyphs; play and pause cross-fade"),
+    CLASSIC("Classic", "An accent play button that softly changes shape, with rounded skip controls"),
     MORPH("Morph", "Play folds into pause and the skip arrows roll on"),
     DISC("Disc", "Play and pause in a solid round button that pops"),
     SQUIRCLE("Squircle", "A rounded square that turns round while playing"),
@@ -484,13 +486,16 @@ object AppSettings {
         prefs = p
         connectivity = context.getSystemService(ConnectivityManager::class.java)
         val stored = p.getString(K_STATE, null)?.let { runCatching { json.decodeFromString<SettingsState>(it) }.getOrNull() }
-        publish(stored ?: migrateLegacy(p))
+        val restored = stored ?: migrateLegacy(p)
+        publish(restored)
+        if (restored != _state.value) p.edit { putString(K_STATE, json.encodeToString(SettingsState.serializer(), _state.value)) }
     }
 
     private fun publish(stored: SettingsState) {
         // Curves saved by the seven-band equalizer are redrawn on fifteen bands.
-        val s = if (stored.equalizer.bands.size == EQ_BANDS_HZ.size) stored
-        else stored.copy(equalizer = stored.equalizer.copy(bands = resampleBands(stored.equalizer.bands)))
+        val normalized = stored.curated()
+        val s = if (normalized.equalizer.bands.size == EQ_BANDS_HZ.size) normalized
+        else normalized.copy(equalizer = normalized.equalizer.copy(bands = resampleBands(normalized.equalizer.bands)))
         _state.value = s
         _theme.value = s.theme
         _sound.value = s.sound
@@ -505,7 +510,7 @@ object AppSettings {
     private fun update(transform: (SettingsState) -> SettingsState) {
         val s = transform(_state.value)
         publish(s)
-        prefs?.edit { putString(K_STATE, json.encodeToString(SettingsState.serializer(), s)) }
+        prefs?.edit { putString(K_STATE, json.encodeToString(SettingsState.serializer(), _state.value)) }
     }
 
     fun updateTheme(t: (ThemeSettings) -> ThemeSettings) = update { it.copy(theme = t(it.theme)) }
@@ -513,6 +518,8 @@ object AppSettings {
     fun updateEqualizer(t: (EqualizerSettings) -> EqualizerSettings) = update { it.copy(equalizer = t(it.equalizer)) }
     fun updatePlayback(t: (PlaybackSettings) -> PlaybackSettings) = update { it.copy(playback = t(it.playback)) }
     fun updateUi(t: (InterfaceSettings) -> InterfaceSettings) = update { it.copy(ui = t(it.ui)) }
+    fun applyAppearance(preset: AppearancePreset) = update { it.copy(theme = preset.theme(it.theme), ui = preset.ui(it.ui)) }
+    fun applyMotion(profile: MotionProfile) = updateUi(profile::apply)
     fun updateLibrary(t: (LibrarySettings) -> LibrarySettings) = update { it.copy(library = t(it.library)) }
     fun updateLyrics(t: (LyricsSettings) -> LyricsSettings) = update { it.copy(lyrics = t(it.lyrics)) }
 

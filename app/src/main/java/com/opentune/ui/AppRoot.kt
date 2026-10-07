@@ -424,7 +424,7 @@ fun AppRoot(vm: PlayerViewModel) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
                 SnackbarHost(snackbar)
                 BottomChrome(
-                    inline = chromeScroll.inline,
+                    inline = chromeUi.autoHideDock && chromeScroll.inline,
                     tabs = chromeTabs,
                     selected = if (route == SEARCH_ROUTE) null else tab.ordinal,
                     onSelect = { i ->

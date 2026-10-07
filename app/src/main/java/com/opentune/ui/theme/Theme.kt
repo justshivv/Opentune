@@ -12,6 +12,8 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +31,7 @@ import com.materialkolor.rememberDynamicColorScheme
 import com.opentune.data.settings.PaletteStyleOption
 import com.opentune.data.settings.ThemeMode
 import com.opentune.data.settings.ThemeSettings
+import com.opentune.data.settings.AppSettings
 
 @Composable
 fun ThemeSettings.isDark(): Boolean = when (mode) {
@@ -106,20 +109,21 @@ private fun ColorScheme.toPureBlack(): ColorScheme = copy(
     surface = Color.Black,
     surfaceVariant = Color(0xFF242426),
     surfaceContainerLowest = Color.Black,
-    surfaceContainerLow = Color(0xFF0E0E0F),
-    surfaceContainer = Color(0xFF1B1B1D),
-    surfaceContainerHigh = Color(0xFF232325),
-    surfaceContainerHighest = Color(0xFF2D2D30),
-    onSurface = Color(0xFFF2F2F3),
-    onBackground = Color(0xFFF2F2F3),
-    onSurfaceVariant = Color(0xFF9A9AA0),
+    surfaceContainerLow = Color(0xFF101114),
+    surfaceContainer = Color(0xFF191A1F),
+    surfaceContainerHigh = Color(0xFF24252B),
+    surfaceContainerHighest = Color(0xFF303138),
+    onSurface = Color(0xFFF5F4F7),
+    onBackground = Color(0xFFF5F4F7),
+    onSurfaceVariant = Color(0xFFB1B0BC),
     outline = Color(0xFF4A4A4F),
     outlineVariant = Color(0xFF2E2E32),
 )
 
 @Composable
 private fun ColorScheme.animated(): ColorScheme {
-    val spec = tween<Color>(durationMillis = 600)
+    val ui by AppSettings.ui.collectAsState()
+    val spec = tween<Color>(durationMillis = if (ui.reduceAnimation) 0 else 450)
     @Composable
     fun Color.a() = animateColorAsState(this, spec, label = "scheme").value
     return copy(
@@ -171,11 +175,11 @@ val AppTypography = Typography(
     displayLarge = baseType.displayLarge.outfit(FontWeight.Bold, -1.2f),
     displayMedium = baseType.displayMedium.outfit(FontWeight.Bold, -1f),
     displaySmall = baseType.displaySmall.outfit(FontWeight.Bold, -0.6f),
-    headlineLarge = baseType.headlineLarge.outfit(FontWeight.Bold, -0.4f),
+    headlineLarge = baseType.headlineLarge.outfit(FontWeight.Bold, -0.8f).copy(fontSize = 32.sp, lineHeight = 38.sp),
     headlineMedium = baseType.headlineMedium.outfit(FontWeight.SemiBold, -0.3f),
     headlineSmall = baseType.headlineSmall.outfit(FontWeight.SemiBold, -0.2f),
-    titleLarge = baseType.titleLarge.outfit(FontWeight.SemiBold, -0.1f),
-    titleMedium = baseType.titleMedium.outfit(FontWeight.Medium),
+    titleLarge = baseType.titleLarge.outfit(FontWeight.SemiBold, -0.3f).copy(fontSize = 23.sp, lineHeight = 29.sp),
+    titleMedium = baseType.titleMedium.outfit(FontWeight.SemiBold, -0.1f),
     titleSmall = baseType.titleSmall.outfit(FontWeight.Medium),
     bodyLarge = baseType.bodyLarge.outfit(),
     bodyMedium = baseType.bodyMedium.outfit(),
@@ -196,9 +200,9 @@ val LyricsTextStyle = TextStyle(
 
 val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(24.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(28.dp),
     extraLarge = RoundedCornerShape(32.dp),
 )
 

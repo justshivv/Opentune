@@ -133,6 +133,7 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
 import com.opentune.data.settings.ControlStyle
 import com.opentune.data.settings.DockMotion
+import com.opentune.data.settings.Customization
 import com.opentune.data.settings.LyricsAlign
 import com.opentune.data.settings.PlayerMotion
 import com.opentune.data.settings.PageTransition
@@ -344,7 +345,7 @@ private fun settingsSections(
     if (playerStyleDialog) {
         ChoiceSheet(
             title = "Player layout",
-            options = PlayerStyle.entries,
+            options = Customization.players,
             selected = ui.playerStyle,
             label = { "${it.label} · ${it.summary}" },
             onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v) } },
@@ -354,7 +355,7 @@ private fun settingsSections(
     if (controlStyleDialog) {
         ChoiceSheet(
             title = "Player buttons",
-            options = ControlStyle.entries,
+            options = Customization.controls,
             selected = ui.controlStyle,
             label = { "${it.label} · ${it.summary}" },
             onSelect = { c -> AppSettings.updateUi { it.copy(controlStyle = c) } },
@@ -364,7 +365,7 @@ private fun settingsSections(
     if (dockMotionDialog) {
         ChoiceSheet(
             title = "Dock animation",
-            options = DockMotion.entries,
+            options = Customization.docks,
             selected = ui.dockMotion,
             label = { "${it.label} · ${it.summary}" },
             onSelect = { m -> AppSettings.updateUi { it.copy(dockMotion = m) } },
@@ -373,8 +374,8 @@ private fun settingsSections(
     }
     if (dockLensDialog) {
         ChoiceSheet(
-            title = "Dock lens",
-            options = DockLens.entries,
+            title = "Tab highlight",
+            options = Customization.lenses,
             selected = ui.dockLens,
             label = { "${it.label} · ${it.summary}" },
             onSelect = { l -> AppSettings.updateUi { it.copy(dockLens = l) } },
@@ -383,8 +384,8 @@ private fun settingsSections(
     }
     if (glassStyleDialog) {
         ChoiceSheet(
-            title = "Glass style",
-            options = GlassStyle.entries,
+            title = "Surface finish",
+            options = Customization.glass,
             selected = ui.glassStyle,
             label = { "${it.label} · ${it.summary}" },
             onSelect = { g -> AppSettings.updateUi { it.copy(glassStyle = g) } },
@@ -394,7 +395,7 @@ private fun settingsSections(
     if (pageTransitionDialog) {
         ChoiceSheet(
             title = "Page transitions",
-            options = PageTransition.entries,
+            options = Customization.pages,
             selected = ui.pageTransition,
             label = { "${it.label} · ${it.summary}" },
             onSelect = { t -> AppSettings.updateUi { it.copy(pageTransition = t) } },
@@ -404,7 +405,7 @@ private fun settingsSections(
     if (playerMotionDialog) {
         ChoiceSheet(
             title = "Player opening",
-            options = PlayerMotion.entries,
+            options = Customization.playerMotion,
             selected = ui.playerMotion,
             label = { "${it.label} · ${it.summary}" },
             onSelect = { m -> AppSettings.updateUi { it.copy(playerMotion = m) } },
@@ -414,7 +415,7 @@ private fun settingsSections(
     if (lyricsAnimationDialog) {
         ChoiceSheet(
             title = "Lyrics animation",
-            options = LyricsAnimation.entries,
+            options = Customization.lyrics,
             selected = ui.lyricsAnimation,
             label = { "${it.label} · ${it.summary}" },
             onSelect = { a -> AppSettings.updateUi { it.copy(lyricsAnimation = a) } },
@@ -468,6 +469,20 @@ private fun settingsSections(
     }
 
     return listOf(
+        Section(
+            "Make it yours",
+            listOf(
+                Entry("Style presets", "studio midnight paper appearance theme color look surfaces") {
+                    AppearancePresets(theme, ui, AppSettings::applyAppearance)
+                },
+                Entry("Motion profiles", "calm fluid crisp animation dock preview transitions pace") {
+                    MotionProfiles(ui, AppSettings::applyMotion)
+                },
+                Entry("Hide dock while scrolling", "navigation always visible dock behavior") {
+                    ToggleRow("Hide dock while scrolling", ui.autoHideDock, { v -> AppSettings.updateUi { it.copy(autoHideDock = v) } }, summary = "Turn off to keep every destination in reach", icon = Icons.Rounded.Dock)
+                },
+            ),
+        ),
         Section(
             "Account",
             listOfNotNull(
@@ -657,7 +672,7 @@ private fun settingsSections(
                 Entry("Palette style", "tonal vibrant expressive") {
                     SettingRow("Palette style", icon = Icons.Rounded.Palette, below = {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PaletteStyleOption.entries.forEach { s ->
+                            Customization.palettes.forEach { s ->
                                 FilterChip(theme.paletteStyle == s, { AppSettings.updateTheme { it.copy(paletteStyle = s) } }, label = { Text(s.label) })
                             }
                         }
@@ -672,11 +687,11 @@ private fun settingsSections(
                 Entry("Player buttons", "play pause next previous skip controls buttons design morph disc squircle glass") {
                     NavRow("Player buttons", { controlStyleDialog = true }, summary = ui.controlStyle.summary, icon = Icons.Rounded.PlayCircle, value = ui.controlStyle.label)
                 },
-                Entry("Dock animation", "navigation bar dock fold hide scroll animation motion squash pop") {
+                Entry("Dock animation", "navigation bar dock fold glide retract hide scroll animation motion") {
                     NavRow("Dock animation", { dockMotionDialog = true }, summary = ui.dockMotion.summary, icon = Icons.Rounded.Dock, value = ui.dockMotion.label)
                 },
-                Entry("Dock lens", "navigation bar dock tab highlight selection pill indicator jelly stretch glide") {
-                    NavRow("Dock lens", { dockLensDialog = true }, summary = ui.dockLens.summary, icon = Icons.Rounded.Lens, value = ui.dockLens.label)
+                Entry("Tab highlight", "navigation bar dock tab highlight selection pill indicator stretch glide") {
+                    NavRow("Tab highlight", { dockLensDialog = true }, summary = ui.dockLens.summary, icon = Icons.Rounded.Lens, value = ui.dockLens.label)
                 },
                 Entry("Page transitions", "navigation animation screen open back slide fade zoom rise") {
                     NavRow("Page transitions", { pageTransitionDialog = true }, summary = ui.pageTransition.summary, icon = Icons.Rounded.SwapHoriz, value = ui.pageTransition.label)
@@ -686,7 +701,7 @@ private fun settingsSections(
                 },
                 Entry("Player background", "mesh gradient blur") {
                     SettingRow("Player background", icon = Icons.Rounded.Wallpaper, below = {
-                        PillSegmented(PlayerBackground.entries, theme.playerBackground, { it.label }, { b -> AppSettings.updateTheme { it.copy(playerBackground = b) } })
+                        PillSegmented(Customization.backgrounds, theme.playerBackground, { it.label }, { b -> AppSettings.updateTheme { it.copy(playerBackground = b) } })
                     })
                 },
                 Entry("Moving cover art", "motion artwork canvas animated cover drift zoom") {
@@ -704,19 +719,8 @@ private fun settingsSections(
                 Entry("Reduce animation", "motion") {
                     ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Keeps artwork and playing indicators still, and reduces card and screen motion", icon = Icons.Rounded.Animation)
                 },
-                Entry("Liquid Glass", "glass refraction apple lens") {
-                    ToggleRow(
-                        "Liquid Glass",
-                        ui.liquidGlass && liquidGlassSupported,
-                        { v -> AppSettings.updateUi { it.copy(liquidGlass = v) } },
-                        summary = if (liquidGlassSupported) "Bends and lifts what's behind the floating bars, like Apple's glass"
-                        else "Needs Android 13 or newer; frosted glass is used instead",
-                        icon = Icons.Rounded.AutoAwesome,
-                        enabled = liquidGlassSupported && !ui.reduceBlur,
-                    )
-                },
-                Entry("Glass style", "glass frosted blur clear heavy tinted smoke theme material") {
-                    NavRow("Glass style", { glassStyleDialog = true }, summary = ui.glassStyle.summary, icon = Icons.Rounded.BlurOn, value = ui.glassStyle.label)
+                Entry("Surface finish", "glass frosted blur heavy tinted theme material") {
+                    NavRow("Surface finish", { glassStyleDialog = true }, summary = ui.glassStyle.summary, icon = Icons.Rounded.BlurOn, value = ui.glassStyle.label)
                 },
                 Entry("Frosted top edge", "status bar blur fade top scroll glass") {
                     ToggleRow("Frosted top edge", ui.frostedTopEdge, { v -> AppSettings.updateUi { it.copy(frostedTopEdge = v) } }, summary = "Pages blur and fade as they scroll under the status bar", icon = Icons.Rounded.Gradient)

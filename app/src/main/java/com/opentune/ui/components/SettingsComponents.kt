@@ -3,6 +3,10 @@ package com.opentune.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +32,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +42,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
+import com.opentune.data.settings.AppSettings
 
 /** Small gray uppercase label above a group. */
 @Composable
@@ -155,9 +163,9 @@ fun AppSwitch(checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = 
         onCheckedChange = onChange,
         enabled = enabled,
         colors = SwitchDefaults.colors(
-            checkedTrackColor = c.onSurface,
-            checkedThumbColor = c.background,
-            checkedBorderColor = c.onSurface,
+            checkedTrackColor = c.primary,
+            checkedThumbColor = c.onPrimary,
+            checkedBorderColor = c.primary,
             uncheckedTrackColor = c.surfaceContainerHighest,
             uncheckedThumbColor = c.onSurfaceVariant.copy(alpha = 0.6f),
             uncheckedBorderColor = c.surfaceContainerHighest,
@@ -169,6 +177,7 @@ fun AppSwitch(checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = 
 @Composable
 fun <T> PillSegmented(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     val c = MaterialTheme.colorScheme
+    val ui by AppSettings.ui.collectAsState()
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
@@ -179,23 +188,23 @@ fun <T> PillSegmented(options: List<T>, selected: T, label: (T) -> String, onSel
     ) {
         val index = options.indexOf(selected).coerceAtLeast(0)
         val segment = maxWidth / options.size
-        val x by animateDpAsState(segment * index, spring(dampingRatio = 0.8f, stiffness = 500f), label = "pill")
+        val x by animateDpAsState(segment * index, if (ui.reduceAnimation) snap() else spring(dampingRatio = 0.9f, stiffness = 500f), label = "pill")
         Box(
             Modifier
                 .offset { IntOffset(x.roundToPx(), 0) }
                 .width(segment)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(12.dp))
-                .background(c.onSurface),
+                .background(c.primaryContainer),
         )
-        Row(Modifier.fillMaxWidth().fillMaxHeight(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        Row(Modifier.fillMaxWidth().fillMaxHeight().selectableGroup(), horizontalArrangement = Arrangement.SpaceEvenly) {
             options.forEachIndexed { i, option ->
-                val color by animateColorAsState(if (i == index) c.background else c.onSurfaceVariant, label = "pillText")
+                val color by animateColorAsState(if (i == index) c.onPrimaryContainer else c.onSurfaceVariant, tween(if (ui.reduceAnimation) 0 else 180), label = "pillText")
                 Box(
-                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp)).clickable { onSelect(option) },
+                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp)).selectable(selected = i == index, role = Role.RadioButton, onClick = { onSelect(option) }),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(label(option), color = color, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center, maxLines = 1)
+                    Text(label(option), color = color, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

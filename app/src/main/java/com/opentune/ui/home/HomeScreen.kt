@@ -124,8 +124,8 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(greeting, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                        Text(firstName ?: "What's playing?", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
+                        Text(greeting, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        Text(firstName ?: "Your soundtrack", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
                     }
                     GlassIconButton(Icons.Rounded.Person, "Account and settings", onOpenSettings, size = 52.dp) {
                         val photo = account?.thumbnailUrl

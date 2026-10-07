@@ -1,6 +1,7 @@
 package com.opentune.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -22,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -42,8 +44,9 @@ internal fun RecentListeningCard(song: Song, onPlay: () -> Unit, onShuffle: () -
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             .background(Brush.linearGradient(listOf(colors.secondaryContainer, colors.surfaceContainerHigh)))
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .border(0.75.dp, colors.onSecondaryContainer.copy(alpha = 0.12f), MaterialTheme.shapes.large)
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         Text(
             "Back in rotation",
@@ -52,7 +55,7 @@ internal fun RecentListeningCard(song: Song, onPlay: () -> Unit, onShuffle: () -
             modifier = Modifier.semantics { heading() },
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Artwork(song.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.size(76.dp), MaterialTheme.shapes.medium)
+            Artwork(song.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.size(96.dp).shadow(12.dp, MaterialTheme.shapes.medium), MaterialTheme.shapes.medium)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(song.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis, color = colors.onSecondaryContainer)
                 Text(song.artist, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSecondaryContainer)
