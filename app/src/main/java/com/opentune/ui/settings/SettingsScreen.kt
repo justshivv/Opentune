@@ -8,6 +8,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.togetherWith
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -175,6 +176,14 @@ private class Entry(val title: String, val summary: String = "", val content: @C
 
 private class Section(val title: String, val entries: List<Entry>)
 
+/** A setting placed on its page: the category it's on and the subsection under it. */
+private class Placed(val entry: Entry, val category: SettingsCategory, val group: String)
+
+/**
+ * Settings as a short list of categories, each opening its own page of
+ * subsections (see [SETTINGS_CATEGORIES]). Searching from the main page looks
+ * through every setting and shows where each one lives.
+ */
 @Composable
 fun SettingsScreen(
     contentPadding: PaddingValues,
@@ -186,60 +195,132 @@ fun SettingsScreen(
     onOpenSpotify: () -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    var openKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val signedIn by AccountStore.signedIn.collectAsState()
+    val account by AccountStore.account.collectAsState()
     val sections = settingsSections(onOpenEqualizer, onOpenReplay, onSignIn, onOpenDownloads, onOpenSpotify)
+    val placed = remember(sections) { place(sections) }
+    val open = SETTINGS_CATEGORIES.firstOrNull { it.key == openKey }
+    androidx.activity.compose.BackHandler(enabled = open != null) { openKey = null }
     val q = query.trim()
-    val visible = sections.mapNotNull { s ->
-        val matches = if (q.isEmpty()) s.entries else s.entries.filter {
-            it.title.contains(q, true) || it.summary.contains(q, true) || s.title.contains(q, true)
-        }
-        if (matches.isEmpty()) null else Section(s.title, matches)
-    }
 
-    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item { PageHeader("Settings", onBack = onBack) }
-        item {
-            TextField(
-                value = query,
-                onValueChange = { query = it },
-                singleLine = true,
-                placeholder = { Text("Search settings") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
-                shape = RoundedCornerShape(20.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
-        if (visible.isEmpty()) {
-            item {
-                Text("No settings match \"$q\".", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp))
-            }
-        }
-        visible.forEach { section ->
-            item(key = "label:${section.title}") { GroupLabel(section.title) }
-            item(key = "card:${section.title}") {
-                GroupCard {
-                    section.entries.forEachIndexed { i, entry ->
-                        if (i > 0) RowDivider()
-                        entry.content()
+    androidx.compose.animation.AnimatedContent(
+        open,
+        transitionSpec = {
+            val forward = targetState != null
+            (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
+                androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { if (forward) it / 8 else -it / 8 }) togetherWith
+                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160))
+        },
+        label = "settingsPage",
+    ) { page ->
+        LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+            if (page != null) {
+                item { PageHeader(page.title, onBack = { openKey = null }) }
+                placed.filter { it.category == page }.groupBy { it.group }.forEach { (group, rows) ->
+                    item(key = "label:$group") { GroupLabel(group) }
+                    item(key = "card:$group") {
+                        GroupCard {
+                            rows.forEachIndexed { i, row ->
+                                if (i > 0) RowDivider()
+                                row.entry.content()
+                            }
+                        }
                     }
+                }
+            } else {
+                item { PageHeader("Settings", onBack = onBack) }
+                item {
+                    TextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        singleLine = true,
+                        placeholder = { Text("Search settings") },
+                        leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                        trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        ),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                if (q.isNotEmpty()) {
+                    val hits = placed.filter {
+                        it.entry.title.contains(q, true) || it.entry.summary.contains(q, true) ||
+                            it.group.contains(q, true) || it.category.title.contains(q, true)
+                    }
+                    if (hits.isEmpty()) {
+                        item { Text("No settings match \"$q\".", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp)) }
+                    }
+                    hits.groupBy { "${it.category.title} · ${it.group}" }.forEach { (where, rows) ->
+                        item(key = "hit:$where") { GroupLabel(where) }
+                        item(key = "hitcard:$where") {
+                            GroupCard {
+                                rows.forEachIndexed { i, row ->
+                                    if (i > 0) RowDivider()
+                                    row.entry.content()
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    SETTINGS_HOME.forEach { (label, keys) ->
+                        val cats = keys.mapNotNull { k -> SETTINGS_CATEGORIES.firstOrNull { it.key == k } }
+                        item(key = "home:$label") { GroupLabel(label) }
+                        item(key = "homecard:$label") {
+                            GroupCard {
+                                cats.forEachIndexed { i, c ->
+                                    if (i > 0) RowDivider()
+                                    val summary = if (c.key == "account") {
+                                        if (signedIn) account?.name ?: "Signed in to YouTube Music" else "Not signed in"
+                                    } else {
+                                        c.summary
+                                    }
+                                    NavRow(c.title, { openKey = c.key }, summary = summary, icon = c.icon)
+                                }
+                            }
+                        }
+                    }
+                }
+                item {
+                    Text(
+                        "OpenTune ${BuildConfig.VERSION_NAME} • GNU GPL v3 • Lyrics from LRCLIB",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(28.dp),
+                    )
                 }
             }
         }
-        item {
-            Text(
-                "OpenTune ${BuildConfig.VERSION_NAME} • GNU GPL v3 • Lyrics from LRCLIB",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(28.dp),
-            )
+    }
+}
+
+/**
+ * Puts every setting on its category page, in the order [SETTINGS_CATEGORIES]
+ * lists them; one it doesn't name goes under "More" on its old section's page.
+ */
+private fun place(sections: List<Section>): List<Placed> {
+    val byTitle = sections.flatMap { s -> s.entries.map { it to s.title } }.associateBy { it.first.title }
+    val used = mutableSetOf<String>()
+    val out = mutableListOf<Placed>()
+    // Every named setting first, so a page's "More" only gets what no page claims.
+    SETTINGS_CATEGORIES.forEach { c ->
+        c.groups.forEach { (group, titles) ->
+            titles.forEach { t -> byTitle[t]?.let { (e, _) -> out += Placed(e, c, group); used += t } }
         }
     }
+    SETTINGS_CATEGORIES.forEach { c ->
+        byTitle.values.filter { (e, section) -> e.title !in used && SECTION_HOME[section] == c.key }
+            .forEach { (e, _) -> out += Placed(e, c, "More"); used += e.title }
+    }
+    // Anything left (a section with no page) still shows, on About.
+    val about = SETTINGS_CATEGORIES.last()
+    byTitle.values.filter { (e, _) -> e.title !in used }.forEach { (e, _) -> out += Placed(e, about, "More") }
+    return out
 }
 
 @OptIn(ExperimentalLayoutApi::class)
