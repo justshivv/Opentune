@@ -95,9 +95,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   stays level. Off by default.
 - **One steady volume.** Loudness normalization uses YouTube's own
   measurement of each song. Figures are kept on the device, so songs played
-  from the cache or from downloads get the same level as fresh ones. On
-  the phone's own speaker it's held off by default, so every song plays at
-  full level there; headphones and Bluetooth are still levelled.
+  from the cache or from downloads get the same level as fresh ones. A
+  volume level sets where songs land: Quiet, Normal (YouTube's reference)
+  or Loud, the default, about 5 dB higher with a limiter so peaks don't
+  clip. On the phone's own speaker songs are never turned down, only quiet
+  ones lifted; headphones and Bluetooth are fully levelled.
 - **Your phone's own sound effects.** The audio session is opened to the
   system, so Dolby Atmos, Samsung SoundAlive, the system equalizer and
   similar effects apply to OpenTune the way they do to the stock players.

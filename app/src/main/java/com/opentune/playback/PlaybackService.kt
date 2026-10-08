@@ -217,7 +217,7 @@ class PlaybackService : MediaLibraryService() {
         }
         scope.launch { trackListening(player) }
         scope.launch {
-            AppSettings.playback.map { it.loudnessNormalization to it.normalizeOnSpeaker }.distinctUntilChanged().collect { applyLoudness() }
+            AppSettings.playback.map { Triple(it.loudnessNormalization, it.normalizeOnSpeaker, it.volumeLevel) }.distinctUntilChanged().collect { applyLoudness() }
         }
         scope.launch {
             AppSettings.playback.map { it.preloadUpcoming }.distinctUntilChanged().collect { on ->
@@ -804,7 +804,7 @@ class PlaybackService : MediaLibraryService() {
         val pb = AppSettings.playback.value
         val speakerHold = pb.loudnessNormalization && !pb.normalizeOnSpeaker && onPhoneSpeaker()
         NerdStats.onLoudnessOffOnSpeaker(speakerHold)
-        val on = pb.loudnessNormalization && !speakerHold && db != null && !BitPerfectUsb.active
+        val on = pb.loudnessNormalization && db != null && !BitPerfectUsb.active
         val enhancer = loudnessEnhancer?.takeIf { loudnessSession == session }
             ?: runCatching { LoudnessEnhancer(session) }
                 .onFailure { Log.w(TAG, "LoudnessEnhancer unavailable", it) }
@@ -817,7 +817,7 @@ class PlaybackService : MediaLibraryService() {
             ?: return
         runCatching {
             if (on) {
-                val gainMb = (-db!! * 100).roundToInt().coerceIn(MIN_LOUDNESS_GAIN_MB, MAX_LOUDNESS_GAIN_MB)
+                val gainMb = (loudnessGainDb(db!!, pb.volumeLevel, speakerHold) * 100).roundToInt().coerceIn(MIN_LOUDNESS_GAIN_MB, MAX_LOUDNESS_GAIN_MB)
                 enhancer.setTargetGain(gainMb)
                 enhancer.enabled = true
                 NerdStats.onLoudnessGain(gainMb / 100f)
@@ -1300,7 +1300,7 @@ class PlaybackService : MediaLibraryService() {
         const val FAR_BUFFER_BYTES = 8 * 1024 * 1024
         const val BACK_BUFFER_MS = 30_000
         const val MIN_LOUDNESS_GAIN_MB = -1500
-        const val MAX_LOUDNESS_GAIN_MB = 300
+        const val MAX_LOUDNESS_GAIN_MB = 900
 
         /** How much of the next track ExoPlayer buffers ahead of time. */
         const val PRELOAD_US = 10_000_000L
@@ -1311,4 +1311,15 @@ class PlaybackService : MediaLibraryService() {
         /** A little under StreamResolver's 20-minute URL lifetime. */
         const val WARM_TTL_MS = 15 * 60 * 1000L
     }
+}
+
+/**
+ * The gain, in dB, for a song YouTube measured at [loudnessDb] against its
+ * reference: brought to the reference, moved by [level]'s offset, and lifted
+ * no more than its cap. With [speakerHold] (the phone speaker, normalization
+ * held off there) it's never negative: a song is only lifted, never cut.
+ */
+internal fun loudnessGainDb(loudnessDb: Double, level: com.opentune.data.settings.VolumeLevel, speakerHold: Boolean): Double {
+    val target = (-loudnessDb + level.offsetDb).coerceAtMost(level.maxGainDb.toDouble())
+    return if (speakerHold) target.coerceAtLeast(0.0) else target
 }

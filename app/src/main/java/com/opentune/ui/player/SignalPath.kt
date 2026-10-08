@@ -82,7 +82,8 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
                     "Loudness",
                     when {
                         !pb.loudnessNormalization -> "Off: every song at its own level"
-                        speakerHold -> "Off on the phone speaker: full level until headphones connect"
+                        speakerHold && (gain ?: 0f) > 0.05f -> "%+.1f dB on the phone speaker: a quiet song lifted, never turned down".format(gain)
+                        speakerHold -> "Full level on the phone speaker: songs aren't turned down there"
                         gain == null -> "No figure for this song yet"
                         else -> "%+.1f dB to YouTube's reference level".format(gain)
                     },

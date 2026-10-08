@@ -146,6 +146,7 @@ import com.opentune.data.settings.PlayerBackground
 import com.opentune.data.settings.PlayerStyle
 import com.opentune.data.settings.SEED_COLORS
 import com.opentune.data.settings.ThemeMode
+import com.opentune.data.settings.VolumeLevel
 import com.opentune.data.sponsorblock.SponsorBlock
 import com.opentune.data.subsonic.Subsonic
 import com.opentune.playback.AudioCache
@@ -644,13 +645,18 @@ private fun settingsSections(
                 Entry("Loudness normalization", "volume level") {
                     ToggleRow("Loudness normalization", pb.loudnessNormalization, { v -> AppSettings.updatePlayback { it.copy(loudnessNormalization = v) } }, summary = "Uses YouTube's loudness measurement to set one steady volume per song", icon = Icons.AutoMirrored.Rounded.VolumeUp)
                 },
+                if (pb.loudnessNormalization) Entry("Volume level", "loud louder quiet normal volume level loudness target boost") {
+                    SettingRow("Volume level", summary = pb.volumeLevel.summary, icon = Icons.AutoMirrored.Rounded.VolumeUp, below = {
+                        PillSegmented(VolumeLevel.entries, pb.volumeLevel, { it.label }, { v -> AppSettings.updatePlayback { it.copy(volumeLevel = v) } })
+                    })
+                } else null,
                 if (pb.loudnessNormalization) Entry("Normalize on the phone speaker", "loudness volume speaker louder quiet normalization level") {
                     ToggleRow(
                         "Normalize on the phone speaker",
                         pb.normalizeOnSpeaker,
                         { v -> AppSettings.updatePlayback { it.copy(normalizeOnSpeaker = v) } },
-                        summary = if (pb.normalizeOnSpeaker) "Songs are levelled on the speaker too, which makes most of them quieter"
-                        else "Off: the speaker plays every song at full level; headphones and Bluetooth are still levelled",
+                        summary = if (pb.normalizeOnSpeaker) "Songs are levelled on the speaker too, which turns loud ones down"
+                        else "Off: the speaker never turns a song down, only lifts quiet ones; headphones and Bluetooth are fully levelled",
                         icon = Icons.Rounded.Speaker,
                     )
                 } else null,

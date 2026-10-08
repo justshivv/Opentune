@@ -34,7 +34,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "audio", "Audio", "Quality, loudness, effects and output", Icons.Rounded.GraphicEq,
         listOf(
             "Streaming quality" to listOf("On Wi-Fi", "On mobile data", "Upgrade quality while playing"),
-            "Loudness" to listOf("Loudness normalization", "Normalize on the phone speaker"),
+            "Loudness" to listOf("Loudness normalization", "Volume level", "Normalize on the phone speaker"),
             "Sound" to listOf("Equalizer", "Clarity", "Spatial audio", "System audio effects"),
             "Output" to listOf("Output precision", "Prefer USB DAC", "Bit-perfect USB output"),
         ),

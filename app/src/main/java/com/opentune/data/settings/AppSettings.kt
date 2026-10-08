@@ -213,6 +213,8 @@ data class PlaybackSettings(
      * mostly turns loud masters down, and a small speaker needs the level.
      */
     val normalizeOnSpeaker: Boolean = false,
+    /** Where normalization sets songs: below, at or above YouTube's reference level. */
+    val volumeLevel: VolumeLevel = VolumeLevel.LOUD,
     val skipSilence: Boolean = false,
     /** Mid/side stereo widening. */
     val spatialAudio: Boolean = false,
@@ -361,6 +363,19 @@ data class LibrarySettings(
     /** Notify about new albums and singles from followed artists. */
     val releaseAlerts: Boolean = true,
 )
+
+/**
+ * The level loudness normalization aims for, against YouTube's reference
+ * (about −14 LUFS). [offsetDb] moves every song by the same amount; [maxGainDb]
+ * caps how far a quiet song is lifted. Lifts go through a limiter, so Loud
+ * doesn't clip.
+ */
+@Serializable
+enum class VolumeLevel(val label: String, val summary: String, val offsetDb: Float, val maxGainDb: Float) {
+    QUIET("Quiet", "About 5 dB under YouTube's level, for quiet rooms and long listens", -5f, 3f),
+    NORMAL("Normal", "YouTube's own reference level", 0f, 3f),
+    LOUD("Loud", "About 5 dB over YouTube's level, held by a limiter so peaks don't clip", 5f, 9f),
+}
 
 /** How the player's back, play/pause and forward buttons look and move. */
 @Serializable
