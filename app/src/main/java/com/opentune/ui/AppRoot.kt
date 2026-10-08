@@ -97,6 +97,7 @@ import com.opentune.ui.home.HomeScreen
 import com.opentune.ui.library.LibraryScreen
 import com.opentune.ui.library.LocalMusicScreen
 import com.opentune.ui.library.ReplayScreen
+import com.opentune.ui.wrapped.WrappedScreen
 import com.opentune.ui.player.MiniPlayerBar
 import com.opentune.ui.player.PlayerScreen
 import com.opentune.ui.search.SearchScreen
@@ -227,6 +228,7 @@ fun AppRoot(vm: PlayerViewModel) {
         radio = { nav.navigate("radio") },
         together = { nav.navigate("together") },
         importPlaylist = { nav.navigate("import") },
+        wrapped = { nav.navigate("wrapped") },
     ) }
     val serverNav = remember(nav) {
         ServerNav(
@@ -267,7 +269,8 @@ fun AppRoot(vm: PlayerViewModel) {
         }
         Links.consumed()
     }
-    val chromeVisible = route != "login" && !playerCovers
+    // The Wrapped story fills the screen, like the login page.
+    val chromeVisible = route != "login" && route != "wrapped" && !playerCovers
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val content = PaddingValues(bottom = navInset + CHROME_TAB_HEIGHT + 24.dp + if (song != null) CHROME_MINI_HEIGHT + 8.dp else 0.dp)
 
@@ -340,6 +343,7 @@ fun AppRoot(vm: PlayerViewModel) {
                             onBack = { nav.popBackStack() },
                             onOpenEqualizer = { nav.navigate("equalizer") },
                             onOpenReplay = { nav.navigate("replay") },
+                            onOpenWrapped = { nav.navigate("wrapped") },
                             onSignIn = { nav.navigate("login") },
                             onOpenDownloads = { nav.navigate("downloads") },
                             onOpenSpotify = { nav.navigate("import") },
@@ -355,7 +359,8 @@ fun AppRoot(vm: PlayerViewModel) {
                     }
                     composable("equalizer") { EqualizerScreen(content, onBack = { nav.popBackStack() }) }
                     composable("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
-                    composable("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    composable("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }, onOpenWrapped = { nav.navigate("wrapped") }) }
+                    composable("wrapped") { WrappedScreen(actions, onBack = { nav.popBackStack() }) }
                     composable(
                         "import?link={link}",
                         listOf(navArgument("link") { type = NavType.StringType; nullable = true; defaultValue = null }),

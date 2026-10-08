@@ -159,7 +159,7 @@ private enum class ReplayPeriod(val label: String, val days: Long?) {
 
 /** Top songs, artists and albums from this device's listening history. */
 @Composable
-fun ReplayScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
+fun ReplayScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit, onOpenWrapped: () -> Unit = {}) {
     val records by History.records.collectAsState()
     var period by rememberSaveable { mutableStateOf(ReplayPeriod.MONTH) }
     val summary = remember(records, period) {
@@ -170,6 +170,14 @@ fun ReplayScreen(contentPadding: PaddingValues, actions: SongActions, onBack: ()
 
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader("Replay", onBack = onBack) }
+        item {
+            com.opentune.ui.wrapped.WrappedBanner(
+                "Your Wrapped",
+                "Your top artists, songs and listening habits as an animated story",
+                onOpenWrapped,
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
         item {
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(ReplayPeriod.entries) { p ->

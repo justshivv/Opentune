@@ -34,7 +34,6 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.LibraryResult
 import com.opentune.widget.NowPlayingWidget
-import com.opentune.data.ContentFilter
 import com.opentune.data.radio.Radio
 import com.opentune.data.podcasts.Podcasts
 import com.opentune.data.sponsorblock.SponsorBlock
@@ -64,10 +63,9 @@ import com.opentune.data.library.SongRef
 import com.opentune.data.NerdStats
 import com.opentune.data.history.History
 import com.opentune.data.local.LocalMusic
-import com.opentune.data.innertube.Innertube
-import com.opentune.data.innertube.InnertubeParser
 import com.opentune.data.innertube.StreamResolver
 import com.opentune.data.model.Song
+import com.opentune.data.reco.Recommendations
 import com.opentune.data.settings.AppSettings
 import com.opentune.playback.dsp.DspAudioProcessor
 import com.opentune.playback.dsp.DspParams
@@ -1069,7 +1067,8 @@ class PlaybackService : MediaLibraryService() {
         if (!AppSettings.playback.value.autoplay || player.repeatMode != Player.REPEAT_MODE_OFF) return
         val remaining = player.upcomingPlayOrder().size - 1
         if (!Autoplay.shouldExtend(remaining, player.mediaItemCount)) return
-        val seed = player.getMediaItemAt(player.mediaItemCount - 1).mediaId
+        val seedItem = player.getMediaItemAt(player.mediaItemCount - 1)
+        val seed = seedItem.mediaId
         // Radio is a YouTube feature; a local file has none. A song on your own
         // server carries on with more of the server's songs, picked at random.
         if (LocalMusic.isLocal(seed) || Radio.isRadio(seed)) return
@@ -1084,7 +1083,8 @@ class PlaybackService : MediaLibraryService() {
                 if (Subsonic.isSubsonic(seed)) {
                     Subsonic.randomSongs(RADIO_FROM_SERVER)
                 } else {
-                    withContext(Dispatchers.IO) { ContentFilter.songs(InnertubeParser.parseWatchQueue(Innertube.next(seed))) }
+                    // YouTube Music, Spotify or JioSaavn, as chosen; the songs always play from YouTube Music.
+                    Recommendations.after(seedItem.toSong(), AppSettings.playback.value.recommender).songs
                 }
             } catch (e: CancellationException) {
                 throw e

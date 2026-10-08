@@ -223,6 +223,8 @@ data class PlaybackSettings(
     val autoplay: Boolean = true,
     /** Autoplay won't add anything already played or queued this session. */
     val noRepeatInSession: Boolean = false,
+    /** Whose suggestions autoplay and Home's "Because you played" follow. */
+    val recommender: Recommender = Recommender.YOUTUBE,
     val stopOnTaskRemoved: Boolean = false,
     /** Swiping a row queues it to play next; off queues it at the end. */
     val playNextOnSwipe: Boolean = true,
@@ -377,12 +379,21 @@ enum class VolumeLevel(val label: String, val summary: String, val offsetDb: Flo
     LOUD("Loud", "About 5 dB over YouTube's level, held by a limiter so peaks don't clip", 5f, 9f),
 }
 
+/** Whose recommendations pick the songs autoplay adds. Every song still plays from YouTube Music. */
+@Serializable
+enum class Recommender(val label: String, val summary: String) {
+    YOUTUBE("YouTube Music", "YouTube Music's own radio for the last song"),
+    SPOTIFY("Spotify", "The songs Spotify recommends after the last one, found on YouTube Music"),
+    JIOSAAVN("JioSaavn", "JioSaavn's picks after the last song, strong on Indian music, found on YouTube Music"),
+}
+
 /** How the player's back, play/pause and forward buttons look and move. */
 @Serializable
 enum class ControlStyle(val label: String, val summary: String) {
     BLOOM("Bloom", "Large bare glyphs; a soft light blooms behind each press and play folds into pause"),
     CAPSULE("Capsule", "Play stretches into a wide accent pill while it plays; the skips tilt as you tap"),
     ORBIT("Orbit", "Play sits inside the song's progress ring, with a comet of light circling while it plays"),
+    MORPH("Morph", "A round button that ripples into a slowly turning wavy shape while it plays, with outlined glyphs"),
 }
 
 /**

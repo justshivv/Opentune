@@ -122,6 +122,14 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **Queue and radio.** Autoplay keeps similar songs coming. Shuffle,
   repeat, play next, add to queue, swipe-to-queue on any row, and
   drag-to-reorder in the player's queue.
+- **Pick who recommends.** Autoplay and Home's "Because you played" can
+  follow YouTube Music's radio, Spotify's recommendations or JioSaavn's
+  (Settings → Playback → Recommendations). Spotify's picks come from the
+  "Recommended" list on its public song pages, after ListenBrainz's public
+  lookup finds the song there; JioSaavn's come from its public
+  recommendations. No account or key is needed. Only song names are read,
+  each one is found on YouTube Music and plays from there, and when a
+  service doesn't know a song, YouTube Music's radio takes over.
 - **Sound tools.** A 15-band equalizer (ISO 25 Hz to 16 kHz) with presets,
   tone and balance, bass boost,
   stereo widening, skip silence, USB DAC preference, optional 32-bit float
@@ -190,9 +198,19 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **Downloads** for offline listening, with a quality setting and Wi-Fi
   only by default. They keep going after the app is closed.
 - **Library:** a card for your year so far (minutes, plays, top song and
-  artist), shortcuts to Liked, Downloads, On this phone and Replay, then
-  your playlists from the app and from YouTube in one list.
+  artist) that opens your Wrapped, shortcuts to Liked, Downloads, On this
+  phone and Replay, then your playlists from the app and from YouTube in
+  one list.
 - **Replay:** top songs, artists and albums from this device's history.
+- **Wrapped:** your listening as a quiet animated story. Each page is a
+  flat field of colour with one large shape drifting slowly on it (a low
+  sun, a wave, nested arcs, a grid of dots), and the numbers set large in
+  a serif. Minutes listened, top artist and top five, top song and top five, what
+  part of the day you listen most, your biggest month and day, your
+  longest streak, the song you played most in one day and the one it all
+  started with, then a summary card with Play and Shuffle. Covers this
+  year, the last 30 days or all time. Tap to go on, tap the left side to
+  go back, hold to pause.
 - **Your own music server** (optional): Navidrome, Gonic, Airsonic,
   Nextcloud Music or any Subsonic-compatible server. Browse recently added
   and most played albums, artists and playlists, search, and play songs
@@ -315,13 +333,15 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **iOS-style bounce** at the ends of every list.
 - **Smooth tab changes.** The dock's highlight stretches toward the tab
   you pick and settles into it, without overshooting.
-- **Player buttons in three designs.** Bloom: big bare glyphs, a soft disc
+- **Player buttons in four designs.** Bloom: big bare glyphs, a soft disc
   of light blooming behind each press. Capsule: play in an accent pill
   that stretches wide while music plays, between skip buttons that tilt
   toward where they go. Orbit: play inside the song's progress ring with a
   comet of light circling it, and an arc that spins round a skip button
-  when tapped. In all three, play folds into pause and the skip arrows
-  roll a step on with each tap.
+  when tapped. Morph: a round button that ripples into a slowly turning
+  wavy shape while music plays, its outlined triangle folding into two
+  outlined bars, with skips that ripple when tapped. In all four, play
+  folds into pause and the skip arrows roll a step on with each tap.
 - **Song change.** The cover can Fade into the next, slide past in a
   Carousel in the direction you skipped, Flip over like a card, or drop
   onto a Deck while the old one sinks under it.

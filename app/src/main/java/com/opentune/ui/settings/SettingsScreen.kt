@@ -133,6 +133,7 @@ import com.opentune.data.releases.NewReleases
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
 import com.opentune.data.settings.ControlStyle
+import com.opentune.data.settings.Recommender
 import com.opentune.data.settings.CoverChange
 import com.opentune.data.settings.DockMotion
 import com.opentune.data.settings.LyricsAlign
@@ -192,6 +193,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenEqualizer: () -> Unit,
     onOpenReplay: () -> Unit,
+    onOpenWrapped: () -> Unit = {},
     onSignIn: () -> Unit = {},
     onOpenDownloads: () -> Unit = {},
     onOpenSpotify: () -> Unit = {},
@@ -200,7 +202,7 @@ fun SettingsScreen(
     var openKey by rememberSaveable { mutableStateOf<String?>(null) }
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
-    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onSignIn, onOpenDownloads, onOpenSpotify)
+    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onOpenWrapped, onSignIn, onOpenDownloads, onOpenSpotify)
     val placed = remember(sections) { place(sections) }
     val open = SETTINGS_CATEGORIES.firstOrNull { it.key == openKey }
     androidx.activity.compose.BackHandler(enabled = open != null) { openKey = null }
@@ -330,6 +332,7 @@ private fun place(sections: List<Section>): List<Placed> {
 private fun settingsSections(
     onOpenEqualizer: () -> Unit,
     onOpenReplay: () -> Unit,
+    onOpenWrapped: () -> Unit,
     onSignIn: () -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenSpotify: () -> Unit,
@@ -345,6 +348,7 @@ private fun settingsSections(
     var sponsorBlockDialog by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<UpdateCheck.Release?>(null) }
     var playerStyleDialog by remember { mutableStateOf(false) }
+    var recommenderDialog by remember { mutableStateOf(false) }
     var followedDialog by remember { mutableStateOf(false) }
     val followedArtists by NewReleases.followed.collectAsState()
     val listenBrainz by ListenBrainz.account.collectAsState()
@@ -433,6 +437,16 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v) } },
             onDismiss = { playerStyleDialog = false },
+        )
+    }
+    if (recommenderDialog) {
+        ChoiceSheet(
+            title = "Recommendations",
+            options = Recommender.entries,
+            selected = pb.recommender,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { r -> AppSettings.updatePlayback { it.copy(recommender = r) } },
+            onDismiss = { recommenderDialog = false },
         )
     }
     if (controlStyleDialog) {
@@ -695,6 +709,15 @@ private fun settingsSections(
                 },
                 Entry("Autoplay", "radio continue") {
                     ToggleRow("Autoplay", pb.autoplay, AppSettings::setAutoplay, summary = "Keep playing similar songs when the queue ends", icon = Icons.AutoMirrored.Rounded.PlaylistPlay)
+                },
+                Entry("Recommendations", "recommendation engine spotify jiosaavn saavn youtube music radio suggestions similar songs") {
+                    NavRow(
+                        "Recommendations",
+                        { recommenderDialog = true },
+                        summary = "Whose picks autoplay adds and Home's \"Because you played\" shows. Songs still play from YouTube Music.",
+                        icon = Icons.Rounded.AutoAwesome,
+                        value = pb.recommender.label,
+                    )
                 },
                 Entry("Don't repeat songs in current session", "autoplay duplicates") {
                     ToggleRow("Don't repeat songs in current session", pb.noRepeatInSession, { v -> AppSettings.updatePlayback { it.copy(noRepeatInSession = v) } }, summary = "Autoplay won't add a song already played or queued this session", icon = Icons.Rounded.History)
@@ -1005,6 +1028,9 @@ private fun settingsSections(
             listOf(
                 Entry("Replay", "stats top songs artists") {
                     NavRow("Replay", onOpenReplay, summary = "Your top songs, artists and albums", icon = Icons.Rounded.BarChart)
+                },
+                Entry("Wrapped", "wrapped story year review stats recap top artists") {
+                    NavRow("Wrapped", onOpenWrapped, summary = "Your listening as an animated story", icon = Icons.Rounded.AutoAwesome)
                 },
                 Entry("Export data", "backup json") {
                     NavRow("Export data", { exporter.launch("opentune-backup.json") }, summary = "Settings, history, likes and playlists, as one JSON file", icon = Icons.Rounded.Upload)

@@ -15,6 +15,9 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import com.opentune.data.history.History
 import com.opentune.data.listenbrainz.ListenBrainz
+import com.opentune.data.reco.Recommendations
+import com.opentune.data.settings.AppSettings
+import com.opentune.data.settings.Recommender
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitAll
@@ -178,15 +181,18 @@ object MusicRepository {
             .filter { it.items.isNotEmpty() }
     }
 
-    /** "Because you played …": the radio YouTube queues after the last song heard. */
+    /**
+     * "Because you played …": what the chosen recommendation engine (YouTube
+     * Music, Spotify or JioSaavn) suggests after the last song heard.
+     */
     private suspend fun radioShelf(): List<HomeShelf> {
         val last = History.records.value.firstOrNull() ?: return emptyList()
-        val songs = InnertubeParser.parseWatchQueue(Innertube.next(last.videoId))
-            .filter { it.videoId != last.videoId }
-            .take(20)
+        val result = Recommendations.after(last.toSong(), AppSettings.playback.value.recommender)
+        val songs = result.songs.filter { it.videoId != last.videoId }.take(20)
         if (songs.size < 4) return emptyList()
         val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
-        return listOf(HomeShelf("Because you played ${last.title}", items, "Picked for you"))
+        val by = if (result.engine == Recommender.YOUTUBE) "Picked for you" else "Picked by ${result.engine.label}"
+        return listOf(HomeShelf("Because you played ${last.title}", items, by))
     }
 
     /**

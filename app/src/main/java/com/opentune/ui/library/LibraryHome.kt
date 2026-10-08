@@ -96,6 +96,7 @@ class LibraryNav(
     val radio: () -> Unit,
     val together: () -> Unit = {},
     val importPlaylist: () -> Unit = {},
+    val wrapped: () -> Unit = {},
 )
 
 private const val YT_PLAYLISTS = "library:ytPlaylists"
@@ -149,7 +150,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 plays = summary.totalPlays,
                 topArtist = summary.topArtists.firstOrNull()?.title,
                 topSong = summary.topSongs.firstOrNull()?.title,
-                onClick = nav.replay,
+                onClick = nav.wrapped,
             )
         }
         item {
@@ -237,44 +238,15 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
 }
 
-/** This year in numbers, in the accent colours; opens Replay. */
+/** This year in numbers on a neon card; opens the Wrapped story. */
 @Composable
 private fun YearCard(year: Int, minutes: Long, plays: Int, topArtist: String?, topSong: String?, onClick: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    Column(
-        Modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .pressable(onClick, 0.97f)
-            .clip(RoundedCornerShape(28.dp))
-            .background(Brush.linearGradient(listOf(scheme.primaryContainer, scheme.tertiaryContainer)))
-            .padding(20.dp),
-    ) {
-        Text("$year so far", style = MaterialTheme.typography.titleMedium, color = scheme.onPrimaryContainer)
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth()) {
-            Stat("$minutes", "minutes", Modifier.weight(1f))
-            Stat("$plays", "plays", Modifier.weight(1f))
-        }
-        if (topArtist != null || topSong != null) {
-            Spacer(Modifier.height(12.dp))
-            Text(
-                listOfNotNull(topSong?.let { "Top song: $it" }, topArtist?.let { "Top artist: $it" }).joinToString("  ·  "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onPrimaryContainer.copy(alpha = 0.8f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-@Composable
-private fun Stat(value: String, label: String, modifier: Modifier) {
-    Column(modifier) {
-        Text(value, style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f))
-    }
+    val line = buildList {
+        add("$minutes minutes · $plays plays")
+        topArtist?.let { add("Top artist: $it") }
+        topSong?.let { add("Top song: $it") }
+    }.joinToString("\n")
+    com.opentune.ui.wrapped.WrappedBanner("Your $year Wrapped", line, onClick, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 }
 
 /** One of the four library shortcuts: an accent badge, a name and a count. */

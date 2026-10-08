@@ -40,10 +40,10 @@ internal val SETTINGS_CATEGORIES = listOf(
         ),
     ),
     SettingsCategory(
-        "playback", "Playback", "Crossfade, autoplay and devices", Icons.Rounded.PlayCircle,
+        "playback", "Playback", "Crossfade, autoplay, recommendations and devices", Icons.Rounded.PlayCircle,
         listOf(
             "Between songs" to listOf("Crossfade", "Skip silence", "Preload upcoming songs"),
-            "Autoplay" to listOf("Autoplay", "Don't repeat songs in current session"),
+            "Autoplay" to listOf("Autoplay", "Recommendations", "Don't repeat songs in current session"),
             "Headphones and devices" to listOf("Resume when headphones connect", "Pause at zero volume", "Background playback", "Stop music on close from recents"),
             "Music videos" to listOf("SponsorBlock", "SponsorBlock categories"),
         ),
@@ -102,7 +102,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "data", "Storage and data", "Cache, backups and listening history", Icons.Rounded.Storage,
         listOf(
             "Storage" to listOf("Song cache limit", "Clear song cache", "Clear image cache"),
-            "Your data" to listOf("Replay", "Export data", "Import data", "Clear listening history"),
+            "Your data" to listOf("Replay", "Wrapped", "Export data", "Import data", "Clear listening history"),
         ),
     ),
     SettingsCategory(
