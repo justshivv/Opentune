@@ -133,7 +133,7 @@ class ReadmeScreenshotTest {
         position: Long,
         style: com.opentune.data.settings.PlayerStyle = com.opentune.data.settings.PlayerStyle.CLASSIC,
         fullCover: Boolean = false,
-        controls: com.opentune.data.settings.ControlStyle = com.opentune.data.settings.ControlStyle.CLASSIC,
+        controls: com.opentune.data.settings.ControlStyle = com.opentune.data.settings.ControlStyle.BLOOM,
         playing: Boolean = true,
     ) = PlayerUiState(
         song = song, isPlaying = playing, isBuffering = false, hasNext = true, shuffle = false, repeatMode = Player.REPEAT_MODE_OFF,
@@ -150,6 +150,8 @@ class ReadmeScreenshotTest {
 
     /** Each button design, playing and paused, swapped into one composition (a test can set content only once). */
     @Test fun buttons() {
+        // Orbit's comet circles for as long as music plays, so this one runs on a hand-moved clock.
+        compose.mainClock.autoAdvance = false
         var shown by androidx.compose.runtime.mutableStateOf<@Composable () -> Unit>({})
         var first = true
         com.opentune.data.settings.ControlStyle.entries.forEach { c ->

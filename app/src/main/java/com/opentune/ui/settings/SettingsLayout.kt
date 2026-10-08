@@ -49,11 +49,12 @@ internal val SETTINGS_CATEGORIES = listOf(
         ),
     ),
     SettingsCategory(
-        "look", "Look and feel", "Theme, colour, glass and haptics", Icons.Rounded.Palette,
+        "look", "Look and feel", "Theme, colour, glass, glow and haptics", Icons.Rounded.Palette,
         listOf(
             "Theme" to listOf("Theme", "Pure black"),
             "Colour" to listOf("Color from artwork", "Material You", "Accent color", "Palette style"),
             "Glass" to listOf("Liquid Glass", "Glass style", "Frosted top edge", "Reduce dynamic blur"),
+            "Light" to listOf("Edge glow"),
             "Feel" to listOf("Haptic feedback", "High refresh rate"),
         ),
     ),
@@ -61,7 +62,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "player", "Player", "Layout, buttons, cover and background", Icons.Rounded.Album,
         listOf(
             "Layout" to listOf("Player layout", "Player buttons", "Player background"),
-            "Cover art" to listOf("Moving cover art", "Full-screen cover art", "Album covers"),
+            "Cover art" to listOf("Moving cover art", "Song change", "Full-screen cover art", "Album covers"),
             "Controls" to listOf("Wavy seek bar", "Hide volume bar", "Hide song status", "Show stats for nerds"),
         ),
     ),

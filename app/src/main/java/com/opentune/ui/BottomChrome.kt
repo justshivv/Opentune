@@ -103,6 +103,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.sizeIn
 import com.opentune.data.settings.DockLens
 import com.opentune.data.settings.DockMotion
 import com.opentune.ui.components.glass
@@ -111,6 +113,8 @@ import com.opentune.ui.components.glass
 val CHROME_TAB_HEIGHT = 64.dp
 val CHROME_MINI_HEIGHT = 64.dp
 private val BUBBLE = 62.dp
+/** Height of the one-row minimized dock. */
+private val MINI_ROW = 56.dp
 
 /** How long the dock takes to fold away or come back, and its easing (Material's emphasized curve). */
 private const val FOLD_MS = 560
@@ -128,10 +132,6 @@ private const val CASCADE_STEP_MS = 40
 private const val CASCADE_DROP_MS = 220
 private const val CASCADE_RISE_MS = 420
 private const val CASCADE_LEAD_MS = 40
-private const val DISSOLVE_MS = 420
-private const val SQUASH_OUT_MS = 200
-private const val POP_OUT_MS = 180
-private val DISSOLVE_BLUR = 22.dp
 
 /** Ends a touch past the target and eases back, for tabs landing in [DockMotion.CASCADE]. */
 private val BACK_OUT = CubicBezierEasing(0.34f, 1.4f, 0.64f, 1f)
@@ -213,37 +213,25 @@ fun BottomChrome(
             label = "chrome",
         ) { folded ->
             val shared = SharedMini(this@SharedTransitionLayout, this, boundsSpec(style))
-            val mist = if (style == DockMotion.DISSOLVE) {
-                transition.animateFloat({ tween(DISSOLVE_MS, easing = FOLD_EASING) }, label = "mist") { if (it == EnterExitState.Visible) 0f else 1f }
-            } else {
-                null
-            }
-            val dissolve = if (mist == null) Modifier else Modifier.graphicsLayer {
-                val blur = mist.value * DISSOLVE_BLUR.toPx()
-                renderEffect = if (blur > 0.5f) BlurEffect(blur, blur, TileMode.Decal) else null
-            }
-            // Squash: flattens into a line on the way out and springs back past full height on the way in.
-            val squash = if (style == DockMotion.SQUASH) {
-                transition.animateFloat(
-                    {
-                        if (targetState == EnterExitState.Visible) spring(dampingRatio = 0.45f, stiffness = 420f)
-                        else tween(SQUASH_OUT_MS, easing = FastOutLinearInEasing)
-                    },
-                    label = "squash",
-                ) { if (it == EnterExitState.Visible) 1f else 0f }
-            } else {
-                null
-            }
-            val flatten = if (squash == null) Modifier else Modifier.graphicsLayer {
-                val v = squash.value
-                transformOrigin = TransformOrigin(0.5f, 1f)
-                scaleY = (0.06f + 0.94f * v).coerceAtLeast(0.02f)
-                // Wider as it flattens, the way a pressed drop spreads.
-                scaleX = 1f + 0.08f * (1f - v.coerceIn(0f, 1f))
-                alpha = (v * 2.5f).coerceIn(0f, 1f)
-            }
-            if (folded) {
-                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).then(dissolve).then(flatten), contentAlignment = Alignment.BottomEnd) {
+            if (folded && motion == DockMotion.MINIMIZE) {
+                // One row: the open tab in its own glass circle, the song in a slim
+                // bar, Search on the end. The dock pill becomes the circle.
+                val current = selected?.let(tabs::getOrNull) ?: tabs.first()
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(MINI_ROW),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TabOrb(current, searchSelected, with(shared) { Modifier.sharedPart("dock") }, onExpand)
+                    if (mini != null) {
+                        mini(false, with(shared) { Modifier.sharedMini() }.weight(1f).height(MINI_ROW))
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
+                    SearchOrb(searchSelected, with(shared) { Modifier.sharedPart("search") }.size(MINI_ROW), onSearch)
+                }
+            } else if (folded) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.BottomEnd) {
                     if (mini != null) {
                         mini(true, with(shared) { Modifier.sharedMini() }.size(BUBBLE))
                     } else {
@@ -258,9 +246,9 @@ fun BottomChrome(
                     }
                 }
             } else {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).then(dissolve).then(flatten), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (mini != null) mini(false, with(shared) { Modifier.sharedMini() }.fillMaxWidth().height(CHROME_MINI_HEIGHT))
-                    Dock(tabs, selected, onSelect, searchSelected, onSearch, style, lens, this@AnimatedContent)
+                    Dock(tabs, selected, onSelect, searchSelected, onSearch, style, lens, this@AnimatedContent, shared.takeIf { motion == DockMotion.MINIMIZE })
                 }
             }
         }
@@ -302,22 +290,15 @@ private fun AnimatedContentTransitionScope<Boolean>.foldTransform(motion: DockMo
             fadeIn(tween(220)) togetherWith
                 (fadeOut(tween(CASCADE_DROP_MS + 60, glassDelay, FastOutLinearInEasing)) + slideOutVertically(tween(CASCADE_DROP_MS + 60, glassDelay, FastOutLinearInEasing)) { it / 6 })
         }
-        // Blurred in BottomChrome; here it fades and grows a touch as it goes.
-        DockMotion.DISSOLVE ->
-            (fadeIn(tween(DISSOLVE_MS, easing = LinearOutSlowInEasing)) + scaleIn(tween(DISSOLVE_MS, easing = FOLD_EASING), initialScale = 1.05f)) togetherWith
-                (fadeOut(tween(DISSOLVE_MS * 3 / 4, easing = FastOutLinearInEasing)) + scaleOut(tween(DISSOLVE_MS, easing = FOLD_EASING), targetScale = 1.06f))
-        // Flattened in BottomChrome; the swap waits until the line has all but gone.
-        DockMotion.SQUASH -> fadeIn(tween(1)) togetherWith fadeOut(tween(90, delayMillis = SQUASH_OUT_MS - 40))
-        // Into its middle and back out past full size, on a spring.
-        DockMotion.POP ->
-            (scaleIn(spring(dampingRatio = 0.5f, stiffness = 380f), initialScale = 0.55f, transformOrigin = TransformOrigin(0.5f, 1f)) + fadeIn(tween(140))) togetherWith
-                (scaleOut(tween(POP_OUT_MS, easing = FastOutLinearInEasing), targetScale = 0.6f, transformOrigin = TransformOrigin(0.5f, 1f)) + fadeOut(tween(POP_OUT_MS)))
+        // The pill and Search morph on their own (shared bounds); everything
+        // else cross-fades quickly, the way iOS 26's tab bar minimizes.
+        DockMotion.MINIMIZE -> fadeIn(tween(220, delayMillis = 60)) togetherWith fadeOut(tween(150))
     }
     val size: FiniteAnimationSpec<IntSize> = when (motion) {
         null -> tween(200, easing = FOLD_EASING)
         DockMotion.GLIDE -> spring(dampingRatio = 1f, stiffness = 380f, visibilityThreshold = IntSize.VisibilityThreshold)
         DockMotion.RETRACT -> tween(RETRACT_MS, easing = FastOutSlowInEasing)
-        DockMotion.POP, DockMotion.SQUASH -> spring(dampingRatio = 0.8f, stiffness = 420f, visibilityThreshold = IntSize.VisibilityThreshold)
+        DockMotion.MINIMIZE -> spring(dampingRatio = 0.85f, stiffness = 380f, visibilityThreshold = IntSize.VisibilityThreshold)
         else -> tween(FOLD_MS, easing = FOLD_EASING)
     }
     return transform.using(SizeTransform(clip = false) { _, _ -> size })
@@ -328,8 +309,7 @@ private fun boundsSpec(motion: DockMotion?): FiniteAnimationSpec<Rect> = when (m
     null -> tween(200, easing = FOLD_EASING)
     DockMotion.GLIDE -> spring(dampingRatio = 0.82f, stiffness = 300f, visibilityThreshold = Rect.VisibilityThreshold)
     DockMotion.RETRACT -> tween(RETRACT_MS, easing = FastOutSlowInEasing)
-    DockMotion.DISSOLVE -> tween(DISSOLVE_MS + 80, easing = FOLD_EASING)
-    DockMotion.POP, DockMotion.SQUASH -> spring(dampingRatio = 0.72f, stiffness = 360f, visibilityThreshold = Rect.VisibilityThreshold)
+    DockMotion.MINIMIZE -> spring(dampingRatio = 0.82f, stiffness = 380f, visibilityThreshold = Rect.VisibilityThreshold)
     else -> tween(FOLD_MS, easing = FOLD_EASING)
 }
 
@@ -339,6 +319,20 @@ private class SharedMini(
     private val scope: AnimatedVisibilityScope,
     private val spec: FiniteAnimationSpec<Rect>,
 ) {
+    /** A piece of the dock that changes shape between the two layouts (the pill into a circle, say). */
+    @Composable
+    fun Modifier.sharedPart(key: String): Modifier = with(layout) {
+        this@sharedPart.sharedBounds(
+            rememberSharedContentState(key),
+            scope,
+            enter = fadeIn(tween(200, delayMillis = 40)),
+            exit = fadeOut(tween(120)),
+            boundsTransform = { _, _ -> spec },
+            resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+            clipInOverlayDuringTransition = OverlayClip(CircleShape),
+        )
+    }
+
     @Composable
     fun Modifier.sharedMini(): Modifier = with(layout) {
         this@sharedMini.sharedElement(
@@ -392,6 +386,7 @@ private fun Dock(
     motion: DockMotion?,
     lens: DockLens,
     scope: AnimatedVisibilityScope,
+    shared: SharedMini? = null,
 ) {
     val haptics = com.opentune.ui.components.rememberHaptics()
     val reveal: State<Float>? = if (motion == DockMotion.RETRACT) {
@@ -421,7 +416,9 @@ private fun Dock(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BoxWithConstraints(
-            Modifier.weight(1f).fillMaxHeight().dockShadow(DOCK_SHAPE).glass(DOCK_SHAPE).dockHighlight(DOCK_SHAPE).padding(DOCK_INSET),
+            Modifier.weight(1f).fillMaxHeight()
+                .then(if (shared == null) Modifier else with(shared) { Modifier.sharedPart("dock") })
+                .dockShadow(DOCK_SHAPE).glass(DOCK_SHAPE).dockHighlight(DOCK_SHAPE).padding(DOCK_INSET),
         ) {
             val slot = maxWidth / tabs.size
             val shown = selected?.takeIf { it in tabs.indices }
@@ -462,7 +459,7 @@ private fun Dock(
             }
         }
         Spacer(Modifier.width(10.dp))
-        SearchOrb(searchSelected, wave(tabs.size)) {
+        SearchOrb(searchSelected, wave(tabs.size).then(if (shared == null) Modifier else with(shared) { Modifier.sharedPart("search") })) {
             if (!searchSelected) haptics.tick()
             onSearch()
         }
@@ -526,7 +523,8 @@ private fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onClick:
     val fg by animateColorAsState(if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, label = "orbFg")
     Box(
         modifier
-            .size(CHROME_TAB_HEIGHT)
+            .sizeIn(maxWidth = CHROME_TAB_HEIGHT, maxHeight = CHROME_TAB_HEIGHT)
+            .aspectRatio(1f)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .dockShadow(CircleShape)
             .glass(CircleShape)
@@ -539,6 +537,36 @@ private fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onClick:
         contentAlignment = Alignment.Center,
     ) {
         Icon(Icons.Rounded.Search, "Search", tint = fg, modifier = Modifier.size(26.dp))
+    }
+}
+
+/**
+ * The open tab on its own, for [DockMotion.MINIMIZE]: its filled icon in the
+ * accent colour inside a glass circle. Tapping it brings the whole dock back.
+ */
+@Composable
+private fun TabOrb(tab: ChromeTab, searchSelected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "tabOrbScale")
+    Box(
+        modifier
+            .size(MINI_ROW)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .dockShadow(CircleShape)
+            .glass(CircleShape)
+            .dockHighlight(CircleShape)
+            .clip(CircleShape)
+            .clickable(interactionSource = interaction, indication = null, onClickLabel = "Show navigation", onClick = onClick)
+            .semantics { role = Role.Button },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (searchSelected) tab.icon else tab.selectedIcon,
+            tab.label,
+            tint = if (searchSelected) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(26.dp),
+        )
     }
 }
 

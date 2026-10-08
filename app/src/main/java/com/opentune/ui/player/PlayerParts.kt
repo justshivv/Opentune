@@ -9,6 +9,12 @@ import androidx.compose.runtime.setValue
 import android.media.AudioManager
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -245,6 +251,9 @@ fun ArtworkPane(
     onSwipePrevious: () -> Unit,
     modifier: Modifier = Modifier,
     moving: Boolean = false,
+    change: com.opentune.data.settings.CoverChange = com.opentune.data.settings.CoverChange.FADE,
+    /** The song's place in the queue, so Carousel knows which way to slide. */
+    index: Int = 0,
 ) {
     val scale by animateFloatAsState(
         if (isPlaying) 1f else 0.86f,
@@ -277,12 +286,24 @@ fun ArtworkPane(
         contentAlignment = Alignment.Center,
     ) {
         AnimatedContent(
-            targetState = song.thumbnailUrl,
-            transitionSpec = {
-                (fadeIn(tween(450)) + scaleIn(tween(450), initialScale = 0.94f)) togetherWith fadeOut(tween(300))
-            },
+            targetState = CoverShown(song.thumbnailUrl, index),
+            contentKey = { it.url },
+            transitionSpec = { coverTransition(change, forward = targetState.index >= initialState.index) },
             label = "artwork",
-        ) { url ->
+        ) { shown ->
+            val url = shown.url
+            // Flip turns each cover on its own: out to the edge, then the next in from the other side.
+            val turn = if (change == com.opentune.data.settings.CoverChange.FLIP) {
+                transition.animateFloat({ tween(FLIP_MS / 2, delayMillis = if (targetState == androidx.compose.animation.EnterExitState.Visible) FLIP_MS / 2 else 0, easing = FastOutSlowInEasing) }, label = "flip") {
+                    when (it) {
+                        androidx.compose.animation.EnterExitState.PreEnter -> -90f
+                        androidx.compose.animation.EnterExitState.Visible -> 0f
+                        androidx.compose.animation.EnterExitState.PostExit -> 90f
+                    }
+                }
+            } else {
+                null
+            }
             Artwork(
                 url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
                 Modifier
@@ -293,6 +314,10 @@ fun ArtworkPane(
                         scaleY = scale
                         translationX = offsetX.value
                         rotationZ = offsetX.value / 90f
+                        if (turn != null) {
+                            rotationY = turn.value
+                            cameraDistance = 14f * density
+                        }
                         shadowElevation = 28.dp.toPx()
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
                         clip = true
@@ -302,6 +327,30 @@ fun ArtworkPane(
             )
         }
     }
+}
+
+/** A cover on screen: which art, and where its song sits in the queue. */
+private data class CoverShown(val url: String?, val index: Int)
+
+private const val FLIP_MS = 520
+
+/** How one cover gives way to the next for each [com.opentune.data.settings.CoverChange]. */
+private fun coverTransition(change: com.opentune.data.settings.CoverChange, forward: Boolean): ContentTransform = when (change) {
+    com.opentune.data.settings.CoverChange.FADE ->
+        (fadeIn(tween(450)) + scaleIn(tween(450), initialScale = 0.94f)) togetherWith fadeOut(tween(300))
+    com.opentune.data.settings.CoverChange.CAROUSEL -> {
+        val dir = if (forward) 1 else -1
+        val slide = spring(dampingRatio = 0.86f, stiffness = 300f, visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold)
+        (slideInHorizontally(slide) { dir * it } + scaleIn(tween(420), initialScale = 0.9f)) togetherWith
+            (slideOutHorizontally(slide) { -dir * it } + scaleOut(tween(420), targetScale = 0.9f) + fadeOut(tween(420)))
+    }
+    // The turn itself is in ArtworkPane; this only keeps both faces for the length of it.
+    com.opentune.data.settings.CoverChange.FLIP ->
+        fadeIn(tween(1, delayMillis = FLIP_MS / 2)) togetherWith fadeOut(tween(1, delayMillis = FLIP_MS / 2))
+    com.opentune.data.settings.CoverChange.DECK ->
+        (slideInVertically(spring(dampingRatio = 0.7f, stiffness = 320f, visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold)) { -it / 3 } +
+            scaleIn(spring(dampingRatio = 0.7f, stiffness = 320f), initialScale = 1.08f) + fadeIn(tween(220))) togetherWith
+            (scaleOut(tween(420, easing = FastOutSlowInEasing), targetScale = 0.82f) + fadeOut(tween(420)))
 }
 
 /**
@@ -404,63 +453,6 @@ fun SeekBar(
 private fun rememberWavePhase(): androidx.compose.runtime.State<Float> =
     rememberInfiniteTransition(label = "wave")
         .animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(1_600, easing = LinearEasing)), label = "phase")
-
-/**
- * Back, play/pause and forward. Classic is large bare glyphs, Apple Music
- * style: each sinks under the finger, and play and pause cross-fade with a
- * little scale. The other [style]s are in [StyledControls].
- */
-@Composable
-fun PlayerControls(
-    isPlaying: Boolean,
-    isBuffering: Boolean,
-    hasNext: Boolean,
-    onTogglePlay: () -> Unit,
-    onNext: () -> Unit,
-    onPrevious: () -> Unit,
-    modifier: Modifier = Modifier,
-    style: com.opentune.data.settings.ControlStyle = com.opentune.data.settings.ControlStyle.CLASSIC,
-    animate: Boolean = true,
-) {
-    if (style != com.opentune.data.settings.ControlStyle.CLASSIC) {
-        StyledControls(style, isPlaying, isBuffering, hasNext, onTogglePlay, onNext, onPrevious, animate, modifier)
-        return
-    }
-    Row(
-        modifier.fillMaxWidth().height(96.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        GlyphButton(Icons.Rounded.FastRewind, "Previous", 64.dp, onClick = onPrevious)
-        Box(contentAlignment = Alignment.Center) {
-            if (isBuffering) {
-                CircularProgressIndicator(Modifier.size(84.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-            }
-            Box(Modifier.size(84.dp).pressable(onTogglePlay, 0.86f), contentAlignment = Alignment.Center) {
-                AnimatedContent(
-                    isPlaying,
-                    transitionSpec = { (scaleIn(initialScale = 0.6f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.6f) + fadeOut()) },
-                    label = "playIcon",
-                ) { playing ->
-                    Icon(
-                        if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        if (playing) "Pause" else "Play",
-                        Modifier.size(80.dp),
-                    )
-                }
-            }
-        }
-        GlyphButton(Icons.Rounded.FastForward, "Next", 64.dp, enabled = hasNext, onClick = onNext)
-    }
-}
-
-@Composable
-private fun GlyphButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, size: androidx.compose.ui.unit.Dp, enabled: Boolean = true, onClick: () -> Unit) {
-    val alpha = if (enabled) 1f else 0.35f
-    Box(Modifier.size(size + 12.dp).pressable({ if (enabled) onClick() }, 0.82f), contentAlignment = Alignment.Center) {
-        Icon(icon, label, Modifier.size(size), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
-    }
-}
 
 /**
  * Now playing, above the dock: a card tinted with the cover's colour, with

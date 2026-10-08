@@ -268,8 +268,8 @@ data class InterfaceSettings(
     /** Lyrics text size, as a fraction of the standard size. */
     val lyricsTextScale: Float = 1f,
     val playerStyle: PlayerStyle = PlayerStyle.CLASSIC,
-    val dockMotion: DockMotion = DockMotion.FOLD,
-    val controlStyle: ControlStyle = ControlStyle.CLASSIC,
+    val dockMotion: DockMotion = DockMotion.MINIMIZE,
+    val controlStyle: ControlStyle = ControlStyle.BLOOM,
     /** The cover drifts and zooms slowly in the player while a song plays. */
     val movingCover: Boolean = true,
     /** How strong taps and buzzes are, 0 (off) to 1. */
@@ -291,7 +291,20 @@ data class InterfaceSettings(
     val highRefreshRate: Boolean = true,
     /** How the full player rises over the page and drops away. */
     val playerMotion: PlayerMotion = PlayerMotion.SPRING,
+    /** How the player's cover gives way to the next song's. */
+    val coverChange: CoverChange = CoverChange.FADE,
+    /** A soft glow of the playing cover's colour along the screen's edges. */
+    val edgeGlow: Boolean = false,
 )
+
+/** How the cover changes when the song does. */
+@Serializable
+enum class CoverChange(val label: String, val summary: String) {
+    FADE("Fade", "The new cover fades in as it settles to size"),
+    CAROUSEL("Carousel", "Covers slide past in the direction you skipped"),
+    FLIP("Flip", "The cover turns over like a card to show the next one"),
+    DECK("Deck", "The next cover drops onto the pile and the old one sinks under it"),
+}
 
 /** How the full-screen player opens and closes. */
 @Serializable
@@ -352,23 +365,22 @@ data class LibrarySettings(
 /** How the player's back, play/pause and forward buttons look and move. */
 @Serializable
 enum class ControlStyle(val label: String, val summary: String) {
-    CLASSIC("Classic", "Big bare glyphs; play and pause cross-fade"),
-    MORPH("Morph", "Play folds into pause and the skip arrows roll on"),
-    DISC("Disc", "Play and pause in a solid round button that pops"),
-    SQUIRCLE("Squircle", "A rounded square that turns round while playing"),
-    GLASS("Glass", "Each button in its own glass bubble"),
+    BLOOM("Bloom", "Large bare glyphs; a soft light blooms behind each press and play folds into pause"),
+    CAPSULE("Capsule", "Play stretches into a wide accent pill while it plays; the skips tilt as you tap"),
+    ORBIT("Orbit", "Play sits inside the song's progress ring, with a comet of light circling while it plays"),
 }
 
-/** How the dock tucks away while a page scrolls down, and comes back. */
+/**
+ * How the dock tucks away while a page scrolls down, and comes back. Each
+ * one either ends somewhere different or travels a different way.
+ */
 @Serializable
 enum class DockMotion(val label: String, val summary: String) {
-    FOLD("Fold", "The dock sinks and fades as the card shrinks to a bubble"),
+    MINIMIZE("Minimize", "Like iOS 26: the tabs shrink to the open one, with the song in a slim bar beside it"),
+    FOLD("Bubble", "The dock sinks away and the song shrinks into a round cover in the corner"),
     GLIDE("Glide", "The dock slides off the bottom and springs back up"),
-    RETRACT("Retract", "The dock pulls into the corner and unrolls from it"),
+    RETRACT("Retract", "The dock pulls into the Search button and unrolls from it"),
     CASCADE("Cascade", "The tabs drop away one by one and come back in a wave"),
-    DISSOLVE("Dissolve", "The dock blurs away and sharpens back into place"),
-    SQUASH("Squash", "The dock flattens into a line and springs back up"),
-    POP("Pop", "The dock shrinks into its middle and pops back out"),
 }
 
 /** How synced lyrics move as the song plays. */
@@ -447,7 +459,9 @@ object AppSettings {
     private var prefs: SharedPreferences? = null
     private var connectivity: ConnectivityManager? = null
 
-    val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    // coerceInputValues: a choice a later version dropped reads back as that setting's default
+    // instead of failing the whole file.
+    val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; coerceInputValues = true }
 
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()

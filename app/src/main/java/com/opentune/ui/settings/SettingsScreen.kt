@@ -133,6 +133,7 @@ import com.opentune.data.releases.NewReleases
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
 import com.opentune.data.settings.ControlStyle
+import com.opentune.data.settings.CoverChange
 import com.opentune.data.settings.DockMotion
 import com.opentune.data.settings.LyricsAlign
 import com.opentune.data.settings.PlayerMotion
@@ -354,6 +355,7 @@ private fun settingsSections(
     var glassStyleDialog by remember { mutableStateOf(false) }
     var pageTransitionDialog by remember { mutableStateOf(false) }
     var playerMotionDialog by remember { mutableStateOf(false) }
+    var coverChangeDialog by remember { mutableStateOf(false) }
     var controlStyleDialog by remember { mutableStateOf(false) }
     val lastFm by LastFm.account.collectAsState()
     val scrobblesWaiting by LastFm.queued.collectAsState()
@@ -480,6 +482,16 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { t -> AppSettings.updateUi { it.copy(pageTransition = t) } },
             onDismiss = { pageTransitionDialog = false },
+        )
+    }
+    if (coverChangeDialog) {
+        ChoiceSheet(
+            title = "Song change",
+            options = CoverChange.entries,
+            selected = ui.coverChange,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { c -> AppSettings.updateUi { it.copy(coverChange = c) } },
+            onDismiss = { coverChangeDialog = false },
         )
     }
     if (playerMotionDialog) {
@@ -761,6 +773,12 @@ private fun settingsSections(
                 },
                 Entry("Page transitions", "navigation animation screen open back slide fade zoom rise") {
                     NavRow("Page transitions", { pageTransitionDialog = true }, summary = ui.pageTransition.summary, icon = Icons.Rounded.SwapHoriz, value = ui.pageTransition.label)
+                },
+                Entry("Song change", "cover change next song skip animation flip carousel deck fade") {
+                    NavRow("Song change", { coverChangeDialog = true }, summary = ui.coverChange.summary, icon = Icons.Rounded.SwapHoriz, value = ui.coverChange.label)
+                },
+                Entry("Edge glow", "glow edges ambient light colour cover screen") {
+                    ToggleRow("Edge glow", ui.edgeGlow, { v -> AppSettings.updateUi { it.copy(edgeGlow = v) } }, summary = "The playing cover's colour lights the edges of the screen, breathing with the music", icon = Icons.Rounded.Flare)
                 },
                 Entry("Player opening", "now playing sheet open close animation spring smooth bouncy snappy") {
                     NavRow("Player opening", { playerMotionDialog = true }, summary = ui.playerMotion.summary, icon = Icons.Rounded.UnfoldMore, value = ui.playerMotion.label)

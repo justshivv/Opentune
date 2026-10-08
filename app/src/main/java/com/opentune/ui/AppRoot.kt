@@ -481,6 +481,15 @@ fun AppRoot(vm: PlayerViewModel) {
                     onTogether = { playerOpen = false; nav.navigate("together") },
                 )
             }
+
+            // Over everything, light from the cover along the screen's edges.
+            if (chromeUi.edgeGlow) {
+                com.opentune.ui.components.EdgeGlow(
+                    com.opentune.ui.theme.rememberArtworkSeed(song?.thumbnailUrl).takeIf { song != null },
+                    playing = isPlaying,
+                    still = chromeUi.reduceAnimation,
+                )
+            }
         }
     }
 }

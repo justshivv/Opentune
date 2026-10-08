@@ -441,6 +441,8 @@ fun PlayerLayout(
                                         ArtworkPane(
                                             current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous,
                                             moving = state.ui.movingCover && !state.ui.reduceAnimation,
+                                            change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
+                                            index = state.currentIndex,
                                         )
                                 }
                             }
@@ -497,6 +499,7 @@ fun PlayerLayout(
                     onPrevious = actions.previous,
                     style = state.ui.controlStyle,
                     animate = !state.ui.reduceAnimation,
+                    progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
                 )
                 if (!state.ui.hideVolumeBar && !minimal) VolumeBar(Modifier.padding(vertical = 4.dp))
                 Spacer(Modifier.height(10.dp))

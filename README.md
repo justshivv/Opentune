@@ -257,12 +257,12 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   takes its tint from the cover and has the play button inside a progress
   ring. Scroll down and the dock tucks away while the card shrinks into a
   round cover bubble in the corner, still ringed by progress; scroll up and
-  both come back. Pick how the dock goes: Fold, Glide (off the bottom and
-  back on a spring), Retract (into the corner and unrolling from it),
-  Cascade (tabs drop one by one and return in a wave), Dissolve (blurs
-  away and sharpens back, Android 12+), Squash (flattens into a line and
-  springs back) or Pop (shrinks into its middle and pops back out). The
-  lens can Stretch like a drop, wobble like Jelly or Glide in one piece.
+  both come back. Pick how the dock goes: Minimize (like iOS 26, the
+  default: the tabs shrink into a circle holding the open one, with the
+  song in a slim bar beside it), Bubble, Glide (off the bottom and back on
+  a spring), Retract (into the Search button and unrolling from it) or
+  Cascade (tabs drop one by one and return in a wave). The lens can
+  Stretch like a drop, wobble like Jelly or Glide in one piece.
 - **Glass styles.** The dock, buttons and bars come in Frosted, Clear,
   Heavy frost, Tinted (washed with the accent) or Smoke, for Liquid Glass
   and frosted glass alike. Pages also blur and fade as they scroll under
@@ -313,10 +313,18 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **iOS-style bounce** at the ends of every list.
 - **Smooth tab changes.** The dock's highlight stretches toward the tab
   you pick and settles into it, without overshooting.
-- **Player buttons in five designs.** Classic glyphs; Morph, where play
-  folds into pause and the skip arrows roll a step on each tap; Disc, a
-  solid round play button that pops; Squircle, a rounded square that turns
-  round while the song plays; and Glass, each button in its own bubble.
+- **Player buttons in three designs.** Bloom: big bare glyphs, a soft disc
+  of light blooming behind each press. Capsule: play in an accent pill
+  that stretches wide while music plays, between skip buttons that tilt
+  toward where they go. Orbit: play inside the song's progress ring with a
+  comet of light circling it, and an arc that spins round a skip button
+  when tapped. In all three, play folds into pause and the skip arrows
+  roll a step on with each tap.
+- **Song change.** The cover can Fade into the next, slide past in a
+  Carousel in the direction you skipped, Flip over like a card, or drop
+  onto a Deck while the old one sinks under it.
+- **Edge glow.** An optional soft light in the playing cover's colour along
+  the screen's edges, breathing slowly while music plays.
 - **Haptic feedback you can tune**, from off to strong. Taps use the phone's
   crisp haptic primitives where it has them, and follow the system's touch
   feedback switch.
