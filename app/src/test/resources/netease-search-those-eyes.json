@@ -1,0 +1,61 @@
+{
+ "result": {
+  "songs": [
+   {
+    "id": 2092470574,
+    "name": "Those Eyes",
+    "artists": [
+     {
+      "name": "New West"
+     }
+    ],
+    "duration": 220750
+   },
+   {
+    "id": 1451847351,
+    "name": "Those Eyes",
+    "artists": [
+     {
+      "name": "New West"
+     }
+    ],
+    "duration": 220750
+   },
+   {
+    "id": 1964192320,
+    "name": "Those Eyes (Sped Up)",
+    "artists": [
+     {
+      "name": "New West"
+     }
+    ],
+    "duration": 167658
+   },
+   {
+    "id": 2018651648,
+    "name": "those eyes",
+    "artists": [
+     {
+      "name": "New West"
+     }
+    ],
+    "duration": 169272
+   },
+   {
+    "id": 2114618774,
+    "name": "Those Eyes",
+    "artists": [
+     {
+      "name": "New West"
+     },
+     {
+      "name": "Zeph"
+     }
+    ],
+    "duration": 244750
+   }
+  ],
+  "songCount": 5
+ },
+ "code": 200
+}

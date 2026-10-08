@@ -25,10 +25,12 @@ import okhttp3.Request
 
 /**
  * Lyrics from LRCLIB (lrclib.net): free, keyless, and mostly line-synced, with
- * word sync for some tracks; from KuGou (see [KuGou]), line-synced; and from
- * YouTube Music, unsynced.
+ * word sync for some tracks; from KuGou (see [KuGou]) and NetEase (see
+ * [NetEase]), line-synced; and from YouTube Music, unsynced.
  *
- * Sources are tried in the order set in Settings › Lyrics sources. Within
+ * Sources are tried in the order set in Settings › Lyrics sources, and
+ * plain text never stops the search: every source is asked until one has
+ * them synced, and plain text shows only when none does. Within
  * LRCLIB: an exact match on title, artist and duration; then a search on
  * title and artist, preferring synced results whose duration is closest;
  * then a free-text search on the cleaned title. YouTube Music's lyrics are
@@ -67,45 +69,63 @@ object LyricsRepository {
         val settings = AppSettings.lyrics.value
         val key = "$videoId|${settings.ordered.filter { it.enabled }.joinToString(",") { it.source.name }}|${settings.preferWordSynced}"
         if (cache.containsKey(key)) return cache[key]
+        var failed = false
         val result = withContext(Dispatchers.IO) {
             var best: Lyrics? = null
             for (entry in settings.ordered) {
                 if (!entry.enabled) continue
                 val found = when (entry.source) {
                     LyricsSource.LRCLIB -> runCatching { lookup(title, artist, durationMs) }
-                        .onFailure { Log.w(TAG, "LRCLIB lookup failed for $videoId", it) }
+                        .onFailure { failed = true; Log.w(TAG, "LRCLIB lookup failed for $videoId", it) }
                         .getOrNull()
                     LyricsSource.KUGOU -> runCatching { KuGou.lookup(title, artist, durationMs) }
-                        .onFailure { Log.w(TAG, "KuGou lookup failed for $videoId", it) }
+                        .onFailure { failed = true; Log.w(TAG, "KuGou lookup failed for $videoId", it) }
+                        .getOrNull()
+                    LyricsSource.NETEASE -> runCatching { NetEase.lookup(title, artist, durationMs) }
+                        .onFailure { failed = true; Log.w(TAG, "NetEase lookup failed for $videoId", it) }
                         .getOrNull()
                     LyricsSource.YOUTUBE_MUSIC -> if (!isYouTubeId(videoId)) null else runCatching { youTubeMusic(videoId) }
                         .onFailure { Log.w(TAG, "YouTube Music lyrics failed for $videoId", it) }
                         .getOrNull()
                 } ?: continue
                 if (rank(found) > rank(best)) best = found
-                // The first source with lyrics wins, unless word-by-word is
-                // wanted and this isn't it.
-                if (!settings.preferWordSynced || rank(found) == WORD_SYNCED) break
+                // The first source with synced lyrics wins (word by word, when
+                // that's wanted). Plain text only holds the place: a later
+                // source may well have the same song in time.
+                if (rank(found) >= (if (settings.preferWordSynced) WORD_SYNCED else LINE_SYNCED)) break
             }
             best
         }
         // Only remember answers, and only ones matched on the song's length:
         // without it any version's lyrics can match, timed for another cut.
-        if (result != null && durationMs > 0) cache[key] = result
+        // Plain text found while a synced source was down isn't kept either,
+        // so the next play asks again.
+        val settled = !(result is Lyrics.Plain && failed)
+        if (result != null && durationMs > 0 && settled) cache[key] = result
         return result
     }
 
     private fun rank(lyrics: Lyrics?): Int = when (lyrics) {
         null -> 0
         is Lyrics.Plain -> 1
-        is Lyrics.Synced -> if (lyrics.lines.any { it.wordSynced }) WORD_SYNCED else 2
+        is Lyrics.Synced -> if (lyrics.lines.any { it.wordSynced }) WORD_SYNCED else LINE_SYNCED
     }
 
+    private const val LINE_SYNCED = 2
     private const val WORD_SYNCED = 3
 
     private fun lookup(title: String, artist: String, durationMs: Long): Lyrics? {
         val cleaned = TrackNameCleaner.clean(title, artist)
         val durationS = durationMs / 1000.0
+
+        // Each step returns at once with synced lyrics; plain text is kept
+        // in case no later step finds them in time.
+        var plain: Lyrics? = null
+        fun take(found: Lyrics?): Lyrics? {
+            if (found is Lyrics.Synced) return found
+            if (plain == null) plain = found
+            return null
+        }
 
         if (durationMs > 0) {
             val exact = request(
@@ -114,14 +134,15 @@ object LyricsRepository {
                 "artist_name" to cleaned.artist,
                 "duration" to durationS.toLong().toString(),
             ) as? JsonObject
-            exact?.let { toLyrics(it, durationMs) }?.let { return it }
+            take(exact?.let { toLyrics(it, durationMs) })?.let { return it }
         }
 
         val byFields = request("search", "track_name" to cleaned.title, "artist_name" to cleaned.artist)
-        pick(byFields, durationS)?.let { toLyrics(it, durationMs) }?.let { return it }
+        take(pick(byFields, durationS)?.let { toLyrics(it, durationMs) })?.let { return it }
 
         val byQuery = request("search", "q" to "${cleaned.artist} ${cleaned.title}")
-        return pick(byQuery, durationS)?.let { toLyrics(it, durationMs) }
+        take(pick(byQuery, durationS)?.let { toLyrics(it, durationMs) })?.let { return it }
+        return plain
     }
 
     /**
@@ -185,13 +206,27 @@ object LyricsRepository {
         val url = "$BASE/$path".toHttpUrl().newBuilder().apply {
             params.forEach { (k, v) -> addQueryParameter(k, v) }
         }.build()
-        val call = Http.client.newCall(Request.Builder().url(url).header("User-Agent", USER_AGENT).build())
-        return call.execute().use { response ->
-            if (response.code == 404) return null
-            if (!response.isSuccessful) throw java.io.IOException("LRCLIB answered ${response.code}")
-            response.body?.string()?.let(json::parseToJsonElement)
+        // LRCLIB is often busy (503) or rate-limits (429) for a moment; a
+        // short wait and another try usually gets through.
+        for (attempt in 0..RETRIES) {
+            val call = Http.client.newCall(Request.Builder().url(url).header("User-Agent", USER_AGENT).build())
+            val busy = call.execute().use { response ->
+                if (response.code == 404) return null
+                if (response.code == 429 || response.code in 500..599) {
+                    if (attempt == RETRIES) throw java.io.IOException("LRCLIB answered ${response.code}")
+                    true
+                } else {
+                    if (!response.isSuccessful) throw java.io.IOException("LRCLIB answered ${response.code}")
+                    return response.body?.string()?.let(json::parseToJsonElement)
+                }
+            }
+            if (busy) Thread.sleep(RETRY_WAIT_MS * (attempt + 1))
         }
+        return null
     }
+
+    private const val RETRIES = 2
+    private const val RETRY_WAIT_MS = 900L
 
     private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
     private fun JsonObject.num(key: String): Double? = (this[key] as? JsonPrimitive)?.doubleOrNull

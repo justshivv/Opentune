@@ -299,6 +299,8 @@ data class InterfaceSettings(
     val coverChange: CoverChange = CoverChange.FADE,
     /** A soft glow of the playing cover's colour along the screen's edges. */
     val edgeGlow: Boolean = false,
+    /** Flickering coloured light rising from the bottom of the screen, in time with the music. */
+    val stageLights: Boolean = false,
 )
 
 /** How the cover changes when the song does. */
@@ -427,6 +429,7 @@ enum class LyricsAnimation(val label: String, val summary: String) {
 enum class LyricsSource(val label: String, val summary: String) {
     LRCLIB("LRCLIB", "Community lyrics, line by line and sometimes word by word"),
     KUGOU("KuGou", "Line-synced lyrics from KuGou's large catalogue, strong on Asian music"),
+    NETEASE("NetEase", "Line-synced lyrics from NetEase Cloud Music, a large catalogue of every kind of music"),
     YOUTUBE_MUSIC("YouTube Music", "YouTube Music's own lyrics, as plain text"),
 }
 

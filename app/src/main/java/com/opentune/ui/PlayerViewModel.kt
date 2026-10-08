@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+private const val LYRICS_RETRY_MS = 15_000L
+
 sealed interface LyricsState {
     data object Loading : LyricsState
     data class Found(val lyrics: Lyrics) : LyricsState
@@ -74,6 +76,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val duration = withTimeoutOrNull(20_000) { durationMs.first { it > 0 } } ?: 0L
             val found = LyricsRepository.lyricsFor(song.videoId, song.title, song.artist, duration)
             _lyrics.value = found?.let(LyricsState::Found) ?: LyricsState.NotFound
+            // Plain text often means a synced source was busy just then; ask
+            // once more a little later and switch over if it answers in time.
+            if (found is com.opentune.data.lyrics.Lyrics.Plain) {
+                kotlinx.coroutines.delay(LYRICS_RETRY_MS)
+                val again = LyricsRepository.lyricsFor(song.videoId, song.title, song.artist, duration)
+                if (again is com.opentune.data.lyrics.Lyrics.Synced) _lyrics.value = LyricsState.Found(again)
+            }
         }
     }
 
