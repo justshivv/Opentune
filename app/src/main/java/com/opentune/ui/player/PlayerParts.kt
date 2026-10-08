@@ -130,6 +130,9 @@ fun PlayerBackdrop(
     /** Let the full cover drift and zoom while playing (see livingArt). */
     movingCover: Boolean = false,
     playing: Boolean = false,
+    /** How the full-screen cover changes to the next song's, and where that song is in the queue. */
+    change: com.opentune.data.settings.CoverChange = com.opentune.data.settings.CoverChange.FADE,
+    index: Int = 0,
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(modifier.background(scheme.surface)) {
@@ -166,7 +169,7 @@ fun PlayerBackdrop(
             )
         }
         if (fullCover) {
-            AnimatedContent(artworkUrl, transitionSpec = { fadeIn(tween(600)) togetherWith fadeOut(tween(600)) }, label = "cover") { url ->
+            CoverSwap(CoverShown(artworkUrl, index), change) { url, motion ->
                 // The cover runs from the top down to just behind the title and
                 // fades out there into whatever backdrop is below it, with a light
                 // scrim at the top so the status line stays readable. It's never
@@ -178,6 +181,7 @@ fun PlayerBackdrop(
                     Modifier
                         .fillMaxWidth()
                         .height(height)
+                        .then(motion)
                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                         .drawWithContent {
                             drawContent()
@@ -293,39 +297,18 @@ fun ArtworkPane(
             },
         contentAlignment = Alignment.Center,
     ) {
-        AnimatedContent(
-            targetState = CoverShown(song.thumbnailUrl, index),
-            contentKey = { it.url },
-            transitionSpec = { coverTransition(change, forward = targetState.index >= initialState.index) },
-            label = "artwork",
-        ) { shown ->
-            val url = shown.url
-            // Flip turns each cover on its own: out to the edge, then the next in from the other side.
-            val turn = if (change == com.opentune.data.settings.CoverChange.FLIP) {
-                transition.animateFloat({ tween(FLIP_MS / 2, delayMillis = if (targetState == androidx.compose.animation.EnterExitState.Visible) FLIP_MS / 2 else 0, easing = FastOutSlowInEasing) }, label = "flip") {
-                    when (it) {
-                        androidx.compose.animation.EnterExitState.PreEnter -> -90f
-                        androidx.compose.animation.EnterExitState.Visible -> 0f
-                        androidx.compose.animation.EnterExitState.PostExit -> 90f
-                    }
-                }
-            } else {
-                null
-            }
+        CoverSwap(CoverShown(song.thumbnailUrl, index), change) { url, motion ->
             Artwork(
                 url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
+                    .then(motion)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
                         translationX = offsetX.value
                         rotationZ = offsetX.value / 90f
-                        if (turn != null) {
-                            rotationY = turn.value
-                            cameraDistance = 14f * density
-                        }
                         shadowElevation = 28.dp.toPx()
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
                         clip = true
@@ -335,30 +318,6 @@ fun ArtworkPane(
             )
         }
     }
-}
-
-/** A cover on screen: which art, and where its song sits in the queue. */
-private data class CoverShown(val url: String?, val index: Int)
-
-private const val FLIP_MS = 520
-
-/** How one cover gives way to the next for each [com.opentune.data.settings.CoverChange]. */
-private fun coverTransition(change: com.opentune.data.settings.CoverChange, forward: Boolean): ContentTransform = when (change) {
-    com.opentune.data.settings.CoverChange.FADE ->
-        (fadeIn(tween(450)) + scaleIn(tween(450), initialScale = 0.94f)) togetherWith fadeOut(tween(300))
-    com.opentune.data.settings.CoverChange.CAROUSEL -> {
-        val dir = if (forward) 1 else -1
-        val slide = spring(dampingRatio = 0.86f, stiffness = 300f, visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold)
-        (slideInHorizontally(slide) { dir * it } + scaleIn(tween(420), initialScale = 0.9f)) togetherWith
-            (slideOutHorizontally(slide) { -dir * it } + scaleOut(tween(420), targetScale = 0.9f) + fadeOut(tween(420)))
-    }
-    // The turn itself is in ArtworkPane; this only keeps both faces for the length of it.
-    com.opentune.data.settings.CoverChange.FLIP ->
-        fadeIn(tween(1, delayMillis = FLIP_MS / 2)) togetherWith fadeOut(tween(1, delayMillis = FLIP_MS / 2))
-    com.opentune.data.settings.CoverChange.DECK ->
-        (slideInVertically(spring(dampingRatio = 0.7f, stiffness = 320f, visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold)) { -it / 3 } +
-            scaleIn(spring(dampingRatio = 0.7f, stiffness = 320f), initialScale = 1.08f) + fadeIn(tween(220))) togetherWith
-            (scaleOut(tween(420, easing = FastOutSlowInEasing), targetScale = 0.82f) + fadeOut(tween(420)))
 }
 
 /**
@@ -386,6 +345,7 @@ fun SeekBar(
     val inactive = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
     val bufferedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
 
+    val seekHaptics = com.opentune.ui.components.rememberHaptics()
     fun fraction(): Float = dragFraction
         ?: if (durationMs > 0) (position().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 
@@ -412,7 +372,12 @@ fun SeekBar(
                         onDragCancel = { dragFraction = null },
                     ) { change, _ ->
                         change.consume()
-                        dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                        val f = (change.position.x / size.width).coerceIn(0f, 1f)
+                        // A soft tick each time the drag crosses a tenth of the song, and a firmer one at either end.
+                        val before = dragFraction
+                        if (before != null && (before * 10).toInt() != (f * 10).toInt()) seekHaptics.tick()
+                        if (before != null && before > 0f && before < 1f && (f == 0f || f == 1f)) seekHaptics.press()
+                        dragFraction = f
                     }
                 },
         ) {

@@ -90,8 +90,14 @@ fun PlayerControls(
 ) {
     var nextRolls by remember { mutableIntStateOf(0) }
     var previousRolls by remember { mutableIntStateOf(0) }
-    val back = { previousRolls++; onPrevious() }
-    val ahead = { nextRolls++; onNext() }
+    // Deep, strong feels for the transport, each its own (see Haptics.Pattern).
+    val haptics = com.opentune.ui.components.rememberHaptics()
+    val back = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.PREVIOUS); previousRolls++; onPrevious() }
+    val ahead = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.NEXT); nextRolls++; onNext() }
+    val playPause = {
+        haptics.pattern(if (isPlaying) com.opentune.ui.components.Haptics.Pattern.PAUSE else com.opentune.ui.components.Haptics.Pattern.PLAY)
+        onTogglePlay()
+    }
     Row(
         modifier.fillMaxWidth().height(104.dp),
         // Capsule is a tight cluster; the bare designs spread across the row.
@@ -101,25 +107,25 @@ fun PlayerControls(
         when (style) {
             ControlStyle.BLOOM -> {
                 BloomSkip(forward = false, previousRolls, enabled = true, animate, back)
-                BloomPlay(isPlaying, isBuffering, animate, onTogglePlay)
+                BloomPlay(isPlaying, isBuffering, animate, playPause)
                 BloomSkip(forward = true, nextRolls, hasNext, animate, ahead)
             }
             ControlStyle.CAPSULE -> {
                 CapsuleSkip(forward = false, previousRolls, enabled = true, animate, back)
                 Spacer(Modifier.width(26.dp))
-                CapsulePlay(isPlaying, isBuffering, animate, onTogglePlay)
+                CapsulePlay(isPlaying, isBuffering, animate, playPause)
                 Spacer(Modifier.width(26.dp))
                 CapsuleSkip(forward = true, nextRolls, hasNext, animate, ahead)
             }
             ControlStyle.ORBIT -> {
                 OrbitSkip(forward = false, previousRolls, enabled = true, animate, back)
-                OrbitPlay(isPlaying, isBuffering, animate, progress, onTogglePlay)
+                OrbitPlay(isPlaying, isBuffering, animate, progress, playPause)
                 OrbitSkip(forward = true, nextRolls, hasNext, animate, ahead)
             }
             ControlStyle.MORPH -> {
                 MorphSkip(forward = false, previousRolls, enabled = true, animate, back)
                 Spacer(Modifier.width(30.dp))
-                MorphPlay(isPlaying, isBuffering, animate, onTogglePlay)
+                MorphPlay(isPlaying, isBuffering, animate, playPause)
                 Spacer(Modifier.width(30.dp))
                 MorphSkip(forward = true, nextRolls, hasNext, animate, ahead)
             }

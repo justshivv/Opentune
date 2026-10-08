@@ -209,8 +209,11 @@ fun CollectionScreen(
                                     enabled = !c?.songs.isNullOrEmpty(),
                                     onPlay = { c?.let { actions.playAll(it.songs, 0, false, it.title) } },
                                     onShuffle = { c?.let { actions.playAll(it.songs, 0, true, it.title) } },
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 12.dp),
                                 )
+                                if (!c?.songs.isNullOrEmpty()) {
+                                    com.opentune.ui.library.ListTools(c!!.songs, onAddSongs = null, Modifier.fillMaxWidth().padding(bottom = 16.dp))
+                                }
                             }
                         }
                     }

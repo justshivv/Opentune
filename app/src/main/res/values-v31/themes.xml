@@ -1,5 +1,5 @@
 <resources>
-    <!-- The system splash: the mark on near-black, handing straight over to the in-app opening. -->
+    <!-- The system splash: the mark on black, handing straight over to the in-app opening. -->
     <style name="Theme.OpenTune" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowSplashScreenBackground">@color/opening_field</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@color/opening_field</item>

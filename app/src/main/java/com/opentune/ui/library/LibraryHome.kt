@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -110,6 +112,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val recents = remember(records) { History.recents(records, 30) }
+    var recentsOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val yearStart = remember {
         Calendar.getInstance().apply { set(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0) }.timeInMillis
     }
@@ -224,7 +227,9 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     PlayButtons(onPlay = { actions.playAll(recents, 0, false, "Recently played") }, onShuffle = { actions.playAll(recents, 0, true, "Recently played") }, compact = true)
                 })
             }
-            itemsIndexed(recents, key = { i, s -> "r$i:${s.videoId}" }) { i, song ->
+            // The last few, with the rest a tap away, so the list doesn't run the page long.
+            val shownRecents = if (recentsOpen) recents else recents.take(RECENTS_FOLDED)
+            itemsIndexed(shownRecents, key = { i, s -> "r$i:${s.videoId}" }) { i, song ->
                 SongListItem(
                     song = song,
                     onClick = { actions.playAll(recents, i, false, "Recently played") },
@@ -232,11 +237,30 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     isPlaying = actions.isPlaying,
                     onPlayNext = { actions.playNext(song) },
                     onAddToQueue = { actions.addToQueue(song) },
+                    modifier = Modifier.animateItem(),
                 )
+            }
+            if (recents.size > RECENTS_FOLDED) {
+                item(key = "recentsToggle") {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).animateItem(), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.FilledTonalButton(onClick = { recentsOpen = !recentsOpen }) {
+                            Icon(
+                                if (recentsOpen) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                                null,
+                                Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (recentsOpen) "Show less" else "Show all ${recents.size}")
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+/** How many recently played songs show before "Show all". */
+private const val RECENTS_FOLDED = 5
 
 /** This year in numbers on a neon card; opens the Wrapped story. */
 @Composable
@@ -393,6 +417,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     val playlist = playlists.firstOrNull { it.id == id }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    var adding by remember { mutableStateOf(false) }
+    if (adding) AddSongsSheet(id, onDismiss = { adding = false })
     if (playlist == null) {
         LaunchedEffect(Unit) { onBack() }
         return
@@ -419,8 +445,9 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         }
         if (songs.isEmpty()) {
             item {
-                MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "Nothing here yet", Modifier.padding(top = 32.dp), message = "Use Add to playlist in any song's menu.")
+                MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "Nothing here yet", Modifier.padding(top = 32.dp), message = "Add songs here, or use Add to playlist in any song's menu.")
             }
+            item { ListTools(songs, onAddSongs = { adding = true }, Modifier.fillMaxWidth().padding(16.dp)) }
             return@LazyColumn
         }
         item {
@@ -430,6 +457,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             )
         }
+        item { ListTools(songs, onAddSongs = { adding = true }, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
         itemsIndexed(songs, key = { i, s -> "$i:${s.videoId}" }) { i, song ->
             SongListItem(
                 song = song,

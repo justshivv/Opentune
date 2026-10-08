@@ -347,6 +347,8 @@ fun PlayerLayout(
                     fullCoverBottom = with(LocalDensity.current) { coverBottomPx.takeIf { it > 0f }?.toDp() },
                     movingCover = state.ui.movingCover && !state.ui.reduceAnimation,
                     playing = state.isPlaying,
+                    change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
+                    index = state.currentIndex,
                 )
             }
 
@@ -698,6 +700,7 @@ private fun TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () 
 /** The heart pops when tapped on. */
 @Composable
 private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
+    val haptics = com.opentune.ui.components.rememberHaptics()
     val pop = remember { Animatable(1f) }
     LaunchedEffect(liked) {
         if (liked) {
@@ -706,7 +709,11 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
         }
     }
     Box(
-        Modifier.size(46.dp).glass(CircleShape, Color.White.copy(alpha = 0.16f)).clickable(onClick = onClick),
+        Modifier.size(46.dp).glass(CircleShape, Color.White.copy(alpha = 0.16f)).clickable {
+            // A heartbeat for a like; a soft fall for taking it back.
+            haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE)
+            onClick()
+        },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -727,6 +734,7 @@ fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier 
     val hasNext by vm.hasNext.collectAsState()
     val duration by vm.durationMs.collectAsState()
     val position = rememberPlaybackPosition(vm)
+    val haptics = com.opentune.ui.components.rememberHaptics()
     val s = song ?: return
     MiniPlayer(
         song = s,
@@ -734,9 +742,12 @@ fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier 
         isBuffering = isBuffering,
         hasNext = hasNext,
         progress = { if (duration > 0) position().toFloat() / duration else 0f },
-        onTogglePlay = vm::togglePlayPause,
-        onNext = vm::skipNext,
-        onPrevious = vm::skipPrevious,
+        onTogglePlay = {
+            haptics.pattern(if (isPlaying) com.opentune.ui.components.Haptics.Pattern.PAUSE else com.opentune.ui.components.Haptics.Pattern.PLAY)
+            vm.togglePlayPause()
+        },
+        onNext = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.NEXT); vm.skipNext() },
+        onPrevious = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.PREVIOUS); vm.skipPrevious() },
         onClick = onExpand,
         modifier = modifier,
         inline = inline,

@@ -121,7 +121,9 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   stay in a song cache (512 MB by default) for instant replays and seeks.
 - **Queue and radio.** Autoplay keeps similar songs coming. Shuffle,
   repeat, play next, add to queue, swipe-to-queue on any row, and
-  drag-to-reorder in the player's queue.
+  drag-to-reorder in the player's queue. Shuffle, repeat and autoplay
+  each feel different under your finger (a riffle, a loop closing, a
+  swell) and move in their own way as they change.
 - **Pick who recommends.** Autoplay and Home's "Because you played" can
   follow YouTube Music's radio, Spotify's recommendations or JioSaavn's
   (Settings → Playback → Recommendations). Spotify's picks come from the
@@ -196,11 +198,16 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   personal. The login cookie stays in app-private storage and is left out
   of backups.
 - **Downloads** for offline listening, with a quality setting and Wi-Fi
-  only by default. They keep going after the app is closed.
+  only by default. They keep going after the app is closed. Every
+  playlist and album has Download all, which counts its way through and
+  ends with a little run of taps.
+- **Add songs to your playlists** from the playlist itself: search, or
+  pick from what you played lately, and tap + on each one.
 - **Library:** a card for your year so far (minutes, plays, top song and
   artist) that opens your Wrapped, shortcuts to Liked, Downloads, On this
-  phone and Replay, then your playlists from the app and from YouTube in
-  one list.
+  phone and Replay, your playlists from the app and from YouTube in one
+  list, and the last five songs you played, with the rest behind
+  "Show all".
 - **Replay:** top songs, artists and albums from this device's history.
 - **Wrapped:** your listening as a quiet animated story. Each page is a
   flat field of colour with one large shape drifting slowly on it (a low
@@ -374,8 +381,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   outlined bars, with skips that ripple when tapped. In all four, play
   folds into pause and the skip arrows roll a step on with each tap.
 - **Song change.** The cover can Fade into the next, slide past in a
-  Carousel in the direction you skipped, Flip over like a card, or drop
-  onto a Deck while the old one sinks under it.
+  Carousel in the direction you skipped, Flip over like a card, drop onto
+  a Deck while the old one sinks under it, Zoom through as the old one
+  rushes past you, Dissolve from one blur into the other, turn like a
+  Cube, open out of the middle in a Reveal, or Toss the old one aside as
+  the new one lands. It applies to the full-screen cover too.
 - **Edge glow.** An optional soft light in the playing cover's colour along
   the screen's edges, breathing slowly while music plays.
 - **Stage lights.** Optional coloured light rising from the bottom of the
@@ -383,6 +393,10 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   hues, swell with the bass, flash on the beat and now and then flicker
   out like a worn stage light. The level is read from the app's own audio
   as it plays, so no microphone permission is needed.
+- **A player you can feel.** Play swells into a deep thump, pause thumps
+  and fades, next rushes forward into a kick, previous kicks and pulls
+  back, a like beats twice like a heart, and dragging the seek bar ticks
+  past each tenth of the song. These stay strong even on a light setting.
 - **Haptic feedback you can tune**, from off to strong. Taps use the phone's
   crisp haptic primitives where it has them, and follow the system's touch
   feedback switch.

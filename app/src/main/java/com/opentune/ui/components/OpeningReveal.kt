@@ -29,8 +29,8 @@ object Opening {
     var played = false
 }
 
-/** The splash's near-black, which the system splash screen uses too. */
-val OPENING_FIELD = Color(0xFF050406)
+/** The splash's black, which the system splash screen and the icon use too. */
+val OPENING_FIELD = Color.Black
 
 /**
  * The opening: the mark takes over from the system splash at the same
@@ -71,11 +71,11 @@ fun OpeningReveal(onDive: (Float) -> Unit, onDone: () -> Unit) {
         val fade = 1f - smooth(0.8f, 1f, d)
 
         drawRect(OPENING_FIELD, alpha = fade)
-        // A warm glow that comes up behind the mark while it settles and goes as it dives.
-        val glow = 0.55f * st * (1f - smooth(0f, 0.4f, d))
+        // A faint white glow that comes up behind the mark while it settles and goes as it dives.
+        val glow = 0.16f * st * (1f - smooth(0f, 0.4f, d))
         if (glow > 0.01f) {
             drawCircle(
-                Brush.radialGradient(listOf(Color(0xFF6B2F4F).copy(alpha = glow), Color.Transparent), center, size.minDimension * 0.6f),
+                Brush.radialGradient(listOf(Color.White.copy(alpha = glow), Color.Transparent), center, size.minDimension * 0.6f),
                 size.minDimension * 0.6f,
                 center,
             )
@@ -89,7 +89,7 @@ fun OpeningReveal(onDive: (Float) -> Unit, onDone: () -> Unit) {
                     drawPath(
                         mark,
                         Brush.linearGradient(
-                            listOf(Color.Transparent, Color(0xFFFFE9F2).copy(alpha = 0.9f), Color.Transparent),
+                            listOf(Color.Transparent, Color(0xFFDADADA).copy(alpha = 0.9f), Color.Transparent),
                             start = Offset(x - 18f, 30f),
                             end = Offset(x + 18f, 78f),
                         ),

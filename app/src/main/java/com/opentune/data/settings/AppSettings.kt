@@ -312,6 +312,11 @@ enum class CoverChange(val label: String, val summary: String) {
     CAROUSEL("Carousel", "Covers slide past in the direction you skipped"),
     FLIP("Flip", "The cover turns over like a card to show the next one"),
     DECK("Deck", "The next cover drops onto the pile and the old one sinks under it"),
+    ZOOM("Zoom through", "The old cover rushes past you as the new one grows in from behind it"),
+    DISSOLVE("Dissolve", "The old cover blurs away while the new one comes into focus"),
+    CUBE("Cube", "The covers turn like two faces of a cube, hinged on the edge they share"),
+    REVEAL("Reveal", "The new cover opens out of the middle as a growing circle"),
+    TOSS("Toss", "The old cover is flung off to the side and the new one drops into place"),
 }
 
 /** How the full-screen player opens and closes. */

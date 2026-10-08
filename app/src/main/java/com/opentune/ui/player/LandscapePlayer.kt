@@ -100,6 +100,7 @@ internal fun LandscapePlayer(
     val animate = !state.ui.reduceAnimation
     var previousRolls by remember { mutableIntStateOf(0) }
     var nextRolls by remember { mutableIntStateOf(0) }
+    val haptics = com.opentune.ui.components.rememberHaptics()
     Row(
         Modifier
             .fillMaxSize()
@@ -150,11 +151,11 @@ internal fun LandscapePlayer(
                 val lines = if (showLines) rememberLyricLines(state.lyrics, lyricsPosition) else "" to ""
                 LyricLine(lines.first, alpha = 0.92f, onLyrics)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    RoundIcon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Unlike" else "Like", onLike, tint = if (liked) scheme.primary else scheme.onSurface)
+                    RoundIcon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Unlike" else "Like", { haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE); onLike() }, tint = if (liked) scheme.primary else scheme.onSurface)
                     Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Tap("Previous", { previousRolls++; actions.previous() }) { SkipGlyph(false, previousRolls, scheme.onSurface, animate, Modifier.size(38.dp)) }
-                        Tap(if (state.isPlaying) "Pause" else "Play", actions.togglePlay) { PlayPauseGlyph(state.isPlaying, scheme.onSurface, animate, Modifier.size(54.dp)) }
-                        Tap("Next", { nextRolls++; actions.next() }, enabled = state.hasNext) {
+                        Tap("Previous", { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.PREVIOUS); previousRolls++; actions.previous() }) { SkipGlyph(false, previousRolls, scheme.onSurface, animate, Modifier.size(38.dp)) }
+                        Tap(if (state.isPlaying) "Pause" else "Play", { haptics.pattern(if (state.isPlaying) com.opentune.ui.components.Haptics.Pattern.PAUSE else com.opentune.ui.components.Haptics.Pattern.PLAY); actions.togglePlay() }) { PlayPauseGlyph(state.isPlaying, scheme.onSurface, animate, Modifier.size(54.dp)) }
+                        Tap("Next", { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.NEXT); nextRolls++; actions.next() }, enabled = state.hasNext) {
                             SkipGlyph(true, nextRolls, scheme.onSurface.copy(alpha = if (state.hasNext) 1f else 0.35f), animate, Modifier.size(38.dp))
                         }
                     }

@@ -74,6 +74,7 @@ import com.opentune.data.model.ROW_ART_PX
 import com.opentune.data.model.Song
 import com.opentune.data.model.artworkAt
 import com.opentune.data.settings.AppSettings
+import com.opentune.ui.components.Haptics
 import com.opentune.playback.SleepTimer
 import com.opentune.ui.LyricsState
 import com.opentune.ui.components.Artwork
@@ -261,13 +262,21 @@ fun GlassToggle(icon: ImageVector, label: String, selected: Boolean, onClick: ()
     }
 }
 
-/** Shuffle, repeat and autoplay in one glass pill, split by hairlines. */
+/**
+ * Shuffle, repeat and autoplay in one glass pill, split by hairlines. Each
+ * has a feel of its own under the finger (see [Haptics.Pattern]) and a small
+ * motion of its own as it changes.
+ */
 @Composable
 fun ModesPill(shuffle: Boolean, repeatMode: Int, onShuffle: () -> Unit, onRepeat: () -> Unit) {
     val autoplay = AppSettings.playback.collectAsState().value.autoplay
+    val haptics = com.opentune.ui.components.rememberHaptics()
     val shape = RoundedCornerShape(30.dp)
     Row(Modifier.height(52.dp).glass(shape, Color.White.copy(alpha = 0.10f)), verticalAlignment = Alignment.CenterVertically) {
-        PillSegment(Icons.Rounded.Shuffle, "Shuffle", shuffle, onShuffle)
+        PillSegment(Icons.Rounded.Shuffle, "Shuffle", shuffle, SegmentMotion.WIGGLE) {
+            haptics.pattern(if (shuffle) Haptics.Pattern.OFF else Haptics.Pattern.SHUFFLE)
+            onShuffle()
+        }
         VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
         PillSegment(
             if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
@@ -277,19 +286,61 @@ fun ModesPill(shuffle: Boolean, repeatMode: Int, onShuffle: () -> Unit, onRepeat
                 else -> "Repeat off"
             },
             repeatMode != Player.REPEAT_MODE_OFF,
-            onRepeat,
-        )
+            SegmentMotion.SPIN,
+        ) {
+            // Off, then all, then one, then off again.
+            haptics.pattern(
+                when (repeatMode) {
+                    Player.REPEAT_MODE_OFF -> Haptics.Pattern.REPEAT_ALL
+                    Player.REPEAT_MODE_ALL -> Haptics.Pattern.REPEAT_ONE
+                    else -> Haptics.Pattern.OFF
+                },
+            )
+            onRepeat()
+        }
         VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
-        PillSegment(Icons.Rounded.AllInclusive, "AutoPlay", autoplay) { AppSettings.setAutoplay(!autoplay) }
+        PillSegment(Icons.Rounded.AllInclusive, "AutoPlay", autoplay, SegmentMotion.PULSE) {
+            haptics.pattern(if (autoplay) Haptics.Pattern.OFF else Haptics.Pattern.AUTOPLAY)
+            AppSettings.setAutoplay(!autoplay)
+        }
     }
 }
 
+private enum class SegmentMotion { WIGGLE, SPIN, PULSE }
+
 @Composable
-private fun PillSegment(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
+private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motion: SegmentMotion, onClick: () -> Unit) {
     val bg by animateColorAsState(if (active) Color.White.copy(alpha = 0.20f) else Color.Transparent, label = "seg")
     val fg by animateColorAsState(if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, label = "segFg")
-    Box(Modifier.fillMaxHeight().width(60.dp).background(bg).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, label, tint = fg, modifier = Modifier.size(24.dp))
+    val reduce = AppSettings.ui.collectAsState().value.reduceAnimation
+    // Each change plays the segment's motion once: 0 at rest, through to 1 and back.
+    val kick = remember { androidx.compose.animation.core.Animatable(0f) }
+    var taps by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    LaunchedEffect(taps) {
+        if (taps == 0 || reduce) return@LaunchedEffect
+        kick.snapTo(0f)
+        kick.animateTo(1f, androidx.compose.animation.core.tween(if (motion == SegmentMotion.SPIN) 520 else 420, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        kick.snapTo(0f)
+    }
+    Box(
+        Modifier.fillMaxHeight().width(60.dp).background(bg).clickable { taps++; onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon, label, tint = fg,
+            modifier = Modifier.size(24.dp).graphicsLayer {
+                val k = kick.value
+                val wave = kotlin.math.sin(Math.PI.toFloat() * k)
+                when (motion) {
+                    // A quick side-to-side shake, the arrows crossing.
+                    SegmentMotion.WIGGLE -> { rotationZ = kotlin.math.sin(k * 3f * 2f * Math.PI.toFloat()) * 14f * (1f - k); translationX = wave * 2.dp.toPx() }
+                    // Once round, like the loop it is.
+                    SegmentMotion.SPIN -> { rotationZ = 360f * k; val sc = 1f - 0.15f * wave; scaleX = sc; scaleY = sc }
+                    // A heartbeat swell.
+                    SegmentMotion.PULSE -> { val sc = 1f + 0.28f * wave; scaleX = sc; scaleY = sc }
+                }
+            },
+        )
     }
 }
 
