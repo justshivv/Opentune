@@ -135,6 +135,14 @@ fun PlayerBackdrop(
     Box(modifier.background(scheme.surface)) {
         val blur = style == PlayerBackground.BLUR && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         when {
+            style == PlayerBackground.BLUR && !blur -> {
+                // No blur effect before Android 12: a tiny copy of the cover,
+                // stretched to fill, smears into the same soft colour field.
+                AnimatedContent(artworkUrl, transitionSpec = { fadeIn(tween(800)) togetherWith fadeOut(tween(800)) }, label = "backdrop") { url ->
+                    Artwork(url.artworkAt(24), Modifier.fillMaxSize().graphicsLayer { scaleX = 1.3f; scaleY = 1.3f }, shape = RectangleShape)
+                }
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.5f)))
+            }
             blur -> {
                 AnimatedContent(artworkUrl, transitionSpec = { fadeIn(tween(800)) togetherWith fadeOut(tween(800)) }, label = "backdrop") { url ->
                     Artwork(

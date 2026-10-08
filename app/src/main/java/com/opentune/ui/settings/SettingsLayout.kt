@@ -54,7 +54,7 @@ internal val SETTINGS_CATEGORIES = listOf(
             "Theme" to listOf("Theme", "Pure black"),
             "Colour" to listOf("Color from artwork", "Material You", "Accent color", "Palette style"),
             "Glass" to listOf("Liquid Glass", "Glass style", "Frosted top edge", "Reduce dynamic blur"),
-            "Light" to listOf("Edge glow"),
+            "Light" to listOf("Stage lights", "Edge glow"),
             "Feel" to listOf("Haptic feedback", "High refresh rate"),
         ),
     ),

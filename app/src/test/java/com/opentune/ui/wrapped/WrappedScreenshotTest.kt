@@ -88,9 +88,24 @@ class WrappedScreenshotTest {
         compose.mainClock.advanceTimeBy(2_500)
         for (i in 0 until 10) {
             save("wrapped/${"%02d".format(i)}")
-            compose.onRoot().performTouchInput { click(Offset(width * 0.85f, height * 0.5f)) }
-            compose.mainClock.advanceTimeBy(2_600)
+            compose.onRoot().performTouchInput { click(Offset(width * 0.85f, height * 0.62f)) }
+            // Caught mid-turn once, to see the circle opening.
+            if (i == 2) {
+                compose.mainClock.advanceTimeBy(260)
+                save("wrapped/turning")
+                compose.mainClock.advanceTimeBy(2_340)
+            } else {
+                compose.mainClock.advanceTimeBy(2_600)
+            }
         }
+    }
+
+    @Test fun poster() {
+        val summary = com.opentune.data.history.Wrapped.summarize(History.records.value, 0, now)
+        val cover = android.graphics.Bitmap.createBitmap(200, 200, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(colors[1].toInt()) }
+        val poster = WrappedPoster.draw(summary, "2026", cover, listOf(cover, null, cover, cover, null))
+        val file = File("build/screenshots/wrapped/poster.png").apply { parentFile!!.mkdirs() }
+        file.outputStream().use { poster.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     @Test fun morphButtons() {

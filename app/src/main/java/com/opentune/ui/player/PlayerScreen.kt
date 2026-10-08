@@ -284,8 +284,10 @@ fun PlayerLayout(
     val backdrop = rememberLayerBackdrop()
     val style = state.ui.playerStyle
     val minimal = style == PlayerStyle.MINIMAL
+    // On its side the player has its own layout, over a blurred cover.
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Full-screen cover only fits the layouts built around a plain square cover.
-    val fullCover = state.ui.fullScreenCover && pane == Pane.COVER && (style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    val fullCover = !landscape && state.ui.fullScreenCover && pane == Pane.COVER && (style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     // Where the cover area ends, measured from the top of the player, so a
     // full-screen cover can run down to the title on any screen height.
     var playerCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
@@ -334,7 +336,7 @@ fun PlayerLayout(
             // The backdrop is the layer the player's Liquid Glass bends.
             Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
                 PlayerBackdrop(
-                    theme.playerBackground,
+                    if (landscape) com.opentune.data.settings.PlayerBackground.BLUR else theme.playerBackground,
                     current.thumbnailUrl,
                     Modifier.fillMaxSize(),
                     animate = !state.ui.reduceAnimation,
@@ -353,8 +355,7 @@ fun PlayerLayout(
                 LocalHazeState provides null,
             ) {
             // On its side the cover goes left and the rest stacks on the right;
-            // lyrics and the queue still open as their own panes.
-            val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+            // lyrics and the queue open in the cover's place.
             if (landscape) {
                 LandscapePlayer(
                     state, position, lyricsPosition, actions,

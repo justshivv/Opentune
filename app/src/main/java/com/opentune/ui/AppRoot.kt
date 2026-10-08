@@ -44,6 +44,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -134,12 +135,21 @@ fun AppRoot(vm: PlayerViewModel) {
     val chromeScroll = rememberChromeScroll()
     val chromeUi by com.opentune.data.settings.AppSettings.ui.collectAsState()
 
-    // Once a day at start: a newer release on GitHub, offered with an Update button.
+    // A newer release on GitHub, offered with an Update button. Checked each
+    // time the app comes to the front and hourly while it stays there (the
+    // check itself goes online at most every few hours), since a music app
+    // is rarely started afresh.
     val appContext = androidx.compose.ui.platform.LocalContext.current
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var update by remember { mutableStateOf<com.opentune.data.UpdateCheck.Release?>(null) }
-    LaunchedEffect(Unit) {
-        if (com.opentune.data.settings.AppSettings.ui.value.checkForUpdates) {
-            update = com.opentune.data.UpdateCheck.checkIfDue(appContext)
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (true) {
+                if (com.opentune.data.settings.AppSettings.ui.value.checkForUpdates && update == null) {
+                    update = com.opentune.data.UpdateCheck.checkIfDue(appContext)
+                }
+                kotlinx.coroutines.delay(60 * 60 * 1000L)
+            }
         }
     }
     update?.let { r ->
@@ -488,6 +498,14 @@ fun AppRoot(vm: PlayerViewModel) {
                 )
             }
 
+            // Over everything, light rising from the bottom in time with the music.
+            if (chromeUi.stageLights && song != null) {
+                com.opentune.ui.components.StageLights(
+                    com.opentune.ui.theme.rememberArtworkSeed(song?.thumbnailUrl),
+                    playing = isPlaying,
+                    still = chromeUi.reduceAnimation,
+                )
+            }
             // Over everything, light from the cover along the screen's edges.
             if (chromeUi.edgeGlow) {
                 com.opentune.ui.components.EdgeGlow(

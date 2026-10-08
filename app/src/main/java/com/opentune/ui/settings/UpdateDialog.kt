@@ -73,7 +73,7 @@ fun UpdateDialog(release: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: 
         text = {
             Column {
                 Text(
-                    "You have ${BuildConfig.VERSION_NAME}." + (apk?.let { " The update is ${Formatter.formatShortFileSize(context, it.bytes)}." } ?: ""),
+                    "You have ${BuildConfig.VERSION_NAME}." + (apk?.takeIf { it.bytes > 0 }?.let { " The update is ${Formatter.formatShortFileSize(context, it.bytes)}." } ?: ""),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 if (release.notes.isNotBlank()) {

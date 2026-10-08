@@ -179,7 +179,7 @@ object NewReleases {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
             val notification = NotificationCompat.Builder(context, CHANNEL)
-                .setSmallIcon(R.drawable.ic_widget_music)
+                .setSmallIcon(R.drawable.ic_stat_opentune)
                 .setContentTitle("New from ${r.artist.name}")
                 .setContentText(r.item.title + r.item.subtitle.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty())
                 .setContentIntent(open)

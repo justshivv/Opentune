@@ -806,6 +806,15 @@ private fun settingsSections(
                 Entry("Song change", "cover change next song skip animation flip carousel deck fade") {
                     NavRow("Song change", { coverChangeDialog = true }, summary = ui.coverChange.summary, icon = Icons.Rounded.SwapHoriz, value = ui.coverChange.label)
                 },
+                Entry("Stage lights", "lights flicker broken neon disco bottom glow beat bass music visualizer colours") {
+                    ToggleRow(
+                        "Stage lights",
+                        ui.stageLights,
+                        { v -> AppSettings.updateUi { it.copy(stageLights = v) } },
+                        summary = "Coloured light rises from the bottom of the screen in time with the music, flickering now and then like a worn stage light",
+                        icon = Icons.Rounded.Flare,
+                    )
+                },
                 Entry("Edge glow", "glow edges ambient light colour cover screen") {
                     ToggleRow("Edge glow", ui.edgeGlow, { v -> AppSettings.updateUi { it.copy(edgeGlow = v) } }, summary = "The playing cover's colour lights the edges of the screen, breathing with the music", icon = Icons.Rounded.Flare)
                 },
@@ -1142,7 +1151,7 @@ private fun settingsSections(
                     }, summary = "Current version: ${BuildConfig.VERSION_NAME}", icon = Icons.Rounded.SystemUpdate)
                 },
                 Entry("Check for updates automatically", "update new version release auto") {
-                    ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) } }, summary = "Looks for a new release on GitHub once a day and offers to install it", icon = Icons.Rounded.SystemUpdate)
+                    ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Looks for a new release on GitHub every few hours, in the background too, and offers to install it", icon = Icons.Rounded.SystemUpdate)
                 },
                 Entry("Source code", "github open source license gpl") {
                     NavRow("Source code", {

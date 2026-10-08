@@ -1,7 +1,6 @@
 package com.opentune.ui.wrapped
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
@@ -11,9 +10,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -55,6 +51,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.key
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -182,12 +185,26 @@ fun WrappedScreen(actions: SongActions, onBack: () -> Unit, nowMs: Long = System
 
     var shown by remember { mutableIntStateOf(-1) }
     var round by remember { mutableIntStateOf(0) }
-    fun go(to: Int) {
+    // Each new page opens over the last as a circle growing from where the tap was.
+    var under by remember { mutableIntStateOf(index) }
+    var origin by remember { mutableStateOf(Offset.Unspecified) }
+    val reveal = remember { Animatable(1f) }
+    fun go(to: Int, at: Offset = Offset.Unspecified) {
         val next = to.coerceIn(0, slides.lastIndex)
         if (next == index) return
         haptics.tick()
+        origin = at
         index = next
     }
+    LaunchedEffect(index) {
+        if (under == index) return@LaunchedEffect
+        if (!still) {
+            reveal.snapTo(0f)
+            reveal.animateTo(1f, tween(780, easing = Ease))
+        }
+        under = index
+    }
+    val context = LocalContext.current
 
     // Each slide runs for SLIDE_MS, then the next comes; holding pauses it where it is.
     // The bar is reset here rather than where the slide changes, so a reset can't
@@ -203,14 +220,46 @@ fun WrappedScreen(actions: SongActions, onBack: () -> Unit, nowMs: Long = System
         go(index + 1)
     }
 
-    val look = LOOKS[index % LOOKS.size]
-    // The field melts from one slide's colour into the next.
-    val field by animateColorAsState(look.field, tween(if (still) 0 else 700), label = "field")
-    val ink by animateColorAsState(look.ink, tween(if (still) 0 else 700), label = "ink")
+    val ink by animateColorAsState(inkFor(slides.getOrNull(index), index), tween(if (still) 0 else 500), label = "ink")
+    // One page of the story; [frozen] draws it as it ends up, with nothing moving in.
+    val page: @Composable (Int, Boolean) -> Unit = { i, frozen ->
+        val slide = slides.getOrNull(i)
+        val calm = still || frozen
+        val base = LOOKS[i % LOOKS.size]
+        val l = when (slide) {
+            Slide.TOP_ARTIST -> coverLook(summary.topArtists.firstOrNull()?.thumbnailUrl, base)
+            Slide.TOP_SONG -> coverLook(summary.topSongs.firstOrNull()?.thumbnailUrl, base)
+            else -> base
+        }
+        Box(Modifier.fillMaxSize().background(l.field)) {
+            if (slide != null) StoryArt(slide.art, l, calm, Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(top = 52.dp).padding(horizontal = 28.dp, vertical = 20.dp)) {
+                when (slide) {
+                    Slide.INTRO -> IntroSlide(title, period, summary.isEmpty, introCovers(summary), l, calm) { p -> period = p; index = 0; shown = -1; round++ }
+                    Slide.MINUTES -> MinutesSlide(summary, l, calm)
+                    Slide.TOP_ARTIST -> TopArtistSlide(summary.topArtists.first(), l, calm)
+                    Slide.ARTISTS -> RankSlide("Top artists", "The five you came back to most", summary.topArtists, round = true, l, calm)
+                    Slide.TOP_SONG -> TopSongSlide(summary.topSongs.first(), l, calm) { actions.playAll(topSongs, 0, false, "Your Wrapped") }
+                    Slide.SONGS -> RankSlide("Top songs", "On your lips all along", summary.topSongs, round = false, l, calm)
+                    Slide.CLOCK -> ClockSlide(summary, l, calm)
+                    Slide.MONTHS -> MonthsSlide(summary, l, calm)
+                    Slide.REPEAT -> RepeatSlide(summary, l, calm)
+                    Slide.SUMMARY -> SummarySlide(
+                        title, summary, l, calm,
+                        onPlay = { actions.playAll(topSongs, 0, false, "Your Wrapped") },
+                        onShuffle = { actions.playAll(topSongs, 0, true, "Your Wrapped") },
+                        onShare = { WrappedPoster.share(context, summary, title) },
+                        onAgain = { go(0) },
+                    )
+                    null -> Unit
+                }
+            }
+        }
+    }
     Box(
         Modifier
             .fillMaxSize()
-            .background(field)
+            .background(LOOKS[0].field)
             .pointerInput(slides.size) {
                 detectTapGestures(
                     onPress = {
@@ -218,42 +267,20 @@ fun WrappedScreen(actions: SongActions, onBack: () -> Unit, nowMs: Long = System
                         tryAwaitRelease()
                         held = false
                     },
-                    onTap = { at -> if (at.x < size.width * 0.3f) go(index - 1) else go(index + 1) },
+                    onTap = { at -> if (at.x < size.width * 0.3f) go(index - 1, at) else go(index + 1, at) },
                 )
             },
     ) {
-        AnimatedContent(
-            targetState = index,
-            transitionSpec = { fadeIn(tween(if (still) 150 else 600, easing = Ease)) togetherWith fadeOut(tween(if (still) 150 else 300)) },
-            label = "slide",
-            modifier = Modifier.fillMaxSize(),
-        ) { i ->
-            val l = LOOKS[i % LOOKS.size]
-            val slide = slides.getOrNull(i)
-            Box(Modifier.fillMaxSize()) {
-                if (slide != null) StoryArt(slide.art, l, still, Modifier.fillMaxSize())
-                Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(top = 52.dp).padding(horizontal = 28.dp, vertical = 20.dp)) {
-                    when (slide) {
-                        Slide.INTRO -> IntroSlide(title, period, summary.isEmpty, l, still) { p -> period = p; index = 0; shown = -1; round++ }
-                        Slide.MINUTES -> MinutesSlide(summary, l, still)
-                        Slide.TOP_ARTIST -> TopArtistSlide(summary.topArtists.first(), l, still)
-                        Slide.ARTISTS -> RankSlide("Top artists", "The five you came back to most", summary.topArtists, round = true, l, still)
-                        Slide.TOP_SONG -> TopSongSlide(summary.topSongs.first(), l, still) { actions.playAll(topSongs, 0, false, "Your Wrapped") }
-                        Slide.SONGS -> RankSlide("Top songs", "On your lips all along", summary.topSongs, round = false, l, still)
-                        Slide.CLOCK -> ClockSlide(summary, l, still)
-                        Slide.MONTHS -> MonthsSlide(summary, l, still)
-                        Slide.REPEAT -> RepeatSlide(summary, l, still)
-                        Slide.SUMMARY -> SummarySlide(
-                            title, summary, l, still,
-                            onPlay = { actions.playAll(topSongs, 0, false, "Your Wrapped") },
-                            onShuffle = { actions.playAll(topSongs, 0, true, "Your Wrapped") },
-                            onAgain = { go(0) },
-                        )
-                        null -> Unit
-                    }
+        if (reveal.value < 1f && under != index) key(under) { page(under, true) }
+        Box(
+            Modifier.fillMaxSize().graphicsLayer {
+                if (reveal.value < 1f) {
+                    clip = true
+                    shape = RevealShape(origin, reveal.value)
                 }
-            }
-        }
+            },
+        ) { key(index) { page(index, false) } }
+        Grain(Modifier.fillMaxSize())
         StoryBar(slides.size, index, { progress.value }, ink, Modifier.statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 12.dp))
         Box(
             Modifier
@@ -270,6 +297,65 @@ fun WrappedScreen(actions: SongActions, onBack: () -> Unit, nowMs: Long = System
 }
 
 // ---- Story chrome ------------------------------------------------------------
+
+/** A circle around [origin] (or low in the middle, when the page turned by itself) [fraction] of the way to the far corner. */
+private class RevealShape(private val origin: Offset, private val fraction: Float) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(size: Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density): androidx.compose.ui.graphics.Outline {
+        val o = if (origin.isSpecified) origin else Offset(size.width / 2f, size.height * 0.8f)
+        val far = kotlin.math.hypot(maxOf(o.x, size.width - o.x), maxOf(o.y, size.height - o.y))
+        val r = far * fraction
+        return androidx.compose.ui.graphics.Outline.Generic(Path().apply { addOval(androidx.compose.ui.geometry.Rect(o, r)) })
+    }
+}
+
+/** A fine film grain over the pages, so the flat colours read like print. */
+@Composable
+private fun Grain(modifier: Modifier) {
+    val brush = remember {
+        val side = 160
+        val random = kotlin.random.Random(11)
+        val px = IntArray(side * side) { val v = random.nextInt(256); (0xFF shl 24) or (v shl 16) or (v shl 8) or v }
+        val bitmap = android.graphics.Bitmap.createBitmap(px, side, side, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+        androidx.compose.ui.graphics.ShaderBrush(androidx.compose.ui.graphics.ImageShader(bitmap, androidx.compose.ui.graphics.TileMode.Repeated, androidx.compose.ui.graphics.TileMode.Repeated))
+    }
+    Canvas(modifier) { drawRect(brush, alpha = 0.07f) }
+}
+
+/** The colour of the words on a page, for the story bar and close button over it. */
+private fun inkFor(slide: Slide?, index: Int): Color =
+    if (slide == Slide.TOP_ARTIST || slide == Slide.TOP_SONG) COVER_INK else LOOKS[index % LOOKS.size].ink
+
+private val COVER_INK = Color(0xFFF5F1EA)
+
+/** A page coloured from a cover: a deep field of its colour, the shapes a lighter tone of it. */
+@Composable
+private fun coverLook(url: String?, fallback: Look): Look {
+    val seed = com.opentune.ui.theme.rememberArtworkSeed(url) ?: return fallback.copy(ink = COVER_INK, field = Color(0xFF1B1A1F))
+    return Look(
+        field = androidx.compose.ui.graphics.lerp(seed, Color.Black, 0.62f),
+        shape = androidx.compose.ui.graphics.lerp(seed, Color.White, 0.08f),
+        accent = Color(0xFFF2C14E),
+        ink = COVER_INK,
+    )
+}
+
+/** Up to five covers for the intro's collage: the top songs first, then the top artists. */
+private fun introCovers(s: Wrapped.Summary): List<String> =
+    (s.topSongs.mapNotNull { it.thumbnailUrl } + s.topArtists.mapNotNull { it.thumbnailUrl }).distinct().take(5)
+
+/** Brings words in as if inked from left to right, with a soft edge, as [v] goes 0 to 1. */
+private fun Modifier.wipe(v: Float) = graphicsLayer {
+    compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+    translationY = (1f - v) * 10.dp.toPx()
+}.drawWithContent {
+    drawContent()
+    val band = size.width * 0.35f
+    val edge = -band + (size.width + band * 2) * v.coerceIn(0f, 1f)
+    drawRect(
+        Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = edge - band, endX = edge),
+        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+    )
+}
 
 @Composable
 private fun StoryBar(count: Int, index: Int, progress: () -> Float, ink: Color, modifier: Modifier) {
@@ -467,16 +553,17 @@ internal fun hiRes(url: String?): String? = url?.replace(Regex("""=w\d+-h\d+""")
 // ---- Slides ------------------------------------------------------------------
 
 @Composable
-private fun BoxScope.IntroSlide(title: String, period: WrappedPeriod, empty: Boolean, look: Look, still: Boolean, onPeriod: (WrappedPeriod) -> Unit) {
+private fun BoxScope.IntroSlide(title: String, period: WrappedPeriod, empty: Boolean, covers: List<String>, look: Look, still: Boolean, onPeriod: (WrappedPeriod) -> Unit) {
     val a = entrance(100, still)
     val b = entrance(300, still)
     val c = entrance(500, still)
+    if (covers.isNotEmpty()) CoverCollage(covers, still, Modifier.align(Alignment.BottomEnd).padding(bottom = 64.dp).fillMaxWidth(0.92f).aspectRatio(1.05f))
     Column(Modifier.align(Alignment.TopStart).padding(top = 28.dp)) {
         Eyebrow("OpenTune", look, Modifier.rise(a))
         Spacer(Modifier.height(18.dp))
-        Text("Your", style = display(64.sp, look.ink), modifier = Modifier.rise(a))
-        Text(title, style = display(if (title.length > 5) 64.sp else 92.sp, look.shape), modifier = Modifier.rise(b))
-        Text("Wrapped", style = display(64.sp, look.ink), modifier = Modifier.rise(c))
+        Text("Your", style = display(64.sp, look.ink), modifier = Modifier.wipe(a))
+        Text(title, style = display(if (title.length > 5) 64.sp else 92.sp, look.shape), modifier = Modifier.wipe(b))
+        Text("Wrapped", style = display(64.sp, look.ink), modifier = Modifier.wipe(c))
         Spacer(Modifier.height(20.dp))
         Text(
             if (empty) "Nothing played here yet. Play some music and come back for your story."
@@ -504,6 +591,46 @@ private fun BoxScope.IntroSlide(title: String, period: WrappedPeriod, empty: Boo
     }
 }
 
+/**
+ * The top covers scattered like prints dropped on a table, each turned a
+ * little, dropping in one after another and then drifting gently.
+ */
+@Composable
+private fun CoverCollage(covers: List<String>, still: Boolean, modifier: Modifier) {
+    // Where each lands, as parts of the area, and how far it's turned.
+    val spots = listOf(
+        Triple(0.42f, 0.08f, 6f), Triple(0.04f, 0.3f, -7f), Triple(0.56f, 0.46f, -4f), Triple(0.18f, 0.62f, 5f), Triple(0.66f, 0.02f, 9f),
+    )
+    val drift = if (still) 0f else {
+        val v by rememberInfiniteTransition(label = "collage").animateFloat(0f, 1f, infiniteRepeatable(tween(9_000, easing = LinearEasing)), label = "drift")
+        v
+    }
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        val side = maxWidth * 0.42f
+        covers.take(spots.size).forEachIndexed { i, url ->
+            val (fx, fy, turn) = spots[i]
+            val v = entrance(450 + i * 160, still)
+            val phase = drift * 2f * PI.toFloat() + i * 1.3f
+            Artwork(
+                hiRes(url),
+                Modifier
+                    .padding(start = maxWidth * fx, top = maxHeight * fy)
+                    .size(side)
+                    .graphicsLayer {
+                        alpha = v.coerceIn(0f, 1f)
+                        val s = 1.25f - 0.25f * v
+                        scaleX = s
+                        scaleY = s
+                        rotationZ = turn * v + sin(phase) * 1.2f
+                        translationY = (1f - v) * -40.dp.toPx() + cos(phase) * 3.dp.toPx()
+                    }
+                    .shadow(14.dp, RoundedCornerShape(6.dp)),
+                RoundedCornerShape(6.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun BoxScope.MinutesSlide(s: Wrapped.Summary, look: Look, still: Boolean) {
     val a = entrance(100, still)
@@ -514,8 +641,8 @@ private fun BoxScope.MinutesSlide(s: Wrapped.Summary, look: Look, still: Boolean
         Eyebrow("Time listening", look, Modifier.rise(a))
         Spacer(Modifier.height(18.dp))
         Text("You spent", style = body(look.ink), modifier = Modifier.rise(a))
-        Text("%,d".format(minutes), style = display(96.sp, look.shape), maxLines = 1, modifier = Modifier.rise(b))
-        Text("minutes with music", style = display(34.sp, look.ink), modifier = Modifier.rise(b))
+        Text("%,d".format(minutes), style = display(96.sp, look.shape), maxLines = 1, modifier = Modifier.wipe(b))
+        Text("minutes with music", style = display(34.sp, look.ink), modifier = Modifier.wipe(b))
         Spacer(Modifier.height(22.dp))
         val hours = s.minutes / 60
         Text(
@@ -561,7 +688,7 @@ private fun BoxScope.TopArtistSlide(e: Wrapped.Entry, look: Look, still: Boolean
             Artwork(hiRes(e.thumbnailUrl), Modifier.fillMaxSize(0.88f).graphicsLayer { alpha = ring; val s = 0.94f + 0.06f * ring; scaleX = s; scaleY = s }, CircleShape)
         }
         Spacer(Modifier.height(30.dp))
-        Text(e.title, style = display(46.sp, look.ink), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.rise(b))
+        Text(e.title, style = display(46.sp, look.ink), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.wipe(b))
         Spacer(Modifier.height(10.dp))
         Text("${e.plays} plays · ${e.minutes} minutes", style = body(look.ink.copy(alpha = 0.7f)), modifier = Modifier.rise(b))
     }
@@ -573,7 +700,7 @@ private fun BoxScope.RankSlide(heading: String, line: String, list: List<Wrapped
     Column(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(top = 24.dp)) {
         Eyebrow(line, look, Modifier.rise(h))
         Spacer(Modifier.height(12.dp))
-        Text(heading, style = display(46.sp, look.ink), modifier = Modifier.rise(h))
+        Text(heading, style = display(46.sp, look.ink), modifier = Modifier.wipe(h))
         Spacer(Modifier.height(24.dp))
         list.take(5).forEachIndexed { i, e ->
             val v = entrance(260 + i * 150, still)
@@ -616,7 +743,7 @@ private fun BoxScope.TopSongSlide(e: Wrapped.Entry, look: Look, still: Boolean, 
             RoundedCornerShape(14.dp),
         )
         Spacer(Modifier.height(34.dp))
-        Text(e.title, style = display(38.sp, look.ink), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.rise(c))
+        Text(e.title, style = display(38.sp, look.ink), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.wipe(c))
         Spacer(Modifier.height(6.dp))
         Text(e.subtitle, style = strong(look.ink.copy(alpha = 0.75f)), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.rise(c))
         Spacer(Modifier.height(4.dp))
@@ -634,7 +761,7 @@ private fun BoxScope.ClockSlide(s: Wrapped.Summary, look: Look, still: Boolean) 
     Column(Modifier.align(Alignment.TopCenter).padding(top = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Eyebrow("When you listen", look, Modifier.rise(a))
         Spacer(Modifier.height(18.dp))
-        Text(s.clock.title, style = display(54.sp, look.ink), textAlign = TextAlign.Center, modifier = Modifier.rise(a))
+        Text(s.clock.title, style = display(54.sp, look.ink), textAlign = TextAlign.Center, modifier = Modifier.wipe(a))
         Spacer(Modifier.height(8.dp))
         Text(s.clock.line, style = body(look.ink.copy(alpha = 0.7f)), textAlign = TextAlign.Center, modifier = Modifier.rise(a))
         Spacer(Modifier.height(26.dp))
@@ -677,7 +804,7 @@ private fun BoxScope.MonthsSlide(s: Wrapped.Summary, look: Look, still: Boolean)
     Column(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(top = 24.dp)) {
         Eyebrow("Your year, month by month", look, Modifier.rise(a))
         Spacer(Modifier.height(14.dp))
-        if (best != null && best.second > 0) Text("${best.first} was\nyour month", style = display(48.sp, look.ink), modifier = Modifier.rise(a))
+        if (best != null && best.second > 0) Text("${best.first} was\nyour month", style = display(48.sp, look.ink), modifier = Modifier.wipe(a))
         Spacer(Modifier.height(28.dp))
         Row(Modifier.fillMaxWidth().height(170.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
             s.months.forEach { (name, minutes) ->
@@ -754,7 +881,7 @@ private fun BoxScope.RepeatSlide(s: Wrapped.Summary, look: Look, still: Boolean)
 }
 
 @Composable
-private fun BoxScope.SummarySlide(title: String, s: Wrapped.Summary, look: Look, still: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit, onAgain: () -> Unit) {
+private fun BoxScope.SummarySlide(title: String, s: Wrapped.Summary, look: Look, still: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit, onShare: () -> Unit, onAgain: () -> Unit) {
     val a = entrance(100, still)
     val b = entrance(500, still)
     Column(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(top = 16.dp)) {
@@ -801,8 +928,14 @@ private fun BoxScope.SummarySlide(title: String, s: Wrapped.Summary, look: Look,
         Row(Modifier.rise(b).pointerInput(Unit) { detectTapGestures { } }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Pill("Play", Icons.Rounded.PlayArrow, filled = true, look, onPlay)
             Pill("Shuffle", Icons.Rounded.Shuffle, filled = false, look, onShuffle)
-            Pill("Watch again", null, filled = false, look, onAgain)
+            Pill("Share", Icons.Rounded.Share, filled = false, look, onShare)
         }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Watch again",
+            style = body(look.ink.copy(alpha = 0.7f)).copy(fontSize = 15.sp),
+            modifier = Modifier.rise(b).clip(CircleShape).clickable(onClick = onAgain).padding(horizontal = 12.dp, vertical = 8.dp),
+        )
     }
 }
 

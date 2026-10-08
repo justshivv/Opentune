@@ -204,11 +204,15 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **Replay:** top songs, artists and albums from this device's history.
 - **Wrapped:** your listening as a quiet animated story. Each page is a
   flat field of colour with one large shape drifting slowly on it (a low
-  sun, a wave, nested arcs, a grid of dots), and the numbers set large in
-  a serif. Minutes listened, top artist and top five, top song and top five, what
+  sun, a wave, nested arcs, a grid of dots) under a fine film grain, with
+  the numbers set large in a serif and headlines that ink in from the
+  left. A new page opens as a circle growing from where you tapped. The
+  intro scatters your top covers like prints, and the top artist and top
+  song pages take their colours from the cover. Minutes listened, top artist and top five, top song and top five, what
   part of the day you listen most, your biggest month and day, your
   longest streak, the song you played most in one day and the one it all
-  started with, then a summary card with Play and Shuffle. Covers this
+  started with, then a summary card with Play, Shuffle and Share, which
+  sends your Wrapped as a story-sized poster. Covers this
   year, the last 30 days or all time. Tap to go on, tap the left side to
   go back, hold to pause.
 - **Your own music server** (optional): Navidrome, Gonic, Airsonic,
@@ -252,8 +256,12 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   Ringtones/OpenTune first, since the system can't read app storage.
 - **Export and import** of settings, history, likes and playlists as JSON.
 - **Updates in the app.** OpenTune checks this repository's GitHub releases
-  once a day (or when you ask), downloads the APK for your phone's
-  processor, checks it against the release's SHA256SUMS and hands it to
+  every few hours: whenever the app comes to the front, hourly while it's
+  open, and twice a day in the background, with a notification when a new
+  version is out (or whenever you ask). When GitHub's API is over its
+  hourly limit, which happens often on mobile data where many phones share
+  one address, the latest release is read from the releases page instead.
+  It downloads the APK for your phone's processor, checks it against the release's SHA256SUMS and hands it to
   Android's installer. Android only installs an update signed with the same
   key as the installed app.
 
@@ -308,9 +316,12 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   name of the output device. Drag it down and it shrinks into a card
   before it closes.
 - **Synced lyrics** from [LRCLIB](https://lrclib.net) (word by word where
-  it has the timing), KuGou (line-synced, strong on Asian music) and
-  YouTube Music (unsynced), in an order you set, each credited under the
-  lyrics, with eight animation
+  it has the timing), KuGou (line-synced, strong on Asian music), NetEase
+  Cloud Music (line-synced, a large catalogue) and YouTube Music
+  (unsynced), in an order you set, each credited under the lyrics. Plain
+  text never ends the search: every source is asked until one has the
+  song in time, a busy LRCLIB is asked again, and plain lyrics found while
+  a source was down are looked up again a little later. Eight animation
   styles (Fluid, Karaoke, Slide, Focus zoom, Minimal, and three where the
   words themselves move: Bounce, Pop and Reveal), a per-song timing
   offset, adjustable text size, left or centred lines, an optional glow on
@@ -336,11 +347,12 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **Landscape player.** Turn the phone on its side and the cover fills
   the left; the right shows where the sound is going, the song, a slim
   time bar, the line being sung and the next ones in a serif, the
-  controls with like and output buttons, and the volume. Lyrics and the
-  queue open in the cover's place.
-- **Share with a picture.** Sharing a song sends its link with an image:
-  the cover blurred behind a rounded now-playing card with the song's
-  name, the time and the controls.
+  controls with like and output buttons, and the volume, all over a
+  blurred, dimmed cover. Lyrics and the queue open in the cover's place.
+- **Share with a picture.** Sharing a song sends its link with an image
+  drawn like a lock screen playing it: the cover blurred into the
+  background, the time and date, the cover, and a frosted panel with the
+  song, the time and the controls.
 - **Player buttons in four designs.** Bloom: big bare glyphs, a soft disc
   of light blooming behind each press. Capsule: play in an accent pill
   that stretches wide while music plays, between skip buttons that tilt
@@ -355,6 +367,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   onto a Deck while the old one sinks under it.
 - **Edge glow.** An optional soft light in the playing cover's colour along
   the screen's edges, breathing slowly while music plays.
+- **Stage lights.** Optional coloured light rising from the bottom of the
+  screen in time with the music: pools of colour that cycle through the
+  hues, swell with the bass, flash on the beat and now and then flicker
+  out like a worn stage light. The level is read from the app's own audio
+  as it plays, so no microphone permission is needed.
 - **Haptic feedback you can tune**, from off to strong. Taps use the phone's
   crisp haptic primitives where it has them, and follow the system's touch
   feedback switch.

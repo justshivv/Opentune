@@ -272,6 +272,15 @@ class DspAudioProcessor : BaseAudioProcessor() {
         val p = params
         if (p !== applied) rebuild(p)
         val size = inputBuffer.remaining()
+        // The song's loudness for the on-screen lights, read without moving the buffer.
+        if (com.opentune.playback.AudioLevels.listening && channels > 0) {
+            val view = inputBuffer.duplicate().order(inputBuffer.order())
+            val base = view.position()
+            val width = if (isFloat) 4 else 2
+            com.opentune.playback.AudioLevels.measure(size / (channels * width), channels, sampleRate) { i ->
+                if (isFloat) view.getFloat(base + i * 4) else view.getShort(base + i * 2) / 32768f
+            }
+        }
         val out = replaceOutputBuffer(size)
         if (p.isNeutral || channels == 0) {
             out.put(inputBuffer)
@@ -321,6 +330,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
 
     override fun onFlush() {
         filters.forEach { ch -> ch.forEach { it.reset() } }
+        com.opentune.playback.AudioLevels.flush()
     }
 
     override fun onReset() {
