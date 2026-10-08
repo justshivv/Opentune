@@ -101,6 +101,17 @@
             android:exported="false"
             android:grantUriPermissions="true" />
 
+        <!-- The picture sent along when a song is shared. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths" />
+        </provider>
+
         <!-- Shows OpenTune as a media app in Android Auto. -->
         <meta-data
             android:name="com.google.android.gms.car.application"

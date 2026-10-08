@@ -1,6 +1,7 @@
 package com.opentune.ui.player
 
 import android.content.ClipData
+import android.content.res.Configuration
 import android.content.ClipboardManager
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
@@ -77,6 +78,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -350,7 +352,48 @@ fun PlayerLayout(
                 LocalBackdrop provides backdrop,
                 LocalHazeState provides null,
             ) {
-            Column(
+            // On its side the cover goes left and the rest stacks on the right;
+            // lyrics and the queue still open as their own panes.
+            val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+            if (landscape) {
+                LandscapePlayer(
+                    state, position, lyricsPosition, actions,
+                    liked = isLiked,
+                    device = sleepLabel ?: device,
+                    onLike = { LibraryStore.setLiked(current, !isLiked) },
+                    onMore = { showMenu = true },
+                    onLyrics = { toggle(Pane.LYRICS) },
+                    onQueue = { toggle(Pane.QUEUE) },
+                    showLines = pane != Pane.LYRICS,
+                    side = when (pane) {
+                        Pane.COVER -> null
+                        Pane.LYRICS -> { ->
+                            LyricsView(
+                                state.lyrics,
+                                lyricsPosition,
+                                onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
+                                modifier = Modifier.fillMaxSize(),
+                                synced = state.ui.syncedLyrics,
+                                blur = state.ui.blurLyrics,
+                                onSyncLine = syncLine,
+                            )
+                        }
+                        Pane.QUEUE -> { ->
+                            QueuePane(
+                                queue = state.queue,
+                                currentIndex = state.currentIndex,
+                                upNext = state.upNext,
+                                isPlaying = state.isPlaying,
+                                shuffle = state.shuffle,
+                                onPlayIndex = actions.playIndex,
+                                onRemoveIndex = actions.removeIndex,
+                                onMove = actions.moveIndex,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    },
+                )
+            } else Column(
                 Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(horizontal = 24.dp),
             ) {
                 // Grab handle, then "Playing from" or the remix pill.

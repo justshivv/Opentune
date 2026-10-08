@@ -190,6 +190,7 @@ fun AppRoot(vm: PlayerViewModel) {
             if (s.videoId == song?.videoId) vm.skipNext()
             uiScope.launch { snackbar.showSnackbar("You won't hear \"${s.title}\" in autoplay again") }
         },
+        progressOf = { s -> if (s.videoId == vm.currentSong.value?.videoId) vm.positionMs() to vm.durationMs.value else null },
         viewArtist = { s ->
             uiScope.launch {
                 val id = MusicRepository.artistIdFor(s)

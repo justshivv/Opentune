@@ -333,6 +333,14 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **iOS-style bounce** at the ends of every list.
 - **Smooth tab changes.** The dock's highlight stretches toward the tab
   you pick and settles into it, without overshooting.
+- **Landscape player.** Turn the phone on its side and the cover fills
+  the left; the right shows where the sound is going, the song, a slim
+  time bar, the line being sung and the next ones in a serif, the
+  controls with like and output buttons, and the volume. Lyrics and the
+  queue open in the cover's place.
+- **Share with a picture.** Sharing a song sends its link with an image:
+  the cover blurred behind a rounded now-playing card with the song's
+  name, the time and the controls.
 - **Player buttons in four designs.** Bloom: big bare glyphs, a soft disc
   of light blooming behind each press. Capsule: play in an accent pill
   that stretches wide while music plays, between skip buttons that tilt

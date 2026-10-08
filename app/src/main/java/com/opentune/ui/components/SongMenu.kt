@@ -1,6 +1,5 @@
 package com.opentune.ui.components
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -80,6 +79,8 @@ class SongMenuActions(
     val playVideoVersion: ((Song) -> Unit)? = null,
     /** Opens the song's artist, finding the page when the row didn't say which. */
     val viewArtist: ((Song) -> Unit)? = null,
+    /** Where the song is and how long it runs, when it's the one playing; for the share picture. */
+    val progressOf: (Song) -> Pair<Long, Long>? = { null },
 )
 
 val LocalSongMenu = staticCompositionLocalOf<SongMenuActions?> { null }
@@ -151,9 +152,9 @@ fun SongMenuSheet(
                 QuickAction(Icons.AutoMirrored.Rounded.PlaylistAdd, "Playlist", active = false) { pickPlaylist = true }
                 if (!local) {
                     QuickAction(Icons.Rounded.Share, "Share", active = false) {
-                        val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                            .putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/watch?v=${song.videoId}")
-                        context.startActivity(Intent.createChooser(send, null))
+                        // The link goes with a picture of the song, like a now-playing card.
+                        val (at, length) = actions?.progressOf?.invoke(song) ?: (0L to 0L)
+                        com.opentune.ui.share.ShareCard.share(context, song, at, length)
                         close()
                     }
                 }
