@@ -253,6 +253,8 @@ val DEFAULT_SPONSORBLOCK_CATEGORIES = setOf("music_offtopic", "sponsor", "selfpr
 @Serializable
 data class InterfaceSettings(
     val reduceAnimation: Boolean = false,
+    /** The mark's dive into the app when it starts. */
+    val openingAnimation: Boolean = true,
     /** Solid fills instead of frosted glass. */
     val reduceBlur: Boolean = false,
     val fullScreenCover: Boolean = false,
@@ -329,6 +331,7 @@ enum class GlassStyle(val label: String, val summary: String) {
     HEAVY("Heavy frost", "Thick, milky glass that hides what's behind it"),
     TINTED("Tinted", "Glass washed with your accent colour"),
     SMOKE("Smoke", "Dark smoked glass with deep contrast"),
+    LIQUID("Liquid", "Apple's clear Liquid Glass: barely frosted, the edges bend and split the light, with a bright rim (Android 13+)"),
 }
 
 /** How the dock's highlight moves to the tab you pick. */

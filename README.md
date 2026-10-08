@@ -267,6 +267,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 
 ### Look and feel
 
+- **An opening that dives into the logo.** At start the mark takes over
+  from the system splash at the same size, settles with a soft glow and a
+  glint of light, then turns into a window onto the app and rushes toward
+  you until the app fills the screen. Off under Settings › Motion, and
+  skipped with reduced motion.
 - **Liquid Glass.** The floating bars and player buttons frost and bend
   what's behind them, like Apple's material (Android 13 and newer; frosted
   glass below that, solid with "Reduce dynamic blur"). Album, playlist and
@@ -293,7 +298,10 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   Stretch like a drop, wobble like Jelly or Glide in one piece.
 - **Glass styles.** The dock, buttons and bars come in Frosted, Clear,
   Heavy frost, Tinted (washed with the accent) or Smoke, for Liquid Glass
-  and frosted glass alike. Pages also blur and fade as they scroll under
+  and frosted glass alike, or Liquid: Apple's clear glass, hardly frosted,
+  with a deep lens at the edges that bends and splits the light, vibrant
+  colour through it, a bright specular rim and a soft inner shade
+  (Android 13 and newer). Pages also blur and fade as they scroll under
   the status bar; that's a switch of its own.
 - **Motion to taste.** Pages can Slide, Fade, Zoom or Rise into view, and
   the player can open on a Spring, a Smooth glide, a Bouncy overshoot or
@@ -315,6 +323,9 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   large back/play/forward controls, a shuffle/repeat/autoplay pill, and the
   name of the output device. Drag it down and it shrinks into a card
   before it closes.
+- **Lyrics that rise into place.** Opening the lyrics slides them up on a
+  soft spring and brings them into focus from a blur while the cover sinks
+  back; closing them brings the cover forward again.
 - **Synced lyrics** from [LRCLIB](https://lrclib.net) (word by word where
   it has the timing), KuGou (line-synced, strong on Asian music), NetEase
   Cloud Music (line-synced, a large catalogue) and YouTube Music

@@ -53,6 +53,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.LocalOverscrollFactory
@@ -285,13 +286,27 @@ fun AppRoot(vm: PlayerViewModel) {
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val content = PaddingValues(bottom = navInset + CHROME_TAB_HEIGHT + 24.dp + if (song != null) CHROME_MINI_HEIGHT + 8.dp else 0.dp)
 
+    // The opening animation, once per launch: the app comes forward out of
+    // the mark as the screen dives into it.
+    var opening by remember { mutableStateOf(!com.opentune.ui.components.Opening.played && chromeUi.openingAnimation && !chromeUi.reduceAnimation) }
+    var dive by remember { androidx.compose.runtime.mutableFloatStateOf(if (opening) 0f else 1f) }
+    LaunchedEffect(Unit) { com.opentune.ui.components.Opening.played = true }
+
     CompositionLocalProvider(
         LocalHazeState provides haze,
         LocalSongMenu provides songMenu,
         // iOS-style rubber band at the ends of every list.
         LocalOverscrollFactory provides RubberBandOverscrollFactory,
     ) {
-        Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier.fillMaxSize().graphicsLayer {
+                if (dive < 1f) {
+                    val s = 1.14f - 0.14f * (1f - (1f - dive) * (1f - dive))
+                    scaleX = s
+                    scaleY = s
+                }
+            },
+        ) {
             Box(
                 Modifier.fillMaxSize()
                     .then(if (liquid) Modifier.layerBackdrop(backdrop) else Modifier)
@@ -514,6 +529,9 @@ fun AppRoot(vm: PlayerViewModel) {
                     still = chromeUi.reduceAnimation,
                 )
             }
+        }
+        if (opening) {
+            com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })
         }
     }
 }

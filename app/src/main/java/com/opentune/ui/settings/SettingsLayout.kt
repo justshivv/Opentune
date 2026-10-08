@@ -70,7 +70,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "motion", "Motion", "How the dock, pages and player move", Icons.Rounded.Animation,
         listOf(
             "Dock" to listOf("Dock animation", "Dock lens"),
-            "Pages and player" to listOf("Page transitions", "Player opening"),
+            "Pages and player" to listOf("Opening animation", "Page transitions", "Player opening"),
             "Less motion" to listOf("Reduce animation"),
         ),
     ),

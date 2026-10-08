@@ -12,6 +12,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.ui.draw.blur
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -373,7 +376,7 @@ fun PlayerLayout(
                                 state.lyrics,
                                 lyricsPosition,
                                 onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier.fillMaxSize().focusIn(!state.ui.reduceAnimation),
                                 synced = state.ui.syncedLyrics,
                                 blur = state.ui.blurLyrics,
                                 onSyncLine = syncLine,
@@ -432,8 +435,20 @@ fun PlayerLayout(
                 AnimatedContent(
                     pane,
                     transitionSpec = {
-                        (fadeIn(tween(320)) + scaleIn(tween(380, easing = FastOutSlowInEasing), 0.94f)) togetherWith
-                            (fadeOut(tween(180)) + scaleOut(tween(220), 0.98f))
+                        when {
+                            state.ui.reduceAnimation -> fadeIn(tween(160)) togetherWith fadeOut(tween(120))
+                            // Lyrics rise into place on a soft spring while the cover sinks back.
+                            targetState == Pane.LYRICS ->
+                                (fadeIn(tween(360)) + slideInVertically(spring(dampingRatio = 0.86f, stiffness = 240f)) { it / 5 }) togetherWith
+                                    (fadeOut(tween(220)) + scaleOut(tween(340, easing = FastOutSlowInEasing), 0.9f))
+                            // And going back, the cover comes forward as they drop away.
+                            initialState == Pane.LYRICS ->
+                                (fadeIn(tween(320)) + scaleIn(spring(dampingRatio = 0.82f, stiffness = 260f), 0.9f)) togetherWith
+                                    (fadeOut(tween(220)) + slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { it / 6 })
+                            else ->
+                                (fadeIn(tween(320)) + scaleIn(tween(380, easing = FastOutSlowInEasing), 0.94f)) togetherWith
+                                    (fadeOut(tween(180)) + scaleOut(tween(220), 0.98f))
+                        }
                     },
                     label = "pane",
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -503,7 +518,7 @@ fun PlayerLayout(
                                     state.lyrics,
                                     lyricsPosition,
                                     onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
-                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                    modifier = Modifier.weight(1f).fillMaxWidth().focusIn(!state.ui.reduceAnimation),
                                     synced = state.ui.syncedLyrics,
                                     blur = state.ui.blurLyrics,
                                     onSyncLine = syncLine,
@@ -750,4 +765,19 @@ private fun TogetherPill(room: Together.Room, onClick: () -> Unit) {
             leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         ),
     )
+}
+
+/**
+ * Brings what it's on into focus as it appears: from a soft blur and a
+ * touch smaller to sharp, over half a second. Blur needs Android 12; before
+ * that it only grows into place.
+ */
+@Composable
+private fun Modifier.focusIn(animate: Boolean): Modifier {
+    val v = remember { androidx.compose.animation.core.Animatable(if (animate) 0f else 1f) }
+    LaunchedEffect(Unit) { if (animate) v.animateTo(1f, tween(520, easing = FastOutSlowInEasing)) }
+    val blur = (1f - v.value) * 14f
+    return this
+        .graphicsLayer { val s = 0.96f + 0.04f * v.value; scaleX = s; scaleY = s }
+        .then(if (blur > 0.2f) Modifier.blur(blur.dp) else Modifier)
 }

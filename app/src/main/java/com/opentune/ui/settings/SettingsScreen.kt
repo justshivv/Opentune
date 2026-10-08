@@ -800,6 +800,15 @@ private fun settingsSections(
                 Entry("Dock lens", "navigation bar dock tab highlight selection pill indicator jelly stretch glide") {
                     NavRow("Dock lens", { dockLensDialog = true }, summary = ui.dockLens.summary, icon = Icons.Rounded.Lens, value = ui.dockLens.label)
                 },
+                Entry("Opening animation", "splash start launch intro logo reveal dive") {
+                    ToggleRow(
+                        "Opening animation",
+                        ui.openingAnimation,
+                        { v -> AppSettings.updateUi { it.copy(openingAnimation = v) } },
+                        summary = "When OpenTune starts, the screen dives into the logo and the app comes through it",
+                        icon = Icons.Rounded.AutoAwesome,
+                    )
+                },
                 Entry("Page transitions", "navigation animation screen open back slide fade zoom rise") {
                     NavRow("Page transitions", { pageTransitionDialog = true }, summary = ui.pageTransition.summary, icon = Icons.Rounded.SwapHoriz, value = ui.pageTransition.label)
                 },
