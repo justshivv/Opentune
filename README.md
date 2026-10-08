@@ -288,6 +288,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   while the song plays and settles when you pause; it works on the
   full-screen cover too. It's made from the cover itself, so it works for
   every song. Off in Settings, or with reduced motion.
+- **Pull to refresh with the logo.** On Home and Podcasts, pulling down
+  brings in the OpenTune mark and fills it with the accent from left to
+  right while the page follows your finger with some give; past the line
+  it ticks and pops, while it loads the mark sways like a sound wave with
+  light running across it, and when it's done it shrinks away.
 - **Skeleton loading.** Pages show the shape of what's coming while they
   load, with one soft band of light sweeping across every placeholder.
 - **A dock that gets out of the way.** Home, Explore, Podcasts and Library

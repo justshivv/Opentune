@@ -115,103 +115,110 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
         }
     }
 
-    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item { PageHeader("Podcasts") }
-        item {
-            TextField(
-                value = query,
-                onValueChange = { query = it },
-                singleLine = true,
-                placeholder = { Text("Search shows and episodes") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
-                shape = RoundedCornerShape(20.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
-        item {
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(Podcasts.TOPICS) { topic ->
-                    FilterChip(query == topic, { query = if (query == topic) "" else topic; kind = SearchKind.SHOWS }, { Text(topic) })
-                }
-            }
-        }
-
-        if (query.isNotBlank()) {
+    val refreshing by loader.refreshing.collectAsState()
+    com.opentune.ui.components.MarkRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = { loader.reload(keepContent = true) },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+            item { PageHeader("Podcasts") }
             item {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    SearchKind.entries.forEachIndexed { i, k ->
-                        SegmentedButton(kind == k, { kind = k }, SegmentedButtonDefaults.itemShape(i, SearchKind.entries.size)) { Text(k.label) }
+                TextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    placeholder = { Text("Search shows and episodes") },
+                    leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+            item {
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(Podcasts.TOPICS) { topic ->
+                        FilterChip(query == topic, { query = if (query == topic) "" else topic; kind = SearchKind.SHOWS }, { Text(topic) })
                     }
                 }
             }
-            when {
-                searchError != null -> item { ErrorState(searchError!!, onRetry = { attempt++ }) }
-                kind == SearchKind.SHOWS -> {
-                    val s = shows
-                    if (s == null) items(6) { SongRowPlaceholder() }
-                    else if (s.isEmpty()) item { MessageState(Icons.Rounded.Podcasts, "No shows found") }
-                    else items(s, key = { it.browseId }) { ShowRow(it) { onOpenShow(it.browseId) } }
+
+            if (query.isNotBlank()) {
+                item {
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        SearchKind.entries.forEachIndexed { i, k ->
+                            SegmentedButton(kind == k, { kind = k }, SegmentedButtonDefaults.itemShape(i, SearchKind.entries.size)) { Text(k.label) }
+                        }
+                    }
                 }
-                else -> {
-                    val e = episodes
-                    if (e == null) items(6) { SongRowPlaceholder() }
-                    else if (e.isEmpty()) item { MessageState(Icons.Rounded.Podcasts, "No episodes found") }
-                    else items(e, key = { it.videoId }) { ep ->
+                when {
+                    searchError != null -> item { ErrorState(searchError!!, onRetry = { attempt++ }) }
+                    kind == SearchKind.SHOWS -> {
+                        val s = shows
+                        if (s == null) items(6) { SongRowPlaceholder() }
+                        else if (s.isEmpty()) item { MessageState(Icons.Rounded.Podcasts, "No shows found") }
+                        else items(s, key = { it.browseId }) { ShowRow(it) { onOpenShow(it.browseId) } }
+                    }
+                    else -> {
+                        val e = episodes
+                        if (e == null) items(6) { SongRowPlaceholder() }
+                        else if (e.isEmpty()) item { MessageState(Icons.Rounded.Podcasts, "No episodes found") }
+                        else items(e, key = { it.videoId }) { ep ->
+                            EpisodeRow(ep, actions, showShow = true, onOpenShow = onOpenShow) { actions.playEpisodes(listOf(ep), 0, ep.showTitle) }
+                        }
+                    }
+                }
+                return@LazyColumn
+            }
+
+            if (inProgress.isNotEmpty()) {
+                item { SectionHeader("Continue listening") }
+                item {
+                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(inProgress, key = { it.episode.videoId }) { p ->
+                            ContinueCard(p) { actions.playEpisodes(listOf(p.episode), 0, p.episode.showTitle) }
+                        }
+                    }
+                }
+            }
+            if (subscriptions.isNotEmpty()) {
+                item { SectionHeader("Your shows") }
+                item { ShowCarousel(subscriptions, onOpenShow) }
+                if (latest.isNotEmpty()) {
+                    item { SectionHeader("New from your shows") }
+                    items(latest.take(8), key = { "new:${it.videoId}" }) { ep ->
                         EpisodeRow(ep, actions, showShow = true, onOpenShow = onOpenShow) { actions.playEpisodes(listOf(ep), 0, ep.showTitle) }
                     }
                 }
             }
-            return@LazyColumn
-        }
-
-        if (inProgress.isNotEmpty()) {
-            item { SectionHeader("Continue listening") }
-            item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(inProgress, key = { it.episode.videoId }) { p ->
-                        ContinueCard(p) { actions.playEpisodes(listOf(p.episode), 0, p.episode.showTitle) }
+            when (val s = state) {
+                is UiState.Loading -> {
+                    item { ShelfPlaceholder() }
+                    items(5) { SongRowPlaceholder() }
+                }
+                is UiState.Error -> item { ErrorState(s.message, onRetry = { loader.reload() }) }
+                is UiState.Success -> {
+                    val home = s.data
+                    if (home.shows.isNotEmpty()) {
+                        item { SectionHeader("Shows to try") }
+                        item { ShowCarousel(home.shows, onOpenShow) }
                     }
-                }
-            }
-        }
-        if (subscriptions.isNotEmpty()) {
-            item { SectionHeader("Your shows") }
-            item { ShowCarousel(subscriptions, onOpenShow) }
-            if (latest.isNotEmpty()) {
-                item { SectionHeader("New from your shows") }
-                items(latest.take(8), key = { "new:${it.videoId}" }) { ep ->
-                    EpisodeRow(ep, actions, showShow = true, onOpenShow = onOpenShow) { actions.playEpisodes(listOf(ep), 0, ep.showTitle) }
-                }
-            }
-        }
-        when (val s = state) {
-            is UiState.Loading -> {
-                item { ShelfPlaceholder() }
-                items(5) { SongRowPlaceholder() }
-            }
-            is UiState.Error -> item { ErrorState(s.message, onRetry = { loader.reload() }) }
-            is UiState.Success -> {
-                val home = s.data
-                if (home.shows.isNotEmpty()) {
-                    item { SectionHeader("Shows to try") }
-                    item { ShowCarousel(home.shows, onOpenShow) }
-                }
-                if (home.popular.isNotEmpty()) {
-                    item { SectionHeader("Popular episodes") }
-                    items(home.popular, key = { "pop:${it.videoId}" }) { ep ->
-                        EpisodeRow(ep, actions, showShow = true, onOpenShow = onOpenShow) { actions.playEpisodes(listOf(ep), 0, "Popular episodes") }
+                    if (home.popular.isNotEmpty()) {
+                        item { SectionHeader("Popular episodes") }
+                        items(home.popular, key = { "pop:${it.videoId}" }) { ep ->
+                            EpisodeRow(ep, actions, showShow = true, onOpenShow = onOpenShow) { actions.playEpisodes(listOf(ep), 0, "Popular episodes") }
+                        }
                     }
-                }
-                home.more.forEach { (topic, list) ->
-                    item(key = "topic:$topic") { SectionHeader(topic, subtitle = "Topic") }
-                    item(key = "topicRow:$topic") { ShowCarousel(list, onOpenShow) }
+                    home.more.forEach { (topic, list) ->
+                        item(key = "topic:$topic") { SectionHeader(topic, subtitle = "Topic") }
+                        item(key = "topicRow:$topic") { ShowCarousel(list, onOpenShow) }
+                    }
                 }
             }
         }
