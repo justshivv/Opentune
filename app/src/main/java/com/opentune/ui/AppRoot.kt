@@ -53,6 +53,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.opentune.data.model.ROW_ART_PX
+import com.opentune.data.model.artworkAt
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
@@ -307,7 +309,7 @@ fun AppRoot(vm: PlayerViewModel) {
         LocalOverscrollFactory provides RubberBandOverscrollFactory,
     ) {
         Box(
-            Modifier.fillMaxSize().graphicsLayer {
+            with(com.opentune.ui.components.FlyingCover) { Modifier.watchTaps() }.fillMaxSize().graphicsLayer {
                 if (dive < 1f) {
                     val s = 1.14f - 0.14f * (1f - (1f - dive) * (1f - dive))
                     scaleX = s
@@ -525,6 +527,12 @@ fun AppRoot(vm: PlayerViewModel) {
                     onTogether = { playerOpen = false; nav.navigate("together") },
                 )
             }
+            // A tapped song's cover flying down into the now-playing card.
+            com.opentune.ui.components.CoverFlight(
+                song?.videoId,
+                song?.thumbnailUrl.artworkAt(ROW_ART_PX),
+                enabled = chromeUi.coverFlight && !chromeUi.reduceAnimation && !playerOpen,
+            )
         }
         if (opening) {
             com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })

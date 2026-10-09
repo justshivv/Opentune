@@ -271,6 +271,8 @@ data class InterfaceSettings(
     val wavySeekbar: Boolean = false,
     /** The seek bar drawn as the song's waveform, loud and quiet parts. */
     val waveformSeekbar: Boolean = false,
+    /** A tapped song's cover flies down into the now-playing card. */
+    val coverFlight: Boolean = true,
     /** Proper album covers from MusicBrainz for music videos and local files without art. */
     val albumCovers: Boolean = true,
     val lyricsAnimation: LyricsAnimation = LyricsAnimation.FLUID,

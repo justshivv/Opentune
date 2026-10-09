@@ -812,6 +812,9 @@ private fun settingsSections(
                 Entry("Page transitions", "navigation animation screen open back slide fade zoom rise") {
                     NavRow("Page transitions", { pageTransitionDialog = true }, summary = ui.pageTransition.summary, icon = Icons.Rounded.SwapHoriz, value = ui.pageTransition.label)
                 },
+                Entry("Cover flies to the player", "fly cover animation tap song now playing card shared element") {
+                    ToggleRow("Cover flies to the player", ui.coverFlight, { v -> AppSettings.updateUi { it.copy(coverFlight = v) } }, summary = "Tap a song and its cover lifts off and lands in the now-playing card", icon = Icons.Rounded.AutoAwesome)
+                },
                 Entry("Song change", "cover change next song skip animation flip carousel deck fade") {
                     NavRow("Song change", { coverChangeDialog = true }, summary = ui.coverChange.summary, icon = Icons.Rounded.SwapHoriz, value = ui.coverChange.label)
                 },

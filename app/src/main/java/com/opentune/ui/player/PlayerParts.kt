@@ -500,14 +500,14 @@ fun MiniPlayer(
 
     if (inline) {
         Box(
-            modifier
+            with(com.opentune.ui.components.FlyingCover) { modifier.card() }
                 .glass(CircleShape, tint)
                 .clickable(onClick = onClick)
                 .padding(4.dp),
             contentAlignment = Alignment.Center,
         ) {
             ProgressRing(progress, accent, track, stroke = 3.dp, modifier = Modifier.matchParentSize())
-            Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.padding(4.dp).fillMaxSize(), CircleShape)
+            Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), with(com.opentune.ui.components.FlyingCover) { Modifier.padding(4.dp).fillMaxSize().landing() }, CircleShape)
             if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize(), strokeWidth = 3.dp, color = accent)
         }
         return
@@ -518,7 +518,7 @@ fun MiniPlayer(
         onClick = onClick,
         shape = shape,
         color = Color.Transparent,
-        modifier = modifier
+        modifier = with(com.opentune.ui.components.FlyingCover) { modifier.card() }
             .graphicsLayer { translationX = offsetX.value }
             .glass(shape, tint)
             .pointerInput(Unit) {
@@ -540,7 +540,7 @@ fun MiniPlayer(
         Row(Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(44.dp), RoundedCornerShape(12.dp))
+                    Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), with(com.opentune.ui.components.FlyingCover) { Modifier.size(44.dp).landing() }, RoundedCornerShape(12.dp))
                     Column(Modifier.padding(start = 12.dp)) {
                         Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
