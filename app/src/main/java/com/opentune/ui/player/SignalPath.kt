@@ -2,6 +2,8 @@ package com.opentune.ui.player
 
 import android.media.AudioManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,8 +42,8 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
     val eq by AppSettings.equalizer.collectAsState()
     val sound by AppSettings.sound.collectAsState()
     val pb by AppSettings.playback.collectAsState()
-    val engine by NerdStats.engine.collectAsState()
-    val picked by NerdStats.lastPicked.collectAsState()
+    val source by NerdStats.playbackSource.collectAsState()
+    val lossless by NerdStats.externalSource.collectAsState()
     val gain by NerdStats.loudnessGainDb.collectAsState()
     val speakerHold by NerdStats.loudnessOffOnSpeaker.collectAsState()
     val device = rememberOutputDeviceName()
@@ -59,16 +61,16 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
         if (pb.clarity) add("clarity")
         if (eq.balance != 0f) add("balance")
     }
-    val kbps = format?.bitrateKbps ?: picked?.second
-    val rate = format?.sampleRateHz
+    val rate = format?.sampleRateHz ?: source?.sampleRate
 
     FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Signal path") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Stage(Tone.INFO, "Source", listOfNotNull(format?.codec, kbps?.let { "$it kbps" }, rate?.let { "$it Hz" }, format?.channels?.let { if (it == 2) "stereo" else "$it ch" }).joinToString(" · ").ifEmpty { "Waiting for the stream" })
-                Stage(Tone.INFO, "Found by", engine ?: "Not resolved this session (played from cache or a download)")
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Stage(Tone.INFO, "Source", source?.provider ?: "Waiting for the stream")
+                Stage(Tone.INFO, "Audio quality", signalQuality(format, source))
+                source?.selectionDetail?.let { Stage(Tone.INFO, "Source selection", it) }
                 Stage(
                     if (dspStages.isEmpty()) Tone.CLEAN else Tone.CHANGED,
                     "App DSP",
@@ -84,6 +86,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
                     "Loudness",
                     when {
                         !pb.loudnessNormalization -> "Off: every song at its own level"
+                        lossless != null -> "No loudness measurement for this external master"
                         speakerHold && (gain ?: 0f) > 0.05f -> "%+.1f dB on the phone speaker: a quiet song lifted, never turned down".format(gain)
                         speakerHold -> "Full level on the phone speaker: songs aren't turned down there"
                         gain == null -> "No figure for this song yet"
@@ -128,6 +131,23 @@ private enum class Tone(val color: Color) {
     CLEAN(Color(0xFF4CAF50)),
     CHANGED(Color(0xFFFFB300)),
     INFO(Color(0xFF9E9E9E)),
+}
+
+/** Reports the selected media format; output mixer precision is shown separately. */
+internal fun signalQuality(format: AudioFormatInfo?, source: NerdStats.Source?): String {
+    val codec = format?.codec ?: if (source?.bits != null) "FLAC" else null
+    val bits = source?.bits ?: format?.bitDepth
+    val rate = format?.sampleRateHz ?: source?.sampleRate
+    val kbps = format?.bitrateKbps ?: source?.kbps
+    return listOfNotNull(
+        codec,
+        bits?.let { "$it-bit" },
+        rate?.let { "$it Hz" },
+        format?.channels?.let { if (it == 2) "stereo" else "$it ch" },
+        kbps?.let { "$it kbps" },
+        if (codec?.contains("FLAC", true) == true) "lossless" else null,
+        if (codec != null && kbps == null) "bitrate not reported" else null,
+    ).joinToString(" · ").ifEmpty { "Waiting for the actual stream format" }
 }
 
 @Composable

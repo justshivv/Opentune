@@ -337,12 +337,26 @@ object StreamResolver {
 
     /** The stream each track started on, so a better one can be recognised. */
     private val served = ConcurrentHashMap<String, Stream>()
+    private val sourceEngines = ConcurrentHashMap<String, String>()
+    private val upgradeInfo = ConcurrentHashMap<String, Pair<Stream, String>>()
+    fun engineFor(videoId: String, upgraded: Boolean = false): String? =
+        if (upgraded) upgradeInfo[videoId]?.second else sourceEngines[videoId]
+    fun bitrateFor(videoId: String, upgraded: Boolean = false): Int? =
+        (if (upgraded) upgradeInfo[videoId]?.first else served[videoId])?.kbps
 
     /** Better streams found while a track played, ready for the swap. */
     private val upgrades = ConcurrentHashMap<String, Resolved>()
 
     private fun Stream.score(): Double =
         if ("opus" in mimeType.lowercase(Locale.ROOT)) kbps * OPUS_EFFICIENCY else kbps.toDouble()
+
+    /** A lossy alternative must beat the actual YouTube rendition and respect its network ceiling. */
+    fun worthExternalUpgrade(videoId: String, kbps: Int): Boolean {
+        if (kbps > AppSettings.effectiveAudioQuality.maxKbps) return false
+        val current = served[videoId] ?: return false
+        if (upgrades.containsKey(videoId)) return false // Do not replace a pinned Premium upgrade.
+        return kbps - current.score() >= UPGRADE_MIN_GAIN
+    }
 
     /**
      * Looks for a clearly better copy of [videoId] than the one it started on:
@@ -358,14 +372,16 @@ object StreamResolver {
         if (upgrades[videoId]?.let { SystemClock.elapsedRealtime() - it.at < URL_TTL_MS } == true) return@withContext true
         val maxKbps = AppSettings.effectiveAudioQuality.maxKbps
         val candidates = buildList {
-            runCatching { authenticatedWebRemixStream(videoId, ::rankForPlayback) }.getOrNull()?.let(::add)
-            if ("opus" !in current.mimeType.lowercase(Locale.ROOT)) innerTubeXStream(videoId, maxKbps)?.let(::add)
-        }.filter { it.kbps <= maxKbps && it.url != current.url }
-        val best = candidates.maxByOrNull { it.score() } ?: return@withContext false
+            runCatching { authenticatedWebRemixStream(videoId, ::rankForPlayback) }.getOrNull()?.let { add(it to "InnerTube · signed-in account") }
+            if ("opus" !in current.mimeType.lowercase(Locale.ROOT)) innerTubeXStream(videoId, maxKbps)?.let { add(it to "InnerTubeX") }
+        }.filter { it.first.kbps <= maxKbps && it.first.url != current.url }
+        val selected = candidates.maxByOrNull { it.first.score() } ?: return@withContext false
+        val best = selected.first
         val gain = best.score() - current.score()
         if (!force && gain < UPGRADE_MIN_GAIN || gain <= 0) return@withContext false
         TrackLog.d(TAG, "upgrade for $videoId: ${current.kbps} kbps ${current.mimeType} -> ${best.kbps} kbps ${best.mimeType}")
         upgrades[videoId] = Resolved(best.url, SystemClock.elapsedRealtime())
+        upgradeInfo[videoId] = selected
         UpgradedTracks.add(videoId)
         true
     }
@@ -387,6 +403,7 @@ object StreamResolver {
      */
     fun dropUpgrade(videoId: String) {
         upgrades.remove(videoId)
+        upgradeInfo.remove(videoId)
         UpgradedTracks.remove(videoId)
     }
 
@@ -541,12 +558,13 @@ object StreamResolver {
 
     private var switchedAt = 0L
 
-    private fun onEngineWorked(e: Engine) {
+    private fun onEngineWorked(e: Engine, videoId: String) {
         if (engine != e) {
             TrackLog.d(TAG, "switching to ${e.label}")
             switchedAt = SystemClock.elapsedRealtime()
         }
         engine = e
+        sourceEngines[videoId] = if (e == Engine.OWN) "InnerTube (OpenTune)" else e.label
         NerdStats.onEngine(e.label)
     }
 
@@ -601,12 +619,12 @@ object StreamResolver {
             // the other is the fallback, and NewPipe's extraction is the last resort.
             val first = if (engine == Engine.INNERTUBEX) itx else own
             val second = if (engine == Engine.INNERTUBEX) own else itx
-            first()?.also { onEngineWorked(if (first === itx) Engine.INNERTUBEX else Engine.OWN) }
-                ?: second()?.also { onEngineWorked(if (second === itx) Engine.INNERTUBEX else Engine.OWN) }
+            first()?.also { onEngineWorked(if (first === itx) Engine.INNERTUBEX else Engine.OWN, videoId) }
+                ?: second()?.also { onEngineWorked(if (second === itx) Engine.INNERTUBEX else Engine.OWN, videoId) }
                 ?: run {
                     TrackLog.w(TAG, "every player client and InnerTubeX failed for $videoId; falling back to extraction")
                     timed("$videoId newPipeStream") { newPipeStream(videoId, ::pickForQuality) }
-                        .also { onEngineWorked(Engine.OWN) }
+                        .also { onEngineWorked(Engine.OWN, videoId); sourceEngines[videoId] = "NewPipe" }
                 }
         } catch (e: CancellationException) {
             throw e

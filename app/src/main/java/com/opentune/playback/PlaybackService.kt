@@ -1,5 +1,9 @@
 package com.opentune.playback
 
+import com.opentune.data.lossless.ExternalStreams
+import com.opentune.data.model.durationMillis
+import kotlinx.coroutines.ensureActive
+
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -31,6 +35,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.session.MediaSession
 import androidx.media3.session.LibraryResult
 import com.opentune.widget.NowPlayingWidget
@@ -132,6 +137,9 @@ class PlaybackService : MediaLibraryService() {
     private var soundEffects: SoundEffects? = null
     private val dsp = DspAudioProcessor()
     private var audioManager: AudioManager? = null
+    private val startupSelections = ConcurrentHashMap<String, StartupSelection>()
+
+    private fun selectedUri(uri: Uri): Uri = startupToken(uri)?.let { startupSelections[it]?.selected } ?: uri
 
     override fun onCreate() {
         super.onCreate()
@@ -153,6 +161,28 @@ class PlaybackService : MediaLibraryService() {
         val direct = DefaultDataSource.Factory(context, OkHttpDataSource.Factory(Http.client))
         val routing = SchemeRoutingDataSource.Factory(streams = cached, local = direct)
         val sources = DefaultMediaSourceFactory(routing)
+        val qualitySources = object : MediaSource.Factory by sources {
+            override fun createMediaSource(mediaItem: MediaItem): MediaSource {
+                val input = mediaItem.localConfiguration?.uri ?: return sources.createMediaSource(mediaItem)
+                if (videoIdOf(input) == null) return sources.createMediaSource(mediaItem)
+                val uri = withoutStartup(input)
+                val id = videoIdOf(uri) ?: return sources.createMediaSource(mediaItem)
+                if (!isYouTubeId(id) || Podcasts.isEpisode(id) || externalStreamKeyOf(uri) != null ||
+                    uri.getQueryParameter("fallback") == "youtube") return sources.createMediaSource(mediaItem)
+                val token = java.util.UUID.randomUUID().toString()
+                val tagged = uri.buildUpon().appendQueryParameter("startup", token).build()
+                val selection = StartupSelection(mediaItem.toSong(), uri)
+                // Selection wraps the cache, so external audio never enters a YouTube cache entry.
+                val choosing = ResolvingDataSource.Factory(cached) { spec ->
+                    startupSelections[token] = selection
+                    val resolved = runBlocking { selection.resolve(spec) }
+                    scope.launch { updateExternalStats(); applyLoudness() }
+                    resolved
+                }
+                return DefaultMediaSourceFactory(SchemeRoutingDataSource.Factory(choosing, direct))
+                    .createMediaSource(mediaItem.buildUpon().setUri(tagged).build())
+            }
+        }
 
         val floatOutput = AppSettings.playback.value.floatOutput
         val renderers = object : DefaultRenderersFactory(context) {
@@ -180,7 +210,7 @@ class PlaybackService : MediaLibraryService() {
             .build()
 
         val player = ExoPlayer.Builder(context, renderers)
-            .setMediaSourceFactory(sources)
+            .setMediaSourceFactory(qualitySources)
             .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -215,6 +245,20 @@ class PlaybackService : MediaLibraryService() {
             AppSettings.playback.map { it.autoplay }.distinctUntilChanged().collect { extendQueueIfNeeded() }
         }
         scope.launch { trackListening(player) }
+        scope.launch {
+            AppSettings.playback.map { listOf(it.losslessStreaming, it.losslessUnmeteredOnly, it.losslessHiRes, it.jioSaavnQuality, it.qobuzRelayUrl, it.wifiQuality, it.mobileQuality) }
+                .distinctUntilChanged().collect {
+                    val item = player.currentMediaItem
+                    val uri = item?.localConfiguration?.uri?.let(::selectedUri)
+                    if (item != null && uri != null) {
+                        val rendition = externalStreamKeyOf(uri)?.let { ExternalStreams.get(item.mediaId, it) }
+                        if (rendition != null && !ExternalStreams.allowed(rendition.lossless)) {
+                            swapToUpgrade(player, item.mediaId, youtubeFallbackUri(item.mediaId))
+                        }
+                    }
+                    scheduleUpgrade()
+                }
+        }
         scope.launch {
             AppSettings.playback.map { Triple(it.loudnessNormalization, it.normalizeOnSpeaker, it.volumeLevel) }.distinctUntilChanged().collect { applyLoudness() }
         }
@@ -388,6 +432,7 @@ class PlaybackService : MediaLibraryService() {
         runCatching { unregisterReceiver(volumeReceiver) }
         audioManager?.let { BitPerfectUsb.apply(it, wanted = false, sampleRate = outputRate, float = false) }
         scope.cancel()
+        startupSelections.clear()
         soundEffects?.release()
         soundEffects = null
         mediaSession?.run {
@@ -403,7 +448,12 @@ class PlaybackService : MediaLibraryService() {
         val videoId = videoIdOf(dataSpec.uri) ?: return dataSpec
         val url = try {
             runBlocking {
-                if (isUpgradedUri(dataSpec.uri)) StreamResolver.resolveUpgrade(videoId) else StreamResolver.resolve(videoId)
+                val losslessKey = externalStreamKeyOf(dataSpec.uri)
+                when {
+                    losslessKey != null -> ExternalStreams.resolve(videoId, losslessKey)
+                    isUpgradedUri(dataSpec.uri) -> StreamResolver.resolveUpgrade(videoId)
+                    else -> StreamResolver.resolve(videoId)
+                }
             }
         } catch (e: IOException) {
             throw e
@@ -413,7 +463,7 @@ class PlaybackService : MediaLibraryService() {
         // googlevideo expects the media request to look like the client that
         // minted the URL; these are also the headers StreamResolver probed with.
         return dataSpec.withUri(url.toUri())
-            .withAdditionalHeaders(StreamResolver.mediaHeadersFor(url))
+            .withAdditionalHeaders(if (externalStreamKeyOf(dataSpec.uri) != null) emptyMap() else StreamResolver.mediaHeadersFor(url))
     }
 
     /**
@@ -613,6 +663,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            updateExternalStats()
             applyLoudness()
             scheduleUpgrade()
             watchSegments(mediaItem)
@@ -648,9 +699,11 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) {
+                updateExternalStats()
                 // The figure arrives with the stream; on a first play it's
                 // only known once the track has resolved.
                 applyLoudness()
+                if (mediaSession?.player?.currentMediaItem?.localConfiguration?.uri?.let(::startupToken) != null && upgradeJob?.isActive != true) scheduleUpgrade()
             }
         }
 
@@ -828,11 +881,15 @@ class PlaybackService : MediaLibraryService() {
         if (session == C.AUDIO_SESSION_ID_UNSET) return
         openEffectSession(session)
         val id = player.currentMediaItem?.mediaId
-        val db = id?.let { StreamResolver.loudnessDbFor(it) ?: Downloads.loudnessFor(it) }
+        val rawUri = player.currentMediaItem?.localConfiguration?.uri
+        val pendingSelection = rawUri?.let(::startupToken)?.let { startupSelections[it]?.selected == null } == true
+        val lossless = rawUri?.let(::selectedUri)?.let(::externalStreamKeyOf) != null
+        // YouTube's gain belongs to its own master, not the external FLAC.
+        val db = if (lossless) null else id?.let { StreamResolver.loudnessDbFor(it) ?: Downloads.loudnessFor(it) }
         // A track playing from the cache never resolved, so its figure may not
         // be known yet. Look it up once, a moment in, then apply it.
         loudnessRetry?.cancel()
-        if (db == null && id != null && isYouTubeId(id) && AppSettings.playback.value.loudnessNormalization) {
+        if (!lossless && !pendingSelection && db == null && id != null && isYouTubeId(id) && AppSettings.playback.value.loudnessNormalization) {
             loudnessRetry = scope.launch {
                 delay(LOUDNESS_RETRY_MS)
                 withContext(Dispatchers.IO) { runCatching { StreamResolver.resolve(id) } }
@@ -883,14 +940,28 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun scheduleUpgrade(force: Boolean = false) {
         upgradeJob?.cancel()
-        if (!force && !AppSettings.playback.value.qualityUpgrade) return
+        if (!force && !AppSettings.playback.value.qualityUpgrade && !ExternalStreams.allowed()) return
         val player = mediaSession?.player as? ExoPlayer ?: return
         val item = player.currentMediaItem ?: return
         val uri = item.localConfiguration?.uri ?: return
         val id = videoIdOf(uri) ?: return
-        if (isUpgradedUri(uri)) return
+        if (externalStreamKeyOf(selectedUri(uri)) != null) return
         upgradeJob = scope.launch {
             if (!force) delay(UPGRADE_DELAY_MS)
+            val startup = startupToken(uri)?.let { startupSelections[it] }
+            if (startupToken(uri) != null && startup?.selected == null) return@launch
+            if (externalStreamKeyOf(selectedUri(uri)) != null) return@launch
+            val duration = player.duration.takeIf { it > 0 } ?: item.toSong().durationMillis()
+            val lossless = if (Podcasts.isEpisode(id) || startup?.checkedMaximum == true) null else ExternalStreams.find(item.toSong(), duration)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (player.currentMediaItem?.localConfiguration?.uri != uri) return@launch
+            if (lossless != null && ExternalStreams.allowed(lossless.lossless)) {
+                val left = player.duration - player.currentPosition
+                if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) return@launch
+                swapToUpgrade(player, id, externalStreamUri(id, lossless.key))
+                return@launch
+            }
+            if (isUpgradedUri(uri) || (!force && !AppSettings.playback.value.qualityUpgrade)) return@launch
             val found = withContext(Dispatchers.IO) { runCatching { StreamResolver.findUpgrade(id, force) }.getOrDefault(false) }
             if (!found || player.currentMediaItem?.mediaId != id) return@launch
             val left = player.duration - player.currentPosition
@@ -899,16 +970,41 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private fun swapToUpgrade(player: ExoPlayer, id: String) {
+    private fun swapToUpgrade(player: ExoPlayer, id: String, uri: android.net.Uri = youtubeFallbackUri(id, upgraded = true)) {
         val index = player.currentMediaItemIndex
         val item = player.getMediaItemAt(index)
         val position = player.currentPosition
         swappingTo = id
         // If the player updates the item in place there's no transition to clear this.
         scope.launch { delay(2_000); if (swappingTo == id) swappingTo = null }
-        player.replaceMediaItem(index, item.buildUpon().setUri(streamUri(id, upgraded = true)).build())
+        player.replaceMediaItem(index, item.buildUpon().setUri(uri).build())
+        updateExternalStats()
+        applyLoudness()
         if (player.currentMediaItemIndex != index || player.currentPosition < position - 1_000) player.seekTo(index, position)
         Log.d(TAG, "Swapped $id to its upgraded stream at ${position}ms")
+    }
+
+    private fun updateExternalStats() {
+        val item = mediaSession?.player?.currentMediaItem
+        val uri = item?.localConfiguration?.uri?.let(::selectedUri)
+        val key = uri?.let(::externalStreamKeyOf)
+        val rendition = if (item != null && key != null) ExternalStreams.get(item.mediaId, key) else null
+        NerdStats.onExternalSource(rendition?.label)
+        val provider = when {
+            item == null -> "No track selected"
+            rendition != null -> rendition.provider
+            uri?.let(::startupToken) != null -> "Checking highest-quality sources…"
+            LocalMusic.isLocal(item.mediaId) -> "Local file"
+            Radio.isRadio(item.mediaId) -> "Internet radio"
+            Subsonic.isSubsonic(item.mediaId) -> "Your music server"
+            uri?.scheme == "file" -> "Downloaded file"
+            else -> StreamResolver.engineFor(item.mediaId, uri?.let(::isUpgradedUri) == true)?.let { "YouTube · $it" } ?: "YouTube · cached stream or resolving"
+        }
+        NerdStats.onPlaybackSource(NerdStats.Source(provider, rendition?.bits, rendition?.sampleRate,
+            rendition?.kbps ?: if (rendition == null && item != null && uri?.let(::videoIdOf) != null)
+                StreamResolver.bitrateFor(item.mediaId, isUpgradedUri(uri)) else null,
+            selectionDetail = if (item != null && uri?.let(::videoIdOf) != null && uri.let(::startupToken) == null)
+                ExternalStreams.selectionDetail(item.mediaId) else null))
     }
 
     // ---- Latency -----------------------------------------------------------------
@@ -930,6 +1026,8 @@ class PlaybackService : MediaLibraryService() {
      * then buffers the very next one.
      */
     private fun warmNeighbours() {
+        // Maximum chooses external audio first; warming YouTube would race that decision.
+        if (AppSettings.effectiveAudioQuality == com.opentune.data.settings.AudioQuality.MAX) return
         if (!AppSettings.playback.value.preloadUpcoming) return
         val player = mediaSession?.player ?: return
         val timeline = player.currentTimeline
@@ -1183,14 +1281,17 @@ class PlaybackService : MediaLibraryService() {
         val player = mediaSession?.player as? ExoPlayer ?: return
         val item = player.currentMediaItem ?: return
         val mediaId = item.mediaId
-        val uri = item.localConfiguration?.uri
-        if (uri != null && isUpgradedUri(uri)) {
+        val uri = item.localConfiguration?.uri?.let(::selectedUri)
+        if (uri != null && (isUpgradedUri(uri) || externalStreamKeyOf(uri) != null)) {
             Log.w(TAG, "Upgraded stream for $mediaId failed (${error.errorCodeName}); back to the one it started on")
             StreamResolver.dropUpgrade(mediaId)
+            if (externalStreamKeyOf(uri) != null) ExternalStreams.failed(mediaId)
             val index = player.currentMediaItemIndex
             val position = player.currentPosition
             swappingTo = mediaId
-            player.replaceMediaItem(index, item.buildUpon().setUri(streamUri(mediaId, upgraded = false)).build())
+            player.replaceMediaItem(index, item.buildUpon().setUri(youtubeFallbackUri(mediaId)).build())
+            updateExternalStats()
+            applyLoudness()
             player.seekTo(index, position)
             player.prepare()
             return

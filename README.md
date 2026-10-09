@@ -79,6 +79,31 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 
 ### Listening
 
+- **Highest-quality sources first.** Choose Max streaming quality to check
+  matching FLAC sources before opening YouTube audio. A bounded search compares
+  verified candidates by bit depth and sample rate, including hi-res. If no FLAC
+  is available, OpenTune tries matching JioSaavn 320 kbps, then falls back to
+  InnerTubeX/InnerTube. Provider checks can delay startup (up to 12 seconds for
+  FLAC plus 10 seconds for JioSaavn). The unmetered-only setting still applies.
+  Other quality levels start on YouTube and can optionally upgrade afterward.
+  Qobuz supports direct catalog
+  matching and a compatible custom relay; Tidal, Amazon and the original
+  Qobuz community route use Odesli when its public mapping API is available.
+  A matching, verified
+  FLAC can replace the stream at the current position; an unavailable or failed
+  provider falls back to YouTube. External sources are restricted to unmetered
+  networks by default. Optional SpotiFLAC verification and a Qobuz relay
+  can be configured under Higher-quality sources. JioSaavn is lossy.
+  Track title, artist, album (when known),
+  duration, the catalog's 320 flag and the returned audio are checked first.
+  Availability depends on third-party providers. This does
+  not change downloads, local files, podcasts, radio or your own server streams.
+  Signal Path shows the active provider and actual codec, precision, sample rate
+  and bitrate when known; output quality still depends on
+  Android, your audio device and enabled effects.
+  See [the source review](docs/audio-source-review.md) for the assessed clients
+  and live-provider limitations.
+
 - **Two stream engines that switch on their own.**
   InnerTubeX leads and
   OpenTune's own client walk backs it up; after a failure the walk leads
@@ -491,13 +516,15 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   styles, pure black, color from artwork, and reduced motion and blur.
 
 YouTube's audio is lossy, so there's no lossless or Dolby Atmos stream
-option from YouTube; lossless comes from your own music server. OpenTune
-doesn't unlock JioSaavn streams with a hard-coded key, doesn't fetch Tidal,
-Qobuz, Deezer or DAB audio through relay servers or decrypt Deezer
-streams, doesn't use scraped Apple Music, Tidal or Spotify tokens for
-animated "Canvas" covers, and doesn't take lyrics from Apple Music, Spotify
-or Musixmatch through proxies or scraped secrets. Those depend on getting
-around a service's protection or terms, so they stay out.
+option from YouTube. Lossless can come from your own music server or the
+optional community sources described above. The optional JioSaavn route
+remains lossy. Source availability varies, and a FLAC header does not prove
+that the upstream master was never transcoded. See the
+[source review](docs/audio-source-review.md) for current limitations.
+
+OpenTune does not decrypt Deezer streams, use scraped Apple Music, Tidal
+or Spotify tokens for animated "Canvas" covers, or take lyrics from Apple
+Music, Spotify or Musixmatch through proxies or scraped secrets.
 
 Not built yet: lyric translation and an in-app language setting.
 

@@ -34,6 +34,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "audio", "Audio", "Quality, loudness, effects and output", Icons.Rounded.GraphicEq,
         listOf(
             "Streaming quality" to listOf("On Wi-Fi", "On mobile data", "Upgrade quality while playing"),
+            "Higher-quality sources" to listOf("Lossless streaming", "JioSaavn quality upgrade", "Unmetered networks only", "Prefer hi-res lossless", "Qobuz relay", "SpotiFLAC verification", "Disconnect SpotiFLAC"),
             "Loudness" to listOf("Loudness normalization", "Volume level", "Normalize on the phone speaker"),
             "Sound" to listOf("Equalizer", "Clarity", "Spatial audio", "System audio effects"),
             "Output" to listOf("Output precision", "Prefer USB DAC", "Bit-perfect USB output"),
