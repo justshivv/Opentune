@@ -566,6 +566,8 @@ class PlaybackService : MediaLibraryService() {
                     Player.EVENT_TIMELINE_CHANGED,
                     Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
                     Player.EVENT_REPEAT_MODE_CHANGED,
+                    // Asked again as playback starts and ends, in case an earlier ask came to nothing.
+                    Player.EVENT_PLAYBACK_STATE_CHANGED,
                 )
             ) {
                 extendQueueIfNeeded()
@@ -1079,32 +1081,50 @@ class PlaybackService : MediaLibraryService() {
         radioJob?.cancel()
         radioSeed = seed
         radioJob = scope.launch {
-            val radio = try {
-                if (Subsonic.isSubsonic(seed)) {
-                    Subsonic.randomSongs(RADIO_FROM_SERVER)
-                } else {
-                    // YouTube Music, Spotify or JioSaavn, as chosen; the songs always play from YouTube Music.
-                    Recommendations.after(seedItem.toSong(), AppSettings.playback.value.recommender).songs
+            // A song started on its own asks for radio while its own stream is
+            // still loading, which is when a request is most likely to fail; a
+            // failure must not leave the song to end in silence, so ask again.
+            var radio: List<Song>? = null
+            for ((attempt, wait) in RADIO_RETRY_MS.withIndex()) {
+                if (wait > 0) delay(wait)
+                radio = try {
+                    if (Subsonic.isSubsonic(seed)) {
+                        Subsonic.randomSongs(RADIO_FROM_SERVER)
+                    } else {
+                        // YouTube Music, Spotify or JioSaavn, as chosen; the songs always play from YouTube Music.
+                        Recommendations.after(seedItem.toSong(), AppSettings.playback.value.recommender).songs
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Radio for $seed failed (try ${attempt + 1})", e)
+                    null
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Radio for $seed failed", e)
-                return@launch
+                if (!radio.isNullOrEmpty()) break
             }
+            if (radio.isNullOrEmpty()) return@launch
             // The queue may have been replaced while the request was out; radio
             // for a track that's no longer last doesn't belong at the end.
             val count = player.mediaItemCount
             if (count == 0 || player.getMediaItemAt(count - 1).mediaId != seed) return@launch
 
             val queued = (0 until count).mapTo(HashSet()) { player.getMediaItemAt(it).mediaId }
-            if (AppSettings.playback.value.noRepeatInSession) queued += sessionIds
-            val additions = Autoplay.newTracks(queued, radio.filterNot { LibraryStore.isDisliked(it.videoId) })
+            val liked = radio.filterNot { LibraryStore.isDisliked(it.videoId) }
+            // Songs already heard this session are skipped when asked, unless that leaves nothing to play.
+            val additions = Autoplay.newTracks(if (AppSettings.playback.value.noRepeatInSession) queued + sessionIds else queued, liked)
+                .ifEmpty { Autoplay.newTracks(queued, liked) }
             if (additions.isEmpty()) {
                 exhaustedSeeds += seed
                 return@launch
             }
+            val ended = player.playbackState == Player.STATE_ENDED
             player.addMediaItems(additions.map { it.toMediaItem() })
+            // The song finished before the next ones came; carry on into them.
+            if (ended) {
+                player.seekToNextMediaItem()
+                player.prepare()
+                player.play()
+            }
         }
     }
 
@@ -1257,6 +1277,8 @@ class PlaybackService : MediaLibraryService() {
         const val UPGRADE_DELAY_MS = 8_000L
         /** Songs a server queue carries on with when it runs out. */
         const val RADIO_FROM_SERVER = 25
+        /** Waits before each ask for radio: at once, then twice more if it fails. */
+        val RADIO_RETRY_MS = longArrayOf(0L, 3_000L, 10_000L)
         /** An episode only jumps to its saved place if it hasn't got going yet. */
         const val RESUME_SLACK_MS = 5_000L
         const val SEGMENT_POLL_MS = 250L

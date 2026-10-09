@@ -12,6 +12,9 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -45,6 +48,30 @@ fun PaletteStyleOption.toPaletteStyle(): PaletteStyle = PaletteStyle.valueOf(nam
  * wallpaper colors (Android 12+), or the chosen accent. Color changes animate,
  * so a new track's colors ease in rather than snap.
  */
+/** The colour read from the playing song's cover, or null with nothing playing; set whatever the theme follows. */
+val LocalArtworkSeed = compositionLocalOf<Color?> { null }
+
+/**
+ * The playing song's own accent pair (primary, tertiary) from a scheme seeded
+ * by its cover, for small touches that follow the music even when the app's
+ * theme doesn't; the theme's own when nothing is playing. Eases between songs.
+ */
+@Composable
+fun songAccents(): Pair<Color, Color> {
+    val seed = LocalArtworkSeed.current
+    val theme = MaterialTheme.colorScheme
+    if (seed == null) return theme.primary to theme.tertiary
+    val scheme = rememberDynamicColorScheme(
+        seedColor = seed,
+        isDark = theme.background.red + theme.background.green + theme.background.blue < 1.5f,
+        isAmoled = false,
+        style = PaletteStyle.Vibrant,
+    )
+    val primary by animateColorAsState(scheme.primary, tween(600), label = "songPrimary")
+    val tertiary by animateColorAsState(scheme.tertiary, tween(600), label = "songTertiary")
+    return primary to tertiary
+}
+
 @Composable
 fun OpenTuneTheme(
     settings: ThemeSettings,
@@ -73,8 +100,9 @@ fun OpenTuneTheme(
         colorScheme = scheme.animated(),
         typography = AppTypography,
         shapes = AppShapes,
-        content = content,
-    )
+    ) {
+        CompositionLocalProvider(LocalArtworkSeed provides artworkSeed, content = content)
+    }
 }
 
 /**

@@ -14,6 +14,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.ui.layout.layout
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
@@ -205,6 +206,10 @@ fun BottomChrome(
     reduceMotion: Boolean = false,
 ) {
     val style = if (reduceMotion) null else motion
+    if (style == DockMotion.MINIMIZE) {
+        MinimizeChrome(inline, tabs, selected, onSelect, onExpand, searchSelected, onSearch, mini, lens, modifier)
+        return
+    }
     SharedTransitionLayout(modifier) {
         AnimatedContent(
             inline,
@@ -254,6 +259,174 @@ fun BottomChrome(
         }
     }
 }
+
+/**
+ * [DockMotion.MINIMIZE], the way iOS 26's tab bar minimizes: nothing swaps.
+ * The dock pill itself contracts toward its left end until it's a circle,
+ * the open tab gliding to its middle while the others slip under the closing
+ * edge, so the dock becomes the open tab's button. The now-playing card drops
+ * into the space beside it and Search shrinks to match. Scrolling back up
+ * runs it the other way.
+ */
+@Composable
+private fun MinimizeChrome(
+    inline: Boolean,
+    tabs: List<ChromeTab>,
+    selected: Int?,
+    onSelect: (Int) -> Unit,
+    onExpand: () -> Unit,
+    searchSelected: Boolean,
+    onSearch: () -> Unit,
+    mini: (@Composable (inline: Boolean, modifier: Modifier) -> Unit)?,
+    lens: DockLens,
+    modifier: Modifier,
+) {
+    val haptics = com.opentune.ui.components.rememberHaptics()
+    // 0 with the dock open, 1 minimized; a spring that settles without bouncing past.
+    val progress = animateFloatAsState(
+        if (inline) 1f else 0f,
+        spring(dampingRatio = 0.9f, stiffness = 300f, visibilityThreshold = 0.001f),
+        label = "minimize",
+    )
+    val shown = selected?.takeIf { it in tabs.indices }
+    var resting by remember { mutableIntStateOf(shown ?: 0) }
+    if (shown != null) resting = shown
+    val pill = RoundedCornerShape(percent = 50)
+    BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        val width = maxWidth
+        val gap = 10.dp
+        val miniGap = 8.dp
+        val fullDock = width - CHROME_TAB_HEIGHT - gap
+        val slot = (fullDock - DOCK_INSET * 2) / tabs.size
+        val openHeight = if (mini != null) CHROME_MINI_HEIGHT + miniGap + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT
+        // Everything is placed from the bottom edge, which stays put.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .layout { measurable, constraints ->
+                    val h = lerp(openHeight, MINI_ROW, progress.value).roundToPx()
+                    val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                    layout(placeable.width, h) { placeable.place(0, 0) }
+                },
+        ) {
+            // The pieces' size and place at a given moment.
+            fun Modifier.placed(x: (Float) -> Dp, bottom: (Float) -> Dp, w: (Float) -> Dp, h: (Float) -> Dp): Modifier =
+                this.layout { measurable, constraints ->
+                    val t = progress.value
+                    val pw = w(t).roundToPx().coerceAtLeast(0)
+                    val ph = h(t).roundToPx().coerceAtLeast(0)
+                    val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(pw, ph))
+                    layout(constraints.maxWidth, constraints.maxHeight) {
+                        placeable.place(x(t).roundToPx(), constraints.maxHeight - bottom(t).roundToPx() - ph)
+                    }
+                }
+            val row = { t: Float -> lerp(CHROME_TAB_HEIGHT, MINI_ROW, t) }
+
+            if (mini != null) {
+                mini(
+                    false,
+                    Modifier.placed(
+                        x = { t -> lerp(0.dp, MINI_ROW + gap, t) },
+                        bottom = { t -> lerp(CHROME_TAB_HEIGHT + miniGap, 0.dp, t) },
+                        w = { t -> lerp(width, width - (MINI_ROW + gap) * 2, t) },
+                        h = { t -> lerp(CHROME_MINI_HEIGHT, MINI_ROW, t) },
+                    ),
+                )
+            }
+
+            // The dock, contracting to the left into a circle.
+            Box(
+                Modifier
+                    .placed(
+                        x = { 0.dp },
+                        bottom = { 0.dp },
+                        w = { t -> lerp(fullDock, MINI_ROW, t) },
+                        h = row,
+                    )
+                    .dockShadow(pill)
+                    .glass(pill)
+                    .dockHighlight(pill)
+                    .clip(pill),
+            ) {
+                // The tabs stay laid out at the open dock's width; the pill's edge
+                // passes over them, and the whole row slides so the open tab ends
+                // up in the middle of the circle.
+                val (left, right) = rememberStretchingLens(resting, slot, lens)
+                val accent = MaterialTheme.colorScheme.primary
+                val lensAlpha by animateFloatAsState(if (shown != null) 1f else 0f, tween(260, easing = FastOutSlowInEasing), label = "lensAlpha")
+                Box(
+                    Modifier
+                        .layout { measurable, constraints ->
+                            val t = progress.value
+                            val inset = DOCK_INSET.roundToPx()
+                            val w = (fullDock - DOCK_INSET * 2).roundToPx()
+                            val h = (row(t) - DOCK_INSET * 2).roundToPx().coerceAtLeast(0)
+                            val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))
+                            // From the open tab's own place to the circle's middle.
+                            val slide = (MINI_ROW / 2 - DOCK_INSET - slot * (resting + 0.5f)).toPx() * t
+                            layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(inset + slide.roundToInt(), inset) }
+                        },
+                ) {
+                    Box(
+                        Modifier
+                            .offset { IntOffset(left().roundToPx(), 0) }
+                            .layout { measurable, constraints ->
+                                val w = (right() - left()).roundToPx().coerceAtLeast(0)
+                                val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+                                layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                            }
+                            .fillMaxHeight()
+                            .graphicsLayer { alpha = lensAlpha * (1f - progress.value).coerceIn(0f, 1f) }
+                            .clip(LENS_SHAPE)
+                            .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.24f), accent.copy(alpha = 0.14f))))
+                            .border(1.dp, Brush.verticalGradient(listOf(accent.copy(alpha = 0.45f), accent.copy(alpha = 0.08f))), LENS_SHAPE),
+                    )
+                    Row(Modifier.fillMaxSize()) {
+                        tabs.forEachIndexed { i, tab ->
+                            DockItem(
+                                tab,
+                                i == shown,
+                                Modifier
+                                    .width(slot)
+                                    .fillMaxHeight()
+                                    // The other tabs fade as the edge reaches them.
+                                    .graphicsLayer { if (i != resting) alpha = (1f - progress.value * 1.6f).coerceIn(0f, 1f) },
+                                collapse = { progress.value },
+                            ) {
+                                if (i != shown) haptics.tick()
+                                onSelect(i)
+                            }
+                        }
+                    }
+                }
+                // Minimized, the circle as a whole brings the dock back.
+                if (inline) {
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .clickable(onClickLabel = "Show navigation", onClick = onExpand)
+                            .semantics { role = Role.Button },
+                    )
+                }
+            }
+
+            SearchOrb(
+                searchSelected,
+                Modifier.placed(
+                    x = { t -> width - lerp(CHROME_TAB_HEIGHT, MINI_ROW, t) },
+                    bottom = { 0.dp },
+                    w = row,
+                    h = row,
+                ),
+            ) {
+                if (!searchSelected) haptics.tick()
+                onSearch()
+            }
+        }
+    }
+}
+
+private fun lerp(a: Dp, b: Dp, t: Float): Dp = a + (b - a) * t
 
 /**
  * How the chrome swaps between the full dock and the corner bubble, for
@@ -468,7 +641,7 @@ private fun Dock(
 
 /** One destination: the icon, filled and lifted a little when open, over its name. */
 @Composable
-private fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, collapse: () -> Float = { 0f }, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -498,7 +671,14 @@ private fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, onCl
                 if (on) tab.selectedIcon else tab.icon,
                 null,
                 tint = fg,
-                modifier = Modifier.size(25.dp).graphicsLayer { scaleX = scale; scaleY = scale },
+                modifier = Modifier.size(25.dp).graphicsLayer {
+                    // Folding into a button, the icon drops to the middle as the name goes.
+                    val c = collapse()
+                    val s = scale * (1f + 0.04f * c)
+                    scaleX = s
+                    scaleY = s
+                    translationY = 9.dp.toPx() * c
+                },
             )
         }
         Text(
@@ -508,7 +688,11 @@ private fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, onCl
             fontWeight = FontWeight.SemiBold,
             color = fg,
             maxLines = 1,
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(top = 2.dp).graphicsLayer {
+                val c = collapse()
+                alpha = (1f - c * 2.5f).coerceIn(0f, 1f)
+                translationY = 6.dp.toPx() * c
+            },
         )
     }
 }

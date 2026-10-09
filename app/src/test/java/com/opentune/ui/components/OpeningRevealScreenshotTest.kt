@@ -44,7 +44,7 @@ class OpeningRevealScreenshotTest {
             Box(Modifier.fillMaxSize()) {
                 Column(
                     Modifier.fillMaxSize().graphicsLayer { val s = 1.14f - 0.14f * dive; scaleX = s; scaleY = s }
-                        .background(Color(0xFF1C1B22)).padding(24.dp),
+                        .background(Color(0xFF050507)).padding(24.dp),
                 ) {
                     Text("Good evening", color = Color.White, fontSize = 34.sp, modifier = Modifier.padding(top = 60.dp, bottom = 20.dp))
                     listOf(0xFFE0457B, 0xFF3A7BD5, 0xFF2BB673, 0xFFF2A93B).forEach { c ->

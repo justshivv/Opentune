@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -34,10 +36,10 @@ val OPENING_FIELD = Color.Black
 
 /**
  * The opening: the mark takes over from the system splash at the same
- * size, settles with a soft glow and a glint of light across it, then the
- * screen dives into it. The white mark turns into a window onto the app and
- * rushes toward you until the app fills the screen, as if flying through
- * the logo. [onDive] reports the dive, 0 to 1, so the app behind can come
+ * size, settles with a glint of light across it, then the screen dives into
+ * it. The white mark turns into a window onto the app, outlined in white,
+ * and rushes toward you until the app fills the screen, as if flying
+ * through the logo. [onDive] reports the dive, 0 to 1, so the app behind can come
  * forward as it's revealed; [onDone] removes this.
  */
 @Composable
@@ -71,15 +73,8 @@ fun OpeningReveal(onDive: (Float) -> Unit, onDone: () -> Unit) {
         val fade = 1f - smooth(0.8f, 1f, d)
 
         drawRect(OPENING_FIELD, alpha = fade)
-        // A faint white glow that comes up behind the mark while it settles and goes as it dives.
-        val glow = 0.16f * st * (1f - smooth(0f, 0.4f, d))
-        if (glow > 0.01f) {
-            drawCircle(
-                Brush.radialGradient(listOf(Color.White.copy(alpha = glow), Color.Transparent), center, size.minDimension * 0.6f),
-                size.minDimension * 0.6f,
-                center,
-            )
-        }
+        // A white rim that stays the same width on screen however big the mark gets.
+        val rim = Stroke(width = RIM.toPx() / s, join = StrokeJoin.Round)
         translate(center.x - MARK_VIEWPORT / 2f * s, center.y - MARK_VIEWPORT / 2f * s) {
             scale(s, s, pivot = Offset.Zero) {
                 drawPath(mark, Color.White, alpha = 1f - window)
@@ -98,6 +93,9 @@ fun OpeningReveal(onDive: (Float) -> Unit, onDone: () -> Unit) {
                 }
                 // Then the mark becomes a window onto the app.
                 if (window > 0f) drawPath(mark, Color.Black, alpha = window, blendMode = BlendMode.DstOut)
+                // Its white edge outlines the window, so the way in shows even when the
+                // app behind is as dark as the field around it.
+                if (fade > 0f) drawPath(mark, Color.White, alpha = fade, style = rim)
             }
         }
     }
@@ -108,6 +106,8 @@ private fun smooth(from: Float, to: Float, x: Float): Float {
     return t * t * (3f - 2f * t)
 }
 
+/** The width of the white edge around the mark. */
+private val RIM = 2.5.dp
 private const val SETTLE_MS = 620
 private const val HOLD_MS = 120L
 private const val DIVE_MS = 900

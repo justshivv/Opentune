@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.opentune.data.settings.AppSettings
+import com.opentune.ui.theme.songAccents
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -92,7 +93,8 @@ private val PULL_ROOM = 72.dp
 @Composable
 private fun MarkIndicator(state: PullToRefreshState, refreshing: Boolean, still: Boolean, modifier: Modifier) {
     val mark = remember { markPath() }
-    val ink = MaterialTheme.colorScheme.primary
+    // The colours of the song that's playing, so the mark matches the player.
+    val (ink, inkEnd) = songAccents()
     val faint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
     // A pop as the line is passed, and as the load finishes.
     val pop = remember { Animatable(0f) }
@@ -138,7 +140,9 @@ private fun MarkIndicator(state: PullToRefreshState, refreshing: Boolean, still:
             scale(1f, sway, pivot = Offset((MARK_LEFT + MARK_RIGHT) / 2f, (MARK_TOP + MARK_BOTTOM) / 2f)) {
                 drawPath(mark, faint)
                 // Filled with the accent from the left as the pull goes on.
-                clipRect(right = MARK_LEFT + mw * fill) { drawPath(mark, ink) }
+                clipRect(right = MARK_LEFT + mw * fill) {
+                    drawPath(mark, Brush.horizontalGradient(listOf(ink, inkEnd), startX = MARK_LEFT, endX = MARK_RIGHT))
+                }
                 if (refreshing && !still) {
                     val x = MARK_LEFT - 20f + (mw + 40f) * t
                     drawPath(

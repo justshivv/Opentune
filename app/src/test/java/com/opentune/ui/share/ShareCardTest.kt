@@ -16,13 +16,12 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], application = android.app.Application::class)
 class ShareCardTest {
     @Test fun drawsTheCard() {
-        val at = java.util.Calendar.getInstance().apply { set(2026, java.util.Calendar.JANUARY, 24, 8, 56) }.timeInMillis
-        val card = ShareCard.draw(coverArt(), "Blinding Lights", "The Weeknd", 86_000, 194_000, nowMs = at, playing = true)
+        val card = ShareCard.draw(coverArt(), "Blinding Lights", "The Weeknd", 86_000, 194_000, subtitle = "After Hours", liked = true)
         assertEquals(ShareCard.SIZE, card.width)
         assertEquals(ShareCard.HEIGHT, card.height)
         save("share/card", card)
-        // A long name is cut short inside its pill, and no cover still makes a card.
-        save("share/long-no-cover", ShareCard.draw(null, "A song with a very long name that will not fit on one line at all", "Somebody, Somebody Else", 0, 0, nowMs = at))
+        // Long names are cut short, and no cover still makes a card.
+        save("share/long-no-cover", ShareCard.draw(null, "A song with a very long name that will not fit on one line at all", "Somebody, Somebody Else and A Third Person", 0, 0, liked = false))
     }
 
     @Test fun readsSongLengths() {
