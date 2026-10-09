@@ -112,6 +112,15 @@ class TrackNameCleanerTest {
     }
 
     @Test
+    fun dropsReleaseNotesAfterADash() {
+        assertEquals("Let It Be", TrackNameCleaner.clean("Let It Be - Remastered 2009", "The Beatles").title)
+        assertEquals("Let It Be", TrackNameCleaner.clean("Let It Be - 2009 Remaster", "The Beatles").title)
+        assertEquals("Shout", TrackNameCleaner.clean("Shout - Radio Edit", "Tears for Fears").title)
+        assertEquals("Song", TrackNameCleaner.clean("Song (Deluxe Edition)", "Band").title)
+        assertEquals("Song", TrackNameCleaner.clean("Song [Bonus Track]", "Band").title)
+    }
+
+    @Test
     fun usesTheFirstCreditedArtist() {
         val c = TrackNameCleaner.clean("Song", "Alpha, Beta & Gamma")
         assertEquals("Alpha", c.artist)

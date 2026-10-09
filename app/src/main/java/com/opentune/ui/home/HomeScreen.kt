@@ -191,7 +191,7 @@ private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, on
             if (grid) {
                 LazyRow(contentPadding = PaddingValues(horizontal = 10.dp)) {
                     itemsIndexed(songs) { i, song ->
-                        ItemCard(song.title, song.artist, song.thumbnailUrl, null, onClick = { actions.playAll(songs, i, false, "Recents") })
+                        ItemCard(song.title, song.artist, song.thumbnailUrl, null, onClick = { actions.playAll(songs, i, false, "Recents") }, explicit = song.isExplicit == true)
                     }
                 }
             } else {
@@ -234,7 +234,7 @@ fun HomeShelfView(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, modifier: 
             QuickPicks(shelf, onItemClick)
         } else {
             Shelf(title = shelf.title, subtitle = shelf.subtitle, items = shelf.items) { item ->
-                ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) })
+                ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) }, explicit = item.explicit)
             }
         }
     }
@@ -263,13 +263,7 @@ private fun QuickPicks(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit) {
                     Artwork(item.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(48.dp))
                     Column(Modifier.weight(1f)) {
                         Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            item.subtitle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        com.opentune.ui.components.SubtitleLine(item.subtitle, explicit = item.explicit)
                     }
                 }
             }

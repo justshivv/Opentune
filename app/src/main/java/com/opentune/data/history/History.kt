@@ -30,8 +30,9 @@ data class PlayRecord(
     val albumName: String? = null,
     val playedAt: Long,
     val listenedMs: Long = 0,
+    val explicit: Boolean? = null,
 ) {
-    fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName)
+    fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit)
 }
 
 data class TopEntry(val key: String, val title: String, val subtitle: String, val thumbnailUrl: String?, val plays: Int, val listenedMs: Long, val song: Song?)
@@ -78,7 +79,7 @@ object History {
     /** Records a listen and returns its key for [updateListened]. */
     fun record(song: Song, listenedMs: Long): Long {
         val now = System.currentTimeMillis()
-        val r = PlayRecord(song.videoId, song.title, song.artist, song.thumbnailUrl, song.durationText, song.albumName, now, listenedMs)
+        val r = PlayRecord(song.videoId, song.title, song.artist, song.thumbnailUrl, song.durationText, song.albumName, now, listenedMs, song.isExplicit)
         _records.value = (listOf(r) + _records.value).take(MAX_RECORDS)
         return now
     }

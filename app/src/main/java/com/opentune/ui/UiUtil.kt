@@ -38,7 +38,7 @@ fun formatTime(ms: Long): String {
 }
 
 fun ShelfItem.toSong(): Song? = videoId?.let {
-    Song(videoId = it, title = title, artist = subtitle.substringBefore(" • "), thumbnailUrl = thumbnailUrl)
+    Song(videoId = it, title = title, artist = subtitle.substringBefore(" • "), thumbnailUrl = thumbnailUrl, isExplicit = explicit.takeIf { e -> e })
 }
 
 fun ShelfItem.type(): BrowseType? = browseId?.let(MusicRepository::typeOf)

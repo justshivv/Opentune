@@ -1,5 +1,11 @@
 package com.opentune.ui.components
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
@@ -135,6 +141,47 @@ fun Artwork(
     }
 }
 
+/**
+ * YouTube Music's explicit mark: a small square "E" in front of a subtitle,
+ * the way the official apps show it. Read out as "Explicit".
+ */
+@Composable
+fun ExplicitBadge(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+    Box(
+        modifier
+            .size(15.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(color.copy(alpha = 0.22f))
+            .semantics { contentDescription = "Explicit" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("E", color = color, fontSize = 10.sp, lineHeight = 10.sp, fontWeight = FontWeight.Bold, style = LocalTextStyle.current.copy(platformStyle = PlatformTextStyle(includeFontPadding = false)))
+    }
+}
+
+/** A one-line subtitle with the explicit mark in front when [explicit]. */
+@Composable
+fun SubtitleLine(
+    text: String,
+    explicit: Boolean,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    textAlign: TextAlign? = null,
+) {
+    if (!explicit) {
+        Text(text, modifier, maxLines = 1, overflow = TextOverflow.Ellipsis, style = style, color = color, textAlign = textAlign)
+        return
+    }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = if (textAlign == TextAlign.Center) Arrangement.Center else Arrangement.Start) {
+        ExplicitBadge(color = color)
+        if (text.isNotBlank()) {
+            Spacer(Modifier.width(6.dp))
+            Text(text, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, style = style, color = color)
+        }
+    }
+}
+
 /** One track in a list. Shows animated bars instead of the art overlay while it plays. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -234,12 +281,9 @@ fun SongListItem(
                     fontWeight = FontWeight.Medium,
                     color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
-                Text(
+                SubtitleLine(
                     listOfNotNull(song.artist.takeIf { it.isNotBlank() }, song.durationText).joinToString(" • "),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    explicit = song.isExplicit == true,
                 )
             }
             trailing()
@@ -279,6 +323,7 @@ fun ItemCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     width: Dp = 156.dp,
+    explicit: Boolean = false,
 ) {
     val round = type == BrowseType.ARTIST
     Column(
@@ -308,13 +353,11 @@ fun ItemCard(
             textAlign = if (round) TextAlign.Center else TextAlign.Start,
             modifier = Modifier.fillMaxWidth(),
         )
-        if (subtitle.isNotBlank()) {
-            Text(
+        if (subtitle.isNotBlank() || explicit) {
+            SubtitleLine(
                 subtitle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                explicit = explicit,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = if (round) TextAlign.Center else TextAlign.Start,
                 modifier = Modifier.fillMaxWidth(),
             )

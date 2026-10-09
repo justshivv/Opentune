@@ -140,16 +140,21 @@ fun List<LyricLine>.activeIndex(positionMs: Long): Int {
  */
 object TrackNameCleaner {
     private val NOISE = Regex(
-        """\s*[(\[](?:[^)\]]*\b(?:official|lyrics?|lyric video|audio|video|visuali[sz]er|mv|m/v|hd|hq|4k|remaster(?:ed)?|explicit|clean|color coded)\b[^)\]]*)[)\]]""",
+        """\s*[(\[](?:[^)\]]*\b(?:official|lyrics?|lyric video|audio|video|visuali[sz]er|mv|m/v|hd|hq|4k|remaster(?:ed)?|explicit|clean|color coded|deluxe|bonus|mono|stereo|radio edit|(?:single|album) version)\b[^)\]]*)[)\]]""",
         RegexOption.IGNORE_CASE,
     )
     private val FEAT = Regex("""\s*[(\[]?\s*\b(?:feat\.?|ft\.?|featuring)\s.*$""", RegexOption.IGNORE_CASE)
+    /** A release note after a dash, as catalogues write them: "Song - 2011 Remaster", "Song - Radio Edit". */
+    private val RELEASE_SUFFIX = Regex(
+        """\s+[-–—]\s+(?:(?:\d{4}\s+)?remaster(?:ed)?(?:\s+(?:version|\d{4}))?|radio edit|(?:single|album|mono|stereo) version|mono|stereo|bonus track|deluxe(?:\s+edition)?)\s*$""",
+        RegexOption.IGNORE_CASE,
+    )
     private val CHANNEL_SUFFIX = Regex("""\s*(?:VEVO|- Topic|Official|Music)$""", RegexOption.IGNORE_CASE)
 
     data class Cleaned(val title: String, val artist: String)
 
     fun clean(title: String, artist: String): Cleaned {
-        var t = NOISE.replace(title, "")
+        var t = RELEASE_SUFFIX.replace(NOISE.replace(title, ""), "")
         var a = CHANNEL_SUFFIX.replace(artist.trim(), "").trim()
         // "Artist - Title" uploads: take the artist from the title when it
         // agrees with the channel (which is often the same name, unspaced).

@@ -30,4 +30,11 @@ class LyricsPickTest {
         val plainOnly = Json.parseToJsonElement("""[{"id":3,"duration":200.0,"plainLyrics":"plain only"},{"id":4,"duration":260.0,"syncedLyrics":"[00:01.00]x"}]""")
         assertEquals("3", id(LyricsRepository.pick(plainOnly, 200.0)))
     }
+
+    @Test fun titleOnlyHitsMustBeTheSameArtist() {
+        val hits = Json.parseToJsonElement("""[{"id":1,"artistName":"Beyonce","duration":200.0},{"id":2,"artistName":"A Cover Band","duration":200.0},{"id":3,"artistName":"Beyoncé feat. JAY-Z","duration":200.0}]""")
+        val kept = LyricsRepository.sameArtist(hits, "Beyoncé").map { id(it as kotlinx.serialization.json.JsonObject) }
+        assertEquals(listOf("1", "3"), kept)
+        assertEquals(0, LyricsRepository.sameArtist(hits, "").size)
+    }
 }

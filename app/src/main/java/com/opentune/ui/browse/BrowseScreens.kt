@@ -250,15 +250,25 @@ fun CollectionScreen(
                                         textAlign = TextAlign.Center,
                                         modifier = Modifier.padding(top = 20.dp),
                                     )
-                                    Text(
-                                        listOf(c.subtitle, "${c.songs.size} songs").filter { it.isNotBlank() }.joinToString(" • "),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(top = 6.dp),
-                                    )
+                                    // An album with any explicit track carries the mark, as YouTube Music shows it.
+                                    if (isAlbum && c.songs.any { it.isExplicit == true }) {
+                                        com.opentune.ui.components.SubtitleLine(
+                                            listOf(c.subtitle, "${c.songs.size} songs").filter { it.isNotBlank() }.joinToString(" • "),
+                                            explicit = true,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.padding(top = 6.dp),
+                                        )
+                                    } else {
+                                        Text(
+                                            listOf(c.subtitle, "${c.songs.size} songs").filter { it.isNotBlank() }.joinToString(" • "),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(top = 6.dp),
+                                        )
+                                    }
                                 }
                                 PlayShuffleButtons(
                                     enabled = !c?.songs.isNullOrEmpty(),
@@ -393,7 +403,7 @@ fun ArtistScreen(
                     page.sections.forEachIndexed { i, shelf ->
                         item(key = "shelf:$i:${shelf.title}") {
                             Shelf(shelf.title, shelf.items) { item ->
-                                ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) })
+                                ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) }, explicit = item.explicit)
                             }
                         }
                     }

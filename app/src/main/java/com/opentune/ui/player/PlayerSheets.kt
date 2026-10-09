@@ -114,7 +114,19 @@ fun RemixSheet(onDismiss: () -> Unit) {
                 com.opentune.data.settings.EightD.entries.forEach { e ->
                     FilterChip(
                         selected = sound.eightD == e,
-                        onClick = { AppSettings.updateSound { it.copy(eightD = e) } },
+                        onClick = { AppSettings.updateSound { it.copy(eightD = e, space = if (e != com.opentune.data.settings.EightD.OFF) com.opentune.data.settings.Space3DSpeed.OFF else it.space) } },
+                        label = { Text(e.label) },
+                    )
+                }
+            }
+
+            Text("3D sound", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+            Text("The music goes all the way round you: in front, overhead, behind and below. Best on headphones.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.opentune.data.settings.Space3DSpeed.entries.forEach { e ->
+                    FilterChip(
+                        selected = sound.space == e,
+                        onClick = { AppSettings.updateSound { it.copy(space = e, eightD = if (e != com.opentune.data.settings.Space3DSpeed.OFF) com.opentune.data.settings.EightD.OFF else it.eightD) } },
                         label = { Text(e.label) },
                     )
                 }

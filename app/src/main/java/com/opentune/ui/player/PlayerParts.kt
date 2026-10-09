@@ -659,7 +659,7 @@ fun MiniPlayer(
                     Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), with(com.opentune.ui.components.FlyingCover) { Modifier.size(44.dp).landing() }, RoundedCornerShape(12.dp))
                     Column(Modifier.padding(start = 12.dp)) {
                         Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text(s.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        com.opentune.ui.components.SubtitleLine(s.artist, explicit = s.isExplicit == true, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

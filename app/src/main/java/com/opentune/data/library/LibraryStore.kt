@@ -31,11 +31,13 @@ data class SongRef(
     val thumbnailUrl: String? = null,
     val durationText: String? = null,
     val albumName: String? = null,
+    /** YouTube Music's "E" mark; null for songs saved before it was kept. */
+    val explicit: Boolean? = null,
 ) {
-    fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName)
+    fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit)
 
     companion object {
-        fun of(song: Song) = SongRef(song.videoId, song.title, song.artist, song.thumbnailUrl, song.durationText, song.albumName)
+        fun of(song: Song) = SongRef(song.videoId, song.title, song.artist, song.thumbnailUrl, song.durationText, song.albumName, song.isExplicit)
     }
 }
 

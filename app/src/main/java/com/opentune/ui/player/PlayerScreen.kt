@@ -715,12 +715,10 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
         MarqueeText(song.title, Modifier.fillMaxWidth(), style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall)
         // Tapping the artist opens their page.
         val viewArtist = LocalSongMenu.current?.viewArtist
-        Text(
+        com.opentune.ui.components.SubtitleLine(
             song.artist,
+            explicit = song.isExplicit == true,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = if (viewArtist != null && !song.videoId.startsWith("local:")) Modifier.clickable { viewArtist(song) } else Modifier,
         )
     }

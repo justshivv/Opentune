@@ -54,7 +54,8 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
         if (eq.enabled) add("equalizer")
         if (sound.bassBoost > 0) add("bass boost")
         if (pb.spatialAudio) add("stereo widening")
-        if (sound.eightD != com.opentune.data.settings.EightD.OFF) add("8D")
+        if (sound.space != com.opentune.data.settings.Space3DSpeed.OFF) add("3D sound")
+        else if (sound.eightD != com.opentune.data.settings.EightD.OFF) add("8D")
         if (pb.clarity) add("clarity")
         if (eq.balance != 0f) add("balance")
     }

@@ -20,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Explicit
+import androidx.compose.material.icons.rounded.SurroundSound
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.Headphones
@@ -57,6 +59,11 @@ object WhatsNew {
 
     /** Newest first. Add the coming version's notes at the top when releasing. */
     val NOTES: List<Pair<String, List<Note>>> = listOf(
+        "0.4.0" to listOf(
+            Note(Icons.Rounded.SurroundSound, "3D sound", "In Remix: the music goes all the way round you, overhead and underneath too. Put headphones on."),
+            Note(Icons.Rounded.Explicit, "Explicit, marked", "Songs and albums marked explicit show a small E, in lists, on Home, in search and in the player."),
+            Note(Icons.Rounded.Lyrics, "Lyrics found more often", "Remaster and deluxe tags are cleaned off titles, and artists spelled another way are still matched."),
+        ),
         "0.3.9" to listOf(
             Note(Icons.Rounded.Lyrics, "Lyrics while seeking, fixed", "Dragging the seek bar now shows the line sung at that spot."),
             Note(Icons.Rounded.FormatQuote, "Easier lyric cards", "The share sheet opens on the line being sung. Tap lines to tick them onto the card."),

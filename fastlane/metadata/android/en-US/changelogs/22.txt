@@ -1,0 +1,3 @@
+• 3D sound in Remix: the music goes all the way round you, overhead and underneath too (headphones)
+• Explicit songs and albums show a small E, as in YouTube Music: in lists, on Home, in search, on album pages and in the player
+• Lyrics are found more often: remaster and deluxe tags are cleaned off titles, LRCLIB's lookups run side by side, and artists it spells another way are still matched

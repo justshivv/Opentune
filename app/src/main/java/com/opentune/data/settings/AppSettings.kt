@@ -99,6 +99,8 @@ data class SoundSettings(
     val bassBoost: Int = 0,
     /** The sound circling around the listener's head. */
     val eightD: EightD = EightD.OFF,
+    /** The sound travelling all round the listener, above and below too; takes over from [eightD]. */
+    val space: Space3DSpeed = Space3DSpeed.OFF,
 ) {
     val isDefault: Boolean get() = this == SoundSettings()
 }
@@ -112,6 +114,15 @@ enum class EightD(val label: String, val periodSeconds: Float) {
     FAST("Fast", 6f),
 }
 
+/** How fast 3D sound goes round: once in this many seconds, tipping over and under every few turns. */
+@Serializable
+enum class Space3DSpeed(val label: String, val periodSeconds: Float) {
+    OFF("Off", 0f),
+    SLOW("Slow", 14f),
+    MEDIUM("Medium", 9f),
+    FAST("Fast", 5f),
+}
+
 /** One-tap remixes. Speed and pitch move together, as on a turntable. */
 enum class RemixPreset(val label: String, val sound: SoundSettings) {
     NORMAL("Normal", SoundSettings()),
@@ -122,6 +133,7 @@ enum class RemixPreset(val label: String, val sound: SoundSettings) {
     VAPORWAVE("Vaporwave", SoundSettings(0.75f, 0.75f, ReverbLevel.PLATE)),
     BASS_BOOSTED("Bass boosted", SoundSettings(bassBoost = 800)),
     EIGHT_D("8D", SoundSettings(eightD = EightD.MEDIUM)),
+    SPACE_3D("3D", SoundSettings(space = Space3DSpeed.MEDIUM)),
     ;
 
     companion object {

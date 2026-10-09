@@ -25,6 +25,7 @@ private const val TRACK_HOST = "track"
 private const val EXTRA_DURATION_TEXT = "durationText"
 private const val EXTRA_ALBUM = "album"
 private const val EXTRA_THUMB = "thumb"
+private const val EXTRA_EXPLICIT = "explicit"
 
 /**
  * Local files play straight from MediaStore and downloads from their file;
@@ -77,6 +78,7 @@ fun Song.toMediaItem(): MediaItem =
                         putString(EXTRA_ALBUM, albumName)
                         // The cover as the song stores it: a server's carries no credentials.
                         putString(EXTRA_THUMB, thumbnailUrl)
+                        isExplicit?.let { putBoolean(EXTRA_EXPLICIT, it) }
                     },
                 )
                 .build(),
@@ -91,6 +93,7 @@ fun MediaItem.toSong(): Song =
         thumbnailUrl = mediaMetadata.extras?.getString(EXTRA_THUMB) ?: mediaMetadata.artworkUri?.toString(),
         durationText = mediaMetadata.extras?.getString(EXTRA_DURATION_TEXT),
         albumName = mediaMetadata.extras?.getString(EXTRA_ALBUM) ?: mediaMetadata.albumTitle?.toString(),
+        isExplicit = mediaMetadata.extras?.takeIf { it.containsKey(EXTRA_EXPLICIT) }?.getBoolean(EXTRA_EXPLICIT),
     )
 
 /**

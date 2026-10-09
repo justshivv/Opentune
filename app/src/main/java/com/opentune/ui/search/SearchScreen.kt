@@ -291,7 +291,7 @@ private fun TopResult(song: Song, onPlay: () -> Unit) {
             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                 Text("Top result", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
                 Text(song.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(song.artist, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                com.opentune.ui.components.SubtitleLine(song.artist, explicit = song.isExplicit == true, color = MaterialTheme.colorScheme.onSecondaryContainer)
             }
             FilledIconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.PlayArrow, "Play") }
         }
@@ -313,13 +313,7 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit) {
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                item.subtitle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            com.opentune.ui.components.SubtitleLine(item.subtitle, explicit = item.explicit)
         }
         Box(
             Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(horizontal = 10.dp, vertical = 4.dp),

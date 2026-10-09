@@ -202,7 +202,7 @@ class PlaybackService : MediaLibraryService() {
                 if (bp is BitPerfectUsb.Status.Active) {
                     DspParams(outputGainDb = audioManager?.let(BitPerfectUsb::softwareGainDb) ?: 0f)
                 } else {
-                    DspParams(eq, sound.bassBoost, pb.spatialAudio, pb.clarity, eightDPeriod = sound.eightD.periodSeconds)
+                    DspParams(eq, sound.bassBoost, pb.spatialAudio, pb.clarity, eightDPeriod = sound.eightD.periodSeconds, spacePeriod = sound.space.periodSeconds)
                 }
             }.distinctUntilChanged().collect { dsp.params = it }
         }

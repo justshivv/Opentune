@@ -122,6 +122,8 @@ data class DspParams(
     val outputGainDb: Float = 0f,
     /** Seconds for 8D audio to circle the head once; 0 is off. */
     val eightDPeriod: Float = 0f,
+    /** Seconds for one turn of 3D sound ([Space3D]), which takes over from 8D; 0 is off. */
+    val spacePeriod: Float = 0f,
 ) {
     private val eqActive: Boolean
         get() = equalizer.enabled && (
@@ -132,7 +134,7 @@ data class DspParams(
     /** The headphone correction from AutoEq, when one is chosen; independent of [eqActive]. */
     private val headphone get() = equalizer.headphone?.takeIf { it.filters.isNotEmpty() }
 
-    val isNeutral: Boolean get() = !eqActive && headphone == null && bassBoost == 0 && !spatial && !clarity && outputGainDb == 0f && eightDPeriod <= 0f
+    val isNeutral: Boolean get() = !eqActive && headphone == null && bassBoost == 0 && !spatial && !clarity && outputGainDb == 0f && eightDPeriod <= 0f && spacePeriod <= 0f
 
     /**
      * Whether anything in the chain can push a sample past full scale. Only
@@ -140,7 +142,7 @@ data class DspParams(
      * mastered.
      */
     val canBoost: Boolean
-        get() = spatial || clarity || bassBoost > 0 || eightDPeriod > 0f || headphone?.filters?.any { it.gainDb > 0 } == true || (eqActive && (
+        get() = spatial || clarity || bassBoost > 0 || eightDPeriod > 0f || spacePeriod > 0f || headphone?.filters?.any { it.gainDb > 0 } == true || (eqActive && (
             equalizer.preampDb > 0 || equalizer.bassDb > 0 || equalizer.trebleDb > 0 || equalizer.bands.any { it > 0 }
             ))
 
@@ -245,6 +247,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
     private var isFloat = false
     private var filters: Array<Array<Biquad>> = emptyArray()
     private var frame = FloatArray(0)
+    private var space: Space3D? = null
 
     override fun onConfigure(inputAudioFormat: AudioFormat): AudioFormat {
         val enc = inputAudioFormat.encoding
@@ -255,6 +258,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
         sampleRate = inputAudioFormat.sampleRate
         isFloat = enc == C.ENCODING_PCM_FLOAT
         frame = FloatArray(channels)
+        space = if (sampleRate > 0) Space3D(sampleRate) else null
         applied = null
         return inputAudioFormat
     }
@@ -339,7 +343,9 @@ class DspAudioProcessor : BaseAudioProcessor() {
                 frame[0] = mid + side
                 frame[1] = mid - side
             }
-            if (p.eightDPeriod > 0f) circle(p.eightDPeriod)
+            val around = space
+            if (p.spacePeriod > 0f && around != null) around.process(frame, p.spacePeriod)
+            else if (p.eightDPeriod > 0f) circle(p.eightDPeriod)
             frame[0] *= leftGain
             frame[1] *= rightGain
         }
@@ -396,6 +402,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
 
     override fun onFlush() {
         filters.forEach { ch -> ch.forEach { it.reset() } }
+        space?.reset()
         com.opentune.playback.AudioLevels.flush()
     }
 

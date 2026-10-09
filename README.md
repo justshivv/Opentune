@@ -120,6 +120,14 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **8D audio** (Remix). The music circles your head, slowly, at a medium
   pace or fast: it pans from ear to ear with the small delay and softening
   a sound has when it's beside or behind you. Best with headphones.
+- **3D sound** (Remix). The music goes all the way round you: in front,
+  overhead, behind and underneath, on a circle that tips up and over
+  every few turns. The near ear hears it louder and a fraction sooner,
+  the far ear duller; the treble changes the way the outer ear changes
+  it, brighter above and darker below; and a few faint echoes place it
+  in a room around you. Slow, medium or fast; best with headphones. It
+  isn't Dolby Atmos, which needs tracks mixed for it; it moves any
+  stereo song.
 - **A sleep timer that winds down.** Over the last few minutes (a third of
   a short timer, at most three) the music fades out and the player
   dims; "End of song" fades the last 15 seconds. A switch in the sleep
@@ -290,9 +298,14 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **New-release alerts.** Follow an artist from their page (no account
   needed) and a notification tells you when they put out an album or
   single. Checked twice a day.
-- **Hide explicit content** (optional): songs and albums YouTube Music
-  marks explicit are left out of Home, search, album and artist pages,
-  autoplay and radio. Tracks the catalogue doesn't label still show.
+- **Explicit content, marked.** Songs and albums YouTube Music marks
+  explicit carry a small "E" in front of the artist, as in the official
+  apps: in lists, on Home and in search, on the album page, in the player
+  and the mini player. The mark is kept with liked songs, playlists,
+  downloads and history.
+- **Hide explicit content** (optional): those songs and albums are left
+  out of Home, search, album and artist pages, autoplay and radio. Tracks
+  the catalogue doesn't label still show.
 - **Set as ringtone.** A downloaded song or a file on the phone can be the
   ringtone, notification sound or alarm. A downloaded song is copied to
   Ringtones/OpenTune first, since the system can't read app storage.
@@ -387,7 +400,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   credited under the lyrics. Plain
   text never ends the search: every source is asked until one has the
   song in time, a busy LRCLIB is asked again, and plain lyrics found while
-  a source was down are looked up again a little later. Eight animation
+  a source was down are looked up again a little later. Titles are cleaned
+  before the lookup ("- 2009 Remaster", "(Deluxe Edition)", "feat." and
+  video noise go), LRCLIB's exact match and its search run side by side,
+  and a last search by title alone catches artists it spells another way,
+  taking only a hit by the same artist. Eight animation
   styles (Fluid, Karaoke, Slide, Focus zoom, Minimal, and three where the
   words themselves move: Bounce, Pop and Reveal), a per-song timing
   offset, adjustable text size, left or centred lines, an optional glow on

@@ -12,6 +12,8 @@ import com.opentune.data.settings.LyricsSource
 import com.opentune.data.settings.AppSettings
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -120,7 +122,7 @@ object LyricsRepository {
     private const val LINE_SYNCED = 2
     private const val WORD_SYNCED = 3
 
-    private fun lookup(title: String, artist: String, durationMs: Long): Lyrics? {
+    private suspend fun lookup(title: String, artist: String, durationMs: Long): Lyrics? = coroutineScope {
         val cleaned = TrackNameCleaner.clean(title, artist)
         val durationS = durationMs / 1000.0
 
@@ -133,23 +135,50 @@ object LyricsRepository {
             return null
         }
 
-        if (durationMs > 0) {
-            val exact = request(
-                "get",
-                "track_name" to cleaned.title,
-                "artist_name" to cleaned.artist,
-                "duration" to durationS.toLong().toString(),
-            ) as? JsonObject
-            take(exact?.let { toLyrics(it, durationMs) })?.let { return it }
-        }
-
-        val byFields = request("search", "track_name" to cleaned.title, "artist_name" to cleaned.artist)
-        take(pick(byFields, durationS)?.let { toLyrics(it, durationMs) })?.let { return it }
+        // The exact match and the search by fields go out together, so a slow
+        // or busy exact lookup doesn't hold up the search behind it.
+        val exact = if (durationMs > 0) async(Dispatchers.IO) {
+            runCatching {
+                request(
+                    "get",
+                    "track_name" to cleaned.title,
+                    "artist_name" to cleaned.artist,
+                    "duration" to durationS.toLong().toString(),
+                ) as? JsonObject
+            }
+        } else null
+        val byFields = async(Dispatchers.IO) { runCatching { request("search", "track_name" to cleaned.title, "artist_name" to cleaned.artist) } }
+        val e = exact?.await()
+        take(e?.getOrNull()?.let { toLyrics(it, durationMs) })?.let { return@coroutineScope it }
+        val f = byFields.await()
+        take(pick(f.getOrNull(), durationS)?.let { toLyrics(it, durationMs) })?.let { return@coroutineScope it }
+        // Both turned away rather than empty: LRCLIB is down, which the caller counts.
+        if ((e == null || e.isFailure) && f.isFailure) throw f.exceptionOrNull()!!
 
         val byQuery = request("search", "q" to "${cleaned.artist} ${cleaned.title}")
-        take(pick(byQuery, durationS)?.let { toLyrics(it, durationMs) })?.let { return it }
-        return plain
+        take(pick(byQuery, durationS)?.let { toLyrics(it, durationMs) })?.let { return@coroutineScope it }
+
+        // The title alone, for an artist LRCLIB spells another way (accents, a
+        // transliteration, a "feat." in the artist field). Only a hit by the
+        // same artist counts, so a cover's words never sync to this song.
+        val byTitle = request("search", "track_name" to cleaned.title)
+        take(pick(sameArtist(byTitle, cleaned.artist), durationS)?.let { toLyrics(it, durationMs) })?.let { return@coroutineScope it }
+        plain
     }
+
+    /** The results whose artist matches [artist] loosely: one name inside the other, ignoring case, accents and punctuation. */
+    internal fun sameArtist(results: JsonElement?, artist: String): JsonArray {
+        val want = looseName(artist)
+        if (want.length < 2) return JsonArray(emptyList())
+        return JsonArray((results as? JsonArray).orEmpty().filterIsInstance<JsonObject>().filter { o ->
+            val got = looseName(o.str("artistName").orEmpty())
+            got.length >= 2 && (got.contains(want) || want.contains(got))
+        })
+    }
+
+    private fun looseName(s: String): String =
+        java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+            .lowercase(java.util.Locale.ROOT).filter { it.isLetterOrDigit() }
 
     /**
      * YouTube Music's own lyrics: unsynced text from LyricFind and others.

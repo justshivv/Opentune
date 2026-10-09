@@ -112,6 +112,43 @@ class DspAudioProcessorTest {
     }
 
     @Test
+    fun spaceGoesRoundEverySide() {
+        // Over a few turns the sound passes right, left, in front, behind, overhead and below.
+        val fs = 48_000
+        val space = Space3D(fs)
+        val frame = FloatArray(2)
+        var maxX = 0f; var minX = 0f; var maxY = 0f; var minY = 0f; var maxZ = 0f; var minZ = 0f
+        repeat(fs * 4 * 3) {
+            frame[0] = 0.3f; frame[1] = 0.3f
+            space.process(frame, 4f)
+            maxX = maxOf(maxX, space.x); minX = minOf(minX, space.x)
+            maxY = maxOf(maxY, space.y); minY = minOf(minY, space.y)
+            maxZ = maxOf(maxZ, space.z); minZ = minOf(minZ, space.z)
+            assert(frame[0].isFinite() && frame[1].isFinite())
+        }
+        assert(maxX > 0.99f && minX < -0.99f) { "side to side" }
+        assert(maxY > 0.9f && minY < -0.9f) { "front and back" }
+        assert(maxZ > 0.8f && minZ < -0.8f) { "overhead and below" }
+    }
+
+    @Test
+    fun spaceMovesTheSoundBetweenTheEars() {
+        val p = configured(DspParams(spacePeriod = 4f))
+        val frames = 48_000 * 4
+        val out = run(p, pcm16Stereo(frames) { 0.4f })
+        fun level(from: Int, to: Int, channel: Int): Double {
+            var sum = 0.0
+            for (i in from until to) sum += kotlin.math.abs(out.getShort((i * 2 + channel) * 2).toInt())
+            return sum / (to - from)
+        }
+        val q = frames / 4
+        assert(level(q - 1_000, q + 1_000, 1) > 2 * level(q - 1_000, q + 1_000, 0)) { "right ear louder at a quarter turn" }
+        assert(level(3 * q - 1_000, 3 * q + 1_000, 0) > 2 * level(3 * q - 1_000, 3 * q + 1_000, 1)) { "left ear louder at three quarters" }
+        assertEquals(false, DspParams(spacePeriod = 4f).isNeutral)
+        assertEquals(true, DspParams(spacePeriod = 4f).canBoost)
+    }
+
+    @Test
     fun balanceFullyRightSilencesTheLeftChannel() {
         val p = configured(DspParams(EqualizerSettings(enabled = true, balance = 1f)))
         val out = run(p, pcm16Stereo(500) { 0.5f })
