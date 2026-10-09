@@ -95,6 +95,23 @@ class DspAudioProcessorTest {
     }
 
     @Test
+    fun eightDCirclesFromOneEarToTheOther() {
+        // A 4-second circle at 48 kHz: a quarter of the way round the sound is on the right, three quarters on the left.
+        val p = configured(DspParams(eightDPeriod = 4f))
+        val frames = 48_000 * 4
+        val out = run(p, pcm16Stereo(frames) { 0.4f })
+        fun level(from: Int, to: Int, channel: Int): Double {
+            var sum = 0.0
+            for (i in from until to) sum += kotlin.math.abs(out.getShort((i * 2 + channel) * 2).toInt())
+            return sum / (to - from)
+        }
+        val q = frames / 4
+        assert(level(q - 2_000, q + 2_000, 1) > 3 * level(q - 2_000, q + 2_000, 0)) { "right ear louder at a quarter turn" }
+        assert(level(3 * q - 2_000, 3 * q + 2_000, 0) > 3 * level(3 * q - 2_000, 3 * q + 2_000, 1)) { "left ear louder at three quarters" }
+        assertEquals(false, DspParams(eightDPeriod = 4f).isNeutral)
+    }
+
+    @Test
     fun balanceFullyRightSilencesTheLeftChannel() {
         val p = configured(DspParams(EqualizerSettings(enabled = true, balance = 1f)))
         val out = run(p, pcm16Stereo(500) { 0.5f })

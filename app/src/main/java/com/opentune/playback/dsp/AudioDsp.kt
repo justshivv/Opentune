@@ -120,6 +120,8 @@ data class DspParams(
     val clarity: Boolean = false,
     /** A plain level change, never above 0 dB: the volume while bit-perfect. */
     val outputGainDb: Float = 0f,
+    /** Seconds for 8D audio to circle the head once; 0 is off. */
+    val eightDPeriod: Float = 0f,
 ) {
     private val eqActive: Boolean
         get() = equalizer.enabled && (
@@ -130,7 +132,7 @@ data class DspParams(
     /** The headphone correction from AutoEq, when one is chosen; independent of [eqActive]. */
     private val headphone get() = equalizer.headphone?.takeIf { it.filters.isNotEmpty() }
 
-    val isNeutral: Boolean get() = !eqActive && headphone == null && bassBoost == 0 && !spatial && !clarity && outputGainDb == 0f
+    val isNeutral: Boolean get() = !eqActive && headphone == null && bassBoost == 0 && !spatial && !clarity && outputGainDb == 0f && eightDPeriod <= 0f
 
     /**
      * Whether anything in the chain can push a sample past full scale. Only
@@ -138,7 +140,7 @@ data class DspParams(
      * mastered.
      */
     val canBoost: Boolean
-        get() = spatial || clarity || bassBoost > 0 || headphone?.filters?.any { it.gainDb > 0 } == true || (eqActive && (
+        get() = spatial || clarity || bassBoost > 0 || eightDPeriod > 0f || headphone?.filters?.any { it.gainDb > 0 } == true || (eqActive && (
             equalizer.preampDb > 0 || equalizer.bassDb > 0 || equalizer.trebleDb > 0 || equalizer.bands.any { it > 0 }
             ))
 
@@ -337,10 +339,59 @@ class DspAudioProcessor : BaseAudioProcessor() {
                 frame[0] = mid + side
                 frame[1] = mid - side
             }
+            if (p.eightDPeriod > 0f) circle(p.eightDPeriod)
             frame[0] *= leftGain
             frame[1] *= rightGain
         }
         if (limit) for (c in 0 until channels) frame[c] = softLimit(frame[c])
+    }
+
+    // 8D audio: where the sound is on its circle, and the ears' short delay lines.
+    private var orbit = 0.0
+    private val earDelay = Array(2) { FloatArray(DELAY_SLOTS) }
+    private var earAt = 0
+    private val behindLow = FloatArray(2)
+
+    /**
+     * Moves the sound around the head: equal-power panning from side to
+     * side, the far ear hearing it a fraction of a millisecond later (which
+     * is what puts it outside the head), and a little duller as it passes
+     * behind.
+     */
+    private fun circle(periodSeconds: Float) {
+        orbit += 2.0 * Math.PI / (periodSeconds * sampleRate)
+        if (orbit > 2.0 * Math.PI) orbit -= 2.0 * Math.PI
+        val side = kotlin.math.sin(orbit).toFloat() // -1 left, 1 right
+        val front = kotlin.math.cos(orbit).toFloat() // 1 in front, -1 behind
+        // Mostly one voice going round, with a little of the stereo kept for width.
+        val mono = (frame[0] + frame[1]) * 0.5f
+        val l = mono * 0.85f + frame[0] * 0.15f
+        val r = mono * 0.85f + frame[1] * 0.15f
+        earDelay[0][earAt] = l
+        earDelay[1][earAt] = r
+        // Up to about 0.6 ms on the far side.
+        val lag = (kotlin.math.abs(side) * 0.0006f * sampleRate).toInt().coerceIn(0, DELAY_SLOTS - 1)
+        val lagged = (earAt - lag + DELAY_SLOTS) % DELAY_SLOTS
+        val leftIn = if (side > 0) earDelay[0][lagged] else l
+        val rightIn = if (side < 0) earDelay[1][lagged] else r
+        earAt = (earAt + 1) % DELAY_SLOTS
+        val angle = (side + 1f) * (Math.PI.toFloat() / 4f)
+        var outL = leftIn * kotlin.math.cos(angle) * 1.25f
+        var outR = rightIn * kotlin.math.sin(angle) * 1.25f
+        // Behind: a gentle low-pass, deeper the further back.
+        val dull = ((-front).coerceAtLeast(0f)) * 0.55f
+        if (dull > 0f) {
+            val a = 0.25f
+            behindLow[0] += a * (outL - behindLow[0])
+            behindLow[1] += a * (outR - behindLow[1])
+            outL = outL * (1f - dull) + behindLow[0] * dull
+            outR = outR * (1f - dull) + behindLow[1] * dull
+        } else {
+            behindLow[0] = outL
+            behindLow[1] = outR
+        }
+        frame[0] = outL
+        frame[1] = outR
     }
 
     override fun onFlush() {
@@ -360,6 +411,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
         /** A volume the sleep timer turns down as it winds down; 1 the rest of the time. */
         @Volatile var masterGain = 1f
         const val SPATIAL_WIDTH = 1.6f
+        private const val DELAY_SLOTS = 64
         private const val KNEE = 0.85f
         /** Never quite full scale, so the output can't clip after conversion. */
         const val CEILING = 0.98f

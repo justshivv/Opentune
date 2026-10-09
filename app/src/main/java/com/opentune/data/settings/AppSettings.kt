@@ -97,8 +97,19 @@ data class SoundSettings(
     val reverb: ReverbLevel = ReverbLevel.OFF,
     /** 0..1000; drives the low-shelf in [com.opentune.playback.dsp.AudioDsp]. */
     val bassBoost: Int = 0,
+    /** The sound circling around the listener's head. */
+    val eightD: EightD = EightD.OFF,
 ) {
     val isDefault: Boolean get() = this == SoundSettings()
+}
+
+/** How fast 8D audio circles: once around in this many seconds. */
+@Serializable
+enum class EightD(val label: String, val periodSeconds: Float) {
+    OFF("Off", 0f),
+    SLOW("Slow", 16f),
+    MEDIUM("Medium", 10f),
+    FAST("Fast", 6f),
 }
 
 /** One-tap remixes. Speed and pitch move together, as on a turntable. */
@@ -110,6 +121,7 @@ enum class RemixPreset(val label: String, val sound: SoundSettings) {
     DAYCORE("Daycore", SoundSettings(0.9f, 0.9f, ReverbLevel.MEDIUM_ROOM)),
     VAPORWAVE("Vaporwave", SoundSettings(0.75f, 0.75f, ReverbLevel.PLATE)),
     BASS_BOOSTED("Bass boosted", SoundSettings(bassBoost = 800)),
+    EIGHT_D("8D", SoundSettings(eightD = EightD.MEDIUM)),
     ;
 
     companion object {

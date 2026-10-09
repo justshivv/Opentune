@@ -107,6 +107,18 @@ fun RemixSheet(onDismiss: () -> Unit) {
             ValueSlider("Bass boost", sound.bassBoost / 1000f, 0f..1f, format = { "${(it * 100).roundToInt()}%" }) { v ->
                 AppSettings.updateSound { it.copy(bassBoost = (v * 1000).roundToInt()) }
             }
+
+            Text("8D audio", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+            Text("The sound circles slowly around your head. Best on headphones.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.opentune.data.settings.EightD.entries.forEach { e ->
+                    FilterChip(
+                        selected = sound.eightD == e,
+                        onClick = { AppSettings.updateSound { it.copy(eightD = e) } },
+                        label = { Text(e.label) },
+                    )
+                }
+            }
             Text(
                 "Speed, pitch and bass work on every phone. Reverb uses Android's built-in effect, which some phones don't have.",
                 style = MaterialTheme.typography.bodySmall,
