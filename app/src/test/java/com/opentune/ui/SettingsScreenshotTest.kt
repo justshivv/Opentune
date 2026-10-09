@@ -7,6 +7,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsDisplayed
@@ -72,7 +73,7 @@ class SettingsScreenshotTest {
         val previousTheme = AppSettings.theme.value
         try {
             AppSettings.updateUi { it.copy(reduceAnimation = true) }
-            compose.onNodeWithText("Motion").performClick()
+            compose.onNodeWithText("Motion").performScrollTo().performClick()
             compose.onNodeWithText("Echo motion preset").performClick()
             compose.onNodeWithText("Applied").assertIsDisplayed()
             assertTrue(AppSettings.ui.value.reduceAnimation)
