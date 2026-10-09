@@ -273,6 +273,8 @@ data class InterfaceSettings(
     val waveformSeekbar: Boolean = false,
     /** A tapped song's cover flies down into the now-playing card. */
     val coverFlight: Boolean = true,
+    /** A soft light in the cover's colour under the player's cover. */
+    val coverGlow: Boolean = true,
     /** Proper album covers from MusicBrainz for music videos and local files without art. */
     val albumCovers: Boolean = true,
     val lyricsAnimation: LyricsAnimation = LyricsAnimation.FLUID,

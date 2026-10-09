@@ -812,6 +812,9 @@ private fun settingsSections(
                 Entry("Page transitions", "navigation animation screen open back slide fade zoom rise") {
                     NavRow("Page transitions", { pageTransitionDialog = true }, summary = ui.pageTransition.summary, icon = Icons.Rounded.SwapHoriz, value = ui.pageTransition.label)
                 },
+                Entry("Glow under the cover", "glow shadow light cover colour bass pulse") {
+                    ToggleRow("Glow under the cover", ui.coverGlow, { v -> AppSettings.updateUi { it.copy(coverGlow = v) } }, summary = "A soft light in the cover's colours under it, swelling a little with the bass", icon = Icons.Rounded.AutoAwesome)
+                },
                 Entry("Cover flies to the player", "fly cover animation tap song now playing card shared element") {
                     ToggleRow("Cover flies to the player", ui.coverFlight, { v -> AppSettings.updateUi { it.copy(coverFlight = v) } }, summary = "Tap a song and its cover lifts off and lands in the now-playing card", icon = Icons.Rounded.AutoAwesome)
                 },

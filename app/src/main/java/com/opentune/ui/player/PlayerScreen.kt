@@ -524,6 +524,8 @@ fun PlayerLayout(
                                             moving = state.ui.movingCover && !state.ui.reduceAnimation,
                                             change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                                             index = state.currentIndex,
+                                            onSeekBy = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) },
+                                            glow = state.ui.coverGlow && !state.ui.reduceAnimation,
                                         )
                                 }
                             }

@@ -61,7 +61,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "player", "Player", "Layout, buttons, cover and background", Icons.Rounded.Album,
         listOf(
             "Layout" to listOf("Player layout", "Player buttons", "Player background"),
-            "Cover art" to listOf("Moving cover art", "Song change", "Full-screen cover art", "Album covers"),
+            "Cover art" to listOf("Moving cover art", "Glow under the cover", "Song change", "Full-screen cover art", "Album covers"),
             "Controls" to listOf("Wavy seek bar", "Waveform seek bar", "Hide volume bar", "Hide song status", "Show stats for nerds"),
         ),
     ),

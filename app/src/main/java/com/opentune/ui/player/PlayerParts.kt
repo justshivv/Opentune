@@ -79,6 +79,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
@@ -280,6 +281,10 @@ fun ArtworkPane(
     change: com.opentune.data.settings.CoverChange = com.opentune.data.settings.CoverChange.FADE,
     /** The song's place in the queue, so Carousel knows which way to slide. */
     index: Int = 0,
+    /** Double-tapping the cover's left or right side jumps by this many milliseconds back or on. */
+    onSeekBy: ((Long) -> Unit)? = null,
+    /** A soft light in the cover's colour under it, swelling with the bass. */
+    glow: Boolean = false,
 ) {
     val scale by animateFloatAsState(
         if (isPlaying) 1f else 0.86f,
@@ -311,6 +316,7 @@ fun ArtworkPane(
             },
         contentAlignment = Alignment.Center,
     ) {
+        if (glow) CoverGlow(isPlaying, scale, Modifier.matchParentSize())
         CoverSwap(CoverShown(song.thumbnailUrl, index), change) { url, motion ->
             Artwork(
                 url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
@@ -331,6 +337,109 @@ fun ArtworkPane(
                 imageModifier = Modifier.livingArt(isPlaying, moving),
             )
         }
+        if (onSeekBy != null) SeekTaps(onSeekBy, scale, Modifier.matchParentSize())
+    }
+}
+
+/**
+ * Double-tap the cover's left side to go back ten seconds, its right side
+ * to go on: a ripple spreads from the finger over that half and a label
+ * says how far, adding up while the taps keep coming.
+ */
+@Composable
+private fun SeekTaps(onSeekBy: (Long) -> Unit, scale: Float, modifier: Modifier) {
+    val haptics = com.opentune.ui.components.rememberHaptics()
+    val ripple = remember { Animatable(1f) }
+    var side by remember { mutableStateOf(0) }
+    var at by remember { mutableStateOf(Offset.Zero) }
+    var total by remember { mutableStateOf(0) }
+    var lastTap by remember { mutableStateOf(0L) }
+    val scope = rememberCoroutineScope()
+    Box(
+        modifier.pointerInput(Unit) {
+            detectTapGestures(onDoubleTap = { o ->
+                val s = if (o.x < size.width / 2f) -1 else 1
+                val now = android.os.SystemClock.uptimeMillis()
+                total = if (s == side && now - lastTap < 1_200) total + 10 else 10
+                side = s
+                at = o
+                lastTap = now
+                haptics.tick()
+                onSeekBy(s * 10_000L)
+                scope.launch {
+                    ripple.snapTo(0f)
+                    ripple.animateTo(1f, tween(650, easing = FastOutSlowInEasing))
+                }
+            })
+        },
+    ) {
+        val p = ripple.value
+        if (p < 1f && side != 0) {
+            val shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+            Canvas(Modifier.matchParentSize().graphicsLayer { scaleX = scale; scaleY = scale; clip = true; this.shape = shape }) {
+                // Only the half that was tapped.
+                val left = if (side < 0) 0f else size.width / 2f
+                clipRect(left = left, right = left + size.width / 2f) {
+                    drawRect(Color.Black.copy(alpha = 0.18f * (1f - p)))
+                    drawCircle(Color.White.copy(alpha = 0.28f * (1f - p)), size.width * 0.75f * p, at)
+                }
+            }
+            val label = if (side < 0) "« $total s" else "$total s »"
+            Text(
+                label,
+                color = Color.White.copy(alpha = (1f - p * p).coerceIn(0f, 1f)),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(if (side < 0) Alignment.CenterStart else Alignment.CenterEnd)
+                    .padding(horizontal = 36.dp)
+                    .graphicsLayer { translationX = side * 10.dp.toPx() * p },
+            )
+        }
+    }
+}
+
+/** A blurred light in the cover's colours under it, drifting a little lower and swelling with the bass. */
+@Composable
+private fun CoverGlow(playing: Boolean, scale: Float, modifier: Modifier) {
+    val (a, b) = com.opentune.ui.theme.songAccents()
+    val swell = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        com.opentune.playback.AudioLevels.hold()
+        onDispose { com.opentune.playback.AudioLevels.release() }
+    }
+    LaunchedEffect(playing) {
+        var peak = 0.05f
+        var last = 0L
+        while (playing) {
+            androidx.compose.runtime.withFrameNanos { now ->
+                val dt = if (last == 0L) 0.016f else ((now - last) / 1e9f).coerceIn(0f, 0.1f)
+                last = now
+                val level = com.opentune.playback.AudioLevels.at(System.nanoTime())?.let { it.bass * 0.8f + it.level * 0.2f } ?: 0f
+                peak = maxOf(level, peak * (1f - dt * 0.3f)).coerceAtLeast(0.02f)
+                val target = (level / peak).coerceIn(0f, 1f)
+                swell.floatValue += (target - swell.floatValue) * (dt * if (target > swell.floatValue) 6f else 2f).coerceAtMost(1f)
+            }
+        }
+        swell.floatValue = 0f
+    }
+    val strength by animateFloatAsState(if (playing) 1f else 0.45f, tween(600), label = "glow")
+    Canvas(modifier) {
+        val s = swell.floatValue
+        val w = size.width * scale
+        val c = Offset(center.x, center.y + w * 0.12f)
+        val r = w * (0.7f + 0.07f * s)
+        drawCircle(
+            Brush.radialGradient(
+                0f to a.copy(alpha = (0.7f + 0.25f * s).coerceAtMost(1f) * strength),
+                0.5f to b.copy(alpha = (0.35f + 0.15f * s) * strength),
+                1f to Color.Transparent,
+                center = c,
+                radius = r,
+            ),
+            r,
+            c,
+        )
     }
 }
 
