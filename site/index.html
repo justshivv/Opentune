@@ -1098,7 +1098,7 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
   function renderReleases(list, live) {
     const box = $("rel-list"); box.innerHTML = "";
     list.slice(0, 4).forEach((rel, i) => {
-      const apk = (rel.assets || []).find((a) => /arm64/.test(a.name)) || (rel.assets || []).find((a) => /\.apk$/.test(a.name));
+      const apk = (rel.assets || []).find((a) => /arm64.*\.apk$/.test(a.name)) || (rel.assets || []).find((a) => /\.apk$/.test(a.name));
       const downloads = (rel.assets || []).filter((a) => /\.apk$/.test(a.name)).reduce((n, a) => n + (a.download_count || 0), 0);
       const notes = notesOf(rel);
       const row = document.createElement("article"); row.className = "rel";
@@ -1109,7 +1109,13 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
       box.appendChild(row);
       if (i === 0) {
         $("ver-badge").textContent = rel.tag_name;
-        if (apk) { $("dl-size").textContent = (apk.size / 1048576).toFixed(1) + " MB"; }
+        if (apk) {
+          $("dl-size").textContent = (apk.size / 1048576).toFixed(1) + " MB";
+          // Main download buttons must request an APK too, so browser/release deduplication
+          // covers them. Keep GitHub's release page as the fallback if the live lookup fails.
+          if (live) document.querySelectorAll('a[href="https://github.com/justshivv/Opentune/releases/latest"]')
+            .forEach((link) => { link.href = apk.browser_download_url; });
+        }
       }
     });
     $("rel-intro").textContent = list.length + (list.length === 1 ? " published build" : " published builds") + ", straight from GitHub Releases.";
