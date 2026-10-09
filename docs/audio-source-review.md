@@ -62,6 +62,6 @@ Settings → Playback → Higher-quality sources contains the toggles, a shared 
 - [Meld QobuzAudioProvider](https://github.com/FrancescoGrazioso/Meld/blob/main/app/src/main/kotlin/com/metrolist/music/qobuz/QobuzAudioProvider.kt)
 - [BitChord repository](https://github.com/kushagrasinghx/BitChord)
 - [Stash source and lossless documentation](https://github.com/rawnaldclark/Stash#lossless)
-- [Just-Listen Audius API configuration](https://github.com/RLD-JL/Just-Listen/blob/main/shared/src/commonMain/kotlin/com/rld/justlisten/datalayer/utils/Constants.kt)
+- [Just-Listen Audius API configuration](https://github.com/RLD-JL/Just-Listen/blob/master/shared/src/commonMain/kotlin/com/rld/justlisten/datalayer/utils/Constants.kt)
 
 See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for adaptation credits. End-to-end Android playback, interactive verification, device output precision and regional catalog availability still require device testing.

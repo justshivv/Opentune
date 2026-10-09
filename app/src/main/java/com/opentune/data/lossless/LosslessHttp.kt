@@ -41,7 +41,7 @@ internal object LosslessHttp {
                         val bytes = response.use {
                             if (!it.isSuccessful) throw IOException("Lossless HTTP ${it.code}")
                             val source = it.body?.source() ?: throw IOException("Empty lossless response")
-                            source.request(limit.toLong() + 1)
+                            source.request(limit.toLong() + if (prefixOnly) 0 else 1)
                             if (!prefixOnly && source.buffer.size > limit) throw IOException("Lossless response too large")
                             val total = if (it.code == 206) it.header("Content-Range")?.substringAfterLast('/')?.toLongOrNull()
                                 else it.body?.contentLength()?.takeIf { length -> length > 0 }
