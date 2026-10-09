@@ -367,8 +367,12 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   back; closing them brings the cover forward again.
 - **Synced lyrics** from [LRCLIB](https://lrclib.net) (word by word where
   it has the timing), KuGou (line-synced, strong on Asian music), NetEase
-  Cloud Music (line-synced, a large catalogue) and YouTube Music
-  (unsynced), in an order you set, each credited under the lyrics. Plain
+  Cloud Music (line-synced, a large catalogue), Unison (the community
+  lyrics of [Better Lyrics](https://github.com/better-lyrics/better-lyrics),
+  often word by word; entries its users voted down are skipped), a music
+  video's own hand-made captions (timed to the video, as Better Lyrics
+  finds them) and YouTube Music (unsynced), in an order you set, each
+  credited under the lyrics. Plain
   text never ends the search: every source is asked until one has the
   song in time, a busy LRCLIB is asked again, and plain lyrics found while
   a source was down are looked up again a little later. Eight animation

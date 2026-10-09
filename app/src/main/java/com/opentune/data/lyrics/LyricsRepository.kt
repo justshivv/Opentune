@@ -84,6 +84,12 @@ object LyricsRepository {
                     LyricsSource.NETEASE -> runCatching { NetEase.lookup(title, artist, durationMs) }
                         .onFailure { failed = true; Log.w(TAG, "NetEase lookup failed for $videoId", it) }
                         .getOrNull()
+                    LyricsSource.UNISON -> if (!isYouTubeId(videoId)) null else runCatching { Unison.lookup(videoId, title, artist, durationMs) }
+                        .onFailure { Log.w(TAG, "Unison lookup failed for $videoId", it) }
+                        .getOrNull()
+                    LyricsSource.YOUTUBE_CAPTIONS -> if (!isYouTubeId(videoId)) null else runCatching { YouTubeCaptions.lookup(videoId) }
+                        .onFailure { Log.w(TAG, "YouTube captions failed for $videoId", it) }
+                        .getOrNull()
                     LyricsSource.YOUTUBE_MUSIC -> if (!isYouTubeId(videoId)) null else runCatching { youTubeMusic(videoId) }
                         .onFailure { Log.w(TAG, "YouTube Music lyrics failed for $videoId", it) }
                         .getOrNull()
