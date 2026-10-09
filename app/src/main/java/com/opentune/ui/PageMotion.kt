@@ -63,6 +63,7 @@ internal object PageMotion {
     /** The full player dropping away. */
     fun playerOut(m: PlayerMotion, still: Boolean): ExitTransition {
         if (still) return fadeOut(tween(140))
+        if (m == PlayerMotion.ECHO) return slideOutVertically(playerRise(m)) { it } + fadeOut(tween(220))
         val ms = when (m) {
             PlayerMotion.SMOOTH -> 260
             PlayerMotion.SNAPPY -> 170
@@ -72,6 +73,8 @@ internal object PageMotion {
     }
 
     private fun playerRise(m: PlayerMotion) = when (m) {
+        // Echo Music BottomSheet's soft spring; see THIRD_PARTY_NOTICES.md.
+        PlayerMotion.ECHO -> spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)
         PlayerMotion.SPRING -> spring(dampingRatio = 0.86f, stiffness = 380f, visibilityThreshold = IntOffset.VisibilityThreshold)
         // Apple Music's sheet: no bounce, short and responsive.
         PlayerMotion.SMOOTH -> spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 550f, visibilityThreshold = IntOffset.VisibilityThreshold)

@@ -7,6 +7,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsDisplayed
@@ -65,6 +66,23 @@ class SettingsScreenshotTest {
         // Each setting lives on one page only.
         assertTrue(compose.onAllNodesWithText("Dock lens").fetchSemanticsNodes().size == 1)
         save("settings-search")
+    }
+
+    @Test fun echoPresetIsReachableAndPreservesReducedMotion() {
+        val previousUi = AppSettings.ui.value
+        val previousTheme = AppSettings.theme.value
+        try {
+            AppSettings.updateUi { it.copy(reduceAnimation = true) }
+            compose.onNodeWithText("Motion").performScrollTo().performClick()
+            compose.onNodeWithText("Echo motion preset").performClick()
+            compose.onNodeWithText("Applied").assertIsDisplayed()
+            assertTrue(AppSettings.ui.value.reduceAnimation)
+            assertTrue(AppSettings.theme.value.playerBackground == com.opentune.data.settings.PlayerBackground.ECHO_GLOW)
+            save("settings-echo-preset")
+        } finally {
+            AppSettings.updateUi { previousUi }
+            AppSettings.updateTheme { previousTheme }
+        }
     }
 
     private fun save(name: String) {

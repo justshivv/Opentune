@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import java.io.File
 import org.junit.Rule
@@ -30,6 +32,31 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = android.app.Application::class)
 class ButtonMotionScreenshotTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+
+    @Test fun echoControlsOnLightAndDarkGlow() {
+        var dark by mutableStateOf(true)
+        var playing by mutableStateOf(false)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            androidx.compose.material3.MaterialTheme(colorScheme = if (dark) androidx.compose.material3.darkColorScheme() else androidx.compose.material3.lightColorScheme()) {
+                androidx.compose.foundation.layout.Box(Modifier.size(360.dp, 250.dp)) {
+                    EchoGlowBackground(false, Modifier.matchParentSize())
+                    PlayerControls(playing, false, true, { playing = !playing }, {}, {},
+                        Modifier.align(Alignment.Center), com.opentune.data.settings.ControlStyle.ECHO, animate = false)
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(100)
+        compose.onNodeWithContentDescription("Play").performClick()
+        compose.mainClock.advanceTimeBy(100)
+        compose.onNodeWithContentDescription("Pause").assertExists()
+        save("echo/dark-playing")
+        dark = false
+        compose.onNodeWithContentDescription("Pause").performClick()
+        compose.mainClock.advanceTimeBy(100)
+        compose.onNodeWithContentDescription("Play").assertExists()
+        save("echo/light-paused")
+    }
 
     @Test fun motion() {
         var playing by mutableStateOf(false)

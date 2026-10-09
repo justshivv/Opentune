@@ -57,6 +57,7 @@ jobs:
           path: |
             app/build/reports/
             app/build/test-results/
+            app/build/screenshots/
           if-no-files-found: ignore
 
       - name: APKs

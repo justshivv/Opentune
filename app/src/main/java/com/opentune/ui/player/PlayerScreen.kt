@@ -344,7 +344,7 @@ fun PlayerLayout(
             // The backdrop is the layer the player's Liquid Glass bends.
             Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
                 PlayerBackdrop(
-                    if (landscape) com.opentune.data.settings.PlayerBackground.BLUR else theme.playerBackground,
+                    if (landscape && theme.playerBackground != com.opentune.data.settings.PlayerBackground.ECHO_GLOW) com.opentune.data.settings.PlayerBackground.BLUR else theme.playerBackground,
                     current.thumbnailUrl,
                     Modifier.fillMaxSize(),
                     animate = !state.ui.reduceAnimation,
