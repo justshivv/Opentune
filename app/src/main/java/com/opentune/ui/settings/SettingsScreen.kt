@@ -604,7 +604,7 @@ private fun settingsSections(
         ),
         Section(
             "Audio quality",
-            listOf(
+            listOfNotNull(
                 Entry("On Wi-Fi", "stream quality bitrate") {
                     NavRow("On Wi-Fi", { qualityDialog = true }, icon = Icons.Rounded.Wifi, value = pb.wifiQuality.label)
                 },
