@@ -98,7 +98,7 @@ object Usage {
             pending.removeAll { it.substringBefore('|') < oldest }
             val editor = p.edit().putInt("total:$key", total).putStringSet("pending", pending)
             p.all.keys.filter { it.startsWith("total:") && it.removePrefix("total:").substringBefore('|') < oldest }.forEach(editor::remove)
-            if (!editor.commit()) return@withLock
+            if (!editor.commit()) return null
         return id to pending
     }
 
