@@ -196,7 +196,9 @@ private fun SyncedLyrics(
     source: String,
     onSyncLine: ((Long) -> Unit)? = null,
 ) {
-    val animation = AppSettings.ui.collectAsState().value.lyricsAnimation
+    val ui by AppSettings.ui.collectAsState()
+    val reduced = ui.reduceAnimation || !android.animation.ValueAnimator.areAnimatorsEnabled()
+    val animation = if (reduced) LyricsAnimation.MINIMAL else ui.lyricsAnimation
     val listState = rememberLazyListState()
     // The position function changes with the lyrics offset; read the latest.
     val pos by rememberUpdatedState(position)
@@ -220,12 +222,15 @@ private fun SyncedLyrics(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val anchor = maxHeight * 0.3f
-        LaunchedEffect(active, following) {
+        LaunchedEffect(active, following, reduced) {
             if (!following) return@LaunchedEffect
             autoScrolling = true
             // +1 for the intro item ahead of the first line.
-            glideTo(listState, (active + 1).coerceAtLeast(0))
-            autoScrolling = false
+            try {
+                glideTo(listState, (active + 1).coerceAtLeast(0), reduced)
+            } finally {
+                autoScrolling = false
+            }
         }
 
         LazyColumn(
@@ -273,9 +278,9 @@ private fun SyncedLyrics(
 }
 
 /** Scroll [index] to the top of the content area (the anchor), smoothly when it's near. */
-private suspend fun glideTo(state: LazyListState, index: Int) {
+private suspend fun glideTo(state: LazyListState, index: Int, reduced: Boolean) {
     val item = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
-    if (item != null) {
+    if (item != null && !reduced) {
         state.animateScrollBy(item.offset.toFloat(), tween(durationMillis = 650, easing = FastOutSlowInEasing))
     } else {
         state.scrollToItem(index)
@@ -294,7 +299,7 @@ private class LineMotion(
 )
 
 /** What a word of the current line does while it's sung. */
-internal enum class WordMotion { NONE, BOUNCE, POP, REVEAL }
+internal enum class WordMotion { NONE, BOUNCE, POP, REVEAL, ECHO }
 
 /** One word's lift (dp, up is positive), scale, glow and opacity, [t] of the way through singing it. */
 internal class WordPose(val lift: Float, val scale: Float, val glow: Float, val alpha: Float)
@@ -306,6 +311,8 @@ internal fun wordPose(motion: WordMotion, t: Float): WordPose {
         WordMotion.NONE -> WordPose(0f, 1f, 0f, 1f)
         WordMotion.BOUNCE -> WordPose(7f * bell, 1f, 0f, 1f)
         WordMotion.POP -> WordPose(1.5f * bell, 1f + 0.14f * bell, bell, 1f)
+        // Adapted from Echo Music LyricsV2's subtle sine lift; see THIRD_PARTY_NOTICES.md.
+        WordMotion.ECHO -> WordPose(4f * bell, 1f + 0.015f * bell, 0.45f * bell, 1f)
         // Not there before its time, then up from a little below.
         WordMotion.REVEAL -> if (t <= 0f) WordPose(0f, 1f, 0f, 0f) else {
             val e = 1f - (1f - (p * 2f).coerceAtMost(1f)).let { it * it }
@@ -315,6 +322,7 @@ internal fun wordPose(motion: WordMotion, t: Float): WordPose {
 }
 
 private fun motionOf(animation: LyricsAnimation) = when (animation) {
+    LyricsAnimation.ECHO -> LineMotion(1f, 0.85f, 0f, 0.dp, glow = false, inactiveAlpha = 0.5f, word = WordMotion.ECHO)
     LyricsAnimation.FLUID -> LineMotion(1f, 0.93f, 1.1f, 0.dp, glow = false, inactiveAlpha = 0.8f)
     LyricsAnimation.KARAOKE -> LineMotion(1f, 1f, 0f, 0.dp, glow = true, inactiveAlpha = 0.55f)
     LyricsAnimation.SLIDE -> LineMotion(1f, 0.96f, 0.6f, 18.dp, glow = false, inactiveAlpha = 0.7f)
@@ -341,12 +349,12 @@ private fun LyricLineView(
     val dim = bright.copy(alpha = 0.32f)
     val scale by animateFloatAsState(
         if (isActive) motion.activeScale else motion.inactiveScale,
-        spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessLow),
+        if (animation == LyricsAnimation.ECHO) tween(400) else spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessLow),
         label = "lineScale",
     )
     val alpha by animateFloatAsState(
         if (isActive) 1f else if (distance < 0) motion.inactiveAlpha - 0.1f else motion.inactiveAlpha,
-        tween(if (animation == LyricsAnimation.MINIMAL) 200 else 400),
+        tween(when (animation) { LyricsAnimation.MINIMAL -> 200; LyricsAnimation.ECHO -> 300; else -> 400 }),
         label = "lineAlpha",
     )
     val blur by animateDpAsState(

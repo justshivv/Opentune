@@ -6,6 +6,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MotionTest {
+    @Test fun echoWordsStayReadableAndReturnToRest() {
+        for (time in listOf(-1f, 0f, 1f, 2f)) {
+            val pose = wordPose(WordMotion.ECHO, time)
+            assertEquals(0f, pose.lift, 1e-3f)
+            assertEquals(1f, pose.scale, 1e-3f)
+            assertEquals(1f, pose.alpha, 0f)
+        }
+        val peak = wordPose(WordMotion.ECHO, 0.5f)
+        assertEquals(4f, peak.lift, 1e-3f)
+        assertEquals(1.015f, peak.scale, 1e-3f)
+        assertTrue(peak.glow in 0f..0.5f)
+    }
     @Test fun bounceHopsAndLands() {
         assertEquals(0f, wordPose(WordMotion.BOUNCE, 0f).lift, 1e-3f)
         assertEquals(7f, wordPose(WordMotion.BOUNCE, 0.5f).lift, 1e-3f)

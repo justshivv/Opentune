@@ -165,6 +165,7 @@ fun PlayerBackdrop(
                 Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.45f)))
             }
             style == PlayerBackground.PLAIN -> Unit
+            style == PlayerBackground.ECHO_GLOW -> EchoGlowBackground(animate && playing, Modifier.matchParentSize())
             style == PlayerBackground.MESH -> MeshGradient(animate, Modifier.matchParentSize())
             else -> {
                 Box(

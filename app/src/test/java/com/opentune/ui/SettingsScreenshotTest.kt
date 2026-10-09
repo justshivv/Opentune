@@ -67,6 +67,23 @@ class SettingsScreenshotTest {
         save("settings-search")
     }
 
+    @Test fun echoPresetIsReachableAndPreservesReducedMotion() {
+        val previousUi = AppSettings.ui.value
+        val previousTheme = AppSettings.theme.value
+        try {
+            AppSettings.updateUi { it.copy(reduceAnimation = true) }
+            compose.onNodeWithText("Motion").performClick()
+            compose.onNodeWithText("Echo motion preset").performClick()
+            compose.onNodeWithText("Applied").assertIsDisplayed()
+            assertTrue(AppSettings.ui.value.reduceAnimation)
+            assertTrue(AppSettings.theme.value.playerBackground == com.opentune.data.settings.PlayerBackground.ECHO_GLOW)
+            save("settings-echo-preset")
+        } finally {
+            AppSettings.updateUi { previousUi }
+            AppSettings.updateTheme { previousTheme }
+        }
+    }
+
     private fun save(name: String) {
         compose.waitForIdle()
         val view = compose.activity.window.decorView

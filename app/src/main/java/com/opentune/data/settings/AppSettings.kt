@@ -49,6 +49,7 @@ enum class PlayerBackground(val label: String) {
     GRADIENT("Gradient"),
     BLUR("Blur"),
     PLAIN("Plain"),
+    ECHO_GLOW("Echo glow"),
 }
 
 /** How the full-screen player is laid out. */
@@ -366,6 +367,7 @@ enum class PlayerMotion(val label: String, val summary: String) {
     SMOOTH("Smooth", "One slow, even glide with no bounce"),
     BOUNCY("Bouncy", "Overshoots the top a little and bounces into place"),
     SNAPPY("Snappy", "Up and down in a blink"),
+    ECHO("Echo", "A soft spring that settles without bouncing"),
 }
 
 /** The glass the floating parts of the app are made of. */
@@ -444,6 +446,7 @@ enum class ControlStyle(val label: String, val summary: String) {
     CAPSULE("Capsule", "Play stretches into a wide accent pill while it plays; the skips tilt as you tap"),
     ORBIT("Orbit", "Play sits inside the song's progress ring, with a comet of light circling while it plays"),
     MORPH("Morph", "A round button that ripples into a slowly turning wavy shape while it plays, with outlined glyphs"),
+    ECHO("Echo", "An accent-coloured wavy play button that turns gently while playing"),
 }
 
 /**
@@ -470,6 +473,7 @@ enum class LyricsAnimation(val label: String, val summary: String) {
     BOUNCE("Bounce", "Each word hops up as it's sung"),
     POP("Pop", "Words swell and glow as they're sung"),
     REVEAL("Reveal", "Words appear only as they're sung"),
+    ECHO("Echo", "Soft line focus with a small lift and glow on timed words"),
 }
 
 /** Where lyrics can come from. */
@@ -513,6 +517,12 @@ data class SettingsState(
     val library: LibrarySettings = LibrarySettings(),
     val lyrics: LyricsSettings = LyricsSettings(),
     val recentSearches: List<String> = emptyList(),
+)
+
+/** Apply only the four Echo choices; preserve accessibility and unrelated preferences. */
+internal fun SettingsState.withEchoMotion() = copy(
+    theme = theme.copy(playerBackground = PlayerBackground.ECHO_GLOW),
+    ui = ui.copy(controlStyle = ControlStyle.ECHO, playerMotion = PlayerMotion.ECHO, lyricsAnimation = LyricsAnimation.ECHO),
 )
 
 /** Accent choices offered when Material You is off. */
@@ -601,6 +611,7 @@ object AppSettings {
         prefs?.edit { putString(K_STATE, json.encodeToString(SettingsState.serializer(), s)) }
     }
 
+    fun applyEchoMotion() = update { it.withEchoMotion() }
     fun updateTheme(t: (ThemeSettings) -> ThemeSettings) = update { it.copy(theme = t(it.theme)) }
     fun updateSound(t: (SoundSettings) -> SoundSettings) = update { it.copy(sound = t(it.sound)) }
     fun updateEqualizer(t: (EqualizerSettings) -> EqualizerSettings) = update { it.copy(equalizer = t(it.equalizer)) }

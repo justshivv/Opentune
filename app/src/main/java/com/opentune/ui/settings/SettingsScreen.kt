@@ -850,9 +850,17 @@ private fun settingsSections(
                 Entry("Player opening", "now playing sheet open close animation spring smooth bouncy snappy") {
                     NavRow("Player opening", { playerMotionDialog = true }, summary = ui.playerMotion.summary, icon = Icons.Rounded.UnfoldMore, value = ui.playerMotion.label)
                 },
-                Entry("Player background", "mesh gradient blur") {
+                Entry("Echo motion preset", "echo music animation glow waves lyrics soft spring") {
+                    val applied = theme.playerBackground == PlayerBackground.ECHO_GLOW && ui.controlStyle == ControlStyle.ECHO && ui.playerMotion == PlayerMotion.ECHO && ui.lyricsAnimation == LyricsAnimation.ECHO
+                    NavRow("Echo motion preset", { AppSettings.applyEchoMotion() }, summary = "Drifting glow, wavy play button, soft player opening and lyric focus. Each can be changed separately.", icon = Icons.Rounded.Animation, value = if (applied) "Applied" else "Apply")
+                },
+                Entry("Player background", "mesh gradient blur echo glow") {
                     SettingRow("Player background", icon = Icons.Rounded.Wallpaper, below = {
-                        PillSegmented(PlayerBackground.entries, theme.playerBackground, { it.label }, { b -> AppSettings.updateTheme { it.copy(playerBackground = b) } })
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PlayerBackground.entries.forEach { b ->
+                                FilterChip(theme.playerBackground == b, { AppSettings.updateTheme { it.copy(playerBackground = b) } }, label = { Text(b.label) })
+                            }
+                        }
                     })
                 },
                 Entry("Moving cover art", "motion artwork canvas animated cover drift zoom") {
@@ -874,7 +882,7 @@ private fun settingsSections(
                     ToggleRow("Album covers from MusicBrainz", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "Shows the album's cover in the player instead of a video frame, and for local files without one", icon = Icons.Rounded.Album)
                 },
                 Entry("Reduce animation", "motion") {
-                    ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes the player's moving background", icon = Icons.Rounded.Animation)
+                    ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes decorative motion and simplifies player and lyric transitions", icon = Icons.Rounded.Animation)
                 },
                 Entry("Liquid Glass", "glass refraction apple lens") {
                     ToggleRow(

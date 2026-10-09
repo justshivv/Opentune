@@ -4,6 +4,16 @@ OpenTune is licensed under the GNU General Public License v3.0 (see
 [LICENSE](LICENSE)). It includes or uses the following code, libraries,
 fonts and data, under their own licences.
 
+The optional Echo motion effects are adapted from [Echo Music](https://github.com/EchoMusicApp/Echo-Music/tree/a31a72bd958f7cdc128db17d2ea6ae90c3489aa1),
+by the Echo Music contributors, under GPLv3. The sources are
+`ui/player/MiniPlayer.kt` (animated glow and wavy play button),
+`ui/component/BottomSheet.kt` (soft spring), `ui/component/EchoMusicLyrics.kt`
+(line focus), and `ui/component/LyricsV2.kt` (word lift), under
+`app/src/main/kotlin/com/music/echo/` at that revision.
+OpenTune adapts these in `ui/player/EchoMotion.kt`, `PlayerButtons.kt`,
+`LyricsView.kt` and `ui/PageMotion.kt`, with its own palette, pause/lifecycle
+handling and reduced-motion behavior. See [Echo motion](docs/echo-motion.md).
+
 The community lossless provider protocols, endpoint registry, SpotiFLAC session
 signing and verification flow under `data/lossless/` and `ui/settings/SpotiflacVerification.kt`
 are adapted from
