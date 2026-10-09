@@ -355,6 +355,23 @@ fun PlayerLayout(
                 )
             }
 
+            // Behind the lyrics, the cover's colours drift slowly.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = pane == Pane.LYRICS && !landscape,
+                enter = fadeIn(tween(700)),
+                exit = fadeOut(tween(500)),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                val scheme = MaterialTheme.colorScheme
+                AmbientLights(
+                    listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.inversePrimary, scheme.primaryContainer),
+                    playing = state.isPlaying,
+                    animate = !state.ui.reduceAnimation,
+                    modifier = Modifier.fillMaxSize(),
+                    field = true,
+                )
+            }
+
             // The player draws its own dark surface, so it sets its own text and
             // icon color rather than inheriting the app's (light in light theme).
             CompositionLocalProvider(

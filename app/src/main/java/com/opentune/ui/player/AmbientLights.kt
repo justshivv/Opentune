@@ -36,7 +36,14 @@ import kotlin.math.sin
  * them still.
  */
 @Composable
-fun AmbientLights(colors: List<Color>, playing: Boolean, animate: Boolean, modifier: Modifier = Modifier) {
+fun AmbientLights(
+    colors: List<Color>,
+    playing: Boolean,
+    animate: Boolean,
+    modifier: Modifier = Modifier,
+    /** Spread over the whole area, softer and with no wash, for behind the lyrics. */
+    field: Boolean = false,
+) {
     // Each colour eases into the next song's rather than jumping.
     val shown = colors.take(GLOWS).let { if (it.size < GLOWS) it + List(GLOWS - it.size) { i -> it[i % it.size] } else it }
         .mapIndexed { i, c -> animateColorAsState(c, tween(1_400), label = "glow$i").value }
@@ -72,6 +79,7 @@ fun AmbientLights(colors: List<Color>, playing: Boolean, animate: Boolean, modif
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
                 drawContent()
+                if (field) return@drawWithContent
                 // Fades out toward the top so it melts into the gradient.
                 drawRect(
                     Brush.verticalGradient(0f to Color.Transparent, 0.25f to Color.Black.copy(alpha = 0.35f), 0.6f to Color.Black, 1f to Color.Black),
@@ -86,7 +94,7 @@ fun AmbientLights(colors: List<Color>, playing: Boolean, animate: Boolean, modif
         val light = bright.floatValue
         // A pale wash rising from the bottom edge, the way light pools at the foot of a sky.
         val wash = lerp(shown[1], Color.White, 0.35f)
-        drawRect(
+        if (!field) drawRect(
             Brush.verticalGradient(
                 0f to Color.Transparent,
                 0.55f to wash.copy(alpha = 0.10f * light * lift),
@@ -97,10 +105,11 @@ fun AmbientLights(colors: List<Color>, playing: Boolean, animate: Boolean, modif
             val path = PATHS[i]
             // Two slow circles of different speeds make a path that doesn't repeat for a long while.
             val x = w * (path[0] + 0.24f * sin(t * path[2] + path[4]) + 0.1f * cos(t * path[3] * 1.7f + i))
-            val y = h * (path[1] + 0.14f * cos(t * path[3] + path[4]) + 0.05f * sin(t * path[2] * 1.3f + i * 2))
+            val rest = if (field) FIELD_Y[i] else path[1]
+            val y = h * (rest + (if (field) 0.2f else 0.14f) * cos(t * path[3] + path[4]) + 0.05f * sin(t * path[2] * 1.3f + i * 2))
             val r = w * (0.72f + 0.08f * sin(t * 0.21f + i)) * lift
             val c = lerp(shown[i], Color.White, 0.15f)
-            val a = (0.42f * light).coerceIn(0f, 1f)
+            val a = ((if (field) 0.34f else 0.42f) * light).coerceIn(0f, 1f)
             // A falloff close to a bell curve, so no glow shows an edge.
             drawCircle(
                 Brush.radialGradient(
@@ -122,6 +131,9 @@ fun AmbientLights(colors: List<Color>, playing: Boolean, animate: Boolean, modif
 }
 
 private const val GLOWS = 5
+
+/** Where each glow rests across the height when it fills the whole area. */
+private val FIELD_Y = floatArrayOf(0.12f, 0.38f, 0.88f, 0.62f, 0.25f)
 
 /** Each glow's resting place (x, y as fractions), its two speeds, and where along its path it starts. */
 private val PATHS = arrayOf(

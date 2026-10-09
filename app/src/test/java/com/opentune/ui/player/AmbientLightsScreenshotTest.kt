@@ -1,6 +1,7 @@
 package com.opentune.ui.player
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -46,6 +47,25 @@ class AmbientLightsScreenshotTest {
             at = t
             save("ambient/${"%05d".format(t)}")
         }
+    }
+
+    @Test fun behindLyrics() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65), tertiary = Color(0xFFB388FF), secondary = Color(0xFFE0457B), inversePrimary = Color(0xFF8E44AD), primaryContainer = Color(0xFF5A2A10), surface = Color(0xFF120C10))) {
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().then(androidx.compose.ui.Modifier.background(MaterialTheme.colorScheme.surface))) {
+                    AmbientLights(listOf(Color(0xFFFF8A65), Color(0xFFB388FF), Color(0xFFE0457B), Color(0xFF8E44AD), Color(0xFF5A2A10)), playing = true, animate = true, modifier = Modifier.fillMaxSize(), field = true)
+                    androidx.compose.material3.Text(
+                        "This is the line being sung\nand this is the next one",
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.Center),
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(3_000)
+        save("ambient/lyrics")
     }
 
     private fun save(name: String) {
