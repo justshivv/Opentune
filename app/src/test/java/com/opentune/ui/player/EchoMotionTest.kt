@@ -24,21 +24,27 @@ class EchoMotionTest {
         compose.setContent { phase = rememberEchoPhase(running.value, 8_000) }
         compose.mainClock.advanceTimeBy(500)
         assertTrue(phase.value > 0f)
-        running.value = false
-        compose.mainClock.advanceTimeBy(32)
+        compose.runOnIdle { running.value = false }
+        compose.mainClock.advanceTimeByFrame()
+        // repeatOnLifecycle registers/removes observers on Android's main looper;
+        // advancing only Compose's frame clock does not drain those callbacks.
+        compose.waitForIdle()
         val paused = phase.value
         compose.mainClock.advanceTimeBy(500)
         assertEquals(paused, phase.value, 0f)
-        running.value = true
+        compose.runOnIdle { running.value = true }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(500)
-        assertTrue(phase.value > paused)
+        assertTrue("resumed phase ${phase.value} should advance beyond $paused", phase.value > paused)
         compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
         compose.waitForIdle()
         val background = phase.value
         compose.mainClock.advanceTimeBy(500)
         assertEquals(background, phase.value, 0f)
         compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(500)
-        assertTrue(phase.value > background)
+        assertTrue("foreground phase ${phase.value} should advance beyond $background", phase.value > background)
     }
 }
