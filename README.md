@@ -70,6 +70,8 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **Listen together**: share a room code and friends hear the same song,
   in step, on their own phones.
 - **Live radio** from 50,000+ stations, nearest first.
+- **Cast** to Chromecasts, smart TVs and network speakers on your Wi-Fi.
+- **Name that song**: hold the phone up and it tells you what's playing.
 - **Podcasts**, downloads, Android Auto, a home-screen widget and imports
   from Spotify and YouTube playlists.
 
@@ -119,7 +121,8 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   The songs either side of the current one are found before you get to
   them, and the next one is buffered while this one plays. Played songs
   stay in a song cache (512 MB by default) for instant replays and seeks.
-- **Queue and radio.** Autoplay keeps similar songs coming. Shuffle,
+- **Queue and radio.** Autoplay keeps similar songs coming, also after a
+  song you started on its own from Home or search. Shuffle,
   repeat, play next, add to queue, swipe-to-queue on any row, and
   drag-to-reorder in the player's queue. Shuffle, repeat and autoplay
   each feel different under your finger (a riffle, a loop closing, a
@@ -141,6 +144,23 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   measurements and their parametric correction runs ahead of your own EQ,
   so you start from a neutral sound.
 - **Sleep timer.** Stop after 15 to 90 minutes, or at the end of the song.
+- **Cast to a TV or speaker.** The Play on button in the player finds
+  Chromecasts (and TVs and speakers with Chromecast built in) and DLNA
+  renderers (most smart TVs, many network speakers, Kodi, VLC) on the same
+  Wi-Fi. No Google libraries are involved: OpenTune speaks the Cast
+  protocol and DLNA itself. The phone serves each song to the device from
+  a small web server of its own, so downloads, songs on the phone and
+  streams all cast. The queue, autoplay, the notification and every button
+  keep working as usual; the device follows, and its volume is in the same
+  sheet.
+- **What's this song?** From Home or the search bar, a page listens
+  through the microphone and names the song playing nearby. The phone
+  turns a few seconds of sound into an audio fingerprint (the method
+  [SongRec](https://github.com/marin-m/SongRec) worked out) and only the
+  fingerprint is sent to Shazam's lookup; the recording stays on the phone.
+  While it listens, a glowing button sends rings out and ripples with the
+  sound. What it finds can be played straight away and stays in a Found
+  lately list. The microphone is only asked for when you use it.
 - **SponsorBlock.** Music videos skip the parts viewers have marked as
   non-music (talking, skits), sponsor reads, self-promotion and like or
   subscribe reminders, using [SponsorBlock](https://sponsor.ajay.app)'s
@@ -275,9 +295,10 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 ### Look and feel
 
 - **An opening that dives into the logo.** At start the mark takes over
-  from the system splash at the same size, settles with a soft glow and a
-  glint of light, then turns into a window onto the app and rushes toward
-  you until the app fills the screen. Off under Settings › Motion, and
+  from the system splash at the same size, settles with a glint of light,
+  then turns into a window onto the app, outlined in white so it shows
+  even over a dark app, and rushes toward you until the app fills the
+  screen. Off under Settings › Motion, and
   skipped with reduced motion.
 - **Liquid Glass.** The floating bars and player buttons frost and bend
   what's behind them, like Apple's material (Android 13 and newer; frosted
@@ -289,8 +310,8 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   full-screen cover too. It's made from the cover itself, so it works for
   every song. Off in Settings, or with reduced motion.
 - **Pull to refresh with the logo.** On Home and Podcasts, pulling down
-  brings in the OpenTune mark and fills it with the accent from left to
-  right while the page follows your finger with some give; past the line
+  brings in the OpenTune mark and fills it with the playing song's colours
+  from left to right while the page follows your finger with some give; past the line
   it ticks and pops, while it loads the mark sways like a sound wave with
   light running across it, and when it's done it shrinks away.
 - **Skeleton loading.** Pages show the shape of what's coming while they
@@ -303,8 +324,9 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   ring. Scroll down and the dock tucks away while the card shrinks into a
   round cover bubble in the corner, still ringed by progress; scroll up and
   both come back. Pick how the dock goes: Minimize (like iOS 26, the
-  default: the tabs shrink into a circle holding the open one, with the
-  song in a slim bar beside it), Bubble, Glide (off the bottom and back on
+  default: the dock pill contracts to the left into a circle holding the
+  open tab, the other tabs slipping under its edge, with the song in a
+  slim bar beside it), Bubble, Glide (off the bottom and back on
   a spring), Retract (into the Search button and unrolling from it) or
   Cascade (tabs drop one by one and return in a wave). The lens can
   Stretch like a drop, wobble like Jelly or Glide in one piece.
@@ -372,10 +394,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   time bar, the line being sung and the next ones in a serif, the
   controls with like and output buttons, and the volume, all over a
   blurred, dimmed cover. Lyrics and the queue open in the cover's place.
-- **Share with a picture.** Sharing a song sends its link with an image
-  drawn like a lock screen playing it: the cover blurred into the
-  background, the time and date, the cover, and a frosted panel with the
-  song, the time and the controls.
+- **Share with a picture.** Sharing a song sends its link with a square
+  image: the cover blurred into the background and, in the middle, the
+  cover in a dark rounded frame with the artist's photo and name at the
+  top, a share button and a heart, and the title, the time, a progress bar
+  and the controls over its foot.
 - **Player buttons in four designs.** Bloom: big bare glyphs, a soft disc
   of light blooming behind each press. Capsule: play in an accent pill
   that stretches wide while music plays, between skip buttons that tilt
@@ -391,13 +414,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   rushes past you, Dissolve from one blur into the other, turn like a
   Cube, open out of the middle in a Reveal, or Toss the old one aside as
   the new one lands. It applies to the full-screen cover too.
-- **Edge glow.** An optional soft light in the playing cover's colour along
-  the screen's edges, breathing slowly while music plays.
-- **Stage lights.** Optional coloured light rising from the bottom of the
-  screen in time with the music: pools of colour that cycle through the
-  hues, swell with the bass, flash on the beat and now and then flicker
-  out like a worn stage light. The level is read from the app's own audio
-  as it plays, so no microphone permission is needed.
+- **Ambient light.** With the Gradient player background, wide soft
+  glows in the song's colours drift slowly under the controls, meeting and
+  mixing over a pale wash at the foot of the screen, and lift a little
+  with the music. The level is read from the app's own audio as it plays,
+  so no microphone permission is needed.
 - **A player you can feel.** Play swells into a deep thump, pause thumps
   and fades, next rushes forward into a kick, previous kicks and pulls
   back, a like beats twice like a heart, and dragging the seek bar ticks

@@ -338,6 +338,32 @@ h2.in .wd { transition: transform .9s var(--ease), opacity .9s; transition-delay
 .rel .side .mono { color: var(--dim); }
 .source-note { margin-top: 18px; color: var(--dim); }
 
+/* ---------- activity ---------- */
+.cal-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: clamp(18px, 3vw, 32px); display: grid; gap: 18px; }
+.cal-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px 24px; }
+.cal-top b { font: 600 clamp(28px, 4vw, 44px)/1 var(--display); letter-spacing: -0.02em; }
+.cal-top span { color: var(--muted); font-size: 15px; }
+.cal-scroll { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; padding-bottom: 4px; }
+.cal { --c: 13px; --g: 3px; display: grid; grid-template-rows: 16px auto; gap: 6px; width: max-content; }
+.cal-months { display: grid; grid-auto-flow: column; grid-auto-columns: var(--c); gap: var(--g); font: 500 11px/16px var(--mono); color: var(--dim); }
+.cal-months span { white-space: nowrap; }
+.cal-grid { display: grid; grid-template-rows: repeat(7, var(--c)); grid-auto-flow: column; grid-auto-columns: var(--c); gap: var(--g); }
+.cal-grid i { border-radius: 3px; background: var(--raise); outline: 1px solid rgba(255, 255, 255, .03); outline-offset: -1px; }
+.cal-grid i[data-l="1"] { background: color-mix(in srgb, var(--tint) 30%, var(--raise)); }
+.cal-grid i[data-l="2"] { background: color-mix(in srgb, var(--tint) 55%, var(--raise)); }
+.cal-grid i[data-l="3"] { background: color-mix(in srgb, var(--tint) 78%, var(--raise)); }
+.cal-grid i[data-l="4"] { background: var(--tint); box-shadow: 0 0 10px color-mix(in srgb, var(--tint) 55%, transparent); }
+.cal-grid.in i { animation: cal-in .5s var(--ease) both; animation-delay: calc(var(--w) * 14ms); }
+@keyframes cal-in { from { opacity: 0; transform: scale(.4); } }
+.cal-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--dim); }
+.cal-key { display: inline-flex; align-items: center; gap: 4px; }
+.cal-key i { width: 12px; height: 12px; border-radius: 3px; background: var(--raise); }
+.cal-key i:nth-child(3) { background: color-mix(in srgb, var(--tint) 30%, var(--raise)); }
+.cal-key i:nth-child(4) { background: color-mix(in srgb, var(--tint) 55%, var(--raise)); }
+.cal-key i:nth-child(5) { background: color-mix(in srgb, var(--tint) 78%, var(--raise)); }
+.cal-key i:nth-child(6) { background: var(--tint); }
+.cal-foot a { color: var(--muted); }
+
 /* ---------- install ---------- */
 .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; position: relative; padding-top: 28px; }
 .thread { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--line); border-radius: 2px; overflow: hidden; }
@@ -454,7 +480,7 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
   <section class="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <a class="badge rise" href="#releases"><b id="ver-badge">v0.3.3</b><span id="ver-note">Latest release: stage lights and more synced lyrics</span></a>
+        <a class="badge rise" href="#releases"><b id="ver-badge">v0.3.5</b><span id="ver-note">Latest release: cast to your TV and name that song</span></a>
         <h1 class="rise d1"><span class="hl">Every song.</span><span class="hl two">No ads.</span><span class="hl three">No account.</span></h1>
         <p class="lede rise d2">OpenTune is a free, open-source music player for Android. It plays the YouTube Music catalogue with word-synced lyrics, live radio, podcasts and rooms where friends listen in step.</p>
         <div class="ctas rise d3">
@@ -641,6 +667,29 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
         </div>
       </div>
     </div></div>
+  </section>
+
+  <section class="block" id="activity" style="border-top:1px solid var(--line)">
+    <div class="wrap">
+      <div class="head">
+        <span class="kicker"><i></i>Activity</span>
+        <h2>Built in the open.</h2>
+        <p>Every day of work on GitHub over the past year, one square a day.</p>
+      </div>
+      <div class="cal-card" id="cal-card">
+        <div class="cal-top"><b id="cal-total">&nbsp;</b><span id="cal-note">contributions in the last year</span></div>
+        <div class="cal-scroll" id="cal-scroll">
+          <div class="cal" role="img" aria-label="GitHub contribution calendar for justshivv" id="cal">
+            <div class="cal-months" id="cal-months"></div>
+            <div class="cal-grid" id="cal-grid"></div>
+          </div>
+        </div>
+        <div class="cal-foot">
+          <a href="https://github.com/justshivv" target="_blank" rel="noopener">@justshivv on GitHub</a>
+          <span class="cal-key">Less<i></i><i></i><i></i><i></i><i></i> More</span>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section class="block" id="releases" style="border-top:1px solid var(--line)">
@@ -1071,6 +1120,56 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
     .then((list) => { if (Array.isArray(list) && list.length) renderReleases(list, true); }).catch(() => {});
   fetch("https://api.github.com/repos/justshivv/Opentune").then((r) => r.ok ? r.json() : Promise.reject(r.status))
     .then((repo) => { if (repo.stargazers_count > 0) { const s = $("stars-nav"); s.textContent = repo.stargazers_count.toLocaleString("en-US"); s.hidden = false; } }).catch(() => {});
+
+  /* ===== contribution calendar ===== */
+  // A year of days from GitHub's contribution graph, by week, newest on the right.
+  function renderCalendar(days) {
+    const grid = $("cal-grid"), months = $("cal-months");
+    grid.textContent = ""; months.textContent = "";
+    const first = new Date(days[0].date + "T00:00:00");
+    // Start the first column on Sunday, as GitHub does.
+    for (let k = 0; k < first.getDay(); k++) { const pad = document.createElement("i"); pad.style.visibility = "hidden"; pad.style.setProperty("--w", 0); grid.appendChild(pad); }
+    let week = 0, lastMonth = -1, total = 0, busiest = null;
+    const fmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" });
+    const monthName = new Intl.DateTimeFormat("en", { month: "short" });
+    days.forEach((d, i) => {
+      const date = new Date(d.date + "T00:00:00");
+      week = Math.floor((i + first.getDay()) / 7);
+      if (date.getDay() === 0 || i === 0) {
+        if (date.getMonth() !== lastMonth && date.getDate() <= 7) {
+          const m = document.createElement("span");
+          m.textContent = monthName.format(date);
+          m.style.gridColumn = String(week + 1);
+          months.appendChild(m);
+          lastMonth = date.getMonth();
+        }
+      }
+      const cell = document.createElement("i");
+      cell.dataset.l = String(d.level);
+      cell.style.setProperty("--w", week);
+      cell.title = (d.count === 0 ? "No contributions" : d.count + (d.count === 1 ? " contribution" : " contributions")) + " on " + fmt.format(date);
+      grid.appendChild(cell);
+      total += d.count;
+      if (!busiest || d.count > busiest.count) busiest = d;
+    });
+    $("cal-total").textContent = total.toLocaleString("en-US");
+    if (busiest && busiest.count > 0) $("cal-note").textContent = "contributions in the last year · busiest day " + fmt.format(new Date(busiest.date + "T00:00:00")) + " with " + busiest.count;
+    const scroller = $("cal-scroll"), cal = $("cal"), weeks = week + 1;
+    // Squares sized to fill the card, between 11 and 20 px; on a phone they stay small and the year scrolls.
+    const fit = () => {
+      const gap = scroller.clientWidth > 700 ? 4 : 3;
+      const c = Math.max(11, Math.min(20, Math.floor((scroller.clientWidth - gap * (weeks - 1)) / weeks)));
+      cal.style.setProperty("--c", c + "px");
+      cal.style.setProperty("--g", gap + "px");
+      scroller.scrollLeft = scroller.scrollWidth;
+    };
+    fit();
+    addEventListener("resize", fit, { passive: true });
+    if (!still) requestAnimationFrame(() => grid.classList.add("in"));
+  }
+  fetch("https://github-contributions-api.jogruber.de/v4/justshivv?y=last").then((r) => r.ok ? r.json() : Promise.reject(r.status))
+    .then((data) => { if (data && Array.isArray(data.contributions) && data.contributions.length) renderCalendar(data.contributions); else throw 0; })
+    .catch(() => { $("cal-total").textContent = "See it on GitHub"; $("cal-note").textContent = "The calendar couldn't be loaded just now."; $("cal-scroll").hidden = true; });
 
   /* ===== what's on screen ===== */
   // Parts off screen keep their clocks but aren't drawn, so scrolling has
