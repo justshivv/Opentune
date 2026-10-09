@@ -610,7 +610,7 @@ fun PlayerLayout(
                                     Modifier.height(52.dp).glass(RoundedCornerShape(30.dp), Color.White.copy(alpha = 0.10f)),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    GlassToggle(Icons.Rounded.Tune, "Remix", !sound.isDefault, { showRemix = true })
+                                    GlassToggle(Icons.Rounded.Tune, "Remix", showRemix, { showRemix = true })
                                     GlassToggle(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true })
                                     GlassToggle(Icons.Rounded.Cast, "Play on another device", com.opentune.ui.cast.castingTo() != null, { showCast = true })
                                 }
