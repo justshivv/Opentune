@@ -217,7 +217,9 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
             }
         }
         items(playlists, key = { it.id }) { p ->
-            PlaylistRow(p.songs.firstOrNull()?.thumbnailUrl, p.name, "${p.songs.size} songs · on this phone", { nav.playlist(p.id) }, Modifier.animateItem())
+            PlaylistRow(null, p.name, "${p.songs.size} songs · on this phone", { nav.playlist(p.id) }, Modifier.animateItem(), cover = {
+                com.opentune.ui.components.PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.size(56.dp))
+            })
         }
         items(ytPlaylists, key = { "yt:${it.browseId}" }) { p ->
             PlaylistRow(p.thumbnailUrl, p.title, p.subtitle.ifBlank { "YouTube Music" }, { p.browseId?.let(nav.browse) }, Modifier.animateItem())
@@ -297,12 +299,14 @@ private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick
 }
 
 @Composable
-private fun PlaylistRow(art: String?, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun PlaylistRow(art: String?, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier, cover: (@Composable () -> Unit)? = null) {
     Row(
         modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (art != null) {
+        if (cover != null) {
+            cover()
+        } else if (art != null) {
             Artwork(art.artworkAt(CARD_ART_PX), Modifier.size(56.dp), RoundedCornerShape(14.dp))
         } else {
             Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
@@ -447,6 +451,12 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                             GlassIconButton(Icons.Rounded.DeleteOutline, "Delete", { deleting = true })
                         }
                     })
+                    com.opentune.ui.components.PlaylistCover(
+                        playlist.name,
+                        songs.map { it.thumbnailUrl },
+                        Modifier.padding(top = 4.dp, bottom = 8.dp).size(200.dp).align(Alignment.CenterHorizontally),
+                        RoundedCornerShape(24.dp),
+                    )
                     if (songs.isNotEmpty()) {
                         PlayButtons(
                             onPlay = { actions.playAll(songs, 0, false, playlist.name) },
