@@ -18,6 +18,7 @@ import java.io.IOException
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class StartupSelectionTest {
     @Test fun playerRetainsTheSourceFactorySelectionToken() {
         val context = org.robolectric.RuntimeEnvironment.getApplication()

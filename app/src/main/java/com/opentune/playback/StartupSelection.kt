@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CancellationException
 
 /** One choice per media source, made before the cache opens. Seeks must keep the same bytes. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class StartupSelection(
     private val song: Song,
     private val original: Uri,
