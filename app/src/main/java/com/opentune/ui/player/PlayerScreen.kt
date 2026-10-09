@@ -43,6 +43,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -251,6 +252,7 @@ fun PlayerLayout(
     val pane = Pane.valueOf(paneName)
     fun toggle(p: Pane) { paneName = if (pane == p) Pane.COVER.name else p.name }
     var showRemix by remember { mutableStateOf(false) }
+    var showCast by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
     var showOffset by remember { mutableStateOf(false) }
@@ -577,6 +579,7 @@ fun PlayerLayout(
                                 ) {
                                     GlassToggle(Icons.Rounded.Tune, "Remix", !sound.isDefault, { showRemix = true })
                                     GlassToggle(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true })
+                                    GlassToggle(Icons.Rounded.Cast, "Play on another device", com.opentune.ui.cast.castingTo() != null, { showCast = true })
                                 }
                             }
                         }
@@ -595,6 +598,7 @@ fun PlayerLayout(
         }
 
         if (showRemix) RemixSheet(onDismiss = { showRemix = false })
+        if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
         if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })
         if (showMenu) {
             SongMenuSheet(

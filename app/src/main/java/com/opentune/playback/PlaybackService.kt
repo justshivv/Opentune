@@ -116,6 +116,7 @@ class PlaybackService : MediaLibraryService() {
     private val car by lazy { CarLibrary(this) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    private var castMirror: CastMirror? = null
     private var radioJob: Job? = null
     private var radioSeed: String? = null
 
@@ -232,6 +233,13 @@ class PlaybackService : MediaLibraryService() {
             AppSettings.playback.map { it.systemEffects }.distinctUntilChanged().collect { openEffectSession(player.audioSessionId) }
         }
         crossfade = Crossfade(context, scope, sources, player).also { it.start() }
+        // Casting: the device follows this player while one is connected.
+        castMirror = CastMirror(context, player, scope)
+        scope.launch {
+            com.opentune.cast.Cast.session.map { it?.receiver }.distinctUntilChanged().collect { r ->
+                if (r != null) castMirror?.attach(r) else castMirror?.detach()
+            }
+        }
         scope.launch { PlaybackRequests.upgrade.collect { scheduleUpgrade(force = true) } }
 
         audioManager = getSystemService(AudioManager::class.java)?.also { am ->
@@ -343,6 +351,8 @@ class PlaybackService : MediaLibraryService() {
         NowPlayingWidget.stopped(this)
         crossfade?.release()
         crossfade = null
+        castMirror?.detach(resume = false)
+        castMirror = null
         closeEffectSession()
         finishListen()
         loudnessEnhancer?.release()

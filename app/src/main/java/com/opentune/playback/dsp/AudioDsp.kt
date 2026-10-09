@@ -282,6 +282,13 @@ class DspAudioProcessor : BaseAudioProcessor() {
             }
         }
         val out = replaceOutputBuffer(size)
+        if (silenced) {
+            // Casting: the phone keeps time for the queue while another device makes the sound.
+            repeat(size) { out.put(0) }
+            inputBuffer.position(inputBuffer.limit())
+            out.flip()
+            return
+        }
         if (p.isNeutral || channels == 0) {
             out.put(inputBuffer)
             out.flip()
@@ -339,6 +346,8 @@ class DspAudioProcessor : BaseAudioProcessor() {
     }
 
     companion object {
+        /** While true, every processor puts out silence; set while casting. */
+        @Volatile var silenced = false
         const val SPATIAL_WIDTH = 1.6f
         private const val KNEE = 0.85f
         /** Never quite full scale, so the output can't clip after conversion. */

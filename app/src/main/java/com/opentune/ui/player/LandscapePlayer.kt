@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.SpeakerGroup
+import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -101,6 +102,7 @@ internal fun LandscapePlayer(
     var previousRolls by remember { mutableIntStateOf(0) }
     var nextRolls by remember { mutableIntStateOf(0) }
     val haptics = com.opentune.ui.components.rememberHaptics()
+    var showCast by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxSize()
@@ -161,6 +163,8 @@ internal fun LandscapePlayer(
                     }
                     val context = LocalContext.current
                     RoundIcon(Icons.Rounded.SpeakerGroup, "Choose where it plays", { openOutputSwitcher(context) })
+                    RoundIcon(Icons.Rounded.Cast, "Play on another device", { showCast = true })
+                    if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
                 }
                 if (roomy) {
                     LyricLine(lines.second, alpha = 0.55f, onLyrics, maxLines = 2)

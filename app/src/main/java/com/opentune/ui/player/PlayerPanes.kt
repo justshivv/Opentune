@@ -358,7 +358,8 @@ fun rememberOutputDeviceName(): String {
         am?.registerAudioDeviceCallback(cb, null)
         onDispose { am?.unregisterAudioDeviceCallback(cb) }
     }
-    return name
+    val cast by com.opentune.cast.Cast.session.collectAsState()
+    return cast?.let { if (it.receiver == null) "Connecting to ${it.target.name}…" else "Playing on ${it.target.name}" } ?: name
 }
 
 private fun outputName(context: Context, am: AudioManager?): String {

@@ -170,6 +170,7 @@ fun AppRoot(vm: PlayerViewModel) {
     }
     LaunchedEffect(playbackError) { playbackError?.let { snackbar.showSnackbar(it) } }
     LaunchedEffect(Unit) { com.opentune.data.together.Together.notices.collect { snackbar.showSnackbar(it) } }
+    LaunchedEffect(Unit) { com.opentune.cast.Cast.messages.collect { snackbar.showSnackbar(it) } }
 
     // Kept across recompositions (opening the player, play/pause): a new
     // instance each time would recompose every screen and list handed one.
