@@ -331,6 +331,7 @@ fun AppRoot(vm: PlayerViewModel) {
                             actions = actions,
                             onItemClick = openItem,
                             onOpenSettings = { nav.navigate("settings") },
+                            onRecognize = { nav.navigate("recognize") },
                         )
                     }
                     composable(Tab.EXPLORE.route) {
@@ -362,6 +363,7 @@ fun AppRoot(vm: PlayerViewModel) {
                             onPlayNext = vm::playNext,
                             onAddToQueue = vm::addToQueue,
                             onBrowse = { item: BrowseItem -> nav.openBrowse(item.browseId, item.type) },
+                            onRecognize = { nav.navigate("recognize") },
                         )
                     }
                     composable("settings") {
@@ -388,6 +390,9 @@ fun AppRoot(vm: PlayerViewModel) {
                     composable("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }, onOpenWrapped = { nav.navigate("wrapped") }) }
                     composable("wrapped") { WrappedScreen(actions, onBack = { nav.popBackStack() }) }
+                    composable("recognize") {
+                        com.opentune.ui.recognize.RecognizeScreen(content, onPlay = { vm.play(it, "Found by listening") }, onBack = { nav.popBackStack() })
+                    }
                     composable(
                         "import?link={link}",
                         listOf(navArgument("link") { type = NavType.StringType; nullable = true; defaultValue = null }),

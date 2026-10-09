@@ -7,6 +7,8 @@
     <!-- Casting: finding TVs and speakers on the Wi-Fi. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- Naming a song playing nearby; only asked for when that's used. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Approximate only: used once to find radio stations nearby, never kept. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

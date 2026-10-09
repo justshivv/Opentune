@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,6 +76,8 @@ fun HomeScreen(
     actions: SongActions,
     onItemClick: (ShelfItem) -> Unit,
     onOpenSettings: () -> Unit,
+    /** Opens the page that names a song from what the microphone hears. */
+    onRecognize: (() -> Unit)? = null,
 ) {
     val loader = rememberLoader("home") { MusicRepository.home() }
     val state by loader.state.collectAsState()
@@ -121,6 +124,10 @@ fun HomeScreen(
                     Column(Modifier.weight(1f)) {
                         Text(greeting, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                         Text(firstName ?: "What's playing?", style = MaterialTheme.typography.displaySmall)
+                    }
+                    if (onRecognize != null) {
+                        GlassIconButton(Icons.Rounded.GraphicEq, "Name a song playing nearby", onRecognize, size = 52.dp)
+                        Spacer(Modifier.width(10.dp))
                     }
                     GlassIconButton(Icons.Rounded.Person, "Account and settings", onOpenSettings, size = 52.dp) {
                         val photo = account?.thumbnailUrl

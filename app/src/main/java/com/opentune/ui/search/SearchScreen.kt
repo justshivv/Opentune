@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -78,6 +79,8 @@ fun SearchScreen(
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
     onBrowse: (BrowseItem) -> Unit,
+    /** Opens the page that names a song from what the microphone hears. */
+    onRecognize: (() -> Unit)? = null,
     vm: SearchViewModel = viewModel(),
 ) {
     val query by vm.query.collectAsState()
@@ -105,6 +108,8 @@ fun SearchScreen(
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { vm.onQueryChange("") }) { Icon(Icons.Filled.Close, "Clear") }
+                } else if (onRecognize != null) {
+                    IconButton(onClick = onRecognize) { Icon(Icons.Filled.GraphicEq, "Name a song playing nearby") }
                 }
             },
             colors = TextFieldDefaults.colors(
