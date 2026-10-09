@@ -46,6 +46,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.opentune.data.MusicRepository
@@ -88,6 +90,7 @@ fun HomeScreen(
     val more = remember(moreAll, hideExplicit) { ContentFilter.shelves(moreAll, hideExplicit) }
     val records by History.records.collectAsState()
     val recents = remember(records) { History.recents(records, 24) }
+    val mixes = remember(records) { com.opentune.data.history.DailyMixes.build(records) }
     val ui by AppSettings.ui.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
@@ -145,6 +148,9 @@ fun HomeScreen(
                         onToggleLayout = { AppSettings.updateUi { it.copy(recentsAsGrid = !it.recentsAsGrid) } },
                     )
                 }
+            }
+            if (mixes.isNotEmpty()) {
+                item(key = "mixes") { MixesShelf(mixes, actions) }
             }
             when (val s = state) {
                 is UiState.Loading -> items(3) { ShelfPlaceholder() }
@@ -268,5 +274,81 @@ private fun QuickPicks(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** Today's mixes from this phone's listening, each a card of four covers. */
+@Composable
+internal fun MixesShelf(mixes: List<com.opentune.data.history.DailyMixes.Mix>, actions: SongActions) {
+    Column(Modifier.padding(top = 18.dp)) {
+        Text(
+            "Made for you today",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        Text(
+            "Daily mixes from what you play, new each day",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+        androidx.compose.foundation.lazy.LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+        ) {
+            items(mixes.size, key = { mixes[it].id }) { i ->
+                val mix = mixes[i]
+                MixCard(mix) { actions.playAll(mix.songs, 0, false, mix.title) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MixCard(mix: com.opentune.data.history.DailyMixes.Mix, onClick: () -> Unit) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+    Column(Modifier.width(156.dp).clip(shape).clickable(onClick = onClick)) {
+        Box(Modifier.size(156.dp).clip(shape)) {
+            val covers = mix.covers
+            if (covers.size >= 4) {
+                Column {
+                    for (row in 0..1) Row {
+                        for (col in 0..1) Artwork(covers[row * 2 + col], Modifier.size(78.dp), androidx.compose.ui.graphics.RectangleShape)
+                    }
+                }
+            } else {
+                Artwork(covers.firstOrNull(), Modifier.size(156.dp), androidx.compose.ui.graphics.RectangleShape)
+            }
+            // A band of colour at the foot with the mix's name.
+            val accent = MaterialTheme.colorScheme.primary
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0.45f to androidx.compose.ui.graphics.Color.Transparent,
+                            1f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.78f),
+                        ),
+                    ),
+            )
+            Box(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp).size(width = 28.dp, height = 4.dp).clip(CircleShape).background(accent))
+            Text(
+                mix.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                color = androidx.compose.ui.graphics.Color.White,
+                maxLines = 2,
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, end = 12.dp, bottom = 22.dp),
+            )
+        }
+        Text(
+            mix.subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp, bottom = 2.dp),
+        )
     }
 }
