@@ -336,7 +336,7 @@ enum class GlassStyle(val label: String, val summary: String) {
     HEAVY("Heavy frost", "Thick, milky glass that hides what's behind it"),
     TINTED("Tinted", "Glass washed with your accent colour"),
     SMOKE("Smoke", "Dark smoked glass with deep contrast"),
-    LIQUID("Liquid", "Apple's clear Liquid Glass: barely frosted, the edges bend and split the light, with a bright rim (Android 13+)"),
+    LIQUID("Liquid", "Apple's Liquid Glass: softly frosted, the edges bend and split the light, with a bright rim (Android 13+)"),
 }
 
 /** How the dock's highlight moves to the tab you pick. */

@@ -68,6 +68,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlin.math.roundToInt
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.TransformOrigin
@@ -177,8 +179,12 @@ fun FloatingCard(
                 val maxCard = maxHeight
                 val shape = RoundedCornerShape(32.dp)
                 val density = LocalDensity.current
-                val halfPx = with(density) { (maxCard * 0.5f).toPx() }
-                val range = with(density) { (maxCard * 0.9f).toPx() } - halfPx
+                // The card's own height with everything shown, measured as it lays out;
+                // an expandable card never grows past it, so a short menu has no empty foot.
+                var naturalPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+                val fullPx = minOf(with(density) { (maxCard * 0.9f).toPx() }, naturalPx)
+                val halfPx = minOf(with(density) { (maxCard * 0.5f).toPx() }, fullPx)
+                val range = (fullPx - halfPx).coerceAtLeast(0f)
                 fun settle(velocity: Float) {
                     settling?.cancel()
                     settling = scope.launch {
@@ -244,8 +250,19 @@ fun FloatingCard(
                         .widthIn(max = 560.dp)
                         .fillMaxWidth()
                         .then(
-                            if (expandable) Modifier.height(with(density) { (halfPx + extra).toDp() })
-                            else Modifier.heightIn(max = maxCard * 0.9f),
+                            if (expandable) {
+                                Modifier.layout { measurable, constraints ->
+                                    // Lists that can't be measured whole (lazy ones) just take the height asked for.
+                                    val natural = runCatching { measurable.maxIntrinsicHeight(constraints.maxWidth) }.getOrNull()
+                                    if (natural != null && natural.toFloat() != naturalPx) naturalPx = natural.toFloat()
+                                    val want = (halfPx + extra).roundToInt()
+                                    val h = minOf(want, natural ?: want).coerceIn(constraints.minHeight, constraints.maxHeight)
+                                    val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                                }
+                            } else {
+                                Modifier.heightIn(max = maxCard * 0.9f)
+                            },
                         )
                         .graphicsLayer {
                             transformOrigin = TransformOrigin(0.5f, 1f)

@@ -100,11 +100,12 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     // A caller's own see-through tint wins; otherwise the style colours the glass.
     val colour = if (tint.alpha < 1f) tint else styleTint(ui.glassStyle, tint, MaterialTheme.colorScheme.primary, dark)
     if (backdrop != null && liquidGlassOn() && ui.glassStyle == GlassStyle.LIQUID) {
-        // Apple's material: hardly any frost, so what's behind stays sharp in
-        // the middle; a deep lens at the edges that bends it and splits the
-        // light into a colour fringe; vibrancy so colours glow through; a
-        // bright specular rim and a soft inner shade that give the glass depth.
-        val film = if (tint.alpha < 1f) tint else (if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.18f))
+        // Apple's material: what's behind is softly frosted, so colours read
+        // as glowing fields rather than detail; a deep lens at the edges that
+        // bends it and splits the light into a colour fringe; vibrancy so the
+        // colours glow through; a bright specular rim and a soft inner shade
+        // that give the glass depth.
+        val film = if (tint.alpha < 1f) tint else (if (dark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.2f))
         return this.drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
@@ -178,7 +179,7 @@ internal fun glassLook(style: GlassStyle): GlassLook = when (style) {
     GlassStyle.TINTED -> GlassLook(30.dp, 0.58f, 0.05f, LIQUID_BLUR, 0.46f, 1.6f)
     GlassStyle.SMOKE -> GlassLook(34.dp, 0.70f, 0.04f, 26.dp, 0.58f, 1.1f)
     // Without Liquid Glass (older Android, or blur reduced) it's the clearest frost.
-    GlassStyle.LIQUID -> GlassLook(14.dp, 0.24f, 0f, 2.dp, 0.06f, 1.8f)
+    GlassStyle.LIQUID -> GlassLook(20.dp, 0.30f, 0f, 16.dp, 0.08f, 1.8f)
 }
 
 /** The colour a [GlassStyle] washes the glass with, from the surface [base] and the [accent]. */
