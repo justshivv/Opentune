@@ -9,6 +9,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * asked for to making sound.
  */
 object NerdStats {
+    private val _lossless = MutableStateFlow<String?>(null)
+    val lossless = _lossless.asStateFlow()
+
+    fun onLossless(label: String?) { _lossless.value = label }
+
     private val _lastPicked = MutableStateFlow<Pair<String, Int>?>(null)
     val lastPicked = _lastPicked.asStateFlow()
 

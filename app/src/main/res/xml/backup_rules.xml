@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Android 11 and older. Login cookie and Last.fm session are live credentials: never back them up. -->
 <full-backup-content>
+    <exclude domain="sharedpref" path="spotiflac.xml" />
     <exclude domain="sharedpref" path="account.xml" />
     <exclude domain="sharedpref" path="lastfm.xml" />
     <exclude domain="sharedpref" path="subsonic.xml" />

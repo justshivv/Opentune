@@ -70,6 +70,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
             }
         })
         AppSettings.init(this)
+        com.opentune.data.lossless.SpotiflacSession.init(this)
         History.init(this)
         LoudnessStore.init(this)
         UpgradedTracks.init(this)

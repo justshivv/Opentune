@@ -1,0 +1,47 @@
+<!doctype html>
+<!-- Adapted from Spotui's GPLv3 SpotiFLAC verification flow. -->
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{font:16px system-ui;color:#ddd;background:#151515;padding:12px}button{font:inherit;padding:12px;margin-top:16px}#status{white-space:pre-wrap}</style>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+</head><body><div id="check"></div><p id="status">Connecting…</p><button onclick="this.disabled=true;boot().finally(()=>this.disabled=false)">Retry</button>
+<script>
+const base='https://api.zarz.moe/v2', version='4.8.5';
+let installId=localStorage.getItem('sf_install');
+if(!installId){installId=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');localStorage.setItem('sf_install',installId);}
+function statusText(s){document.getElementById('status').textContent=s;}
+async function request(path,body){
+  const response=await fetch(base+path,{method:body?'POST':'GET',headers:{'Accept':'application/json',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(15000)});
+  if(!response.ok)throw new Error('Provider returned HTTP '+response.status+'. Try again later.');
+  return response.json();
+}
+function done(data){
+  if(!data.session_id||!data.session_secret)return false;
+  window.opentuneSession={session_id:data.session_id,session_secret:data.session_secret,expires_at:data.expires_at||data.expiresAt||''};
+  statusText('Verification complete.');return true;
+}
+async function boot(){
+  document.getElementById('check').replaceChildren();
+  statusText('Connecting…');
+  try{
+    const data=await request('/bootstrap?install_id='+installId+'&app_version='+version);
+    if(done(data))return;
+    const sitekey=data.sitekey||data.turnstile_sitekey||data.turnstile_site_key;
+    if(!sitekey)throw new Error('This provider could not start verification. Public providers remain available.');
+    for(let i=0;!window.turnstile&&i<40;i++)await new Promise(r=>setTimeout(r,250));
+    if(!window.turnstile)throw new Error('The verification check could not load.');
+    statusText('Complete the check to connect.');
+    turnstile.render('#check',{sitekey,callback:async token=>{
+      try{
+        statusText('Verifying…');
+        const verified=await request('/challenge/verify',{challenge_id:data.challenge_id||'',turnstile_token:token});
+        if(done(verified))return;
+        const grant=verified.grant||verified.grant_token;
+        if(!grant)throw new Error('Verification did not return a grant. Please retry.');
+        const session=await request('/session/exchange',{grant,install_id:installId,app_version:version,platform:'android'});
+        if(!done(session))throw new Error('No session was returned. Please retry.');
+      }catch(error){statusText(error.message);}
+    },'error-callback':()=>statusText('Verification failed. Please retry.'),'expired-callback':()=>statusText('Verification expired. Please retry.')});
+  }catch(error){statusText(error.message);}
+}
+window.addEventListener('load',boot);
+</script></body></html>

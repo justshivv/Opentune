@@ -4,6 +4,14 @@ OpenTune is licensed under the GNU General Public License v3.0 (see
 [LICENSE](LICENSE)). It includes or uses the following code, libraries,
 fonts and data, under their own licences.
 
+The community lossless provider protocols, endpoint registry, SpotiFLAC session
+signing and verification flow under `data/lossless/`, `ui/settings/SpotiflacVerification.kt`
+and `assets/spotiflac_verify.html` are adapted from
+[Spotui](https://github.com/Spotui/Spotui/tree/main/app/src/main/java/com/music/spotui/lossless)
+under GPLv3. OpenTune adds YouTube Music identity lookup through
+[Odesli](https://odesli.co), cancellable network requests, FLAC validation,
+separate rendition caches and playback fallback.
+
 The Innertube client, response parser and YouTube stream resolver under
 `data/innertube/` are adapted from
 [BitChord](https://github.com/kushagrasinghx/BitChord), used under its

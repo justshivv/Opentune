@@ -374,6 +374,9 @@ private fun settingsSections(
     val lib by AppSettings.library.collectAsState()
     val metered = remember { AppSettings.onMeteredNetwork() }
     var qualityDialog by remember { mutableStateOf<Boolean?>(null) } // true = Wi-Fi, false = mobile
+    var verifyLossless by remember { mutableStateOf(false) }
+    val losslessConnected by com.opentune.data.lossless.SpotiflacSession.connected.collectAsState()
+    if (verifyLossless) SpotiflacVerification { verifyLossless = false }
     var folderDialog by remember { mutableStateOf(false) }
     var cacheBytes by remember { mutableLongStateOf(0L) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -625,6 +628,21 @@ private fun settingsSections(
                         )
                     })
                 },
+                Entry("Lossless streaming", "flac tidal amazon qobuz spotiflac") {
+                    ToggleRow("Lossless streaming", pb.losslessStreaming, { v -> AppSettings.updatePlayback { it.copy(losslessStreaming = v) } }, summary = "Look for a matching FLAC after playback starts. Uses Odesli and community providers; falls back to YouTube. Streaming only.", icon = Icons.Rounded.HighQuality)
+                },
+                Entry("Lossless on unmetered networks only", "flac mobile wifi data") {
+                    ToggleRow("Lossless on unmetered networks only", pb.losslessUnmeteredOnly, { v -> AppSettings.updatePlayback { it.copy(losslessUnmeteredOnly = v) } }, summary = "Avoid large FLAC streams on mobile data and metered Wi-Fi", icon = Icons.Rounded.Wifi)
+                },
+                Entry("Prefer hi-res lossless", "24 bit flac qobuz") {
+                    ToggleRow("Prefer hi-res lossless", pb.losslessHiRes, { v -> AppSettings.updatePlayback { it.copy(losslessHiRes = v) } }, summary = "Try Qobuz hi-res when available. Uses more data; other providers use standard lossless.", icon = Icons.Rounded.HighQuality)
+                },
+                Entry("SpotiFLAC verification", "lossless session connect verify") {
+                    SettingRow("SpotiFLAC verification", icon = Icons.Rounded.HighQuality, summary = if (losslessConnected) "Connected · tap to renew" else "Optional · public providers work without it", onClick = { verifyLossless = true })
+                },
+                if (losslessConnected) Entry("Disconnect SpotiFLAC", "lossless session sign out") {
+                    SettingRow("Disconnect SpotiFLAC", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { com.opentune.data.lossless.SpotiflacSession.clear() })
+                } else null,
                 Entry("Bit-perfect USB output", "dac exclusive passthrough hi-fi audiophile mixer bypass") {
                     ToggleRow(
                         "Bit-perfect USB output",

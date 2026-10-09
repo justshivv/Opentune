@@ -259,6 +259,10 @@ data class PlaybackSettings(
     val preloadUpcoming: Boolean = true,
     /** Swap to a clearly better stream mid-song when one turns up. */
     val qualityUpgrade: Boolean = true,
+    /** Community FLAC lookup runs after playback starts. Downloads remain YouTube audio. */
+    val losslessStreaming: Boolean = false,
+    val losslessUnmeteredOnly: Boolean = true,
+    val losslessHiRes: Boolean = false,
     /** Overlap the end of a song with the start of the next; 0 is off. */
     val crossfadeSeconds: Int = 0,
     /** Bit-perfect output to a USB DAC (Android 14+): no mixing, effects or resampling. */

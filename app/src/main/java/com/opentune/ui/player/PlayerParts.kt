@@ -709,7 +709,8 @@ fun NerdStatsLine(format: AudioFormatInfo?) {
     val startup by NerdStats.startupMs.collectAsState()
     val gain by NerdStats.loudnessGainDb.collectAsState()
     val engine by NerdStats.engine.collectAsState()
-    val kbps = format?.bitrateKbps ?: picked?.second
+    val lossless by NerdStats.lossless.collectAsState()
+    val kbps = format?.bitrateKbps ?: picked?.second.takeIf { lossless == null }
     val parts = listOfNotNull(
         format?.codec,
         kbps?.let { "$it kbps" },
@@ -717,7 +718,7 @@ fun NerdStatsLine(format: AudioFormatInfo?) {
         format?.channels?.let { if (it == 2) "stereo" else if (it == 1) "mono" else "$it ch" },
         gain?.let { "normalized %+.1f dB".format(it) },
         startup?.let { "started in $it ms" },
-        engine?.let { "via $it" },
+        (lossless ?: engine)?.let { "via $it" },
     )
     Text(
         parts.joinToString(" · ").ifEmpty { "Waiting for stream…" },

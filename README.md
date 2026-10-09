@@ -79,6 +79,17 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 
 ### Listening
 
+- **Optional lossless streaming.** Enable it in Settings → Audio → Lossless.
+  Music starts on YouTube while OpenTune looks up the recording through Odesli
+  and tries community Tidal, Amazon and Qobuz providers. A matching, verified
+  FLAC can replace the stream at the current position; an unavailable or failed
+  provider falls back to YouTube. Off by default and restricted to unmetered
+  networks by default. Optional SpotiFLAC verification and Qobuz hi-res preference
+  are on the same page. Availability depends on third-party providers. This does
+  not change downloads, local files, podcasts, radio or your own server streams.
+  FLAC precision is shown in Stats for nerds; output quality still depends on
+  Android, your audio device and enabled effects.
+
 - **Two stream engines that switch on their own.**
   InnerTubeX leads and
   OpenTune's own client walk backs it up; after a failure the walk leads

@@ -54,8 +54,16 @@ fun videoIdOf(uri: Uri): String? =
 
 fun isUpgradedUri(uri: Uri): Boolean = uri.getQueryParameter(QUALITY_PARAM) == QUALITY_UPGRADED
 
+fun losslessUri(videoId: String, rendition: String): Uri =
+    streamUri(videoId, upgraded = false).buildUpon().appendQueryParameter("flac", rendition).build()
+
+fun losslessKeyOf(uri: Uri): String? =
+    if (videoIdOf(uri) != null) uri.getQueryParameter("flac")?.takeIf { it.isNotBlank() } else null
+
 /** The song cache key: the video id, kept apart for an upgraded copy. */
-fun cacheKeyOf(uri: Uri): String? = videoIdOf(uri)?.let { if (isUpgradedUri(uri)) "$it:hq" else it }
+fun cacheKeyOf(uri: Uri): String? = videoIdOf(uri)?.let { id ->
+    losslessKeyOf(uri)?.let { "$id:flac:$it" } ?: if (isUpgradedUri(uri)) "$id:hq" else id
+}
 
 private const val QUALITY_PARAM = "q"
 private const val QUALITY_UPGRADED = "hq"

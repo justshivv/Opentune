@@ -41,6 +41,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
     val sound by AppSettings.sound.collectAsState()
     val pb by AppSettings.playback.collectAsState()
     val engine by NerdStats.engine.collectAsState()
+    val lossless by NerdStats.lossless.collectAsState()
     val picked by NerdStats.lastPicked.collectAsState()
     val gain by NerdStats.loudnessGainDb.collectAsState()
     val speakerHold by NerdStats.loudnessOffOnSpeaker.collectAsState()
@@ -59,7 +60,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
         if (pb.clarity) add("clarity")
         if (eq.balance != 0f) add("balance")
     }
-    val kbps = format?.bitrateKbps ?: picked?.second
+    val kbps = format?.bitrateKbps ?: picked?.second.takeIf { lossless == null }
     val rate = format?.sampleRateHz
 
     FloatingDialog(
@@ -68,7 +69,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Stage(Tone.INFO, "Source", listOfNotNull(format?.codec, kbps?.let { "$it kbps" }, rate?.let { "$it Hz" }, format?.channels?.let { if (it == 2) "stereo" else "$it ch" }).joinToString(" · ").ifEmpty { "Waiting for the stream" })
-                Stage(Tone.INFO, "Found by", engine ?: "Not resolved this session (played from cache or a download)")
+                Stage(Tone.INFO, "Found by", lossless ?: engine ?: "Not resolved this session (played from cache or a download)")
                 Stage(
                     if (dspStages.isEmpty()) Tone.CLEAN else Tone.CHANGED,
                     "App DSP",
@@ -84,6 +85,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
                     "Loudness",
                     when {
                         !pb.loudnessNormalization -> "Off: every song at its own level"
+                        lossless != null -> "No loudness measurement for this FLAC master"
                         speakerHold && (gain ?: 0f) > 0.05f -> "%+.1f dB on the phone speaker: a quiet song lifted, never turned down".format(gain)
                         speakerHold -> "Full level on the phone speaker: songs aren't turned down there"
                         gain == null -> "No figure for this song yet"
