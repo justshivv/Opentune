@@ -150,8 +150,8 @@ internal fun LandscapePlayer(
                     RoundIcon(Icons.Rounded.MoreHoriz, "More", onMore)
                     RoundIcon(Icons.Rounded.KeyboardArrowDown, "Close player", actions.collapse)
                 }
-                SourceQualityBadge(song.videoId, state.audioFormat, onClick = onSignal)
                 TimeBar(position, state.durationMs, actions.seekTo)
+                SourceQualityBadge(song.videoId, state.audioFormat, onClick = onSignal)
                 val lines = if (showLines) rememberLyricLines(state.lyrics, lyricsPosition) else "" to ""
                 LyricLine(lines.first, alpha = 0.92f, onLyrics)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
