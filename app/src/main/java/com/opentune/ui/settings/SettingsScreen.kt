@@ -539,7 +539,7 @@ private fun settingsSections(
             title = "Download quality",
             options = AudioQuality.entries,
             selected = lib.downloadQuality,
-            label = { "${it.label} · ${it.summary}" },
+            label = { "${it.label} · ${if (it == AudioQuality.MAX) "Best YouTube download offered" else it.summary}" },
             onSelect = { q -> AppSettings.updateLibrary { it.copy(downloadQuality = q) } },
             onDismiss = { downloadQualityDialog = false },
         )
