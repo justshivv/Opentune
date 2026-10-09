@@ -1,10 +1,18 @@
 package com.opentune.ui.browse
 
-import com.opentune.ui.components.glass
+import com.opentune.ui.components.GlassPage
+import com.opentune.ui.components.LocalHazeState
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.drawBehind
+import dev.chrisbanes.haze.HazeProgressive
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 
 import androidx.compose.material.icons.filled.NotificationAdd
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -90,18 +98,50 @@ class SongActions(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CollapsingBar(title: String, listState: LazyListState, onBack: () -> Unit) {
+internal fun CollapsingBar(title: String, listState: LazyListState, onBack: () -> Unit) {
     val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
-    // Frosted, Telegram style: once the header scrolls away the bar fades in
-    // as translucent glass, so the list stays faintly visible under it.
+    // Once the header scrolls away the bar frosts in: the list under it is
+    // blurred and washed with the page colour, and the frost thins out over
+    // a short tail below the bar instead of stopping at a hard line.
     val frost by androidx.compose.animation.core.animateFloatAsState(if (collapsed) 1f else 0f, androidx.compose.animation.core.tween(260), label = "frost")
+    val haze = LocalHazeState.current
+    val page = MaterialTheme.colorScheme.background
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    var tall by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     Box {
         if (frost > 0f) {
             Box(
                 Modifier
                     .matchParentSize()
-                    .graphicsLayer { alpha = frost }
-                    .glass(androidx.compose.ui.graphics.RectangleShape, MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+                    .layout { measurable, constraints ->
+                        // Drawn taller than the bar by the tail; the bar's own size is unchanged.
+                        val h = constraints.maxHeight + FROST_TAIL.roundToPx()
+                        val p = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                        layout(constraints.maxWidth, constraints.maxHeight) { p.place(0, 0) }
+                    }
+                    .onSizeChanged { tall = it.height }
+                    .then(
+                        if (haze == null) {
+                            Modifier.graphicsLayer { alpha = frost }.drawBehind {
+                                drawRect(Brush.verticalGradient(0f to page.copy(alpha = 0.96f), 0.7f to page.copy(alpha = 0.9f), 1f to Color.Transparent))
+                            }
+                        } else {
+                            Modifier.hazeEffect(haze) {
+                                alpha = frost
+                                backgroundColor = page
+                                tints = listOf(HazeTint(page.copy(alpha = 0.6f)))
+                                blurRadius = 26.dp
+                                noiseFactor = 0.03f
+                                progressive = HazeProgressive.verticalGradient(
+                                    easing = androidx.compose.animation.core.EaseIn,
+                                    startY = tall - FROST_TAIL.value * density * 1.6f,
+                                    startIntensity = 1f,
+                                    endY = tall.toFloat(),
+                                    endIntensity = 0f,
+                                )
+                            }
+                        },
+                    ),
             )
         }
         TopAppBar(
@@ -117,6 +157,9 @@ private fun CollapsingBar(title: String, listState: LazyListState, onBack: () ->
         )
     }
 }
+
+/** How far below the collapsed bar its frost reaches as it fades out. */
+private val FROST_TAIL = 22.dp
 
 @Composable
 private fun PlayShuffleButtons(enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier) {
@@ -177,7 +220,7 @@ fun CollectionScreen(
     val isAlbum = MusicRepository.typeOf(browseId) == BrowseType.ALBUM
     val title = (state as? UiState.Success)?.data?.title.orEmpty()
 
-    Box(Modifier.fillMaxSize()) {
+    GlassPage(Modifier.fillMaxSize(), overlay = { CollapsingBar(title, listState, onBack) }) {
         when (val s = state) {
             is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
             else -> {
@@ -260,7 +303,6 @@ fun CollectionScreen(
                 }
             }
         }
-        CollapsingBar(title, listState, onBack)
     }
 }
 
@@ -277,7 +319,7 @@ fun ArtistScreen(
     val listState = rememberLazyListState()
     val page = (state as? UiState.Success)?.data
 
-    Box(Modifier.fillMaxSize()) {
+    GlassPage(Modifier.fillMaxSize(), overlay = { CollapsingBar(page?.name.orEmpty(), listState, onBack) }) {
         when (val s = state) {
             is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
             else -> LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -373,7 +415,6 @@ fun ArtistScreen(
                 }
             }
         }
-        CollapsingBar(page?.name.orEmpty(), listState, onBack)
     }
 }
 

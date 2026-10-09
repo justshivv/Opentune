@@ -10,6 +10,13 @@ import dev.chrisbanes.haze.HazeProgressive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -71,6 +78,16 @@ private val LIQUID_BLUR = 22.dp
 /** Lens refraction needs runtime shaders, which arrived in Android 13. */
 val liquidGlassSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 
+/** Blurring a recorded layer needs RenderEffect, which arrived in Android 12. */
+val backdropBlurSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+/** Whether glass blurs a recorded copy of what's behind it: Android 12+, blur not reduced. */
+@Composable
+fun backdropBlurOn(): Boolean {
+    val ui by AppSettings.ui.collectAsState()
+    return backdropBlurSupported && !ui.reduceBlur
+}
+
 @Composable
 fun liquidGlassOn(): Boolean {
     val ui by AppSettings.ui.collectAsState()
@@ -84,8 +101,10 @@ fun liquidGlassOn(): Boolean {
  * - Liquid Glass (Android 13+, setting on): the content behind is blurred a
  *   little, bent at the edges by a lens and lifted by vibrancy, with a rim
  *   highlight, like Apple's material.
- * - Frosted (Android 12+): blurred and tinted via Haze.
- * - Solid: with "Reduce dynamic blur" on, or nothing to sample.
+ * - Frosted (Android 12+): a recorded copy of what's behind, blurred and
+ *   tinted; through Haze where only that is provided (older phones too).
+ * - Solid: with "Reduce dynamic blur" on, or inside the very layer glass
+ *   would sample (a page's own buttons), where there's nothing to blur.
  *
  * Every grade keeps a hairline edge so the shape reads on any background.
  */
@@ -145,6 +164,22 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
             onDrawSurface = { drawRect(film) },
         ).border(0.5.dp, Color.White.copy(alpha = 0.10f), shape)
     }
+    if (backdrop != null && backdropBlurOn()) {
+        // Frosted: the content behind, blurred and a little saturated, under
+        // the style's film. No lens, so nothing bends, but it is the real
+        // content, moving as it scrolls.
+        val film = if (tint.alpha < 1f) tint else colour.copy(alpha = look.tintAlpha)
+        return this.drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                colorControls(saturation = look.saturation)
+                blur(look.blur.toPx())
+            },
+            shadow = { Shadow.Default },
+            onDrawSurface = { drawRect(film) },
+        ).border(0.75.dp, edge, shape)
+    }
     val base = this.clip(shape)
     val filled = if (haze == null || ui.reduceBlur) {
         base.background(if (tint.alpha < 1f) tint else colour.copy(alpha = 0.96f))
@@ -160,6 +195,34 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
         )
     }
     return filled.border(0.75.dp, edge, shape)
+}
+
+/**
+ * A page whose [overlay] (a top bar, floating buttons) is glass over the
+ * page's own [content]. Glass drawn inside the layer it samples gets nothing
+ * to blur, so the content is recorded here on its own and the overlay,
+ * outside that recording, blurs and bends it.
+ */
+@Composable
+fun GlassPage(modifier: Modifier = Modifier, overlay: @Composable BoxScope.() -> Unit, content: @Composable BoxScope.() -> Unit) {
+    val ui by AppSettings.ui.collectAsState()
+    val haze = rememberHazeState()
+    val backdrop = rememberLayerBackdrop()
+    val sampled = backdropBlurOn()
+    Box(modifier) {
+        Box(
+            Modifier.fillMaxSize()
+                .then(if (sampled) Modifier.layerBackdrop(backdrop) else Modifier)
+                // Inside the recording, so the glass never sees through to the sharp page.
+                .background(MaterialTheme.colorScheme.background)
+                .hazeSource(haze),
+            content = content,
+        )
+        CompositionLocalProvider(
+            LocalHazeState provides haze.takeIf { !ui.reduceBlur },
+            LocalBackdrop provides backdrop.takeIf { sampled },
+        ) { overlay() }
+    }
 }
 
 /** The numbers behind a [GlassStyle], for frosted glass and for Liquid Glass. */

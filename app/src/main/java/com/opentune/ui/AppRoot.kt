@@ -88,7 +88,6 @@ import com.opentune.ui.components.LocalBackdrop
 import com.opentune.ui.components.LocalHazeState
 import com.opentune.ui.components.LocalSongMenu
 import com.opentune.ui.components.SongMenuActions
-import com.opentune.ui.components.liquidGlassOn
 import com.opentune.ui.library.DownloadsScreen
 import com.opentune.ui.library.LibraryNav
 import com.opentune.ui.library.LikedScreen
@@ -133,7 +132,8 @@ fun AppRoot(vm: PlayerViewModel) {
     val haze = rememberHazeState()
     val uiScope = rememberCoroutineScope()
     val backdrop = rememberLayerBackdrop()
-    val liquid = liquidGlassOn()
+    // Floating glass blurs a recording of the page (and bends it, with Liquid Glass on).
+    val sampled = com.opentune.ui.components.backdropBlurOn()
     // Scrolling any page down folds the bottom bar into one row; scrolling up unfolds it.
     val chromeScroll = rememberChromeScroll()
     val chromeUi by com.opentune.data.settings.AppSettings.ui.collectAsState()
@@ -319,13 +319,17 @@ fun AppRoot(vm: PlayerViewModel) {
         ) {
             Box(
                 Modifier.fillMaxSize()
-                    .then(if (liquid) Modifier.layerBackdrop(backdrop) else Modifier)
+                    .then(if (sampled) Modifier.layerBackdrop(backdrop) else Modifier)
                     // Painted inside the recorded layer: a see-through backdrop would let
                     // the sharp page show through the glass instead of the blurred copy.
                     .background(MaterialTheme.colorScheme.background)
                     .hazeSource(haze)
                     .nestedScroll(chromeScroll),
             ) {
+                // Glass inside the pages is part of the layer the chrome blurs, so it
+                // can't blur that layer itself: it's filled, unless a page records
+                // its own content for an overlay (GlassPage).
+                CompositionLocalProvider(LocalHazeState provides null) {
                 NavHost(
                     navController = nav,
                     startDestination = Tab.HOME.route,
@@ -458,6 +462,7 @@ fun AppRoot(vm: PlayerViewModel) {
                         )
                     }
                 }
+                }
             }
 
             // Pages blur and fade as they pass under the status bar.
@@ -465,7 +470,7 @@ fun AppRoot(vm: PlayerViewModel) {
 
             // Floating chrome: the mini player above the nav pill and search button.
             // It sits outside the recorded layer, so its Liquid Glass can sample it.
-            if (chromeVisible) CompositionLocalProvider(LocalBackdrop provides backdrop.takeIf { liquid }) {
+            if (chromeVisible) CompositionLocalProvider(LocalBackdrop provides backdrop.takeIf { sampled }) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
                 SnackbarHost(snackbar)
                 BottomChrome(

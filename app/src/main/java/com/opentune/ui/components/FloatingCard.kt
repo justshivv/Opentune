@@ -68,6 +68,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import kotlin.math.roundToInt
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.clip
@@ -164,7 +167,8 @@ fun FloatingCard(
             dismissOnClickOutside = dismissible,
         ),
     ) {
-        FrostBehind(enabled = !ui.reduceBlur)
+        val frosted = FrostBehind(enabled = !ui.reduceBlur)
+        val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
         val shown by animateFloatAsState(
             if (open) 1f else 0f,
             if (still) snap() else if (open) spring(dampingRatio = 0.8f, stiffness = 360f) else tween(EXIT_MS.toInt()),
@@ -272,10 +276,22 @@ fun FloatingCard(
                             scaleY = s
                             alpha = shown.coerceIn(0f, 1f)
                         }
-                        .shadow(32.dp, shape, ambientColor = MaterialTheme.colorScheme.scrim, spotColor = MaterialTheme.colorScheme.scrim)
+                        .shadow(if (frosted) 12.dp else 32.dp, shape, ambientColor = MaterialTheme.colorScheme.scrim, spotColor = MaterialTheme.colorScheme.scrim)
                         .clip(shape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f))
-                        .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape)
+                        .then(
+                            if (frosted) {
+                                // Glass: the blurred screen behind the window shows through
+                                // a film of the surface, lit a little along the top.
+                                Modifier
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (dark) 0.62f else 0.7f))
+                                    .background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.07f else 0.18f), 0.35f to Color.Transparent))
+                                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.22f else 0.6f), Color.White.copy(alpha = 0.04f))), shape)
+                            } else {
+                                Modifier
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f))
+                                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape)
+                            },
+                        )
                         // Taps on the card stay on the card.
                         .pointerInput(Unit) { detectTapGestures { } }
                         .padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 14.dp),
@@ -466,22 +482,44 @@ fun SheetButton(
     }
 }
 
-/** Frosts what's behind the dialog's window where the phone allows it; dims it either way. */
+/**
+ * Frosts what's behind the dialog's window where the phone allows it; dims it
+ * either way. Returns whether the blur is on right now: the system can turn
+ * cross-window blur off (battery saver, some animations off) and back on.
+ */
 @Composable
-internal fun FrostBehind(enabled: Boolean) {
+internal fun FrostBehind(enabled: Boolean): Boolean {
     val view = LocalView.current
     val density = LocalDensity.current
+    var blurring by remember { mutableStateOf(false) }
     DisposableEffect(view, enabled) {
         val window = (view.parent as? DialogWindowProvider)?.window
+        var listener: java.util.function.Consumer<Boolean>? = null
         if (window != null) {
             window.setDimAmount(if (enabled) 0.35f else 0.55f)
-            if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && window.windowManager.isCrossWindowBlurEnabled) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-                window.attributes = window.attributes.apply { blurBehindRadius = with(density) { 36.dp.roundToPx() } }
+            if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val radius = with(density) { 36.dp.roundToPx() }
+                val apply = java.util.function.Consumer<Boolean> { on ->
+                    blurring = on
+                    // Lighter dim over a blur, so the colours behind still come through the card.
+                    window.setDimAmount(if (on) 0.22f else 0.35f)
+                    if (on) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                        window.attributes = window.attributes.apply { blurBehindRadius = radius }
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                    }
+                }
+                apply.accept(window.windowManager.isCrossWindowBlurEnabled)
+                window.windowManager.addCrossWindowBlurEnabledListener(apply)
+                listener = apply
             }
         }
-        onDispose { }
+        onDispose {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) listener?.let { window?.windowManager?.removeCrossWindowBlurEnabledListener(it) }
+        }
     }
+    return blurring
 }
 
 private const val EXIT_MS = 200L
