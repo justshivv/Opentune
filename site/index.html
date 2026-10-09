@@ -470,7 +470,7 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
     </nav>
     <div class="nav-right">
       <a class="btn btn-ghost btn-small gh" href="https://github.com/justshivv/Opentune" target="_blank" rel="noopener"><svg class="line-ico"><use href="#i-star"/></svg>Star<span class="sub" id="stars-nav" hidden></span></a>
-      <a class="btn btn-primary btn-small" href="https://github.com/justshivv/Opentune/releases/latest" target="_blank" rel="noopener"><svg class="line-ico"><use href="#i-download"/></svg>Get APK</a>
+      <a class="btn btn-primary btn-small" data-android-download href="https://github.com/justshivv/Opentune/releases/download/v0.4.4/OpenTune-v0.4.4-universal.apk"><svg class="line-ico"><use href="#i-download"/></svg>Get APK</a>
     </div>
   </div>
   <i class="readline" id="readline" aria-hidden="true"></i>
@@ -484,7 +484,7 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
         <h1 class="rise d1"><span class="hl">Every song.</span><span class="hl two">No ads.</span><span class="hl three">No account.</span></h1>
         <p class="lede rise d2">OpenTune is a free, open-source music player for Android. It plays the YouTube Music catalogue with word-synced lyrics, live radio, podcasts and rooms where friends listen in step.</p>
         <div class="ctas rise d3">
-          <a class="btn btn-tint" id="dl-hero" href="https://github.com/justshivv/Opentune/releases/latest" target="_blank" rel="noopener"><svg class="line-ico"><use href="#i-download"/></svg>Download for Android<span class="sub" id="dl-size">9.8 MB</span></a>
+          <a class="btn btn-tint" id="dl-hero" data-android-download href="https://github.com/justshivv/Opentune/releases/download/v0.4.4/OpenTune-v0.4.4-universal.apk"><svg class="line-ico"><use href="#i-download"/></svg>Download for Android<span class="sub" id="dl-size">12.1 MB</span></a>
           <a class="btn btn-ghost" href="https://github.com/justshivv/Opentune" target="_blank" rel="noopener"><svg class="line-ico"><use href="#i-code"/></svg>Source on GitHub</a>
         </div>
         <div class="fine rise d4"><span>Android 8.0+</span><span>No ads</span><span>No account needed</span><span>GPL-3.0</span></div>
@@ -713,7 +713,7 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
       </div>
       <div class="steps" id="steps">
         <div class="thread" aria-hidden="true"><i id="thread"></i></div>
-        <div class="step"><span class="n">Step 1</span><h3>Get the APK</h3><p>Download the latest build from GitHub Releases. <code>arm64-v8a</code> fits almost every recent phone; <code>universal</code> runs on anything.</p><span class="hint">Android 8.0 (API 26) or newer.</span></div>
+        <div class="step"><span class="n">Step 1</span><h3>Get the APK</h3><p>Download for Android starts the universal APK download directly. It includes all supported device architectures.</p><span class="hint">Android 8.0 (API 26) or newer.</span></div>
         <div class="step"><span class="n">Step 2</span><h3>Allow the install</h3><p>Android asks you to let your browser or file manager install apps. Allow it, then confirm.</p><span class="hint">Settings &rsaquo; Apps &rsaquo; Special access &rsaquo; Install unknown apps</span></div>
         <div class="step"><span class="n">Step 3</span><h3>Press play</h3><p>Sign in only if you want your likes and playlists. OpenTune looks for new releases once a day and checks each download against its SHA-256 sums.</p><span class="hint">Nothing to buy, nothing upsold. APK links count unique browsers using a random ID; see Usage &amp; counting.</span></div>
       </div>
@@ -725,7 +725,7 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
       <div class="word" id="word" aria-label="OpenTune"></div>
       <p>Free, open source, and yours to keep.</p>
       <div class="ctas">
-        <a class="btn btn-tint" href="https://github.com/justshivv/Opentune/releases/latest" target="_blank" rel="noopener"><svg class="line-ico"><use href="#i-download"/></svg>Download for Android</a>
+        <a class="btn btn-tint" data-android-download href="https://github.com/justshivv/Opentune/releases/download/v0.4.4/OpenTune-v0.4.4-universal.apk"><svg class="line-ico"><use href="#i-download"/></svg>Download for Android</a>
         <a class="btn btn-ghost" href="https://github.com/justshivv/Opentune" target="_blank" rel="noopener"><svg class="line-ico"><use href="#i-star"/></svg>Star on GitHub</a>
       </div>
     </div>
@@ -1082,9 +1082,9 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
 
   /* ===== releases: live from GitHub, with a built-in copy ===== */
   const FALLBACK = [{
-    tag_name: "v0.2.0", name: "OpenTune v0.2.0", published_at: "2026-10-06T17:43:48Z", html_url: "https://github.com/justshivv/Opentune/releases/tag/v0.2.0",
-    assets: [{ name: "OpenTune-v0.2.0-arm64-v8a.apk", size: 9779415, download_count: null, browser_download_url: "https://github.com/justshivv/Opentune/releases/download/v0.2.0/OpenTune-v0.2.0-arm64-v8a.apk" }],
-    highlights: ["Listen together over encrypted rooms, with guests kept in step by tiny speed changes", "Five player button designs, five dock animations, seven player layouts", "Live radio near you, podcasts, and lyrics that follow the song word by word"],
+    tag_name: "v0.4.4", name: "OpenTune v0.4.4", published_at: "2026-10-09", html_url: "https://github.com/justshivv/Opentune/releases/tag/v0.4.4",
+    assets: [{ name: "OpenTune-v0.4.4-universal.apk", size: 12718212, download_count: null, browser_download_url: "https://github.com/justshivv/Opentune/releases/download/v0.4.4/OpenTune-v0.4.4-universal.apk" }],
+    highlights: ["Player source and quality shown in a tappable pill", "Optional Echo motion preset with glow, wavy controls and gentle lyric focus", "Track details with Apple catalog metadata and source quality information"],
   }];
   const ago = (iso) => { const d = (Date.now() - new Date(iso)) / 864e5; return d < 1 ? "today" : d < 2 ? "yesterday" : d < 30 ? Math.floor(d) + " days ago" : Math.floor(d / 30) + " months ago"; };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -1098,7 +1098,7 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
   function renderReleases(list, live) {
     const box = $("rel-list"); box.innerHTML = "";
     list.slice(0, 4).forEach((rel, i) => {
-      const apk = (rel.assets || []).find((a) => /arm64.*\.apk$/.test(a.name)) || (rel.assets || []).find((a) => /\.apk$/.test(a.name));
+      const apk = (rel.assets || []).find((a) => /-universal\.apk$/i.test(a.name));
       const downloads = (rel.assets || []).filter((a) => /\.apk$/.test(a.name)).reduce((n, a) => n + (a.download_count || 0), 0);
       const notes = notesOf(rel);
       const row = document.createElement("article"); row.className = "rel";
@@ -1111,9 +1111,9 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
         $("ver-badge").textContent = rel.tag_name;
         if (apk) {
           $("dl-size").textContent = (apk.size / 1048576).toFixed(1) + " MB";
-          // Main download buttons must request an APK too, so browser/release deduplication
-          // covers them. Keep GitHub's release page as the fallback if the live lookup fails.
-          if (live) document.querySelectorAll('a[href="https://github.com/justshivv/Opentune/releases/latest"]')
+          // Always link straight to the universal APK. The built-in link also works
+          // before JavaScript loads or when GitHub's release API is unavailable.
+          document.querySelectorAll('a[data-android-download]')
             .forEach((link) => { link.href = apk.browser_download_url; });
         }
       }
