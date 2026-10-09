@@ -283,6 +283,8 @@ data class InterfaceSettings(
     val hapticStrength: Float = 0.6f,
     /** Look for a new release once a day when the app opens. */
     val checkForUpdates: Boolean = true,
+    /** Add this phone to the app's anonymous usage counts (see Usage). */
+    val countUsage: Boolean = true,
     /** How the glass of the dock, buttons and bars looks. */
     val glassStyle: GlassStyle = GlassStyle.FROSTED,
     /** Pages blur and fade out as they scroll under the status bar. */

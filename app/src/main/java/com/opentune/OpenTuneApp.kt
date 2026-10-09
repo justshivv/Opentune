@@ -81,6 +81,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         com.opentune.data.radio.Radio.init(this)
         com.opentune.data.releases.NewReleases.init(this)
         com.opentune.data.UpdateCheck.schedule(this)
+        com.opentune.data.Usage.init(this)
         // Spotify sign-in is gone; drop any tokens an earlier version kept.
         deleteSharedPreferences("spotify")
         com.opentune.data.podcasts.Podcasts.init(this)

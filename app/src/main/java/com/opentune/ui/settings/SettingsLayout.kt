@@ -105,10 +105,10 @@ internal val SETTINGS_CATEGORIES = listOf(
         ),
     ),
     SettingsCategory(
-        "about", "About", "Updates, stats, source code and diagnostics", Icons.Rounded.Info,
+        "about", "About", "Updates, source code and diagnostics", Icons.Rounded.Info,
         listOf(
             "Updates" to listOf("Check for updates", "Check for updates automatically"),
-            "OpenTune" to listOf("Stats", "Source code", "Export diagnostics"),
+            "OpenTune" to listOf("Count this phone in usage numbers", "Source code", "Export diagnostics"),
         ),
     ),
 )

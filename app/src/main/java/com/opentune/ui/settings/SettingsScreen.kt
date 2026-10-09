@@ -68,7 +68,6 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MusicOff
 import androidx.compose.material.icons.rounded.NetworkCell
@@ -198,13 +197,12 @@ fun SettingsScreen(
     onSignIn: () -> Unit = {},
     onOpenDownloads: () -> Unit = {},
     onOpenSpotify: () -> Unit = {},
-    onOpenStats: () -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var openKey by rememberSaveable { mutableStateOf<String?>(null) }
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
-    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onOpenWrapped, onSignIn, onOpenDownloads, onOpenSpotify, onOpenStats)
+    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onOpenWrapped, onSignIn, onOpenDownloads, onOpenSpotify)
     val placed = remember(sections) { place(sections) }
     val open = SETTINGS_CATEGORIES.firstOrNull { it.key == openKey }
     androidx.activity.compose.BackHandler(enabled = open != null) { openKey = null }
@@ -338,7 +336,6 @@ private fun settingsSections(
     onSignIn: () -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenSpotify: () -> Unit,
-    onOpenStats: () -> Unit,
 ): List<Section> {
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
@@ -1153,8 +1150,14 @@ private fun settingsSections(
                 Entry("Check for updates automatically", "update new version release auto") {
                     ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Looks for a new release on GitHub every few hours, in the background too, and offers to install it", icon = Icons.Rounded.SystemUpdate)
                 },
-                Entry("Stats", "statistics numbers downloads users people stars plays how many total") {
-                    NavRow("Stats", onOpenStats, summary = "OpenTune's downloads and stars on GitHub, and your own listening in numbers", icon = Icons.Rounded.Insights)
+                Entry("Count this phone in usage numbers", "anonymous usage statistics analytics counter privacy telemetry") {
+                    ToggleRow(
+                        "Count this phone in usage numbers",
+                        ui.countUsage,
+                        { v -> AppSettings.updateUi { it.copy(countUsage = v) } },
+                        summary = "Adds one, anonymously, to public counters of how many phones use OpenTune each day and how many songs are played. No ID, no song names, nothing about you",
+                        icon = Icons.Rounded.Info,
+                    )
                 },
                 Entry("Source code", "github open source license gpl") {
                     NavRow("Source code", {

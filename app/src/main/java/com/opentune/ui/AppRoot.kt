@@ -145,6 +145,7 @@ fun AppRoot(vm: PlayerViewModel) {
     var update by remember { mutableStateOf<com.opentune.data.UpdateCheck.Release?>(null) }
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            com.opentune.data.Usage.active()
             while (true) {
                 if (com.opentune.data.settings.AppSettings.ui.value.checkForUpdates && update == null) {
                     update = com.opentune.data.UpdateCheck.checkIfDue(appContext)
@@ -376,10 +377,8 @@ fun AppRoot(vm: PlayerViewModel) {
                             onSignIn = { nav.navigate("login") },
                             onOpenDownloads = { nav.navigate("downloads") },
                             onOpenSpotify = { nav.navigate("import") },
-                            onOpenStats = { nav.navigate("stats") },
                         )
                     }
-                    composable("stats") { com.opentune.ui.stats.StatsScreen(content, onBack = { nav.popBackStack() }) }
                     composable("login") { LoginScreen(onDone = { nav.popBackStack() }) }
                     composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("liked") {

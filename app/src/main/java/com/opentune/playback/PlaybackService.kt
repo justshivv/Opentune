@@ -739,7 +739,10 @@ class PlaybackService : MediaLibraryService() {
             if (listenRecord != null) continue
             val duration = known ?: Long.MAX_VALUE
             val threshold = minOf(30_000L, duration / 2)
-            if (heard >= threshold) listenRecord = History.record(song, heard)
+            if (heard >= threshold) {
+                listenRecord = History.record(song, heard)
+                com.opentune.data.Usage.played()
+            }
         }
     }
 
