@@ -815,18 +815,6 @@ private fun settingsSections(
                 Entry("Song change", "cover change next song skip animation flip carousel deck fade") {
                     NavRow("Song change", { coverChangeDialog = true }, summary = ui.coverChange.summary, icon = Icons.Rounded.SwapHoriz, value = ui.coverChange.label)
                 },
-                Entry("Stage lights", "lights flicker broken neon disco bottom glow beat bass music visualizer colours") {
-                    ToggleRow(
-                        "Stage lights",
-                        ui.stageLights,
-                        { v -> AppSettings.updateUi { it.copy(stageLights = v) } },
-                        summary = "Coloured light rises from the bottom of the screen in time with the music, flickering now and then like a worn stage light",
-                        icon = Icons.Rounded.Flare,
-                    )
-                },
-                Entry("Edge glow", "glow edges ambient light colour cover screen") {
-                    ToggleRow("Edge glow", ui.edgeGlow, { v -> AppSettings.updateUi { it.copy(edgeGlow = v) } }, summary = "The playing cover's colour lights the edges of the screen, breathing with the music", icon = Icons.Rounded.Flare)
-                },
                 Entry("Player opening", "now playing sheet open close animation spring smooth bouncy snappy") {
                     NavRow("Player opening", { playerMotionDialog = true }, summary = ui.playerMotion.summary, icon = Icons.Rounded.UnfoldMore, value = ui.playerMotion.label)
                 },

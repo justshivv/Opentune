@@ -45,6 +45,7 @@ enum class PaletteStyleOption(val label: String) {
 @Serializable
 enum class PlayerBackground(val label: String) {
     MESH("Mesh"),
+    /** A gradient from the cover's colour, with soft lights drifting under the controls. */
     GRADIENT("Gradient"),
     BLUR("Blur"),
     PLAIN("Plain"),
@@ -299,10 +300,6 @@ data class InterfaceSettings(
     val playerMotion: PlayerMotion = PlayerMotion.SPRING,
     /** How the player's cover gives way to the next song's. */
     val coverChange: CoverChange = CoverChange.FADE,
-    /** A soft glow of the playing cover's colour along the screen's edges. */
-    val edgeGlow: Boolean = false,
-    /** Flickering coloured light rising from the bottom of the screen, in time with the music. */
-    val stageLights: Boolean = false,
 )
 
 /** How the cover changes when the song does. */

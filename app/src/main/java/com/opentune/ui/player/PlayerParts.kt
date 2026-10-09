@@ -158,15 +158,29 @@ fun PlayerBackdrop(
             }
             style == PlayerBackground.PLAIN -> Unit
             style == PlayerBackground.MESH -> MeshGradient(animate, Modifier.matchParentSize())
-            else -> Box(
-                Modifier.matchParentSize().background(
-                    Brush.verticalGradient(
-                        0f to scheme.primaryContainer,
-                        0.55f to scheme.surfaceContainer,
-                        1f to scheme.surface,
+            else -> {
+                Box(
+                    Modifier.matchParentSize().background(
+                        Brush.verticalGradient(
+                            0f to scheme.primaryContainer,
+                            0.55f to scheme.surfaceContainer,
+                            1f to scheme.surface,
+                        ),
                     ),
-                ),
-            )
+                )
+                // Under the controls, the song's colours glow and drift into each other.
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize()) {
+                    AmbientLights(
+                        listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.inversePrimary, scheme.primaryContainer),
+                        playing = playing,
+                        animate = animate,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(maxHeight * 0.6f)
+                            .align(Alignment.BottomCenter),
+                    )
+                }
+            }
         }
         if (fullCover) {
             CoverSwap(CoverShown(artworkUrl, index), change) { url, motion ->

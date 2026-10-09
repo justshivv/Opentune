@@ -518,23 +518,6 @@ fun AppRoot(vm: PlayerViewModel) {
                     onTogether = { playerOpen = false; nav.navigate("together") },
                 )
             }
-
-            // Over everything, light rising from the bottom in time with the music.
-            if (chromeUi.stageLights && song != null) {
-                com.opentune.ui.components.StageLights(
-                    com.opentune.ui.theme.rememberArtworkSeed(song?.thumbnailUrl),
-                    playing = isPlaying,
-                    still = chromeUi.reduceAnimation,
-                )
-            }
-            // Over everything, light from the cover along the screen's edges.
-            if (chromeUi.edgeGlow) {
-                com.opentune.ui.components.EdgeGlow(
-                    com.opentune.ui.theme.rememberArtworkSeed(song?.thumbnailUrl).takeIf { song != null },
-                    playing = isPlaying,
-                    still = chromeUi.reduceAnimation,
-                )
-            }
         }
         if (opening) {
             com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })
