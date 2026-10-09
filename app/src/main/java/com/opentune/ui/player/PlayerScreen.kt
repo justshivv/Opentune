@@ -627,6 +627,11 @@ fun PlayerLayout(
             }
         }
 
+        // Winding down for the night: the whole player dims with the music.
+        val windDown by com.opentune.playback.SleepTimer.windDown.collectAsState()
+        if (windDown > 0f) {
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = (windDown * 0.55f).coerceIn(0f, 0.55f) }.background(Color.Black))
+        }
         if (showRemix) RemixSheet(onDismiss = { showRemix = false })
         if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
         if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })

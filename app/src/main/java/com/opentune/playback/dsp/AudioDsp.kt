@@ -289,8 +289,16 @@ class DspAudioProcessor : BaseAudioProcessor() {
             out.flip()
             return
         }
+        val gain = masterGain
         if (p.isNeutral || channels == 0) {
-            out.put(inputBuffer)
+            if (gain >= 0.999f || channels == 0) {
+                out.put(inputBuffer)
+            } else if (isFloat) {
+                // The sleep timer's fade, on an otherwise untouched signal.
+                while (inputBuffer.remaining() >= 4) out.putFloat(inputBuffer.getFloat() * gain)
+            } else {
+                while (inputBuffer.remaining() >= 2) out.putShort((inputBuffer.getShort() * gain).toInt().toShort())
+            }
             out.flip()
             return
         }
@@ -307,7 +315,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
             }
             processFrame(p, pre, leftGain, rightGain, limit)
             for (c in 0 until channels) {
-                val s = frame[c]
+                val s = frame[c] * gain
                 if (isFloat) out.putFloat(s) else out.putShort((s * 32767f).toInt().coerceIn(-32768, 32767).toShort())
             }
         }
@@ -348,6 +356,9 @@ class DspAudioProcessor : BaseAudioProcessor() {
     companion object {
         /** While true, every processor puts out silence; set while casting. */
         @Volatile var silenced = false
+
+        /** A volume the sleep timer turns down as it winds down; 1 the rest of the time. */
+        @Volatile var masterGain = 1f
         const val SPATIAL_WIDTH = 1.6f
         private const val KNEE = 0.85f
         /** Never quite full scale, so the output can't clip after conversion. */

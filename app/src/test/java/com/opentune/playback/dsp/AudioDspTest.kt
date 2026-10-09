@@ -75,6 +75,26 @@ class DspAudioProcessorTest {
     }
 
     @Test
+    fun sleepTimerGainTurnsTheSignalDown() {
+        try {
+            for (params in listOf(DspParams(), DspParams(EqualizerSettings(enabled = true, preampDb = 0.5f)))) {
+                DspAudioProcessor.masterGain = 0.5f
+                val out = run(configured(params), pcm16Stereo(200) { 0.6f })
+                val first = out.getShort().toInt()
+                assertEquals(0.3 * 32767, first.toDouble(), 32767 * 0.03)
+            }
+        } finally {
+            DspAudioProcessor.masterGain = 1f
+        }
+        // The fade: a little over three minutes at most, gentle at first, silent at the end.
+        assertEquals(180_000L, com.opentune.playback.SleepTimer.fadeMsFor(60 * 60_000L))
+        assertEquals(5 * 60_000L / 3, com.opentune.playback.SleepTimer.fadeMsFor(5 * 60_000L))
+        assertEquals(1f, com.opentune.playback.SleepTimer.gainAt(0f), 0.001f)
+        assertEquals(0f, com.opentune.playback.SleepTimer.gainAt(1f), 0.001f)
+        assert(com.opentune.playback.SleepTimer.gainAt(0.25f) > 0.7f)
+    }
+
+    @Test
     fun balanceFullyRightSilencesTheLeftChannel() {
         val p = configured(DspParams(EqualizerSettings(enabled = true, balance = 1f)))
         val out = run(p, pcm16Stereo(500) { 0.5f })

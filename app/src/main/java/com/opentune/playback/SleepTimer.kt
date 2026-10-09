@@ -18,6 +18,23 @@ object SleepTimer {
     private val _state = MutableStateFlow<State>(State.Off)
     val state: StateFlow<State> = _state.asStateFlow()
 
+    private val _windDown = MutableStateFlow(0f)
+    /** How far the wind-down at the end has gone, 0 (not started) to 1 (silent); the player dims with it. */
+    val windDown: StateFlow<Float> = _windDown.asStateFlow()
+
+    internal fun setWindDown(v: Float) {
+        _windDown.value = v
+    }
+
+    /** How long the fade before the end lasts for a timer of [totalMs]: three minutes, or a third of a short one. */
+    fun fadeMsFor(totalMs: Long): Long = minOf(3 * 60_000L, totalMs / 3).coerceAtLeast(5_000L)
+
+    /** The volume at a point of the fade, 1 down to 0: barely lower at first, halfway at the middle, gone at the end. */
+    fun gainAt(fraction: Float): Float {
+        val c = kotlin.math.cos(fraction.coerceIn(0f, 1f) * Math.PI.toFloat() / 2f)
+        return c * c
+    }
+
     fun startMinutes(minutes: Int) {
         _state.value = State.At(System.currentTimeMillis() + minutes * 60_000L)
     }

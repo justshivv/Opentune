@@ -302,18 +302,45 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun runSleepTimer(player: ExoPlayer) {
         SleepTimer.state.collectLatest { state ->
             player.pauseAtEndOfMediaItems = state is SleepTimer.State.EndOfTrack
-            when (state) {
-                is SleepTimer.State.At -> {
-                    delay((state.endsAtMs - System.currentTimeMillis()).coerceAtLeast(0))
-                    player.pause()
-                    SleepTimer.cancel()
+            try {
+                when (state) {
+                    is SleepTimer.State.At -> {
+                        // Winding down: the volume eases away over the last few minutes.
+                        val fadeMs = SleepTimer.fadeMsFor(state.endsAtMs - state.startedAtMs)
+                        while (true) {
+                            val left = state.endsAtMs - System.currentTimeMillis()
+                            if (left <= 0) break
+                            if (AppSettings.playback.value.sleepWindDown && left < fadeMs) {
+                                val f = 1f - left.toFloat() / fadeMs
+                                com.opentune.playback.dsp.DspAudioProcessor.masterGain = SleepTimer.gainAt(f)
+                                SleepTimer.setWindDown(f)
+                                delay(200)
+                            } else {
+                                delay(minOf(left - fadeMs, 1_000L).coerceAtLeast(50))
+                            }
+                        }
+                        player.pause()
+                        SleepTimer.cancel()
+                    }
+                    SleepTimer.State.EndOfTrack -> {
+                        // The last seconds of the song fade out, then pauseAtEndOfMediaItems pauses.
+                        val stopped = scope.launch { playWhenReadyFlow(player).first { !it } }
+                        while (stopped.isActive) {
+                            val left = player.duration - player.currentPosition
+                            if (AppSettings.playback.value.sleepWindDown && player.duration > 0 && left in 0 until END_FADE_MS) {
+                                val f = 1f - left.toFloat() / END_FADE_MS
+                                com.opentune.playback.dsp.DspAudioProcessor.masterGain = SleepTimer.gainAt(f)
+                                SleepTimer.setWindDown(f)
+                            }
+                            delay(200)
+                        }
+                        SleepTimer.cancel()
+                    }
+                    SleepTimer.State.Off -> Unit
                 }
-                SleepTimer.State.EndOfTrack -> {
-                    // pauseAtEndOfMediaItems pauses; clear the timer once it has.
-                    playWhenReadyFlow(player).first { !it }
-                    SleepTimer.cancel()
-                }
-                SleepTimer.State.Off -> Unit
+            } finally {
+                com.opentune.playback.dsp.DspAudioProcessor.masterGain = 1f
+                SleepTimer.setWindDown(0f)
             }
         }
     }
@@ -1290,6 +1317,8 @@ class PlaybackService : MediaLibraryService() {
         const val UPGRADE_DELAY_MS = 8_000L
         /** Songs a server queue carries on with when it runs out. */
         const val RADIO_FROM_SERVER = 25
+        /** With "end of song", how long the song fades out before it stops. */
+        const val END_FADE_MS = 15_000L
         /** Waits before each ask for radio: at once, then twice more if it fails. */
         val RADIO_RETRY_MS = longArrayOf(0L, 3_000L, 10_000L)
         /** An episode only jumps to its saved place if it hasn't got going yet. */

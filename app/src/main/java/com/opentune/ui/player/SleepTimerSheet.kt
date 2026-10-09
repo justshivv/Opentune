@@ -107,6 +107,24 @@ fun SleepTimerDialog(onDismiss: () -> Unit) {
             Running(state, still, onAdd = { haptics.tick(); SleepTimer.addMinutes(5) }, onOff = { haptics.tick(); SleepTimer.cancel() })
         }
 
+        val playback by AppSettings.playback.collectAsState()
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(18.dp)).clickable {
+                haptics.tick()
+                AppSettings.updatePlayback { it.copy(sleepWindDown = !it.sleepWindDown) }
+            }.padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Wind down", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "The music fades away over the last few minutes and the player dims",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            androidx.compose.material3.Switch(checked = playback.sleepWindDown, onCheckedChange = { v -> haptics.tick(); AppSettings.updatePlayback { it.copy(sleepWindDown = v) } })
+        }
         val rows = MINUTES.map { m -> m as Any } + EndOfSong
         Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             rows.chunked(3).forEachIndexed { r, row ->

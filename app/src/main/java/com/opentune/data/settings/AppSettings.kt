@@ -202,6 +202,8 @@ enum class EqPreset(val label: String, val bands: List<Float>) {
 
 @Serializable
 data class PlaybackSettings(
+    /** The sleep timer fades the music out over its last minutes instead of stopping it dead. */
+    val sleepWindDown: Boolean = true,
     val wifiQuality: AudioQuality = AudioQuality.MAX,
     val mobileQuality: AudioQuality = AudioQuality.MAX,
     /** Keep hi-res local files in 32-bit float to the output; bypasses effects for them. */
