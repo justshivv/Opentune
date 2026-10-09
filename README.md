@@ -530,15 +530,19 @@ Not built yet: lyric translation and an in-app language setting.
 
 ## Usage counts
 
-To know how many people use it, OpenTune adds one, anonymously, to a few
-public counters on [Abacus](https://abacus.jasoncameron.dev), a free
-counting service: once when it's first used, once per version, the first
-time it's used each day, week and month, and once per song played. No ID
-is sent, no song names and nothing about you; the counter only learns that
-some phone was here (like any web request, the service sees an IP
-address). Each phone remembers what it has counted so it never adds itself
-twice to the same day. Turn it off under Settings › About › Count this
-phone in usage numbers. Debug builds never count.
+The new usage system uses a random installation ID, version, UTC activity dates and
+daily play totals. IDs survive app updates and are excluded from backups and device
+transfers. Reinstalling or clearing app data creates a new ID. The server deduplicates
+installations and merges cumulative play totals, so upload retries do not inflate counts.
+No hardware identifiers, accounts, song names or listening history are sent. Turn it off
+under Settings > About > Count this phone in usage numbers. Debug builds never count.
+
+The website separately reports unique browsers requesting APKs and GitHub's raw APK
+download events. Neither means unique people or completed installs. Historical Abacus
+counters cannot be converted into unique installations. The free-tier
+[Worker and D1 backend](usage-api/README.md) needs deployment; until its URL is configured,
+the dashboard shows unique counts as unavailable. Up to 30 days of pending reports retry
+during subsequent app use.
 
 ## Building
 

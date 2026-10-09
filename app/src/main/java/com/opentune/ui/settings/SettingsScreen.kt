@@ -1192,8 +1192,8 @@ private fun settingsSections(
                     ToggleRow(
                         "Count this phone in usage numbers",
                         ui.countUsage,
-                        { v -> AppSettings.updateUi { it.copy(countUsage = v) } },
-                        summary = "Adds one, anonymously, to public counters of how many phones use OpenTune each day and how many songs are played. No ID, no song names, nothing about you",
+                        { v -> AppSettings.updateUi { it.copy(countUsage = v) }; com.opentune.data.Usage.consentChanged(v) },
+                        summary = "Shares a random installation ID, app version, active dates and daily play totals. No hardware ID, account or song names. Reinstalls get a new ID; updates keep it.",
                         icon = Icons.Rounded.Info,
                     )
                 },

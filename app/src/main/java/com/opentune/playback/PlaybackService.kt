@@ -1004,7 +1004,7 @@ class PlaybackService : MediaLibraryService() {
             rendition?.kbps ?: if (rendition == null && item != null && uri?.let(::videoIdOf) != null)
                 StreamResolver.bitrateFor(item.mediaId, isUpgradedUri(uri)) else null,
             selectionDetail = if (item != null && uri?.let(::videoIdOf) != null && uri.let(::startupToken) == null)
-                ExternalStreams.selectionDetail(item.mediaId) else null))
+                ExternalStreams.selectionDetail(item.mediaId) else null, mediaId = item?.mediaId))
     }
 
     // ---- Latency -----------------------------------------------------------------

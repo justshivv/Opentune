@@ -64,17 +64,17 @@ internal object PageMotion {
     fun playerOut(m: PlayerMotion, still: Boolean): ExitTransition {
         if (still) return fadeOut(tween(140))
         val ms = when (m) {
-            PlayerMotion.SMOOTH -> 420
+            PlayerMotion.SMOOTH -> 260
             PlayerMotion.SNAPPY -> 170
-            else -> 280
+            else -> 220
         }
         return slideOutVertically(tween(ms, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(ms))
     }
 
     private fun playerRise(m: PlayerMotion) = when (m) {
         PlayerMotion.SPRING -> spring(dampingRatio = 0.86f, stiffness = 380f, visibilityThreshold = IntOffset.VisibilityThreshold)
-        // Apple Music's sheet: no bounce, about half a second.
-        PlayerMotion.SMOOTH -> spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 195f, visibilityThreshold = IntOffset.VisibilityThreshold)
+        // Apple Music's sheet: no bounce, short and responsive.
+        PlayerMotion.SMOOTH -> spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 550f, visibilityThreshold = IntOffset.VisibilityThreshold)
         PlayerMotion.BOUNCY -> spring(dampingRatio = 0.62f, stiffness = 300f, visibilityThreshold = IntOffset.VisibilityThreshold)
         PlayerMotion.SNAPPY -> spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 1100f, visibilityThreshold = IntOffset.VisibilityThreshold)
     }
