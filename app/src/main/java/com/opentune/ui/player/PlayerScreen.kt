@@ -401,6 +401,7 @@ fun PlayerLayout(
                                 modifier = Modifier.fillMaxSize().focusIn(!state.ui.reduceAnimation),
                                 synced = state.ui.syncedLyrics,
                                 blur = state.ui.blurLyrics,
+                                shareSong = current,
                                 onSyncLine = syncLine,
                             )
                         }
@@ -490,6 +491,7 @@ fun PlayerLayout(
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
                                 synced = state.ui.syncedLyrics,
                                 blur = state.ui.blurLyrics,
+                                shareSong = current,
                                 onSyncLine = syncLine,
                             )
                         } else if (p == Pane.COVER) {
@@ -545,6 +547,7 @@ fun PlayerLayout(
                                     modifier = Modifier.weight(1f).fillMaxWidth().focusIn(!state.ui.reduceAnimation),
                                     synced = state.ui.syncedLyrics,
                                     blur = state.ui.blurLyrics,
+                                shareSong = current,
                                     onSyncLine = syncLine,
                                 )
                             } else {

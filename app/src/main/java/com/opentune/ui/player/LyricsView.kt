@@ -53,6 +53,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -106,7 +107,10 @@ fun LyricsView(
     blur: Boolean = true,
     /** Long-press on a line: it's being sung now, so the song's lyrics move to match. */
     onSyncLine: ((Long) -> Unit)? = null,
+    /** The song, for sharing its lines as a lyric card; no share button without it. */
+    shareSong: com.opentune.data.model.Song? = null,
 ) {
+    var sharing by remember { mutableStateOf(false) }
     Box(modifier) {
         when (state) {
             is LyricsState.Loading -> Column(Modifier.padding(top = 32.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -123,6 +127,29 @@ fun LyricsView(
                     else PlainLyrics(lyrics.lines.joinToString("\n") { it.text }, lyrics.source, note = null)
                 is Lyrics.Plain -> PlainLyrics(lyrics.text, lyrics.source)
             }
+        }
+        val found = (state as? LyricsState.Found)?.lyrics
+        if (shareSong != null && found != null) {
+            val lines = remember(found) {
+                when (found) {
+                    is Lyrics.Synced -> found.lines.map { it.text }
+                    is Lyrics.Plain -> found.text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                }
+            }
+            val haptics = com.opentune.ui.components.rememberHaptics()
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 4.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))
+                    .clickable { haptics.tick(); sharing = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.FormatQuote, "Share lyrics", Modifier.size(20.dp))
+            }
+            if (sharing) com.opentune.ui.share.LyricCardSheet(shareSong, lines, startAt = -1, onDismiss = { sharing = false })
         }
     }
 }
