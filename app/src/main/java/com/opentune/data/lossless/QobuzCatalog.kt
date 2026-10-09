@@ -16,7 +16,9 @@ internal object QobuzCatalog {
     private val unavailableUntil = ConcurrentHashMap<String, Long>()
     private val defaults = listOf("https://qobuz.kennyy.com.br", "https://trypt-hifi-dl-456461932686.us-west1.run.app")
 
-    suspend fun resolve(identity: CatalogIdentity, hiRes: Boolean, custom: String): LosslessSource.Track? {
+    suspend fun resolve(identity: CatalogIdentity, hiRes: Boolean, custom: String,
+        bestAvailable: Boolean = false, onCandidate: (LosslessSource.Track) -> Unit = {}): LosslessSource.Track? {
+        var best: LosslessSource.Track? = null
         val endpoints = (listOfNotNull(httpsUrl(custom)?.trimEnd('/')) + defaults).distinct()
         for (base in endpoints) {
             if ((unavailableUntil[base] ?: 0) > now()) continue
@@ -31,7 +33,11 @@ internal object QobuzCatalog {
                             .addQueryParameter("track_id", id).addQueryParameter("quality", "$quality").build()
                         val root = JSONObject(LosslessHttp.text(requestUrl.toString(), headers))
                         val stream = streamUrl(root) ?: continue
-                        LosslessSource.verify(stream, "Qobuz (${base.toHttpUrl().host})", identity.durationMs)?.let { return@withTimeoutOrNull it }
+                        LosslessSource.verify(stream, "Qobuz (${base.toHttpUrl().host})", identity.durationMs)?.let {
+                            onCandidate(it)
+                            best = LosslessSource.better(best, it)
+                            if (!bestAvailable) return@withTimeoutOrNull it
+                        }
                     }
                     null
                 }
@@ -43,7 +49,7 @@ internal object QobuzCatalog {
             }
             if (result != null) return result
         }
-        return null
+        return best
     }
 
     internal fun match(root: JSONObject, identity: CatalogIdentity): String? {

@@ -11,6 +11,15 @@ import java.util.Base64
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class LosslessSourceTest {
+    @Test fun ranksVerifiedFlacByPrecisionThenSampleRate() {
+        val cd = LosslessSource.Track("https://cdn.example/cd", "Tidal", 16, 44_100)
+        val hi = LosslessSource.Track("https://cdn.example/hi", "Qobuz", 24, 96_000)
+        val highest = hi.copy(sampleRate = 192_000)
+        assertEquals(hi, LosslessSource.better(cd, hi))
+        assertEquals(hi, LosslessSource.better(hi, cd))
+        assertEquals(highest, LosslessSource.better(hi, highest))
+    }
+
     @Test fun resolvesOnlyLinkedProviderEntities() {
         val json = JSONObject("""{"linksByPlatform":{"tidal":{"entityUniqueId":"TIDAL_SONG::123"},"spotify":{"entityUniqueId":"SPOTIFY_SONG::abcdefghijklmnopqrstuv"}},"entitiesByUniqueId":{"TIDAL_SONG::999":{"id":"999"}}}""")
         assertEquals(mapOf("tidal" to "123", "spotify" to "abcdefghijklmnopqrstuv"), LosslessSource.providerIds(json))

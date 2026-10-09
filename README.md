@@ -79,22 +79,27 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 
 ### Listening
 
-- **Optional higher-quality streaming.** Enable it in Settings → Audio →
-  Higher-quality sources. Music starts on YouTube while OpenTune looks for
-  a matching recording in community catalogs. Qobuz supports direct catalog
+- **Highest-quality sources first.** Choose Max streaming quality to check
+  matching FLAC sources before opening YouTube audio. A bounded search compares
+  verified candidates by bit depth and sample rate, including hi-res. If no FLAC
+  is available, OpenTune tries matching JioSaavn 320 kbps, then falls back to
+  InnerTubeX/InnerTube. Provider checks can delay startup (up to 12 seconds for
+  FLAC plus 10 seconds for JioSaavn). The unmetered-only setting still applies.
+  Other quality levels start on YouTube and can optionally upgrade afterward.
+  Qobuz supports direct catalog
   matching and a compatible custom relay; Tidal, Amazon and the original
   Qobuz community route use Odesli when its public mapping API is available.
   A matching, verified
   FLAC can replace the stream at the current position; an unavailable or failed
-  provider falls back to YouTube. Off by default and restricted to unmetered
-  networks by default. Optional SpotiFLAC verification and Qobuz hi-res preference
-  are on the same page. An independent JioSaavn toggle can try its 320 kbps
-  lossy rendition when no FLAC is available and it exceeds the current YouTube
-  quality within your network ceiling. Track title, artist, album (when known),
+  provider falls back to YouTube. External sources are restricted to unmetered
+  networks by default. Optional SpotiFLAC verification and a Qobuz relay
+  can be configured under Higher-quality sources. JioSaavn is lossy.
+  Track title, artist, album (when known),
   duration, the catalog's 320 flag and the returned audio are checked first.
   Availability depends on third-party providers. This does
   not change downloads, local files, podcasts, radio or your own server streams.
-  FLAC precision is shown in Stats for nerds; output quality still depends on
+  Signal Path shows the active provider and actual codec, precision, sample rate
+  and bitrate when known; output quality still depends on
   Android, your audio device and enabled effects.
   See [the source review](docs/audio-source-review.md) for the assessed clients
   and live-provider limitations.

@@ -1,6 +1,7 @@
 package com.opentune.data.lossless
 
 import com.opentune.data.settings.AppSettings
+import com.opentune.data.settings.AudioQuality
 import com.opentune.data.model.Song
 import com.opentune.data.innertube.StreamResolver
 import java.io.IOException
@@ -8,27 +9,32 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** Pins each external rendition to a unique cache key; expired URLs never become YouTube bytes. */
 object ExternalStreams {
-    data class Rendition(val key: String, val url: String, val label: String, val lossless: Boolean, val at: Long)
+    data class Rendition(val key: String, val url: String, val label: String, val lossless: Boolean, val at: Long,
+        val provider: String = label, val bits: Int? = null, val sampleRate: Int? = null, val kbps: Int? = null,
+        val maximumSearch: Boolean = false)
     private val renditions = ConcurrentHashMap<String, Rendition>()
     private val failedUntil = ConcurrentHashMap<String, Long>()
     private const val TTL = 10 * 60_000L
 
     fun allowed(lossless: Boolean? = null): Boolean = AppSettings.playback.value.let {
-        val enabled = when (lossless) { true -> it.losslessStreaming; false -> it.jioSaavnQuality; null -> it.losslessStreaming || it.jioSaavnQuality }
+        val maximum = AppSettings.effectiveAudioQuality == AudioQuality.MAX
+        val enabled = maximum || when (lossless) { true -> it.losslessStreaming; false -> it.jioSaavnQuality; null -> it.losslessStreaming || it.jioSaavnQuality }
         enabled && (lossless != false || AppSettings.effectiveAudioQuality.maxKbps >= 320) &&
             (!it.losslessUnmeteredOnly || !AppSettings.onMeteredNetwork())
     }
 
-    suspend fun find(song: Song, durationMs: Long): Rendition? {
+    suspend fun find(song: Song, durationMs: Long, beforePlayback: Boolean = false): Rendition? {
         val videoId = song.videoId
         if (!allowed() || durationMs <= 0) return null
         val now = now()
         if ((failedUntil[videoId] ?: 0) > now) return null
         renditions[videoId]?.takeIf {
-            now - it.at < TTL && allowed(it.lossless) && (it.lossless || StreamResolver.worthExternalUpgrade(videoId, 320))
+            now - it.at < TTL && allowed(it.lossless) && (!beforePlayback || it.maximumSearch) &&
+                (it.lossless || beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
         }?.let { return it }
-        val track = if (allowed(true)) LosslessSource.resolve(song, durationMs, AppSettings.playback.value.losslessHiRes) else null
-        val saavn = if (track == null && allowed(false) && StreamResolver.worthExternalUpgrade(videoId, 320)) JioSaavnSource.resolve(song, durationMs) else null
+        val track = if (allowed(true)) LosslessSource.resolve(song, durationMs,
+            beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback) else null
+        val saavn = if (track == null && allowed(false) && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))) JioSaavnSource.resolve(song, durationMs) else null
         if (track == null && saavn == null) {
             if (failedUntil.size > 256) failedUntil.clear()
             failedUntil[videoId] = now() + 60_000
@@ -36,7 +42,9 @@ object ExternalStreams {
         }
         // Even two FLACs of the same recording can have different byte offsets.
         val rendition = Rendition(java.util.UUID.randomUUID().toString(), track?.url ?: saavn!!,
-            track?.let { "${it.provider} · ${it.bits}-bit FLAC" } ?: "JioSaavn · 320 kbps (lossy)", track != null, now())
+            track?.let { "${it.provider} · ${it.bits}-bit FLAC · ${it.sampleRate} Hz" } ?: "JioSaavn · 320 kbps (lossy)", track != null, now(),
+            provider = track?.provider ?: "JioSaavn", bits = track?.bits, sampleRate = track?.sampleRate,
+            kbps = if (track == null) 320 else null, maximumSearch = beforePlayback)
         if (renditions.size > 256) renditions.clear()
         renditions[videoId] = rendition
         return rendition

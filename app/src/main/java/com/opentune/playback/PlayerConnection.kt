@@ -84,8 +84,13 @@ class PlayerConnection(private val context: Context) {
     val seeks = _seeks.asSharedFlow()
 
     private val listener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+            _audioFormat.value = null
+        }
+
         override fun onEvents(player: Player, events: Player.Events) {
             refresh(player)
+            if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) || events.contains(Player.EVENT_TRACKS_CHANGED)) onTracksChanged(player.currentTracks)
         }
 
         override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
@@ -106,6 +111,13 @@ class PlayerConnection(private val context: Context) {
                     bitrateKbps = it.bitrate.takeIf { b -> b > 0 }?.div(1000),
                     sampleRateHz = it.sampleRate.takeIf { r -> r > 0 },
                     channels = it.channelCount.takeIf { c -> c > 0 },
+                    bitDepth = when (it.pcmEncoding) {
+                        C.ENCODING_PCM_8BIT -> 8
+                        C.ENCODING_PCM_16BIT -> 16
+                        C.ENCODING_PCM_24BIT -> 24
+                        C.ENCODING_PCM_32BIT, C.ENCODING_PCM_FLOAT -> 32
+                        else -> null
+                    },
                 )
             }
         }
@@ -119,6 +131,7 @@ class PlayerConnection(private val context: Context) {
         newController.addListener(listener)
         controller = newController
         refresh(newController)
+        listener.onTracksChanged(newController.currentTracks)
         _connected.value = true
     }
 
@@ -293,4 +306,4 @@ class PlayerConnection(private val context: Context) {
     fun bufferedPositionMs(): Long = controller?.bufferedPosition ?: 0L
 }
 
-data class AudioFormatInfo(val codec: String?, val bitrateKbps: Int?, val sampleRateHz: Int?, val channels: Int?)
+data class AudioFormatInfo(val codec: String?, val bitrateKbps: Int?, val sampleRateHz: Int?, val channels: Int?, val bitDepth: Int? = null)

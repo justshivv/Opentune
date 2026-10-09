@@ -7,6 +7,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicReference
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
@@ -25,14 +28,34 @@ object LosslessSource {
     private val keyHeader = mapOf("X-API-Key" to LosslessRegistry.API_KEY)
     @Volatile private var mappingRetryAt = 0L
 
-    suspend fun resolve(song: Song, durationMs: Long, preferHiRes: Boolean = false): Track? =
+    suspend fun resolve(song: Song, durationMs: Long, preferHiRes: Boolean = false, bestAvailable: Boolean = false): Track? =
         withContext(Dispatchers.IO) {
-            val videoId = song.videoId
+            if (!isYouTubeId(song.videoId)) return@withContext null
+            val identity = CatalogIdentity(song.title, song.artist, song.albumName, durationMs)
+            if (!bestAvailable) return@withContext withTimeoutOrNull(20_000) {
+                QobuzCatalog.resolve(identity, preferHiRes, AppSettings.playback.value.qobuzRelayUrl)
+                    ?: resolveMapped(song.videoId, durationMs, preferHiRes)
+            }
+            val best = AtomicReference<Track?>(null)
+            val record: (Track) -> Unit = { candidate -> best.updateAndGet { better(it, candidate) } }
+            // Keep an already verified candidate even if another provider exhausts the budget.
+            withTimeoutOrNull(12_000) {
+                coroutineScope {
+                    launch { QobuzCatalog.resolve(identity, true, AppSettings.playback.value.qobuzRelayUrl, bestAvailable = true, onCandidate = record) }
+                    launch { resolveMapped(song.videoId, durationMs, true, bestAvailable = true, onCandidate = record) }
+                }
+            }
+            best.get()
+        }
+
+    internal fun better(current: Track?, candidate: Track): Track =
+        if (current == null || compareValuesBy(candidate, current, { it.bits }, { it.sampleRate }) > 0) candidate else current
+
+    private suspend fun resolveMapped(videoId: String, durationMs: Long, preferHiRes: Boolean,
+        bestAvailable: Boolean = false, onCandidate: (Track) -> Unit = {}): Track? =
+        withContext(Dispatchers.IO) {
             if (!isYouTubeId(videoId)) return@withContext null
             withTimeoutOrNull(20_000) {
-                val identity = CatalogIdentity(song.title, song.artist, song.albumName, durationMs)
-                QobuzCatalog.resolve(identity, preferHiRes, AppSettings.playback.value.qobuzRelayUrl)
-                    ?.let { return@withTimeoutOrNull it }
                 val link = "https://api.song.link/v1-alpha.1/links".toHttpUrl().newBuilder()
                     .addQueryParameter("url", "https://music.youtube.com/watch?v=$videoId").build()
                 val ids = if (System.nanoTime() / 1_000_000 < mappingRetryAt) emptyMap() else {
@@ -41,7 +64,11 @@ object LosslessSource {
                 }
                 if (ids.isEmpty()) return@withTimeoutOrNull null
                 val registry = LosslessRegistry.snapshot()
-                suspend fun verified(url: String?, provider: String): Track? = verify(url, provider, durationMs)
+                suspend fun verified(url: String?, provider: String): Track? {
+                    val track = verify(url, provider, durationMs) ?: return null
+                    onCandidate(track)
+                    return track.takeUnless { bestAvailable }
+                }
                 ids["tidal"]?.let { id ->
                     val gated = httpsUrl(registry?.optJSONObject("tidal")?.optString("community").orEmpty())
                     if (gated != null) {

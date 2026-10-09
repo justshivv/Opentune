@@ -40,9 +40,8 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
     val eq by AppSettings.equalizer.collectAsState()
     val sound by AppSettings.sound.collectAsState()
     val pb by AppSettings.playback.collectAsState()
-    val engine by NerdStats.engine.collectAsState()
+    val source by NerdStats.playbackSource.collectAsState()
     val lossless by NerdStats.externalSource.collectAsState()
-    val picked by NerdStats.lastPicked.collectAsState()
     val gain by NerdStats.loudnessGainDb.collectAsState()
     val speakerHold by NerdStats.loudnessOffOnSpeaker.collectAsState()
     val device = rememberOutputDeviceName()
@@ -60,16 +59,15 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
         if (pb.clarity) add("clarity")
         if (eq.balance != 0f) add("balance")
     }
-    val kbps = format?.bitrateKbps ?: picked?.second.takeIf { lossless == null }
-    val rate = format?.sampleRateHz
+    val rate = format?.sampleRateHz ?: source?.sampleRate
 
     FloatingDialog(
         onDismissRequest = onDismiss,
         title = { Text("Signal path") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Stage(Tone.INFO, "Source", listOfNotNull(format?.codec, kbps?.let { "$it kbps" }, rate?.let { "$it Hz" }, format?.channels?.let { if (it == 2) "stereo" else "$it ch" }).joinToString(" · ").ifEmpty { "Waiting for the stream" })
-                Stage(Tone.INFO, "Found by", lossless ?: engine ?: "Not resolved this session (played from cache or a download)")
+                Stage(Tone.INFO, "Source", source?.provider ?: "Waiting for the stream")
+                Stage(Tone.INFO, "Audio quality", signalQuality(format, source))
                 Stage(
                     if (dspStages.isEmpty()) Tone.CLEAN else Tone.CHANGED,
                     "App DSP",
@@ -130,6 +128,23 @@ private enum class Tone(val color: Color) {
     CLEAN(Color(0xFF4CAF50)),
     CHANGED(Color(0xFFFFB300)),
     INFO(Color(0xFF9E9E9E)),
+}
+
+/** Reports the selected media format; output mixer precision is shown separately. */
+internal fun signalQuality(format: AudioFormatInfo?, source: NerdStats.Source?): String {
+    val codec = format?.codec ?: if (source?.bits != null) "FLAC" else null
+    val bits = source?.bits ?: format?.bitDepth
+    val rate = format?.sampleRateHz ?: source?.sampleRate
+    val kbps = format?.bitrateKbps ?: source?.kbps
+    return listOfNotNull(
+        codec,
+        bits?.let { "$it-bit" },
+        rate?.let { "$it Hz" },
+        format?.channels?.let { if (it == 2) "stereo" else "$it ch" },
+        kbps?.let { "$it kbps" },
+        if (codec?.contains("FLAC", true) == true) "lossless" else null,
+        if (codec != null && kbps == null) "bitrate not reported" else null,
+    ).joinToString(" · ").ifEmpty { "Waiting for the actual stream format" }
 }
 
 @Composable

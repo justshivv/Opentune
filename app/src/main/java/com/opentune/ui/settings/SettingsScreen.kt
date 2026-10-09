@@ -631,16 +631,16 @@ private fun settingsSections(
                     })
                 },
                 Entry("Lossless streaming", "flac tidal amazon qobuz spotiflac") {
-                    ToggleRow("Lossless streaming", pb.losslessStreaming, { v -> AppSettings.updatePlayback { it.copy(losslessStreaming = v) } }, summary = "Look for a matching FLAC after playback starts. Uses community catalogs and providers; falls back to YouTube. Streaming only.", icon = Icons.Rounded.HighQuality)
+                    ToggleRow("Lossless below Max", pb.losslessStreaming, { v -> AppSettings.updatePlayback { it.copy(losslessStreaming = v) } }, summary = "Also look for FLAC after playback starts at other quality levels. Max automatically checks highest-quality sources before YouTube.", icon = Icons.Rounded.HighQuality)
                 },
                 Entry("JioSaavn quality upgrade", "320 aac higher quality alternate lossy") {
-                    ToggleRow("JioSaavn quality upgrade", pb.jioSaavnQuality, { v -> AppSettings.updatePlayback { it.copy(jioSaavnQuality = v) } }, summary = "Try a matching 320 kbps stream when FLAC is unavailable and it improves on YouTube. This is lossy audio.", icon = Icons.Rounded.HighQuality)
+                    SettingRow("Max quality sources", summary = "Max checks hi-res FLAC first, then JioSaavn 320 kbps, then YouTube. Checking providers can delay the start. JioSaavn is lossy.", icon = Icons.Rounded.HighQuality)
                 },
                 Entry("Unmetered networks only", "flac saavn mobile wifi data") {
                     ToggleRow("Unmetered networks only", pb.losslessUnmeteredOnly, { v -> AppSettings.updatePlayback { it.copy(losslessUnmeteredOnly = v) } }, summary = "Use lossless and JioSaavn upgrades only on unmetered connections", icon = Icons.Rounded.Wifi)
                 },
                 Entry("Prefer hi-res lossless", "24 bit flac qobuz") {
-                    ToggleRow("Prefer hi-res lossless", pb.losslessHiRes, { v -> AppSettings.updatePlayback { it.copy(losslessHiRes = v) } }, summary = "Try Qobuz hi-res when available. Uses more data; other providers use standard lossless.", icon = Icons.Rounded.HighQuality)
+                    ToggleRow("Prefer hi-res lossless", pb.losslessHiRes, { v -> AppSettings.updatePlayback { it.copy(losslessHiRes = v) } }, summary = "Prefer hi-res for background upgrades too. Max always checks hi-res first. Uses more data.", icon = Icons.Rounded.HighQuality)
                 },
                 Entry("SpotiFLAC verification", "lossless session connect verify") {
                     SettingRow("SpotiFLAC verification", icon = Icons.Rounded.HighQuality, summary = if (losslessConnected) "Connected · tap to renew" else "Optional · public providers work without it", onClick = { verifyLossless = true })
