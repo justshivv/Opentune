@@ -121,6 +121,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   The songs either side of the current one are found before you get to
   them, and the next one is buffered while this one plays. Played songs
   stay in a song cache (512 MB by default) for instant replays and seeks.
+- **Daily mixes.** Home has mixes made on the phone from what you play,
+  new each day: one for each of your top three artists with the songs you
+  play around them, one for this time of day, On repeat and Rediscover
+  (favourites you haven't played lately). When a mix runs out, autoplay
+  carries on.
 - **Queue and radio.** Autoplay keeps similar songs coming, also after a
   song you started on its own from Home or search. Shuffle,
   repeat, play next, add to queue, swipe-to-queue on any row, and
@@ -383,6 +388,10 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   the other as the song goes on; Halo, a round cover in a ring of moving
   bars; and Polaroid, the cover as an instant photo that sways gently.
 - **Wavy seek bar** (optional) that ripples while music plays.
+- **Waveform seek bar** (optional): the bar shows the song's loud and
+  quiet parts. Downloaded songs and songs on the phone are read in the
+  background and show the whole shape at once; streamed songs fill it in
+  as they play and keep it, so it's complete the next time.
 - **Quick screens.** Home opens on the last copy saved while the fresh one
   loads; pages you've visited and searches you've made come back at once
   and refresh in the background.
@@ -414,6 +423,16 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   rushes past you, Dissolve from one blur into the other, turn like a
   Cube, open out of the middle in a Reveal, or Toss the old one aside as
   the new one lands. It applies to the full-screen cover too.
+- **Covers that fly.** Tap a song and its cover lifts off, tilts and arcs
+  down into the now-playing card. Off under Settings › Motion.
+- **A burst of hearts.** Liking a song in the player throws small hearts
+  and sparks out in the cover's colours.
+- **Lyrics in colour.** The cover's colours drift slowly behind the
+  lyrics while they're open.
+- **Blurred headers.** Album, artist and playlist pages have their cover
+  blurred and stretched behind the top, fading into the page; artist photos
+  stay sharp at the top and melt into the blur below.
+- **What's new.** After an update, a short sheet lists what changed, once.
 - **Ambient light.** With the Gradient player background, wide soft
   glows in the song's colours drift slowly under the controls, meeting and
   mixing over a pale wash at the foot of the screen, and lift a little

@@ -1,0 +1,7 @@
+• Daily mixes on Home, made from what you play
+• Waveform seek bar (Settings › Player)
+• A tapped song's cover flies into the now-playing card
+• Hearts burst out when you like a song
+• The cover's colours drift behind the lyrics
+• Blurred cover headers on album, artist and playlist pages
+• A "What's new" sheet after each update

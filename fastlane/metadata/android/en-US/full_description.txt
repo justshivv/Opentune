@@ -1,0 +1,26 @@
+<p>OpenTune is a music player for the YouTube Music catalogue. It talks to YouTube Music directly, so there's no account to make, no API key and no server in between. Sign in only if you want your likes and playlists.</p>
+
+<p><b>Listening</b></p>
+<ul>
+<li>Best audio by default, with crossfade, loudness levelling, a 15-band equalizer and AutoEq correction for 8,000+ headphones</li>
+<li>Synced lyrics lit word by word, also offline for downloads, from LRCLIB, YouTube Music and NetEase</li>
+<li>Autoplay that keeps similar songs coming, from YouTube Music, Spotify or JioSaavn recommendations</li>
+<li>Daily mixes made on the phone from what you play</li>
+<li>Downloads, songs on the phone and your own Subsonic or Navidrome server</li>
+<li>50,000+ live radio stations and podcasts</li>
+<li>Cast to Chromecasts and DLNA TVs and speakers, without Google's libraries</li>
+<li>Name the song playing near you</li>
+<li>Listen together: friends join a room and hear the same song in step</li>
+<li>SponsorBlock for music videos, Android Auto, a home-screen widget</li>
+</ul>
+
+<p><b>Looks</b></p>
+<ul>
+<li>Several player designs, Liquid Glass, colours from the cover, a waveform seek bar and ambient light</li>
+<li>Wrapped: your listening as an animated story, made on the phone</li>
+</ul>
+
+<p><b>Privacy</b></p>
+<p>Your history, likes and settings stay on the phone. OpenTune adds one, anonymously, to public counters of how many phones use it each day and how many songs are played, with no ID and nothing about you; turn it off under Settings › About.</p>
+
+<p>OpenTune is free software under the GPL-3.0. It isn't made by or connected with Google, YouTube, Spotify or Shazam.</p>
