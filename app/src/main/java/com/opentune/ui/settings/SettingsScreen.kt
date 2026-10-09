@@ -838,6 +838,9 @@ private fun settingsSections(
                 Entry("Wavy seek bar", "wave progress slider") {
                     ToggleRow("Wavy seek bar", ui.wavySeekbar, { v -> AppSettings.updateUi { it.copy(wavySeekbar = v) } }, summary = "The played part of the bar ripples while music plays", icon = Icons.Rounded.Waves)
                 },
+                Entry("Lyric preview while seeking", "scrub seek bar lyric line preview bubble drag") {
+                    ToggleRow("Lyric preview while seeking", ui.lyricScrubPreview, { v -> AppSettings.updateUi { it.copy(lyricScrubPreview = v) } }, summary = "Dragging the seek bar shows the line sung at that point above your finger", icon = Icons.Rounded.Lyrics)
+                },
                 Entry("Waveform seek bar", "waveform seek bar loud quiet bars scrub audio shape") {
                     ToggleRow("Waveform seek bar", ui.waveformSeekbar, { v -> AppSettings.updateUi { it.copy(waveformSeekbar = v) } }, summary = "The bar shows the song's loud and quiet parts. Downloaded songs show it at once; streamed songs fill it in as they play, then keep it", icon = Icons.Rounded.GraphicEq)
                 },

@@ -275,6 +275,8 @@ data class InterfaceSettings(
     val coverFlight: Boolean = true,
     /** A soft light in the cover's colour under the player's cover. */
     val coverGlow: Boolean = true,
+    /** While the seek bar is dragged, the lyric line at that point shows above the finger. */
+    val lyricScrubPreview: Boolean = true,
     /** Proper album covers from MusicBrainz for music videos and local files without art. */
     val albumCovers: Boolean = true,
     val lyricsAnimation: LyricsAnimation = LyricsAnimation.FLUID,

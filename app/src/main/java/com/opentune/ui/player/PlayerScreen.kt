@@ -569,11 +569,16 @@ fun PlayerLayout(
                     LyricPreview(state.lyrics, lyricsPosition, onOpen = { paneName = Pane.LYRICS.name }, Modifier.padding(top = 4.dp))
                 }
                 Spacer(Modifier.height(8.dp))
+                // The line at a point of the song, for the bubble shown while the bar is dragged.
+                val synced = state.lyrics as? com.opentune.data.lyrics.Lyrics.Synced
+                val lyricAt: ((Long) -> String?)? = if (state.ui.lyricScrubPreview && synced != null) {
+                    { ms -> synced.lines.lastOrNull { it.startMs <= ms + offsetMs }?.text }
+                } else null
                 if (state.ui.waveformSeekbar) {
                     val (wave, waveVersion) = rememberWaveform(current.videoId, position, state.durationMs, state.isPlaying)
-                    SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, playing = state.isPlaying, waveform = wave, waveVersion = { waveVersion.value })
+                    SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, playing = state.isPlaying, waveform = wave, waveVersion = { waveVersion.value }, lyricAt = lyricAt)
                 } else {
-                    SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation, playing = state.isPlaying)
+                    SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation, playing = state.isPlaying, lyricAt = lyricAt)
                 }
                 if (state.ui.statsForNerds) {
                     Box(Modifier.clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }

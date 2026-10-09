@@ -79,6 +79,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -460,6 +462,8 @@ fun SeekBar(
     waveform: com.opentune.playback.Waveforms.Wave? = null,
     /** Moves on as [waveform] fills in, so the bars are redrawn. */
     waveVersion: () -> Int = { 0 },
+    /** The lyric line sung at a moment, shown above the finger while the bar is dragged. */
+    lyricAt: ((Long) -> String?)? = null,
 ) {
     var dragFraction by remember { mutableStateOf<Float?>(null) }
     // The wave travels while music plays and flattens out when it stops.
@@ -477,6 +481,8 @@ fun SeekBar(
         ?: if (durationMs > 0) (position().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 
     Column(modifier) {
+        Box {
+        if (lyricAt != null) ScrubLyric(dragFraction, durationMs, lyricAt)
         Canvas(
             Modifier
                 .fillMaxWidth()
@@ -556,6 +562,7 @@ fun SeekBar(
                 drawRoundRect(active, Offset(0f, y), Size(size.width * f, h), r)
             }
             if (thumbRadius > 0.dp) drawCircle(active, thumbRadius.toPx(), Offset(size.width * f, size.height / 2))
+        }
         }
         val elapsedSeconds by remember(durationMs) {
             derivedStateOf { ((dragFraction?.times(durationMs)?.toLong() ?: position()) / 1000) }
@@ -893,4 +900,54 @@ fun rememberWaveform(videoId: String, position: () -> Long, durationMs: Long, pl
         }
     }
     return wave to version
+}
+
+/**
+ * While the seek bar is dragged, the line sung at that point in a bubble
+ * above the finger. It follows the finger, stays inside the bar's width
+ * and changes as the finger crosses into another line.
+ */
+@Composable
+private fun BoxScope.ScrubLyric(dragFraction: Float?, durationMs: Long, lyricAt: (Long) -> String?) {
+    var last by remember { mutableStateOf<String?>(null) }
+    var lastFraction by remember { mutableStateOf(0f) }
+    val line = dragFraction?.let { lyricAt((it * durationMs).toLong()) }
+    if (dragFraction != null) {
+        lastFraction = dragFraction
+        if (line != null) last = line
+    }
+    val shown by animateFloatAsState(if (dragFraction != null && last != null) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 500f), label = "scrubLyric")
+    if (shown <= 0.01f || last == null) return
+    val text = last!!
+    Box(
+        Modifier
+            .layout { measurable, constraints ->
+                val maxW = (constraints.maxWidth * 0.8f).toInt()
+                val p = measurable.measure(androidx.compose.ui.unit.Constraints(maxWidth = maxW))
+                layout(constraints.maxWidth, 0) {
+                    val center = (constraints.maxWidth * lastFraction).toInt()
+                    val x = (center - p.width / 2).coerceIn(0, (constraints.maxWidth - p.width).coerceAtLeast(0))
+                    p.place(x, -p.height - 6.dp.roundToPx())
+                }
+            }
+            .graphicsLayer {
+                alpha = shown
+                val s = 0.85f + 0.15f * shown
+                scaleX = s
+                scaleY = s
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                translationY = (1f - shown) * 8.dp.toPx()
+            }
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        androidx.compose.animation.AnimatedContent(
+            text,
+            transitionSpec = { (fadeIn(tween(160)) + slideInVertically(tween(200)) { it / 3 }) togetherWith fadeOut(tween(120)) },
+            label = "scrubLine",
+        ) { t ->
+            Text(t, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+    }
 }
