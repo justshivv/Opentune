@@ -1,7 +1,8 @@
 # Free usage backend
 
 This Worker + D1 database replaces Abacus increment counters. The website remains on GitHub Pages.
-It is prepared for Cloudflare's Free plan; it has not been deployed until an actual D1 ID and API URL are configured.
+Deployed on Cloudflare's Free plan at `https://opentune-usage.create-a-new-site-with-sites.workers.dev`.
+The public API URL and D1 binding are configured in this repository; credentials are kept outside it.
 
 ## Deploy
 

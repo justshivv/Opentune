@@ -8,6 +8,6 @@
   "d1_databases": [{
     "binding": "DB",
     "database_name": "opentune-usage",
-    "database_id": "REPLACE_WITH_CREATED_D1_DATABASE_ID"
+    "database_id": "0f977bd8-a4ec-46f9-985f-c1bc8bccac78"
   }]
 }
