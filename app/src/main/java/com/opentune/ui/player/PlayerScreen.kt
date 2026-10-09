@@ -77,6 +77,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -712,20 +713,89 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
             pop.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 500f))
         }
     }
-    Box(
-        Modifier.size(46.dp).glass(CircleShape, Color.White.copy(alpha = 0.16f)).clickable {
-            // A heartbeat for a like; a soft fall for taking it back.
-            haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE)
-            onClick()
-        },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-            if (liked) "Remove from Liked" else "Like",
-            Modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
-            tint = if (liked) Color(0xFFFF4D6D) else LocalContentColor.current,
-        )
+    // Hearts and sparks thrown out when a song is liked, only on the tap itself.
+    val burst = remember { Animatable(1f) }
+    var bursts by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+    LaunchedEffect(bursts) {
+        if (bursts > 0) {
+            burst.snapTo(0f)
+            burst.animateTo(1f, tween(950, easing = androidx.compose.animation.core.LinearEasing))
+        }
+    }
+    val (accentA, accentB) = com.opentune.ui.theme.songAccents()
+    Box(contentAlignment = Alignment.Center) {
+        if (burst.value < 1f) LikeBurst(burst.value, bursts, listOf(Color(0xFFFF4D6D), accentA, accentB), Modifier.size(46.dp))
+        Box(
+            Modifier.size(46.dp).glass(CircleShape, Color.White.copy(alpha = 0.16f)).clickable {
+                // A heartbeat for a like; a soft fall for taking it back.
+                haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE)
+                if (!liked && !still) bursts++
+                onClick()
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                if (liked) "Remove from Liked" else "Like",
+                Modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+                tint = if (liked) Color(0xFFFF4D6D) else LocalContentColor.current,
+            )
+        }
+    }
+}
+
+/**
+ * The burst at [t] (0 to 1): small hearts and sparks flying out from the
+ * button's middle on slightly different paths, growing then shrinking as
+ * they fade. [seed] makes each burst a little different.
+ */
+@Composable
+internal fun LikeBurst(t: Float, seed: Int, colors: List<Color>, modifier: Modifier) {
+    val heart = remember {
+        androidx.compose.ui.graphics.Path().apply {
+            moveTo(0f, 0.9f)
+            cubicTo(-1.45f, -0.05f, -0.8f, -1.15f, 0f, -0.42f)
+            cubicTo(0.8f, -1.15f, 1.45f, -0.05f, 0f, 0.9f)
+            close()
+        }
+    }
+    val pieces = remember(seed) {
+        val r = kotlin.random.Random(seed * 7919 + 13)
+        List(14) { i ->
+            floatArrayOf(
+                (i / 14f) * 2f * Math.PI.toFloat() + r.nextFloat() * 0.35f, // angle
+                0.7f + r.nextFloat() * 0.6f, // how far
+                0.6f + r.nextFloat() * 0.7f, // size
+                if (i % 3 == 0) 0f else 1f, // spark or heart
+                r.nextFloat() * 0.12f, // late start
+            )
+        }
+    }
+    androidx.compose.foundation.Canvas(modifier) {
+        val c = center
+        pieces.forEachIndexed { i, p ->
+            val local = ((t - p[4]) / (1f - p[4])).coerceIn(0f, 1f)
+            if (local <= 0f) return@forEachIndexed
+            val out = 1f - (1f - local) * (1f - local) * (1f - local)
+            val dist = 58.dp.toPx() * p[1] * out
+            // A little drift upward, like they float.
+            val x = c.x + kotlin.math.cos(p[0]) * dist
+            val y = c.y + kotlin.math.sin(p[0]) * dist - 10.dp.toPx() * out
+            val grow = if (local < 0.3f) local / 0.3f else 1f - (local - 0.3f) / 0.7f
+            val alpha = (1f - local * local).coerceIn(0f, 1f)
+            val color = colors[i % colors.size].copy(alpha = alpha)
+            if (p[3] == 0f) {
+                drawCircle(color, 2.5.dp.toPx() * p[2] * (0.4f + grow), androidx.compose.ui.geometry.Offset(x, y))
+            } else {
+                val size = 6.dp.toPx() * p[2] * (0.3f + 0.9f * grow)
+                withTransform({
+                    translate(x, y)
+                    rotate((p[0] * 57.3f + 90f) * 0.15f, pivot = androidx.compose.ui.geometry.Offset.Zero)
+                    scale(size, size, pivot = androidx.compose.ui.geometry.Offset.Zero)
+                }) { drawPath(heart, color) }
+            }
+        }
     }
 }
 
