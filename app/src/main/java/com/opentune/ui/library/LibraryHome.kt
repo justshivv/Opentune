@@ -69,6 +69,7 @@ import com.opentune.data.library.LibraryStore
 import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.artworkAt
+import com.opentune.data.model.HEADER_ART_PX
 import com.opentune.data.subsonic.Subsonic
 import com.opentune.ui.ScreenCache
 import com.opentune.ui.browse.SongActions
@@ -436,12 +437,25 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     }
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item {
-            PageHeader(playlist.name, onBack = onBack, actions = {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassIconButton(Icons.Rounded.Edit, "Rename", { renaming = true })
-                    GlassIconButton(Icons.Rounded.DeleteOutline, "Delete", { deleting = true })
+            // The first song's cover, blurred behind the name and the play buttons.
+            Box {
+                if (songs.isNotEmpty()) com.opentune.ui.browse.HeaderBackdrop(songs.first().thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize())
+                Column {
+                    PageHeader(playlist.name, onBack = onBack, actions = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            GlassIconButton(Icons.Rounded.Edit, "Rename", { renaming = true })
+                            GlassIconButton(Icons.Rounded.DeleteOutline, "Delete", { deleting = true })
+                        }
+                    })
+                    if (songs.isNotEmpty()) {
+                        PlayButtons(
+                            onPlay = { actions.playAll(songs, 0, false, playlist.name) },
+                            onShuffle = { actions.playAll(songs, 0, true, playlist.name) },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
                 }
-            })
+            }
         }
         if (songs.isEmpty()) {
             item {
@@ -449,13 +463,6 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             }
             item { ListTools(songs, onAddSongs = { adding = true }, Modifier.fillMaxWidth().padding(16.dp)) }
             return@LazyColumn
-        }
-        item {
-            PlayButtons(
-                onPlay = { actions.playAll(songs, 0, false, playlist.name) },
-                onShuffle = { actions.playAll(songs, 0, true, playlist.name) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            )
         }
         item { ListTools(songs, onAddSongs = { adding = true }, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
         itemsIndexed(songs, key = { i, s -> "$i:${s.videoId}" }) { i, song ->

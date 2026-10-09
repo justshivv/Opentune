@@ -48,6 +48,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -132,21 +134,31 @@ private fun PlayShuffleButtons(enabled: Boolean, onPlay: () -> Unit, onShuffle: 
     }
 }
 
-/** Blurred, faded artwork behind a page header (blur needs Android 12). */
+/**
+ * The cover blurred and stretched behind a page's header, fading into the
+ * page below it. Before Android 12, which can't blur, a tiny copy of the
+ * cover stretched to fill makes the same soft wash.
+ */
 @Composable
-private fun HeaderBackdrop(url: String?, modifier: Modifier = Modifier) {
+internal fun HeaderBackdrop(url: String?, modifier: Modifier = Modifier) {
     val background = MaterialTheme.colorScheme.background
-    Box(modifier) {
+    Box(modifier.clipToBounds()) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Artwork(
                 url,
-                Modifier.matchParentSize().graphicsLayer { alpha = 0.55f }.blur(60.dp),
+                Modifier.matchParentSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f; alpha = 0.85f }.blur(70.dp),
+                shape = androidx.compose.ui.graphics.RectangleShape,
+            )
+        } else {
+            Artwork(
+                url.artworkAt(24),
+                Modifier.matchParentSize().graphicsLayer { scaleX = 1.4f; scaleY = 1.4f; alpha = 0.7f },
                 shape = androidx.compose.ui.graphics.RectangleShape,
             )
         }
         Box(
             Modifier.matchParentSize().background(
-                Brush.verticalGradient(listOf(background.copy(alpha = 0.2f), background)),
+                Brush.verticalGradient(0f to background.copy(alpha = 0.15f), 0.55f to background.copy(alpha = 0.45f), 1f to background),
             ),
         )
     }
@@ -275,9 +287,20 @@ fun ArtistScreen(
                         if (page == null) {
                             Placeholder(Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape)
                         } else {
+                            // The photo sharp at the top, melting into a blurred copy of itself below.
+                            HeaderBackdrop(page.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize())
                             Artwork(
                                 page.thumbnailUrl.artworkAt(HEADER_ART_PX),
-                                Modifier.fillMaxSize(),
+                                Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                                    .drawWithContent {
+                                        drawContent()
+                                        drawRect(
+                                            Brush.verticalGradient(0f to Color.Black, 0.5f to Color.Black, 0.92f to Color.Transparent),
+                                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                                        )
+                                    },
                                 shape = androidx.compose.ui.graphics.RectangleShape,
                                 placeholder = Icons.Filled.Person,
                             )
