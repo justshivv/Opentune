@@ -1,7 +1,10 @@
 package com.opentune.ui.player
 
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
@@ -21,10 +24,21 @@ internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onCli
     // Never show the previous song's provider while a new item is resolving.
     val source = reported?.takeIf { it.mediaId == mediaId }
     val label = sourceQualityLabel(source, if (source != null) format else null)
-    TextButton(onClick, Modifier.heightIn(min = 40.dp).semantics {
-        contentDescription = "$label. Open signal path"
-    }) {
-        Text(label, Modifier.padding(horizontal = 2.dp), style = MaterialTheme.typography.labelMedium,
+    val colors = MaterialTheme.colorScheme
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.heightIn(min = 40.dp).semantics {
+            contentDescription = "$label. Open signal path"
+        },
+        shape = CircleShape,
+        colors = ButtonDefaults.textButtonColors(
+            containerColor = colors.surfaceContainerHigh.copy(alpha = 0.9f),
+            contentColor = colors.onSurface,
+        ),
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.6f)),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
