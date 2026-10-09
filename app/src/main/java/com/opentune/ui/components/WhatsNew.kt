@@ -57,6 +57,10 @@ object WhatsNew {
 
     /** Newest first. Add the coming version's notes at the top when releasing. */
     val NOTES: List<Pair<String, List<Note>>> = listOf(
+        "0.3.9" to listOf(
+            Note(Icons.Rounded.Lyrics, "Lyrics while seeking, fixed", "Dragging the seek bar now shows the line sung at that spot."),
+            Note(Icons.Rounded.FormatQuote, "Easier lyric cards", "The share sheet opens on the line being sung. Tap lines to tick them onto the card."),
+        ),
         "0.3.8" to listOf(
             Note(Icons.Rounded.FormatQuote, "Lyric cards", "Tap the quote button in the lyrics, pick up to five lines and share them as a picture."),
             Note(Icons.Rounded.Headphones, "8D audio", "In Remix: the music circles your head, slow, medium or fast. Best with headphones."),

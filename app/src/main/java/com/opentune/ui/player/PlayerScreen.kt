@@ -573,9 +573,9 @@ fun PlayerLayout(
                 }
                 Spacer(Modifier.height(8.dp))
                 // The line at a point of the song, for the bubble shown while the bar is dragged.
-                val synced = state.lyrics as? com.opentune.data.lyrics.Lyrics.Synced
+                val synced = (state.lyrics as? LyricsState.Found)?.lyrics as? com.opentune.data.lyrics.Lyrics.Synced
                 val lyricAt: ((Long) -> String?)? = if (state.ui.lyricScrubPreview && synced != null) {
-                    { ms -> synced.lines.lastOrNull { it.startMs <= ms + offsetMs }?.text }
+                    { ms -> synced.lines.lastOrNull { it.startMs <= ms + offsetMs }?.text?.takeIf { it.isNotBlank() } }
                 } else null
                 if (state.ui.waveformSeekbar) {
                     val (wave, waveVersion) = rememberWaveform(current.videoId, position, state.durationMs, state.isPlaying)

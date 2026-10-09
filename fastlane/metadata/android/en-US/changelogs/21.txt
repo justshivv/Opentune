@@ -1,0 +1,2 @@
+• Lyric preview while seeking works again
+• Sharing lyrics: the sheet opens on the line being sung, and you tap lines to tick them onto the card

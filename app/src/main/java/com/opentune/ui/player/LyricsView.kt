@@ -130,12 +130,16 @@ fun LyricsView(
         }
         val found = (state as? LyricsState.Found)?.lyrics
         if (shareSong != null && found != null) {
-            val lines = remember(found) {
+            // Lines with words in them (synced lyrics carry empty ones for the gaps), with
+            // their start times so the sheet can open on the line being sung.
+            val timed = remember(found) {
                 when (found) {
-                    is Lyrics.Synced -> found.lines.map { it.text }
-                    is Lyrics.Plain -> found.text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                    is Lyrics.Synced -> found.lines.filter { it.text.isNotBlank() }.map { it.text.trim() to it.startMs }
+                    is Lyrics.Plain -> found.text.lines().map { it.trim() }.filter { it.isNotEmpty() }.map { it to -1L }
                 }
             }
+            val lines = remember(timed) { timed.map { it.first } }
+            var startAt by remember { mutableStateOf(-1) }
             val haptics = com.opentune.ui.components.rememberHaptics()
             Box(
                 Modifier
@@ -144,12 +148,17 @@ fun LyricsView(
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))
-                    .clickable { haptics.tick(); sharing = true },
+                    .clickable {
+                        haptics.tick()
+                        val now = position()
+                        startAt = if (found is Lyrics.Synced) timed.indexOfLast { it.second <= now } else -1
+                        sharing = true
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Rounded.FormatQuote, "Share lyrics", Modifier.size(20.dp))
             }
-            if (sharing) com.opentune.ui.share.LyricCardSheet(shareSong, lines, startAt = -1, onDismiss = { sharing = false })
+            if (sharing) com.opentune.ui.share.LyricCardSheet(shareSong, lines, startAt = startAt, onDismiss = { sharing = false })
         }
     }
 }

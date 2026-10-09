@@ -23,11 +23,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FormatQuote
@@ -189,12 +194,14 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
     LaunchedEffect(chosen, look, cover) {
         preview = if (chosen.isEmpty()) null else withContext(Dispatchers.Default) { LyricCard.draw(cover, chosen, song.title, song.artist, look) }
     }
+    val list = rememberLazyListState()
+    // Open on the line being sung, a little way down so the lines before it show too.
+    LaunchedEffect(Unit) { if (startAt > 0) list.scrollToItem((startAt - 2).coerceAtLeast(0)) }
     FloatingCard(
         onDismiss = onDismiss,
         title = "Share lyrics",
         icon = Icons.Rounded.FormatQuote,
-        subtitle = if (picked.isEmpty()) "Tap up to ${LyricCard.MAX_LINES} lines" else "${picked.size} of ${LyricCard.MAX_LINES} lines",
-        expandable = true,
+        subtitle = if (picked.isEmpty()) "Tap the lines to put on the card" else "${picked.size} of ${LyricCard.MAX_LINES} lines picked",
         actions = {
             SheetButton(
                 "Share",
@@ -211,40 +218,59 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
             )
         },
     ) {
-        Column(Modifier.padding(horizontal = 4.dp)) {
-            Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
-                val p = preview
-                if (p != null) {
-                    Image(p.asImageBitmap(), "Lyric card", Modifier.width(220.dp).aspectRatio(LyricCard.WIDTH / LyricCard.HEIGHT.toFloat()).clip(RoundedCornerShape(16.dp)))
-                } else {
-                    Box(Modifier.width(220.dp).aspectRatio(LyricCard.WIDTH / LyricCard.HEIGHT.toFloat()).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-                        Text("Pick some lines", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+        // The card as it will look, small, beside its looks; the lines to pick below.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            val p = preview
+            val thumb = Modifier.width(104.dp).aspectRatio(LyricCard.WIDTH / LyricCard.HEIGHT.toFloat()).clip(RoundedCornerShape(12.dp))
+            if (p != null) {
+                Image(p.asImageBitmap(), "Lyric card", thumb)
+            } else {
+                Box(thumb.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.FormatQuote, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Row(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.width(14.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Look", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 LyricCard.Look.entries.forEach { l ->
                     FilterChip(selected = look == l, onClick = { haptics.tick(); look = l }, label = { Text(l.label) })
                 }
             }
-            LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                itemsIndexed(lines) { i, line ->
-                    val on = i in picked
-                    val bg by animateColorAsState(if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else androidx.compose.ui.graphics.Color.Transparent, label = "pick")
+        }
+        LazyColumn(Modifier.weight(1f, fill = false).padding(top = 8.dp), state = list) {
+            itemsIndexed(lines) { i, line ->
+                val on = i in picked
+                val full = !on && picked.size >= LyricCard.MAX_LINES
+                val bg by animateColorAsState(if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else androidx.compose.ui.graphics.Color.Transparent, label = "pick")
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(bg)
+                        .clickable(enabled = !full) {
+                            haptics.tick()
+                            if (on) picked.remove(i) else picked.add(i)
+                        }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (on) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                        if (on) "Picked" else "Not picked",
+                        Modifier.size(22.dp),
+                        tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (full) 0.35f else 0.8f),
+                    )
+                    Spacer(Modifier.width(12.dp))
                     Text(
                         line,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (on) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(bg)
-                            .clickable {
-                                haptics.tick()
-                                if (on) picked.remove(i) else if (picked.size < LyricCard.MAX_LINES) picked.add(i)
-                            }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        color = when {
+                            on -> MaterialTheme.colorScheme.onSurface
+                            full -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
             }
