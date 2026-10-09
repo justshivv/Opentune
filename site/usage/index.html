@@ -28,7 +28,7 @@ h1 { font: 700 clamp(32px, 5vw, 52px)/1 var(--display); letter-spacing: -0.02em;
 .bar { display: flex; gap: 10px; align-items: center; color: var(--dim); font: 500 12.5px/1 var(--mono); }
 button { font: 500 14px/1 var(--body); color: var(--fg); background: var(--raise); border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
-.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px 20px; min-width: 0; }
 .kpi b { display: block; font: 600 clamp(28px, 4vw, 40px)/1.05 var(--display); letter-spacing: -0.02em; }
 .kpi span { color: var(--muted); font-size: 13.5px; }
@@ -53,202 +53,44 @@ td .meter { height: 6px; border-radius: 3px; background: var(--tint); margin-top
 <div class="wrap">
   <header>
     <div>
-      <div class="kicker"><i></i>Owner dashboard</div>
+      <div class="kicker"><i></i>Usage dashboard</div>
       <h1>OpenTune usage</h1>
     </div>
     <div class="bar"><span id="when">Loading…</span><button id="refresh" type="button">Refresh</button></div>
   </header>
 
   <section class="kpis">
-    <div class="kpi hot"><b id="k-dau">–</b><span>Active today</span></div>
-    <div class="kpi"><b id="k-wau">–</b><span>Active this week</span></div>
-    <div class="kpi"><b id="k-mau">–</b><span>Active this month</span></div>
-    <div class="kpi"><b id="k-installs">–</b><span>Installs counted</span></div>
+    <div class="kpi hot"><b id="k-dau">–</b><span>Active installations today</span></div>
+    <div class="kpi"><b id="k-wau">–</b><span>Active installations this week</span></div>
+    <div class="kpi"><b id="k-mau">–</b><span>Active installations this month</span></div>
+    <div class="kpi"><b id="k-installs">–</b><span>Unique installations reported</span></div>
     <div class="kpi"><b id="k-plays-today">–</b><span>Songs played today</span></div>
     <div class="kpi"><b id="k-plays">–</b><span>Songs played in all</span></div>
     <div class="kpi"><b id="k-per">–</b><span>Songs per active phone today</span></div>
-    <div class="kpi"><b id="k-dl">–</b><span>APK downloads on GitHub</span></div>
+    <div class="kpi"><b id="k-dl">–</b><span>GitHub APK download events</span></div>
+    <div class="kpi"><b id="k-browsers">—</b><span>Unique browsers requesting APKs</span></div>
   </section>
 
   <div class="card">
-    <h2>Active phones, last 30 days</h2>
-    <p>Phones that opened OpenTune or played a song, each counted once a day. Days are in UTC.</p>
+    <h2>Active installations, reported days</h2>
+    <p>Installation IDs that opened OpenTune or played a song, deduplicated each UTC day.</p>
     <div id="daily"></div>
   </div>
   <div class="card">
     <h2>Songs played, last 30 days</h2>
-    <p>Every song listened to long enough to go into a phone's history.</p>
+    <p>Daily cumulative play reports. Repeated uploads do not add plays again.</p>
     <div id="dailyPlays"></div>
   </div>
 
-  <div class="two" style="margin-top:14px">
-    <div class="card"><h2>Weekly active</h2><p>Each phone once per ISO week, last 12 weeks.</p><div id="weekly"></div></div>
-    <div class="card"><h2>Monthly active</h2><p>Each phone once per month, last 12 months.</p><div id="monthly"></div></div>
-  </div>
 
   <div class="two" style="margin-top:14px">
-    <div class="card"><h2>Versions</h2><p>Phones that have run each version at least once.</p><table id="versions"></table></div>
-    <div class="card"><h2>Downloads by release</h2><p>APK downloads from GitHub Releases, in-app updates included.</p><table id="downloads"></table></div>
+    <div class="card"><h2>Versions</h2><p>Unique installation IDs that reported each version. Updates retain the ID.</p><table id="versions"></table></div>
+    <div class="card"><h2>GitHub download events by release</h2><p>Includes repeat downloads and updates. Four downloads may be one person; GitHub does not expose unique downloader IDs.</p><table id="downloads"></table></div>
   </div>
 
-  <p class="note">How it's counted: each phone with "Count this phone in usage numbers" on (Settings › About, on by default) adds one to a public counter the first time it's used each day, week and month, once when first installed, once per version, and once per song it plays. It sends no ID, no song names and nothing about the person. Counting started with v0.3.6, and debug builds never count. The counters are kept by Abacus, a free service; daily counters fade after about five months without being read. This page isn't linked from the site.</p>
+  <div class="card"><h2>Unique download browsers by release</h2><p>Requests through this website only, counted once per browser per release. Not completed downloads or installations.</p><table id="unique-downloads"></table></div>
+  <p class="note">New counts use random installation IDs and database deduplication. App updates keep an ID; reinstalling or clearing app data creates a new one. Browser downloads use a separate random ID; clearing storage or using another browser creates another ID. These measure installations and browsers, not unique people. Direct GitHub downloads, offline reports not yet uploaded, disabled usage sharing, and older app versions are not included in unique counts. No hardware IDs, account identities or song names are collected. Old Abacus counts cannot be converted to unique counts and are not mixed into these totals. This dashboard is public and displays aggregate totals only.</p>
 </div>
-<script>
-(() => {
-  const NS = "opentune-justshivv";
-  const API = "https://abacus.jasoncameron.dev/get/" + NS + "/";
-  // Counting began with v0.3.6 on 9 Oct 2026 (UTC). Earlier days, weeks, months and versions
-  // were never counted, so they aren't read and are left blank rather than shown as 0.
-  const START = new Date(Date.UTC(2026, 9, 9));
-  const $ = (id) => document.getElementById(id);
-  const fmt = (n) => n == null ? "–" : n.toLocaleString("en-US");
-  const pad = (n, w = 2) => String(n).padStart(w, "0");
-
-  // The same keys the app builds (see Usage.kt), all in UTC.
-  const dayKey = (d) => d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate());
-  const monthKey = (d) => d.getUTCFullYear() + pad(d.getUTCMonth() + 1);
-  function isoWeek(d) {
-    const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-    const day = t.getUTCDay() || 7;
-    t.setUTCDate(t.getUTCDate() + 4 - day);
-    const start = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-    return t.getUTCFullYear() + "w" + pad(Math.ceil(((t - start) / 864e5 + 1) / 7));
-  }
-
-  // A counter's real value, read fresh every time: never from the browser's cache, never made up.
-  // 404 means the counter has never been added to, which is a real 0. Abacus allows 30 reads
-  // per 10 s, so reads are paced under that; a read that's turned away waits and goes again,
-  // and one that still fails comes back as null and shows as "–", not as 0.
-  const WINDOW = 10_000, PER_WINDOW = 26, PARALLEL = 4;
-  let running = 0, sent = [], queue = [], total = 0, done = 0, failed = 0;
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  function get(key) {
-    total++; progress();
-    return new Promise((resolve) => { queue.push({ key, resolve, tries: 0 }); pump(); });
-  }
-  function pump() {
-    while (running < PARALLEL && queue.length) {
-      const now = Date.now();
-      sent = sent.filter((t) => now - t < WINDOW);
-      if (sent.length >= PER_WINDOW) { setTimeout(pump, WINDOW - (now - sent[0]) + 50); return; }
-      sent.push(now); running++;
-      read(queue.shift());
-    }
-  }
-  async function read(job) {
-    let value, retry = false;
-    try {
-      const r = await fetch(API + encodeURIComponent(job.key) + "?t=" + Date.now(), { cache: "no-store" });
-      if (r.status === 404) value = 0;
-      else if (r.ok) { const j = await r.json(); value = Number.isFinite(j.value) ? Math.max(0, j.value) : null; if (value == null) retry = true; }
-      else retry = true;
-      if (r.status === 429) { const wait = (+r.headers.get("retry-after") || 10) * 1000; sent = Array(PER_WINDOW).fill(Date.now() - WINDOW + wait); }
-    } catch (e) { retry = true; }
-    running--;
-    if (retry && ++job.tries <= 5) { await sleep(800 * job.tries); queue.unshift(job); pump(); return; }
-    if (retry) { value = null; failed++; }
-    done++; progress(); job.resolve(value); pump();
-  }
-  function progress() {
-    if (total) $("when").textContent = done < total ? `Loading ${done} of ${total}…` : "Loading…";
-  }
-
-  function bars(el, items, opts = {}) {
-    const W = 640, H = opts.h || 180, top = 18, bottom = 22, n = items.length;
-    const series = opts.series || [{ key: "v", color: "var(--tint)" }];
-    const max = Math.max(1, ...items.flatMap((it) => series.map((s) => it[s.key] || 0)));
-    const slot = W / n, groupW = slot * 0.7, bw = groupW / series.length;
-    let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${opts.label || "chart"}">`;
-    for (const f of [0.25, 0.5, 0.75, 1]) {
-      const y = top + (H - top - bottom) * (1 - f);
-      svg += `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="#1d1d21" stroke-width="1"/>`;
-    }
-    items.forEach((it, i) => {
-      series.forEach((s, k) => {
-        const raw = it[s.key], v = raw || 0, h = (H - top - bottom) * v / max;
-        const x = i * slot + (slot - groupW) / 2 + k * bw;
-        if (raw === undefined) return;
-        if (raw === null) { svg += `<rect x="${x.toFixed(1)}" y="${(H - bottom - 6).toFixed(1)}" width="${(bw - 1).toFixed(1)}" height="6" rx="2" fill="none" stroke="#55555c" stroke-dasharray="2 2"><title>${it.label}: didn't load</title></rect>`; return; }
-        svg += `<rect x="${x.toFixed(1)}" y="${(H - bottom - h).toFixed(1)}" width="${(bw - 1).toFixed(1)}" height="${Math.max(h, v ? 2 : 0).toFixed(1)}" rx="${Math.min(4, bw / 3).toFixed(1)}" fill="${s.color}"><title>${it.label}: ${v}</title></rect>`;
-        if (opts.values && v) svg += `<text class="val" x="${(x + bw / 2).toFixed(1)}" y="${(H - bottom - h - 5).toFixed(1)}" text-anchor="middle">${v}</text>`;
-      });
-      const every = Math.ceil(n / (opts.ticks || 8));
-      if (i % every === 0 || i === n - 1) svg += `<text class="axis" x="${(i * slot + slot / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${it.label}</text>`;
-    });
-    el.innerHTML = svg + "</svg>";
-  }
-
-  function table(el, rows) {
-    const max = Math.max(1, ...rows.map((r) => r[1] || 0));
-    el.innerHTML = rows.length ? rows.map(([name, v]) => `<tr><td>${name}<div class="meter" style="width:${(100 * v / max).toFixed(1)}%;opacity:${v ? 1 : .25}"></div></td><td>${fmt(v)}</td></tr>`).join("") : `<tr><td>Nothing yet</td><td></td></tr>`;
-  }
-
-  let loading = false;
-  async function load() {
-    if (loading) return;
-    loading = true; $("refresh").disabled = true;
-    total = done = failed = 0;
-    for (const id of ["k-dau", "k-wau", "k-mau", "k-installs", "k-plays", "k-plays-today", "k-per", "k-dl"]) $(id).textContent = "…";
-    const now = new Date();
-    const days = [...Array(30)].map((_, i) => new Date(now.getTime() - (29 - i) * 864e5));
-    const weeks = [...Array(12)].map((_, i) => new Date(now.getTime() - (11 - i) * 7 * 864e5));
-    const months = [...Array(12)].map((_, i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (11 - i), 1)));
-    const shortDay = (d) => d.toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
-    const ratio = (p, a) => a && p != null ? (p / a).toFixed(1) : "–";
-    const counted = (key, from) => key >= from;
-    const BEFORE = undefined;
-    const ver = (t) => t.replace(/^v/, "").split(".").map(Number);
-    const newer = (a, b) => { const x = ver(a), y = ver(b); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return true; };
-
-    // The headline numbers first, so they show within a second or two.
-    const [installs, plays, dauToday, playsToday, wauNow, mauNow] = await Promise.all([
-      get("installs"), get("plays"), get("dau-" + dayKey(now)), get("plays-" + dayKey(now)), get("wau-" + isoWeek(now)), get("mau-" + monthKey(now))]);
-    $("k-dau").textContent = fmt(dauToday);
-    $("k-wau").textContent = fmt(wauNow);
-    $("k-mau").textContent = fmt(mauNow);
-    $("k-installs").textContent = fmt(installs);
-    $("k-plays").textContent = fmt(plays);
-    $("k-plays-today").textContent = fmt(playsToday);
-    $("k-per").textContent = ratio(playsToday, dauToday);
-
-    // GitHub's release list alongside the charts.
-    const releases = fetch("https://api.github.com/repos/justshivv/Opentune/releases?per_page=100", { cache: "no-store" })
-      .then((r) => r.ok ? r.json() : Promise.reject(r.status)).catch(() => null);
-
-    // Then the charts; today's counters are already in hand.
-    const past = days.slice(0, -1);
-    const [weekly, monthly, daily] = await Promise.all([
-      Promise.all(weeks.map(async (d, i) => ({ label: isoWeek(d).slice(4), v: i === weeks.length - 1 ? wauNow : counted(isoWeek(d), isoWeek(START)) ? await get("wau-" + isoWeek(d)) : BEFORE }))),
-      Promise.all(months.map(async (d, i) => ({ label: d.toLocaleDateString("en", { month: "short", timeZone: "UTC" }), v: i === months.length - 1 ? mauNow : counted(monthKey(d), monthKey(START)) ? await get("mau-" + monthKey(d)) : BEFORE }))),
-      Promise.all(past.map(async (d) => counted(dayKey(d), dayKey(START))
-        ? { label: shortDay(d), a: await get("dau-" + dayKey(d)), p: await get("plays-" + dayKey(d)) }
-        : { label: shortDay(d), a: BEFORE, p: BEFORE })),
-    ]).then(([w, m, d]) => [w, m, d.concat([{ label: shortDay(now), a: dauToday, p: playsToday }])]);
-    bars($("weekly"), weekly, { values: true, label: "Weekly active phones", ticks: 12 });
-    bars($("monthly"), monthly, { values: true, label: "Monthly active phones", ticks: 12 });
-    bars($("daily"), daily.map((d) => ({ label: d.label, v: d.a })), { label: "Daily active phones", ticks: 6, h: 160 });
-    bars($("dailyPlays"), daily.map((d) => ({ label: d.label, v: d.p })), { series: [{ key: "v", color: "var(--tint2)" }], label: "Songs played each day", ticks: 6, h: 160 });
-
-    // Versions and downloads come from the release list on GitHub.
-    const rels = await releases;
-    if (rels) {
-      const list = rels.filter((r) => !r.draft);
-      const dl = list.map((r) => [r.tag_name, r.assets.filter((a) => a.name.endsWith(".apk")).reduce((s, a) => s + a.download_count, 0)]);
-      $("k-dl").textContent = fmt(dl.reduce((s, [, n]) => s + n, 0));
-      table($("downloads"), dl.slice(0, 12));
-      const vers = await Promise.all(list.filter((r) => newer(r.tag_name, "0.3.6")).slice(0, 12).map(async (r) => [r.tag_name, await get("ver-" + r.tag_name.replace(/^v/, ""))]));
-      table($("versions"), vers);
-    } else {
-      $("k-dl").textContent = "–";
-      $("downloads").innerHTML = $("versions").innerHTML = `<tr><td>GitHub didn't answer. Refresh to try again.</td><td></td></tr>`;
-    }
-    const at = new Date().toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    $("when").textContent = failed ? `${failed} of ${total} counters didn't load (shown as –). Refresh to try again. ${at}` : "Live as of " + at;
-    $("refresh").disabled = false; loading = false;
-  }
-  $("refresh").addEventListener("click", load);
-  load();
-})();
-</script>
+<script type="module" src="dashboard.js"></script>
 </body>
 </html>

@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object NerdStats {
     data class Source(val provider: String, val bits: Int? = null, val sampleRate: Int? = null, val kbps: Int? = null,
-        val selectionDetail: String? = null)
+        val selectionDetail: String? = null, val mediaId: String? = null)
     private val _playbackSource = MutableStateFlow<Source?>(null)
     val playbackSource = _playbackSource.asStateFlow()
     fun onPlaybackSource(source: Source) { _playbackSource.value = source }

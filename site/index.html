@@ -531,7 +531,7 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
       <div class="fact"><div class="n" data-odo="15"></div><span>equalizer bands, 25 Hz to 16 kHz</span></div>
       <div class="fact"><div class="n" data-odo="3"></div><span>lyrics sources, tried in your order</span></div>
       <div class="fact"><div class="n" data-odo="7"></div><span>player layouts to choose from</span></div>
-      <div class="fact"><div class="n" data-odo="0" data-em="1"></div><span>ads, trackers or subscriptions</span></div>
+      <div class="fact"><div class="n" data-odo="0" data-em="1"></div><span>ads or required subscriptions</span></div>
     </div>
   </div>
 
@@ -715,7 +715,7 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
         <div class="thread" aria-hidden="true"><i id="thread"></i></div>
         <div class="step"><span class="n">Step 1</span><h3>Get the APK</h3><p>Download the latest build from GitHub Releases. <code>arm64-v8a</code> fits almost every recent phone; <code>universal</code> runs on anything.</p><span class="hint">Android 8.0 (API 26) or newer.</span></div>
         <div class="step"><span class="n">Step 2</span><h3>Allow the install</h3><p>Android asks you to let your browser or file manager install apps. Allow it, then confirm.</p><span class="hint">Settings &rsaquo; Apps &rsaquo; Special access &rsaquo; Install unknown apps</span></div>
-        <div class="step"><span class="n">Step 3</span><h3>Press play</h3><p>Sign in only if you want your likes and playlists. OpenTune looks for new releases once a day and checks each download against its SHA-256 sums.</p><span class="hint">Nothing to buy, nothing upsold.</span></div>
+        <div class="step"><span class="n">Step 3</span><h3>Press play</h3><p>Sign in only if you want your likes and playlists. OpenTune looks for new releases once a day and checks each download against its SHA-256 sums.</p><span class="hint">Nothing to buy, nothing upsold. APK links count unique browsers using a random ID; see Usage &amp; counting.</span></div>
       </div>
     </div>
   </section>
@@ -739,7 +739,7 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
       <p>Free software under GPL-3.0. OpenTune isn't affiliated with or endorsed by YouTube, Google, Spotify or any artist or label shown. Covers are shown to illustrate the app.</p>
     </div>
     <div><h4>Product</h4><ul><li><a href="#live">Features</a></li><li><a href="#colour">Colour from the cover</a></li><li><a href="#releases">Releases</a></li><li><a href="#install">Install guide</a></li></ul></div>
-    <div><h4>Project</h4><ul><li><a href="https://github.com/justshivv/Opentune" target="_blank" rel="noopener">Source on GitHub</a></li><li><a href="https://github.com/justshivv/Opentune/releases" target="_blank" rel="noopener">All releases</a></li><li><a href="https://github.com/justshivv/Opentune/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0 license</a></li></ul></div>
+    <div><h4>Project</h4><ul><li><a href="https://github.com/justshivv/Opentune" target="_blank" rel="noopener">Source on GitHub</a></li><li><a href="https://github.com/justshivv/Opentune/releases" target="_blank" rel="noopener">All releases</a></li><li><a href="usage/">Usage &amp; counting</a></li><li><a href="https://github.com/justshivv/Opentune/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0 license</a></li></ul></div>
     <div><h4>Support</h4><ul><li><a href="https://github.com/justshivv/Opentune/issues" target="_blank" rel="noopener">Report a problem</a></li><li><a href="https://github.com/justshivv/Opentune/issues/new" target="_blank" rel="noopener">Ask for a feature</a></li></ul></div>
   </div>
 </footer>
@@ -1099,13 +1099,13 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
     const box = $("rel-list"); box.innerHTML = "";
     list.slice(0, 4).forEach((rel, i) => {
       const apk = (rel.assets || []).find((a) => /arm64/.test(a.name)) || (rel.assets || []).find((a) => /\.apk$/.test(a.name));
-      const downloads = (rel.assets || []).reduce((n, a) => n + (a.download_count || 0), 0);
+      const downloads = (rel.assets || []).filter((a) => /\.apk$/.test(a.name)).reduce((n, a) => n + (a.download_count || 0), 0);
       const notes = notesOf(rel);
       const row = document.createElement("article"); row.className = "rel";
       row.innerHTML =
         '<div class="ver"><b>' + esc(rel.tag_name) + '</b>' + (i === 0 ? '<span class="tag">Latest</span>' : '') + '<span class="mono dim">' + new Date(rel.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + ' &middot; ' + ago(rel.published_at) + '</span></div>' +
         '<div class="notes"><h3>' + esc(rel.name || rel.tag_name) + '</h3>' + (notes.length ? '<ul>' + notes.map((n) => '<li>' + esc(n) + '</li>').join("") + '</ul>' : '<p>See the release notes on GitHub.</p>') + '</div>' +
-        '<div class="side">' + (apk ? '<a class="btn btn-ghost btn-small" href="' + esc(apk.browser_download_url) + '"><svg class="line-ico"><use href="#i-download"/></svg>APK <span class="sub">' + (apk.size / 1048576).toFixed(1) + ' MB</span></a>' : '') + '<a class="mono dim" href="' + esc(rel.html_url) + '" target="_blank" rel="noopener">Release notes</a>' + (live && downloads ? '<span class="mono dim">' + downloads.toLocaleString("en-US") + ' downloads</span>' : '') + '</div>';
+        '<div class="side">' + (apk ? '<a class="btn btn-ghost btn-small" href="' + esc(apk.browser_download_url) + '"><svg class="line-ico"><use href="#i-download"/></svg>APK <span class="sub">' + (apk.size / 1048576).toFixed(1) + ' MB</span></a>' : '') + '<a class="mono dim" href="' + esc(rel.html_url) + '" target="_blank" rel="noopener">Release notes</a>' + (live && downloads ? '<span class="mono dim">' + downloads.toLocaleString("en-US") + ' APK download events</span>' : '') + '</div>';
       box.appendChild(row);
       if (i === 0) {
         $("ver-badge").textContent = rel.tag_name;
@@ -1269,5 +1269,6 @@ footer .about p { color: var(--dim); font-size: 13.5px; max-width: 46ch; margin-
   } else requestAnimationFrame(frame);
 })();
 </script>
+<script src="download-tracking.js" defer></script>
 </body>
 </html>

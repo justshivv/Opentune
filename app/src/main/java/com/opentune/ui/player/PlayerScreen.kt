@@ -17,6 +17,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -257,6 +258,7 @@ fun PlayerLayout(
     var showMenu by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
     var showOffset by remember { mutableStateOf(false) }
+    var showDetails by remember { mutableStateOf(false) }
     var showSignal by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val clipboard = remember { context.getSystemService(ClipboardManager::class.java) }
@@ -358,8 +360,8 @@ fun PlayerLayout(
             // Behind the lyrics, the cover's colours drift slowly.
             androidx.compose.animation.AnimatedVisibility(
                 visible = pane == Pane.LYRICS && !landscape,
-                enter = fadeIn(tween(700)),
-                exit = fadeOut(tween(500)),
+                enter = fadeIn(tween(220)),
+                exit = fadeOut(tween(180)),
                 modifier = Modifier.fillMaxSize(),
             ) {
                 val scheme = MaterialTheme.colorScheme
@@ -388,6 +390,7 @@ fun PlayerLayout(
                     device = sleepLabel ?: device,
                     onLike = { LibraryStore.setLiked(current, !isLiked) },
                     onMore = { showMenu = true },
+                    onSignal = { showSignal = true },
                     onLyrics = { toggle(Pane.LYRICS) },
                     onQueue = { toggle(Pane.QUEUE) },
                     showLines = pane != Pane.LYRICS,
@@ -459,17 +462,17 @@ fun PlayerLayout(
                     pane,
                     transitionSpec = {
                         when {
-                            state.ui.reduceAnimation -> fadeIn(tween(160)) togetherWith fadeOut(tween(120))
+                            state.ui.reduceAnimation -> fadeIn(tween(0)) togetherWith fadeOut(tween(0))
                             // Lyrics rise into place on a soft spring while the cover sinks back.
                             targetState == Pane.LYRICS ->
-                                (fadeIn(tween(360)) + slideInVertically(spring(dampingRatio = 0.86f, stiffness = 240f)) { it / 5 }) togetherWith
-                                    (fadeOut(tween(220)) + scaleOut(tween(340, easing = FastOutSlowInEasing), 0.9f))
+                                (fadeIn(tween(220)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 650f)) { it / 5 }) togetherWith
+                                    (fadeOut(tween(220)) + scaleOut(tween(240, easing = FastOutSlowInEasing), 0.9f))
                             // And going back, the cover comes forward as they drop away.
                             initialState == Pane.LYRICS ->
-                                (fadeIn(tween(320)) + scaleIn(spring(dampingRatio = 0.82f, stiffness = 260f), 0.9f)) togetherWith
-                                    (fadeOut(tween(220)) + slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { it / 6 })
+                                (fadeIn(tween(220)) + scaleIn(spring(dampingRatio = 1f, stiffness = 650f), 0.9f)) togetherWith
+                                    (fadeOut(tween(220)) + slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { it / 6 })
                             else ->
-                                (fadeIn(tween(320)) + scaleIn(tween(380, easing = FastOutSlowInEasing), 0.94f)) togetherWith
+                                (fadeIn(tween(320)) + scaleIn(tween(240, easing = FastOutSlowInEasing), 0.94f)) togetherWith
                                     (fadeOut(tween(180)) + scaleOut(tween(220), 0.98f))
                         }
                     },
@@ -568,6 +571,7 @@ fun PlayerLayout(
                     }
                 }
 
+                SourceQualityBadge(current.videoId, state.audioFormat, onClick = { showSignal = true })
                 if (pane != Pane.LYRICS && state.ui.syncedLyrics && !minimal && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
                     LyricPreview(state.lyrics, lyricsPosition, onOpen = { paneName = Pane.LYRICS.name }, Modifier.padding(top = 4.dp))
                 }
@@ -644,6 +648,7 @@ fun PlayerLayout(
                 onDismiss = { showMenu = false },
                 top = { close -> MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() } },
                 tools = { close ->
+                    MenuRow(Icons.Rounded.HighQuality, "Track details") { close(); showDetails = true }
                     MenuRow(Icons.Rounded.GraphicEq, "Signal path") { close(); showSignal = true }
                     MenuRow(Icons.Rounded.Groups, "Listen together") { close(); actions.openTogether() }
                     MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
@@ -663,6 +668,7 @@ fun PlayerLayout(
             )
         }
         if (showOffset) LyricsOffsetDialog(current.videoId, onDismiss = { showOffset = false })
+        if (showDetails) TrackDetailsDialog(current, state.durationMs, onDismiss = { showDetails = false })
         if (showSignal) SignalPathDialog(state.audioFormat, onDismiss = { showSignal = false })
     }
 }
@@ -741,42 +747,25 @@ private fun TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () 
 @Composable
 private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
     val haptics = com.opentune.ui.components.rememberHaptics()
-    val pop = remember { Animatable(1f) }
-    LaunchedEffect(liked) {
-        if (liked) {
-            pop.snapTo(0.7f)
-            pop.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 500f))
-        }
-    }
-    // Hearts and sparks thrown out when a song is liked, only on the tap itself.
-    val burst = remember { Animatable(1f) }
-    var bursts by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
-    LaunchedEffect(bursts) {
-        if (bursts > 0) {
-            burst.snapTo(0f)
-            burst.animateTo(1f, tween(950, easing = androidx.compose.animation.core.LinearEasing))
-        }
-    }
-    val (accentA, accentB) = com.opentune.ui.theme.songAccents()
-    Box(contentAlignment = Alignment.Center) {
-        if (burst.value < 1f) LikeBurst(burst.value, bursts, listOf(Color(0xFFFF4D6D), accentA, accentB), Modifier.size(46.dp))
-        Box(
-            Modifier.size(46.dp).glass(CircleShape, Color.White.copy(alpha = 0.16f)).clickable {
-                // A heartbeat for a like; a soft fall for taking it back.
+    val still = AppSettings.ui.collectAsState().value.reduceAnimation
+    val interactions = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        if (pressed && !still) 0.94f else 1f,
+        tween(if (still) 0 else 140), label = "heartPress",
+    )
+    Box(
+        Modifier.size(46.dp).graphicsLayer { scaleX = scale; scaleY = scale }
+            .glass(CircleShape, Color.White.copy(alpha = 0.16f))
+            .clickable(interactionSource = interactions, indication = null) {
                 haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE)
-                if (!liked && !still) bursts++
                 onClick()
             },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                if (liked) "Remove from Liked" else "Like",
-                Modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
-                tint = if (liked) Color(0xFFFF4D6D) else LocalContentColor.current,
-            )
-        }
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            if (liked) "Remove from Liked" else "Like", Modifier.size(24.dp),
+            tint = if (liked) Color(0xFFFF4D6D) else LocalContentColor.current)
     }
 }
 
@@ -895,8 +884,8 @@ private fun TogetherPill(room: Together.Room, onClick: () -> Unit) {
 @Composable
 private fun Modifier.focusIn(animate: Boolean): Modifier {
     val v = remember { androidx.compose.animation.core.Animatable(if (animate) 0f else 1f) }
-    LaunchedEffect(Unit) { if (animate) v.animateTo(1f, tween(520, easing = FastOutSlowInEasing)) }
-    val blur = (1f - v.value) * 14f
+    LaunchedEffect(Unit) { if (animate) v.animateTo(1f, tween(200, easing = FastOutSlowInEasing)) }
+    val blur = (1f - v.value) * 2f
     return this
         .graphicsLayer { val s = 0.96f + 0.04f * v.value; scaleX = s; scaleY = s }
         .then(if (blur > 0.2f) Modifier.blur(blur.dp) else Modifier)

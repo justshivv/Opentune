@@ -77,6 +77,11 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
@@ -466,6 +471,8 @@ fun SeekBar(
     lyricAt: ((Long) -> String?)? = null,
 ) {
     var dragFraction by remember { mutableStateOf<Float?>(null) }
+    var scrubStartY by remember { mutableStateOf(0f) }
+    var fineScrubbing by remember { mutableStateOf(false) }
     // The wave travels while music plays and flattens out when it stops.
     // Only animated while it can be seen, so an idle bar costs no frames.
     val phaseState = if (wavy && playing) rememberWavePhase() else null
@@ -490,6 +497,15 @@ fun SeekBar(
                 // Redrawn every frame while playing; its own layer keeps that from
                 // re-recording the rest of the player.
                 .graphicsLayer()
+                .semantics {
+                    contentDescription = "Playback position. Drag away from the bar for fine scrubbing."
+                    progressBarRangeInfo = ProgressBarRangeInfo(fraction(), 0f..1f)
+                    setProgress { value ->
+                        if (durationMs <= 0) false else {
+                            onSeek((value.coerceIn(0f, 1f) * durationMs).toLong()); true
+                        }
+                    }
+                }
                 .pointerInput(durationMs) {
                     detectTapGestures { offset ->
                         if (durationMs > 0) onSeek((offset.x / size.width).coerceIn(0f, 1f).times(durationMs).toLong())
@@ -497,15 +513,18 @@ fun SeekBar(
                 }
                 .pointerInput(durationMs) {
                     detectHorizontalDragGestures(
-                        onDragStart = { dragFraction = (it.x / size.width).coerceIn(0f, 1f) },
+                        onDragStart = { scrubStartY = it.y; dragFraction = (it.x / size.width).coerceIn(0f, 1f) },
                         onDragEnd = {
                             dragFraction?.let { if (durationMs > 0) onSeek((it * durationMs).toLong()) }
                             dragFraction = null
+                            fineScrubbing = false
                         },
-                        onDragCancel = { dragFraction = null },
-                    ) { change, _ ->
+                        onDragCancel = { dragFraction = null; fineScrubbing = false },
+                    ) { change, delta ->
                         change.consume()
-                        val f = (change.position.x / size.width).coerceIn(0f, 1f)
+                        fineScrubbing = kotlin.math.abs(change.position.y - scrubStartY) > 48.dp.toPx()
+                        val speed = if (fineScrubbing) 0.2f else 1f
+                        val f = ((dragFraction ?: 0f) + delta / size.width * speed).coerceIn(0f, 1f)
                         // A soft tick each time the drag crosses a tenth of the song, and a firmer one at either end.
                         val before = dragFraction
                         if (before != null && (before * 10).toInt() != (f * 10).toInt()) seekHaptics.tick()
@@ -564,6 +583,7 @@ fun SeekBar(
             if (thumbRadius > 0.dp) drawCircle(active, thumbRadius.toPx(), Offset(size.width * f, size.height / 2))
         }
         }
+        if (fineScrubbing) Text("Fine scrubbing · ⅕ speed", style = MaterialTheme.typography.labelSmall)
         val elapsedSeconds by remember(durationMs) {
             derivedStateOf { ((dragFraction?.times(durationMs)?.toLong() ?: position()) / 1000) }
         }

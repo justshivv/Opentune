@@ -160,15 +160,8 @@ object AlbumCovers {
     }
 
     /** MusicBrainz's one-request-a-second rule, across the app. */
-    private suspend fun <T> politely(block: () -> T): T = gate.withLock {
-        val wait = lastRequestAt + SPACING_MS - SystemClock.elapsedRealtime()
-        if (wait > 0) delay(wait)
-        try {
-            block()
-        } finally {
-            lastRequestAt = SystemClock.elapsedRealtime()
-        }
-    }
+    private suspend fun <T> politely(block: () -> T): T =
+        com.opentune.data.metadata.MusicBrainzRequests.politely { block() }
 
     private fun save() {
         val f = file ?: return

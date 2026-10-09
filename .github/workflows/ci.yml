@@ -19,6 +19,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Usage deduplication and website scripts
+        run: |
+          node --test usage-api/worker.test.mjs
+          node --check site/usage/dashboard.js
+          node --check site/download-tracking.js
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

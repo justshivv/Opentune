@@ -89,6 +89,7 @@ internal fun LandscapePlayer(
     device: String,
     onLike: () -> Unit,
     onMore: () -> Unit,
+    onSignal: () -> Unit,
     onLyrics: () -> Unit,
     onQueue: () -> Unit,
     /** Lyrics or the queue, shown in the cover's place; null shows the cover. */
@@ -149,6 +150,7 @@ internal fun LandscapePlayer(
                     RoundIcon(Icons.Rounded.MoreHoriz, "More", onMore)
                     RoundIcon(Icons.Rounded.KeyboardArrowDown, "Close player", actions.collapse)
                 }
+                SourceQualityBadge(song.videoId, state.audioFormat, onClick = onSignal)
                 TimeBar(position, state.durationMs, actions.seekTo)
                 val lines = if (showLines) rememberLyricLines(state.lyrics, lyricsPosition) else "" to ""
                 LyricLine(lines.first, alpha = 0.92f, onLyrics)

@@ -3,6 +3,7 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="spotiflac.xml" />
+        <exclude domain="sharedpref" path="usage_v2.xml" />
         <exclude domain="sharedpref" path="account.xml" />
         <exclude domain="sharedpref" path="lastfm.xml" />
         <exclude domain="sharedpref" path="subsonic.xml" />
@@ -10,6 +11,7 @@
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="spotiflac.xml" />
+        <exclude domain="sharedpref" path="usage_v2.xml" />
         <exclude domain="sharedpref" path="account.xml" />
         <exclude domain="sharedpref" path="lastfm.xml" />
         <exclude domain="sharedpref" path="subsonic.xml" />
