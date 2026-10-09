@@ -31,7 +31,13 @@ internal object QobuzCatalog {
                     for (quality in if (hiRes) listOf(27, 7, 6) else listOf(6)) {
                         val requestUrl = "$base/api/download-music".toHttpUrl().newBuilder()
                             .addQueryParameter("track_id", id).addQueryParameter("quality", "$quality").build()
-                        val root = JSONObject(LosslessHttp.text(requestUrl.toString(), headers))
+                        val root = try {
+                            JSONObject(LosslessHttp.text(requestUrl.toString(), headers))
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            continue // A missing hi-res edition must still allow CD quality.
+                        }
                         val stream = streamUrl(root) ?: continue
                         LosslessSource.verify(stream, "Qobuz (${base.toHttpUrl().host})", identity.durationMs)?.let {
                             onCandidate(it)

@@ -92,7 +92,7 @@ object LosslessSource {
                 }
                 ids["qobuz"]?.let { id ->
                     for (endpoint in LosslessRegistry.endpoints(registry, "qobuz")) {
-                        for (quality in if (preferHiRes) listOf(27, 7) else listOf(7)) {
+                        for (quality in if (preferHiRes) listOf(27, 7, 6) else listOf(7, 6)) {
                             val url = attempt {
                                 directUrl(JSONObject(LosslessHttp.text("$endpoint/api/track/$id?quality=$quality", keyHeader)))
                             }

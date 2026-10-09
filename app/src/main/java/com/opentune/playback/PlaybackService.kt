@@ -881,13 +881,15 @@ class PlaybackService : MediaLibraryService() {
         if (session == C.AUDIO_SESSION_ID_UNSET) return
         openEffectSession(session)
         val id = player.currentMediaItem?.mediaId
-        val lossless = player.currentMediaItem?.localConfiguration?.uri?.let(::selectedUri)?.let(::externalStreamKeyOf) != null
+        val rawUri = player.currentMediaItem?.localConfiguration?.uri
+        val pendingSelection = rawUri?.let(::startupToken)?.let { startupSelections[it]?.selected == null } == true
+        val lossless = rawUri?.let(::selectedUri)?.let(::externalStreamKeyOf) != null
         // YouTube's gain belongs to its own master, not the external FLAC.
         val db = if (lossless) null else id?.let { StreamResolver.loudnessDbFor(it) ?: Downloads.loudnessFor(it) }
         // A track playing from the cache never resolved, so its figure may not
         // be known yet. Look it up once, a moment in, then apply it.
         loudnessRetry?.cancel()
-        if (!lossless && db == null && id != null && isYouTubeId(id) && AppSettings.playback.value.loudnessNormalization) {
+        if (!lossless && !pendingSelection && db == null && id != null && isYouTubeId(id) && AppSettings.playback.value.loudnessNormalization) {
             loudnessRetry = scope.launch {
                 delay(LOUDNESS_RETRY_MS)
                 withContext(Dispatchers.IO) { runCatching { StreamResolver.resolve(id) } }
@@ -1022,6 +1024,8 @@ class PlaybackService : MediaLibraryService() {
      * then buffers the very next one.
      */
     private fun warmNeighbours() {
+        // Maximum chooses external audio first; warming YouTube would race that decision.
+        if (AppSettings.effectiveAudioQuality == com.opentune.data.settings.AudioQuality.MAX) return
         if (!AppSettings.playback.value.preloadUpcoming) return
         val player = mediaSession?.player ?: return
         val timeline = player.currentTimeline
