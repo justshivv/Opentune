@@ -25,7 +25,7 @@ class WhatsNewTest {
         assertEquals(listOf("0.3.7", "0.3.6"), WhatsNew.since("0.3.5", "0.3.7").map { it.first })
         assertEquals(listOf("0.3.7"), WhatsNew.since("0.3.6", "0.3.7").map { it.first })
         // A version with no notes of its own still shows the ones before it it hasn't seen.
-        assertEquals(listOf("0.3.7"), WhatsNew.since("0.3.6", "0.3.8").map { it.first })
+        assertEquals(listOf("0.3.8", "0.3.7"), WhatsNew.since("0.3.6", "0.3.9").map { it.first })
         assertEquals(emptyList<String>(), WhatsNew.since("0.3.7", "0.3.7").map { it.first })
         assertEquals(1, WhatsNew.compare("0.3.10", "0.3.9"))
         assertEquals(0, WhatsNew.compare("0.3", "0.3.0"))

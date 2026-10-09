@@ -1,0 +1,8 @@
+• Lyric cards: share up to five lines as a picture
+• 8D audio in Remix
+• The sleep timer fades the music out and dims the screen
+• Double-tap the cover to seek 10 s; a glow under it follows the bass
+• See the lyric line as you drag the seek bar (Settings › Player)
+• Covers for your own playlists
+• Real blur behind the page bars, floating buttons and popups
+• Two more lyrics sources: Better Lyrics' Unison and YouTube captions

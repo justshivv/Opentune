@@ -117,6 +117,13 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 - **Clarity** (optional). A tone curve that cuts rumble, firms up the
   bass, clears mud and adds presence and air, with headroom and a soft
   limiter so peaks stay clean.
+- **8D audio** (Remix). The music circles your head, slowly, at a medium
+  pace or fast: it pans from ear to ear with the small delay and softening
+  a sound has when it's beside or behind you. Best with headphones.
+- **A sleep timer that winds down.** Over the last few minutes (a third of
+  a short timer, at most three) the music fades out and the player
+  dims; "End of song" fades the last 15 seconds. A switch in the sleep
+  timer turns it off.
 - **Fast starts and skips.** Playback begins after half a second of audio.
   The songs either side of the current one are found before you get to
   them, and the next one is buffered while this one plays. Played songs
@@ -126,6 +133,9 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   play around them, one for this time of day, On repeat and Rediscover
   (favourites you haven't played lately). When a mix runs out, autoplay
   carries on.
+- **Covers for your playlists.** A playlist made in the app shows four of
+  its songs' covers as a collage; with fewer, it gets a soft gradient in
+  colours picked from its name, so it always looks the same.
 - **Queue and radio.** Autoplay keeps similar songs coming, also after a
   song you started on its own from Home or search. Shuffle,
   repeat, play next, add to queue, swipe-to-queue on any row, and
@@ -307,9 +317,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   skipped with reduced motion.
 - **Liquid Glass.** The floating bars and player buttons frost and bend
   what's behind them, like Apple's material (Android 13 and newer; frosted
-  glass below that, solid with "Reduce dynamic blur"). Album, playlist and
-  artist pages get a frosted top bar once the header scrolls away, with
-  the list showing faintly through it.
+  glass below that, solid with "Reduce dynamic blur"). The glass blurs the
+  real page as it scrolls under it, not a flat colour. Album, playlist and
+  artist pages get a frosted top bar once the header scrolls away, which
+  fades out softly below the bar instead of ending in a line, and popup
+  sheets let the phone's blur of the screen behind show through.
 - **Moving cover art.** In the player the cover drifts and zooms slowly
   while the song plays and settles when you pause; it works on the
   full-screen cover too. It's made from the cover itself, so it works for
@@ -380,6 +392,11 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   words themselves move: Bounce, Pop and Reveal), a per-song timing
   offset, adjustable text size, left or centred lines, an optional glow on
   the sung line, and lyrics saved with downloads so they work offline.
+- **Lyric cards.** The quote button in the lyrics opens a sheet where you
+  pick up to five lines and share them as a picture: over the blurred
+  cover, in the cover's colour, or on a light page.
+- **Lyrics while seeking.** Drag the seek bar and the line sung at that
+  spot shows above your finger (Settings › Player).
 - **One song menu everywhere:** round buttons up top for like, download,
   add to playlist and share, then play next, add to queue, start radio,
   view artist, open album, convert to the music video, and dislike (kept
@@ -429,6 +446,10 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   the new one lands. It applies to the full-screen cover too.
 - **Covers that fly.** Tap a song and its cover lifts off, tilts and arcs
   down into the now-playing card. Off under Settings › Motion.
+- **Double-tap the cover** on either side to go back or ahead 10 seconds;
+  taps in a row add up, with a ripple and the total on the cover.
+- **A glow under the cover** in its own colours, which swells with the
+  bass (Settings › Player › Cover art).
 - **A burst of hearts.** Liking a song in the player throws small hearts
   and sparks out in the cover's colours.
 - **Lyrics in colour.** The cover's colours drift slowly behind the
