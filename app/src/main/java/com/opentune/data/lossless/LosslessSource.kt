@@ -129,7 +129,8 @@ object LosslessSource {
         val rate = (packed ushr 44).toInt()
         val bits = ((packed ushr 36) and 31).toInt() + 1
         val samples = packed and 0xfffffffffL
-        if (rate !in 8_000..384_000 || bits !in 16..32 || samples == 0L) return null
+        // Lossless voice-rate audio is not a music quality upgrade.
+        if (rate !in 44_100..384_000 || bits !in 16..32 || samples == 0L) return null
         return FlacInfo(bits, rate, samples * 1000 / rate)
     }
 

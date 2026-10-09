@@ -511,13 +511,15 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   styles, pure black, color from artwork, and reduced motion and blur.
 
 YouTube's audio is lossy, so there's no lossless or Dolby Atmos stream
-option from YouTube; lossless comes from your own music server. OpenTune
-doesn't unlock JioSaavn streams with a hard-coded key, doesn't fetch Tidal,
-Qobuz, Deezer or DAB audio through relay servers or decrypt Deezer
-streams, doesn't use scraped Apple Music, Tidal or Spotify tokens for
-animated "Canvas" covers, and doesn't take lyrics from Apple Music, Spotify
-or Musixmatch through proxies or scraped secrets. Those depend on getting
-around a service's protection or terms, so they stay out.
+option from YouTube. Lossless can come from your own music server or the
+optional community sources described above. The optional JioSaavn route
+remains lossy. Source availability varies, and a FLAC header does not prove
+that the upstream master was never transcoded. See the
+[source review](docs/audio-source-review.md) for current limitations.
+
+OpenTune does not decrypt Deezer streams, use scraped Apple Music, Tidal
+or Spotify tokens for animated "Canvas" covers, or take lyrics from Apple
+Music, Spotify or Musixmatch through proxies or scraped secrets.
 
 Not built yet: lyric translation and an in-app language setting.
 

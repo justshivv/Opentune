@@ -47,6 +47,7 @@ class LosslessSourceTest {
         assertNull(LosslessSource.flacInfo(flac(16, 44_100, 180).copyOf(25)))
         assertNull(LosslessSource.flacInfo(flac(16, 44_100, 0)))
         assertNull(LosslessSource.flacInfo(flac(8, 44_100, 180)))
+        assertNull(LosslessSource.flacInfo(flac(16, 8_000, 180)))
         assertNull(LosslessSource.flacInfo(flac(16, 44_100, 180).apply { this[4] = 1 }))
     }
 
