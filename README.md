@@ -30,9 +30,9 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
 ## See it
 
 <p align="center">
-  <a href="docs/media/opentune-reel.mp4"><img src="docs/media/preview.gif" alt="OpenTune in 30 seconds" width="300"></a>
+  <a href="docs/media/opentune-reel.mp4"><img src="docs/media/preview.gif" alt="OpenTune in 40 seconds" width="300"></a>
   <br>
-  <sub><a href="docs/media/opentune-reel.mp4">Watch the 30-second video</a> (MP4, with sound)</sub>
+  <sub><a href="docs/media/opentune-reel.mp4">Watch the 40-second video</a> (MP4, with sound)</sub>
 </p>
 
 <table>
