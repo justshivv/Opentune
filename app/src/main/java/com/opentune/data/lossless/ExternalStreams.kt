@@ -14,7 +14,15 @@ object ExternalStreams {
         val maximumSearch: Boolean = false)
     private val renditions = ConcurrentHashMap<String, Rendition>()
     private val failedUntil = ConcurrentHashMap<String, Long>()
+    private val reports = ConcurrentHashMap<String, String>()
     private const val TTL = 10 * 60_000L
+
+    fun selectionDetail(videoId: String): String? = reports[videoId]
+
+    private fun report(videoId: String, detail: String) {
+        if (reports.size > 256) reports.clear()
+        reports[videoId] = detail
+    }
 
     fun allowed(lossless: Boolean? = null): Boolean = AppSettings.playback.value.let {
         val maximum = AppSettings.effectiveAudioQuality == AudioQuality.MAX
@@ -25,16 +33,30 @@ object ExternalStreams {
 
     suspend fun find(song: Song, durationMs: Long, beforePlayback: Boolean = false): Rendition? {
         val videoId = song.videoId
-        if (!allowed() || durationMs <= 0) return null
+        if (!allowed()) {
+            report(videoId, if (AppSettings.playback.value.losslessUnmeteredOnly && AppSettings.onMeteredNetwork())
+                "External sources skipped: Unmetered networks only is on. Turn it off in Settings to try FLAC and JioSaavn on mobile data."
+                else "External sources disabled for the current quality settings.")
+            return null
+        }
         val now = now()
         if ((failedUntil[videoId] ?: 0) > now) return null
         renditions[videoId]?.takeIf {
             now - it.at < TTL && allowed(it.lossless) && (!beforePlayback || it.maximumSearch) &&
                 (it.lossless || beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
         }?.let { return it }
-        val track = if (allowed(true)) LosslessSource.resolve(song, durationMs,
+        val duration = CatalogMetadata.duration(song, durationMs)
+        if (duration <= 0) {
+            report(videoId, "External sources skipped: this track's duration could not be verified.")
+            return null
+        }
+        val track = if (allowed(true)) LosslessSource.resolve(song, duration,
             beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback) else null
-        val saavn = if (track == null && allowed(false) && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))) JioSaavnSource.resolve(song, durationMs) else null
+        val detail = mutableListOf<String>()
+        if (allowed(true)) detail += if (track == null) "FLAC: no verified matching stream available" else "FLAC: verified ${track.bits}-bit, ${track.sampleRate} Hz"
+        val saavn = if (track == null && allowed(false) && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320)))
+            JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
+        report(videoId, detail.joinToString("\n").ifEmpty { "No external source eligible for this quality setting." })
         if (track == null && saavn == null) {
             if (failedUntil.size > 256) failedUntil.clear()
             failedUntil[videoId] = now() + 60_000
@@ -63,6 +85,7 @@ object ExternalStreams {
     fun failed(videoId: String) {
         renditions.remove(videoId)
         failedUntil[videoId] = now() + TTL
+        report(videoId, "The selected external stream failed during playback; using YouTube. External retry paused for 10 minutes.")
     }
 
     private fun now(): Long = System.nanoTime() / 1_000_000

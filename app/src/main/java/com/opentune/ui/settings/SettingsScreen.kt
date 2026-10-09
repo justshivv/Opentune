@@ -637,7 +637,7 @@ private fun settingsSections(
                     SettingRow("Max quality sources", summary = "Max checks hi-res FLAC first, then JioSaavn 320 kbps, then YouTube. Checking providers can delay the start. JioSaavn is lossy.", icon = Icons.Rounded.HighQuality)
                 },
                 Entry("Unmetered networks only", "flac saavn mobile wifi data") {
-                    ToggleRow("Unmetered networks only", pb.losslessUnmeteredOnly, { v -> AppSettings.updatePlayback { it.copy(losslessUnmeteredOnly = v) } }, summary = "Use lossless and JioSaavn upgrades only on unmetered connections", icon = Icons.Rounded.Wifi)
+                    ToggleRow("Unmetered networks only", pb.losslessUnmeteredOnly, { v -> AppSettings.updatePlayback { it.copy(losslessUnmeteredOnly = v) } }, summary = "When on, mobile data uses YouTube even at Max. Turn off to try FLAC and JioSaavn on mobile data", icon = Icons.Rounded.Wifi)
                 },
                 Entry("Prefer hi-res lossless", "24 bit flac qobuz") {
                     ToggleRow("Prefer hi-res lossless", pb.losslessHiRes, { v -> AppSettings.updatePlayback { it.copy(losslessHiRes = v) } }, summary = "Prefer hi-res for background upgrades too. Max always checks hi-res first. Uses more data.", icon = Icons.Rounded.HighQuality)

@@ -1002,7 +1002,9 @@ class PlaybackService : MediaLibraryService() {
         }
         NerdStats.onPlaybackSource(NerdStats.Source(provider, rendition?.bits, rendition?.sampleRate,
             rendition?.kbps ?: if (rendition == null && item != null && uri?.let(::videoIdOf) != null)
-                StreamResolver.bitrateFor(item.mediaId, isUpgradedUri(uri)) else null))
+                StreamResolver.bitrateFor(item.mediaId, isUpgradedUri(uri)) else null,
+            selectionDetail = if (item != null && uri?.let(::videoIdOf) != null && uri.let(::startupToken) == null)
+                ExternalStreams.selectionDetail(item.mediaId) else null))
     }
 
     // ---- Latency -----------------------------------------------------------------

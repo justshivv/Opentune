@@ -68,6 +68,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Stage(Tone.INFO, "Source", source?.provider ?: "Waiting for the stream")
                 Stage(Tone.INFO, "Audio quality", signalQuality(format, source))
+                source?.selectionDetail?.let { Stage(Tone.INFO, "Source selection", it) }
                 Stage(
                     if (dspStages.isEmpty()) Tone.CLEAN else Tone.CHANGED,
                     "App DSP",
