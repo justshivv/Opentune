@@ -48,8 +48,8 @@ fun AmbientLights(
     val shown = colors.take(GLOWS).let { if (it.size < GLOWS) it + List(GLOWS - it.size) { i -> it[i % it.size] } else it }
         .mapIndexed { i, c -> animateColorAsState(c, tween(1_400), label = "glow$i").value }
     DisposableEffect(animate) {
-        if (animate) AudioLevels.listening = true
-        onDispose { if (animate) AudioLevels.listening = false }
+        if (animate) AudioLevels.hold()
+        onDispose { if (animate) AudioLevels.release() }
     }
     val time = remember { mutableFloatStateOf(0f) }
     val swell = remember { mutableFloatStateOf(0f) }

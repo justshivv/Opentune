@@ -832,6 +832,9 @@ private fun settingsSections(
                 Entry("Wavy seek bar", "wave progress slider") {
                     ToggleRow("Wavy seek bar", ui.wavySeekbar, { v -> AppSettings.updateUi { it.copy(wavySeekbar = v) } }, summary = "The played part of the bar ripples while music plays", icon = Icons.Rounded.Waves)
                 },
+                Entry("Waveform seek bar", "waveform seek bar loud quiet bars scrub audio shape") {
+                    ToggleRow("Waveform seek bar", ui.waveformSeekbar, { v -> AppSettings.updateUi { it.copy(waveformSeekbar = v) } }, summary = "The bar shows the song's loud and quiet parts. Downloaded songs show it at once; streamed songs fill it in as they play, then keep it", icon = Icons.Rounded.GraphicEq)
+                },
                 Entry("Album covers", "artwork cover musicbrainz cover art archive video thumbnail") {
                     ToggleRow("Album covers from MusicBrainz", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "Shows the album's cover in the player instead of a video frame, and for local files without one", icon = Icons.Rounded.Album)
                 },

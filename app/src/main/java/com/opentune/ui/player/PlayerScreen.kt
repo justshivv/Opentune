@@ -567,7 +567,12 @@ fun PlayerLayout(
                     LyricPreview(state.lyrics, lyricsPosition, onOpen = { paneName = Pane.LYRICS.name }, Modifier.padding(top = 4.dp))
                 }
                 Spacer(Modifier.height(8.dp))
-                SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation, playing = state.isPlaying)
+                if (state.ui.waveformSeekbar) {
+                    val (wave, waveVersion) = rememberWaveform(current.videoId, position, state.durationMs, state.isPlaying)
+                    SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, playing = state.isPlaying, waveform = wave, waveVersion = { waveVersion.value })
+                } else {
+                    SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation, playing = state.isPlaying)
+                }
                 if (state.ui.statsForNerds) {
                     Box(Modifier.clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
                 }

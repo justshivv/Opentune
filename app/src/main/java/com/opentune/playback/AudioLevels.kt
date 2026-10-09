@@ -15,6 +15,21 @@ object AudioLevels {
     /** Set while an effect is on screen; measuring costs nothing otherwise. */
     @Volatile var listening = false
 
+    private var holders = 0
+
+    /** For each thing on screen that wants the levels; [release] when it goes. Measuring runs while any hold. */
+    @Synchronized
+    fun hold() {
+        holders++
+        listening = true
+    }
+
+    @Synchronized
+    fun release() {
+        holders = (holders - 1).coerceAtLeast(0)
+        listening = holders > 0
+    }
+
     /** Roughly how long processed sound waits in the output buffer before it's heard. */
     private const val DELAY_NS = 320_000_000L
     /** One measurement per slice this long. */
