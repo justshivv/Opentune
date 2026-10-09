@@ -77,6 +77,11 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
@@ -492,6 +497,15 @@ fun SeekBar(
                 // Redrawn every frame while playing; its own layer keeps that from
                 // re-recording the rest of the player.
                 .graphicsLayer()
+                .semantics {
+                    contentDescription = "Playback position. Drag away from the bar for fine scrubbing."
+                    progressBarRangeInfo = ProgressBarRangeInfo(fraction(), 0f..1f)
+                    setProgress { value ->
+                        if (durationMs <= 0) false else {
+                            onSeek((value.coerceIn(0f, 1f) * durationMs).toLong()); true
+                        }
+                    }
+                }
                 .pointerInput(durationMs) {
                     detectTapGestures { offset ->
                         if (durationMs > 0) onSeek((offset.x / size.width).coerceIn(0f, 1f).times(durationMs).toLong())

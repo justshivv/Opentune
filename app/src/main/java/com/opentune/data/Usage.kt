@@ -53,22 +53,11 @@ object Usage {
         scope.launch { lock.withLock {
             if (!enabled) return@withLock
             val p = prefs ?: return@withLock
-            val id = p.getString("installation", null) ?: UUID.randomUUID().toString().also {
-                if (!p.edit().putString("installation", it).commit()) return@withLock
-            }
-            val key = "${day(now)}|${BuildConfig.VERSION_NAME}"
-            val total = (p.getInt("total:$key", 0) + if (play) 1 else 0).coerceAtMost(10000)
-            val pending = p.getStringSet("pending", emptySet()).orEmpty().toMutableSet()
-            pending.add(key)
-            val oldest = day(now - 30L * 86400000)
-            pending.removeAll { it.substringBefore('|') < oldest }
-            val editor = p.edit().putInt("total:$key", total).putStringSet("pending", pending)
-            p.all.keys.filter { it.startsWith("total:") && it.removePrefix("total:").substringBefore('|') < oldest }.forEach(editor::remove)
-            if (!editor.commit()) return@withLock
+            val (id, pending) = persistDaily(p, now, BuildConfig.VERSION_NAME, play) ?: return@withLock
             // Activity can be called frequently; at most one request per 15 minutes,
             // except a completed play also flushes the updated totals.
             val monotonic = System.nanoTime() / 1_000_000
-            if (!play && monotonic - lastAttempt < 900000) return@withLock
+            if (!play && lastAttempt != 0L && monotonic - lastAttempt < 900000) return@withLock
             lastAttempt = monotonic
             try {
                 val base = endpoint(monotonic) ?: return@withLock
@@ -95,6 +84,22 @@ object Usage {
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { /* Retain the exact totals for the next foreground/play retry. */ }
         } }
+    }
+
+    internal fun persistDaily(p: SharedPreferences, now: Long, version: String, play: Boolean): Pair<String, MutableSet<String>>? {
+            val id = p.getString("installation", null) ?: UUID.randomUUID().toString().also {
+                if (!p.edit().putString("installation", it).commit()) return null
+            }
+            val key = "${day(now)}|${version}"
+            val total = (p.getInt("total:$key", 0) + if (play) 1 else 0).coerceAtMost(10000)
+            val pending = p.getStringSet("pending", emptySet()).orEmpty().toMutableSet()
+            pending.add(key)
+            val oldest = day(now - 30L * 86400000)
+            pending.removeAll { it.substringBefore('|') < oldest }
+            val editor = p.edit().putInt("total:$key", total).putStringSet("pending", pending)
+            p.all.keys.filter { it.startsWith("total:") && it.removePrefix("total:").substringBefore('|') < oldest }.forEach(editor::remove)
+            if (!editor.commit()) return@withLock
+        return id to pending
     }
 
     private fun endpoint(now: Long): String? {

@@ -48,3 +48,16 @@ test('API rejects foreign origins and oversized bodies without touching database
   const large=await worker.fetch(new Request('https://example.test/v1/activity',{method:'POST',headers:{'Content-Type':'application/json'},body:' '.repeat(17000)}),{});
   assert.equal(large.status,413);
 });
+
+test('UTC year boundary counts this ISO week once without carrying last month into this month',async()=>{
+  const db=database(), jan=new Date('2027-01-01T00:01:00Z');
+  await ingest(db,{installationId:id,days:[{day:'2026-12-31',version:'0.4.2',plays:2},{day:'2027-01-01',version:'0.4.2',plays:1}]},jan);
+  const result=await summary(db,jan);
+  assert.equal(result.week,1); assert.equal(result.month,1); assert.equal(result.today.plays,1);
+});
+
+test('invalid batch does not partially write valid rows',async()=>{
+  const db=database();
+  await assert.rejects(ingest(db,{...body(),days:[...body().days,{day:'invalid',version:'0.4.2',plays:1}]},now));
+  assert.equal((await summary(db,now)).totals.installs,0);
+});
