@@ -97,6 +97,9 @@ td .meter { height: 6px; border-radius: 3px; background: var(--tint); margin-top
 (() => {
   const NS = "opentune-justshivv";
   const API = "https://abacus.jasoncameron.dev/get/" + NS + "/";
+  // Counting began with v0.3.6 on 9 Oct 2026 (UTC). Earlier days, weeks, months and versions
+  // were never counted, so they aren't read and are left blank rather than shown as 0.
+  const START = new Date(Date.UTC(2026, 9, 9));
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => n == null ? "–" : n.toLocaleString("en-US");
   const pad = (n, w = 2) => String(n).padStart(w, "0");
@@ -112,20 +115,42 @@ td .meter { height: 6px; border-radius: 3px; background: var(--tint); margin-top
     return t.getUTCFullYear() + "w" + pad(Math.ceil(((t - start) / 864e5 + 1) / 7));
   }
 
-  // A counter's value, 0 if it's never been added to; a few at a time so the service isn't flooded.
-  const cache = new Map();
-  let running = 0; const queue = [];
+  // A counter's real value, read fresh every time: never from the browser's cache, never made up.
+  // 404 means the counter has never been added to, which is a real 0. Abacus allows 30 reads
+  // per 10 s, so reads are paced under that; a read that's turned away waits and goes again,
+  // and one that still fails comes back as null and shows as "–", not as 0.
+  const WINDOW = 10_000, PER_WINDOW = 26, PARALLEL = 4;
+  let running = 0, sent = [], queue = [], total = 0, done = 0, failed = 0;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   function get(key) {
-    if (cache.has(key)) return cache.get(key);
-    const p = new Promise((resolve) => queue.push({ key, resolve }));
-    cache.set(key, p); pump(); return p;
+    total++; progress();
+    return new Promise((resolve) => { queue.push({ key, resolve, tries: 0 }); pump(); });
   }
   function pump() {
-    while (running < 6 && queue.length) {
-      const { key, resolve } = queue.shift(); running++;
-      fetch(API + encodeURIComponent(key)).then((r) => r.ok ? r.json() : { value: 0 }).then((j) => resolve(Math.max(0, j.value | 0)))
-        .catch(() => resolve(null)).finally(() => { running--; pump(); });
+    while (running < PARALLEL && queue.length) {
+      const now = Date.now();
+      sent = sent.filter((t) => now - t < WINDOW);
+      if (sent.length >= PER_WINDOW) { setTimeout(pump, WINDOW - (now - sent[0]) + 50); return; }
+      sent.push(now); running++;
+      read(queue.shift());
     }
+  }
+  async function read(job) {
+    let value, retry = false;
+    try {
+      const r = await fetch(API + encodeURIComponent(job.key) + "?t=" + Date.now(), { cache: "no-store" });
+      if (r.status === 404) value = 0;
+      else if (r.ok) { const j = await r.json(); value = Number.isFinite(j.value) ? Math.max(0, j.value) : null; if (value == null) retry = true; }
+      else retry = true;
+      if (r.status === 429) { const wait = (+r.headers.get("retry-after") || 10) * 1000; sent = Array(PER_WINDOW).fill(Date.now() - WINDOW + wait); }
+    } catch (e) { retry = true; }
+    running--;
+    if (retry && ++job.tries <= 5) { await sleep(800 * job.tries); queue.unshift(job); pump(); return; }
+    if (retry) { value = null; failed++; }
+    done++; progress(); job.resolve(value); pump();
+  }
+  function progress() {
+    if (total) $("when").textContent = done < total ? `Loading ${done} of ${total}…` : "Loading…";
   }
 
   function bars(el, items, opts = {}) {
@@ -140,8 +165,10 @@ td .meter { height: 6px; border-radius: 3px; background: var(--tint); margin-top
     }
     items.forEach((it, i) => {
       series.forEach((s, k) => {
-        const v = it[s.key] || 0, h = (H - top - bottom) * v / max;
+        const raw = it[s.key], v = raw || 0, h = (H - top - bottom) * v / max;
         const x = i * slot + (slot - groupW) / 2 + k * bw;
+        if (raw === undefined) return;
+        if (raw === null) { svg += `<rect x="${x.toFixed(1)}" y="${(H - bottom - 6).toFixed(1)}" width="${(bw - 1).toFixed(1)}" height="6" rx="2" fill="none" stroke="#55555c" stroke-dasharray="2 2"><title>${it.label}: didn't load</title></rect>`; return; }
         svg += `<rect x="${x.toFixed(1)}" y="${(H - bottom - h).toFixed(1)}" width="${(bw - 1).toFixed(1)}" height="${Math.max(h, v ? 2 : 0).toFixed(1)}" rx="${Math.min(4, bw / 3).toFixed(1)}" fill="${s.color}"><title>${it.label}: ${v}</title></rect>`;
         if (opts.values && v) svg += `<text class="val" x="${(x + bw / 2).toFixed(1)}" y="${(H - bottom - h - 5).toFixed(1)}" text-anchor="middle">${v}</text>`;
       });
@@ -152,51 +179,72 @@ td .meter { height: 6px; border-radius: 3px; background: var(--tint); margin-top
   }
 
   function table(el, rows) {
-    const max = Math.max(1, ...rows.map((r) => r[1]));
+    const max = Math.max(1, ...rows.map((r) => r[1] || 0));
     el.innerHTML = rows.length ? rows.map(([name, v]) => `<tr><td>${name}<div class="meter" style="width:${(100 * v / max).toFixed(1)}%;opacity:${v ? 1 : .25}"></div></td><td>${fmt(v)}</td></tr>`).join("") : `<tr><td>Nothing yet</td><td></td></tr>`;
   }
 
+  let loading = false;
   async function load() {
-    $("refresh").disabled = true; $("when").textContent = "Loading…"; cache.clear();
+    if (loading) return;
+    loading = true; $("refresh").disabled = true;
+    total = done = failed = 0;
+    for (const id of ["k-dau", "k-wau", "k-mau", "k-installs", "k-plays", "k-plays-today", "k-per", "k-dl"]) $(id).textContent = "…";
     const now = new Date();
     const days = [...Array(30)].map((_, i) => new Date(now.getTime() - (29 - i) * 864e5));
     const weeks = [...Array(12)].map((_, i) => new Date(now.getTime() - (11 - i) * 7 * 864e5));
     const months = [...Array(12)].map((_, i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (11 - i), 1)));
     const shortDay = (d) => d.toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
+    const ratio = (p, a) => a && p != null ? (p / a).toFixed(1) : "–";
+    const counted = (key, from) => key >= from;
+    const BEFORE = undefined;
+    const ver = (t) => t.replace(/^v/, "").split(".").map(Number);
+    const newer = (a, b) => { const x = ver(a), y = ver(b); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return true; };
 
-    const [installs, plays] = await Promise.all([get("installs"), get("plays")]);
-    const daily = await Promise.all(days.map(async (d) => ({ label: shortDay(d), a: await get("dau-" + dayKey(d)), p: await get("plays-" + dayKey(d)) })));
-    const weekly = await Promise.all(weeks.map(async (d) => ({ label: isoWeek(d).slice(4), v: await get("wau-" + isoWeek(d)) })));
-    const monthly = await Promise.all(months.map(async (d) => ({ label: d.toLocaleDateString("en", { month: "short", timeZone: "UTC" }), v: await get("mau-" + monthKey(d)) })));
-    const today = daily[daily.length - 1];
-
-    $("k-dau").textContent = fmt(today.a);
-    $("k-wau").textContent = fmt(weekly[weekly.length - 1].v);
-    $("k-mau").textContent = fmt(monthly[monthly.length - 1].v);
+    // The headline numbers first, so they show within a second or two.
+    const [installs, plays, dauToday, playsToday, wauNow, mauNow] = await Promise.all([
+      get("installs"), get("plays"), get("dau-" + dayKey(now)), get("plays-" + dayKey(now)), get("wau-" + isoWeek(now)), get("mau-" + monthKey(now))]);
+    $("k-dau").textContent = fmt(dauToday);
+    $("k-wau").textContent = fmt(wauNow);
+    $("k-mau").textContent = fmt(mauNow);
     $("k-installs").textContent = fmt(installs);
     $("k-plays").textContent = fmt(plays);
-    $("k-plays-today").textContent = fmt(today.p);
-    $("k-per").textContent = today.a ? (today.p / today.a).toFixed(1) : "–";
+    $("k-plays-today").textContent = fmt(playsToday);
+    $("k-per").textContent = ratio(playsToday, dauToday);
 
-    bars($("daily"), daily.map((d) => ({ label: d.label, v: d.a })), { label: "Daily active phones", ticks: 6, h: 160 });
-    bars($("dailyPlays"), daily.map((d) => ({ label: d.label, v: d.p })), { series: [{ key: "v", color: "var(--tint2)" }], label: "Songs played each day", ticks: 6, h: 160 });
+    // GitHub's release list alongside the charts.
+    const releases = fetch("https://api.github.com/repos/justshivv/Opentune/releases?per_page=100", { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status)).catch(() => null);
+
+    // Then the charts; today's counters are already in hand.
+    const past = days.slice(0, -1);
+    const [weekly, monthly, daily] = await Promise.all([
+      Promise.all(weeks.map(async (d, i) => ({ label: isoWeek(d).slice(4), v: i === weeks.length - 1 ? wauNow : counted(isoWeek(d), isoWeek(START)) ? await get("wau-" + isoWeek(d)) : BEFORE }))),
+      Promise.all(months.map(async (d, i) => ({ label: d.toLocaleDateString("en", { month: "short", timeZone: "UTC" }), v: i === months.length - 1 ? mauNow : counted(monthKey(d), monthKey(START)) ? await get("mau-" + monthKey(d)) : BEFORE }))),
+      Promise.all(past.map(async (d) => counted(dayKey(d), dayKey(START))
+        ? { label: shortDay(d), a: await get("dau-" + dayKey(d)), p: await get("plays-" + dayKey(d)) }
+        : { label: shortDay(d), a: BEFORE, p: BEFORE })),
+    ]).then(([w, m, d]) => [w, m, d.concat([{ label: shortDay(now), a: dauToday, p: playsToday }])]);
     bars($("weekly"), weekly, { values: true, label: "Weekly active phones", ticks: 12 });
     bars($("monthly"), monthly, { values: true, label: "Monthly active phones", ticks: 12 });
+    bars($("daily"), daily.map((d) => ({ label: d.label, v: d.a })), { label: "Daily active phones", ticks: 6, h: 160 });
+    bars($("dailyPlays"), daily.map((d) => ({ label: d.label, v: d.p })), { series: [{ key: "v", color: "var(--tint2)" }], label: "Songs played each day", ticks: 6, h: 160 });
 
     // Versions and downloads come from the release list on GitHub.
-    try {
-      const rels = await fetch("https://api.github.com/repos/justshivv/Opentune/releases?per_page=100").then((r) => r.ok ? r.json() : Promise.reject(r.status));
+    const rels = await releases;
+    if (rels) {
       const list = rels.filter((r) => !r.draft);
       const dl = list.map((r) => [r.tag_name, r.assets.filter((a) => a.name.endsWith(".apk")).reduce((s, a) => s + a.download_count, 0)]);
       $("k-dl").textContent = fmt(dl.reduce((s, [, n]) => s + n, 0));
       table($("downloads"), dl.slice(0, 12));
-      const vers = await Promise.all(list.slice(0, 12).map(async (r) => [r.tag_name, await get("ver-" + r.tag_name.replace(/^v/, ""))]));
+      const vers = await Promise.all(list.filter((r) => newer(r.tag_name, "0.3.6")).slice(0, 12).map(async (r) => [r.tag_name, await get("ver-" + r.tag_name.replace(/^v/, ""))]));
       table($("versions"), vers);
-    } catch (e) {
-      table($("downloads"), []); table($("versions"), []);
+    } else {
+      $("k-dl").textContent = "–";
+      $("downloads").innerHTML = $("versions").innerHTML = `<tr><td>GitHub didn't answer. Refresh to try again.</td><td></td></tr>`;
     }
-    $("when").textContent = "Updated " + new Date().toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit" });
-    $("refresh").disabled = false;
+    const at = new Date().toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    $("when").textContent = failed ? `${failed} of ${total} counters didn't load (shown as –). Refresh to try again. ${at}` : "Live as of " + at;
+    $("refresh").disabled = false; loading = false;
   }
   $("refresh").addEventListener("click", load);
   load();
