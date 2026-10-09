@@ -52,6 +52,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.opentune.data.settings.ControlStyle
@@ -107,7 +108,7 @@ fun PlayerControls(
         when (style) {
             ControlStyle.ECHO -> {
                 BloomSkip(forward = false, previousRolls, enabled = true, animate, back)
-                EchoPlay(isPlaying, animate, playPause)
+                EchoPlay(isPlaying, isBuffering, animate, playPause)
                 BloomSkip(forward = true, nextRolls, hasNext, animate, ahead)
             }
             ControlStyle.BLOOM -> {
@@ -159,7 +160,7 @@ private fun Modifier.button(interaction: MutableInteractionSource, enabled: Bool
 
 /** Echo Music's nine-lobed, eight-second play-button rotation; GPL-3.0 attribution in THIRD_PARTY_NOTICES.md. */
 @Composable
-private fun EchoPlay(playing: Boolean, animate: Boolean, onClick: () -> Unit) {
+private fun EchoPlay(playing: Boolean, buffering: Boolean, animate: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val press = pressAmount(interaction.collectIsPressedAsState().value, animate)
     val phase = rememberEchoPhase(playing && animate, 8_000)
@@ -172,8 +173,13 @@ private fun EchoPlay(playing: Boolean, animate: Boolean, onClick: () -> Unit) {
             .drawBehind {
                 wavyCircle(path, size, size.minDimension / 2f, depth, phase.value * 360f)
                 drawPath(path, fill)
+                if (buffering) drawArc(ink.copy(alpha = 0.65f), phase.value * 360f, 90f, false,
+                    topLeft = Offset(12.dp.toPx(), 12.dp.toPx()),
+                    size = Size(size.width - 24.dp.toPx(), size.height - 24.dp.toPx()),
+                    style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
             }
-            .button(interaction, true, if (playing) "Pause" else "Play", onClick),
+            .button(interaction, true, if (playing) "Pause" else "Play", onClick)
+            .semantics { if (buffering) stateDescription = "Buffering" },
         contentAlignment = Alignment.Center,
     ) {
         PlayPauseGlyph(playing, ink, animate, Modifier.size(46.dp))
