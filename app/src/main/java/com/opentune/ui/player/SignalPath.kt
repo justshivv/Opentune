@@ -2,6 +2,8 @@ package com.opentune.ui.player
 
 import android.media.AudioManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,7 +67,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("Signal path") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Stage(Tone.INFO, "Source", source?.provider ?: "Waiting for the stream")
                 Stage(Tone.INFO, "Audio quality", signalQuality(format, source))
                 source?.selectionDetail?.let { Stage(Tone.INFO, "Source selection", it) }
