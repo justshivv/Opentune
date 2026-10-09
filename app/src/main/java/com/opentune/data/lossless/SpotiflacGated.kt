@@ -52,6 +52,11 @@ object SpotiflacSession {
         Session(id, secret, expires)
     }.getOrNull()
 
+    internal fun installId(): String = prefs?.getString("install_id", null)?.takeIf { it.isNotBlank() }
+        ?: java.util.UUID.randomUUID().toString().replace("-", "").also {
+            prefs?.edit()?.putString("install_id", it)?.apply()
+        }
+
     fun clear() {
         prefs?.edit()?.clear()?.apply()
         _connected.value = false

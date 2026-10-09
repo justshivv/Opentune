@@ -20,6 +20,7 @@ Higher-quality sources settings contain a shared unmetered-only default, backgro
 - Odesli's unauthenticated mapping endpoint returned HTTP 401 with `PUBLIC_API_ACCESS_DEPRECATED`. The Spotui-style mapping chain therefore cannot currently be relied upon without an upstream change. The Qobuz catalog route works independently of Odesli, and failed mappings have a cooldown.
 - The checked public Qobuz routes were unavailable: Kennyy timed out, TrypT returned HTTP 503, and Squid did not resolve from the test environment. Jumo's advertised search path returned a frontend HTML document. Only the matching Kennyy/TrypT protocol is included as defaults; a user-operated compatible HTTPS relay can be configured. Live FLAC playback remains unverified.
 - SpotiFLAC verification requires the user's interactive challenge and a non-expired session. No credentials from another client are supplied. Session preferences are excluded from Android backup.
+- Verification follow-up: the provider's live `/v2/challenge` page includes `action=session` and per-challenge `cData`, which the copied inline widget omitted. OpenTune now loads that provider-hosted page for the bootstrap challenge ID and reads its top-level `zarzGrant` result, then exchanges it once for a validated session. No CAPTCHA is solved automatically. Bootstrap and page loading were checked live; interactive session issuance still requires device confirmation.
 
 ## Client inventory
 
