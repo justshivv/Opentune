@@ -709,7 +709,7 @@ fun NerdStatsLine(format: AudioFormatInfo?) {
     val startup by NerdStats.startupMs.collectAsState()
     val gain by NerdStats.loudnessGainDb.collectAsState()
     val engine by NerdStats.engine.collectAsState()
-    val lossless by NerdStats.lossless.collectAsState()
+    val lossless by NerdStats.externalSource.collectAsState()
     val kbps = format?.bitrateKbps ?: picked?.second.takeIf { lossless == null }
     val parts = listOfNotNull(
         format?.codec,

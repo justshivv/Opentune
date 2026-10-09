@@ -12,6 +12,13 @@ under GPLv3. OpenTune adds YouTube Music identity lookup through
 [Odesli](https://odesli.co), cancellable network requests, FLAC validation,
 separate rendition caches and playback fallback.
 
+The Qobuz relay protocol in `data/lossless/QobuzCatalog.kt` follows
+[Meld's QobuzAudioProvider](https://github.com/FrancescoGrazioso/Meld/blob/main/app/src/main/kotlin/com/metrolist/music/qobuz/QobuzAudioProvider.kt)
+(Metrolist Project, copyright 2026, GPLv3). The JioSaavn URL decoding and
+conditional 320 kbps rendition selection follow
+[BitChord's JioSaavnService](https://github.com/kushagrasinghx/BitChord/blob/main/app/src/main/java/com/music/bitchord/data/jiosaavn/JioSaavnService.kt)
+(GPLv3). OpenTune adds conservative catalog matching and byte/size verification.
+
 The Innertube client, response parser and YouTube stream resolver under
 `data/innertube/` are adapted from
 [BitChord](https://github.com/kushagrasinghx/BitChord), used under its

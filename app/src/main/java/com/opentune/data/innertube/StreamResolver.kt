@@ -344,6 +344,14 @@ object StreamResolver {
     private fun Stream.score(): Double =
         if ("opus" in mimeType.lowercase(Locale.ROOT)) kbps * OPUS_EFFICIENCY else kbps.toDouble()
 
+    /** A lossy alternative must beat the actual YouTube rendition and respect its network ceiling. */
+    fun worthExternalUpgrade(videoId: String, kbps: Int): Boolean {
+        if (kbps > AppSettings.effectiveAudioQuality.maxKbps) return false
+        val current = served[videoId] ?: return false
+        if (upgrades.containsKey(videoId)) return false // Do not replace a pinned Premium upgrade.
+        return kbps - current.score() >= UPGRADE_MIN_GAIN
+    }
+
     /**
      * Looks for a clearly better copy of [videoId] than the one it started on:
      * the signed-in account's own formats (Premium's 256 kbps Opus and AAC

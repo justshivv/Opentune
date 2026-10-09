@@ -263,6 +263,9 @@ data class PlaybackSettings(
     val losslessStreaming: Boolean = false,
     val losslessUnmeteredOnly: Boolean = true,
     val losslessHiRes: Boolean = false,
+    val jioSaavnQuality: Boolean = false,
+    /** Optional base URL implementing Meld's /api/get-music and /api/download-music protocol. */
+    val qobuzRelayUrl: String = "",
     /** Overlap the end of a song with the start of the next; 0 is off. */
     val crossfadeSeconds: Int = 0,
     /** Bit-perfect output to a USB DAC (Android 14+): no mixing, effects or resampling. */

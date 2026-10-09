@@ -1,6 +1,8 @@
 package com.opentune.data.lossless
 
 import com.opentune.data.isYouTubeId
+import com.opentune.data.model.Song
+import com.opentune.data.settings.AppSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,30 +16,32 @@ import kotlin.math.abs
 
 /**
  * Spotui's Tidal → Amazon → Qobuz chain adapted for YouTube Music identities.
- * Only catalog links supplied by Odesli are used, never fuzzy title matches.
+ * Catalog matching also works when Odesli's public API is unavailable.
  * The FLAC header, precision and duration are checked before playback switches.
  */
 object LosslessSource {
     data class Track(val url: String, val provider: String, val bits: Int, val sampleRate: Int)
     internal data class FlacInfo(val bits: Int, val sampleRate: Int, val durationMs: Long)
     private val keyHeader = mapOf("X-API-Key" to LosslessRegistry.API_KEY)
+    @Volatile private var mappingRetryAt = 0L
 
-    suspend fun resolve(videoId: String, durationMs: Long, preferHiRes: Boolean = false): Track? =
+    suspend fun resolve(song: Song, durationMs: Long, preferHiRes: Boolean = false): Track? =
         withContext(Dispatchers.IO) {
+            val videoId = song.videoId
             if (!isYouTubeId(videoId)) return@withContext null
             withTimeoutOrNull(20_000) {
+                val identity = CatalogIdentity(song.title, song.artist, song.albumName, durationMs)
+                QobuzCatalog.resolve(identity, preferHiRes, AppSettings.playback.value.qobuzRelayUrl)
+                    ?.let { return@withTimeoutOrNull it }
                 val link = "https://api.song.link/v1-alpha.1/links".toHttpUrl().newBuilder()
                     .addQueryParameter("url", "https://music.youtube.com/watch?v=$videoId").build()
-                val ids = attempt { providerIds(JSONObject(LosslessHttp.text(link.toString()))) }
-                    ?: return@withTimeoutOrNull null
-                val registry = LosslessRegistry.snapshot()
-                suspend fun verified(url: String?, provider: String): Track? = attempt {
-                    val safeUrl = url?.let(::httpsUrl) ?: return@attempt null
-                    val request = Request.Builder().url(safeUrl).header("Range", "bytes=0-41").build()
-                    val info = flacInfo(LosslessHttp.bytes(request, 42, prefixOnly = true)) ?: return@attempt null
-                    if (!durationMatches(durationMs, info.durationMs)) return@attempt null
-                    Track(safeUrl, provider, info.bits, info.sampleRate)
+                val ids = if (System.nanoTime() / 1_000_000 < mappingRetryAt) emptyMap() else {
+                    attempt { providerIds(JSONObject(LosslessHttp.text(link.toString()))) }
+                        ?: emptyMap<String, String>().also { mappingRetryAt = System.nanoTime() / 1_000_000 + 30 * 60_000 }
                 }
+                if (ids.isEmpty()) return@withTimeoutOrNull null
+                val registry = LosslessRegistry.snapshot()
+                suspend fun verified(url: String?, provider: String): Track? = verify(url, provider, durationMs)
                 ids["tidal"]?.let { id ->
                     val gated = httpsUrl(registry?.optJSONObject("tidal")?.optString("community").orEmpty())
                     if (gated != null) {
@@ -72,6 +76,14 @@ object LosslessSource {
                 null
             }
         }
+
+    internal suspend fun verify(url: String?, provider: String, durationMs: Long): Track? = attempt {
+        val safeUrl = url?.let(::httpsUrl) ?: return@attempt null
+        val request = Request.Builder().url(safeUrl).header("Range", "bytes=0-41").build()
+        val info = flacInfo(LosslessHttp.bytes(request, 42, prefixOnly = true)) ?: return@attempt null
+        if (!durationMatches(durationMs, info.durationMs)) return@attempt null
+        Track(safeUrl, provider, info.bits, info.sampleRate)
+    }
 
     internal fun providerIds(json: JSONObject): Map<String, String> {
         val links = json.optJSONObject("linksByPlatform") ?: return emptyMap()

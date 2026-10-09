@@ -79,16 +79,25 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 
 ### Listening
 
-- **Optional lossless streaming.** Enable it in Settings → Audio → Lossless.
-  Music starts on YouTube while OpenTune looks up the recording through Odesli
-  and tries community Tidal, Amazon and Qobuz providers. A matching, verified
+- **Optional higher-quality streaming.** Enable it in Settings → Audio →
+  Higher-quality sources. Music starts on YouTube while OpenTune looks for
+  a matching recording in community catalogs. Qobuz supports direct catalog
+  matching and a compatible custom relay; Tidal, Amazon and the original
+  Qobuz community route use Odesli when its public mapping API is available.
+  A matching, verified
   FLAC can replace the stream at the current position; an unavailable or failed
   provider falls back to YouTube. Off by default and restricted to unmetered
   networks by default. Optional SpotiFLAC verification and Qobuz hi-res preference
-  are on the same page. Availability depends on third-party providers. This does
+  are on the same page. An independent JioSaavn toggle can try its 320 kbps
+  lossy rendition when no FLAC is available and it exceeds the current YouTube
+  quality within your network ceiling. Track title, artist, album (when known),
+  duration, the catalog's 320 flag and the returned audio are checked first.
+  Availability depends on third-party providers. This does
   not change downloads, local files, podcasts, radio or your own server streams.
   FLAC precision is shown in Stats for nerds; output quality still depends on
   Android, your audio device and enabled effects.
+  See [the source review](docs/audio-source-review.md) for the assessed clients
+  and live-provider limitations.
 
 - **Two stream engines that switch on their own.**
   InnerTubeX leads and

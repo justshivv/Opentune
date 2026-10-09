@@ -41,7 +41,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
     val sound by AppSettings.sound.collectAsState()
     val pb by AppSettings.playback.collectAsState()
     val engine by NerdStats.engine.collectAsState()
-    val lossless by NerdStats.lossless.collectAsState()
+    val lossless by NerdStats.externalSource.collectAsState()
     val picked by NerdStats.lastPicked.collectAsState()
     val gain by NerdStats.loudnessGainDb.collectAsState()
     val speakerHold by NerdStats.loudnessOffOnSpeaker.collectAsState()
@@ -85,7 +85,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
                     "Loudness",
                     when {
                         !pb.loudnessNormalization -> "Off: every song at its own level"
-                        lossless != null -> "No loudness measurement for this FLAC master"
+                        lossless != null -> "No loudness measurement for this external master"
                         speakerHold && (gain ?: 0f) > 0.05f -> "%+.1f dB on the phone speaker: a quiet song lifted, never turned down".format(gain)
                         speakerHold -> "Full level on the phone speaker: songs aren't turned down there"
                         gain == null -> "No figure for this song yet"
