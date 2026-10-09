@@ -128,6 +128,9 @@ fun RecognizeScreen(contentPadding: PaddingValues, onPlay: (Song) -> Unit, onBac
     }
     LaunchedEffect(state) { if (state is Recognizer.State.Found) haptics.pattern(Haptics.Pattern.DONE) }
     DisposableEffect(Unit) { onDispose { Recognizer.cancel() } }
+    // The song found, held while its card animates away after the next listen starts.
+    var lastFound by remember { mutableStateOf<Recognized?>(null) }
+    (state as? Recognizer.State.Found)?.let { lastFound = it.song }
     var finding by remember { mutableStateOf<String?>(null) }
     fun play(song: Recognized) {
         if (finding != null) return
@@ -159,7 +162,7 @@ fun RecognizeScreen(contentPadding: PaddingValues, onPlay: (Song) -> Unit, onBac
             ) { stage ->
                 Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     when (stage) {
-                        Stage.FOUND -> (Recognizer.state.value as? Recognizer.State.Found)?.song?.let { song ->
+                        Stage.FOUND -> lastFound?.let { song ->
                             FoundCard(song, finding == song.title, onPlay = { play(song) }, onAgain = { listen() })
                         }
                         else -> {

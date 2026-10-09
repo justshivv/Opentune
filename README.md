@@ -153,6 +153,14 @@ Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
   streams all cast. The queue, autoplay, the notification and every button
   keep working as usual; the device follows, and its volume is in the same
   sheet.
+- **Stats.** Settings › About › Stats shows OpenTune's downloads (every
+  release's APKs, updates included), stars and forks as GitHub reports
+  them, with a bar for each version, and your own listening in numbers:
+  songs played, hours, different songs and artists, your longest streak,
+  your favourite hour, your most played song and artist, minutes by month,
+  and what you've liked, downloaded and found. The app counts nothing and
+  sends nothing; the first half is read from GitHub's public numbers and
+  the second stays on the phone.
 - **What's this song?** From Home or the search bar, a page listens
   through the microphone and names the song playing nearby. The phone
   turns a few seconds of sound into an audio fingerprint (the method
