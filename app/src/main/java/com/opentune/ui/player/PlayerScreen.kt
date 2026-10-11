@@ -571,7 +571,6 @@ fun PlayerLayout(
                     }
                 }
 
-                SourceQualityBadge(current.videoId, state.audioFormat, onClick = { showSignal = true })
                 if (pane != Pane.LYRICS && state.ui.syncedLyrics && !minimal && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
                     LyricPreview(state.lyrics, lyricsPosition, onOpen = { paneName = Pane.LYRICS.name }, Modifier.padding(top = 4.dp))
                 }
@@ -587,6 +586,7 @@ fun PlayerLayout(
                 } else {
                     SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation, playing = state.isPlaying, lyricAt = lyricAt)
                 }
+                SourceQualityBadge(current.videoId, state.audioFormat, onClick = { showSignal = true })
                 if (state.ui.statsForNerds) {
                     Box(Modifier.clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
                 }
