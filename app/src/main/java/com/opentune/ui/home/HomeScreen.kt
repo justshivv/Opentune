@@ -139,6 +139,12 @@ fun HomeScreen(
                     }
                 }
             }
+            if (ui.design.style != com.opentune.data.settings.InterfaceDesign.CURRENT && recents.isNotEmpty()) {
+                item(key = "design-feature") {
+                    com.opentune.ui.components.DesignFeatureCard(recents.first(), { actions.playAll(recents, 0, false, "Recents") },
+                        Modifier.padding(horizontal = com.opentune.ui.theme.LocalInterface.current.gutter, vertical = 12.dp))
+                }
+            }
             if (recents.isNotEmpty()) {
                 item(key = "recents") {
                     Recents(
@@ -197,7 +203,7 @@ private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, on
             } else {
                 LazyHorizontalGrid(
                     rows = GridCells.Fixed(4),
-                    modifier = Modifier.fillMaxWidth().height(64.dp * 4),
+                    modifier = Modifier.fillMaxWidth().height(com.opentune.ui.theme.LocalInterface.current.rowHeight * 4),
                 ) {
                     items(songs.size) { i ->
                         val song = songs[i]
@@ -247,7 +253,7 @@ private fun QuickPicks(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit) {
         SectionHeader(shelf.title, subtitle = shelf.subtitle)
         LazyHorizontalGrid(
             rows = GridCells.Fixed(4),
-            modifier = Modifier.fillMaxWidth().height(64.dp * 4),
+            modifier = Modifier.fillMaxWidth().height(com.opentune.ui.theme.LocalInterface.current.rowHeight * 4),
             contentPadding = PaddingValues(horizontal = 8.dp),
         ) {
             items(shelf.items) { item ->

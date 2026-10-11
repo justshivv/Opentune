@@ -127,7 +127,8 @@ fun FloatingCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val ui by AppSettings.ui.collectAsState()
-    val still = ui.reduceAnimation
+    val design = com.opentune.ui.theme.LocalInterface.current
+    val still = ui.reduceAnimation || (design.active && design.reduceMotion)
     val scope = rememberCoroutineScope()
     val dismiss by rememberUpdatedState(onDismiss)
     var open by remember { mutableStateOf(false) }
@@ -171,7 +172,7 @@ fun FloatingCard(
         val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
         val shown by animateFloatAsState(
             if (open) 1f else 0f,
-            if (still) snap() else if (open) spring(dampingRatio = 0.8f, stiffness = 360f) else tween(EXIT_MS.toInt()),
+            if (still) snap() else if (design.active && design.motion != com.opentune.data.settings.DesignMotion.INHERIT) design.spec() else if (open) spring(dampingRatio = 0.8f, stiffness = 360f) else tween(EXIT_MS.toInt()),
             label = "card",
         )
         // A dialog's content sits outside the app's Surface, so it needs its own text colour.
@@ -181,7 +182,7 @@ fun FloatingCard(
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 val maxCard = maxHeight
-                val shape = RoundedCornerShape(32.dp)
+                val shape = if (design.active) MaterialTheme.shapes.extraLarge else RoundedCornerShape(32.dp)
                 val density = LocalDensity.current
                 // The card's own height with everything shown, measured as it lays out;
                 // an expandable card never grows past it, so a short menu has no empty foot.
@@ -445,7 +446,9 @@ fun SheetButton(
     val card = LocalFloatingCard.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val press by animateFloatAsState(if (pressed) 0.95f else 1f, spring(dampingRatio = 0.55f, stiffness = 700f), label = "press")
+    val presentation = com.opentune.ui.theme.LocalInterface.current
+    val press by animateFloatAsState(if (pressed && !(presentation.active && presentation.reduceMotion)) 0.95f else 1f,
+        if (presentation.active && presentation.motion != com.opentune.data.settings.DesignMotion.INHERIT) presentation.spec() else spring(dampingRatio = 0.55f, stiffness = 700f), label = "press")
     val scheme = MaterialTheme.colorScheme
     val (fill, ink) = when (tone) {
         SheetTone.Primary -> scheme.primary to scheme.onPrimary

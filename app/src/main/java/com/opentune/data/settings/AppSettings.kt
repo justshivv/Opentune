@@ -287,6 +287,7 @@ val DEFAULT_SPONSORBLOCK_CATEGORIES = setOf("music_offtopic", "sponsor", "selfpr
 
 @Serializable
 data class InterfaceSettings(
+    val design: DesignOptions = DesignOptions(),
     val reduceAnimation: Boolean = false,
     /** The mark's dive into the app when it starts. */
     val openingAnimation: Boolean = true,

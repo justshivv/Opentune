@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.res.Configuration
 import android.content.ClipboardManager
 import android.widget.Toast
+import com.opentune.ui.theme.designSurface
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
@@ -250,6 +251,8 @@ fun PlayerLayout(
     initialLyrics: Boolean = false,
     onCovering: (Boolean) -> Unit = {},
 ) {
+    val presentation = com.opentune.ui.theme.rememberInterface(state.ui)
+    val reduceMotion = state.ui.reduceAnimation || (presentation.active && presentation.reduceMotion)
     val current = state.song
     val theme = state.theme
     val sound = state.sound
@@ -306,7 +309,7 @@ fun PlayerLayout(
     var playerCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     var coverBottomPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
-    PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme) {
+    PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme, ui = state.ui) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -352,12 +355,12 @@ fun PlayerLayout(
                     if (landscape && theme.playerBackground != com.opentune.data.settings.PlayerBackground.ECHO_GLOW) com.opentune.data.settings.PlayerBackground.BLUR else theme.playerBackground,
                     current.thumbnailUrl,
                     Modifier.fillMaxSize(),
-                    animate = !state.ui.reduceAnimation,
+                    animate = !reduceMotion,
                     fullCover = fullCover,
                     fullCoverBottom = with(LocalDensity.current) { coverBottomPx.takeIf { it > 0f }?.toDp() },
-                    movingCover = state.ui.movingCover && !state.ui.reduceAnimation,
+                    movingCover = state.ui.movingCover && !reduceMotion,
                     playing = state.isPlaying,
-                    change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
+                    change = if (reduceMotion) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                     index = state.currentIndex,
                 )
             }
@@ -373,7 +376,7 @@ fun PlayerLayout(
                 AmbientLights(
                     listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.inversePrimary, scheme.primaryContainer),
                     playing = state.isPlaying,
-                    animate = !state.ui.reduceAnimation,
+                    animate = !reduceMotion,
                     modifier = Modifier.fillMaxSize(),
                     field = true,
                 )
@@ -406,7 +409,7 @@ fun PlayerLayout(
                                 state.lyrics,
                                 lyricsPosition,
                                 onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
-                                modifier = Modifier.fillMaxSize().focusIn(!state.ui.reduceAnimation),
+                                modifier = Modifier.fillMaxSize().focusIn(!reduceMotion),
                                 synced = state.ui.syncedLyrics,
                                 blur = state.ui.blurLyrics,
                                 shareSong = current,
@@ -467,7 +470,7 @@ fun PlayerLayout(
                     pane,
                     transitionSpec = {
                         when {
-                            state.ui.reduceAnimation -> fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                            reduceMotion -> fadeIn(tween(0)) togetherWith fadeOut(tween(0))
                             // Lyrics rise into place on a soft spring while the cover sinks back.
                             targetState == Pane.LYRICS ->
                                 (fadeIn(tween(220)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 650f)) { it / 5 }) togetherWith
@@ -517,25 +520,25 @@ fun PlayerLayout(
                                             },
                                         )
                                     style == PlayerStyle.VINYL ->
-                                        VinylPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                        VinylPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !reduceMotion)
                                     style == PlayerStyle.CASSETTE ->
                                         CassettePane(
                                             current, state.isPlaying,
                                             progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
-                                            onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation,
+                                            onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !reduceMotion,
                                         )
                                     style == PlayerStyle.HALO ->
-                                        HaloPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                        HaloPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !reduceMotion)
                                     style == PlayerStyle.POLAROID ->
-                                        PolaroidPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                        PolaroidPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !reduceMotion)
                                     else ->
                                         ArtworkPane(
                                             current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous,
-                                            moving = state.ui.movingCover && !state.ui.reduceAnimation,
-                                            change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
+                                            moving = state.ui.movingCover && !reduceMotion,
+                                            change = if (reduceMotion) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                                             index = state.currentIndex,
                                             onSeekBy = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) },
-                                            glow = state.ui.coverGlow && !state.ui.reduceAnimation,
+                                            glow = state.ui.coverGlow && !reduceMotion,
                                         )
                                 }
                             }
@@ -552,7 +555,7 @@ fun PlayerLayout(
                                     state.lyrics,
                                     lyricsPosition,
                                     onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
-                                    modifier = Modifier.weight(1f).fillMaxWidth().focusIn(!state.ui.reduceAnimation),
+                                    modifier = Modifier.weight(1f).fillMaxWidth().focusIn(!reduceMotion),
                                     synced = state.ui.syncedLyrics,
                                     blur = state.ui.blurLyrics,
                                 shareSong = current,
@@ -604,7 +607,7 @@ fun PlayerLayout(
                     val (wave, waveVersion) = rememberWaveform(current.videoId, position, state.durationMs, state.isPlaying)
                     SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, playing = state.isPlaying, waveform = wave, waveVersion = { waveVersion.value }, lyricAt = lyricAt, marks = marks)
                 } else {
-                    SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation, playing = state.isPlaying, lyricAt = lyricAt, marks = marks)
+                    SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !reduceMotion, playing = state.isPlaying, lyricAt = lyricAt, marks = marks)
                 }
                 if (state.ui.statsForNerds) {
                     Box(Modifier.clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
@@ -617,7 +620,7 @@ fun PlayerLayout(
                     onNext = actions.next,
                     onPrevious = actions.previous,
                     style = state.ui.controlStyle,
-                    animate = !state.ui.reduceAnimation,
+                    animate = !reduceMotion,
                     progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
                 )
                 if (!state.ui.hideVolumeBar && !minimal) VolumeBar(Modifier.padding(vertical = 4.dp))
@@ -765,7 +768,8 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
 
 @Composable
 private fun TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    val design = com.opentune.ui.theme.LocalInterface.current
+    Row(Modifier.fillMaxWidth().then(if (design.active) Modifier.designSurface().padding(if (design.compact) 12.dp else 16.dp) else Modifier), verticalAlignment = Alignment.CenterVertically) {
         TitleRow(song, liked, onLike, onMore, compact = false)
     }
 }

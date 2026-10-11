@@ -1,5 +1,8 @@
 package com.opentune.ui.library
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import com.opentune.ui.theme.designSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -106,6 +110,11 @@ private const val YT_PLAYLISTS = "library:ytPlaylists"
 
 @Composable
 fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: LibraryNav) {
+    val design = com.opentune.ui.theme.LocalInterface.current
+    var section by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Overview") }
+    val showOverview = !design.active || section == "Overview"
+    val showPlaylists = !design.active || section != "Recent"
+    val showRecents = !design.active || section != "Playlists"
     val records by History.records.collectAsState()
     val liked by LibraryStore.liked.collectAsState()
     val playlists by LibraryStore.playlists.collectAsState()
@@ -147,6 +156,14 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 }
             })
         }
+        if (design.active) item(key = "design-filters") {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = design.gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Overview", "Playlists", "Recent").forEach { label ->
+                    androidx.compose.material3.FilterChip(section == label, { section = label }, label = { Text(label) }, modifier = Modifier.heightIn(min = 48.dp))
+                }
+            }
+        }
+        if (showOverview) {
         item {
             YearCard(
                 year = year,
@@ -190,6 +207,8 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 }
             }
         }
+        }
+        if (showPlaylists) {
         item {
             SectionHeader("Playlists", action = {
                 Row {
@@ -224,14 +243,15 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         items(ytPlaylists, key = { "yt:${it.browseId}" }) { p ->
             PlaylistRow(p.thumbnailUrl, p.title, p.subtitle.ifBlank { "YouTube Music" }, { p.browseId?.let(nav.browse) }, Modifier.animateItem())
         }
-        if (recents.isNotEmpty()) {
+        }
+        if (showRecents && recents.isNotEmpty()) {
             item {
                 SectionHeader("Recently played", action = {
                     PlayButtons(onPlay = { actions.playAll(recents, 0, false, "Recently played") }, onShuffle = { actions.playAll(recents, 0, true, "Recently played") }, compact = true)
                 })
             }
             // The last few, with the rest a tap away, so the list doesn't run the page long.
-            val shownRecents = if (recentsOpen) recents else recents.take(RECENTS_FOLDED)
+            val shownRecents = if (recentsOpen || (design.active && section == "Recent")) recents else recents.take(RECENTS_FOLDED)
             itemsIndexed(shownRecents, key = { i, s -> "r$i:${s.videoId}" }) { i, song ->
                 SongListItem(
                     song = song,
@@ -243,7 +263,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     modifier = Modifier.animateItem(),
                 )
             }
-            if (recents.size > RECENTS_FOLDED) {
+            if (recents.size > RECENTS_FOLDED && !(design.active && section == "Recent")) {
                 item(key = "recentsToggle") {
                     Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).animateItem(), contentAlignment = Alignment.Center) {
                         androidx.compose.material3.FilledTonalButton(onClick = { recentsOpen = !recentsOpen }) {
@@ -258,6 +278,9 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     }
                 }
             }
+        }
+        if (design.active && section == "Recent" && recents.isEmpty()) item {
+            Text("Your recently played songs will appear here.", modifier = Modifier.padding(design.gutter), style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
@@ -281,10 +304,9 @@ private fun YearCard(year: Int, minutes: Long, plays: Int, topArtist: String?, t
 private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier) {
     Row(
         modifier
-            .height(72.dp)
+            .then(if (com.opentune.ui.theme.LocalInterface.current.active) Modifier.heightIn(min = 80.dp) else Modifier.height(72.dp))
             .pressable(onClick, 0.96f)
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .then(if (com.opentune.ui.theme.LocalInterface.current.active) Modifier.designSurface() else Modifier.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainer))
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -301,7 +323,7 @@ private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick
 @Composable
 private fun PlaylistRow(art: String?, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier, cover: (@Composable () -> Unit)? = null) {
     Row(
-        modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = com.opentune.ui.theme.LocalInterface.current.gutter, vertical = if (com.opentune.ui.theme.LocalInterface.current.active) 10.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (cover != null) {

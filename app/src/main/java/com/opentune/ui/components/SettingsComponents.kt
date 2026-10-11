@@ -1,5 +1,6 @@
 package com.opentune.ui.components
 
+import com.opentune.ui.theme.designSurface
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -53,12 +54,12 @@ fun GroupLabel(text: String, modifier: Modifier = Modifier) {
 /** A rounded card holding rows, with hairline dividers between them. */
 @Composable
 fun GroupCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val design = com.opentune.ui.theme.LocalInterface.current
     Column(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer),
+            .padding(horizontal = design.gutter)
+            .then(if (design.active) Modifier.designSurface() else Modifier.clip(RoundedCornerShape(28.dp)).background(MaterialTheme.colorScheme.surfaceContainer)),
         content = content,
     )
 }

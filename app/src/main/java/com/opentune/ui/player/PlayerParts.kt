@@ -2,6 +2,7 @@ package com.opentune.ui.player
 
 import com.opentune.ui.components.livingArt
 
+import com.opentune.ui.theme.designSurface
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
@@ -294,6 +295,7 @@ fun ArtworkPane(
     /** A soft light in the cover's colour under it, swelling with the bass. */
     glow: Boolean = false,
 ) {
+    val artworkShape = if (com.opentune.ui.theme.LocalInterface.current.active) MaterialTheme.shapes.extraLarge else RoundedCornerShape(28.dp)
     val scale by animateFloatAsState(
         if (isPlaying) 1f else 0.86f,
         spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessLow),
@@ -338,7 +340,7 @@ fun ArtworkPane(
                         translationX = offsetX.value
                         rotationZ = offsetX.value / 90f
                         shadowElevation = 28.dp.toPx()
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+                        shape = artworkShape
                         clip = true
                     },
                 shape = MaterialTheme.shapes.extraLarge,
@@ -673,14 +675,15 @@ fun MiniPlayer(
         return
     }
 
-    val shape = RoundedCornerShape(22.dp)
+    val design = com.opentune.ui.theme.LocalInterface.current
+    val shape = if (design.active) MaterialTheme.shapes.large else RoundedCornerShape(22.dp)
     Surface(
         onClick = onClick,
         shape = shape,
         color = Color.Transparent,
         modifier = with(com.opentune.ui.components.FlyingCover) { modifier.card() }
             .graphicsLayer { translationX = offsetX.value }
-            .glass(shape, tint)
+            .then(if (design.active) Modifier.designSurface(accent = true) else Modifier.glass(shape, tint))
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {

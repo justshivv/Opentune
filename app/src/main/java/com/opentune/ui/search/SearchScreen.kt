@@ -97,12 +97,16 @@ fun SearchScreen(
     }
 
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
+        if (com.opentune.ui.theme.LocalInterface.current.active) {
+            Text("Search", style = MaterialTheme.typography.displaySmall,
+                modifier = Modifier.padding(horizontal = com.opentune.ui.theme.LocalInterface.current.gutter, vertical = 16.dp))
+        }
         TextField(
             value = query,
             onValueChange = vm::onQueryChange,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
             singleLine = true,
-            shape = CircleShape,
+            shape = if (com.opentune.ui.theme.LocalInterface.current.active) MaterialTheme.shapes.large else CircleShape,
             placeholder = { Text("Songs, albums, artists") },
             leadingIcon = { Icon(Icons.Filled.Search, null) },
             trailingIcon = {

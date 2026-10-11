@@ -314,6 +314,7 @@ fun GlassBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 /** A page's top: optional glass back button and a large title. Draws under the status bar inset. */
 @Composable
 fun PageHeader(title: String, onBack: (() -> Unit)? = null, actions: (@Composable () -> Unit)? = null) {
+    val design = com.opentune.ui.theme.LocalInterface.current
     Column(
         Modifier
             .windowInsetsPadding(WindowInsets.statusBars)
@@ -330,7 +331,7 @@ fun PageHeader(title: String, onBack: (() -> Unit)? = null, actions: (@Composabl
         Text(
             title,
             style = MaterialTheme.typography.displaySmall,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = if (design.active) design.gutter else 20.dp, end = if (design.active) design.gutter else 20.dp, top = if (design.active) 12.dp else 20.dp, bottom = if (design.active) 16.dp else 8.dp),
         )
     }
 }

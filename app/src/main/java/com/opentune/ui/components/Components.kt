@@ -1,5 +1,6 @@
 package com.opentune.ui.components
 
+import com.opentune.ui.theme.designSurface
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.sp
@@ -198,6 +199,7 @@ fun SongListItem(
     swipeToQueue: Boolean = true,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
+    val design = com.opentune.ui.theme.LocalInterface.current
     var menuOpen by remember { mutableStateOf(false) }
     val hasMenu = onPlayNext != null || onAddToQueue != null || LocalSongMenu.current != null
     val download by remember(song.videoId) { Downloads.entry(song.videoId) }
@@ -253,14 +255,14 @@ fun SongListItem(
                     },
                 )
                 .combinedClickable(onClick = onClick, onLongClick = { if (hasMenu) menuOpen = true })
-                .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                .padding(start = design.gutter, end = 4.dp, top = design.rowPadding, bottom = design.rowPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (leading != null) {
                 leading()
             } else {
-                Box(Modifier.size(52.dp)) {
+                Box(Modifier.size(design.rowArt)) {
                     Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.fillMaxSize())
                     if (isCurrent) {
                         Box(
@@ -325,13 +327,15 @@ fun ItemCard(
     width: Dp = 156.dp,
     explicit: Boolean = false,
 ) {
+    val design = com.opentune.ui.theme.LocalInterface.current
     val round = type == BrowseType.ARTIST
     Column(
         modifier = modifier
-            .width(width)
+            .width(if (design.active && width == 156.dp) { if (design.compact) 160.dp else 184.dp } else width)
             .clip(MaterialTheme.shapes.medium)
+            .then(if (design.active) Modifier.designSurface() else Modifier)
             .clickable(onClick = onClick)
-            .padding(6.dp),
+            .padding(if (design.active) 10.dp else 6.dp),
     ) {
         Artwork(
             thumbnailUrl.artworkAt(CARD_ART_PX),
@@ -372,8 +376,9 @@ fun SectionHeader(
     subtitle: String? = null,
     action: (@Composable () -> Unit)? = null,
 ) {
+    val design = com.opentune.ui.theme.LocalInterface.current
     Row(
-        modifier = modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
+        modifier = modifier.fillMaxWidth().padding(start = design.gutter, end = design.gutter, top = if (design.active && !design.compact) 28.dp else 20.dp, bottom = if (design.active) 12.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -384,7 +389,7 @@ fun SectionHeader(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.titleLarge, maxLines = if (design.active) 2 else 1, overflow = TextOverflow.Ellipsis)
         }
         action?.invoke()
     }
@@ -398,11 +403,12 @@ fun <T> Shelf(
     subtitle: String? = null,
     card: @Composable (T) -> Unit,
 ) {
+    val design = com.opentune.ui.theme.LocalInterface.current
     Column {
         SectionHeader(title, subtitle = subtitle)
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            contentPadding = PaddingValues(horizontal = if (design.active) design.gutter else 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (design.active) 10.dp else 2.dp),
         ) {
             items(items) { card(it) }
         }
@@ -412,7 +418,8 @@ fun <T> Shelf(
 /** Three bars bouncing out of phase; still when paused. */
 @Composable
 fun NowPlayingBars(playing: Boolean, color: Color, modifier: Modifier = Modifier) {
-    if (playing) {
+    val design = com.opentune.ui.theme.LocalInterface.current
+    if (playing && !(design.active && design.reduceMotion)) {
         val transition = rememberInfiniteTransition(label = "bars")
         val heights = listOf(0, 180, 360).map { delay ->
             transition.animateFloat(

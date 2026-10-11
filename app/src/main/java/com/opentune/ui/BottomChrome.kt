@@ -205,6 +205,11 @@ fun BottomChrome(
     lens: DockLens = DockLens.STRETCH,
     reduceMotion: Boolean = false,
 ) {
+    val design = com.opentune.ui.theme.LocalInterface.current
+    if (design.active && design.motion != com.opentune.data.settings.DesignMotion.INHERIT) {
+        DesignChrome(inline, tabs, selected, onSelect, searchSelected, onSearch, mini, modifier)
+        return
+    }
     val style = if (reduceMotion) null else motion
     if (style == DockMotion.MINIMIZE) {
         MinimizeChrome(inline, tabs, selected, onSelect, onExpand, searchSelected, onSearch, mini, lens, modifier)

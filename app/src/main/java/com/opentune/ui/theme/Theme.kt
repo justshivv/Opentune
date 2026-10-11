@@ -76,6 +76,7 @@ fun songAccents(): Pair<Color, Color> {
 fun OpenTuneTheme(
     settings: ThemeSettings,
     artworkSeed: Color? = null,
+    ui: com.opentune.data.settings.InterfaceSettings = com.opentune.data.settings.InterfaceSettings(),
     content: @Composable () -> Unit,
 ) {
     val dark = settings.isDark()
@@ -96,12 +97,14 @@ fun OpenTuneTheme(
     }
     val scheme = if (dark && settings.pureBlack) base.toPureBlack() else base
 
-    MaterialTheme(
-        colorScheme = scheme.animated(),
-        typography = AppTypography,
-        shapes = AppShapes,
-    ) {
-        CompositionLocalProvider(LocalArtworkSeed provides artworkSeed, content = content)
+    val presentation = rememberInterface(ui)
+    CompositionLocalProvider(LocalInterface provides presentation, LocalArtworkSeed provides artworkSeed) {
+        MaterialTheme(
+            colorScheme = if (presentation.active && presentation.reduceMotion) scheme else scheme.animated(),
+            typography = designTypography(ui.design.style),
+            shapes = designShapes(ui.design.style),
+            content = content,
+        )
     }
 }
 
@@ -110,19 +113,22 @@ fun OpenTuneTheme(
  * a dark, immersive surface whatever the app theme is.
  */
 @Composable
-fun PlayerTheme(seed: Color?, settings: ThemeSettings, content: @Composable () -> Unit) {
+fun PlayerTheme(seed: Color?, settings: ThemeSettings, ui: com.opentune.data.settings.InterfaceSettings? = null, content: @Composable () -> Unit) {
     val scheme = rememberDynamicColorScheme(
         seedColor = seed ?: Color(settings.seedColor),
         isDark = true,
         isAmoled = settings.pureBlack,
         style = PaletteStyle.Vibrant,
     )
-    MaterialTheme(
-        colorScheme = scheme.animated(),
-        typography = AppTypography,
-        shapes = AppShapes,
-        content = content,
-    )
+    val presentation = if (ui == null) LocalInterface.current else rememberInterface(ui)
+    CompositionLocalProvider(LocalInterface provides presentation) {
+        MaterialTheme(
+            colorScheme = if (presentation.active && presentation.reduceMotion) scheme else scheme.animated(),
+            typography = designTypography(presentation.options.style),
+            shapes = designShapes(presentation.options.style),
+            content = content,
+        )
+    }
 }
 
 /**

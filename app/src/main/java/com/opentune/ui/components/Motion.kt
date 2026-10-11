@@ -18,11 +18,12 @@ import androidx.compose.ui.graphics.graphicsLayer
  */
 @Composable
 fun Modifier.pressable(onClick: () -> Unit, pressedScale: Float = 0.95f): Modifier {
+    val design = com.opentune.ui.theme.LocalInterface.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        if (pressed) pressedScale else 1f,
-        spring(dampingRatio = 0.55f, stiffness = 600f),
+        if (pressed && !(design.active && design.reduceMotion)) { if (design.motion == com.opentune.data.settings.DesignMotion.CALM) .985f else pressedScale } else 1f,
+        if (design.active && design.motion != com.opentune.data.settings.DesignMotion.INHERIT) design.spec() else spring(dampingRatio = 0.55f, stiffness = 600f),
         label = "press",
     )
     return this

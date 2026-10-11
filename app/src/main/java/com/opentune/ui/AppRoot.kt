@@ -333,10 +333,10 @@ fun AppRoot(vm: PlayerViewModel) {
                 NavHost(
                     navController = nav,
                     startDestination = Tab.HOME.route,
-                    enterTransition = { PageMotion.enter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                    exitTransition = { PageMotion.exit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                    popEnterTransition = { PageMotion.popEnter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                    popExitTransition = { PageMotion.popExit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                    enterTransition = { PageMotion.enter(chromeUi.pageTransition, chromeUi.reduceAnimation || (designPresentation.active && designPresentation.reduceMotion), designPresentation.motion) },
+                    exitTransition = { PageMotion.exit(chromeUi.pageTransition, chromeUi.reduceAnimation || (designPresentation.active && designPresentation.reduceMotion), designPresentation.motion) },
+                    popEnterTransition = { PageMotion.popEnter(chromeUi.pageTransition, chromeUi.reduceAnimation || (designPresentation.active && designPresentation.reduceMotion), designPresentation.motion) },
+                    popExitTransition = { PageMotion.popExit(chromeUi.pageTransition, chromeUi.reduceAnimation || (designPresentation.active && designPresentation.reduceMotion), designPresentation.motion) },
                 ) {
                     composable(Tab.HOME.route) {
                         HomeScreen(
@@ -474,7 +474,7 @@ fun AppRoot(vm: PlayerViewModel) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
                 SnackbarHost(snackbar)
                 BottomChrome(
-                    inline = chromeScroll.inline,
+                    inline = chromeScroll.inline && !(chromeUi.design.style != com.opentune.data.settings.InterfaceDesign.CURRENT && chromeUi.design.dockVisibility == com.opentune.data.settings.DesignDockVisibility.ALWAYS),
                     tabs = chromeTabs,
                     selected = if (route == SEARCH_ROUTE) null else tab.ordinal,
                     onSelect = { i ->
@@ -513,8 +513,8 @@ fun AppRoot(vm: PlayerViewModel) {
 
             AnimatedVisibility(
                 visible = playerOpen && song != null,
-                enter = PageMotion.playerIn(chromeUi.playerMotion, chromeUi.reduceAnimation),
-                exit = PageMotion.playerOut(chromeUi.playerMotion, chromeUi.reduceAnimation),
+                enter = PageMotion.playerIn(chromeUi.playerMotion, chromeUi.reduceAnimation || (designPresentation.active && designPresentation.reduceMotion), designPresentation.motion),
+                exit = PageMotion.playerOut(chromeUi.playerMotion, chromeUi.reduceAnimation || (designPresentation.active && designPresentation.reduceMotion), designPresentation.motion),
             ) {
                 // Registered after the NavHost's own handler, so back closes the
                 // player first instead of popping the page behind it.

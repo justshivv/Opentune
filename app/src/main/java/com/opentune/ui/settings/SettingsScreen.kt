@@ -347,6 +347,7 @@ private fun settingsSections(
     var listenBrainzDialog by remember { mutableStateOf(false) }
     var sponsorBlockDialog by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<UpdateCheck.Release?>(null) }
+    var designDialog by rememberSaveable { mutableStateOf(false) }
     var playerStyleDialog by remember { mutableStateOf(false) }
     var recommenderDialog by remember { mutableStateOf(false) }
     var followedDialog by remember { mutableStateOf(false) }
@@ -371,6 +372,10 @@ private fun settingsSections(
     val theme by AppSettings.theme.collectAsState()
     val pb by AppSettings.playback.collectAsState()
     val ui by AppSettings.ui.collectAsState()
+    if (designDialog) DesignChooser(ui, theme, { designDialog = false }) { options ->
+        AppSettings.updateUi { it.copy(design = options) }
+        designDialog = false
+    }
     val lib by AppSettings.library.collectAsState()
     val metered = remember { AppSettings.onMeteredNetwork() }
     var qualityDialog by remember { mutableStateOf<Boolean?>(null) } // true = Wi-Fi, false = mobile
@@ -768,6 +773,9 @@ private fun settingsSections(
         Section(
             "Appearance",
             listOf(
+                Entry("Interface design", "flow editorial glass current layout density dock visibility motion preview") {
+                    NavRow("Interface design", { designDialog = true }, summary = "Preview a new look and keep your existing choices", value = ui.design.style.label, icon = Icons.Rounded.Palette)
+                },
                 Entry("Theme", "dark light system") {
                     SettingRow("Theme", icon = Icons.Rounded.Palette, below = {
                         PillSegmented(ThemeMode.entries, theme.mode, { it.label }, { m -> AppSettings.updateTheme { it.copy(mode = m) } })

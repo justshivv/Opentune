@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
             val ui by AppSettings.ui.collectAsState()
             LaunchedEffect(ui.highRefreshRate) { preferRefreshRate(ui.highRefreshRate) }
             val song by vm.currentSong.collectAsState()
-            OpenTuneTheme(theme, artworkSeed = rememberArtworkSeed(song?.thumbnailUrl)) {
+            OpenTuneTheme(theme, artworkSeed = rememberArtworkSeed(song?.thumbnailUrl), ui = ui) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     AppRoot(vm)
                 }
