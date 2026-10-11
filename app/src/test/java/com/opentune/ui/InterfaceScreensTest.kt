@@ -42,6 +42,8 @@ class InterfaceScreensTest {
     @Before fun setUp() {
         val context = ApplicationProvider.getApplicationContext<android.app.Application>()
         AppSettings.init(context)
+        // Glass helpers read the shared settings as well as the player state.
+        AppSettings.updateUi { it.copy(liquidGlass = false, reduceBlur = true, reduceAnimation = true) }
         LibraryStore.init(context)
         History.init(context)
         SingletonImageLoader.setUnsafe(ImageLoader.Builder(context).components {
