@@ -49,7 +49,7 @@ internal fun DesignChooser(
     var playerPreview by rememberSaveable { mutableStateOf(false) }
     val options = DesignOptions(style, motion, density, dock)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth().widthIn(max = 560.dp).padding(12.dp).fillMaxHeight(.94f), shape = RoundedCornerShape(28.dp)) {
+        Surface(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(12.dp).fillMaxHeight(.94f), shape = RoundedCornerShape(28.dp)) {
             Column {
                 Row(Modifier.fillMaxWidth().padding(start = 22.dp, top = 12.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Interface design", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))

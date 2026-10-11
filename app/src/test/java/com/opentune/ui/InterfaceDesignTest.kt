@@ -125,6 +125,34 @@ class InterfaceDesignTest {
         save("editorial-narrow-rtl-large-text")
     }
 
+    @Test fun rapidDockChangesKeepEveryTouchTargetAvailableDuringMotion() {
+        var motion by mutableStateOf(DesignMotion.FLUID)
+        var selected by mutableIntStateOf(0)
+        var folded by mutableStateOf(false)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            OpenTuneTheme(ThemeSettings(), ui = InterfaceSettings(design = DesignOptions(InterfaceDesign.FLOW, motion))) {
+                DesignChrome(folded, listOf(ChromeTab("Home", Icons.Outlined.Home), ChromeTab("Explore", Icons.Outlined.Explore),
+                    ChromeTab("Podcasts", Icons.Outlined.Podcasts), ChromeTab("Library", Icons.Outlined.LibraryMusic)),
+                    if (selected == 4) null else selected, { selected = it }, selected == 4, { selected = 4 }, null, Modifier.width(320.dp))
+            }
+        }
+        listOf(DesignMotion.CALM, DesignMotion.FLUID, DesignMotion.EXPRESSIVE).forEach { profile ->
+            compose.runOnIdle { motion = profile; folded = false }
+            compose.mainClock.advanceTimeBy(800)
+            listOf("Library", "Explore", "Search", "Home").forEach { label ->
+                compose.onNodeWithContentDescription(label).performClick()
+                compose.mainClock.advanceTimeBy(80)
+                val bounds = compose.onNodeWithContentDescription(label).fetchSemanticsNode().boundsInRoot
+                val minimum = 48 * compose.activity.resources.displayMetrics.density
+                assertTrue("$label must keep a 48dp target while moving", bounds.width >= minimum - 1 && bounds.height >= minimum - 1)
+            }
+            compose.runOnIdle { folded = true }
+            compose.mainClock.advanceTimeBy(1_000)
+            compose.onNodeWithContentDescription("Library").assertExists()
+        }
+    }
+
     private fun save(name: String) {
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()

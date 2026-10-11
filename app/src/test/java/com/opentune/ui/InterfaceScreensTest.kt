@@ -53,7 +53,8 @@ class InterfaceScreensTest {
         var style by mutableStateOf(InterfaceDesign.FLOW)
         val song = Song("test", "After the rain", "The night garden", "https://covers.invalid/test.jpg", "3:00")
         compose.setContent {
-            val ui = InterfaceSettings(design = DesignOptions(style, DesignMotion.FLUID), reduceAnimation = true)
+            // Native software capture cannot run the existing GPU refraction shader.
+            val ui = InterfaceSettings(design = DesignOptions(style, DesignMotion.FLUID), reduceAnimation = true, liquidGlass = false)
             val theme = ThemeSettings(mode = ThemeMode.DARK, pureBlack = false)
             OpenTuneTheme(theme, ui = ui) {
                 PlayerLayout(PlayerUiState(song, false, false, true, false, Player.REPEAT_MODE_OFF, 180_000L,

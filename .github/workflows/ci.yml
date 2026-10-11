@@ -60,6 +60,14 @@ jobs:
             app/build/screenshots/
           if-no-files-found: ignore
 
+      - name: Unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: app/build/test-results/
+          if-no-files-found: ignore
+
       - name: Interface design previews
         if: always()
         uses: actions/upload-artifact@v4
