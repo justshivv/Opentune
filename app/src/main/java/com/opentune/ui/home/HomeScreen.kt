@@ -103,9 +103,35 @@ fun HomeScreen(
         }
     }
 
+    HomeFeed(contentPadding, actions, onItemClick, onOpenSettings, onRecognize, ui, state, more, recents, mixes,
+        hideExplicit, account?.name, account?.thumbnailUrl, refreshing, { loader.reload(keepContent = true) }, { loader.reload() })
+}
+
+/** The real Home layout accepts loaded data so empty, offline and populated states can be reviewed. */
+@Composable
+internal fun HomeFeed(
+    contentPadding: PaddingValues,
+    actions: SongActions,
+    onItemClick: (ShelfItem) -> Unit,
+    onOpenSettings: () -> Unit,
+    onRecognize: (() -> Unit)?,
+    ui: com.opentune.data.settings.InterfaceSettings,
+    state: UiState<List<HomeShelf>>,
+    more: List<HomeShelf>,
+    recents: List<Song>,
+    mixes: List<com.opentune.data.history.DailyMixes.Mix>,
+    hideExplicit: Boolean = false,
+    accountName: String? = null,
+    accountPhoto: String? = null,
+    refreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
+    onRetry: () -> Unit = {},
+) {
+    val flow = com.opentune.ui.theme.LocalInterface.current.flow
+    var feed by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("For you") }
     com.opentune.ui.components.MarkRefreshBox(
         isRefreshing = refreshing,
-        onRefresh = { loader.reload(keepContent = true) },
+        onRefresh = onRefresh,
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -119,33 +145,40 @@ fun HomeScreen(
                     in 17..21 -> "Good evening"
                     else -> "Late night"
                 }
-                val firstName = account?.name?.substringBefore(' ')?.takeIf { it.isNotBlank() }
+                val firstName = accountName?.substringBefore(' ')?.takeIf { it.isNotBlank() }
                 Row(
                     Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 20.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(greeting, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                        Text(firstName ?: "What's playing?", style = MaterialTheme.typography.displaySmall)
+                        Text(if (flow) "OPENTUNE / $greeting" else greeting, style = if (flow) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(if (flow) "Listen." else firstName ?: "What's playing?", style = MaterialTheme.typography.displaySmall)
                     }
                     if (onRecognize != null) {
                         GlassIconButton(Icons.Rounded.GraphicEq, "Name a song playing nearby", onRecognize, size = 52.dp)
                         Spacer(Modifier.width(10.dp))
                     }
                     GlassIconButton(Icons.Rounded.Person, "Account and settings", onOpenSettings, size = 52.dp) {
-                        val photo = account?.thumbnailUrl
+                        val photo = accountPhoto
                         if (photo != null) Artwork(photo, Modifier.size(44.dp), CircleShape)
                         else Icon(Icons.Rounded.Person, "Account and settings", Modifier.size(26.dp))
                     }
                 }
             }
-            if (ui.design.style != com.opentune.data.settings.InterfaceDesign.CURRENT && recents.isNotEmpty()) {
+            if (flow) item(key = "listening-navigation") {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("For you", "Recents", "Mixes").forEach { label ->
+                        androidx.compose.material3.FilterChip(feed == label, { feed = label }, label = { Text(label) })
+                    }
+                }
+            }
+            if ((!flow || feed == "For you") && ui.design.style != com.opentune.data.settings.InterfaceDesign.CURRENT && recents.isNotEmpty()) {
                 item(key = "design-feature") {
                     com.opentune.ui.components.DesignFeatureCard(recents.first(), { actions.playAll(recents, 0, false, "Recents") },
                         Modifier.padding(horizontal = com.opentune.ui.theme.LocalInterface.current.gutter, vertical = 12.dp))
                 }
             }
-            if (recents.isNotEmpty()) {
+            if (recents.isNotEmpty() && (!flow || feed != "Mixes")) {
                 item(key = "recents") {
                     Recents(
                         songs = recents,
@@ -155,16 +188,35 @@ fun HomeScreen(
                     )
                 }
             }
-            if (mixes.isNotEmpty()) {
+            if (mixes.isNotEmpty() && (!flow || feed != "Recents")) {
                 item(key = "mixes") { MixesShelf(mixes, actions) }
             }
-            when (val s = state) {
+            if (flow && feed != "For you" && (if (feed == "Recents") recents.isEmpty() else mixes.isEmpty())) item {
+                Text(if (feed == "Recents") "Your recent listens will appear here." else "Your daily mixes grow with every listen.",
+                    Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)
+            }
+            if (!flow || feed == "For you") when (val s = state) {
                 is UiState.Loading -> items(3) { ShelfPlaceholder() }
                 is UiState.Error -> item(key = "error") {
-                    ErrorState(s.message, onRetry = { loader.reload() }, modifier = Modifier.padding(top = 24.dp))
+                    ErrorState(s.message, onRetry = onRetry, modifier = Modifier.padding(top = 24.dp))
                 }
                 is UiState.Success -> {
                     val first = ContentFilter.shelves(s.data, hideExplicit)
+                    if (flow && first.isEmpty() && more.isEmpty() && recents.isEmpty()) item(key = "empty-home") {
+                        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("Your soundtrack starts here", style = MaterialTheme.typography.headlineMedium)
+                            Text("Find a favorite in Search. Your recent songs and daily mixes will find a home here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            androidx.compose.material3.OutlinedButton(onClick = onRefresh) { Text("Refresh recommendations") }
+                        }
+                    }
+                    if (flow && recents.isEmpty()) first.firstOrNull()?.items?.firstOrNull()?.let { featured ->
+                        item(key = "discovery-feature") {
+                            com.opentune.ui.components.FlowListeningCard(
+                                Song(featured.videoId ?: "featured", featured.title, featured.subtitle, featured.thumbnailUrl),
+                                { onItemClick(featured) }, Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+                                actionLabel = if (featured.browseId != null) "Open collection" else "Play")
+                        }
+                    }
                     itemsIndexed(first, key = { i, shelf -> "$i:${shelf.title}" }, contentType = { _, shelf -> shelfType(shelf) }) { _, shelf ->
                         HomeShelfView(shelf, onItemClick)
                     }
@@ -185,7 +237,7 @@ fun HomeScreen(
 @Composable
 private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, onToggleLayout: () -> Unit) {
     Column {
-        SectionHeader("Recents", action = {
+        SectionHeader(if (com.opentune.ui.theme.LocalInterface.current.flow) "Jump back in" else "Recents", action = {
             IconButton(onClick = onToggleLayout) {
                 Icon(
                     if (asGrid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
@@ -202,8 +254,8 @@ private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, on
                 }
             } else {
                 LazyHorizontalGrid(
-                    rows = GridCells.Fixed(4),
-                    modifier = Modifier.fillMaxWidth().height(com.opentune.ui.theme.LocalInterface.current.rowHeight * 4),
+                    rows = GridCells.Fixed(if (com.opentune.ui.theme.LocalInterface.current.flow) 2 else 4),
+                    modifier = Modifier.fillMaxWidth().height(com.opentune.ui.theme.LocalInterface.current.rowHeight * (if (com.opentune.ui.theme.LocalInterface.current.flow) 2 else 4)),
                 ) {
                     items(songs.size) { i ->
                         val song = songs[i]

@@ -148,7 +148,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
 
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item {
-            PageHeader("Library", actions = {
+            PageHeader(if (design.flow) "Your collection." else "Library", actions = {
                 GlassIconButton(Icons.Rounded.Settings, "Settings", nav.settings) {
                     val photo = account?.thumbnailUrl
                     if (photo != null) Artwork(photo, Modifier.size(44.dp), androidx.compose.foundation.shape.CircleShape)
@@ -164,6 +164,31 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
             }
         }
         if (showOverview) {
+        if (design.flow) {
+            item(key = "flow-collections") {
+                Column(Modifier.padding(horizontal = design.gutter, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        com.opentune.ui.components.FlowCollectionTile(Icons.Rounded.Favorite, "Liked", "${liked.size} songs", nav.liked, Modifier.weight(1f), accent = true)
+                        com.opentune.ui.components.FlowCollectionTile(Icons.Rounded.Download, "Downloads", "$doneCount ready offline", nav.downloads, Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        com.opentune.ui.components.FlowCollectionTile(Icons.Rounded.LibraryMusic, "On this phone", "Your local files", nav.local, Modifier.weight(1f))
+                        com.opentune.ui.components.FlowCollectionTile(Icons.Rounded.History, "Replay", "Your listening story", nav.replay, Modifier.weight(1f))
+                    }
+                }
+            }
+            item(key = "flow-connections") {
+                SectionHeader("Beyond your collection")
+                LazyRow(contentPadding = PaddingValues(horizontal = design.gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item { androidx.compose.material3.OutlinedButton(onClick = nav.radio) { Icon(Icons.Rounded.Radio, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Radio") } }
+                    item { androidx.compose.material3.OutlinedButton(onClick = nav.server) { Icon(Icons.Rounded.Dns, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Music server") } }
+                    item { androidx.compose.material3.OutlinedButton(onClick = nav.together) { Icon(Icons.Rounded.Groups, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Listen together") } }
+                }
+                TextButton(onClick = nav.wrapped, modifier = Modifier.padding(horizontal = design.gutter)) {
+                    Text("Your $year Wrapped · ${TimeUnit.MILLISECONDS.toMinutes(summary.listenedMs)} minutes")
+                }
+            }
+        } else {
         item {
             YearCard(
                 year = year,
@@ -208,6 +233,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
             }
         }
         }
+        }
         if (showPlaylists) {
         item {
             SectionHeader("Playlists", action = {
@@ -235,7 +261,21 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 )
             }
         }
-        items(playlists, key = { it.id }) { p ->
+        if (design.flow) {
+            items(playlists.chunked(2), key = { "pair:${it.first().id}" }) { pair ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = design.gutter, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    pair.forEach { p ->
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow)
+                            .clickable { nav.playlist(p.id) }.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            com.opentune.ui.components.PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.size(100.dp), RoundedCornerShape(18.dp))
+                            Text(p.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text("${p.songs.size} songs", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+        } else items(playlists, key = { it.id }) { p ->
             PlaylistRow(null, p.name, "${p.songs.size} songs · on this phone", { nav.playlist(p.id) }, Modifier.animateItem(), cover = {
                 com.opentune.ui.components.PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.size(56.dp))
             })

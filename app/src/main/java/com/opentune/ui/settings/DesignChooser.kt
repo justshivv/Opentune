@@ -142,10 +142,18 @@ internal fun DesignPreview(ui: InterfaceSettings, theme: ThemeSettings, player: 
                     Column(Modifier.background(MaterialTheme.colorScheme.background).padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("NOW PLAYING", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(16.dp))
-                        PreviewArtwork(Modifier.size(156.dp).clip(MaterialTheme.shapes.extraLarge))
-                        Spacer(Modifier.height(16.dp))
-                        Text(previewSong.title, style = MaterialTheme.typography.titleLarge)
-                        Text(previewSong.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (LocalInterface.current.flow) {
+                            Box(Modifier.fillMaxWidth().height(290.dp)) {
+                                com.opentune.ui.player.FlowPlayerStage(previewSong, 0, 12,
+                                    artwork = { artModifier -> Box(artModifier, contentAlignment = Alignment.Center) { PreviewArtwork(Modifier.fillMaxWidth().aspectRatio(1f).clip(MaterialTheme.shapes.extraLarge)) } },
+                                    actions = { Icon(Icons.Outlined.FavoriteBorder, "Like"); Icon(Icons.Outlined.MoreHoriz, "More") })
+                            }
+                        } else {
+                            PreviewArtwork(Modifier.size(156.dp).clip(MaterialTheme.shapes.extraLarge))
+                            Spacer(Modifier.height(16.dp))
+                            Text(previewSong.title, style = MaterialTheme.typography.titleLarge)
+                            Text(previewSong.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         Slider(value = .36f, onValueChange = {}, modifier = Modifier.fillMaxWidth())
                         PlayerControls(playing, false, true, { playing = !playing }, {}, {}, style = ui.controlStyle, animate = !LocalInterface.current.reduceMotion)
                     }

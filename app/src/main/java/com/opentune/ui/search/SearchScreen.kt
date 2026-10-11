@@ -98,7 +98,7 @@ fun SearchScreen(
 
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
         if (com.opentune.ui.theme.LocalInterface.current.active) {
-            Text("Search", style = MaterialTheme.typography.displaySmall,
+            Text(if (com.opentune.ui.theme.LocalInterface.current.flow && query.isBlank()) "Find your next favorite." else "Search", style = MaterialTheme.typography.displaySmall,
                 modifier = Modifier.padding(horizontal = com.opentune.ui.theme.LocalInterface.current.gutter, vertical = 16.dp))
         }
         TextField(
@@ -134,6 +134,7 @@ fun SearchScreen(
                 contentPadding = contentPadding,
                 onPick = ::submit,
                 onFill = vm::onQueryChange,
+                onRecognize = onRecognize,
             )
             else -> Column {
                 LazyRow(
@@ -158,10 +159,13 @@ private fun Typing(
     contentPadding: PaddingValues,
     onPick: (String) -> Unit,
     onFill: (String) -> Unit,
+    onRecognize: (() -> Unit)? = null,
 ) {
+    val flow = com.opentune.ui.theme.LocalInterface.current.flow
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         if (query.isBlank()) {
-            if (recent.isEmpty()) {
+            if (flow) item(key = "discover") { FlowDiscovery(onPick, onRecognize) }
+            if (recent.isEmpty() && !flow) {
                 item {
                     MessageState(
                         Icons.Filled.Search,
@@ -170,7 +174,7 @@ private fun Typing(
                         modifier = Modifier.padding(top = 48.dp),
                     )
                 }
-            } else {
+            } else if (recent.isNotEmpty()) {
                 item {
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("Recent searches", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))

@@ -277,7 +277,10 @@ fun SettingsScreen(
                         }
                     }
                 } else {
-                    SETTINGS_HOME.forEach { (label, keys) ->
+                    if (presentation.flow) item(key = "personalization") {
+                        FlowSettingsPersonalization { openKey = it }
+                    }
+                    SETTINGS_HOME.filter { !presentation.flow || it.first != "Look" }.forEach { (label, keys) ->
                         val cats = keys.mapNotNull { k -> SETTINGS_CATEGORIES.firstOrNull { it.key == k } }
                         item(key = "home:$label") { GroupLabel(label) }
                         item(key = "homecard:$label") {

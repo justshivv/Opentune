@@ -464,6 +464,12 @@ fun PlayerLayout(
                     }
                 }
 
+                if (presentation.flow) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(Pane.COVER to "Playing", Pane.LYRICS to "Lyrics", Pane.QUEUE to "Queue").forEach { (destination, label) ->
+                        androidx.compose.material3.FilterChip(selected = pane == destination, onClick = { paneName = destination.name }, label = { Text(label) })
+                    }
+                }
+
                 // Cover mode: the art fills the space and the title sits below it.
                 // Lyrics and queue: a compact header, then the list.
                 AnimatedContent(
@@ -506,7 +512,8 @@ fun PlayerLayout(
                                 onSyncLine = syncLine,
                             )
                         } else if (p == Pane.COVER) {
-                            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            val artwork: @Composable (Modifier) -> Unit = { artModifier ->
+                            Box(artModifier, contentAlignment = Alignment.Center) {
                                 when {
                                     fullCover ->
                                         ArtworkSwipeArea(
@@ -542,8 +549,17 @@ fun PlayerLayout(
                                         )
                                 }
                             }
-                            Spacer(Modifier.height(16.dp))
-                            TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true })
+                            }
+                            if (presentation.flow && !fullCover) {
+                                FlowPlayerStage(current, state.currentIndex, state.queue.size.coerceAtLeast(1), artwork) {
+                                    HeartButton(isLiked) { LibraryStore.setLiked(current, !isLiked) }
+                                    androidx.compose.material3.IconButton(onClick = { showMenu = true }) { Icon(Icons.Rounded.MoreHoriz, "More") }
+                                }
+                            } else {
+                                artwork(Modifier.weight(1f).fillMaxWidth())
+                                Spacer(Modifier.height(16.dp))
+                                TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true })
+                            }
                         } else {
                             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Artwork(current.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(64.dp), RoundedCornerShape(10.dp))
@@ -579,6 +595,8 @@ fun PlayerLayout(
                     }
                 }
 
+                Column(Modifier.fillMaxWidth().then(if (presentation.flow) Modifier.clip(RoundedCornerShape(30.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = .92f)).padding(horizontal = 16.dp, vertical = 10.dp) else Modifier)) {
                 val synced = (state.lyrics as? LyricsState.Found)?.lyrics as? com.opentune.data.lyrics.Lyrics.Synced
                 // Lyrics are timed against the song shifted by the offset; the bar is the song's own time.
                 val choruses = remember(synced, offsetMs) { synced?.let { com.opentune.data.lyrics.SongParts.choruses(it).map { ms -> ms - offsetMs } }.orEmpty() }
@@ -626,7 +644,7 @@ fun PlayerLayout(
                 if (!state.ui.hideVolumeBar && !minimal) VolumeBar(Modifier.padding(vertical = 4.dp))
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    GlassToggle(Icons.Rounded.Lyrics, "Lyrics", pane == Pane.LYRICS, { toggle(Pane.LYRICS) })
+                    if (!presentation.flow) GlassToggle(Icons.Rounded.Lyrics, "Lyrics", pane == Pane.LYRICS, { toggle(Pane.LYRICS) })
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         AnimatedContent(pane == Pane.QUEUE, label = "pill") { inQueue ->
                             if (inQueue) {
@@ -643,7 +661,8 @@ fun PlayerLayout(
                             }
                         }
                     }
-                    GlassToggle(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
+                    if (!presentation.flow) GlassToggle(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
+                }
                 }
                 if (!minimal) Text(
                     sleepLabel ?: device,

@@ -17,6 +17,10 @@ import com.opentune.ui.theme.designSurface
 @Composable
 fun DesignFeatureCard(song: Song, onPlay: () -> Unit, modifier: Modifier = Modifier, artwork: (@Composable (Modifier) -> Unit)? = null) {
     val design = LocalInterface.current
+    if (design.flow) {
+        FlowListeningCard(song, onPlay, modifier, artwork)
+        return
+    }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val artworkSize = if (maxWidth < 300.dp) 72.dp else if (design.compact) 84.dp else 108.dp
         Column(Modifier.fillMaxWidth().designSurface(accent = true).padding(if (design.compact) 16.dp else 20.dp)) {

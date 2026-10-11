@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class InterfaceDesign(val label: String, val summary: String) {
     CURRENT("Current", "Your original OpenTune look and animations"),
-    FLOW("Flow", "Generous artwork, soft cards and a connected floating dock"),
+    FLOW("Flow", "A listening dashboard, collection shelves and a studio player"),
     EDITORIAL("Editorial", "Serif headings, quiet surfaces and an album-first layout"),
     GLASS("Glass", "Translucent surfaces, outlined cards and a luminous dock"),
 }

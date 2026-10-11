@@ -32,6 +32,7 @@ import com.opentune.ui.components.glass
 
 data class InterfacePresentation(val options: DesignOptions = DesignOptions(), val reduceMotion: Boolean = false) {
     val active get() = options.style != InterfaceDesign.CURRENT
+    val flow get() = options.style == InterfaceDesign.FLOW
     val editorial get() = options.style == InterfaceDesign.EDITORIAL
     val glass get() = options.style == InterfaceDesign.GLASS
     val compact get() = options.density == DesignDensity.COMPACT

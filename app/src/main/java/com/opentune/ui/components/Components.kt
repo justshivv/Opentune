@@ -329,6 +329,18 @@ fun ItemCard(
 ) {
     val design = com.opentune.ui.theme.LocalInterface.current
     val round = type == BrowseType.ARTIST
+    if (design.flow && !round) {
+        Box(modifier.width(if (width == 156.dp) { if (design.compact) 172.dp else 204.dp } else width)
+            .height(if (design.compact) 216.dp else 252.dp).clip(MaterialTheme.shapes.large).clickable(onClick = onClick)) {
+            Artwork(thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.matchParentSize(), MaterialTheme.shapes.large)
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .88f)))))
+            Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (subtitle.isNotBlank() || explicit) SubtitleLine(subtitle, explicit = explicit, color = Color.White.copy(alpha = .78f), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        return
+    }
     Column(
         modifier = modifier
             .width(if (design.active && width == 156.dp) { if (design.compact) 160.dp else 184.dp } else width)
