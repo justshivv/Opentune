@@ -26,6 +26,7 @@ import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.UiState
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import com.opentune.data.settings.*
 import com.opentune.ui.browse.SongActions
 import com.opentune.ui.library.LibraryNav
@@ -84,7 +85,7 @@ class InterfaceScreensTest {
         compose.setContent {
             val ui = InterfaceSettings(design = DesignOptions(InterfaceDesign.FLOW, DesignMotion.FLUID), reduceAnimation = true)
             OpenTuneTheme(ThemeSettings(mode = ThemeMode.LIGHT, pureBlack = false), ui = ui) {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                ScreenSurface {
                     LibraryScreen(PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}),
                         LibraryNav({}, {}, {}, {}, {}, {}, {}, {}, {}))
                 }
@@ -120,6 +121,16 @@ class InterfaceScreensTest {
         }
         compose.onNodeWithContentDescription("Play", substring = false).assertIsDisplayed().performClick()
         assertEquals(1, played)
+        compose.onNodeWithContentDescription("Like", substring = false).assertIsDisplayed()
+        compose.onNodeWithContentDescription("More", substring = false).assertIsDisplayed()
+        val artwork = compose.onNodeWithTag("flow-player-artwork").fetchSemanticsNode().boundsInRoot
+        val artist = compose.onNodeWithTag("flow-player-artist").fetchSemanticsNode().boundsInRoot
+        val transport = compose.onNodeWithTag("flow-player-transport").fetchSemanticsNode().boundsInRoot
+        assertTrue("Artwork must remain below the artist", artwork.top >= artist.bottom)
+        assertTrue("Artwork must remain above the transport tray", artwork.bottom <= transport.top)
+        assertTrue("Artwork must retain visible space", artwork.width > 0f && artwork.height > 0f)
+        val more = compose.onNodeWithContentDescription("More", substring = false).fetchSemanticsNode().boundsInRoot
+        assertTrue("More must remain above the transport tray", more.bottom <= transport.top)
         save("flow-player-small-large-text")
         compose.onNode(hasText("Queue") and hasClickAction()).performClick().assertIsSelected()
         compose.onNodeWithContentDescription("Play", substring = false).assertIsDisplayed()
@@ -138,7 +149,7 @@ class InterfaceScreensTest {
         compose.setContent {
             val ui = InterfaceSettings(design = DesignOptions(InterfaceDesign.FLOW, DesignMotion.FLUID), reduceAnimation = true, liquidGlass = false)
             OpenTuneTheme(ThemeSettings(mode = ThemeMode.DARK, pureBlack = false), ui = ui) {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                ScreenSurface {
                     com.opentune.ui.home.HomeFeed(PaddingValues(bottom = 168.dp), actions, { openedCollection = it.browseId }, {}, {}, ui,
                         if (populated) UiState.Success(listOf(HomeShelf("In your rotation", listOf(ShelfItem("Night drive", "A little further", "https://covers.invalid/mix.jpg", videoId = null, browseId = "mix"))))) else UiState.Success(emptyList()),
                         emptyList(), if (populated && hasHistory) listOf(song) else emptyList(), emptyList())
@@ -178,7 +189,7 @@ class InterfaceScreensTest {
         compose.setContent {
             val ui = InterfaceSettings(design = DesignOptions(InterfaceDesign.FLOW), reduceAnimation = true, liquidGlass = false)
             OpenTuneTheme(ThemeSettings(mode = ThemeMode.LIGHT, pureBlack = false), ui = ui) {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                ScreenSurface {
                     com.opentune.ui.search.SearchScreen(PaddingValues(bottom = 24.dp), null, false, {}, {}, {}, {}, { recognized++ })
                 }
             }
@@ -206,7 +217,7 @@ class InterfaceScreensTest {
         compose.setContent {
             val ui = InterfaceSettings(design = DesignOptions(InterfaceDesign.FLOW), reduceAnimation = true, liquidGlass = false)
             OpenTuneTheme(ThemeSettings(mode = ThemeMode.LIGHT, pureBlack = false), ui = ui) {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                ScreenSurface {
                     com.opentune.ui.settings.SettingsScreen(PaddingValues(bottom = 24.dp), {}, {}, {})
                 }
             }
@@ -215,6 +226,14 @@ class InterfaceScreensTest {
         save("flow-actual-settings")
         compose.onNodeWithText("Search settings").performTextInput("Dock animation")
         compose.onNode(hasText("Dock animation") and !hasSetTextAction()).assertIsDisplayed()
+    }
+
+    /** Match MainActivity's Surface so dark-theme content uses onBackground. */
+    @Composable
+    private fun ScreenSurface(content: @Composable BoxScope.() -> Unit) {
+        androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Box(Modifier.fillMaxSize(), content = content)
+        }
     }
 
     private fun save(name: String) {

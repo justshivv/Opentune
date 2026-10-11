@@ -83,6 +83,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -595,7 +596,7 @@ fun PlayerLayout(
                     }
                 }
 
-                Column(Modifier.fillMaxWidth().then(if (presentation.flow) Modifier.clip(RoundedCornerShape(30.dp))
+                Column(Modifier.fillMaxWidth().then(if (presentation.flow) Modifier.testTag("flow-player-transport").clip(RoundedCornerShape(30.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = .92f)).padding(horizontal = 16.dp, vertical = 10.dp) else Modifier)) {
                 val synced = (state.lyrics as? LyricsState.Found)?.lyrics as? com.opentune.data.lyrics.Lyrics.Synced
                 // Lyrics are timed against the song shifted by the offset; the bar is the song's own time.

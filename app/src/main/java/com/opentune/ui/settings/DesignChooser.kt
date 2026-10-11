@@ -92,7 +92,9 @@ internal fun DesignChooser(
                         Text("Design motion", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(8.dp))
                         DesignChoices(DesignMotion.entries, motion, { it.label }, { motion = it }, enabled = style != InterfaceDesign.CURRENT)
-                        Text(if (style == InterfaceDesign.CURRENT) "Current uses your existing animation settings." else motion.summary,
+                        Text(if (style == InterfaceDesign.CURRENT) "Current uses your existing animation settings."
+                            else if (motion == DesignMotion.INHERIT) "Existing keeps your original dock and individual effects. Choose Calm, Fluid or Expressive to try this design’s dock."
+                            else motion.summary,
                             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (ui.reduceAnimation) Text("Reduce animation is on and takes priority.", style = MaterialTheme.typography.bodySmall)
                     }
