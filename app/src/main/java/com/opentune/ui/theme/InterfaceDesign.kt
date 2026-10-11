@@ -1,5 +1,8 @@
 package com.opentune.ui.theme
 
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.spring
@@ -12,10 +15,13 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -47,8 +53,14 @@ val LocalInterface = compositionLocalOf { InterfacePresentation() }
 fun rememberInterface(ui: InterfaceSettings): InterfacePresentation {
     val context = LocalContext.current
     // Compose also honours the system animator scale for all animation specs.
-    val systemStill = remember(context) {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    fun disabled() = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    var systemStill by remember(context) { mutableStateOf(disabled()) }
+    DisposableEffect(context) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) { systemStill = disabled() }
+        }
+        context.contentResolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
+        onDispose { context.contentResolver.unregisterContentObserver(observer) }
     }
     return remember(ui.design, ui.reduceAnimation, systemStill) {
         InterfacePresentation(ui.design, ui.reduceAnimation || systemStill)

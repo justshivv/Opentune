@@ -249,24 +249,25 @@ fun HomeShelfView(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, modifier: 
 /** A shelf of single tracks, laid out four rows deep like YouTube Music's quick picks. */
 @Composable
 private fun QuickPicks(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit) {
+    val design = com.opentune.ui.theme.LocalInterface.current
     Column {
         SectionHeader(shelf.title, subtitle = shelf.subtitle)
         LazyHorizontalGrid(
             rows = GridCells.Fixed(4),
             modifier = Modifier.fillMaxWidth().height(com.opentune.ui.theme.LocalInterface.current.rowHeight * 4),
-            contentPadding = PaddingValues(horizontal = 8.dp),
+            contentPadding = PaddingValues(horizontal = if (design.active) design.gutter - 8.dp else 8.dp),
         ) {
             items(shelf.items) { item ->
                 Row(
                     Modifier
                         .width(300.dp)
-                        .height(64.dp)
+                        .height(design.rowHeight)
                         .clickable { onItemClick(item) }
                         .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Artwork(item.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(48.dp))
+                    Artwork(item.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(if (design.active) design.rowArt else 48.dp))
                     Column(Modifier.weight(1f)) {
                         Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
                         com.opentune.ui.components.SubtitleLine(item.subtitle, explicit = item.explicit)

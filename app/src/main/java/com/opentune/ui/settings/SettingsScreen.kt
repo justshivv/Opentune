@@ -198,6 +198,7 @@ fun SettingsScreen(
     onOpenDownloads: () -> Unit = {},
     onOpenSpotify: () -> Unit = {},
 ) {
+    val presentation = com.opentune.ui.theme.LocalInterface.current
     var query by rememberSaveable { mutableStateOf("") }
     var openKey by rememberSaveable { mutableStateOf<String?>(null) }
     val signedIn by AccountStore.signedIn.collectAsState()
@@ -212,7 +213,11 @@ fun SettingsScreen(
         open,
         transitionSpec = {
             val forward = targetState != null
-            (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
+            if (presentation.active && (presentation.reduceMotion || presentation.motion != com.opentune.data.settings.DesignMotion.INHERIT)) {
+                (if (forward) com.opentune.ui.PageMotion.enter(com.opentune.data.settings.PageTransition.SLIDE, presentation.reduceMotion, presentation.motion)
+                else com.opentune.ui.PageMotion.popEnter(com.opentune.data.settings.PageTransition.SLIDE, presentation.reduceMotion, presentation.motion)) togetherWith
+                    com.opentune.ui.PageMotion.exit(com.opentune.data.settings.PageTransition.SLIDE, presentation.reduceMotion, presentation.motion)
+            } else (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
                 androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { if (forward) it / 8 else -it / 8 }) togetherWith
                 androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160))
         },

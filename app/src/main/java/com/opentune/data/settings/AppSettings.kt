@@ -287,7 +287,6 @@ val DEFAULT_SPONSORBLOCK_CATEGORIES = setOf("music_offtopic", "sponsor", "selfpr
 
 @Serializable
 data class InterfaceSettings(
-    val design: DesignOptions = DesignOptions(),
     val reduceAnimation: Boolean = false,
     /** The mark's dive into the app when it starts. */
     val openingAnimation: Boolean = true,
@@ -345,6 +344,7 @@ data class InterfaceSettings(
     val playerMotion: PlayerMotion = PlayerMotion.SPRING,
     /** How the player's cover gives way to the next song's. */
     val coverChange: CoverChange = CoverChange.FADE,
+    val design: DesignOptions = DesignOptions(),
 )
 
 /** How the cover changes when the song does. */

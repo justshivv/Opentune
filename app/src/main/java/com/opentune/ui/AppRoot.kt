@@ -137,6 +137,7 @@ fun AppRoot(vm: PlayerViewModel) {
     // Scrolling any page down folds the bottom bar into one row; scrolling up unfolds it.
     val chromeScroll = rememberChromeScroll()
     val chromeUi by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    val designPresentation = com.opentune.ui.theme.LocalInterface.current
 
     // A newer release on GitHub, offered with an Update button. Checked each
     // time the app comes to the front and hourly while it stays there (the

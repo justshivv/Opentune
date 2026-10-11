@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
@@ -48,7 +49,7 @@ internal fun DesignChrome(
                     MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(if (design.editorial) 10.dp else 22.dp),
                 ))
             }
-            Row(Modifier.fillMaxWidth().height(height - 12.dp)) {
+            Row(Modifier.fillMaxWidth().height(height - 12.dp).selectableGroup()) {
                 destinations.forEachIndexed { index, tab ->
                     val chosen = index == active
                     Column(
