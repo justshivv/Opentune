@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.media3.common.Player
@@ -127,6 +130,8 @@ class InterfaceScreensTest {
 
     @Test fun flowHomeHasWorkingFeedModesAndAnHonestColdStart() {
         var populated by mutableStateOf(true)
+        var hasHistory by mutableStateOf(true)
+        var openedCollection: String? = null
         val song = Song("test", "After the rain", "The night garden", "https://covers.invalid/test.jpg", "3:00")
         var plays = 0
         val actions = SongActions(null, false, { _, _, _, _ -> plays++ }, {}, {})
@@ -134,9 +139,19 @@ class InterfaceScreensTest {
             val ui = InterfaceSettings(design = DesignOptions(InterfaceDesign.FLOW, DesignMotion.FLUID), reduceAnimation = true, liquidGlass = false)
             OpenTuneTheme(ThemeSettings(mode = ThemeMode.DARK, pureBlack = false), ui = ui) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    com.opentune.ui.home.HomeFeed(PaddingValues(bottom = 24.dp), actions, {}, {}, {}, ui,
+                    com.opentune.ui.home.HomeFeed(PaddingValues(bottom = 168.dp), actions, { openedCollection = it.browseId }, {}, {}, ui,
                         if (populated) UiState.Success(listOf(HomeShelf("In your rotation", listOf(ShelfItem("Night drive", "A little further", "https://covers.invalid/mix.jpg", videoId = null, browseId = "mix"))))) else UiState.Success(emptyList()),
-                        emptyList(), if (populated) listOf(song) else emptyList(), emptyList())
+                        emptyList(), if (populated && hasHistory) listOf(song) else emptyList(), emptyList())
+                    BottomChrome(
+                        inline = false,
+                        tabs = listOf(ChromeTab("Home", Icons.Outlined.Home), ChromeTab("Explore", Icons.Outlined.Explore),
+                            ChromeTab("Podcasts", Icons.Outlined.Podcasts), ChromeTab("Library", Icons.Outlined.LibraryMusic)),
+                        selected = 0, onSelect = {}, onExpand = {}, searchSelected = false, onSearch = {},
+                        mini = if (hasHistory) { { inline, modifier ->
+                            MiniPlayer(song, true, false, true, { .36f }, {}, {}, {}, {}, modifier, inline)
+                        } } else null,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                    )
                 }
             }
         }
@@ -149,6 +164,10 @@ class InterfaceScreensTest {
         compose.onNodeWithText("Recents", substring = false).performClick()
         compose.onNodeWithText("Jump back in").assertIsDisplayed()
         compose.onNodeWithText("For you", substring = false).performClick()
+        compose.runOnIdle { hasHistory = false }
+        compose.onNodeWithContentDescription("Open collection").assertIsDisplayed().performClick()
+        assertEquals("mix", openedCollection)
+        save("flow-first-launch-recommendations")
         compose.runOnIdle { populated = false }
         compose.onNodeWithText("Your soundtrack starts here").assertIsDisplayed()
         save("flow-cold-start-home")
@@ -195,7 +214,7 @@ class InterfaceScreensTest {
         compose.onNodeWithText("Make it yours").assertIsDisplayed()
         save("flow-actual-settings")
         compose.onNodeWithText("Search settings").performTextInput("Dock animation")
-        compose.onNodeWithText("Dock animation", substring = false).assertIsDisplayed()
+        compose.onNode(hasText("Dock animation") and !hasSetTextAction()).assertIsDisplayed()
     }
 
     private fun save(name: String) {
