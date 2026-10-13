@@ -45,10 +45,11 @@ jobs:
       - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
-          name: OpenTune-0.4.13-FLAC-test
+          name: OpenTune-0.4.13-FLAC-test2
           path: app/build/outputs/apk/release/app-universal-release.apk
           if-no-files-found: error
           retention-days: 14
       - name: Remove signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/preview.keystore"
+

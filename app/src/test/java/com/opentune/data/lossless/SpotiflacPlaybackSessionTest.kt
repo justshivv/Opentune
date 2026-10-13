@@ -23,6 +23,58 @@ import javax.crypto.spec.SecretKeySpec
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class SpotiflacPlaybackSessionTest {
+    @Test fun serverCooldownSurvivesSongChangeWithoutAnotherRequestOrReverification() = runBlocking {
+        SpotiflacSession.init(RuntimeEnvironment.getApplication())
+        SpotiflacSession.clear()
+        assertTrue(SpotiflacSession.save(
+            """{"session_id":"test-session","session_secret":"test-secret","expires_at":"2099-01-01T00:00:00Z"}""",
+            LosslessRegistry.DEFAULT_VERIFY_BASE))
+        val session = SpotiflacSession.current()
+        val responded = CompletableFuture<Unit>()
+        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
+            server.soTimeout = 5_000
+            val endpoint = "http://127.0.0.1:${server.localPort}/api/dl"
+            Thread {
+                try {
+                    server.accept().use { socket ->
+                        socket.soTimeout = 5_000
+                        val reader = socket.getInputStream().bufferedReader()
+                        var length = 0
+                        while (true) {
+                            val line = reader.readLine() ?: error("Missing request")
+                            if (line.isEmpty()) break
+                            if (line.startsWith("Content-Length:", true)) length = line.substringAfter(':').trim().toInt()
+                        }
+                        repeat(length) { check(reader.read() >= 0) }
+                        socket.getOutputStream().apply {
+                            write("HTTP/1.1 503 Service Unavailable\r\nRetry-After: 120\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}".toByteArray())
+                            flush()
+                        }
+                    }
+                    // No listening socket remains: a second request would fail rather than return Paused.
+                    server.close()
+                    responded.complete(Unit)
+                } catch (e: Throwable) { responded.completeExceptionally(e) }
+            }.apply { isDaemon = true; start() }
+            try {
+                for (track in listOf("123", "456")) {
+                    try {
+                        withTimeout(5_000) { SpotiflacGated.tidalUrl(endpoint, track) }
+                        fail("The provider is paused")
+                    } catch (e: CommunityCooldowns.Paused) {
+                        assertEquals(503, e.code)
+                        assertTrue(e.remainingMs in 1L..120_000L)
+                        assertTrue(LosslessSource.communityFailureDetail(e).contains("Verification is still saved"))
+                    }
+                    responded.get(5, TimeUnit.SECONDS)
+                    assertEquals(session, SpotiflacSession.current())
+                    assertTrue(SpotiflacSession.connected.value)
+                    assertFalse(SpotiflacSession.needsVerification.value)
+                }
+            } finally { SpotiflacSession.clear() }
+        }
+    }
+
     @Test fun communityQualityAndDirectUrlContractWorksAcrossSignedTrackRequests() = runBlocking {
         SpotiflacSession.init(RuntimeEnvironment.getApplication())
         SpotiflacSession.clear()

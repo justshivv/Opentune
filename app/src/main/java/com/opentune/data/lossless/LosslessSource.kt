@@ -83,7 +83,11 @@ object LosslessSource {
         val registry = LosslessRegistry.snapshot()
         val endpoint = httpsUrl(registry?.optJSONObject("tidal")?.optString("community").orEmpty())
         if (endpoint == null) { report("SpotiFLAC: community endpoint unavailable"); return null }
-        val id = TidalCatalog.withLinkedFallback(linkedTidal) { TidalCatalog.find(identity, registry, report) }
+        val id = try { TidalCatalog.withLinkedFallback(linkedTidal) { TidalCatalog.find(identity, registry) } }
+            catch (_: TidalCatalog.Unavailable) {
+                report("SpotiFLAC: catalog search incomplete because a provider was unavailable; no verified track ID found")
+                return null
+            }
         if (id == null) { report("SpotiFLAC: no exact catalog match for this recording"); return null }
         return try {
             var receivedUrl = false
@@ -106,6 +110,12 @@ object LosslessSource {
 
     /** Fixed messages deliberately exclude URLs, response bodies and session credentials. */
     internal fun communityFailureDetail(error: Exception): String = "SpotiFLAC: " + when (error) {
+        is CommunityCooldowns.Paused -> {
+            val seconds = (error.remainingMs + 999) / 1000
+            val wait = if (seconds >= 60) "about ${(seconds + 59) / 60} min" else "$seconds sec"
+            val reason = if (error.code == 429) "provider rate limit" else "provider temporarily unavailable"
+            "$reason (HTTP ${error.code}); retry in $wait. Verification is still saved"
+        }
         is LosslessHttp.HttpFailure -> if (error.code == 401) "session rejected; verify again in Audio settings"
             else "provider returned HTTP ${error.code}"
         is SpotiflacGated.InvalidResponse -> "provider returned an unreadable response"

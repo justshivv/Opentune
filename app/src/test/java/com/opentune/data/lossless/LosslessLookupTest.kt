@@ -76,4 +76,30 @@ class LosslessLookupTest {
         assertNull(TidalCatalog.match(response(id = "../123"), identity))
         assertNull(TidalCatalog.match(JSONObject("{}"), identity))
     }
+
+    @Test fun unavailableCatalogIsNotReportedAsAConfirmedMissingRecording() = runBlocking {
+        val identity = CatalogIdentity("Blinding Lights", "The Weeknd", "After Hours", 200_000)
+        val endpoints = listOf("https://first.example", "https://second.example")
+        val empty = JSONObject("""{"data":{"items":[]}}""")
+        assertNull(TidalCatalog.findIn(identity, endpoints) { empty })
+        try {
+            TidalCatalog.findIn(identity, endpoints) { url ->
+                if (url.contains("first.example")) throw LosslessHttp.HttpFailure(503)
+                empty
+            }
+            fail("An outage must leave the search inconclusive")
+        } catch (_: TidalCatalog.Unavailable) { }
+        try {
+            TidalCatalog.findIn(identity, endpoints) { JSONObject("""{"error":"unavailable"}""") }
+            fail("An error payload is not a successful empty catalog")
+        } catch (_: TidalCatalog.Unavailable) { }
+        assertEquals("123", TidalCatalog.withLinkedFallback(CompletableDeferred<String?>().apply { complete("123") }) {
+            throw TidalCatalog.Unavailable()
+        })
+        val lateLinked = CompletableDeferred<String?>()
+        assertEquals("456", TidalCatalog.withLinkedFallback(lateLinked) {
+            lateLinked.complete("456")
+            throw TidalCatalog.Unavailable()
+        })
+    }
 }

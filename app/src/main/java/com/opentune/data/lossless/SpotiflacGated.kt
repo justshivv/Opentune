@@ -91,10 +91,12 @@ object SpotiflacSession {
 internal object SpotiflacGated {
     const val APP_VERSION = "4.8.5"
     private val timestamp = DateTimeFormatterBuilder().appendInstant(3).toFormatter()
+    private val cooldowns = CommunityCooldowns()
     class InvalidResponse : java.io.IOException("Community response was not a JSON object")
 
     suspend fun tidalUrl(endpoint: String, id: String, preferHiRes: Boolean = false): String? {
         val session = SpotiflacSession.current() ?: return null
+        cooldowns.current(endpoint)?.let { throw it }
         // Community /api/dl has its own contract, distinct from public /track/.
         // See spotbye/SpotiFLAC backend/tidal_community.go.
         val body = JSONObject().put("id", id).put("quality", if (preferHiRes) "24" else "16")
@@ -114,6 +116,7 @@ internal object SpotiflacGated {
             responseUrl(String(LosslessHttp.bytes(request, 1_048_576, timeoutMs = 12_000), Charsets.UTF_8))
         } catch (e: LosslessHttp.HttpFailure) {
             if (e.code == 401) SpotiflacSession.invalidate(session)
+            cooldowns.record(endpoint, e)?.let { throw it }
             throw e
         }
     }
