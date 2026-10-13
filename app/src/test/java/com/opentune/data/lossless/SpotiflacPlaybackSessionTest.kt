@@ -23,7 +23,7 @@ import javax.crypto.spec.SecretKeySpec
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class SpotiflacPlaybackSessionTest {
-    @Test fun verifiedSessionSurvivesConsecutiveSignedTrackRequests() = runBlocking {
+    @Test fun communityQualityAndDirectUrlContractWorksAcrossSignedTrackRequests() = runBlocking {
         SpotiflacSession.init(RuntimeEnvironment.getApplication())
         SpotiflacSession.clear()
         assertTrue(SpotiflacSession.save(
@@ -56,12 +56,15 @@ class SpotiflacPlaybackSessionTest {
                                 offset += count
                             }
                             val bytes = String(body).toByteArray(Charsets.UTF_8)
-                            val valid = requestLine == "POST /api/dl HTTP/1.1" && accepts(headers, bytes)
-                            val track = JSONObject(String(body)).getString("id")
+                            val payload = JSONObject(String(body))
+                            val track = payload.getString("id")
+                            val quality = if (track == "123") "16" else "24"
+                            val valid = requestLine == "POST /api/dl HTTP/1.1" && accepts(headers, bytes) &&
+                                payload.optString("quality") == quality
                             tracks += track
-                            val manifest = JSONObject().put("urls", org.json.JSONArray().put("https://cdn.example/$track.flac"))
-                            val response = if (valid) JSONObject().put("data", JSONObject().put("manifest",
-                                Base64.getEncoder().encodeToString(manifest.toString().toByteArray()))).toString()
+                            // Real community response shape, from backend/tidal_community.go.
+                            val response = if (valid) JSONObject().put("quality", quality)
+                                .put("url", "https://cdn.example/$track.flac").put("lyric", "").toString()
                                 else "{}"
                             val status = if (valid) "200 OK" else "401 Unauthorized"
                             socket.getOutputStream().apply {
@@ -76,7 +79,7 @@ class SpotiflacPlaybackSessionTest {
             try {
                 for (track in listOf("123", "456")) {
                     assertEquals("https://cdn.example/$track.flac", withTimeout(5_000) {
-                        SpotiflacGated.tidalUrl("http://127.0.0.1:${server.localPort}/api/dl", track)
+                        SpotiflacGated.tidalUrl("http://127.0.0.1:${server.localPort}/api/dl", track, preferHiRes = track == "456")
                     })
                     assertEquals(session, SpotiflacSession.current())
                     assertTrue(SpotiflacSession.connected.value)

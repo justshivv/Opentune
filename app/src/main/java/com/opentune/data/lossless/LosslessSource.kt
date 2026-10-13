@@ -34,7 +34,7 @@ object LosslessSource {
         val identity = CatalogIdentity(song.title, song.artist, song.albumName, durationMs)
         val linkedTidal = CompletableDeferred<String?>()
         searchSources(bestAvailable, providers = listOf(
-            { record -> resolveCommunity(identity, linkedTidal, report)?.let(record) },
+            { record -> resolveCommunity(identity, linkedTidal, preferHiRes || bestAvailable, report)?.let(record) },
             { record -> QobuzCatalog.resolve(identity, preferHiRes || bestAvailable,
                 AppSettings.playback.value.qobuzRelayUrl, bestAvailable = bestAvailable, onCandidate = record) },
             { record ->
@@ -73,7 +73,8 @@ object LosslessSource {
         return best.get()
     }
 
-    private suspend fun resolveCommunity(identity: CatalogIdentity, linkedTidal: kotlinx.coroutines.Deferred<String?>, report: (String) -> Unit): Track? {
+    private suspend fun resolveCommunity(identity: CatalogIdentity, linkedTidal: kotlinx.coroutines.Deferred<String?>,
+        preferHiRes: Boolean, report: (String) -> Unit): Track? {
         if (SpotiflacSession.current() == null) {
             report(if (SpotiflacSession.needsVerification.value) "SpotiFLAC: verify again in Audio settings; the provider session needs renewing"
                 else "SpotiFLAC: no verified provider session")
@@ -85,18 +86,34 @@ object LosslessSource {
         val id = TidalCatalog.withLinkedFallback(linkedTidal) { TidalCatalog.find(identity, registry, report) }
         if (id == null) { report("SpotiFLAC: no exact catalog match for this recording"); return null }
         return try {
-            val track = verify(SpotiflacGated.tidalUrl(endpoint, id), "SpotiFLAC", identity.durationMs)
-            if (track == null) report("SpotiFLAC: response was not a full matching FLAC stream")
-            track
+            var receivedUrl = false
+            for (hiRes in if (preferHiRes) listOf(true, false) else listOf(false)) {
+                val url = SpotiflacGated.tidalUrl(endpoint, id, hiRes) ?: continue
+                receivedUrl = true
+                val track = verify(url, "SpotiFLAC", identity.durationMs)
+                if (track != null) return track
+            }
+            report(if (receivedUrl) "SpotiFLAC: returned audio was not a full matching FLAC stream"
+                else "SpotiFLAC: provider returned no usable audio URL for this recording")
+            null
         } catch (e: CancellationException) {
             throw e
-        } catch (e: LosslessHttp.HttpFailure) {
-            report(if (e.code == 401) "SpotiFLAC: session rejected; verify again in Audio settings" else "SpotiFLAC: provider returned HTTP ${e.code}")
-            null
-        } catch (_: Exception) {
-            report("SpotiFLAC: provider request failed or timed out")
+        } catch (e: Exception) {
+            report(communityFailureDetail(e))
             null
         }
+    }
+
+    /** Fixed messages deliberately exclude URLs, response bodies and session credentials. */
+    internal fun communityFailureDetail(error: Exception): String = "SpotiFLAC: " + when (error) {
+        is LosslessHttp.HttpFailure -> if (error.code == 401) "session rejected; verify again in Audio settings"
+            else "provider returned HTTP ${error.code}"
+        is SpotiflacGated.InvalidResponse -> "provider returned an unreadable response"
+        is java.net.UnknownHostException -> "provider hostname could not be resolved"
+        is javax.net.ssl.SSLException -> "secure connection to the provider failed"
+        is java.io.InterruptedIOException -> "provider request timed out"
+        is java.io.IOException -> "network connection to the provider failed"
+        else -> "provider response could not be processed"
     }
 
     internal fun better(current: Track?, candidate: Track): Track =

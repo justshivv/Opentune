@@ -42,5 +42,42 @@ class SpotiflacGatedTest {
         assertNull(SpotiflacSession.parse("""{"session_id":"","session_secret":"secret","expires_at":"2026-10-10T00:00:00Z"}""", now))
         assertNotNull(SpotiflacSession.parse("""{"session_id":"id","session_secret":"secret","expires_at":"2026-10-10T00:00:00Z"}""", now))
     }
+
+    @Test fun readsCommunityDirectUrlWithoutRequiringAManifest() {
+        assertEquals("https://cdn.example/audio", SpotiflacGated.responseUrl(
+            """{"quality":"16","url":"https://cdn.example/audio","lyric":""}"""))
+        assertEquals("https://cdn.example/audio", SpotiflacGated.responseUrl(
+            """{"data":{"quality":"24","url":"https://cdn.example/audio"}}"""))
+        // Neither quality metadata nor a filename can substitute for an audio URL.
+        for (payload in listOf("{}", """{"quality":"24"}""", """{"url":null}""", """{"url":""}""")) {
+            assertNull(SpotiflacGated.responseUrl(payload))
+        }
+    }
+
+    @Test fun rejectsUnsafeAndEncryptedCommunityUrls() {
+        for (url in listOf("http://cdn.example/audio", "file:///audio.flac", "https://user:pass@cdn.example/audio")) {
+            assertNull(SpotiflacGated.responseUrl(org.json.JSONObject().put("url", url).toString()))
+        }
+        assertNull(SpotiflacGated.responseUrl("""{"url":"https://cdn.example/audio","encrypted":true}"""))
+        assertNull(SpotiflacGated.responseUrl("""{"decryption_key":"secret","data":{"url":"https://cdn.example/audio"}}"""))
+    }
+
+    @Test fun diagnosticsSeparateInvalidResponsesFromNetworkFailuresWithoutLeakingPayloads() {
+        try {
+            SpotiflacGated.responseUrl("<html>private-token</html>")
+            fail("HTML is not a community JSON response")
+        } catch (e: SpotiflacGated.InvalidResponse) {
+            assertEquals("SpotiFLAC: provider returned an unreadable response", LosslessSource.communityFailureDetail(e))
+            assertFalse(e.message.orEmpty().contains("private-token"))
+        }
+        assertEquals("SpotiFLAC: provider request timed out",
+            LosslessSource.communityFailureDetail(java.net.SocketTimeoutException("private-token")))
+        assertEquals("SpotiFLAC: provider hostname could not be resolved",
+            LosslessSource.communityFailureDetail(java.net.UnknownHostException("private-token")))
+        assertEquals("SpotiFLAC: provider returned HTTP 503",
+            LosslessSource.communityFailureDetail(LosslessHttp.HttpFailure(503)))
+        assertEquals("SpotiFLAC: network connection to the provider failed",
+            LosslessSource.communityFailureDetail(java.io.IOException("private-token")))
+    }
 }
 

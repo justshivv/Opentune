@@ -1,0 +1,3 @@
+• Fixed SpotiFLAC community playback requesting the wrong quality format and expecting a manifest instead of the provider's direct audio URL.
+• Max/high-resolution lookup now requests 24-bit audio, with 16-bit fallback when no valid stream is returned. FLAC headers and recording duration are still checked before playback switches.
+• Source details now distinguish request timeouts, connection failures, unreadable responses and missing audio URLs. Existing verification sessions are preserved.
