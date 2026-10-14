@@ -54,11 +54,18 @@ object ExternalStreams {
             return null
         }
         val detail = java.util.concurrent.CopyOnWriteArrayList<String>()
-        val track = if (allowed(true)) LosslessSource.resolve(song, duration,
-            beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { detail.addIfAbsent(it) }) else null
-        if (allowed(true)) detail += if (track == null) "FLAC: no verified matching stream available" else "FLAC: verified ${track.bits}-bit, ${track.sampleRate} Hz"
-        val saavn = if (!losslessOnly && track == null && allowed(false) && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320)))
-            JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
+        val candidates = PlaybackCandidates.resolve(if (beforePlayback) 8_000 else 20_000,
+            lossless = {
+                if (allowed(true)) LosslessSource.resolve(song, duration,
+                    beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback,
+                    report = { detail.addIfAbsent(it) }, timeoutMs = if (beforePlayback) 7_500 else 19_500) else null
+            }, fallback = {
+                if (!losslessOnly && allowed(false) && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320)))
+                    JioSaavnSource.resolve(song, duration, report = { detail.addIfAbsent(it) }) else null
+            })
+        val track = candidates.first
+        val saavn = if (track == null) candidates.second else null
+        if (allowed(true)) detail += if (track == null) "FLAC: no verified matching stream within the playback wait limit" else "FLAC: verified ${track.bits}-bit, ${track.sampleRate} Hz"
         report(videoId, detail.joinToString("\n").ifEmpty { "No external source eligible for this quality setting." })
         if (track == null && saavn == null) {
             if (failedUntil.size > 256) failedUntil.clear()
@@ -107,4 +114,5 @@ object ExternalStreams {
 
     private fun now(): Long = System.nanoTime() / 1_000_000
 }
+
 

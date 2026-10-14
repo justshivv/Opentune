@@ -13,7 +13,7 @@ import kotlin.coroutines.resumeWithException
 
 /** A cancelled lookup closes its socket, including a stalled response body. */
 internal object LosslessHttp {
-    class HttpFailure(val code: Int) : IOException("Lossless HTTP $code")
+    class HttpFailure(val code: Int, val retryAfterMs: Long? = null) : IOException("Lossless HTTP $code")
     data class Data(val bytes: ByteArray, val totalBytes: Long?)
     private val client by lazy {
         Http.client.newBuilder().callTimeout(5, TimeUnit.SECONDS)
@@ -42,7 +42,7 @@ internal object LosslessHttp {
                 override fun onResponse(call: Call, response: Response) {
                     try {
                         val bytes = response.use {
-                            if (!it.isSuccessful) throw HttpFailure(it.code)
+                            if (!it.isSuccessful) throw HttpFailure(it.code, retryAfterMillis(it.header("Retry-After")))
                             val source = it.body?.source() ?: throw IOException("Empty lossless response")
                             source.request(limit.toLong() + if (prefixOnly) 0 else 1)
                             if (!prefixOnly && source.buffer.size > limit) throw IOException("Lossless response too large")
@@ -57,5 +57,15 @@ internal object LosslessHttp {
                 }
             })
         }
+
+    internal fun retryAfterMillis(value: String?, now: java.time.Instant = java.time.Instant.now()): Long? {
+        val text = value?.trim() ?: return null
+        val seconds = text.toLongOrNull()
+        if (seconds != null) return seconds.takeIf { it >= 0 }?.coerceAtMost(86_400)?.times(1000)
+        return runCatching {
+            val date = java.time.ZonedDateTime.parse(text, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME).toInstant()
+            java.time.Duration.between(now, date).toMillis().coerceIn(0, 86_400_000)
+        }.getOrNull()
+    }
 }
 

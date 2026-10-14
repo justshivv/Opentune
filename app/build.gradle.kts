@@ -14,8 +14,8 @@ android {
         applicationId = "com.opentune"
         minSdk = 26
         targetSdk = 36
-        versionCode = 36
-        versionName = "0.4.13"
+        versionCode = 37
+        versionName = "0.4.14-test"
         // This version's store changelog, shown as What's new when a release
         // goes out before the app's own notes for it are written.
         val changelog = rootProject.file("fastlane/metadata/android/en-US/changelogs/$versionCode.txt")

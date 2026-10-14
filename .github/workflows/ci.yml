@@ -46,7 +46,20 @@ jobs:
       - name: Build, unit tests and lint
         run: ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
 
+      - name: Sign owner-requested SpotiFLAC test APK
+        if: github.ref == 'refs/heads/fix/spotiflac-playback'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.OPENTUNE_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          echo "OPENTUNE_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
       - name: Release build (R8 shrinking)
+        env:
+          OPENTUNE_KEYSTORE_PASSWORD: ${{ secrets.OPENTUNE_KEYSTORE_PASSWORD }}
+          OPENTUNE_KEY_ALIAS: ${{ secrets.OPENTUNE_KEY_ALIAS }}
+          OPENTUNE_KEY_PASSWORD: ${{ secrets.OPENTUNE_KEY_PASSWORD }}
         run: ./gradlew --no-daemon assembleRelease
 
       - name: Test and lint reports

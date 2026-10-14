@@ -91,10 +91,18 @@ object SpotiflacSession {
 internal object SpotiflacGated {
     const val APP_VERSION = "4.8.5"
     private val timestamp = DateTimeFormatterBuilder().appendInstant(3).toFormatter()
+    private val cooldowns = CommunityCooldowns()
+    class InvalidResponse : java.io.IOException("Community response was not a JSON object")
 
-    suspend fun tidalUrl(endpoint: String, id: String): String? {
+    fun checkAvailable(endpoint: String) { cooldowns.current(endpoint)?.let { throw it } }
+
+    suspend fun tidalUrl(endpoint: String, id: String, preferHiRes: Boolean = false): String? {
         val session = SpotiflacSession.current() ?: return null
-        val body = JSONObject().put("id", id).put("quality", "LOSSLESS").toString().toByteArray()
+        checkAvailable(endpoint)
+        // Community /api/dl has its own contract, distinct from public /track/.
+        // See spotbye/SpotiFLAC backend/tidal_community.go.
+        val body = JSONObject().put("id", id).put("quality", if (preferHiRes) "24" else "16")
+            .toString().toByteArray(Charsets.UTF_8)
         val url = endpoint.toHttpUrl()
         // The signing protocol below assumes no query string.
         if (url.encodedQuery != null) return null
@@ -107,11 +115,19 @@ internal object SpotiflacGated {
             .header("Accept", "application/json")
             .apply { headers.forEach { (name, value) -> header(name, value) } }.build()
         return try {
-            LosslessSource.tidalUrl(JSONObject(String(LosslessHttp.bytes(request, 1_048_576, timeoutMs = 12_000), Charsets.UTF_8)))
+            responseUrl(String(LosslessHttp.bytes(request, 1_048_576, timeoutMs = 12_000), Charsets.UTF_8))
         } catch (e: LosslessHttp.HttpFailure) {
-            if (e.code == 401) SpotiflacSession.invalidate(session)
+            if (e.code == 401 || e.code == 428) SpotiflacSession.invalidate(session)
+            cooldowns.record(endpoint, e)?.let { throw it }
             throw e
         }
+    }
+
+    internal fun responseUrl(payload: String): String? {
+        val response = try { JSONObject(payload) } catch (_: org.json.JSONException) { throw InvalidResponse() }
+        // Community replies with {quality, url, lyric}, not a base64 BTS manifest.
+        // A returned quality label is not proof of FLAC: the caller probes its bytes.
+        return LosslessSource.directUrl(response)
     }
 
     internal fun signHeaders(id: String, secret: String, path: String, body: ByteArray, now: Instant, nonce: String): Map<String, String> {
