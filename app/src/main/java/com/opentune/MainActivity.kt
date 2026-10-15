@@ -57,7 +57,16 @@ class MainActivity : ComponentActivity() {
 
     private fun receive(intent: Intent?) {
         val uri = intent?.data
-        if (uri != null && SpotifyAccount.isCallback(uri)) {
+        if (uri != null && com.opentune.data.lossless.ExtensionProtocol.isCallback(uri)) {
+            lifecycleScope.launch {
+                val message = try {
+                    if (com.opentune.data.lossless.ExtensionSessions.complete(uri)) "Amazon Music connected. Checking this track again."
+                    else "Verification expired or did not match. Connect again in Audio settings."
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { "Could not complete provider verification. Please try again in Audio settings." }
+                android.widget.Toast.makeText(this@MainActivity, message, android.widget.Toast.LENGTH_LONG).show()
+            }
+        } else if (uri != null && SpotifyAccount.isCallback(uri)) {
             lifecycleScope.launch {
                 try { SpotifyAccount.complete(uri) }
                 catch (e: kotlinx.coroutines.CancellationException) { throw e }

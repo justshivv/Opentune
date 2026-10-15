@@ -33,12 +33,13 @@ internal object LosslessHttp {
             headers.forEach { (name, value) -> header(name, value) }
         }.build(), 1_048_576, timeoutMs = timeoutMs).toString(Charsets.UTF_8)
 
-    suspend fun bytes(request: Request, limit: Int, prefixOnly: Boolean = false, timeoutMs: Long = 5_000): ByteArray =
-        read(request, limit, prefixOnly, timeoutMs).bytes
+    suspend fun bytes(request: Request, limit: Int, prefixOnly: Boolean = false, timeoutMs: Long = 5_000, followRedirects: Boolean = true): ByteArray =
+        read(request, limit, prefixOnly, timeoutMs, followRedirects).bytes
 
-    suspend fun read(request: Request, limit: Int, prefixOnly: Boolean = false, timeoutMs: Long = 5_000): Data =
+    suspend fun read(request: Request, limit: Int, prefixOnly: Boolean = false, timeoutMs: Long = 5_000, followRedirects: Boolean = true): Data =
         suspendCancellableCoroutine { continuation ->
-            val selected = if (timeoutMs == 5_000L) client else client.newBuilder()
+            val selected = if (timeoutMs == 5_000L && followRedirects) client else client.newBuilder()
+                .followRedirects(followRedirects).followSslRedirects(followRedirects)
                 .callTimeout(timeoutMs, TimeUnit.MILLISECONDS).readTimeout(timeoutMs, TimeUnit.MILLISECONDS).build()
             val call = selected.newCall(request)
             continuation.invokeOnCancellation { call.cancel() }

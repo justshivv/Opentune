@@ -384,6 +384,8 @@ private fun settingsSections(
     val metered = remember { AppSettings.onMeteredNetwork() }
     var qualityDialog by remember { mutableStateOf<Boolean?>(null) } // true = Wi-Fi, false = mobile
     var verifyLossless by remember { mutableStateOf(false) }
+    var extensionProviders by remember { mutableStateOf(false) }
+    if (extensionProviders) ExtensionProvidersDialog { extensionProviders = false }
     var spotifyDialog by remember { mutableStateOf(false) }
     if (spotifyDialog) com.opentune.ui.spotify.SpotifyConnection { spotifyDialog = false }
     var clashFlacDialog by remember { mutableStateOf(false) }
@@ -664,6 +666,9 @@ private fun settingsSections(
                 Entry("ClashFLAC server", "lossless flac qobuz custom source") {
                     SettingRow("ClashFLAC server", icon = Icons.Rounded.HighQuality, summary = if (pb.clashFlacUrl.isBlank()) "Optional · connect your own lossless server" else "Custom server configured", onClick = { clashFlacDialog = true })
                 },
+                Entry("SpotiFLAC providers", "amazon extension repository registry flac browser") {
+                    SettingRow("SpotiFLAC providers", icon = Icons.Rounded.HighQuality, summary = "Amazon Music · browser verification and repositories", onClick = { extensionProviders = true })
+                }
                 Entry("SpotiFLAC verification", "lossless session connect verify") {
                     SettingRow("SpotiFLAC verification", icon = Icons.Rounded.HighQuality, summary = if (losslessConnected) "Connected · tap to renew" else if (losslessNeedsVerification) "Verify again · provider session needs renewing" else "Optional · public providers work without it", onClick = { verifyLossless = true })
                 },

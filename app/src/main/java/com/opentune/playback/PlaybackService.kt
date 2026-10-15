@@ -150,7 +150,8 @@ class PlaybackService : MediaLibraryService() {
         // minted it, so a separate HTTP stack here risks a 403 on playback.
         // No fixed User-Agent: [resolveTrack] sends the minting client's own.
         val http = RefusalReportingDataSource.Factory(OkHttpDataSource.Factory(Http.client))
-        val resolving = ResolvingDataSource.Factory(http, ::resolveTrack)
+        // Prepared lossless containers resolve to private local FLAC files.
+        val resolving = ResolvingDataSource.Factory(DefaultDataSource.Factory(context, http), ::resolveTrack)
         val cached = CacheDataSource.Factory()
             .setCache(AudioCache.get(context))
             .setUpstreamDataSourceFactory(resolving)
@@ -287,6 +288,11 @@ class PlaybackService : MediaLibraryService() {
         scope.launch {
             com.opentune.data.lossless.SpotiflacSession.revision.collect { revision ->
                 if (revision > 0 && com.opentune.data.lossless.SpotiflacSession.connected.value) scheduleUpgrade(force = true)
+            }
+        }
+        scope.launch {
+            com.opentune.data.lossless.ExtensionSessions.revision.collect { revision ->
+                if (revision > 0 && com.opentune.data.lossless.ExtensionSessions.current() != null) scheduleUpgrade(force = true)
             }
         }
         scope.launch { PlaybackRequests.upgrade.collect { scheduleUpgrade(force = true) } }

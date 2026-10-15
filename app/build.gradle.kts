@@ -160,6 +160,9 @@ dependencies {
     implementation("androidx.media3:media3-database:1.11.0")
     // Internet radio stations that stream HLS rather than Icecast.
     implementation("androidx.media3:media3-exoplayer-hls:1.11.0")
+    // Pinned audio-only FFmpeg runtime, also used by SpotiFLAC Mobile.
+    // Amazon's FLAC-in-MP4 responses require lossless container preparation.
+    implementation("com.antonkarpenko:ffmpeg-kit-audio:2.2.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.11.0")
 
     // ---- Images ----

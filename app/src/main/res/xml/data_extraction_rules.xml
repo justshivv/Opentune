@@ -4,6 +4,7 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="spotiflac.xml" />
         <exclude domain="sharedpref" path="spotify_oauth.xml" />
+        <exclude domain="sharedpref" path="extension_sessions.xml" />
         <exclude domain="sharedpref" path="usage_v2.xml" />
         <exclude domain="sharedpref" path="account.xml" />
         <exclude domain="sharedpref" path="lastfm.xml" />
@@ -13,6 +14,7 @@
     <device-transfer>
         <exclude domain="sharedpref" path="spotiflac.xml" />
         <exclude domain="sharedpref" path="spotify_oauth.xml" />
+        <exclude domain="sharedpref" path="extension_sessions.xml" />
         <exclude domain="sharedpref" path="usage_v2.xml" />
         <exclude domain="sharedpref" path="account.xml" />
         <exclude domain="sharedpref" path="lastfm.xml" />

@@ -33,7 +33,8 @@ object LosslessSource {
         if (!isYouTubeId(song.videoId)) return@withContext null
         val identity = CatalogIdentity(song.title, song.artist, song.albumName, durationMs)
         val linkedTidal = CompletableDeferred<String?>()
-        searchSources(bestAvailable, providers = listOf(
+        searchSources(bestAvailable, timeoutMs = if (ExtensionSessions.enabled()) 75_000 else 20_000, providers = listOf(
+            { record -> AmazonAudio.resolve(identity, report)?.let(record) },
             { record -> ClashFlacSource.resolve(identity, AppSettings.playback.value.clashFlacUrl, report)?.let(record) },
             { record -> resolveCommunity(identity, linkedTidal, report)?.let(record) },
             { record -> QobuzCatalog.resolve(identity, preferHiRes || bestAvailable,

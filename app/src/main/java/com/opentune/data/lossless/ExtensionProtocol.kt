@@ -1,0 +1,73 @@
+package com.opentune.data.lossless
+
+import android.net.Uri
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import org.json.JSONObject
+import java.security.MessageDigest
+import java.time.Instant
+import java.time.format.DateTimeFormatterBuilder
+import java.util.Base64
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+
+/** Zarz v2 extension protocol, independent of the older community SpotiFLAC issuer. */
+internal object ExtensionProtocol {
+    const val BASE = "https://api.zarz.moe/v2"
+    const val VERSION = "amzn@2.3.11"
+    const val CALLBACK = "opentune://provider-session"
+    data class Session(val id: String, val secret: String, val expires: Instant) {
+        fun json() = JSONObject().put("session_id", id).put("session_secret", secret).put("expires_at", expires.toString())
+    }
+    fun session(json: JSONObject, now: Instant = Instant.now()): Session? = runCatching {
+        val id = json.getString("session_id")
+        val secret = json.getString("session_secret")
+        val expires = Instant.parse(json.getString("expires_at"))
+        require(id.length in 1..4096 && secret.length in 1..4096 && expires.isAfter(now))
+        require(id.none(Char::isISOControl) && secret.none(Char::isISOControl))
+        Session(id, secret, expires)
+    }.getOrNull()
+    fun hash(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
+        .joinToString("") { "%02x".format(it) }
+    private fun hmac(key: String, value: String): String = Base64.getUrlEncoder().withoutPadding().encodeToString(
+        Mac.getInstance("HmacSHA256").run {
+            init(SecretKeySpec(key.toByteArray(), "HmacSHA256")); doFinal(value.toByteArray())
+        })
+    fun headers(session: Session, method: String, path: String, body: String, nonce: String, now: Instant = Instant.now()): Map<String, String> {
+        require(path.startsWith("/v2/") && !path.contains('?') && !path.contains('#'))
+        val time = DateTimeFormatterBuilder().appendInstant(3).toFormatter().format(now)
+        val digest = hash(body)
+        val rolling = hmac(session.secret, "${now.epochSecond / 300}:${session.id}")
+        val canonical = listOf("ZARZ-HMAC-V1", method.uppercase(), path, "", digest, time, nonce, session.id, VERSION, "extension").joinToString("\n")
+        return mapOf("Session" to session.id, "Timestamp" to time, "Nonce" to nonce, "Body-SHA256" to digest,
+            "Signature" to hmac(rolling, canonical), "App-Version" to VERSION, "Platform" to "extension")
+            .mapKeys { "X-Zarz-${it.key}" }
+    }
+    /** Only the reviewed issuer can receive a callback or signed session. */
+    fun challenge(root: JSONObject, randomState: String): Pair<String, String>? {
+        val raw = root.optString("auth_url").ifBlank { root.optString("challenge_url") }
+        val url = if (raw.isNotBlank()) raw.toHttpUrlOrNull() else root.optString("challenge_id").takeIf { it.isNotBlank() }
+            ?.let { "$BASE/challenge".toHttpUrl().newBuilder().addQueryParameter("id", it).build() }
+        if (url == null || !url.isHttps || url.host != "api.zarz.moe" || url.port != 443 ||
+            url.username.isNotEmpty() || url.password.isNotEmpty() || url.fragment != null || url.encodedPath != "/v2/challenge") return null
+        if (url.queryParameterValues("state").size > 1) return null
+        val state = url.queryParameter("state")?.takeIf { it.isNotBlank() } ?: randomState
+        if (state.length !in 16..512 || state.any(Char::isISOControl)) return null
+        val callback = Uri.parse(CALLBACK).buildUpon().appendQueryParameter("cb_version", "v2grant").appendQueryParameter("state", state).build()
+        return url.newBuilder().setQueryParameter("state", state).setQueryParameter("cb", callback.toString()).build().toString() to state
+    }
+    fun isCallback(uri: Uri): Boolean = uri.scheme == "opentune" && uri.host == "provider-session"
+    fun grant(uri: Uri, state: String): String? {
+        if (!isCallback(uri) || uri.port != -1 || uri.userInfo != null || !uri.path.isNullOrEmpty() || uri.fragment != null) return null
+        if (state.isBlank() || uri.getQueryParameters("state") != listOf(state)) return null
+        val grants = uri.getQueryParameters("grant") + uri.getQueryParameters("code")
+        return grants.singleOrNull()?.takeIf { it.length in 1..8192 && it.none(Char::isISOControl) }
+    }
+    fun verificationRequired(status: Int, body: String): Boolean = runCatching {
+        val root = JSONObject(body)
+        val error = root.optJSONObject("error") ?: root
+        error.optString("origin") == "gateway" &&
+            ((status == 401 && error.optString("code") == "SESSION_INVALID") ||
+                (status == 428 && error.optString("code") == "VERIFY_REQUIRED"))
+    }.getOrDefault(false)
+}
