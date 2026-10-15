@@ -13,7 +13,15 @@ import kotlin.coroutines.resumeWithException
 
 /** A cancelled lookup closes its socket, including a stalled response body. */
 internal object LosslessHttp {
-    class HttpFailure(val code: Int) : IOException("Lossless HTTP $code")
+    class HttpFailure(val code: Int, val responseBody: String = "", val retryAfterSeconds: Long? = null) : IOException("Lossless HTTP $code")
+    internal fun retryAfterSeconds(value: String?, now: java.time.Instant = java.time.Instant.now()): Long? {
+        if (value.isNullOrBlank()) return null
+        value.trim().toLongOrNull()?.let { return it.coerceAtLeast(0) }
+        return runCatching {
+            val date = java.time.ZonedDateTime.parse(value.trim(), java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME).toInstant()
+            ((java.time.Duration.between(now, date).toMillis() + 999) / 1000).coerceAtLeast(0)
+        }.getOrDefault(Long.MAX_VALUE) // An unknown server delay must not become an immediate retry.
+    }
     data class Data(val bytes: ByteArray, val totalBytes: Long?)
     private val client by lazy {
         Http.client.newBuilder().callTimeout(5, TimeUnit.SECONDS)
@@ -42,7 +50,13 @@ internal object LosslessHttp {
                 override fun onResponse(call: Call, response: Response) {
                     try {
                         val bytes = response.use {
-                            if (!it.isSuccessful) throw HttpFailure(it.code)
+                            if (!it.isSuccessful) {
+                                // Keep a bounded error contract for session/retry decisions, never in exception messages/logs.
+                                val errorSource = it.body?.source()
+                                errorSource?.request(8_192)
+                                val error = errorSource?.readUtf8(minOf(errorSource.buffer.size, 8_192)) ?: ""
+                                throw HttpFailure(it.code, error, retryAfterSeconds(it.header("Retry-After")))
+                            }
                             val source = it.body?.source() ?: throw IOException("Empty lossless response")
                             source.request(limit.toLong() + if (prefixOnly) 0 else 1)
                             if (!prefixOnly && source.buffer.size > limit) throw IOException("Lossless response too large")

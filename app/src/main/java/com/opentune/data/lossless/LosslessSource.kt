@@ -92,7 +92,7 @@ object LosslessSource {
         } catch (e: CancellationException) {
             throw e
         } catch (e: LosslessHttp.HttpFailure) {
-            report(if (e.code == 401) "SpotiFLAC: session rejected; verify again in Audio settings" else "SpotiFLAC: provider returned HTTP ${e.code}")
+            report(if (SpotiflacSession.needsVerification.value) "SpotiFLAC: session rejected; verify again in Audio settings" else "SpotiFLAC: provider returned HTTP ${e.code}")
             null
         } catch (_: Exception) {
             report("SpotiFLAC: provider request failed or timed out")

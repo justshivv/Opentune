@@ -2,6 +2,7 @@ package com.opentune.data.lossless
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -98,20 +99,30 @@ internal object SpotiflacGated {
         val url = endpoint.toHttpUrl()
         // The signing protocol below assumes no query string.
         if (url.encodedQuery != null) return null
-        val now = Instant.now()
-        val nonce = ByteArray(12).also { SecureRandom().nextBytes(it) }.hex()
-        val headers = signHeaders(session.id, session.secret, url.encodedPath, body, now, nonce)
-        val request = Request.Builder().url(url)
-            .post(body.toRequestBody("application/json".toMediaType()))
-            .header("User-Agent", "SpotiFLAC-Mobile/$APP_VERSION")
-            .header("Accept", "application/json")
-            .apply { headers.forEach { (name, value) -> header(name, value) } }.build()
-        return try {
-            LosslessSource.tidalUrl(JSONObject(String(LosslessHttp.bytes(request, 1_048_576, timeoutMs = 12_000), Charsets.UTF_8)))
-        } catch (e: LosslessHttp.HttpFailure) {
-            if (e.code == 401) SpotiflacSession.invalidate(session)
-            throw e
+        for (attempt in 0..1) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (SpotiflacSession.current() != session) return null
+            val now = Instant.now()
+            val nonce = ByteArray(12).also { SecureRandom().nextBytes(it) }.hex()
+            val headers = signHeaders(session.id, session.secret, url.encodedPath, body, now, nonce)
+            val request = Request.Builder().url(url)
+                .post(body.toRequestBody("application/json".toMediaType()))
+                .header("User-Agent", "SpotiFLAC-Mobile/$APP_VERSION")
+                .header("Accept", "application/json")
+                .apply { headers.forEach { (name, value) -> header(name, value) } }.build()
+            return try {
+                LosslessSource.tidalUrl(JSONObject(String(LosslessHttp.bytes(request, 1_048_576, timeoutMs = 12_000), Charsets.UTF_8)))
+            } catch (e: LosslessHttp.HttpFailure) {
+                if (SpotiflacErrorPolicy.requiresVerification(e)) SpotiflacSession.invalidate(session)
+                val retry = SpotiflacErrorPolicy.retryDelayMs(e, attempt)
+                if (retry != null && SpotiflacSession.current() == session) {
+                    kotlinx.coroutines.delay(retry)
+                    continue
+                }
+                throw e
+            }
         }
+        return null
     }
 
     internal fun signHeaders(id: String, secret: String, path: String, body: ByteArray, now: Instant, nonce: String): Map<String, String> {
