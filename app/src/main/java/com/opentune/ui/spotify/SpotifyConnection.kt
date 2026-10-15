@@ -3,6 +3,8 @@ package com.opentune.ui.spotify
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -60,10 +62,12 @@ internal fun SpotifyConnection(onDismiss: () -> Unit) {
                         Text(if (loaded) "Refresh playlists" else "Show playlists")
                     }
                     if (loaded && playlists.isEmpty()) Text("No playlists were returned by Spotify.")
-                    playlists.forEach { playlist ->
-                        TextButton(enabled = !PlaylistImport.running && !busy, onClick = {
-                            PlaylistImport.start(playlist.name) { SpotifyLibrary.playlist(playlist.id) }; onDismiss()
-                        }) { Text("Import ${playlist.name}") }
+                    if (playlists.isNotEmpty()) LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp)) {
+                        items(playlists, key = { it.id }) { playlist ->
+                            TextButton(enabled = !PlaylistImport.running && !busy, onClick = {
+                                PlaylistImport.start(playlist.name) { SpotifyLibrary.playlist(playlist.id) }; onDismiss()
+                            }) { Text("Import ${playlist.name}") }
+                        }
                     }
                     TextButton(enabled = !busy, onClick = { run {
                         SpotifyAccount.disconnect(); playlists = emptyList(); loaded = false

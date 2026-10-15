@@ -90,7 +90,7 @@ with sync_playwright() as p:
             box = element.bounding_box()
             assert box['x'] >= -1 and box['x'] + box['width'] <= width + 1, box
             assert box['y'] >= 0 and box['y'] + box['height'] <= header['height'] + 1, box
-        assert page.locator('meta[property="og:image"]').get_attribute('content').endswith('/share-waveform-2026.png')
+        assert page.locator('meta[property="og:image"]').get_attribute('content').endswith('/share-waveform-v2.jpg')
         page.screenshot(path=str(OUT / f'home-{width}.png'))
         page.goto('http://opentune.test/usage/')
         expect(page.locator('#owner-login')).to_be_visible()
