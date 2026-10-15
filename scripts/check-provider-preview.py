@@ -15,6 +15,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 opener = urllib.request.build_opener(NoRedirect())
 base = "https://api.zarz.moe/v2"
 query = urllib.parse.urlencode({"install_id": secrets.token_hex(16), "app_version": "amzn@2.3.11"})
+challenge_id = None
 for label, url in [("health", base + "/health"), ("bootstrap", base + "/bootstrap?" + query)]:
     report = {"check": label}
     try:
@@ -33,6 +34,7 @@ for label, url in [("health", base + "/health"), ("bootstrap", base + "/bootstra
             if label == "bootstrap":
                 report["has_session"] = bool(data.get("session_id") and data.get("session_secret"))
                 report["has_challenge_id"] = bool(data.get("challenge_id"))
+                challenge_id = data.get("challenge_id")
                 challenge = data.get("auth_url") or data.get("challenge_url")
                 if isinstance(challenge, str):
                     parsed = urllib.parse.urlsplit(challenge)
@@ -43,16 +45,25 @@ for label, url in [("health", base + "/health"), ("bootstrap", base + "/bootstra
     print(json.dumps(report, sort_keys=True))
 print("This diagnostic does not establish browser verification or lossless playback.")
 
-# Synthetic values only: inspect public redirect code, never a real challenge/grant.
-try:
-    callback = "opentune://provider-session?cb_version=v2grant&state=opentune-diagnostic-state"
-    url = base + "/challenge?" + urllib.parse.urlencode({"id": "opentune-diagnostic", "cb": callback})
-    with opener.open(url, timeout=12) as response:
-        html = response.read(131073).decode("utf-8", errors="replace")
-        print(json.dumps({"check": "public_callback_page", "http_status": response.status}))
-    if len(html) <= 131072:
-        for line in html.splitlines():
-            if re.search(r"callback|\bcb\b|spotiflac|location|intent:|grant|URLSearchParams", line, re.I):
-                print(line[:3000])
-except Exception as error:
-    print(json.dumps({"check": "public_callback_page", "unavailable": type(error).__name__}))
+# Read the unverified challenge page only. Redact the challenge ID before logging
+# static callback code. No challenge is solved and no session is obtained here.
+for scheme in ("opentune://provider-session", "spotiflac://session-grant"):
+    try:
+        if not challenge_id:
+            break
+        callback = scheme + "?cb_version=v2grant&state=opentune-diagnostic-state"
+        url = base + "/challenge?" + urllib.parse.urlencode({"id": challenge_id, "cb": callback})
+        try:
+            response = opener.open(url, timeout=12)
+        except urllib.error.HTTPError as error:
+            response = error
+        with response:
+            html = response.read(131073).decode("utf-8", errors="replace")
+            print(json.dumps({"check": "public_callback_page", "scheme": scheme, "http_status": response.status}))
+        html = html.replace(challenge_id, "REDACTED_CHALLENGE")
+        if len(html) <= 131072:
+            for line in html.splitlines():
+                if re.search(r"callback|\bcb\b|spotiflac|location|intent:|grant|URLSearchParams|invalid", line, re.I):
+                    print(line[:3000])
+    except Exception as error:
+        print(json.dumps({"check": "public_callback_page", "unavailable": type(error).__name__}))
