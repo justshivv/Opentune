@@ -54,12 +54,7 @@ internal object AmazonAudio {
                 val id = AmazonCatalog.find(identity)
                 if (id == null) { report("Amazon Music: no exact catalog match"); return@withLock null }
                 val generation = ExtensionSessions.revision.value
-                val alias = "amazeamazeamaze"
-                val ticket = JSONObject(ExtensionSessions.signed("/tickets", JSONObject().put("capability", "download_ticket")
-                    .put("provider", alias).put("resource_hash", ExtensionProtocol.hash("$alias:track:${id.lowercase()}"))))
-                    .let { it.optString("ticket_id").ifBlank { it.optString("ticket") } }
-                require(ticket.isNotBlank() && ticket.length <= 8192 && ticket.none(Char::isISOControl))
-                val media = media(ExtensionSessions.signed("/dl/$alias", JSONObject().put("asin", id).put("codec", "flac"), mapOf("X-Zarz-Ticket" to ticket)))
+                val media = requestMedia(id)
                 if (media == null) { report("Amazon Music: unsupported audio response"); return@withLock null }
                 val meta = media.meta
                 if (!identity.matches(meta.optString("title"), listOf(meta.optString("artist")), meta.optString("album"), identity.durationMs)) {
@@ -67,7 +62,7 @@ internal object AmazonAudio {
                 }
                 val track = if (media.key.isEmpty()) LosslessSource.verify(media.url, "Amazon Music", identity.durationMs) else null
                 val result = track ?: prepare(media, identity.durationMs)
-                if (!ExtensionSessions.enabled() || (generation != ExtensionSessions.revision.value && ExtensionSessions.current() == null)) return@withLock null
+                if (generation != ExtensionSessions.revision.value || ExtensionSessions.current() == null) return@withLock null
                 if (result == null) report("Amazon Music: could not verify full-length FLAC")
                 result
             } }.also { if (it == null) report("Amazon Music: no verified lossless upgrade; current audio continues") }
@@ -76,6 +71,35 @@ internal object AmazonAudio {
             report(if (ExtensionSessions.current() == null) "Amazon Music: verification required in Audio settings"
                 else "Amazon Music: provider returned HTTP ${e.code}"); null
         } catch (_: Exception) { report("Amazon Music: provider or audio preparation unavailable"); null }
+    }
+    internal fun retry(error: LosslessHttp.HttpFailure, attempt: Int): Pair<Boolean, Long>? = runCatching {
+        if (attempt >= 2 || error.code !in setOf(429, 503)) return null
+        val root = JSONObject(error.responseBody)
+        val mode = root.optString("retry_mode")
+        if (root.opt("retryable") != true || mode !in setOf("new_ticket", "poll_existing")) return null
+        val seconds = maxOf(error.retryAfterSeconds ?: 0, root.optLong("retry_after_seconds"), 1)
+        if (seconds > 5) return null // Never retry earlier than the provider permits.
+        (mode == "poll_existing") to seconds * 1000
+    }.getOrNull()
+    private suspend fun requestMedia(id: String): Media? {
+        val alias = "amazeamazeamaze"
+        var ticket = ""
+        for (attempt in 0..2) {
+            if (ticket.isBlank()) {
+                ticket = JSONObject(ExtensionSessions.signed("/tickets", JSONObject().put("capability", "download_ticket")
+                    .put("provider", alias).put("resource_hash", ExtensionProtocol.hash("$alias:track:${id.lowercase()}"))))
+                    .let { it.optString("ticket_id").ifBlank { it.optString("ticket") } }
+                require(ticket.isNotBlank() && ticket.length <= 8192 && ticket.none(Char::isISOControl))
+            }
+            try {
+                return media(ExtensionSessions.signed("/dl/$alias", JSONObject().put("asin", id).put("codec", "flac"), mapOf("X-Zarz-Ticket" to ticket)))
+            } catch (e: LosslessHttp.HttpFailure) {
+                val retry = retry(e, attempt) ?: throw e
+                if (!retry.first) ticket = ""
+                kotlinx.coroutines.delay(retry.second)
+            }
+        }
+        return null
     }
     private suspend fun prepare(media: Media, durationMs: Long): LosslessSource.Track? = withContext(Dispatchers.IO) {
         // Keep young files (including the one currently playing); refuse growth past the budget.

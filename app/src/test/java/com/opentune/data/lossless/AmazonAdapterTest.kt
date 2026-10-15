@@ -16,6 +16,8 @@ class AmazonAdapterTest {
         .put("secondaryText3", duration).put("primaryTextLink", JSONObject().put("deeplink", "/albums/B012345679?trackAsin=B012345678"))
     @Test fun selectsExactTrackInsteadOfAlbumRemixOrOtherArtist() {
         assertEquals("B012345678", AmazonCatalog.match(item(), identity))
+        assertEquals("B012345678", AmazonCatalog.match(item().put("primaryText",
+            JSONObject().put("observer", JSONObject().put("defaultValue", "Wo Noor"))), identity))
         assertNull(AmazonCatalog.match(item(title = "Wo Noor (Remix)"), identity))
         assertNull(AmazonCatalog.match(item(artist = "Someone Else"), identity))
         assertNull(AmazonCatalog.match(item(duration = "0:30"), identity))
@@ -43,6 +45,15 @@ class AmazonAdapterTest {
         assertEquals("/private/a file", args[args.indexOf("-i") + 1])
         assertFalse(args.contains("-ar")); assertFalse(args.contains("-sample_fmt"))
         assertFalse(AmazonAudio.conversionArguments("in", "out", "").contains("-decryption_key"))
+    }
+    @Test fun pendingOperationsReuseTicketsWithoutRetryingTerminalFailures() {
+        val pending = LosslessHttp.HttpFailure(503, """{"retryable":true,"retry_mode":"poll_existing","retry_after_seconds":2}""")
+        assertEquals(true to 2000L, AmazonAudio.retry(pending, 0))
+        assertNull(AmazonAudio.retry(pending, 2))
+        assertNull(AmazonAudio.retry(LosslessHttp.HttpFailure(503, pending.responseBody, 30), 0))
+        assertEquals(false to 1000L, AmazonAudio.retry(LosslessHttp.HttpFailure(503, """{"retryable":true,"retry_mode":"new_ticket"}"""), 0))
+        assertNull(AmazonAudio.retry(LosslessHttp.HttpFailure(401, pending.responseBody), 0))
+        assertNull(AmazonAudio.retry(LosslessHttp.HttpFailure(503, """{"retryable":false,"retry_mode":"new_ticket"}"""), 0))
     }
     @Test fun registryDoesNotInstallUnreviewedCodeOrVersions() {
         assertNotNull(ExtensionRegistry.canonicalUrl(ExtensionRegistry.MIRROR))

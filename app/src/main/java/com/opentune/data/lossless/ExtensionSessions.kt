@@ -99,21 +99,32 @@ internal object ExtensionSessions {
             val response = JSONObject(signedRequest("/session/refresh", JSONObject().put("install_id", installId()).toString(), old))
             val merged = old.json().apply { response.keys().forEach { put(it, response.get(it)) } }
             val updated = ExtensionProtocol.session(merged) ?: return@withLock old
-            synchronized(this@ExtensionSessions) { if (current() == old) save(updated) }
+            synchronized(this@ExtensionSessions) {
+                if (current() == old) {
+                    // A routine refresh must not cancel/restart the playback lookup that requested it,
+                    // nor consume a browser challenge opened while the old session is still usable.
+                    data.put("session", updated.json()); persist(); updateStatus()
+                }
+            }
             current()
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) { current() } // An outage must not log a listener out.
     }
     private suspend fun signedRequest(path: String, body: String, session: ExtensionProtocol.Session, extra: Map<String, String> = emptyMap()): String {
-        val signed = post(path, body).newBuilder().apply {
-            ExtensionProtocol.headers(session, "POST", "/v2$path", body, ExtensionProtocol.randomHex(12)).forEach { (k, v) -> header(k, v) }
-            extra.forEach { (k, v) -> header(k, v) }
-        }.build()
-        return try { request(signed) }
-        catch (e: LosslessHttp.HttpFailure) {
-            if (ExtensionProtocol.verificationRequired(e.code, e.responseBody)) invalidate(session)
-            throw e
+        for (attempt in 0..1) {
+            val signed = post(path, body).newBuilder().apply {
+                ExtensionProtocol.headers(session, "POST", "/v2$path", body, ExtensionProtocol.randomHex(12)).forEach { (k, v) -> header(k, v) }
+                extra.forEach { (k, v) -> header(k, v) }
+            }.build()
+            try { return request(signed) }
+            catch (e: LosslessHttp.HttpFailure) {
+                if (ExtensionProtocol.verificationRequired(e.code, e.responseBody)) invalidate(session)
+                val wait = SpotiflacErrorPolicy.retryDelayMs(e, attempt) ?: throw e
+                kotlinx.coroutines.delay(wait)
+                if (current() != session) throw e
+            }
         }
+        error("Provider retry exhausted")
     }
     private fun post(path: String, body: String) = Request.Builder().url(ExtensionProtocol.BASE + path)
         .post(body.toRequestBody("application/json".toMediaType())).build()

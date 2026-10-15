@@ -49,8 +49,9 @@ class ExtensionProtocolTest {
         }
     }
     @Test fun outagesAndBadRequestSignaturesDoNotBecomeExpiredSessions() {
-        assertTrue(ExtensionProtocol.verificationRequired(428, """{"origin":"gateway","code":"VERIFY_REQUIRED"}"""))
-        assertTrue(ExtensionProtocol.verificationRequired(401, """{"origin":"gateway","code":"SESSION_INVALID"}"""))
+        assertTrue(ExtensionProtocol.verificationRequired(428, """{"origin":"gateway","code":"VERIFY_REQUIRED","action":"verify"}"""))
+        assertTrue(ExtensionProtocol.verificationRequired(401, """{"origin":"gateway","code":"SESSION_INVALID","action":"bootstrap_session"}"""))
+        assertFalse(ExtensionProtocol.verificationRequired(401, """{"origin":"gateway","code":"SESSION_INVALID"}"""))
         assertFalse(ExtensionProtocol.verificationRequired(503, """{"origin":"provider","code":"PROVIDER_UNAVAILABLE"}"""))
         assertFalse(ExtensionProtocol.verificationRequired(403, """{"origin":"gateway","code":"REQUEST_AUTH_INVALID"}"""))
         assertFalse(ExtensionProtocol.verificationRequired(401, "<html>unavailable</html>"))

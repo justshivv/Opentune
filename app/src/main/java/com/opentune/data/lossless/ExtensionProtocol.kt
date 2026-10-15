@@ -65,11 +65,6 @@ internal object ExtensionProtocol {
         val grants = uri.getQueryParameters("grant") + uri.getQueryParameters("code")
         return grants.singleOrNull()?.takeIf { it.length in 1..8192 && it.none(Char::isISOControl) }
     }
-    fun verificationRequired(status: Int, body: String): Boolean = runCatching {
-        val root = JSONObject(body)
-        val error = root.optJSONObject("error") ?: root
-        error.optString("origin") == "gateway" &&
-            ((status == 401 && error.optString("code") == "SESSION_INVALID") ||
-                (status == 428 && error.optString("code") == "VERIFY_REQUIRED"))
-    }.getOrDefault(false)
+    fun verificationRequired(status: Int, body: String): Boolean =
+        SpotiflacErrorPolicy.requiresVerification(LosslessHttp.HttpFailure(status, body))
 }
