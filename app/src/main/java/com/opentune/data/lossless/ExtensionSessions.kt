@@ -120,25 +120,27 @@ internal class ExtensionSessionManager(
             ExtensionProtocol.session(root)?.let { save(it); return@withLock null }
             val challenge = ExtensionProtocol.challenge(root, UUID.randomUUID().toString())
                 ?: error("Provider returned an unsupported verification page")
-            data.put("enabled", true).put("pending", JSONObject().put("state", challenge.second)
+            val saved = JSONObject(data.toString()).put("enabled", true).put("pending", JSONObject().put("state", challenge.second)
                 .put("url", challenge.first).put("created", System.currentTimeMillis()).put("version", ExtensionProtocol.VERSION))
-            persist(); updateStatus()
+            write(saved); data = saved; updateStatus()
             challenge.first
         }
     } }
 
     /** Persist a validated grant before starting HTTP, so recreation/process death cannot lose it. */
     @Synchronized fun receiveCallback(text: String, pasted: Boolean = false): Boolean {
-        val request = data.optJSONObject("pending") ?: return false
+        val saved = JSONObject(data.toString())
+        val request = saved.optJSONObject("pending") ?: return false
         if (!ExtensionProtocol.pendingActive(request)) { updateStatus(); return false }
         val state = request.optString("state")
         val grant = if (pasted) ExtensionProtocol.pastedGrant(text, state)
             else runCatching { ExtensionProtocol.grant(Uri.parse(text), state) }.getOrNull()
         if (grant == null) return false
         // A duplicate callback never starts a second exchange or overwrites an in-flight grant.
-        if (request.optString("grant").isNotEmpty()) return request.optString("grant") == grant
+        if (request.optString("grant").isNotEmpty() && request.optString("grant") != grant) return false
+        if (exchanging) return true
         request.put("grant", grant).remove("error")
-        persist(); retryCompletion()
+        write(saved); data = saved; retryCompletion()
         return true
     }
 

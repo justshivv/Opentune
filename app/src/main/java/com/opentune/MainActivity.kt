@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
         if (uri != null && com.opentune.data.lossless.ExtensionProtocol.isCallback(uri)) {
             val accepted = runCatching { com.opentune.data.lossless.ExtensionSessions.receiveCallback(uri.toString()) }.getOrDefault(false)
             // The application owns exchange/retry. Clearing the Intent prevents a recreation replay.
-            intent.data = null
+            intent?.data = null
             val message = if (accepted) "Verification received. Saving the Amazon session…"
                 else if (com.opentune.data.lossless.ExtensionSessions.current() != null) "Amazon Music is connected."
                 else "Verification expired or did not match. Connect again in Audio settings."

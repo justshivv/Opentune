@@ -136,4 +136,17 @@ class ExtensionSessionManagerTest {
         withTimeout(3000) { manager.status.first { it == "Connected" } }
         assertEquals(1, changes)
     }
+
+    @Test fun mismatchedCallbackDoesNotExchangeOrOverwriteThePendingVerification() = runBlocking {
+        var requests = 0
+        val manager = manager { requests++; """{"challenge_id":"test-challenge"}""" }
+        manager.connect()
+        val before = stored.toString()
+        val wrong = Uri.parse(callback()).buildUpon().clearQuery()
+            .appendQueryParameter("state", "wrong-state").appendQueryParameter("grant", "test-grant").build()
+        assertFalse(manager.receiveCallback(wrong.toString()))
+        assertFalse(manager.receiveCallback(wrong.toString(), pasted = true))
+        assertEquals(before, stored.toString())
+        assertEquals(1, requests)
+    }
 }
