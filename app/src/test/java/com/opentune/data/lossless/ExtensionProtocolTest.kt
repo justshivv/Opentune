@@ -57,6 +57,27 @@ class ExtensionProtocolTest {
         assertFalse(ExtensionProtocol.verificationRequired(401, "<html>unavailable</html>"))
         assertFalse(ExtensionProtocol.verificationRequired(401, """{"origin":"provider","code":"SESSION_INVALID"}"""))
     }
+    @Test fun explicitPasteAcceptsUpstreamAndNestedResultsButStillBindsState() {
+        val direct = "opentune://provider-session?state=$state&grant=issued"
+        val upstream = "spotiflac://session-grant?state=$state&code=issued"
+        val wrapped = "${ExtensionProtocol.BASE}/challenge?cb=${Uri.encode(upstream)}"
+        for (value in listOf(direct, upstream, wrapped)) assertEquals("issued", ExtensionProtocol.pastedGrant(value, state))
+        for (value in listOf(upstream.replace(state, "wrong"), "$upstream&code=another", "$upstream&state=$state",
+            wrapped.replace("api.zarz.moe", "evil.example"), "$wrapped&state=wrong", "$wrapped&cb=${Uri.encode(direct)}",
+            upstream.replace("session-grant", "session-grant/path"), upstream.replace("issued", "line%0Abreak"),
+            "${ExtensionProtocol.BASE}/challenge?id=original-verification&cb=${Uri.encode(ExtensionProtocol.CALLBACK)}")) {
+            assertNull(value, ExtensionProtocol.pastedGrant(value, state))
+        }
+        assertFalse(ExtensionProtocol.isCallback(Uri.parse(upstream)))
+    }
+    @Test fun pendingVerificationExpiresAndRejectsClockRollbackOrChangedAdapter() {
+        val pending = JSONObject().put("created", 1_000L).put("version", ExtensionProtocol.VERSION)
+        assertTrue(ExtensionProtocol.pendingActive(pending, 1_000L))
+        assertTrue(ExtensionProtocol.pendingActive(pending, 180_999L))
+        assertFalse(ExtensionProtocol.pendingActive(pending, 181_000L))
+        assertFalse(ExtensionProtocol.pendingActive(pending, 999L))
+        assertFalse(ExtensionProtocol.pendingActive(pending.put("version", "old"), 1_000L))
+    }
     @Test fun requiresUnexpiredWellFormedCredentials() {
         val json = JSONObject().put("session_id", "id").put("session_secret", "secret").put("expires_at", "2026-10-15T01:00:00Z")
         assertNotNull(ExtensionProtocol.session(json, Instant.parse("2026-10-15T00:00:00Z")))

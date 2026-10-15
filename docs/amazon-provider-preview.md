@@ -10,6 +10,13 @@ It is separate from OpenTune's older community SpotiFLAC connection.
 2. Tap **Connect in browser**, complete the provider's verification, and allow
    the browser to return to OpenTune. Only a successful grant exchange marks
    the provider connected.
+   Verification now uses a Custom Tab first, with an external-browser fallback.
+   If Android does not deliver the result, use **Paste browser result** with the
+   completed callback copied from the provider page. The original verification
+   URL is not a completed result. A pasted callback must match the active random
+   state, even if the provider used SpotiFLAC's callback scheme.
+   **Retry saving session** reuses a received grant after a connection failure.
+   Expired verification is shown explicitly; connect again to start a new one.
 3. Use Max audio quality (or enable Lossless below Max), then play **Wo Noor —
    AP Dhillon**, the track reported working in SpotiFLAC by the tester.
 4. Audio starts through the existing fast path. Amazon is checked in the
@@ -29,6 +36,11 @@ unsupported. It does not execute downloaded JavaScript or .sflx packages.
 - Only the pinned Zarz HTTPS gateway receives signed requests. Redirects are
   disabled for signed requests. A provider outage does not erase a valid session.
 - Verification requires a user tap; playback never repeatedly launches a browser.
+- A received grant is encrypted before exchange and restored after process death.
+  Exchange runs in the application scope, survives Activity recreation, ignores
+  duplicate deliveries, and cannot reconnect after an explicit disconnect.
+  Reopening the browser reuses the same challenge for its three-minute lifetime.
+  Connected is shown only after the exchanged session has been saved successfully.
 - Catalog title/artist and returned album metadata must match. The final FLAC
   STREAMINFO duration must match the selected recording within three seconds.
 - Amazon can return FLAC inside MP4. The same audio-only FFmpegKit dependency
@@ -48,6 +60,15 @@ unsupported. It does not execute downloaded JavaScript or .sflx packages.
 issuer/callback validation, expired credentials and error classification.
 `AmazonAdapterTest` checks exact recording selection, codec/delivery URL
 validation, non-transcoding preparation and registry compatibility checks.
+`ExtensionSessionManagerTest` exercises the actual connection lifecycle with
+injected storage and transport: duplicate callbacks, restored grants, late
+responses after disconnect, and failed persistence followed by retry.
 Existing startup-selection and lossless tests must continue passing.
+
+The live gateway health/bootstrap checks succeed, but its browser challenge page
+returns HTTP 403 to the Actions diagnostic for both OpenTune and SpotiFLAC callback
+URLs. This does not establish a callback-scheme restriction. Browser verification
+and Amazon playback on a real phone still need confirmation; unit tests cannot
+complete the user's interactive verification.
 
 No main merge or release is part of this preview.

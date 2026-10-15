@@ -16,6 +16,10 @@ internal object ExtensionProtocol {
     const val BASE = "https://api.zarz.moe/v2"
     const val VERSION = "amzn@2.3.11"
     const val CALLBACK = "opentune://provider-session"
+    const val VERIFICATION_TIMEOUT_MS = 180_000L
+    fun pendingActive(pending: JSONObject?, now: Long = System.currentTimeMillis()): Boolean =
+        pending != null && pending.optString("version") == VERSION &&
+            now - pending.optLong("created") in 0 until VERIFICATION_TIMEOUT_MS
     fun randomHex(bytes: Int): String = ByteArray(bytes).also { java.security.SecureRandom().nextBytes(it) }
         .joinToString("") { "%02x".format(it) }
     data class Session(val id: String, val secret: String, val expires: Instant) {
@@ -64,6 +68,23 @@ internal object ExtensionProtocol {
         if (state.isBlank() || uri.getQueryParameters("state") != listOf(state)) return null
         val grants = uri.getQueryParameters("grant") + uri.getQueryParameters("code")
         return grants.singleOrNull()?.takeIf { it.length in 1..8192 && it.none(Char::isISOControl) }
+    }
+    /** Explicit paste recovery, like SpotiFLAC's launcher. Never register its scheme with Android. */
+    fun pastedGrant(text: String, state: String, depth: Int = 0): String? {
+        if (text.length !in 1..32768 || depth > 3 || text.any(Char::isISOControl)) return null
+        val uri = runCatching { Uri.parse(text.trim()) }.getOrNull() ?: return null
+        if (uri.fragment != null || uri.userInfo != null) return null
+        val upstream = uri.scheme == "spotiflac" && uri.host == "session-grant" && uri.port == -1 && uri.path.isNullOrEmpty()
+        if (isCallback(uri) || upstream) {
+            return grant(if (upstream) uri.buildUpon().scheme("opentune").authority("provider-session").build() else uri, state)
+        }
+        // A copied verification URL may wrap the result in cb. Restrict wrappers to the issuer.
+        if (uri.scheme != "https" || uri.host != "api.zarz.moe" || uri.port !in listOf(-1, 443) || uri.path != "/v2/challenge") return null
+        val states = uri.getQueryParameters("state")
+        if (states.isNotEmpty() && states != listOf(state)) return null
+        if (uri.getQueryParameters("grant").isNotEmpty() || uri.getQueryParameters("code").isNotEmpty()) return null
+        val nested = uri.getQueryParameters("cb").singleOrNull() ?: return null
+        return pastedGrant(nested, state, depth + 1)
     }
     fun verificationRequired(status: Int, body: String): Boolean =
         SpotiflacErrorPolicy.requiresVerification(LosslessHttp.HttpFailure(status, body))

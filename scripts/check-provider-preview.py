@@ -46,7 +46,7 @@ for label, url in [("health", base + "/health"), ("bootstrap", base + "/bootstra
 print("This diagnostic does not establish browser verification or lossless playback.")
 
 # Read the unverified challenge page only. Redact the challenge ID before logging
-# static callback code. No challenge is solved and no session is obtained here.
+# callback contract flags. No challenge is solved and no session is obtained here.
 for scheme in ("opentune://provider-session", "spotiflac://session-grant"):
     try:
         if not challenge_id:
@@ -60,10 +60,9 @@ for scheme in ("opentune://provider-session", "spotiflac://session-grant"):
         with response:
             html = response.read(131073).decode("utf-8", errors="replace")
             print(json.dumps({"check": "public_callback_page", "scheme": scheme, "http_status": response.status}))
-        html = html.replace(challenge_id, "REDACTED_CHALLENGE")
-        if len(html) <= 131072:
-            for line in html.splitlines():
-                if re.search(r"callback|\bcb\b|spotiflac|location|intent:|grant|URLSearchParams|invalid", line, re.I):
-                    print(line[:3000])
+        if len(html) <= 131072 and response.status == 200:
+            print(json.dumps({"check": "callback_contract", "requested_callback_present": callback in html,
+                              "has_android_intent": "intent://" in html,
+                              "has_upstream_scheme": "spotiflac://" in html}))
     except Exception as error:
         print(json.dumps({"check": "public_callback_page", "unavailable": type(error).__name__}))

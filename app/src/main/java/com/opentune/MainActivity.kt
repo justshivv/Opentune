@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) receive(intent)
+        if (savedInstanceState == null || intent?.data?.let(com.opentune.data.lossless.ExtensionProtocol::isCallback) == true) receive(intent)
         setContent {
             val vm: PlayerViewModel = viewModel()
             val theme by AppSettings.theme.collectAsState()
@@ -48,24 +48,25 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // The process may have started in the background, offline (after an update, say).
         AccountStore.ensureProfile()
+        com.opentune.data.lossless.ExtensionSessions.refreshStatus()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         receive(intent)
     }
 
     private fun receive(intent: Intent?) {
         val uri = intent?.data
         if (uri != null && com.opentune.data.lossless.ExtensionProtocol.isCallback(uri)) {
-            lifecycleScope.launch {
-                val message = try {
-                    if (com.opentune.data.lossless.ExtensionSessions.complete(uri)) "Amazon Music connected. Checking this track again."
-                    else "Verification expired or did not match. Connect again in Audio settings."
-                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                catch (_: Exception) { "Could not complete provider verification. Please try again in Audio settings." }
-                android.widget.Toast.makeText(this@MainActivity, message, android.widget.Toast.LENGTH_LONG).show()
-            }
+            val accepted = runCatching { com.opentune.data.lossless.ExtensionSessions.receiveCallback(uri.toString()) }.getOrDefault(false)
+            // The application owns exchange/retry. Clearing the Intent prevents a recreation replay.
+            intent.data = null
+            val message = if (accepted) "Verification received. Saving the Amazon session…"
+                else if (com.opentune.data.lossless.ExtensionSessions.current() != null) "Amazon Music is connected."
+                else "Verification expired or did not match. Connect again in Audio settings."
+            android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
         } else if (uri != null && SpotifyAccount.isCallback(uri)) {
             lifecycleScope.launch {
                 try { SpotifyAccount.complete(uri) }
