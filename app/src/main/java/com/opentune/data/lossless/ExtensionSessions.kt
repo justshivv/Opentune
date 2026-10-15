@@ -127,13 +127,16 @@ internal class ExtensionSessionManager(
         }
     } }
 
-    /** Persist a validated grant before starting HTTP, so recreation/process death cannot lose it. */
+    /** Persist a callback or explicitly entered code before HTTP so recreation cannot lose it. */
     @Synchronized fun receiveCallback(text: String, pasted: Boolean = false): Boolean {
         val saved = JSONObject(data.toString())
         val request = saved.optJSONObject("pending") ?: return false
         if (!ExtensionProtocol.pendingActive(request)) { updateStatus(); return false }
         val state = request.optString("state")
-        val grant = if (pasted) ExtensionProtocol.pastedGrant(text, state)
+        // Manual codes cannot prove callback-state correlation. Accept only the exact
+        // grant=gr_… form after explicit user submission during an active challenge;
+        // automatic intents and malformed/state-mismatched URLs never take this path.
+        val grant = if (pasted) ExtensionProtocol.pastedGrant(text, state) ?: ExtensionProtocol.manualGrantCode(text)
             else runCatching { ExtensionProtocol.grant(Uri.parse(text), state) }.getOrNull()
         if (grant == null) return false
         // A duplicate callback never starts a second exchange or overwrites an in-flight grant.

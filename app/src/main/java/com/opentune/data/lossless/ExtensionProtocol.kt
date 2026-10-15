@@ -63,6 +63,15 @@ internal object ExtensionProtocol {
         return url.newBuilder().setQueryParameter("state", state).setQueryParameter("cb", callback.toString()).build().toString() to state
     }
     fun isCallback(uri: Uri): Boolean = uri.scheme == "opentune" && uri.host == "provider-session"
+    /**
+     * The provider's Copy link control can return just grant=gr_… . Treat that
+     * as a manually entered code, not a state-validated redirect. Only explicit
+     * submission against an active verification may use this parser. Never
+     * recover a missing/wrong state from a URL or a multi-parameter callback.
+     */
+    fun manualGrantCode(text: String): String? =
+        Regex("grant=(gr_[A-Za-z0-9_-]{16,256})").matchEntire(text.trim())?.groupValues?.get(1)
+
     fun grant(uri: Uri, state: String): String? {
         if (!isCallback(uri) || uri.port != -1 || uri.userInfo != null || !uri.path.isNullOrEmpty() || uri.fragment != null) return null
         if (state.isBlank() || uri.getQueryParameters("state") != listOf(state)) return null

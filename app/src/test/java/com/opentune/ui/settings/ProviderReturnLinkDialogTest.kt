@@ -98,4 +98,25 @@ class ProviderReturnLinkDialogTest {
         compose.onNodeWithText("Verify link").assertIsNotEnabled()
         compose.onNodeWithText("Close").assertIsDisplayed()
     }
+
+    @Test fun pastedCodeRequiresExplicitVerifyAndWaitsForProvider() {
+        val code = "grant=gr_test_code_0123456789"
+        val status = mutableStateOf("Waiting for the browser result")
+        val submitted = mutableListOf<String>()
+        compose.setContent {
+            MaterialTheme {
+                Box(Modifier.fillMaxSize())
+                ProviderReturnLinkDialog(status.value, true, false, { code }, {
+                    submitted += it; status.value = "Saving verified session…"; true
+                }, {}, {})
+            }
+        }
+        compose.onNodeWithText("Paste").performClick()
+        compose.onNodeWithTag("provider-return-link").assertTextContains(code)
+        assertEquals(0, submitted.size)
+        compose.onNodeWithText("Verify link").performClick()
+        assertEquals(listOf(code), submitted)
+        compose.onNodeWithText("Saving verified session…").assertIsDisplayed()
+        compose.onNodeWithText("Verify link").assertIsNotEnabled()
+    }
 }

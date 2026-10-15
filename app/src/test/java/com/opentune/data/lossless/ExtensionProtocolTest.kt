@@ -96,4 +96,18 @@ class ExtensionProtocolTest {
         assertNull(ExtensionProtocol.session(json.put("expires_at", "invalid")))
         assertNull(ExtensionProtocol.session(JSONObject().put("session_id", "id")))
     }
+    @Test fun manualCodeRecoveryAcceptsOnlyTheProvidersExactCodeFormat() {
+        val code = "gr_test_code_0123456789"
+        assertEquals(code, ExtensionProtocol.manualGrantCode("grant=$code"))
+        assertEquals(code, ExtensionProtocol.manualGrantCode("  grant=$code  "))
+        for (text in listOf(code, "code=$code", "grant=short", "grant=", "?grant=$code",
+            "grant=$code&state=wrong", "grant=$code&state=", "grant=$code&grant=$code",
+            "grant=$code#fragment", "grant=gr_test%5fcode_0123456789", "grant=gr_test\ncode_0123456789",
+            "${ExtensionProtocol.CALLBACK}?grant=$code", "https://api.zarz.moe/v2/challenge?grant=$code",
+            "grant=gr_${"x".repeat(257)}")) {
+            assertNull(text, ExtensionProtocol.manualGrantCode(text))
+        }
+        assertNull(ExtensionProtocol.grant(Uri.parse("${ExtensionProtocol.CALLBACK}?grant=$code"), state))
+        assertNull(ExtensionProtocol.pastedGrant("grant=$code", state))
+    }
 }

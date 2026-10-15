@@ -18,7 +18,14 @@ It is separate from OpenTune's older community SpotiFLAC connection.
    URL is not a completed result. A pasted callback must match the active random
    state, even if the provider used SpotiFLAC's callback scheme.
    Copied parameter text such as `grant=…&state=…` is also accepted; it does not
-   need a URL prefix. A grant without its matching state remains incomplete.
+   need a URL prefix. The provider's **Copy link** button sometimes supplies only
+   `grant=gr_…`. That exact code can be entered manually during the active
+   verification, then submitted with **Verify link**. Use only the code from the
+   browser page just opened for this connection. Without state, the app cannot
+   establish local callback correlation; it sends the code and its installation
+   ID to the pinned issuer and waits for a valid session before showing Connected.
+   Automatic callbacks still require matching state. Missing/mismatched state in
+   full URLs or multi-parameter results is never repaired using local state.
    **Retry saving session** reuses a received grant after a connection failure.
    Expired verification is shown explicitly; connect again to start a new one.
 3. Use Max audio quality (or enable Lossless below Max), then play **Wo Noor —

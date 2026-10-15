@@ -149,4 +149,62 @@ class ExtensionSessionManagerTest {
         assertEquals(before, stored.toString())
         assertEquals(1, requests)
     }
+
+    @Test fun grantOnlyCodeNeedsExplicitSubmissionAndProviderAcceptance() = runBlocking {
+        val response = CompletableDeferred<String>()
+        val code = "gr_test_code_0123456789"
+        var exchanges = 0
+        val manager = manager { request ->
+            if (request.url.encodedPath.endsWith("bootstrap")) """{"challenge_id":"test-challenge"}"""
+            else {
+                exchanges++
+                val body = JSONObject(Buffer().also { request.body!!.writeTo(it) }.readUtf8())
+                assertEquals(code, body.getString("grant"))
+                assertEquals(stored.getString("install_id"), body.getString("install_id"))
+                response.await()
+            }
+        }
+        assertFalse(manager.receiveCallback("grant=$code", pasted = true))
+        manager.connect()
+        assertFalse(manager.receiveCallback("grant=$code"))
+        assertFalse(manager.receiveCallback("${ExtensionProtocol.CALLBACK}?grant=$code", pasted = true))
+        assertFalse(manager.receiveCallback("grant=$code&state=wrong", pasted = true))
+        assertEquals(0, exchanges)
+        assertTrue(manager.receiveCallback("grant=$code", pasted = true))
+        assertEquals(1, exchanges)
+        assertNull(manager.current())
+        assertEquals("Saving verified session…", manager.status.value)
+        assertTrue(manager.receiveCallback("grant=$code", pasted = true))
+        assertFalse(manager.receiveCallback("grant=gr_another_code_0123456789", pasted = true))
+        assertEquals(1, exchanges)
+        response.complete(session)
+        withTimeout(3000) { manager.status.first { it == "Connected" } }
+        assertNotNull(manager.current())
+    }
+
+    @Test fun expiredOrCancelledChallengeCannotAcceptManualCode() = runBlocking {
+        var requests = 0
+        val first = manager { requests++; """{"challenge_id":"test-challenge"}""" }
+        first.connect()
+        stored.getJSONObject("pending").put("created", 0)
+        val expired = manager { requests++; error("No exchange expected") }
+        assertFalse(expired.receiveCallback("grant=gr_test_code_0123456789", pasted = true))
+        first.disconnect()
+        assertFalse(first.receiveCallback("grant=gr_test_code_0123456789", pasted = true))
+        assertEquals(1, requests)
+        assertNull(expired.current())
+    }
+
+    @Test fun rejectedManualCodeNeverBecomesConnected() = runBlocking {
+        val manager = manager { request ->
+            if (request.url.encodedPath.endsWith("bootstrap")) """{"challenge_id":"test-challenge"}"""
+            else throw LosslessHttp.HttpFailure(400, "invalid grant")
+        }
+        manager.connect()
+        assertTrue(manager.receiveCallback("grant=gr_test_code_0123456789", pasted = true))
+        withTimeout(3000) { manager.canRetry.first { it } }
+        assertNull(manager.current())
+        assertTrue(manager.status.value.contains("HTTP 400"))
+        assertFalse(stored.has("session"))
+    }
 }
