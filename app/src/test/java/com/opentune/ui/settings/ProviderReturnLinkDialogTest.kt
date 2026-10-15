@@ -1,6 +1,9 @@
 package com.opentune.ui.settings
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -28,6 +31,7 @@ class ProviderReturnLinkDialogTest {
         var submissions = 0
         compose.setContent {
             MaterialTheme {
+                Box(Modifier.fillMaxSize())
                 ProviderReturnLinkDialog("Waiting for the browser result", true, false,
                     { null }, { submissions++; false }, {}, {})
             }
@@ -44,6 +48,7 @@ class ProviderReturnLinkDialogTest {
         val submitted = mutableListOf<String>()
         compose.setContent {
             MaterialTheme {
+                Box(Modifier.fillMaxSize())
                 ProviderReturnLinkDialog(status.value, true, false, { callback }, {
                     submitted += it; status.value = "Connected"; true
                 }, {}, {})
@@ -63,6 +68,7 @@ class ProviderReturnLinkDialogTest {
         val submitted = mutableListOf<String>()
         compose.setContent {
             MaterialTheme {
+                Box(Modifier.fillMaxSize())
                 ProviderReturnLinkDialog("Waiting for the browser result", true, false,
                     { throw SecurityException("clipboard unavailable") }, { submitted += it; false }, {}, {})
             }
@@ -78,6 +84,7 @@ class ProviderReturnLinkDialogTest {
     @Test fun expiredAttemptExplainsWhyVerificationIsDisabled() {
         compose.setContent {
             MaterialTheme {
+                Box(Modifier.fillMaxSize())
                 ProviderReturnLinkDialog("Verification expired. Connect again.", false, false,
                     { null }, { false }, {}, {})
             }

@@ -46,6 +46,20 @@ jobs:
       - name: Build, unit tests and lint
         run: ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
 
+      - name: Return-link UI failure details
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          for path in Path('app/build/test-results').rglob('TEST-*ProviderReturnLinkDialogTest.xml'):
+              for case in ET.parse(path).getroot().findall('testcase'):
+                  for failure in case.findall('failure'):
+                      print(case.attrib.get('name', ''))
+                      print(failure.attrib.get('message', ''))
+                      print((failure.text or '')[:16000])
+          PY
+
       - name: Release build (R8 shrinking)
         run: ./gradlew --no-daemon assembleRelease
 
