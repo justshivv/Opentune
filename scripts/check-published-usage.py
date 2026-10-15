@@ -17,7 +17,7 @@ for attempt in range(6):
         home = 'https://justshivv.github.io/Opentune/'
         with urlopen(Request(home + '?preview=' + str(int(time())), headers={'Cache-Control':'no-cache'}), timeout=20) as response:
             metadata = response.read().decode()
-        image = 'img/share-waveform-2026.png'
+        image = 'img/share-waveform-v2.jpg'
         assert f'content="{home}{image}"' in metadata and 'summary_large_image' in metadata
         with urlopen(home + image, timeout=20) as response:
             published = response.read()
