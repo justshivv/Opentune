@@ -15,6 +15,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import org.junit.Assert.assertEquals
 import org.junit.Rule
+import org.junit.Before
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -26,6 +28,9 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], qualifiers = "w360dp-h740dp-xhdpi", application = android.app.Application::class)
 class ProviderReturnLinkDialogTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    // A layout loop should fail promptly, rather than stalling each interaction for a minute.
+    @Before fun limitIdleWait() { androidx.test.espresso.IdlingPolicies.setMasterPolicyTimeout(10, java.util.concurrent.TimeUnit.SECONDS) }
+    @After fun restoreIdleWait() { androidx.test.espresso.IdlingPolicies.setMasterPolicyTimeout(60, java.util.concurrent.TimeUnit.SECONDS) }
 
     @Test fun emptyClipboardExplainsTheProblemInTheOpenDialog() {
         var submissions = 0
