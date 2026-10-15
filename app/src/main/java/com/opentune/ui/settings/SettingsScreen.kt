@@ -384,6 +384,10 @@ private fun settingsSections(
     val metered = remember { AppSettings.onMeteredNetwork() }
     var qualityDialog by remember { mutableStateOf<Boolean?>(null) } // true = Wi-Fi, false = mobile
     var verifyLossless by remember { mutableStateOf(false) }
+    var spotifyDialog by remember { mutableStateOf(false) }
+    if (spotifyDialog) com.opentune.ui.spotify.SpotifyConnection { spotifyDialog = false }
+    var clashFlacDialog by remember { mutableStateOf(false) }
+    if (clashFlacDialog) ClashFlacDialog(pb.clashFlacUrl) { clashFlacDialog = false }
     var qobuzRelayDialog by remember { mutableStateOf(false) }
     if (qobuzRelayDialog) QobuzRelayDialog(pb.qobuzRelayUrl) { qobuzRelayDialog = false }
     val losslessConnected by com.opentune.data.lossless.SpotiflacSession.connected.collectAsState()
@@ -646,16 +650,19 @@ private fun settingsSections(
                     })
                 },
                 Entry("Lossless streaming", "flac tidal amazon qobuz spotiflac") {
-                    ToggleRow("Lossless below Max", pb.losslessStreaming, { v -> AppSettings.updatePlayback { it.copy(losslessStreaming = v) } }, summary = "Also look for FLAC after playback starts at other quality levels. Max automatically checks highest-quality sources before YouTube.", icon = Icons.Rounded.HighQuality)
+                    ToggleRow("Lossless below Max", pb.losslessStreaming, { v -> AppSettings.updatePlayback { it.copy(losslessStreaming = v) } }, summary = "Also look for FLAC after playback starts at other quality levels. Max starts with an available source and looks for verified FLAC in the background.", icon = Icons.Rounded.HighQuality)
                 },
                 Entry("JioSaavn quality upgrade", "320 aac higher quality alternate lossy") {
-                    SettingRow("Max quality sources", summary = "Max checks hi-res FLAC first, then JioSaavn 320 kbps, then YouTube. Checking providers can delay the start. JioSaavn is lossy.", icon = Icons.Rounded.HighQuality)
+                    SettingRow("Max quality sources", summary = "JioSaavn 320 kbps is preferred for quick startup, with YouTube fallback. Verified FLAC can upgrade playback in the background. JioSaavn is lossy.", icon = Icons.Rounded.HighQuality)
                 },
                 Entry("Unmetered networks only", "flac saavn mobile wifi data") {
                     ToggleRow("Unmetered networks only", pb.losslessUnmeteredOnly, { v -> AppSettings.updatePlayback { it.copy(losslessUnmeteredOnly = v) } }, summary = "When on, mobile data uses YouTube even at Max. Turn off to try FLAC and JioSaavn on mobile data", icon = Icons.Rounded.Wifi)
                 },
                 Entry("Prefer hi-res lossless", "24 bit flac qobuz") {
-                    ToggleRow("Prefer hi-res lossless", pb.losslessHiRes, { v -> AppSettings.updatePlayback { it.copy(losslessHiRes = v) } }, summary = "Prefer hi-res for background upgrades too. Max always checks hi-res first. Uses more data.", icon = Icons.Rounded.HighQuality)
+                    ToggleRow("Prefer hi-res lossless", pb.losslessHiRes, { v -> AppSettings.updatePlayback { it.copy(losslessHiRes = v) } }, summary = "Prefer hi-res for background upgrades too. Higher-resolution files use more data.", icon = Icons.Rounded.HighQuality)
+                },
+                Entry("ClashFLAC server", "lossless flac qobuz custom source") {
+                    SettingRow("ClashFLAC server", icon = Icons.Rounded.HighQuality, summary = if (pb.clashFlacUrl.isBlank()) "Optional · connect your own lossless server" else "Custom server configured", onClick = { clashFlacDialog = true })
                 },
                 Entry("SpotiFLAC verification", "lossless session connect verify") {
                     SettingRow("SpotiFLAC verification", icon = Icons.Rounded.HighQuality, summary = if (losslessConnected) "Connected · tap to renew" else if (losslessNeedsVerification) "Verify again · provider session needs renewing" else "Optional · public providers work without it", onClick = { verifyLossless = true })
@@ -1121,6 +1128,12 @@ private fun settingsSections(
             ),
         ),
         Section(
+            "Spotify",
+            listOf(Entry("Spotify library", "spotify sign in connect playlists liked songs") {
+                NavRow("Spotify library", { spotifyDialog = true }, summary = "Connect and import playlists or Liked Songs", icon = Icons.AutoMirrored.Rounded.QueueMusic)
+            }),
+        ),
+        Section(
             "Your music server",
             listOfNotNull(
                 Entry("Music server", "subsonic navidrome gonic airsonic jellyfin flac lossless server") {
@@ -1185,7 +1198,7 @@ private fun settingsSections(
             "Import",
             listOf(
                 Entry("Import a playlist", "spotify youtube music import playlist album link csv exportify transfer migrate") {
-                    NavRow("Import a playlist", onOpenSpotify, summary = "From a Spotify or YouTube Music link, or a CSV export", icon = Icons.AutoMirrored.Rounded.QueueMusic)
+                    NavRow("Import a playlist", onOpenSpotify, summary = "From Spotify, YouTube Music, or a CSV export", icon = Icons.AutoMirrored.Rounded.QueueMusic)
                 },
             ),
         ),

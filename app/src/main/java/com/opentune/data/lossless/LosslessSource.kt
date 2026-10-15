@@ -34,6 +34,7 @@ object LosslessSource {
         val identity = CatalogIdentity(song.title, song.artist, song.albumName, durationMs)
         val linkedTidal = CompletableDeferred<String?>()
         searchSources(bestAvailable, providers = listOf(
+            { record -> ClashFlacSource.resolve(identity, AppSettings.playback.value.clashFlacUrl, report)?.let(record) },
             { record -> resolveCommunity(identity, linkedTidal, report)?.let(record) },
             { record -> QobuzCatalog.resolve(identity, preferHiRes || bestAvailable,
                 AppSettings.playback.value.qobuzRelayUrl, bestAvailable = bestAvailable, onCandidate = record) },

@@ -77,6 +77,8 @@ jobs:
       - run: pip install playwright==1.58.0
       - run: python -m playwright install --with-deps chromium
       - run: python scripts/check-distribution.py
+      - run: python scripts/check-social-preview.py
+      - run: node --test scripts/check-spotify-callback.cjs
       - run: python scripts/prepare-usage-assets.py
       - run: python scripts/check-website.py
       - run: python scripts/check-room-invite.py

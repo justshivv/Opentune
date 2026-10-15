@@ -246,7 +246,7 @@ class PlaybackService : MediaLibraryService() {
         }
         scope.launch { trackListening(player) }
         scope.launch {
-            AppSettings.playback.map { listOf(it.losslessStreaming, it.losslessUnmeteredOnly, it.losslessHiRes, it.jioSaavnQuality, it.qobuzRelayUrl, it.wifiQuality, it.mobileQuality) }
+            AppSettings.playback.map { listOf(it.losslessStreaming, it.losslessUnmeteredOnly, it.losslessHiRes, it.jioSaavnQuality, it.qobuzRelayUrl, it.clashFlacUrl, it.wifiQuality, it.mobileQuality) }
                 .distinctUntilChanged().collect {
                     val item = player.currentMediaItem
                     val uri = item?.localConfiguration?.uri?.let(::selectedUri)

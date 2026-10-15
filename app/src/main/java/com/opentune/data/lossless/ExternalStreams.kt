@@ -15,6 +15,7 @@ object ExternalStreams {
     private val renditions = ConcurrentHashMap<String, Rendition>()
     private val pinned = ConcurrentHashMap<String, Pair<String, Rendition>>()
     private val failedUntil = ConcurrentHashMap<String, Long>()
+    private val losslessMissUntil = ConcurrentHashMap<String, Long>()
     private val reports = ConcurrentHashMap<String, String>()
     private const val TTL = 10 * 60_000L
 
@@ -66,7 +67,8 @@ object ExternalStreams {
             return null
         }
         val now = now()
-        if (force) failedUntil.remove(videoId)
+        if (force) { failedUntil.remove(videoId); losslessMissUntil.remove(videoId) }
+        if (losslessOnly && (losslessMissUntil[videoId] ?: 0) > now) return null
         if ((failedUntil[videoId] ?: 0) > now) return null
         renditions[videoId]?.takeIf {
             !force && (!losslessOnly || it.lossless) && now - it.at < TTL && allowed(it.lossless) &&
@@ -86,8 +88,7 @@ object ExternalStreams {
             JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
         report(videoId, detail.joinToString("\n").ifEmpty { "No external source eligible for this quality setting." })
         if (track == null && saavn == null) {
-            if (failedUntil.size > 256) failedUntil.clear()
-            failedUntil[videoId] = now() + 60_000
+            recordLosslessMiss(videoId)
             return null
         }
         // Even two FLACs of the same recording can have different byte offsets.
@@ -97,6 +98,11 @@ object ExternalStreams {
             kbps = if (track == null) 320 else null, maximumSearch = beforePlayback, sessionRevision = SpotiflacSession.revision.value)
         remember(videoId, rendition)
         return rendition
+    }
+
+    internal fun recordLosslessMiss(videoId: String) {
+        if (losslessMissUntil.size > 256) losslessMissUntil.clear()
+        losslessMissUntil[videoId] = now() + 60_000
     }
 
     internal fun remember(videoId: String, rendition: Rendition) {
@@ -119,6 +125,7 @@ object ExternalStreams {
     /** Verification/renewal should take effect immediately, including after a cached miss. */
     fun retryLookups() {
         failedUntil.clear()
+        losslessMissUntil.clear()
         reports.clear()
         // Keep currently playing rendition keys valid until the player swaps sources.
     }

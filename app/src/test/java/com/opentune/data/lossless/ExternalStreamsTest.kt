@@ -12,6 +12,17 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class ExternalStreamsTest {
+    @Test fun losslessMissDoesNotSuppressAnAvailableJioSaavnStream() {
+        AppSettings.init(RuntimeEnvironment.getApplication())
+        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessUnmeteredOnly = false) }
+        val audio = ExternalStreams.Rendition("saavn-after-flac-miss", "https://cdn.example/audio", "JioSaavn", false,
+            System.nanoTime() / 1_000_000, sessionRevision = SpotiflacSession.revision.value)
+        ExternalStreams.recordLosslessMiss("no-flac")
+        ExternalStreams.remember("no-flac", audio)
+        assertEquals(audio, ExternalStreams.cached("no-flac"))
+        assertEquals(audio.url, ExternalStreams.resolve("no-flac", audio.key))
+    }
+
     @Test fun startupCacheRejectsExpiredFailedAndDisabledRenditions() {
         AppSettings.init(RuntimeEnvironment.getApplication())
         AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessUnmeteredOnly = false) }

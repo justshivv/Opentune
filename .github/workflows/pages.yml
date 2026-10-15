@@ -101,6 +101,8 @@ jobs:
             } end' ios-release.json > site/ios/source.json
           rm -f ios-release.json
           [ -s site/ios/source.json ] && jq -c '.apps[0].versions[0] | {version, size}' site/ios/source.json || rm -f site/ios/source.json
+      - name: Validate social preview
+        run: python scripts/check-social-preview.py
       - name: Version dashboard assets
         run: python scripts/prepare-usage-assets.py
       - uses: actions/configure-pages@v5
@@ -112,3 +114,6 @@ jobs:
 
       - name: Verify published dashboard assets
         run: python scripts/check-published-usage.py
+
+      - name: Verify published social preview
+        run: python scripts/check-social-preview.py --published

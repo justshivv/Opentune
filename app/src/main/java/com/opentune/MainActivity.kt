@@ -1,6 +1,9 @@
 package com.opentune
 
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import com.opentune.data.spotify.SpotifyAccount
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -52,7 +55,18 @@ class MainActivity : ComponentActivity() {
         receive(intent)
     }
 
-    private fun receive(intent: Intent?) = Links.receive(intent)
+    private fun receive(intent: Intent?) {
+        val uri = intent?.data
+        if (uri != null && SpotifyAccount.isCallback(uri)) {
+            lifecycleScope.launch {
+                try { SpotifyAccount.complete(uri) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) {
+                    android.widget.Toast.makeText(this@MainActivity, "Spotify sign-in failed. Please try again.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        } else Links.receive(intent)
+    }
 
     /**
      * With [fastest], asks for the screen's quickest refresh rate at its

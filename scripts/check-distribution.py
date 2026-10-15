@@ -35,7 +35,7 @@ assert len(home.matches('link', rel='canonical', href=BASE)) == 1
 assert len(home.matches('meta', name='description')) == 1
 assert 100 <= len(home.matches('meta', name='description')[0]['content']) <= 170
 assert home.matches('meta', name='twitter:title') and home.matches('meta', name='twitter:description')
-assert home.matches('meta', property='og:image')[0]['content'] == BASE + 'img/share-waveform-2026.png'
+assert home.matches('meta', property='og:image')[0]['content'] == BASE + 'img/share-waveform-v2.jpg'
 app = next(x for x in home.ld if x['@type'] == 'SoftwareApplication')
 assert app['name'] == 'OpenTune' and app['url'] == BASE and app['offers']['price'] == '0'
 assert 'aggregateRating' not in app
