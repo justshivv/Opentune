@@ -668,7 +668,7 @@ private fun settingsSections(
                 },
                 Entry("SpotiFLAC providers", "amazon extension repository registry flac browser") {
                     SettingRow("SpotiFLAC providers", icon = Icons.Rounded.HighQuality, summary = "Amazon Music · browser verification and repositories", onClick = { extensionProviders = true })
-                }
+                },
                 Entry("SpotiFLAC verification", "lossless session connect verify") {
                     SettingRow("SpotiFLAC verification", icon = Icons.Rounded.HighQuality, summary = if (losslessConnected) "Connected · tap to renew" else if (losslessNeedsVerification) "Verify again · provider session needs renewing" else "Optional · public providers work without it", onClick = { verifyLossless = true })
                 },

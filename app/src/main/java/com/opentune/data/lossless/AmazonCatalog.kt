@@ -52,9 +52,10 @@ internal object AmazonCatalog {
         }
         return id?.uppercase()?.takeIf { Regex("[A-Z0-9]{10}").matches(it) }
     }
-    private fun text(value: Any?): String = when (value) {
+    private fun text(value: Any?, depth: Int = 0): String = if (depth > 8) "" else when (value) {
         is String -> value
-        is JSONObject -> value.optString("text").ifBlank { value.optString("value") }
+        is JSONObject -> value.optString("text").ifBlank { text(value.opt("defaultValue"), depth + 1) }
+            .ifBlank { text(value.optJSONObject("observer")?.opt("defaultValue"), depth + 1) }
         else -> ""
     }
     internal fun match(root: JSONObject, identity: CatalogIdentity): String? {

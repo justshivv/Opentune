@@ -16,6 +16,8 @@ internal object ExtensionProtocol {
     const val BASE = "https://api.zarz.moe/v2"
     const val VERSION = "amzn@2.3.11"
     const val CALLBACK = "opentune://provider-session"
+    fun randomHex(bytes: Int): String = ByteArray(bytes).also { java.security.SecureRandom().nextBytes(it) }
+        .joinToString("") { "%02x".format(it) }
     data class Session(val id: String, val secret: String, val expires: Instant) {
         fun json() = JSONObject().put("session_id", id).put("session_secret", secret).put("expires_at", expires.toString())
     }

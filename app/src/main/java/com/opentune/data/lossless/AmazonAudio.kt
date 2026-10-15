@@ -1,9 +1,11 @@
 package com.opentune.data.lossless
 
 import android.content.Context
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.FFmpegKitConfig
-import com.arthenica.ffmpegkit.ReturnCode
+import com.antonkarpenko.ffmpegkit.FFmpegKit
+import com.antonkarpenko.ffmpegkit.FFmpegKitConfig
+import com.antonkarpenko.ffmpegkit.FFmpegSession
+import com.antonkarpenko.ffmpegkit.LogRedirectionStrategy
+import com.antonkarpenko.ffmpegkit.ReturnCode
 import com.opentune.data.Http
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -131,13 +133,14 @@ internal object AmazonAudio {
         addAll(listOf("-i", input, "-map", "0:a:0", "-vn", "-c:a", "copy", "-f", "flac", output))
     }.toTypedArray()
     private suspend fun convert(input: File, output: File, key: String) = suspendCancellableCoroutine<Unit> { continuation ->
-        val session = FFmpegKit.executeWithArgumentsAsync(conversionArguments(input.path, output.path, key)) { result ->
+        val session = FFmpegSession.create(conversionArguments(input.path, output.path, key), { result ->
             // FFmpeg's in-memory history retains arguments; discard the ephemeral key immediately.
             FFmpegKitConfig.clearSessions()
-            if (!continuation.isActive) { output.delete(); return@executeWithArgumentsAsync }
+            if (!continuation.isActive) { output.delete(); return@create }
             if (ReturnCode.isSuccess(result.returnCode)) continuation.resume(Unit)
             else continuation.resumeWithException(IOException("Audio container conversion failed"))
-        }
+        }, null, null, LogRedirectionStrategy.NEVER_PRINT_LOGS)
+        FFmpegKitConfig.asyncFFmpegExecute(session)
         continuation.invokeOnCancellation { FFmpegKit.cancel(session.sessionId) }
     }
 }

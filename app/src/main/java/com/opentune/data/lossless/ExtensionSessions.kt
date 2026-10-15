@@ -25,7 +25,7 @@ internal object ExtensionSessions {
     @Synchronized fun init(context: Context) {
         vault = ExtensionVault(context)
         data = vault.read()
-        if (!data.has("install_id")) data.put("install_id", UUID.randomUUID().toString())
+        if (!data.has("install_id")) data.put("install_id", ExtensionProtocol.randomHex(16))
         updateStatus()
         AmazonAudio.init(context)
     }
@@ -106,7 +106,7 @@ internal object ExtensionSessions {
     }
     private suspend fun signedRequest(path: String, body: String, session: ExtensionProtocol.Session, extra: Map<String, String> = emptyMap()): String {
         val signed = post(path, body).newBuilder().apply {
-            ExtensionProtocol.headers(session, "POST", "/v2$path", body, UUID.randomUUID().toString()).forEach { (k, v) -> header(k, v) }
+            ExtensionProtocol.headers(session, "POST", "/v2$path", body, ExtensionProtocol.randomHex(12)).forEach { (k, v) -> header(k, v) }
             extra.forEach { (k, v) -> header(k, v) }
         }.build()
         return try { request(signed) }
