@@ -42,3 +42,17 @@ for label, url in [("health", base + "/health"), ("bootstrap", base + "/bootstra
         report["unavailable"] = type(error).__name__
     print(json.dumps(report, sort_keys=True))
 print("This diagnostic does not establish browser verification or lossless playback.")
+
+# Synthetic values only: inspect public redirect code, never a real challenge/grant.
+try:
+    callback = "opentune://provider-session?cb_version=v2grant&state=opentune-diagnostic-state"
+    url = base + "/challenge?" + urllib.parse.urlencode({"id": "opentune-diagnostic", "cb": callback})
+    with opener.open(url, timeout=12) as response:
+        html = response.read(131073).decode("utf-8", errors="replace")
+        print(json.dumps({"check": "public_callback_page", "http_status": response.status}))
+    if len(html) <= 131072:
+        for line in html.splitlines():
+            if re.search(r"callback|\bcb\b|spotiflac|location|intent:|grant|URLSearchParams", line, re.I):
+                print(line[:3000])
+except Exception as error:
+    print(json.dumps({"check": "public_callback_page", "unavailable": type(error).__name__}))
