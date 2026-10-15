@@ -50,8 +50,7 @@ object SpotifyAccount {
         if (!isCallback(uri)) return@withLock false
         val data = vault.read()
         val state = data.optString("state")
-        val age = System.currentTimeMillis() - data.optLong("started")
-        if (state.isBlank() || uri.getQueryParameters("state") != listOf(state) || age !in 0..600_000) {
+        if (!SpotifyOAuth.matchesAttempt(uri.getQueryParameters("state"), state, data.optLong("started"), System.currentTimeMillis())) {
             _status.value = "This sign-in link expired or doesn't match. Start again in OpenTune."
             return@withLock false
         }

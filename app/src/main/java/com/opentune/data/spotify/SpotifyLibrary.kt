@@ -15,7 +15,7 @@ object SpotifyLibrary {
             it.password.isEmpty() && it.fragment == null && it.encodedPath.startsWith("/v1/")
     } == true
 
-    private suspend fun pages(first: String, read: suspend (String) -> JSONObject = SpotifyAccount::get): List<JSONObject> {
+    internal suspend fun pages(first: String, read: suspend (String) -> JSONObject = SpotifyAccount::get): List<JSONObject> {
         val all = mutableListOf<JSONObject>()
         val seen = mutableSetOf<String>()
         var next: String? = first
@@ -34,7 +34,7 @@ object SpotifyLibrary {
     suspend fun playlists(): List<Playlist> = pages("$API/me/playlists?limit=50").mapNotNull {
         val id = it.optString("id")
         if (!Regex("[A-Za-z0-9]{22}").matches(id)) null else Playlist(id, it.optString("name").ifBlank { "Spotify playlist" })
-    }
+    }.distinctBy { it.id }
     suspend fun likedSongs(): List<Spotify.Track> = pages("$API/me/tracks?limit=50").mapNotNull(::track)
     suspend fun playlist(id: String): List<Spotify.Track> {
         require(Regex("[A-Za-z0-9]{22}").matches(id))

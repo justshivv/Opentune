@@ -12,6 +12,36 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class SpotifyOAuthTest {
+    @Test fun rejectsExpiredWrongDuplicateAndReplayedStates() {
+        assertTrue(SpotifyOAuth.matchesAttempt(listOf("one"), "one", 1000, 2000))
+        assertFalse(SpotifyOAuth.matchesAttempt(listOf("other"), "one", 1000, 2000))
+        assertFalse(SpotifyOAuth.matchesAttempt(listOf("one", "one"), "one", 1000, 2000))
+        assertFalse(SpotifyOAuth.matchesAttempt(listOf("one"), "one", 1000, 601001))
+        assertFalse(SpotifyOAuth.matchesAttempt(listOf("one"), "", 0, 2000))
+        assertFalse(SpotifyOAuth.matchesAttempt(listOf("one"), "one", 3000, 2000))
+    }
+
+    @Test fun paginationKeepsAllPagesAndRejectsForeignNextUrlBeforeReadingIt() = kotlinx.coroutines.runBlocking {
+        val first = "https://api.spotify.com/v1/me/tracks?limit=50"
+        val next = "https://api.spotify.com/v1/me/tracks?offset=50"
+        val read = mutableListOf<String>()
+        val rows = SpotifyLibrary.pages(first) { url ->
+            read += url
+            JSONObject().put("items", org.json.JSONArray().put(JSONObject().put("id", url)))
+                .put("next", if (url == first) next else JSONObject.NULL)
+        }
+        assertEquals(2, rows.size)
+        assertEquals(listOf(first, next), read)
+        var calls = 0
+        try {
+            SpotifyLibrary.pages(first) {
+                calls++
+                JSONObject().put("items", org.json.JSONArray()).put("next", "https://foreign.example/v1/me")
+            }
+            fail("Foreign next URL must be rejected")
+        } catch (_: java.io.IOException) { assertEquals(1, calls) }
+    }
+
     @Test fun pkceMatchesRfc7636TestVectorAndHasReadOnlyScopes() {
         val verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
         assertEquals("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", SpotifyOAuth.challenge(verifier))
