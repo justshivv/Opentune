@@ -72,7 +72,14 @@ internal object ExtensionProtocol {
     /** Explicit paste recovery, like SpotiFLAC's launcher. Never register its scheme with Android. */
     fun pastedGrant(text: String, state: String, depth: Int = 0): String? {
         if (text.length !in 1..32768 || depth > 3 || text.any(Char::isISOControl)) return null
-        val uri = runCatching { Uri.parse(text.trim()) }.getOrNull() ?: return null
+        val input = text.trim()
+        val parameters = input.removePrefix("?")
+        // The provider may copy only query parameters. Upstream's manual recovery accepts
+        // these too; still require the exact active state and a single grant/code.
+        if (listOf("grant=", "code=", "state=").any(parameters::startsWith)) {
+            return runCatching { grant(Uri.parse("$CALLBACK?$parameters"), state) }.getOrNull()
+        }
+        val uri = runCatching { Uri.parse(input) }.getOrNull() ?: return null
         if (uri.fragment != null || uri.userInfo != null) return null
         val upstream = uri.scheme == "spotiflac" && uri.host == "session-grant" && uri.port == -1 && uri.path.isNullOrEmpty()
         if (isCallback(uri) || upstream) {

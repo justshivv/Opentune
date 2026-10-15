@@ -56,7 +56,7 @@ internal fun ProviderReturnLinkDialog(
                     Text("Your current track will be checked again for an Amazon Music stream.")
                 } else {
                     if (!pending && !saving) Text("This verification has expired or was cancelled. Close this dialog and connect again.")
-                    else Text("Paste the completed return link from your browser. You can use Paste below or press and hold inside the field.")
+                    else Text("Paste the completed return link or copied grant-and-state text from your browser. Use Paste below or press and hold inside the field.")
                     OutlinedTextField(
                         value = link,
                         onValueChange = { value ->
@@ -100,7 +100,7 @@ internal fun ProviderReturnLinkDialog(
                     if (onVerify(link.trim())) {
                         link = ""; feedback = "Result received. Saving your session…"; isError = false
                     } else {
-                        feedback = "This link is incomplete or does not match this verification. Copy the completed return link, not the original verification page."; isError = true
+                        feedback = "This link is incomplete or does not match this verification. Copy the complete result with both grant and state."; isError = true
                     }
                 } catch (_: Exception) {
                     feedback = "Could not save the result. Try again."; isError = true

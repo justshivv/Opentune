@@ -17,6 +17,8 @@ It is separate from OpenTune's older community SpotiFLAC connection.
    this dialog. Use the completed callback copied from the provider page. The original verification
    URL is not a completed result. A pasted callback must match the active random
    state, even if the provider used SpotiFLAC's callback scheme.
+   Copied parameter text such as `grant=…&state=…` is also accepted; it does not
+   need a URL prefix. A grant without its matching state remains incomplete.
    **Retry saving session** reuses a received grant after a connection failure.
    Expired verification is shown explicitly; connect again to start a new one.
 3. Use Max audio quality (or enable Lossless below Max), then play **Wo Noor —

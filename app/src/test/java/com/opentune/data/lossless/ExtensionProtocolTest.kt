@@ -78,6 +78,17 @@ class ExtensionProtocolTest {
         assertFalse(ExtensionProtocol.pendingActive(pending, 999L))
         assertFalse(ExtensionProtocol.pendingActive(pending.put("version", "old"), 1_000L))
     }
+    @Test fun copiedGrantParametersNeedNoUrlButStillRequireTheActiveState() {
+        for (text in listOf("grant=sample-grant&state=$state", "state=$state&grant=sample-grant",
+            "?code=sample-grant&state=$state")) {
+            assertEquals("sample-grant", ExtensionProtocol.pastedGrant(text, state))
+        }
+        for (text in listOf("grant=sample-grant", "grant=sample-grant&state=wrong",
+            "grant=sample-grant&state=$state&state=$state", "grant=sample-grant&code=another&state=$state",
+            "grant=sample-grant&grant=another&state=$state", "grant=sample-grant&state=$state#fragment")) {
+            assertNull(text, ExtensionProtocol.pastedGrant(text, state))
+        }
+    }
     @Test fun requiresUnexpiredWellFormedCredentials() {
         val json = JSONObject().put("session_id", "id").put("session_secret", "secret").put("expires_at", "2026-10-15T01:00:00Z")
         assertNotNull(ExtensionProtocol.session(json, Instant.parse("2026-10-15T00:00:00Z")))
