@@ -11,8 +11,10 @@ It is separate from OpenTune's older community SpotiFLAC connection.
    the browser to return to OpenTune. Only a successful grant exchange marks
    the provider connected.
    Verification now uses a Custom Tab first, with an external-browser fallback.
-   If Android does not deliver the result, use **Paste browser result** with the
-   completed callback copied from the provider page. The original verification
+   If Android does not deliver the result, tap **Paste browser result** to open
+   the **Return link** field. Tap **Paste** (or press and hold inside the field),
+   then **Verify link**. Clipboard, validation and exchange feedback appear in
+   this dialog. Use the completed callback copied from the provider page. The original verification
    URL is not a completed result. A pasted callback must match the active random
    state, even if the provider used SpotiFLAC's callback scheme.
    **Retry saving session** reuses a received grant after a connection failure.

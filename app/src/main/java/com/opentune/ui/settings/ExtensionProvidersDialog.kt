@@ -31,10 +31,12 @@ internal fun ExtensionProvidersDialog(onDismiss: () -> Unit) {
     var entries by remember { mutableStateOf<List<ExtensionRegistry.Entry>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var connectionMessage by remember { mutableStateOf<String?>(null) }
+    var showReturnLink by remember { mutableStateOf(false) }
     LaunchedEffect(pending) {
         while (pending) { kotlinx.coroutines.delay(1_000); ExtensionSessions.refreshStatus() }
     }
-    LaunchedEffect(status) { if (status == "Connected") message = "Connected. Your current track will be checked again." }
+    LaunchedEffect(status) { if (status == "Connected") connectionMessage = "Connected. Your current track will be checked again." }
     fun openBrowser(url: String, external: Boolean = false) {
         val uri = Uri.parse(url)
         if (!external) {
@@ -53,36 +55,30 @@ internal fun ExtensionProvidersDialog(onDismiss: () -> Unit) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Amazon Music", style = MaterialTheme.typography.titleMedium)
                     Text(status, color = MaterialTheme.colorScheme.primary)
+                    connectionMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                     Text("FLAC · best available\nUse Max quality or enable Lossless below Max. Audio keeps playing while an upgrade is prepared.", style = MaterialTheme.typography.bodySmall)
                     Button(enabled = !busy && status != "Connected" && status != "Saving verified session…", onClick = {
-                        busy = true; message = null
+                        busy = true; connectionMessage = null
                         scope.launch {
                             try {
                                 val url = ExtensionSessions.connect()
                                 if (url != null) openBrowser(url)
-                                else message = "Connected. Your current track will be checked again."
+                                else connectionMessage = "Connected. Your current track will be checked again."
                             } catch (e: CancellationException) { throw e }
-                            catch (_: Exception) { message = "Could not open verification. Check your connection and try again." }
+                            catch (_: Exception) { connectionMessage = "Could not open verification. Check your connection and try again." }
                             finally { busy = false }
                         }
                     }) { Text(if (status == "Connected") "Connected" else if (pending) "Continue verification" else "Connect in browser") }
                     if (pending) {
-                        Text("Complete verification, then tap the browser’s return-to-app button. If it stays in the browser, copy its completed callback link and tap Paste browser result below.", style = MaterialTheme.typography.bodySmall)
-                        TextButton(enabled = !busy, onClick = {
-                            try {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
-                                message = if (ExtensionSessions.receiveCallback(text, pasted = true)) "Verification received. Saving the session…"
-                                    else "No matching completed callback found. Copy the result from this verification, not the original verification link."
-                            } catch (_: Exception) { message = "Could not read or save the browser result. Try again." }
-                        }) { Text("Paste browser result") }
+                        Text("Complete verification, then tap the browser’s return-to-app button. If it stays in the browser, copy its completed return link and use Paste browser result below.", style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(enabled = !busy, onClick = { showReturnLink = true }) { Text("Paste browser result") }
                         TextButton(onClick = {
                             try { ExtensionSessions.pendingUrl()?.let { openBrowser(it, external = true) } }
-                            catch (_: Exception) { message = "No browser could open verification." }
+                            catch (_: Exception) { connectionMessage = "No browser could open verification." }
                         }) { Text("Open in external browser") }
                     }
                     if (canRetry) TextButton(onClick = { ExtensionSessions.retryCompletion() }) { Text("Retry saving session") }
-                    if (ExtensionSessions.enabled()) TextButton(onClick = { ExtensionSessions.disconnect(); message = "Amazon Music disconnected" }) { Text("Disconnect / cancel verification") }
+                    if (ExtensionSessions.enabled()) TextButton(onClick = { ExtensionSessions.disconnect(); connectionMessage = "Amazon Music disconnected" }) { Text("Disconnect / cancel verification") }
                 }
             }
             HorizontalDivider()
@@ -110,4 +106,18 @@ internal fun ExtensionProvidersDialog(onDismiss: () -> Unit) {
             }
         }
     }, confirmButton = { SheetButton("Done", onClick = onDismiss, closes = true) })
+    if (showReturnLink) ProviderReturnLinkDialog(
+        status = status,
+        pending = pending,
+        canRetry = canRetry,
+        readClipboard = {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val item = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+            // Read only text explicitly pasted by the user; do not dereference content URIs.
+            item?.text?.toString() ?: item?.uri?.toString()
+        },
+        onVerify = { ExtensionSessions.receiveCallback(it, pasted = true) },
+        onRetry = { ExtensionSessions.retryCompletion() },
+        onDismiss = { showReturnLink = false },
+    )
 }
