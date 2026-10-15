@@ -57,7 +57,7 @@ def route(request):
             path = (ROOT.parent / 'usage-api' / 'public' if url.netloc == 'usage.test' else ROOT) / url.path.lstrip('/')
             if path.is_dir(): path = path / 'index.html'
             if path.is_file():
-                mime = {'.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg'}.get(path.suffix, 'text/plain')
+                mime = {'.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json'}.get(path.suffix, 'text/plain')
                 request.fulfill(body=path.read_bytes(), content_type=mime)
             else: request.fulfill(status=404, body='')
     else:
