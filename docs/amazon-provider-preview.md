@@ -1,0 +1,85 @@
+# Amazon Music provider preview
+
+This is a native adapter for the Amazon 2.3.11 protocol documented by
+[SpotiFLAC Extension](https://github.com/spotiflacapp/SpotiFLAC-Extension/tree/main/sources/amazon).
+It is separate from OpenTune's older community SpotiFLAC connection.
+
+## Try it
+
+1. Open Settings → Audio → SpotiFLAC providers.
+2. Tap **Connect in browser**, complete the provider's verification, and allow
+   the browser to return to OpenTune. Only a successful grant exchange marks
+   the provider connected.
+   Verification now uses a Custom Tab first, with an external-browser fallback.
+   If Android does not deliver the result, tap **Paste browser result** to open
+   the **Return link** field. Tap **Paste** (or press and hold inside the field),
+   then **Verify link**. Clipboard, validation and exchange feedback appear in
+   this dialog. Use the completed callback copied from the provider page. The original verification
+   URL is not a completed result. A pasted callback must match the active random
+   state, even if the provider used SpotiFLAC's callback scheme.
+   Copied parameter text such as `grant=…&state=…` is also accepted; it does not
+   need a URL prefix. The provider's **Copy link** button sometimes supplies only
+   `grant=gr_…`. That exact code can be entered manually during the active
+   verification, then submitted with **Verify link**. Use only the code from the
+   browser page just opened for this connection. Without state, the app cannot
+   establish local callback correlation; it sends the code and its installation
+   ID to the pinned issuer and waits for a valid session before showing Connected.
+   Automatic callbacks still require matching state. Missing/mismatched state in
+   full URLs or multi-parameter results is never repaired using local state.
+   **Retry saving session** reuses a received grant after a connection failure.
+   Expired verification is shown explicitly; connect again to start a new one.
+3. Use Max audio quality (or enable Lossless below Max), then play **Wo Noor —
+   AP Dhillon**, the track reported working in SpotiFLAC by the tester.
+4. Audio starts through the existing fast path. Amazon is checked in the
+   background. Open Signal path to inspect the selected provider and the
+   measured bit depth/sample rate. It must actually say Amazon Music/FLAC;
+   a Connected badge alone does not confirm lossless playback.
+
+Both supplied registry URLs can be imported in the provider dialog. This
+preview implements Amazon only. Other catalogue entries are clearly marked
+unsupported. It does not execute downloaded JavaScript or .sflx packages.
+
+## Behaviour and limits
+
+- Browser state and session secrets are encrypted using Android Keystore and
+  excluded from cloud backup/device transfer. OpenTune has its own callback
+  scheme; it does not take over SpotiFLAC's callback.
+- Only the pinned Zarz HTTPS gateway receives signed requests. Redirects are
+  disabled for signed requests. A provider outage does not erase a valid session.
+- Verification requires a user tap; playback never repeatedly launches a browser.
+- A received grant is encrypted before exchange and restored after process death.
+  Exchange runs in the application scope, survives Activity recreation, ignores
+  duplicate deliveries, and cannot reconnect after an explicit disconnect.
+  Reopening the browser reuses the same challenge for its three-minute lifetime.
+  Connected is shown only after the exchanged session has been saved successfully.
+- Catalog title/artist and returned album metadata must match. The final FLAC
+  STREAMINFO duration must match the selected recording within three seconds.
+- Amazon can return FLAC inside MP4. The same audio-only FFmpegKit dependency
+  used by SpotiFLAC Mobile prepares this locally with stream copy, without
+  changing sample rate or bit depth. Non-FLAC responses are rejected.
+- Container preparation downloads the complete input in the background, with
+  a 256 MiB input limit, a 45 second download deadline and cancellation when the
+  playback lookup is cancelled. It can use substantially more data than AAC.
+  Prepared audio lives in the private cache; old files are cleaned on the next
+  preparation. Playback continues through its current source while this runs.
+- Upstream service availability, verification redirects and actual device
+  playback remain external integration checks, not claims made by unit tests.
+
+## Regression checks
+
+`ExtensionProtocolTest` checks an independently calculated signing vector,
+issuer/callback validation, expired credentials and error classification.
+`AmazonAdapterTest` checks exact recording selection, codec/delivery URL
+validation, non-transcoding preparation and registry compatibility checks.
+`ExtensionSessionManagerTest` exercises the actual connection lifecycle with
+injected storage and transport: duplicate callbacks, restored grants, late
+responses after disconnect, and failed persistence followed by retry.
+Existing startup-selection and lossless tests must continue passing.
+
+The live gateway health/bootstrap checks succeed, but its browser challenge page
+returns HTTP 403 to the Actions diagnostic for both OpenTune and SpotiFLAC callback
+URLs. This does not establish a callback-scheme restriction. Browser verification
+and Amazon playback on a real phone still need confirmation; unit tests cannot
+complete the user's interactive verification.
+
+No main merge or release is part of this preview.

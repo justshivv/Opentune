@@ -22,6 +22,26 @@ import java.util.concurrent.TimeUnit
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class LosslessHttpTest {
+    @Test fun preservesBoundedErrorContractWithoutPuttingItInExceptionMessages() = runBlocking {
+        val body = """{"origin":"provider","code":"PROVIDER_UNAVAILABLE"}"""
+        server { socket ->
+            socket.getOutputStream().apply {
+                write("HTTP/1.1 503 Unavailable\r\nContent-Type: application/json\r\nRetry-After: 60\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n$body".toByteArray())
+                flush()
+            }
+        }.use { server ->
+            try {
+                LosslessHttp.read(request(server), 1024)
+                fail("Expected HTTP failure")
+            } catch (expected: LosslessHttp.HttpFailure) {
+                assertEquals(503, expected.code)
+                assertEquals(body, expected.responseBody)
+                assertEquals(60L, expected.retryAfterSeconds)
+                assertEquals("Lossless HTTP 503", expected.message)
+            }
+        }
+    }
+
     @Test fun rangeProbePreservesFullSizeWithoutReadingFullFile() = runBlocking {
         server { socket ->
             socket.getOutputStream().apply {

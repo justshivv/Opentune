@@ -2,6 +2,8 @@
 <!-- Android 11 and older. Login cookie and Last.fm session are live credentials: never back them up. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="spotiflac.xml" />
+        <exclude domain="sharedpref" path="spotify_oauth.xml" />
+        <exclude domain="sharedpref" path="extension_sessions.xml" />
         <exclude domain="sharedpref" path="usage_v2.xml" />
     <exclude domain="sharedpref" path="account.xml" />
     <exclude domain="sharedpref" path="lastfm.xml" />

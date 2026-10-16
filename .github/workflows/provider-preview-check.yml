@@ -1,0 +1,14 @@
+name: Provider preview reachability
+on:
+  push:
+    branches: [feat/audio-sources-spotify-preview]
+permissions:
+  contents: read
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check public gateway and bootstrap contract (no login or audio)
+        run: python3 scripts/check-provider-preview.py

@@ -72,6 +72,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         })
         AppSettings.init(this)
         com.opentune.data.lossless.SpotiflacSession.init(this)
+        com.opentune.data.lossless.ExtensionSessions.init(this)
         History.init(this)
         LoudnessStore.init(this)
         UpgradedTracks.init(this)
@@ -85,8 +86,9 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         com.opentune.data.UpdateCheck.init(this)
         com.opentune.data.UpdateCheck.schedule(this)
         com.opentune.data.Usage.init(this)
-        // Spotify sign-in is gone; drop any tokens an earlier version kept.
+        // Drop the retired cookie-based store; official OAuth uses a separate encrypted vault.
         deleteSharedPreferences("spotify")
+        com.opentune.data.spotify.SpotifyAccount.init(this)
         com.opentune.data.podcasts.Podcasts.init(this)
         AlbumCovers.init(this)
         AutoEq.init(this)

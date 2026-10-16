@@ -34,7 +34,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "audio", "Audio", "Quality, loudness, effects and output", Icons.Rounded.GraphicEq,
         listOf(
             "Streaming quality" to listOf("On Wi-Fi", "On mobile data", "Upgrade quality while playing"),
-            "Higher-quality sources" to listOf("Lossless streaming", "JioSaavn quality upgrade", "Unmetered networks only", "Prefer hi-res lossless", "Qobuz relay", "SpotiFLAC verification", "Disconnect SpotiFLAC"),
+            "Higher-quality sources" to listOf("Lossless streaming", "JioSaavn quality upgrade", "Unmetered networks only", "Prefer hi-res lossless", "Qobuz relay", "ClashFLAC server", "SpotiFLAC providers", "SpotiFLAC verification", "Disconnect SpotiFLAC"),
             "Loudness" to listOf("Loudness normalization", "Volume level", "Normalize on the phone speaker"),
             "Sound" to listOf("Equalizer", "Clarity", "Spatial audio", "System audio effects"),
             "Output" to listOf("Output precision", "Prefer USB DAC", "Bit-perfect USB output"),
@@ -93,8 +93,9 @@ internal val SETTINGS_CATEGORIES = listOf(
         ),
     ),
     SettingsCategory(
-        "services", "Connected services", "Music server, Last.fm and ListenBrainz", Icons.Rounded.Cable,
+        "services", "Connected services", "Spotify, music server, Last.fm and ListenBrainz", Icons.Rounded.Cable,
         listOf(
+            "Spotify" to listOf("Spotify library"),
             "Your music server" to listOf("Music server", "Disconnect server"),
             "Last.fm" to listOf("Last.fm scrobbling", "Disconnect Last.fm"),
             "ListenBrainz" to listOf("ListenBrainz", "Disconnect ListenBrainz"),

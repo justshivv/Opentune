@@ -4,31 +4,6 @@ OpenTune is licensed under the GNU General Public License v3.0 (see
 [LICENSE](LICENSE)). It includes or uses the following code, libraries,
 fonts and data, under their own licences.
 
-The optional Echo motion effects are adapted from [Echo Music](https://github.com/EchoMusicApp/Echo-Music/tree/a31a72bd958f7cdc128db17d2ea6ae90c3489aa1),
-by the Echo Music contributors, under GPLv3. The sources are
-`ui/player/MiniPlayer.kt` (animated glow and wavy play button),
-`ui/component/BottomSheet.kt` (soft spring), `ui/component/EchoMusicLyrics.kt`
-(line focus), and `ui/component/LyricsV2.kt` (word lift), under
-`app/src/main/kotlin/com/music/echo/` at that revision.
-OpenTune adapts these in `ui/player/EchoMotion.kt`, `PlayerButtons.kt`,
-`LyricsView.kt` and `ui/PageMotion.kt`, with its own palette, pause/lifecycle
-handling and reduced-motion behavior. See [Echo motion](docs/echo-motion.md).
-
-The community lossless provider protocols, endpoint registry, SpotiFLAC session
-signing and verification flow under `data/lossless/` and `ui/settings/SpotiflacVerification.kt`
-are adapted from
-[Spotui](https://github.com/Spotui/Spotui/tree/main/app/src/main/java/com/music/spotui/lossless)
-under GPLv3. OpenTune adds YouTube Music identity lookup through
-[Odesli](https://odesli.co), cancellable network requests, FLAC validation,
-separate rendition caches and playback fallback.
-
-The Qobuz relay protocol in `data/lossless/QobuzCatalog.kt` follows
-[Meld's QobuzAudioProvider](https://github.com/FrancescoGrazioso/Meld/blob/main/app/src/main/kotlin/com/metrolist/music/qobuz/QobuzAudioProvider.kt)
-(Metrolist Project, copyright 2026, GPLv3). The JioSaavn URL decoding and
-conditional 320 kbps rendition selection follow
-[BitChord's JioSaavnService](https://github.com/kushagrasinghx/BitChord/blob/main/app/src/main/java/com/music/bitchord/data/jiosaavn/JioSaavnService.kt)
-(GPLv3). OpenTune adds conservative catalog matching and byte/size verification.
-
 The Innertube client, response parser and YouTube stream resolver under
 `data/innertube/` are adapted from
 [BitChord](https://github.com/kushagrasinghx/BitChord), used under its
@@ -50,3 +25,18 @@ Foundation. Headphone corrections come from
 Skip segments come from [SponsorBlock](https://sponsor.ajay.app) (data
 under CC BY-NC-SA 4.0), and radio stations from the
 [Radio Browser](https://www.radio-browser.info) community directory.
+
+The Amazon catalogue and Zarz v2 session adapter follow the protocol in
+[SpotiFLAC Extension](https://github.com/spotiflacapp/SpotiFLAC-Extension)
+(Apache-2.0; licence in `third_party/spotiflac-extension/LICENSE`) and the
+[SpotiFLAC Mobile](https://github.com/spotiflacapp/SpotiFLAC-Mobile) signed
+session implementation. The Kotlin implementation, strict callback checks,
+recording validation and OpenTune integration are maintained here.
+
+Amazon container preparation uses `com.antonkarpenko:ffmpeg-kit-audio:2.2.3`,
+the audio-only build of the maintained
+[FFmpegKit fork](https://github.com/sk3llo/ffmpeg_kit_flutter), based on
+[FFmpegKit](https://github.com/arthenica/ffmpeg-kit) and
+[FFmpeg](https://ffmpeg.org). The audio package is distributed under LGPL-3.0;
+see the upstream source, build instructions and component licences. OpenTune
+does not modify these native libraries.

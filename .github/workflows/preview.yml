@@ -1,7 +1,7 @@
 name: Test APK (no release)
 on:
   push:
-    branches: [fix/home-library-playback]
+    branches: [fix/home-library-playback, feat/audio-sources-spotify-preview]
 permissions:
   contents: read
 concurrency:

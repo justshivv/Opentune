@@ -33,7 +33,9 @@ object LosslessSource {
         if (!isYouTubeId(song.videoId)) return@withContext null
         val identity = CatalogIdentity(song.title, song.artist, song.albumName, durationMs)
         val linkedTidal = CompletableDeferred<String?>()
-        searchSources(bestAvailable, providers = listOf(
+        searchSources(bestAvailable, timeoutMs = if (ExtensionSessions.enabled()) 75_000 else 20_000, providers = listOf(
+            { record -> AmazonAudio.resolve(identity, report)?.let(record) },
+            { record -> ClashFlacSource.resolve(identity, AppSettings.playback.value.clashFlacUrl, report)?.let(record) },
             { record -> resolveCommunity(identity, linkedTidal, report)?.let(record) },
             { record -> QobuzCatalog.resolve(identity, preferHiRes || bestAvailable,
                 AppSettings.playback.value.qobuzRelayUrl, bestAvailable = bestAvailable, onCandidate = record) },
@@ -91,7 +93,7 @@ object LosslessSource {
         } catch (e: CancellationException) {
             throw e
         } catch (e: LosslessHttp.HttpFailure) {
-            report(if (e.code == 401) "SpotiFLAC: session rejected; verify again in Audio settings" else "SpotiFLAC: provider returned HTTP ${e.code}")
+            report(if (SpotiflacSession.needsVerification.value) "SpotiFLAC: session rejected; verify again in Audio settings" else "SpotiFLAC: provider returned HTTP ${e.code}")
             null
         } catch (_: Exception) {
             report("SpotiFLAC: provider request failed or timed out")

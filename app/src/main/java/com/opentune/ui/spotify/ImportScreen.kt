@@ -142,6 +142,8 @@ fun ImportScreen(
     val progress by PlaylistImport.progress.collectAsState()
     var text by rememberSaveable { mutableStateOf(initialLink.orEmpty()) }
     var preview by remember { mutableStateOf<Preview>(Preview.Empty) }
+    var connectSpotify by remember { mutableStateOf(false) }
+    if (connectSpotify) SpotifyConnection { connectSpotify = false }
     var playing by remember { mutableStateOf(false) }
 
     // Coming back from the in-app Exportify page with what it caught.
@@ -202,8 +204,11 @@ fun ImportScreen(
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader("Import a playlist", onBack = onBack) }
         item {
+            OutlinedButton(onClick = { connectSpotify = true }, modifier = Modifier.padding(horizontal = 20.dp)) { Text("Connect Spotify · import your library") }
+        }
+        item {
             Text(
-                "Paste a Spotify or YouTube Music link, share one to OpenTune, or pick a CSV export. Songs play from YouTube Music. No sign-in needed.",
+                "Paste a Spotify or YouTube Music link, share one to OpenTune, or pick a CSV export. Songs use OpenTune’s available audio sources. Public links need no sign-in.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
