@@ -16,6 +16,16 @@ class LosslessStoreTest {
     @get:Rule val temp = TemporaryFolder()
     private val track = LosslessTrack("B012345678", "Wo Noor", "AP Dhillon", durationMs = 190000)
     private fun entry() = LosslessEntry(track, UUID.randomUUID().toString())
+    @Test fun originalSongUriUsesVerifiedOfflineCopyAndFallsBackAfterRemoval() {
+        val store = LosslessStore(temp.newFolder())
+        LosslessDownloads.store = store
+        val e = entry().copy(track = track.copy(sourceIds = setOf("abcdefghijk")), state = LosslessState.DONE)
+        store.folder(e).mkdirs(); store.file(e).writeBytes(ByteArray(100)); store.put(e)
+        assertEquals("file", com.opentune.playback.trackUri("abcdefghijk").scheme)
+        assertEquals(store.file(e).path, com.opentune.playback.trackUri("abcdefghijk").path)
+        store.remove(e.track.key)
+        assertNotEquals("file", com.opentune.playback.trackUri("abcdefghijk").scheme)
+    }
     @Test fun sourceSongLinksSurviveRestartAlongsideExistingDownloads() {
         val store = LosslessStore(temp.newFolder())
         val e = entry().copy(track = track.copy(sourceIds = setOf("abcdefghijk")))

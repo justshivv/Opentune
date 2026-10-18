@@ -238,6 +238,7 @@ fun AppRoot(vm: PlayerViewModel) {
     var downloadProviders by remember { mutableStateOf(false) }
     val songMenu = remember(nav, vm) { SongMenuActions(
         download = { downloadSongs = it },
+        openDownloads = { playerOpen = false; nav.navigate("downloads") },
         playNext = vm::playNext,
         addToQueue = vm::addToQueue,
         startRadio = vm::startRadio,
@@ -780,7 +781,7 @@ fun AppRoot(vm: PlayerViewModel) {
             if (playerCovers) SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp))
         }
         downloadSongs?.let { songs ->
-            com.opentune.ui.lossless.DownloadQualitySheet(songs, onDismiss = { downloadSongs = null }, onProviders = { downloadProviders = true })
+            com.opentune.ui.lossless.DownloadQualitySheet(songs, onDismiss = { downloadSongs = null }, onProviders = { downloadProviders = true }, onDownloads = { downloadSongs = null; playerOpen = false; nav.navigate("downloads") })
         }
         if (downloadProviders) com.opentune.ui.settings.DownloadProvidersSheet { downloadProviders = false }
         if (opening) {

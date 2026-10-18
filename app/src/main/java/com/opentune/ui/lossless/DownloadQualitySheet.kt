@@ -20,7 +20,7 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-internal fun DownloadQualitySheet(songs: List<Song>, onDismiss: () -> Unit, onProviders: () -> Unit) {
+internal fun DownloadQualitySheet(songs: List<Song>, onDismiss: () -> Unit, onProviders: () -> Unit, onDownloads: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val installed by ProviderPackages.installed.collectAsState()
@@ -92,6 +92,7 @@ internal fun DownloadQualitySheet(songs: List<Song>, onDismiss: () -> Unit, onPr
                 if (busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Checking recordings · $searched of ${wanted.size}") }
                 else {
                     Text(if (matches.isEmpty()) "Could not verify the same recording. A matching title, artist and duration are required." else "${matches.size} matching recording${if (matches.size == 1) "" else "s"} · ${matches.size - pending.size} already saved or queued")
+                    if (matches.size > pending.size) Text("Existing copies stay unchanged. To change their quality, remove them from Downloads first.", style = MaterialTheme.typography.bodySmall)
                     if (missed > 0) Text("$missed recording(s) did not match and will be skipped.")
                     if (errors > 0) Text("$errors catalog request(s) failed. Retry or choose another provider.", color = MaterialTheme.colorScheme.error)
                     TextButton(onClick = { attempt++ }, enabled = !queueing) { Text("Check again") }
@@ -114,7 +115,7 @@ internal fun DownloadQualitySheet(songs: List<Song>, onDismiss: () -> Unit, onPr
                     finally { queueing = false }
                 }
             }) { Text(if (queueing) "Adding downloads…" else if (provider == null) "Download" else "Download FLAC${if (wanted.size > 1) " · ${pending.size} songs" else ""}") }
-            Text("Find saved files, progress and download details in Library → Downloads.", style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = onDownloads, enabled = !queueing) { Text("View downloads") }
         }
     }
 }

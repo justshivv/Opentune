@@ -113,7 +113,6 @@ fun DownloadAllButton(songs: List<Song>, modifier: Modifier = Modifier, list: Do
     val downloadRemaining = {
         started = true
         songMenu?.download?.invoke(wanted)
-        list?.let { com.opentune.data.download.DownloadedLists.save(it.id, it.title, it.subtitle, it.thumbnailUrl, songs.map { s -> s.videoId }) }
     }
     if (options) FloatingCard(onDismiss = { options = false }, title = "Playlist downloads", icon = Icons.Rounded.Download) {
         Text("$done of ${wanted.size} songs saved · $going pending", Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
