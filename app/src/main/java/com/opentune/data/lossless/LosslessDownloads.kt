@@ -46,7 +46,7 @@ internal data class LosslessEntry(val track: LosslessTrack, val workId: String,
 
 /** Atomic durable transitions; only the current worker may publish progress/completion. */
 internal class LosslessStore(val root: File) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val serializer = ListSerializer(LosslessEntry.serializer())
     private val index = AtomicFile(File(root.apply { mkdirs() }, "index.json"))
     private val data = MutableStateFlow<Map<String, LosslessEntry>>(emptyMap())

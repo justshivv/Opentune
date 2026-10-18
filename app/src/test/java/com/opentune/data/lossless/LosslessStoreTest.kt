@@ -19,6 +19,8 @@ class LosslessStoreTest {
     @Test fun restartPreservesWaitingTrackAndDoesNotTreatItAsYouTube() {
         val store = LosslessStore(temp.newFolder()); val e = entry().copy(state = LosslessState.WAITING)
         store.put(e)
+        // Dynamic defaults must be serialized, or a restart silently changes the queue date.
+        assertTrue(java.io.File(store.root, "index.json").readText().contains("\"addedAt\":${e.addedAt}"))
         assertEquals(e, LosslessStore(store.root).entries.value[track.id])
         assertFalse(isYouTubeId(track.song().videoId)); assertEquals("3:10", track.song().durationText)
     }
