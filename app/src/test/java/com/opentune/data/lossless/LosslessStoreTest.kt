@@ -16,6 +16,15 @@ class LosslessStoreTest {
     @get:Rule val temp = TemporaryFolder()
     private val track = LosslessTrack("B012345678", "Wo Noor", "AP Dhillon", durationMs = 190000)
     private fun entry() = LosslessEntry(track, UUID.randomUUID().toString())
+    @Test fun temporaryPreviewUrlsNeverEnterTheDurableDownloadIndex() {
+        val store = LosslessStore(temp.newFolder())
+        val e = entry().copy(track = track.copy(previewUrl = "https://cdn.example/preview?temporary=secret"))
+        store.put(e)
+        val json = java.io.File(store.root, "index.json").readText()
+        assertFalse(json.contains("temporary"))
+        assertFalse(json.contains("previewUrl"))
+        assertNull(LosslessStore(store.root).entries.value[track.id]!!.track.previewUrl)
+    }
     @Test fun restartPreservesWaitingTrackAndDoesNotTreatItAsYouTube() {
         val store = LosslessStore(temp.newFolder()); val e = entry().copy(state = LosslessState.WAITING)
         store.put(e)

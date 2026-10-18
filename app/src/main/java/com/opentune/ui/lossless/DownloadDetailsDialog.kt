@@ -9,6 +9,8 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -23,6 +25,12 @@ import java.time.format.DateTimeFormatter
 internal fun DownloadDetailsDialog(entry: LosslessEntry, network: DownloadNetworkState, worker: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val pkg = ProviderPackages.get(entry.track.provider)
+    val source by com.opentune.data.NerdStats.playbackSource.collectAsState()
+    val decoder by com.opentune.data.NerdStats.audioDecoder.collectAsState()
+    val underruns by com.opentune.data.NerdStats.audioUnderruns.collectAsState()
+    val sound by com.opentune.data.settings.AppSettings.sound.collectAsState()
+    val playback by com.opentune.data.settings.AppSettings.playback.collectAsState()
+    val equalizer by com.opentune.data.settings.AppSettings.equalizer.collectAsState()
     val time = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
     val report = buildString {
         appendLine("OpenTune ${BuildConfig.VERSION_NAME}")
@@ -31,6 +39,13 @@ internal fun DownloadDetailsDialog(entry: LosslessEntry, network: DownloadNetwor
         appendLine("Provider: ${ProviderPackages.displayName(entry.track.provider)} ${pkg?.version ?: "not installed"}")
         pkg?.let { appendLine("Package SHA-256: ${it.listing.sha256}") }
         appendLine("Quality: ${entry.quality}")
+        if (entry.state == LosslessState.DONE) appendLine("Saved FLAC: ${entry.bits}-bit / ${entry.sampleRate} Hz")
+        if (source?.mediaId == entry.track.song().videoId) {
+            appendLine("Current decoder: ${decoder ?: "starting"}")
+            appendLine("Current track buffer underruns: $underruns")
+            appendLine("Playback: speed ${sound.speed}, pitch ${sound.pitch}, float output ${playback.floatOutput}")
+            appendLine("Effects: EQ ${equalizer.enabled}, bass ${sound.bassBoost}, clarity ${playback.clarity}, widening ${playback.spatialAudio}, 8D ${sound.eightD}, 3D ${sound.space}, reverb ${sound.reverb}, system effects ${playback.systemEffects}")
+        }
         appendLine("Network: ${network.label}")
         appendLine("Policy: ${if (entry.unmeteredOnly) "unmetered only" else "Wi-Fi or mobile data"}")
         appendLine("Android worker: $worker")

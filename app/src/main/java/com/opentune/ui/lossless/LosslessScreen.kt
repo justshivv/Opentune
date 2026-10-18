@@ -51,7 +51,6 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
     val status by ExtensionSessions.forProvider(provider).status.collectAsState()
     val network by DownloadNetwork.state.collectAsState()
     val workers by LosslessDownloads.workStates.collectAsState()
-    var providerMenu by remember { mutableStateOf(false) }
     var quality by rememberSaveable(provider, pkg?.version) { mutableStateOf(pkg?.qualities?.firstOrNull()?.first ?: "best") }
     var details by remember { mutableStateOf<String?>(null) }
     val library by AppSettings.library.collectAsState()
@@ -151,12 +150,9 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
         item {
             Surface(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box {
-                        TextButton(onClick = { providerMenu = true }) { Text(ProviderPackages.displayName(provider) + " ▾", style = MaterialTheme.typography.titleMedium) }
-                        DropdownMenu(expanded = providerMenu, onDismissRequest = { providerMenu = false }) {
-                            installed.values.forEach { candidate -> DropdownMenuItem(text = { Text(candidate.name) }, onClick = { chosenProvider = candidate.id; providerMenu = false; results = emptyList(); submitted = "" }) }
-                            DropdownMenuItem(text = { Text("Add providers…") }, onClick = { providerMenu = false; tab = 2 })
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Audio source", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        TextButton(onClick = { tab = 2 }) { Text("Add providers") }
                     }
                     Text(if (pkg == null) "Provider package not installed" else "$status · Extension ${pkg.version}", color = MaterialTheme.colorScheme.primary)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

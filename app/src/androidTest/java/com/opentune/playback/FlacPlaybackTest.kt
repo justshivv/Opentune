@@ -79,7 +79,8 @@ class FlacPlaybackTest {
                         override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_ENDED) ended.countDown() }
                         override fun onPlayerError(error: PlaybackException) { failure = error; ended.countDown() }
                     })
-                    setMediaItems(files.map { MediaItem.fromUri(android.net.Uri.fromFile(it)) })
+                    // Use the same overload as the app; R8 removes unused convenience overloads.
+                    setMediaItems(files.map { MediaItem.fromUri(android.net.Uri.fromFile(it)) }, 0, 0L)
                     prepare(); play()
                 }
             }
