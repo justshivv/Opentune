@@ -34,10 +34,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
     val entries by LosslessDownloads.entries.collectAsState()
-    val status by ExtensionSessions.status.collectAsState()
+    val installed by ProviderPackages.installed.collectAsState()
+    var chosenProvider by rememberSaveable { mutableStateOf("amazon") }
+    val provider = chosenProvider.takeIf { it in installed } ?: installed.keys.firstOrNull() ?: "amazon"
+    val pkg = installed[provider]
+    val status by ExtensionSessions.forProvider(provider).status.collectAsState()
+    val network by DownloadNetwork.state.collectAsState()
+    val workers by LosslessDownloads.workStates.collectAsState()
+    var providerMenu by remember { mutableStateOf(false) }
+    var quality by rememberSaveable(provider, pkg?.version) { mutableStateOf(pkg?.qualities?.firstOrNull()?.first ?: "best") }
+    var details by remember { mutableStateOf<String?>(null) }
     val library by AppSettings.library.collectAsState()
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -49,7 +59,7 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
-    var connection by remember { mutableStateOf(false) }
+    var connection by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<LosslessTrack?>(null) }
     var deleting by remember { mutableStateOf<LosslessEntry?>(null) }
     var exportId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -64,25 +74,25 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
             finally { exporting = false }
         }
     }
-    LaunchedEffect(submitted, attempt) {
+    LaunchedEffect(submitted, attempt, provider) {
         if (submitted.isBlank()) return@LaunchedEffect
         busy = true; error = null; results = emptyList()
-        try { results = withContext(Dispatchers.IO) { AmazonCatalog.search(submitted) } }
+        try { results = withContext(Dispatchers.IO) { ProviderRuntime.search(provider, submitted) } }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { error = losslessError("Catalog search", e) }
         finally { busy = false }
     }
     fun search() { keyboard?.hide(); submitted = query.trim(); attempt++ }
-    fun enqueue(track: LosslessTrack) {
+    fun enqueue(track: LosslessTrack, selectedQuality: String = quality) {
         selected = null; tab = 1
         scope.launch {
-            try { LosslessDownloads.enqueue(track); if (ExtensionSessions.current() == null) connection = true }
+            try { LosslessDownloads.enqueue(track, selectedQuality); if (installed[track.provider] == null) tab = 2 else if (ExtensionSessions.forProvider(track.provider).current() == null) connection = track.provider }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { notice = "Could not queue the download. Check free space and try again." }
         }
     }
     fun remove(entry: LosslessEntry) { scope.launch {
-        try { LosslessDownloads.remove(entry.track.id) }
+        try { LosslessDownloads.remove(entry.track.key) }
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { notice = "Could not remove this download. Try again." }
     } }
@@ -103,10 +113,16 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
         item {
             Surface(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Amazon Music", style = MaterialTheme.typography.titleMedium)
-                    Text(status, color = MaterialTheme.colorScheme.primary)
+                    Box {
+                        TextButton(onClick = { providerMenu = true }) { Text(ProviderPackages.displayName(provider) + " ▾", style = MaterialTheme.typography.titleMedium) }
+                        DropdownMenu(expanded = providerMenu, onDismissRequest = { providerMenu = false }) {
+                            installed.values.forEach { candidate -> DropdownMenuItem(text = { Text(candidate.name) }, onClick = { chosenProvider = candidate.id; providerMenu = false; results = emptyList(); submitted = "" }) }
+                            DropdownMenuItem(text = { Text("Add providers…") }, onClick = { providerMenu = false; tab = 2 })
+                        }
+                    }
+                    Text(if (pkg == null) "Provider package not installed" else "$status · Extension ${pkg.version}", color = MaterialTheme.colorScheme.primary)
                     Text("FLAC · best available. Actual bit depth and sample rate appear after download. Availability varies by recording.", style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(onClick = { connection = true }) { Text(if (status == "Connected") "Manage connection" else "Connect provider") }
+                    OutlinedButton(onClick = { if (pkg == null) tab = 2 else connection = provider }) { Text(if (pkg == null) "Install provider" else if (status == "Connected") "Manage connection" else "Connect provider") }
                 }
             }
         }
@@ -118,15 +134,16 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
                 }
             }
         }
-        item { Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        item { FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(tab == 0, { tab = 0 }, label = { Text("Find music") })
             FilterChip(tab == 1, { tab = 1 }, label = { Text("Downloads (${entries.size})") })
+            FilterChip(tab == 2, { tab = 2 }, label = { Text("Providers") })
         } }
         if (tab == 0) {
             item { Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(query, { query = it.take(200) }, Modifier.fillMaxWidth(), label = { Text("Song or artist") }, singleLine = true,
                     leadingIcon = { Icon(Icons.Rounded.Search, null) }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { search() }))
-                Button(onClick = { search() }, enabled = query.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth()) { Text("Search Amazon Music") }
+                Button(onClick = { search() }, enabled = query.isNotBlank() && !busy && pkg != null, modifier = Modifier.fillMaxWidth()) { Text("Search ${ProviderPackages.displayName(provider)}") }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (!busy && error == null) Text(if (submitted.isBlank()) "Find a track, then choose Download FLAC." else if (results.isEmpty()) "No tracks found. Try the title and artist." else "${results.size} tracks · select a recording")
@@ -135,32 +152,54 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
                 Surface(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         TrackHeading(track)
-                        val entry = entries[track.id]
+                        val entry = entries[track.key]
                         Button(onClick = { selected = track }, enabled = entry == null || entry.state == LosslessState.FAILED) {
                             Text(if (entry?.state == LosslessState.DONE) "Saved lossless" else if (entry != null && entry.state != LosslessState.FAILED) "In downloads" else "Download FLAC")
                         }
                     }
                 }
             }
+        } else if (tab == 2) {
+            item { ProviderRepositoryPanel { chosenProvider = it; tab = 0; submitted = ""; results = emptyList() } }
         } else {
+            item { Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) { Text("Unmetered networks only"); Text(network.label, style = MaterialTheme.typography.bodySmall) }
+                Switch(checked = library.downloadWifiOnly, onCheckedChange = { enabled -> AppSettings.updateLibrary { it.copy(downloadWifiOnly = enabled) } })
+            } }
             item { Text(if (library.downloadWifiOnly) "Downloads wait for an unmetered network, following your download settings." else "Downloads can use Wi-Fi or mobile data.", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall) }
             if (entries.isEmpty()) item { Text("Your lossless library starts here. Find a track to save it for offline listening.", Modifier.padding(24.dp)) }
             if (queue.isNotEmpty()) item { Text("Download queue", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge) }
-            items(queue, key = { it.track.id }) { e -> LosslessCard(e, onRetry = { enqueue(e.track) }, onCancel = { remove(e) }, onConnect = { connection = true }) }
+            items(queue, key = { it.track.key }) { e -> LosslessCard(e, onRetry = { enqueue(e.track, e.quality) }, onCancel = { remove(e) },
+                onConnect = { if (installed[e.track.provider] == null) tab = 2 else connection = e.track.provider },
+                waitingReason = if (e.state == LosslessState.QUEUED) DownloadNetwork.waitingReason(e, network, workers[e.workId] == androidx.work.WorkInfo.State.RUNNING) else null,
+                showMobileAction = e.state == LosslessState.QUEUED && e.unmeteredOnly && network.connected && network.metered,
+                onMobile = { scope.launch {
+                    try { LosslessDownloads.enqueue(e.track, e.quality, allowMetered = true, replaceQueued = true) }
+                    catch (c: CancellationException) { throw c }
+                    catch (_: Exception) { notice = "Could not reschedule the download. Tap Retry." }
+                } },
+                needsInstallation = installed[e.track.provider] == null,
+                onDetails = { details = e.track.key }) }
             if (saved.isNotEmpty()) item { Text("Saved lossless", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge) }
-            items(saved, key = { it.track.id }) { e -> LosslessCard(e,
+            items(saved, key = { it.track.key }) { e -> LosslessCard(e,
                 onPlay = { actions.playAll(saved.map(LosslessDownloads::song), saved.indexOf(e), false, "Lossless downloads") },
-                onExport = { exportId = e.track.id; exporter.launch("${e.track.artist} - ${e.track.title}".replace(Regex("[\\\\/:*?\"<>|]"), "_").take(150) + ".flac") },
-                onRemove = { deleting = e }, exportEnabled = !exporting) }
+                onExport = { exportId = e.track.key; exporter.launch("${e.track.artist} - ${e.track.title}".replace(Regex("[\\\\/:*?\"<>|]"), "_").take(150) + ".flac") },
+                onRemove = { deleting = e }, exportEnabled = !exporting, onDetails = { details = e.track.key }) }
             if (exporting) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(16.dp)) }
         }
         item { Spacer(Modifier.height(8.dp)) }
     }
-    if (connection) LosslessConnectionDialog { connection = false }
+    connection?.let { id -> LosslessConnectionDialog(id) { connection = null } }
+    details?.let { key -> entries[key]?.let { DownloadDetailsDialog(it, network, workers[it.workId]?.name ?: "Not scheduled", onDismiss = { details = null }) } }
     selected?.let { track -> FloatingDialog(onDismissRequest = { selected = null }, title = { Text("Download lossless") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(track.title, style = MaterialTheme.typography.titleLarge); Text(track.artist)
-            Text("Amazon Music · FLAC best available")
+            Text(ProviderPackages.displayName(track.provider))
+            installed[track.provider]?.qualities?.forEach { (id, label) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = quality == id, onClick = { quality = id }); TextButton(onClick = { quality = id }) { Text(label) }
+                }
+            }
             Text("The complete file is downloaded and checked before offline playback. No lossy fallback or upsampling.")
             Text("Saved in OpenTune. Export afterward to keep a copy in your chosen folder. Up to 512 MB per track; 1 GB free space needed.", style = MaterialTheme.typography.bodySmall)
         }
@@ -182,11 +221,12 @@ private fun TrackHeading(track: LosslessTrack) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun LosslessCard(entry: LosslessEntry, onRetry: () -> Unit = {}, onCancel: () -> Unit = {}, onConnect: () -> Unit = {},
-    onPlay: () -> Unit = {}, onExport: () -> Unit = {}, onRemove: () -> Unit = {}, exportEnabled: Boolean = true) {
+    onPlay: () -> Unit = {}, onExport: () -> Unit = {}, onRemove: () -> Unit = {}, exportEnabled: Boolean = true,
+    waitingReason: String? = null, showMobileAction: Boolean = false, onMobile: () -> Unit = {}, needsInstallation: Boolean = false, onDetails: () -> Unit = {}) {
     Surface(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            TrackHeading(entry.track.copy(artwork = LosslessDownloads.artFor(entry.track.id)?.toURI()?.toString() ?: entry.track.artwork))
-            Text(if (entry.state == LosslessState.DONE) "FLAC · ${entry.bits}-bit / ${entry.sampleRate / 1000.0} kHz · ${sizeLabel(entry.bytes)}" else entry.state.label,
+            TrackHeading(entry.track.copy(artwork = LosslessDownloads.artFor(entry.track.key)?.toURI()?.toString() ?: entry.track.artwork))
+            Text(if (entry.state == LosslessState.DONE) "FLAC · ${entry.bits}-bit / ${entry.sampleRate / 1000.0} kHz · ${sizeLabel(entry.bytes)}" else waitingReason ?: entry.state.label,
                 color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             if (entry.state == LosslessState.DOWNLOADING) {
                 if (entry.total > 0) LinearProgressIndicator(progress = { (entry.bytes.toFloat() / entry.total).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
@@ -197,10 +237,12 @@ internal fun LosslessCard(entry: LosslessEntry, onRetry: () -> Unit = {}, onCanc
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 when (entry.state) {
                     LosslessState.DONE -> { Button(onClick = onPlay) { Text("Play") }; OutlinedButton(onClick = onExport, enabled = exportEnabled) { Text("Export") }; TextButton(onClick = onRemove) { Text("Remove") } }
-                    LosslessState.WAITING -> { Button(onClick = onConnect) { Text("Verify provider") }; TextButton(onClick = onRetry) { Text("Resume") }; TextButton(onClick = onCancel) { Text("Cancel") } }
+                    LosslessState.WAITING -> { Button(onClick = onConnect) { Text(if (needsInstallation) "Install provider" else "Verify provider") }; TextButton(onClick = onRetry) { Text("Resume") }; TextButton(onClick = onCancel) { Text("Cancel") } }
                     LosslessState.FAILED -> { Button(onClick = onRetry) { Text("Retry") }; TextButton(onClick = onCancel) { Text("Remove") } }
                     else -> TextButton(onClick = onCancel) { Text("Cancel download") }
                 }
+                if (showMobileAction) OutlinedButton(onClick = onMobile) { Text("Use mobile data") }
+                TextButton(onClick = onDetails) { Text("Details") }
             }
         }
     }

@@ -95,6 +95,8 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         com.opentune.data.library.LibraryArtwork.init(this)
         LibraryStore.init(this)
         Downloads.init(this)
+        com.opentune.data.lossless.ProviderPackages.init(this)
+        com.opentune.data.lossless.ProviderRuntime.init(this)
         com.opentune.data.lossless.ExtensionSessions.init(this)
         com.opentune.data.lossless.LosslessDownloads.init(this)
         com.opentune.data.download.DownloadedLists.init(this)

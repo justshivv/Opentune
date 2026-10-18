@@ -45,6 +45,20 @@ class ExtensionSessionManagerTest {
         .appendQueryParameter("grant", "test-grant").build().toString()
     @After fun cleanup() { scopes.forEach { it.cancel() } }
 
+    @Test fun runtimeRequestsCarryUpstreamHeadersAndKeepProviderDenialConnected() = runBlocking {
+        stored = JSONObject().put("install_id", "fixture").put("enabled", true).put("scope", ExtensionProtocol.VERSION).put("session", JSONObject(session))
+        val manager = manager { request ->
+            assertEquals("SpotiFLAC-Mobile/${ExtensionProtocol.VERSION}", request.header("User-Agent"))
+            assertEquals("application/json", request.header("Accept"))
+            assertEquals("fixture-ticket", request.header("X-Zarz-Ticket"))
+            assertNotNull(request.header("X-Zarz-Signature"))
+            throw LosslessHttp.HttpFailure(403, """{"origin":"provider","code":"PROVIDER_AUTH_FAILED"}""")
+        }
+        try { manager.signed("/dl/amazeamazeamaze", JSONObject().put("asin", "B012345678"), mapOf("X-Zarz-Ticket" to "fixture-ticket")); fail() }
+        catch (e: LosslessHttp.HttpFailure) { assertEquals("PROVIDER_AUTH_FAILED", ProviderDiagnostic.from(e).code) }
+        assertEquals("Connected", manager.status.value)
+    }
+
     @Test fun reopeningBrowserKeepsTheOriginalChallenge() = runBlocking {
         var requests = 0
         val manager = manager { requests++; """{"challenge_id":"test-challenge"}""" }

@@ -21,19 +21,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun LosslessConnectionDialog(onDismiss: () -> Unit) {
+internal fun LosslessConnectionDialog(provider: String = "amazon", onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val status by ExtensionSessions.status.collectAsState()
-    val pending by ExtensionSessions.pending.collectAsState()
-    val retry by ExtensionSessions.canRetry.collectAsState()
+    val manager = remember(provider) { ExtensionSessions.forProvider(provider) }
+    val status by manager.status.collectAsState()
+    val pending by manager.pending.collectAsState()
+    val retry by manager.canRetry.collectAsState()
     var paste by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(pending) { while (pending) { delay(1000); ExtensionSessions.refreshStatus() } }
+    LaunchedEffect(pending) { while (pending) { delay(1000); manager.refreshStatus() } }
     FloatingDialog(onDismissRequest = onDismiss, title = { Text("Lossless provider") }, text = {
         Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Amazon Music", style = MaterialTheme.typography.titleLarge)
+            Text(com.opentune.data.lossless.ProviderPackages.displayName(provider), style = MaterialTheme.typography.titleLarge)
             Text(status, color = MaterialTheme.colorScheme.primary)
             Text("Connect through the SpotiFLAC extension service. Verification opens in your browser. Downloads still depend on provider availability.")
             message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -41,7 +42,7 @@ internal fun LosslessConnectionDialog(onDismiss: () -> Unit) {
                 scope.launch {
                     busy = true; message = null
                     try {
-                        ExtensionSessions.connect()?.let { url ->
+                        manager.connect()?.let { url ->
                             try { CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, Uri.parse(url)) }
                             catch (_: android.content.ActivityNotFoundException) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
                         }
@@ -54,12 +55,12 @@ internal fun LosslessConnectionDialog(onDismiss: () -> Unit) {
                 Text("If the browser stays open, use its Copy link button, then paste the result here.")
                 OutlinedButton(onClick = { paste = true }) { Text("Paste browser result") }
             }
-            if (retry) TextButton(onClick = ExtensionSessions::retryCompletion) { Text("Retry saving session") }
-            if (ExtensionSessions.enabled()) TextButton(onClick = ExtensionSessions::disconnect) { Text("Disconnect / cancel verification") }
+            if (retry) TextButton(onClick = manager::retryCompletion) { Text("Retry saving session") }
+            if (manager.enabled()) TextButton(onClick = manager::disconnect) { Text("Disconnect / cancel verification") }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } })
     if (paste) ProviderReturnLinkDialog(status, pending, retry, readClipboard = {
         val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clip.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.let { it.text?.toString() ?: it.uri?.toString() }
-    }, onVerify = { ExtensionSessions.receiveCallback(it, pasted = true) }, onRetry = ExtensionSessions::retryCompletion, onDismiss = { paste = false })
+    }, onVerify = { manager.receiveCallback(it, pasted = true) }, onRetry = manager::retryCompletion, onDismiss = { paste = false })
 }

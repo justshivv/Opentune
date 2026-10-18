@@ -988,7 +988,7 @@ class PlaybackService : MediaLibraryService() {
             ?.let { com.opentune.data.lossless.LosslessDownloads.entry(it) }?.takeIf { it.state == com.opentune.data.lossless.LosslessState.DONE }
         val provider = when {
             item == null -> "No track selected"
-            savedLossless != null -> "Amazon Music · downloaded FLAC"
+            savedLossless != null -> "${com.opentune.data.lossless.ProviderPackages.displayName(savedLossless.track.provider)} · downloaded FLAC"
             rendition != null -> rendition.provider
             uri?.let(::startupToken) != null -> "Loading audio…"
             LocalMusic.isLocal(item.mediaId) -> "Local file"

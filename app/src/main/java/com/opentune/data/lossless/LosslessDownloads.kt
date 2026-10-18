@@ -15,6 +15,9 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -28,8 +31,9 @@ import java.util.UUID
 
 @Serializable
 internal data class LosslessTrack(val id: String, val title: String, val artist: String,
-    val artwork: String? = null, val durationMs: Long = 0) {
-    fun song(duration: Long = durationMs, art: String? = artwork) = Song("lossless:$id", title, artist, art,
+    val artwork: String? = null, val durationMs: Long = 0, val provider: String = "amazon") {
+    val key get() = if (provider == "amazon") id else "$provider:$id"
+    fun song(duration: Long = durationMs, art: String? = artwork) = Song("lossless:$key", title, artist, art,
         durationText = duration.takeIf { it > 0 }?.let { "${it / 60000}:${(it / 1000 % 60).toString().padStart(2, '0')}" })
 }
 @Serializable
@@ -39,10 +43,13 @@ internal enum class LosslessState(val label: String) {
     val active get() = this !in setOf(WAITING, DONE, FAILED)
 }
 @Serializable
+internal data class DownloadEvent(val time: Long, val message: String)
+@Serializable
 internal data class LosslessEntry(val track: LosslessTrack, val workId: String,
     val state: LosslessState = LosslessState.QUEUED, val bytes: Long = 0, val total: Long = 0,
     val bits: Int = 0, val sampleRate: Int = 0, val durationMs: Long = 0,
-    val error: String? = null, val addedAt: Long = System.currentTimeMillis())
+    val error: String? = null, val addedAt: Long = System.currentTimeMillis(),
+    val unmeteredOnly: Boolean = true, val quality: String = "best", val events: List<DownloadEvent> = emptyList())
 
 /** Atomic durable transitions; only the current worker may publish progress/completion. */
 internal class LosslessStore(val root: File) {
@@ -53,12 +60,12 @@ internal class LosslessStore(val root: File) {
     val entries = data.asStateFlow()
     init {
         data.value = runCatching { index.openRead().bufferedReader().use { json.decodeFromString(serializer, it.readText()) } }
-            .getOrDefault(emptyList()).filter(::valid).associateBy { it.track.id }.mapValues { (_, e) ->
+            .getOrDefault(emptyList()).filter(::valid).associateBy { it.track.key }.mapValues { (_, e) ->
                 if (e.state == LosslessState.DONE && (!file(e).isFile || file(e).length() <= 42))
                     e.copy(state = LosslessState.FAILED, error = "Saved file is missing. Download it again.") else e
             }
     }
-    private fun valid(e: LosslessEntry) = Regex("[A-Z0-9]{10}").matches(e.track.id) &&
+    private fun valid(e: LosslessEntry) = e.track.provider in ProviderPackages.supported && Regex("[A-Za-z0-9_-]{1,100}").matches(e.track.id) &&
         runCatching { UUID.fromString(e.workId).toString() == e.workId }.getOrDefault(false)
     fun folder(e: LosslessEntry) = File(root, e.workId)
     fun file(e: LosslessEntry) = File(folder(e), "audio.flac")
@@ -70,10 +77,10 @@ internal class LosslessStore(val root: File) {
         }
         data.value = next
     }
-    @Synchronized fun put(e: LosslessEntry) { require(valid(e)); publish(data.value + (e.track.id to e)) }
+    @Synchronized fun put(e: LosslessEntry) { require(valid(e)); publish(data.value + (e.track.key to e)) }
     @Synchronized fun update(id: String, owner: String, durable: Boolean = true, change: (LosslessEntry) -> LosslessEntry): Boolean {
         val old = data.value[id]?.takeIf { it.workId == owner } ?: return false
-        val next = change(old); require(next.workId == owner && next.track.id == id)
+        val next = change(old); require(next.workId == owner && next.track.key == id)
         publish(data.value + (id to next), durable); return true
     }
     @Synchronized fun remove(id: String): LosslessEntry? {
@@ -86,46 +93,73 @@ internal object LosslessDownloads {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val scheduling = Mutex()
     val entries get() = store.entries
+    val workStates = MutableStateFlow<Map<String, WorkInfo.State>>(emptyMap())
     fun isLossless(id: String) = id.startsWith("lossless:")
     fun entry(id: String) = if (::store.isInitialized) store.entries.value[id.removePrefix("lossless:")] else null
     fun fileFor(id: String) = entry(id)?.takeIf { it.state == LosslessState.DONE }?.let { store.file(it) }?.takeIf { it.isFile && it.length() > 42 }
     fun artFor(id: String) = entry(id)?.takeIf { it.state == LosslessState.DONE }?.let { File(store.folder(it), "cover.jpg") }?.takeIf { it.isFile }
-    fun song(e: LosslessEntry) = e.track.song(e.durationMs, artFor(e.track.id)?.toURI()?.toString() ?: e.track.artwork)
+    fun song(e: LosslessEntry) = e.track.song(e.durationMs, artFor(e.track.key)?.toURI()?.toString() ?: e.track.artwork)
     fun init(context: Context) {
         this.context = context.applicationContext
         store = LosslessStore(File(context.filesDir, "lossless-downloads"))
+        DownloadNetwork.init(context)
         scope.launch {
             // WorkManager restarts active jobs. Only repair work that was never scheduled or has finished.
             entries.value.values.filter { it.state.active }.forEach { e ->
                 runCatching {
                     val info = runInterruptible { WorkManager.getInstance(context).getWorkInfoById(UUID.fromString(e.workId)).get() }
-                    if (info == null || info.state.isFinished) store.update(e.track.id, e.workId) {
+                    if (info == null || info.state.isFinished) store.update(e.track.key, e.workId) {
                         it.copy(state = LosslessState.FAILED, error = "Download was interrupted. Tap Retry to start again.")
                     }
                 }
             }
-            ExtensionSessions.status.collect { status ->
-                if (status == "Connected") entries.value.values.filter { it.state == LosslessState.WAITING }.forEach {
-                    runCatching { enqueue(it.track) }
+        }
+        scope.launch {
+            WorkManager.getInstance(context).getWorkInfosByTagFlow("lossless-downloads").collect { infos ->
+                workStates.value = infos.associate { it.id.toString() to it.state }
+                infos.filter { it.state.isFinished }.forEach { info ->
+                    entries.value.values.firstOrNull { it.workId == info.id.toString() && it.state.active }?.let { e ->
+                        store.update(e.track.key, e.workId) { it.copy(state = LosslessState.FAILED, error = "Android stopped this download. Tap Retry.") }
+                    }
                 }
             }
         }
+        scope.launch {
+            AppSettings.library.map { it.downloadWifiOnly }.distinctUntilChanged().drop(1).collect {
+                entries.value.values.filter { it.state == LosslessState.QUEUED }.forEach { e ->
+                    runCatching { enqueue(e.track, e.quality, replaceQueued = true) }
+                }
+            }
+        }
+        scope.launch { ExtensionSessions.changes.collect { resumeVerified() } }
+        scope.launch { ProviderPackages.installed.collect { resumeVerified() } }
     }
-    suspend fun enqueue(track: LosslessTrack) = withContext(Dispatchers.IO) { scheduling.withLock {
-        val old = entries.value[track.id]
-        if (old?.state == LosslessState.DONE || old?.state?.active == true) return@withLock
-        val request = OneTimeWorkRequestBuilder<LosslessWorker>().setInputData(workDataOf("trackId" to track.id))
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(if (AppSettings.library.value.downloadWifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED).build())
+    private suspend fun resumeVerified() {
+        entries.value.values.filter { it.state == LosslessState.WAITING }.forEach { e ->
+            if (ProviderPackages.get(e.track.provider) != null && ExtensionSessions.forProvider(e.track.provider).current() != null)
+                runCatching { enqueue(e.track, e.quality, allowMetered = !e.unmeteredOnly) }
+        }
+    }
+    suspend fun enqueue(track: LosslessTrack, quality: String? = null, allowMetered: Boolean = false, replaceQueued: Boolean = false) = withContext(Dispatchers.IO) { scheduling.withLock {
+        val old = entries.value[track.key]
+        if (old?.state == LosslessState.DONE || (old?.state?.active == true && !(replaceQueued && old.state == LosslessState.QUEUED))) return@withLock
+        val unmetered = !allowMetered && AppSettings.library.value.downloadWifiOnly
+        val selectedQuality = quality ?: old?.quality ?: ProviderPackages.get(track.provider)?.qualities?.firstOrNull()?.first ?: "best"
+        val request = OneTimeWorkRequestBuilder<LosslessWorker>().setInputData(workDataOf("trackId" to track.key))
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(if (unmetered) NetworkType.UNMETERED else NetworkType.CONNECTED).build())
             .addTag("lossless-downloads").build()
-        val next = LosslessEntry(track, request.id.toString(), addedAt = old?.addedAt ?: System.currentTimeMillis())
+        val next = LosslessEntry(track, request.id.toString(), addedAt = old?.addedAt ?: System.currentTimeMillis(),
+            unmeteredOnly = unmetered, quality = selectedQuality,
+            events = listOf(DownloadEvent(System.currentTimeMillis(), if (unmetered) "Queued · unmetered network required" else "Queued · Wi-Fi or mobile data allowed")))
         store.put(next)
         try {
-            runInterruptible { WorkManager.getInstance(context).enqueueUniqueWork("lossless:${track.id}", ExistingWorkPolicy.REPLACE, request).result.get() }
+            runInterruptible { WorkManager.getInstance(context).enqueueUniqueWork("lossless:${track.key}", ExistingWorkPolicy.REPLACE, request).result.get() }
         } catch (e: Exception) {
-            store.update(track.id, next.workId) { it.copy(state = LosslessState.FAILED, error = "Could not queue download. Try again.") }; throw e
+            store.update(track.key, next.workId) { it.copy(state = LosslessState.FAILED, error = "Could not queue download. Try again.") }; throw e
         }
         old?.let { store.folder(it).deleteRecursively() }
     } }
+
     suspend fun remove(id: String) = withContext(Dispatchers.IO) { scheduling.withLock {
         val old = store.remove(id) ?: return@withLock
         WorkManager.getInstance(context).cancelWorkById(UUID.fromString(old.workId)); store.folder(old).deleteRecursively()
@@ -153,30 +187,34 @@ class LosslessWorker(context: Context, params: WorkerParameters) : CoroutineWork
         try {
             slots.withPermit {
                 setForeground(notification(e.track.title))
-                if (ExtensionSessions.current() == null) {
-                    update { it.copy(state = LosslessState.WAITING, error = "Connect Amazon Music to continue.") }; return@withPermit
+                if (ProviderPackages.get(e.track.provider) == null || ExtensionSessions.forProvider(e.track.provider).current() == null) {
+                    update { it.copy(state = LosslessState.WAITING, error = if (ProviderPackages.get(e.track.provider) == null) "Install this provider in Providers to continue." else "Connect this provider to continue.") }; return@withPermit
                 }
                 val folder = store.folder(e).apply { mkdirs() }
-                val info = AmazonAudio.downloadTrack(e.track, folder) { state, bytes, total ->
+                val info = ProviderRuntime.download(e.track, e.quality, folder, progress = { state, bytes, total ->
                     val oldState = store.entries.value[key]?.state
                     stage = state.label
                     val now = System.currentTimeMillis()
                     if (oldState != state || now - lastProgress > 500 || bytes == total) {
                         lastProgress = now
-                        update(oldState != state) { it.copy(state = state, bytes = bytes, total = total, error = null) }
+                        update(oldState != state) { it.copy(state = state, bytes = bytes, total = total, error = null,
+                            events = if (oldState != state) (it.events + DownloadEvent(now, state.label)).takeLast(40) else it.events) }
                         setForegroundAsync(notification(e.track.title, bytes, total))
                     }
-                }
+                }, event = { message ->
+                    update { it.copy(events = (it.events + DownloadEvent(System.currentTimeMillis(), message)).takeLast(40)) }
+                })
                 currentCoroutineContext().ensureActive()
                 update { it.copy(state = LosslessState.DONE, bytes = store.file(e).length(), total = store.file(e).length(),
-                    bits = info.bits, sampleRate = info.sampleRate, durationMs = info.durationMs, error = null) }
+                    bits = info.bits, sampleRate = info.sampleRate, durationMs = info.durationMs, error = null,
+                    events = (it.events + DownloadEvent(System.currentTimeMillis(), "Saved · FLAC validation passed")).takeLast(40)) }
             }
             return Result.success()
         } catch (cancelled: CancellationException) {
-            store.update(key, e.workId) { it.copy(state = LosslessState.FAILED, error = "Download interrupted. Tap Retry to start again.") }
+            store.update(key, e.workId) { it.copy(state = LosslessState.QUEUED, error = null, events = (it.events + DownloadEvent(System.currentTimeMillis(), "Interrupted · waiting for Android to restart")).takeLast(40)) }
             throw cancelled
         } catch (error: Exception) {
-            update { it.copy(state = if (ExtensionSessions.current() == null) LosslessState.WAITING else LosslessState.FAILED, error = losslessError(stage, error)) }
+            update { it.copy(state = if (ProviderPackages.get(e.track.provider) == null || ExtensionSessions.forProvider(e.track.provider).current() == null) LosslessState.WAITING else LosslessState.FAILED, error = losslessError(stage, error), events = (it.events + DownloadEvent(System.currentTimeMillis(), losslessError(stage, error))).takeLast(40)) }
             return Result.failure()
         } finally {
             val current = store.entries.value[key]
@@ -196,7 +234,7 @@ class LosslessWorker(context: Context, params: WorkerParameters) : CoroutineWork
 }
 internal class LosslessFailure(message: String) : IOException(message)
 internal fun losslessError(stage: String, error: Exception): String = when (error) {
-    is LosslessHttp.HttpFailure -> "$stage: provider returned HTTP ${error.code}. Check the provider connection or try again later."
+    is LosslessHttp.HttpFailure -> ProviderDiagnostic.from(error).let { "$stage: ${it.summary()}. ${it.guidance()}" }
     is LosslessFailure -> error.message ?: "Could not verify FLAC."
     else -> "$stage could not finish. Check your connection and free space, then retry."
 }

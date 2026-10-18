@@ -43,8 +43,11 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Fetch pinned provider fixtures
+        run: python3 scripts/fetch-provider-fixtures.py
+
       - name: Lossless download regressions
-        run: ./gradlew --no-daemon testDebugUnitTest --tests '*ExtensionProtocolTest' --tests '*ExtensionSessionManagerTest' --tests '*AmazonAdapterTest' --tests '*LosslessStoreTest' --tests '*LosslessCardTest' --tests '*ProviderReturnLinkDialogTest'
+        run: ./gradlew --no-daemon testDebugUnitTest --tests '*ExtensionProtocolTest' --tests '*ExtensionSessionManagerTest' --tests '*AmazonAdapterTest' --tests '*LosslessStoreTest' --tests '*LosslessCardTest' --tests '*ProviderReturnLinkDialogTest' --tests '*ProviderRuntimeTest' --tests '*ProviderPackageTest' --tests '*DownloadNetworkTest'
 
       - name: Build, unit tests and lint
         run: ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug

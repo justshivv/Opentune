@@ -80,7 +80,23 @@ internal object AmazonAudio {
             } finally { input.delete(); if (!keep) output.delete() }
         }
     }
-    private fun readInfo(file: File): LosslessSource.FlacInfo? = runCatching {
+    internal suspend fun finishDownloadedFile(input: File, output: File, key: String, expectedDurationMs: Long,
+        progress: (LosslessState, Long, Long) -> Unit): LosslessSource.FlacInfo {
+        require(input.isFile && input.length() in 43..MAX_BYTES)
+        progress(LosslessState.PREPARING, input.length(), input.length())
+        if (key.isEmpty() && readInfo(input) != null) {
+            if (!input.renameTo(output)) throw LosslessFailure("Could not save downloaded FLAC.")
+        } else convert(input, output, key)
+        progress(LosslessState.VERIFYING, output.length(), output.length())
+        val info = readInfo(output) ?: throw LosslessFailure("The provider did not return music-quality FLAC.")
+        if (expectedDurationMs > 0 && !LosslessSource.durationMatches(expectedDurationMs, info.durationMs))
+            throw LosslessFailure("Downloaded recording is incomplete or has a different duration.")
+        runFfmpeg(verificationArguments(output.path), output)
+        currentCoroutineContext().ensureActive()
+        input.delete()
+        return info
+    }
+    internal fun readInfo(file: File): LosslessSource.FlacInfo? = runCatching {
         java.io.DataInputStream(file.inputStream()).use { input -> val bytes = ByteArray(42); input.readFully(bytes); LosslessSource.flacInfo(bytes) }
     }.getOrNull()
     internal fun verificationArguments(path: String) = arrayOf("-hide_banner", "-loglevel", "quiet", "-nostdin", "-xerror",

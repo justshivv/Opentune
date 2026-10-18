@@ -21,6 +21,16 @@ import org.robolectric.annotation.GraphicsMode
 class LosslessCardTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     private val entry = LosslessEntry(LosslessTrack("B012345678", "A long song title that wraps neatly", "An artist with a long name"), "test")
+    @Test fun meteredQueueShowsReasonAndWorkingMobileOverrideAndDetails() {
+        var mobile = 0; var details = 0
+        compose.setContent { MaterialTheme { Box(Modifier.fillMaxSize())
+            LosslessCard(entry, waitingReason = "Waiting for Wi-Fi or another unmetered network", showMobileAction = true,
+                onMobile = { mobile++ }, onDetails = { details++ })
+        } }
+        compose.onNodeWithText("Waiting for Wi-Fi or another unmetered network").assertIsDisplayed()
+        compose.onNodeWithText("Use mobile data").performClick(); compose.onNodeWithText("Details").performClick()
+        assertEquals(1, mobile); assertEquals(1, details)
+    }
     @Test fun providerFailureShowsRetryWithoutClaimingPlayableAudio() {
         var retry = 0
         compose.setContent { MaterialTheme { Box(Modifier.fillMaxSize())

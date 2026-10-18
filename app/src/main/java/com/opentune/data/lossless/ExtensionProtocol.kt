@@ -17,8 +17,8 @@ internal object ExtensionProtocol {
     const val VERSION = "amzn@2.3.11"
     const val CALLBACK = "opentune://provider-session"
     const val VERIFICATION_TIMEOUT_MS = 180_000L
-    fun pendingActive(pending: JSONObject?, now: Long = System.currentTimeMillis()): Boolean =
-        pending != null && pending.optString("version") == VERSION &&
+    fun pendingActive(pending: JSONObject?, now: Long = System.currentTimeMillis(), version: String = VERSION): Boolean =
+        pending != null && pending.optString("version") == version &&
             now - pending.optLong("created") in 0 until VERIFICATION_TIMEOUT_MS
     fun randomHex(bytes: Int): String = ByteArray(bytes).also { java.security.SecureRandom().nextBytes(it) }
         .joinToString("") { "%02x".format(it) }
@@ -39,14 +39,14 @@ internal object ExtensionProtocol {
         Mac.getInstance("HmacSHA256").run {
             init(SecretKeySpec(key.toByteArray(), "HmacSHA256")); doFinal(value.toByteArray())
         })
-    fun headers(session: Session, method: String, path: String, body: String, nonce: String, now: Instant = Instant.now()): Map<String, String> {
+    fun headers(session: Session, method: String, path: String, body: String, nonce: String, now: Instant = Instant.now(), version: String = VERSION): Map<String, String> {
         require(path.startsWith("/v2/") && !path.contains('?') && !path.contains('#'))
         val time = DateTimeFormatterBuilder().appendInstant(3).toFormatter().format(now)
         val digest = hash(body)
         val rolling = hmac(session.secret, "${now.epochSecond / 300}:${session.id}")
-        val canonical = listOf("ZARZ-HMAC-V1", method.uppercase(), path, "", digest, time, nonce, session.id, VERSION, "extension").joinToString("\n")
+        val canonical = listOf("ZARZ-HMAC-V1", method.uppercase(), path, "", digest, time, nonce, session.id, version, "extension").joinToString("\n")
         return mapOf("Session" to session.id, "Timestamp" to time, "Nonce" to nonce, "Body-SHA256" to digest,
-            "Signature" to hmac(rolling, canonical), "App-Version" to VERSION, "Platform" to "extension")
+            "Signature" to hmac(rolling, canonical), "App-Version" to version, "Platform" to "extension")
             .mapKeys { "X-Zarz-${it.key}" }
     }
     /** Only the reviewed issuer can receive a callback or signed session. */
