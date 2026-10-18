@@ -984,8 +984,11 @@ class PlaybackService : MediaLibraryService() {
         val key = uri?.let(::externalStreamKeyOf)
         val rendition = if (item != null && key != null) ExternalStreams.get(item.mediaId, key) else null
         NerdStats.onExternalSource(rendition?.label)
+        val savedLossless = item?.mediaId?.takeIf { com.opentune.data.lossless.LosslessDownloads.isLossless(it) }
+            ?.let { com.opentune.data.lossless.LosslessDownloads.entry(it) }?.takeIf { it.state == com.opentune.data.lossless.LosslessState.DONE }
         val provider = when {
             item == null -> "No track selected"
+            savedLossless != null -> "Amazon Music · downloaded FLAC"
             rendition != null -> rendition.provider
             uri?.let(::startupToken) != null -> "Loading audio…"
             LocalMusic.isLocal(item.mediaId) -> "Local file"
@@ -994,7 +997,7 @@ class PlaybackService : MediaLibraryService() {
             uri?.scheme == "file" -> "Downloaded file"
             else -> StreamResolver.engineFor(item.mediaId, uri?.let(::isUpgradedUri) == true)?.let { "YouTube · $it" } ?: "YouTube · cached stream or resolving"
         }
-        NerdStats.onPlaybackSource(NerdStats.Source(provider, rendition?.bits, rendition?.sampleRate,
+        NerdStats.onPlaybackSource(NerdStats.Source(provider, savedLossless?.bits ?: rendition?.bits, savedLossless?.sampleRate ?: rendition?.sampleRate,
             rendition?.kbps ?: if (rendition == null && item != null && uri?.let(::videoIdOf) != null)
                 StreamResolver.bitrateFor(item.mediaId, isUpgradedUri(uri)) else null,
             selectionDetail = if (item != null && uri?.let(::videoIdOf) != null && uri.let(::startupToken) == null)
@@ -1212,7 +1215,7 @@ class PlaybackService : MediaLibraryService() {
         val seed = seedItem.mediaId
         // Radio is a YouTube feature; a local file has none. A song on your own
         // server carries on with more of the server's songs, picked at random.
-        if (LocalMusic.isLocal(seed) || Radio.isRadio(seed)) return
+        if (LocalMusic.isLocal(seed) || Radio.isRadio(seed) || com.opentune.data.lossless.LosslessDownloads.isLossless(seed)) return
         if (seed in exhaustedSeeds) return
         if (radioJob?.isActive == true && radioSeed == seed) return
 

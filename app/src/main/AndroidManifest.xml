@@ -85,6 +85,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="opentune" android:host="together" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="opentune" android:host="provider-session" />
+            </intent-filter>
             <!-- GitHub Pages cannot publish assetlinks.json at the domain root;
                  browsers use the invite landing page when Android has no default handler. -->
             <intent-filter tools:ignore="AppLinkWarning">

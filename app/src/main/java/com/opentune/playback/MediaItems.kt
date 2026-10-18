@@ -34,6 +34,7 @@ private const val EXTRA_SMART_SHUFFLE = "smartShuffle"
  * everything else resolves on open.
  */
 fun trackUri(videoId: String): Uri = when {
+    com.opentune.data.lossless.LosslessDownloads.isLossless(videoId) -> com.opentune.data.lossless.LosslessDownloads.fileFor(videoId)?.let(Uri::fromFile) ?: Uri.EMPTY
     LocalMusic.isLocal(videoId) -> LocalMusic.contentUri(videoId)
     // Your own server streams the stored file directly; Uri.EMPTY fails the
     // item cleanly if the server has been disconnected since it was queued.
@@ -80,7 +81,7 @@ fun Song.toMediaItem(): MediaItem =
                 .setTitle(title)
                 .setArtist(artist)
                 // A downloaded cover keeps the notification and lock screen right offline.
-                .setArtworkUri(Downloads.artFor(videoId)?.let(Uri::fromFile) ?: Subsonic.resolveCover(thumbnailUrl)?.let(Uri::parse))
+                .setArtworkUri(com.opentune.data.lossless.LosslessDownloads.artFor(videoId)?.let(Uri::fromFile) ?: Downloads.artFor(videoId)?.let(Uri::fromFile) ?: Subsonic.resolveCover(thumbnailUrl)?.let(Uri::parse))
                 .setAlbumTitle(albumName)
                 .setExtras(
                     Bundle().apply {

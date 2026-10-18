@@ -296,6 +296,7 @@ fun AppRoot(vm: PlayerViewModel) {
     ) }
     val libraryNav = remember(nav) { LibraryNav(
         downloads = { nav.navigate("downloads") },
+        lossless = { nav.navigate("lossless") },
         downloaded = { id -> nav.navigate("downloaded/${Uri.encode(id)}") },
         local = { nav.navigate("local") },
         replay = { nav.navigate("replay") },
@@ -562,6 +563,7 @@ fun AppRoot(vm: PlayerViewModel) {
                         )
                     }
                     composable("login") { LoginScreen(onDone = { nav.popBackStack() }) }
+                    composable("lossless") { com.opentune.ui.lossless.LosslessScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })

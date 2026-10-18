@@ -10,4 +10,4 @@ import com.opentune.data.subsonic.Subsonic
  * downloaded, upgraded, shared, followed with radio or measured for
  * loudness by YouTube.
  */
-fun isYouTubeId(id: String): Boolean = !LocalMusic.isLocal(id) && !Subsonic.isSubsonic(id) && !Radio.isRadio(id)
+fun isYouTubeId(id: String): Boolean = !com.opentune.data.lossless.LosslessDownloads.isLossless(id) && !LocalMusic.isLocal(id) && !Subsonic.isSubsonic(id) && !Radio.isRadio(id)

@@ -145,6 +145,8 @@ dependencies {
     implementation("io.github.kyant0:backdrop:2.0.0-alpha03")
     // Downloads that keep going after the app is closed.
     implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation("androidx.browser:browser:1.8.0")
+    implementation("com.antonkarpenko:ffmpeg-kit-audio:2.2.3")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
@@ -194,6 +196,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")
     testImplementation("androidx.test:core:1.7.0")
+    testImplementation("androidx.test.espresso:espresso-core:3.7.0")
     testImplementation("io.coil-kt.coil3:coil-test:3.0.4")
     // Rendering screens to images in unit tests, to check layouts.
     testImplementation(composeBom)

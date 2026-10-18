@@ -113,6 +113,7 @@ class LibraryNav(
     val wrapped: () -> Unit = {},
     /** An album or playlist downloaded as a whole, by its id. */
     val downloaded: (String) -> Unit = {},
+    val lossless: () -> Unit = {},
 )
 
 private const val YT_PLAYLISTS = "library:ytPlaylists"
@@ -205,6 +206,9 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Shortcut(Icons.Rounded.LibraryMusic, "On this phone", "Local files", nav.local, Modifier.weight(1f))
                     Shortcut(Icons.Rounded.History, "Replay", "Your top songs", nav.replay, Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Shortcut(Icons.Rounded.GraphicEq, "Lossless", "FLAC downloads", nav.lossless, Modifier.weight(1f))
                 }
                 val server by Subsonic.server.collectAsState()
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -73,7 +73,14 @@ class MainActivity : ComponentActivity() {
         receive(intent)
     }
 
-    private fun receive(intent: Intent?) = Links.receive(intent)
+    private fun receive(intent: Intent?) {
+        val uri = intent?.data
+        if (uri != null && com.opentune.data.lossless.ExtensionProtocol.isCallback(uri)) {
+            runCatching { com.opentune.data.lossless.ExtensionSessions.receiveCallback(uri.toString()) }
+            return
+        }
+        Links.receive(intent)
+    }
 
     /**
      * With [fastest], asks for the screen's quickest refresh rate at its
