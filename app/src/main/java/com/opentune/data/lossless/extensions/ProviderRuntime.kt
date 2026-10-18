@@ -73,7 +73,7 @@ internal object ProviderRuntime {
         item ?: return null
         val kind = item.optString("item_type").ifBlank { item.optString("type") }
         if (kind.isNotEmpty() && kind !in setOf("track", "song")) return null
-        val id = item.optString("id").removePrefix("$provider:")
+        val id = item.optString("id").removePrefix("$provider:").removePrefix("${provider.removeSuffix("-web")}:")
         if (!Regex("[A-Za-z0-9_-]{1,100}").matches(id)) return null
         val title = item.optString("name").ifBlank { item.optString("title") }
         val artist = when (val value = item.opt("artists")) {
@@ -88,6 +88,7 @@ internal object ProviderRuntime {
     }
     suspend fun download(track: LosslessTrack, quality: String, folder: File,
         progress: (LosslessState, Long, Long) -> Unit, event: (String) -> Unit): LosslessSource.FlacInfo = withContext(Dispatchers.IO) {
+        withTimeout(8 * 60_000L) {
         val pkg = ProviderPackages.get(track.provider) ?: throw LosslessFailure("Install ${ProviderPackages.displayName(track.provider)} in Providers, then retry.")
         require(pkg.qualities.any { it.first == quality }) { "Choose an available lossless quality" }
         require(folder.usableSpace >= 1024L * 1024 * 1024) { "At least 1 GB free space is needed" }
@@ -107,6 +108,10 @@ internal object ProviderRuntime {
                 else -> "The installed provider could not complete this download. Open Details for the request stages."
             })
         }
+        val duration = track.durationMs.takeIf { it > 0 } ?: 1000L
+        if (!CatalogIdentity(track.title, track.artist, null, duration).matches(
+                result.optString("title").ifBlank { track.title }, listOf(result.optString("artist").ifBlank { track.artist }), null, duration))
+            throw LosslessFailure("The downloaded audio does not match the selected recording.")
         val input = invocation.file(result.optString("file_path"))
         val key = result.optJSONObject("decryption")?.optString("key").orEmpty().ifBlank { result.optString("decryption_key") }
         require(key.isEmpty() || Regex("[a-fA-F0-9]{32}").matches(key))
@@ -116,6 +121,7 @@ internal object ProviderRuntime {
             invocation.network.request("GET", cover, "", emptyMap(), File(folder, "cover.jpg"), remainingBytes = 4_194_304)
         }.onFailure { if (it is CancellationException) throw it; File(folder, "cover.jpg").delete() }
         info
+        }
     }
     private class Invocation(val pkg: ProviderPackage, val parent: CoroutineContext, val folder: File?,
         val progress: (LosslessState, Long, Long) -> Unit, val event: (String) -> Unit, val timeoutMs: Long) {
@@ -150,9 +156,9 @@ internal object ProviderRuntime {
         private fun transfer(url: String, target: File, headers: Map<String, String>, append: Boolean): JSONObject {
             val remaining = 512L * 1024 * 1024 - transferred
             require(remaining > 0)
-            val response = runBlocking(parent) { network.request("GET", url, "", headers, target, append, remaining) { bytes, total ->
+            val response = runBlocking(parent) { network.request("GET", url, "", headers, target, append, remaining, progress = { bytes, total ->
                 progress(LosslessState.DOWNLOADING, if (append) transferred + bytes else bytes, if (append) 0 else total)
-            } }
+            }) }
             record(response, "Audio transfer")
             transferred += response.optLong("bytes")
             if (!response.optBoolean("ok")) return JSONObject().put("success", false).put("error", "HTTP ${response.optInt("statusCode")}")

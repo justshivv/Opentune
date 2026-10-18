@@ -48,8 +48,9 @@ internal object ProviderPackages {
         root = File(context.noBackupFilesDir, "lossless-providers").apply { mkdirs() }
         registryData.value = runCatching { parseRegistry(File(root, "registry.json").readText()) }.getOrDefault(emptyList())
         data.value = supported.mapNotNull { id -> runCatching {
-            val listing = parseListing(JSONObject(AtomicFile(File(root, "$id.json")).openRead().bufferedReader().use { it.readText() }))
-            id to inspect(AtomicFile(File(root, "$id.sflx")).openRead().use { it.readBytes() }, listing)
+            val bundle = JSONObject(AtomicFile(File(root, "$id.package")).openRead().bufferedReader().use { it.readText() })
+            val listing = parseListing(bundle.getJSONObject("listing"))
+            id to inspect(java.util.Base64.getDecoder().decode(bundle.getString("archive")), listing)
         }.getOrNull() }.toMap()
     }
     fun get(id: String) = data.value[id]
@@ -101,15 +102,15 @@ internal object ProviderPackages {
         // Verify/compile before replacing a working installation. No provider initialization/network here.
         ProviderRuntime.validate(pkg)
         synchronized(this@ProviderPackages) {
-            write(File(root, "${listing.id}.sflx"), bytes)
-            write(File(root, "${listing.id}.json"), listing.json().toString().toByteArray())
+            val bundle = JSONObject().put("listing", listing.json()).put("archive", java.util.Base64.getEncoder().encodeToString(bytes))
+            write(File(root, "${listing.id}.package"), bundle.toString().toByteArray())
             data.value = data.value + (listing.id to pkg)
         }
         pkg
     }
     @Synchronized fun uninstall(id: String) {
         require(id in supported)
-        AtomicFile(File(root, "$id.sflx")).delete(); AtomicFile(File(root, "$id.json")).delete()
+        AtomicFile(File(root, "$id.package")).delete()
         data.value = data.value - id
     }
     fun inspect(bytes: ByteArray, listing: ProviderListing): ProviderPackage {

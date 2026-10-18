@@ -64,8 +64,8 @@ class ProviderRuntimeTest {
     }
     @Test fun providerCatalogTracksKeepSeparateIdsAndMetadata() {
         val json = JSONObject("""{"id":"12345","name":"A track","artists":"An artist","duration_ms":190000,"item_type":"track"}""")
-        val qobuz = ProviderRuntime.parseTrack(json, "qobuz-web")!!
-        val tidal = ProviderRuntime.parseTrack(json, "tidal-web")!!
+        val qobuz = ProviderRuntime.parseTrack(json.put("id", "qobuz:12345"), "qobuz-web")!!
+        val tidal = ProviderRuntime.parseTrack(json.put("id", "tidal:12345"), "tidal-web")!!
         assertNotEquals(qobuz.key, tidal.key)
         assertEquals("lossless:qobuz-web:12345", qobuz.song().videoId)
         assertNull(ProviderRuntime.parseTrack(json.put("item_type", "album"), "qobuz-web"))
