@@ -22,10 +22,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.audio.AudioSink
-import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.session.MediaSession
@@ -163,16 +160,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val floatOutput = AppSettings.playback.value.floatOutput
-        val renderers = object : DefaultRenderersFactory(context) {
-            override fun buildAudioSink(
-                context: Context,
-                enableFloatOutput: Boolean,
-                enableAudioTrackPlaybackParams: Boolean,
-            ): AudioSink = DefaultAudioSink.Builder(context)
-                .setEnableFloatOutput(floatOutput)
-                .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain(dsp))
-                .build()
-        }
+        val renderers = MusicRenderersFactory(context, floatOutput, arrayOf(dsp))
 
         // Start as soon as a little audio is in: the defaults wait for 2.5 s,
         // which is video-sized caution. A stream starts after half a second buffered
@@ -200,6 +188,16 @@ class PlaybackService : MediaLibraryService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
         player.addListener(playerListener)
+        player.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onAudioDecoderInitialized(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+                NerdStats.onAudioDecoder(decoderName)
+            }
+            override fun onAudioUnderrun(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                bufferSize: Int, bufferSizeMs: Long, elapsedSinceLastFeedMs: Long) {
+                NerdStats.onAudioUnderrun()
+            }
+        })
 
         val effects = SoundEffects(player)
         soundEffects = effects
@@ -632,6 +630,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            NerdStats.resetAudioUnderruns()
             updateExternalStats()
             applyLoudness()
             scheduleUpgrade()

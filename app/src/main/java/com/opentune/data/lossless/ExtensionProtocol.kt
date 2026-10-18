@@ -16,6 +16,7 @@ internal object ExtensionProtocol {
     const val BASE = "https://api.zarz.moe/v2"
     const val VERSION = "amzn@2.3.11"
     const val CALLBACK = "opentune://provider-session"
+    const val BROWSER_CALLBACK = "spotiflac://session-grant"
     const val VERIFICATION_TIMEOUT_MS = 180_000L
     fun pendingActive(pending: JSONObject?, now: Long = System.currentTimeMillis(), version: String = VERSION): Boolean =
         pending != null && pending.optString("version") == version &&
@@ -63,6 +64,23 @@ internal object ExtensionProtocol {
         return url.newBuilder().setQueryParameter("state", state).setQueryParameter("cb", callback.toString()).build().toString() to state
     }
     fun isCallback(uri: Uri): Boolean = uri.scheme == "opentune" && uri.host == "provider-session"
+
+    /** Only an Auth Tab activity result may use the extension's callback scheme.
+     * OpenTune never registers that scheme globally or intercepts another app's links.
+     */
+    fun authTabUrl(pendingUrl: String, state: String): String? {
+        val checked = challenge(JSONObject().put("auth_url", pendingUrl), state) ?: return null
+        if (checked.second != state) return null
+        val callback = Uri.parse(BROWSER_CALLBACK).buildUpon()
+            .appendQueryParameter("cb_version", "v2grant").appendQueryParameter("state", state).build()
+        return checked.first.toHttpUrl().newBuilder().setQueryParameter("cb", callback.toString()).build().toString()
+    }
+
+    fun browserGrant(uri: Uri, state: String): String? {
+        if (uri.scheme != "spotiflac" || uri.host != "session-grant") return null
+        if (uri.port != -1 || uri.userInfo != null) return null
+        return grant(uri.buildUpon().scheme("opentune").authority("provider-session").build(), state)
+    }
     /**
      * The provider's Copy link control can return just grant=gr_… . Treat that
      * as a manually entered code, not a state-validated redirect. Only explicit

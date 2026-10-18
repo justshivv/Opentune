@@ -101,7 +101,8 @@ class Crossfade(
     }
 
     private fun begin(item: MediaItem, position: Long, left: Long) {
-        val t = ExoPlayer.Builder(context)
+        val t = ExoPlayer.Builder(context, androidx.media3.exoplayer.DefaultRenderersFactory(context)
+            .setMediaCodecSelector(AudioDecoders.selector).setEnableDecoderFallback(true))
             .setMediaSourceFactory(sources)
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),

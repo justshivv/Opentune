@@ -116,6 +116,10 @@ internal class ExtensionSessionManager(
     @Synchronized fun pendingUrl(): String? = data.optJSONObject("pending")
         ?.takeIf { ExtensionProtocol.pendingActive(it, version = version) }?.optString("url")?.takeIf { it.isNotEmpty() }
 
+    @Synchronized fun authTabUrl(): String? = data.optJSONObject("pending")
+        ?.takeIf { ExtensionProtocol.pendingActive(it, version = version) }
+        ?.let { ExtensionProtocol.authTabUrl(it.getString("url"), it.getString("state")) }
+
     /** Call only from an explicit user action. Background playback never opens Chrome. */
     suspend fun connect(): String? = withContext(Dispatchers.IO) { connectionLock.withLock {
         current()?.let { return@withLock null }
@@ -138,7 +142,7 @@ internal class ExtensionSessionManager(
     } }
 
     /** Persist a callback or explicitly entered code before HTTP so recreation cannot lose it. */
-    @Synchronized fun receiveCallback(text: String, pasted: Boolean = false): Boolean {
+    @Synchronized fun receiveCallback(text: String, pasted: Boolean = false, browserResult: Boolean = false): Boolean {
         val saved = JSONObject(data.toString())
         val request = saved.optJSONObject("pending") ?: return false
         if (!ExtensionProtocol.pendingActive(request, version = version)) { updateStatus(); return false }
@@ -146,7 +150,8 @@ internal class ExtensionSessionManager(
         // Manual codes cannot prove callback-state correlation. Accept only the exact
         // grant=gr_… form after explicit user submission during an active challenge;
         // automatic intents and malformed/state-mismatched URLs never take this path.
-        val grant = if (pasted) ExtensionProtocol.pastedGrant(text, state) ?: ExtensionProtocol.manualGrantCode(text)
+        val grant = if (browserResult) runCatching { ExtensionProtocol.browserGrant(Uri.parse(text), state) }.getOrNull()
+            else if (pasted) ExtensionProtocol.pastedGrant(text, state) ?: ExtensionProtocol.manualGrantCode(text)
             else runCatching { ExtensionProtocol.grant(Uri.parse(text), state) }.getOrNull()
         if (grant == null) return false
         // A duplicate callback never starts a second exchange or overwrites an in-flight grant.

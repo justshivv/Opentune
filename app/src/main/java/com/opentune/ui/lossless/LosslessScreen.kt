@@ -3,6 +3,7 @@ package com.opentune.ui.lossless
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,6 +20,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -35,6 +40,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
     val entries by LosslessDownloads.entries.collectAsState()
@@ -59,6 +65,33 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var playWhenReady by remember { mutableStateOf<String?>(null) }
+    var playSelection by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val latestActions by rememberUpdatedState(actions)
+    val preview = remember { LosslessPreview(context, scope, { latestActions.pause() }, { notice = it }) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
+    DisposableEffect(lifecycleOwner, preview) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) preview.stop() }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer); preview.stop() }
+    }
+    LaunchedEffect(actions.currentVideoId, actions.isPlaying) {
+        if (actions.isPlaying) { preview.stop(); playWhenReady = null }
+    }
+    LaunchedEffect(playWhenReady, entries, lifecycleState) {
+        val key = playWhenReady ?: return@LaunchedEffect
+        val entry = entries[key] ?: return@LaunchedEffect
+        if (entry.state == LosslessState.DONE && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) {
+            playWhenReady = null
+            preview.stop()
+            latestActions.playAll(listOf(LosslessDownloads.song(entry)), 0, false, "Lossless")
+        } else if (entry.state == LosslessState.FAILED) {
+            playWhenReady = null
+            notice = "Could not prepare playback. Open the download’s Details to see why."
+        }
+    }
     var connection by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<LosslessTrack?>(null) }
     var deleting by remember { mutableStateOf<LosslessEntry?>(null) }
@@ -83,15 +116,20 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
         finally { busy = false }
     }
     fun search() { keyboard?.hide(); submitted = query.trim(); attempt++ }
-    fun enqueue(track: LosslessTrack, selectedQuality: String = quality) {
+    fun enqueue(track: LosslessTrack, selectedQuality: String = quality, play: Boolean = false) {
         selected = null; tab = 1
+        if (play) { preview.stop(); actions.pause() }
         scope.launch {
-            try { LosslessDownloads.enqueue(track, selectedQuality); if (installed[track.provider] == null) tab = 2 else if (ExtensionSessions.forProvider(track.provider).current() == null) connection = track.provider }
+            try {
+                LosslessDownloads.enqueue(track, selectedQuality)
+                if (play) playWhenReady = track.key
+                if (installed[track.provider] == null) tab = 2 else if (ExtensionSessions.forProvider(track.provider).current() == null) connection = track.provider
+            }
             catch (e: CancellationException) { throw e }
-            catch (_: Exception) { notice = "Could not queue the download. Check free space and try again." }
+            catch (_: Exception) { playWhenReady = null; notice = "Could not queue the download. Check free space and try again." }
         }
     }
-    fun remove(entry: LosslessEntry) { scope.launch {
+    fun remove(entry: LosslessEntry) { if (playWhenReady == entry.track.key) playWhenReady = null; scope.launch {
         try { LosslessDownloads.remove(entry.track.key) }
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { notice = "Could not remove this download. Try again." }
@@ -105,7 +143,7 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
                 Column(Modifier.background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.surfaceContainer))).padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Icon(Icons.Rounded.GraphicEq, null, Modifier.size(32.dp))
                     Text("Keep every detail.", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text("Download the best available FLAC. Check it, save it, and listen offline.")
+                    Text("Choose your source and quality. Play a preview, or prepare the full FLAC to listen and keep offline.")
                     Text("${saved.size} saved · ${sizeLabel(saved.sumOf { it.bytes })}", style = MaterialTheme.typography.labelLarge)
                 }
             }
@@ -121,7 +159,12 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
                         }
                     }
                     Text(if (pkg == null) "Provider package not installed" else "$status · Extension ${pkg.version}", color = MaterialTheme.colorScheme.primary)
-                    Text("FLAC · best available. Actual bit depth and sample rate appear after download. Availability varies by recording.", style = MaterialTheme.typography.bodySmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        installed.values.forEach { candidate ->
+                            FilterChip(provider == candidate.id, { chosenProvider = candidate.id; results = emptyList(); submitted = ""; preview.stop() }, label = { Text(candidate.name) })
+                        }
+                    }
+                    Text("${pkg?.qualities?.joinToString(" · ") { it.second } ?: "Install a provider to see its qualities"}. Actual resolution is checked after download.", style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = { if (pkg == null) tab = 2 else connection = provider }) { Text(if (pkg == null) "Install provider" else if (status == "Connected") "Manage connection" else "Connect provider") }
                 }
             }
@@ -131,6 +174,15 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
                 Column(Modifier.padding(horizontal = 20.dp)) {
                     Text(message)
                     TextButton(onClick = { notice = null }) { Text("Dismiss") }
+                }
+            }
+        }
+        if (playWhenReady != null) item {
+            Surface(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Preparing FLAC for playback", style = MaterialTheme.typography.titleMedium)
+                    Text("${entries[playWhenReady]?.track?.title.orEmpty()} · plays after the full file has been downloaded and checked. Keep this page open.")
+                    TextButton(onClick = { playWhenReady = null }) { Text("Cancel auto-play · keep download") }
                 }
             }
         }
@@ -146,16 +198,27 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
                 Button(onClick = { search() }, enabled = query.isNotBlank() && !busy && pkg != null, modifier = Modifier.fillMaxWidth()) { Text("Search ${ProviderPackages.displayName(provider)}") }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                if (!busy && error == null) Text(if (submitted.isBlank()) "Find a track, then choose Download FLAC." else if (results.isEmpty()) "No tracks found. Try the title and artist." else "${results.size} tracks · select a recording")
+                if (!busy && error == null) Text(if (submitted.isBlank()) "Find a track, then choose Play FLAC or Download. Previews appear when supplied by the provider." else if (results.isEmpty()) "No tracks found. Try the title and artist." else "${results.size} tracks · select a recording")
             } }
             items(results, key = { "search:${it.id}" }) { track ->
                 Surface(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         TrackHeading(track)
                         val entry = entries[track.key]
-                        Button(onClick = { selected = track }, enabled = entry == null || entry.state == LosslessState.FAILED) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            if (entry?.state == LosslessState.DONE) { preview.stop(); playWhenReady = null; actions.playAll(listOf(LosslessDownloads.song(entry)), 0, false, "Lossless") }
+                            else if (entry != null && entry.state != LosslessState.FAILED) enqueue(track, entry.quality, play = true)
+                            else { quality = pkg?.qualities?.firstOrNull()?.first ?: "best"; playSelection = true; selected = track }
+                        }) { Text(if (entry?.state == LosslessState.DONE) "Play" else "Play FLAC") }
+                        OutlinedButton(onClick = { quality = pkg?.qualities?.firstOrNull()?.first ?: "best"; playSelection = false; selected = track }, enabled = entry == null || entry.state == LosslessState.FAILED) {
                             Text(if (entry?.state == LosslessState.DONE) "Saved lossless" else if (entry != null && entry.state != LosslessState.FAILED) "In downloads" else "Download FLAC")
                         }
+                        if (track.previewUrl != null) TextButton(onClick = { playWhenReady = null; preview.toggle(track) }) {
+                            Text(if (preview.activeKey == track.key) { if (preview.loading) "Cancel preview" else "Stop preview" } else "Play preview")
+                        }
+                        }
+                        if (preview.activeKey == track.key) Text("${if (preview.loading) "Loading" else "Playing"} a short provider preview · not full-quality FLAC", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -182,7 +245,7 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
                 onDetails = { details = e.track.key }) }
             if (saved.isNotEmpty()) item { Text("Saved lossless", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge) }
             items(saved, key = { it.track.key }) { e -> LosslessCard(e,
-                onPlay = { actions.playAll(saved.map(LosslessDownloads::song), saved.indexOf(e), false, "Lossless downloads") },
+                onPlay = { preview.stop(); playWhenReady = null; actions.playAll(saved.map(LosslessDownloads::song), saved.indexOf(e), false, "Lossless downloads") },
                 onExport = { exportId = e.track.key; exporter.launch("${e.track.artist} - ${e.track.title}".replace(Regex("[\\\\/:*?\"<>|]"), "_").take(150) + ".flac") },
                 onRemove = { deleting = e }, exportEnabled = !exporting, onDetails = { details = e.track.key }) }
             if (exporting) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(16.dp)) }
@@ -191,19 +254,24 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
     }
     connection?.let { id -> LosslessConnectionDialog(id) { connection = null } }
     details?.let { key -> entries[key]?.let { DownloadDetailsDialog(it, network, workers[it.workId]?.name ?: "Not scheduled", onDismiss = { details = null }) } }
-    selected?.let { track -> FloatingDialog(onDismissRequest = { selected = null }, title = { Text("Download lossless") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    selected?.let { track -> FloatingDialog(onDismissRequest = { selected = null }, title = { Text(if (playSelection) "Play lossless" else "Download lossless") }, text = {
+        Column(Modifier.heightIn(max = 440.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(track.title, style = MaterialTheme.typography.titleLarge); Text(track.artist)
             Text(ProviderPackages.displayName(track.provider))
             installed[track.provider]?.qualities?.forEach { (id, label) ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = quality == id, onClick = { quality = id }); TextButton(onClick = { quality = id }) { Text(label) }
+                    RadioButton(selected = quality == id, onClick = { quality = id })
+                    Column(Modifier.weight(1f)) {
+                        TextButton(onClick = { quality = id }) { Text(label) }
+                        Text(installed[track.provider]?.qualityDescription(id).orEmpty(), style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
             Text("The complete file is downloaded and checked before offline playback. No lossy fallback or upsampling.")
+            Text("This section offers FLAC qualities. Opus, AAC and Dolby formats are not lossless FLAC and are not downloaded here.", style = MaterialTheme.typography.bodySmall)
             Text("Saved in OpenTune. Export afterward to keep a copy in your chosen folder. Up to 512 MB per track; 1 GB free space needed.", style = MaterialTheme.typography.bodySmall)
         }
-    }, confirmButton = { TextButton(onClick = { enqueue(track) }) { Text("Download FLAC") } }, dismissButton = { TextButton(onClick = { selected = null }) { Text("Cancel") } }) }
+    }, confirmButton = { TextButton(onClick = { enqueue(track, play = playSelection) }) { Text(if (playSelection) "Prepare & play" else "Download FLAC") } }, dismissButton = { TextButton(onClick = { selected = null }) { Text("Cancel") } }) }
     deleting?.let { e -> FloatingDialog(onDismissRequest = { deleting = null }, title = { Text("Remove saved FLAC?") }, text = { Text("Remove ${e.track.title} from OpenTune? Copies you exported stay in their folders.") },
         confirmButton = { TextButton(onClick = { deleting = null; remove(e) }) { Text("Remove") } }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("Keep") } }) }
 }

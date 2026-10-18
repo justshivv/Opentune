@@ -3,8 +3,6 @@ package com.opentune.ui.lossless
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -42,9 +40,9 @@ internal fun LosslessConnectionDialog(provider: String = "amazon", onDismiss: ()
                 scope.launch {
                     busy = true; message = null
                     try {
-                        manager.connect()?.let { url ->
-                            try { CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, Uri.parse(url)) }
-                            catch (_: android.content.ActivityNotFoundException) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                        manager.connect()?.let {
+                            context.startActivity(Intent(context, ProviderVerificationActivity::class.java)
+                                .putExtra(ProviderVerificationActivity.PROVIDER, provider))
                         }
                     } catch (e: CancellationException) { throw e }
                     catch (_: Exception) { message = "Verification could not open. Check your connection and try again." }
@@ -52,7 +50,7 @@ internal fun LosslessConnectionDialog(provider: String = "amazon", onDismiss: ()
                 }
             }) { Text(if (pending) "Continue verification" else if (status == "Connected") "Connected" else "Connect in browser") }
             if (pending) {
-                Text("If the browser stays open, use its Copy link button, then paste the result here.")
+                Text("Finish verification in your browser. Supported browsers close automatically and save the connection here. If an older browser stays open, use its Copy link button and paste the result below.")
                 OutlinedButton(onClick = { paste = true }) { Text("Paste browser result") }
             }
             if (retry) TextButton(onClick = manager::retryCompletion) { Text("Retry saving session") }

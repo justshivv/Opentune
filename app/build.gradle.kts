@@ -152,7 +152,7 @@ dependencies {
     implementation("io.github.kyant0:backdrop:2.0.0-alpha03")
     // Downloads that keep going after the app is closed.
     implementation("androidx.work:work-runtime-ktx:2.10.1")
-    implementation("androidx.browser:browser:1.8.0")
+    implementation("androidx.browser:browser:1.9.0")
     implementation("com.antonkarpenko:ffmpeg-kit-audio:2.2.3")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.navigation:navigation-compose:2.8.5")

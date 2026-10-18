@@ -46,6 +46,31 @@ class BiquadTest {
 }
 
 class DspAudioProcessorTest {
+    @Test fun nextFormatDoesNotReinterpretSamplesStillDrainingFromPreviousTrack() {
+        val params = DspParams(outputGainDb = -6f)
+        val actual = configured(params)
+        val reference = configured(params)
+        // Real sinks configure the next track before draining/flushing the old one.
+        actual.configure(AudioFormat(192_000, 1, C.ENCODING_PCM_FLOAT))
+        val expected = run(reference, pcm16Stereo(1000) { sin(it / 10.0).toFloat() * 0.5f })
+        val received = run(actual, pcm16Stereo(1000) { sin(it / 10.0).toFloat() * 0.5f })
+        assertEquals(expected, received)
+        actual.flush()
+        val floats = ByteBuffer.allocateDirect(400).order(ByteOrder.nativeOrder()).apply {
+            repeat(100) { putFloat(0.25f) }; flip()
+        }
+        val result = run(actual, floats)
+        repeat(100) { assertEquals(0.25f * dbToGain(-6f), result.float, 0.000001f) }
+    }
+
+    @Test fun seekingClearsSpatialDelaySoPreviousVocalsCannotLeakIntoNextBuffer() {
+        val params = DspParams(eightDPeriod = 4f)
+        val used = configured(params)
+        run(used, pcm16Stereo(48000) { 0.7f })
+        used.flush()
+        val silence = run(used, pcm16Stereo(1000) { 0f })
+        while (silence.hasRemaining()) assertEquals(0, silence.short.toInt())
+    }
     private fun pcm16Stereo(frames: Int, gen: (Int) -> Float): ByteBuffer {
         val b = ByteBuffer.allocateDirect(frames * 4).order(ByteOrder.nativeOrder())
         repeat(frames) { i -> val s = (gen(i) * 32767).toInt().toShort(); b.putShort(s); b.putShort(s) }

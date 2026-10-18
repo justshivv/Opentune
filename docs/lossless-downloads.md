@@ -5,8 +5,15 @@ Based on main 41054c7 (0.4.18). Open Library → Lossless.
 1. Open Providers, import the SpotiFLAC registry URL, and install Amazon Music, Qobuz, or Tidal.
    Packages are downloaded, checked against the registry SHA-256, inspected and compiled.
 2. Select an installed provider, search by song or artist and select the recording.
-3. Choose a lossless quality and Download FLAC. Connect the provider in the browser if prompted.
-4. If the browser does not return, use Copy link, then Paste browser result →
+3. Choose a provider's FLAC quality and Download FLAC, or Play FLAC → Prepare & play.
+   Play prepares/checks the complete file, keeps it for offline use and starts it
+   while this page is open and foregrounded. Network restrictions still apply.
+   Short previews appear only when supplied by the provider and are labelled separately.
+4. Connect in the browser if prompted. Auth Tab-capable browsers (Chrome 137+)
+   return directly to a private activity and close automatically. The extension's
+   callback scheme is captured only inside this browser session, never registered
+   in OpenTune's intent filters. Older browsers retain the OpenTune callback and
+   paste fallback. If the browser does not return, use Copy link, then Paste browser result →
    Paste → Verify link. Complete callback URLs require matching state. An exact
    grant-only code can be submitted explicitly during an active verification.
 5. Waiting downloads resume after connection; Resume is also available.
@@ -52,6 +59,14 @@ private audio are excluded from backup. Exports use Android's document picker.
 Full FLAC decode validation rejects corrupt frames. STREAMINFO provides measured
 bit depth/sample rate; known catalog durations must match within three seconds.
 No AAC/MP3 fallback, lossy-to-FLAC transcoding or upsampling is performed.
+
+Playback stages new PCM formats until the sink flushes the preceding track,
+and clears spatial delay lines on seeks/transitions. Android's software FLAC
+decoder is preferred when available, with initialization fallback retained.
+Signal path shows the decoder and per-track underruns. Release instrumentation
+checks CD and 24-bit high-resolution FLAC through the same renderer/DSP factory,
+comparing both channels' decoded samples with generated reference tones.
+These tests do not replace listening to the reported Tidal files on the user's device.
 
 Limits: one active transfer, 512 MiB input per track, 1 GiB free-space requirement,
 five-minute transfer deadline and a bounded provider execution budget. Interrupted

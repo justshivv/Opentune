@@ -35,6 +35,9 @@
     <!-- The phone's own equalizer, opened from the Equalizer page. -->
     <queries>
         <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+        <intent>
             <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
         </intent>
     </queries>
@@ -51,6 +54,7 @@
         android:supportsRtl="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
+        <activity android:name=".ui.lossless.ProviderVerificationActivity" android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

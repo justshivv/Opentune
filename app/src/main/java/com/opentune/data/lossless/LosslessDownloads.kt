@@ -31,7 +31,7 @@ import java.util.UUID
 
 @Serializable
 internal data class LosslessTrack(val id: String, val title: String, val artist: String,
-    val artwork: String? = null, val durationMs: Long = 0, val provider: String = "amazon") {
+    val artwork: String? = null, val durationMs: Long = 0, val provider: String = "amazon", val previewUrl: String? = null) {
     val key get() = if (provider == "amazon") id else "$provider:$id"
     fun song(duration: Long = durationMs, art: String? = artwork) = Song("lossless:$key", title, artist, art,
         durationText = duration.takeIf { it > 0 }?.let { "${it / 60000}:${(it / 1000 % 60).toString().padStart(2, '0')}" })

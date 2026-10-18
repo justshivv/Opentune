@@ -84,7 +84,8 @@ internal object ProviderRuntime {
         if (title.isBlank() || artist.isBlank()) return null
         return LosslessTrack(id, title.take(500), artist.take(500),
             item.optString("cover_url").ifBlank { item.optString("thumbnail_url") }.takeIf { it.startsWith("https://") },
-            item.optLong("duration_ms").coerceIn(0, 86_400_000), provider)
+            item.optLong("duration_ms").coerceIn(0, 86_400_000), provider,
+            item.optString("preview_url").takeIf { it.length <= 8192 && it.startsWith("https://") })
     }
     suspend fun download(track: LosslessTrack, quality: String, folder: File,
         progress: (LosslessState, Long, Long) -> Unit, event: (String) -> Unit): LosslessSource.FlacInfo = withContext(Dispatchers.IO) {

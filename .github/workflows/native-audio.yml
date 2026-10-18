@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'app/src/main/java/com/opentune/data/lossless/**'
+      - 'app/src/main/java/com/opentune/playback/**'
       - 'app/src/androidTest/**'
       - 'app/proguard-rules.pro'
       - 'app/proguard-native-test.pro'

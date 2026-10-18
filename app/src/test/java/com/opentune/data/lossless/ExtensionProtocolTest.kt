@@ -14,6 +14,23 @@ import java.time.Instant
 @Config(sdk = [35], application = android.app.Application::class)
 class ExtensionProtocolTest {
     private val state = "a-long-random-browser-state"
+    @Test fun authTabReturnsTheManifestCallbackOnlyThroughItsBoundResult() {
+        val original = ExtensionProtocol.challenge(JSONObject().put("challenge_id", "fixture"), state)!!.first
+        val tab = ExtensionProtocol.authTabUrl(original, state)!!
+        val callback = Uri.parse(tab.toHttpUrl().queryParameter("cb"))
+        assertEquals("spotiflac", callback.scheme)
+        assertEquals("session-grant", callback.host)
+        assertEquals(state, callback.getQueryParameter("state"))
+        val result = callback.buildUpon().appendQueryParameter("grant", "fixture-grant").build()
+        assertEquals("fixture-grant", ExtensionProtocol.browserGrant(result, state))
+        assertFalse(ExtensionProtocol.isCallback(result))
+        assertNull(ExtensionProtocol.grant(result, state))
+        assertNull(ExtensionProtocol.browserGrant(result, "wrong-state"))
+        assertNull(ExtensionProtocol.browserGrant(Uri.parse("spotiflac://session-grant?grant=fixture-grant"), state))
+        assertNull(ExtensionProtocol.browserGrant(result.buildUpon().appendQueryParameter("grant", "duplicate").build(), state))
+        assertNull(ExtensionProtocol.authTabUrl("https://evil.example/v2/challenge", state))
+        assertNull(ExtensionProtocol.authTabUrl(original, "wrong-state"))
+    }
     @Test fun signingUsesBase64RollingKeyAndEscapedFullPath() {
         val headers = ExtensionProtocol.headers(ExtensionProtocol.Session("session", "secret", Instant.MAX), "POST",
             "/v2/dl/amazeamazeamaze", """{"asin":"B012345678","codec":"flac"}""", "nonce", Instant.parse("2026-10-15T00:00:00Z"))

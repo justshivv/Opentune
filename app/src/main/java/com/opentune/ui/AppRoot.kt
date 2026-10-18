@@ -223,6 +223,7 @@ fun AppRoot(vm: PlayerViewModel) {
             playNext = vm::playNext,
             addToQueue = vm::addToQueue,
             smartShuffle = { songs, source -> vm.smartShuffle(songs, source) },
+            pause = vm.player::pause,
         )
     }
     val openItem: (ShelfItem) -> Unit = remember(nav, vm) { { item ->

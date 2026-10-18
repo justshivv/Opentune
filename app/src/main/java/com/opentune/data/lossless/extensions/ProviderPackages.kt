@@ -32,6 +32,9 @@ internal data class ProviderPackage(val listing: ProviderListing, val manifest: 
         (0 until array.length()).map { array.getJSONObject(it) }.filter { it.optString("kind") == "lossless" }
             .map { it.getString("id") to it.getString("label") }
     }.orEmpty()
+    fun qualityDescription(id: String): String = manifest.optJSONArray("qualityOptions")?.let { array ->
+        (0 until array.length()).map { array.getJSONObject(it) }.firstOrNull { it.optString("id") == id }?.optString("description")
+    }.orEmpty().take(300)
 }
 internal fun JSONArray.strings(): List<String> = (0 until length()).map { getString(it) }
 

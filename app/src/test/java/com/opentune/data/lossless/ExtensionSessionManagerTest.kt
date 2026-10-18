@@ -45,6 +45,25 @@ class ExtensionSessionManagerTest {
         .appendQueryParameter("grant", "test-grant").build().toString()
     @After fun cleanup() { scopes.forEach { it.cancel() } }
 
+    @Test fun boundBrowserResultCompletesWithoutClipboardAndSurvivesManagerRecreation() = runBlocking {
+        var exchanges = 0
+        val transport: suspend (Request) -> String = { request ->
+            if (request.url.encodedPath.endsWith("bootstrap")) """{"challenge_id":"test-challenge"}"""
+            else { exchanges++; session }
+        }
+        val original = manager(transport)
+        original.connect()
+        assertNotNull(original.authTabUrl())
+        val restored = manager(transport)
+        val callback = callback().replace("opentune://provider-session", "spotiflac://session-grant")
+        assertFalse(restored.receiveCallback(callback))
+        assertTrue(restored.receiveCallback(callback, browserResult = true))
+        withTimeout(1000) { restored.status.first { it == "Connected" } }
+        assertEquals(1, exchanges)
+        assertFalse(restored.pending.value)
+        assertNull(restored.authTabUrl())
+    }
+
     @Test fun runtimeRequestsCarryUpstreamHeadersAndKeepProviderDenialConnected() = runBlocking {
         stored = JSONObject().put("install_id", "fixture").put("enabled", true).put("scope", ExtensionProtocol.VERSION).put("session", JSONObject(session))
         val manager = manager { request ->
