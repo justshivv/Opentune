@@ -41,7 +41,8 @@ fun trackUri(videoId: String): Uri = when {
     Subsonic.isSubsonic(videoId) -> Subsonic.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
     // A station streams from its own server.
     Radio.isRadio(videoId) -> Radio.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
-    else -> Downloads.fileFor(videoId)?.let(Uri::fromFile)
+    else -> com.opentune.data.lossless.LosslessDownloads.fileFor(videoId)?.let(Uri::fromFile)
+        ?: Downloads.fileFor(videoId)?.let(Uri::fromFile)
         ?: streamUri(videoId, upgraded = UpgradedTracks.contains(videoId))
 }
 

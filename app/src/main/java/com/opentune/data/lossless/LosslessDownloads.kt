@@ -32,7 +32,8 @@ import java.util.UUID
 @Serializable
 internal data class LosslessTrack(val id: String, val title: String, val artist: String,
     val artwork: String? = null, val durationMs: Long = 0, val provider: String = "amazon",
-    @kotlinx.serialization.Transient val previewUrl: String? = null) {
+    @kotlinx.serialization.Transient val previewUrl: String? = null,
+    val sourceIds: Set<String> = emptySet()) {
     val key get() = if (provider == "amazon") id else "$provider:$id"
     fun song(duration: Long = durationMs, art: String? = artwork) = Song("lossless:$key", title, artist, art,
         durationText = duration.takeIf { it > 0 }?.let { "${it / 60000}:${(it / 1000 % 60).toString().padStart(2, '0')}" })
@@ -96,7 +97,7 @@ internal object LosslessDownloads {
     val entries get() = store.entries
     val workStates = MutableStateFlow<Map<String, WorkInfo.State>>(emptyMap())
     fun isLossless(id: String) = id.startsWith("lossless:")
-    fun entry(id: String) = if (::store.isInitialized) store.entries.value[id.removePrefix("lossless:")] else null
+    fun entry(id: String) = if (::store.isInitialized) store.entries.value[id.removePrefix("lossless:")] ?: store.entries.value.values.firstOrNull { id in it.track.sourceIds && it.state == LosslessState.DONE } else null
     fun fileFor(id: String) = entry(id)?.takeIf { it.state == LosslessState.DONE }?.let { store.file(it) }?.takeIf { it.isFile && it.length() > 42 }
     fun artFor(id: String) = entry(id)?.takeIf { it.state == LosslessState.DONE }?.let { File(store.folder(it), "cover.jpg") }?.takeIf { it.isFile }
     fun song(e: LosslessEntry) = e.track.song(e.durationMs, artFor(e.track.key)?.toURI()?.toString() ?: e.track.artwork)
@@ -147,13 +148,15 @@ internal object LosslessDownloads {
     }
     suspend fun enqueue(track: LosslessTrack, quality: String? = null, allowMetered: Boolean = false, replaceQueued: Boolean = false) = withContext(Dispatchers.IO) { scheduling.withLock {
         val old = entries.value[track.key]
+        val linkedTrack = track.copy(sourceIds = track.sourceIds + old?.track?.sourceIds.orEmpty())
+        if (old != null && linkedTrack.sourceIds != old.track.sourceIds) store.update(track.key, old.workId) { it.copy(track = it.track.copy(sourceIds = linkedTrack.sourceIds)) }
         if (old?.state == LosslessState.DONE || (old?.state?.active == true && !(replaceQueued && old.state == LosslessState.QUEUED))) return@withLock
         val unmetered = !allowMetered && AppSettings.library.value.downloadWifiOnly
         val selectedQuality = quality ?: old?.quality ?: ProviderPackages.get(track.provider)?.qualities?.firstOrNull()?.first ?: "best"
         val request = OneTimeWorkRequestBuilder<LosslessWorker>().setInputData(workDataOf("trackId" to track.key))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(if (unmetered) NetworkType.UNMETERED else NetworkType.CONNECTED).build())
             .addTag("lossless-downloads").build()
-        val next = LosslessEntry(track, request.id.toString(), addedAt = old?.addedAt ?: System.currentTimeMillis(),
+        val next = LosslessEntry(linkedTrack, request.id.toString(), addedAt = old?.addedAt ?: System.currentTimeMillis(),
             unmeteredOnly = unmetered, quality = selectedQuality,
             events = listOf(DownloadEvent(System.currentTimeMillis(), if (unmetered) "Queued · unmetered network required" else "Queued · Wi-Fi or mobile data allowed")))
         store.put(next)

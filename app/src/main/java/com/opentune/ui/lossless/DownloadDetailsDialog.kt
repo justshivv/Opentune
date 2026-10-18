@@ -40,7 +40,7 @@ internal fun DownloadDetailsDialog(entry: LosslessEntry, network: DownloadNetwor
         pkg?.let { appendLine("Package SHA-256: ${it.listing.sha256}") }
         appendLine("Quality: ${entry.quality}")
         if (entry.state == LosslessState.DONE) appendLine("Saved FLAC: ${entry.bits}-bit / ${entry.sampleRate} Hz")
-        if (source?.mediaId == entry.track.song().videoId) {
+        if (source?.mediaId == entry.track.song().videoId || source?.mediaId in entry.track.sourceIds) {
             appendLine("Current decoder: ${decoder ?: "starting"}")
             appendLine("Current track buffer underruns: $underruns")
             appendLine("Playback: speed ${sound.speed}, pitch ${sound.pitch}, float output ${playback.floatOutput}")

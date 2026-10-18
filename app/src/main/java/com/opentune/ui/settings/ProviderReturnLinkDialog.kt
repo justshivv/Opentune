@@ -55,7 +55,7 @@ internal fun ProviderReturnLinkDialog(
             Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(status, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 if (connected) {
-                    Text("Waiting lossless downloads can now continue. Return to Lossless to see progress.")
+                    Text("Waiting lossless downloads can now continue. Open Library → Downloads to see progress.")
                 } else {
                     if (!pending && !saving) Text("This verification has expired or was cancelled. Close this dialog and connect again.")
                     else Text("Paste the return link or grant= code from the verification page you just opened for this connection. A code alone cannot be matched locally; the provider must accept it before you are connected.")

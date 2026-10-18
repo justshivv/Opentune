@@ -983,7 +983,7 @@ class PlaybackService : MediaLibraryService() {
         val key = uri?.let(::externalStreamKeyOf)
         val rendition = if (item != null && key != null) ExternalStreams.get(item.mediaId, key) else null
         NerdStats.onExternalSource(rendition?.label)
-        val savedLossless = item?.mediaId?.takeIf { com.opentune.data.lossless.LosslessDownloads.isLossless(it) }
+        val savedLossless = item?.mediaId?.takeIf { uri?.scheme == "file" }
             ?.let { com.opentune.data.lossless.LosslessDownloads.entry(it) }?.takeIf { it.state == com.opentune.data.lossless.LosslessState.DONE }
         val provider = when {
             item == null -> "No track selected"

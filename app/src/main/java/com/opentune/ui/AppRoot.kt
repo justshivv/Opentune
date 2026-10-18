@@ -234,7 +234,10 @@ fun AppRoot(vm: PlayerViewModel) {
         }
     } }
     // `song` is read when a menu action runs, so the menu doesn't need rebuilding as songs change.
+    var downloadSongs by remember { mutableStateOf<List<Song>?>(null) }
+    var downloadProviders by remember { mutableStateOf(false) }
     val songMenu = remember(nav, vm) { SongMenuActions(
+        download = { downloadSongs = it },
         playNext = vm::playNext,
         addToQueue = vm::addToQueue,
         startRadio = vm::startRadio,
@@ -297,7 +300,6 @@ fun AppRoot(vm: PlayerViewModel) {
     ) }
     val libraryNav = remember(nav) { LibraryNav(
         downloads = { nav.navigate("downloads") },
-        lossless = { nav.navigate("lossless") },
         downloaded = { id -> nav.navigate("downloaded/${Uri.encode(id)}") },
         local = { nav.navigate("local") },
         replay = { nav.navigate("replay") },
@@ -564,8 +566,7 @@ fun AppRoot(vm: PlayerViewModel) {
                         )
                     }
                     composable("login") { LoginScreen(onDone = { nav.popBackStack() }) }
-                    composable("lossless") { com.opentune.ui.lossless.LosslessScreen(content, actions, onBack = { nav.popBackStack() }) }
-                    composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }, onProviders = { downloadProviders = true }) }
                     composable("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }
@@ -778,6 +779,10 @@ fun AppRoot(vm: PlayerViewModel) {
             // menu can be seen. Only one of the two is ever there.
             if (playerCovers) SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp))
         }
+        downloadSongs?.let { songs ->
+            com.opentune.ui.lossless.DownloadQualitySheet(songs, onDismiss = { downloadSongs = null }, onProviders = { downloadProviders = true })
+        }
+        if (downloadProviders) com.opentune.ui.settings.DownloadProvidersSheet { downloadProviders = false }
         if (opening) {
             com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })
         }

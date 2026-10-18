@@ -98,6 +98,7 @@ class SongMenuActions(
     val dontPlayArtist: (Song) -> Unit = { LibraryStore.hideArtist(it) },
     /** Adds a song smart shuffle mixed in to the playlist the queue came from. */
     val keepInPlaylist: (Song, String) -> Unit = { s, id -> LibraryStore.addToPlaylist(id, s); com.opentune.playback.SmartShuffle.keep(s.videoId) },
+    val download: (List<Song>) -> Unit = {},
 )
 
 val LocalSongMenu = staticCompositionLocalOf<SongMenuActions?> { null }
@@ -174,8 +175,7 @@ fun SongMenuSheet(
                     QuickAction(icon, label, active = download?.state == DownloadState.DONE, progress = ring) {
                         when (download?.state) {
                             DownloadState.DONE, DownloadState.QUEUED, DownloadState.DOWNLOADING -> Downloads.remove(context, song.videoId)
-                            DownloadState.FAILED -> Downloads.retry(context, song.videoId)
-                            null -> Downloads.enqueue(context, song)
+                            DownloadState.FAILED, null -> { close(); actions?.download?.invoke(listOf(song)) }
                         }
                     }
                 }
@@ -197,6 +197,7 @@ fun SongMenuSheet(
         val close: () -> Unit = { card?.close() ?: onDismiss() }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             if (!local && download != null) {
+                MenuRow(Icons.Rounded.Download, "Choose download quality") { close(); actions?.download?.invoke(listOf(song)) }
                 val downloading = download.state == DownloadState.QUEUED || download.state == DownloadState.DOWNLOADING
                 MenuRow(if (downloading) Icons.Rounded.Close else Icons.Rounded.DeleteOutline,
                     if (downloading) "Cancel download" else "Remove download") {

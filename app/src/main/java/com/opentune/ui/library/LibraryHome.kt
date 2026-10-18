@@ -113,7 +113,6 @@ class LibraryNav(
     val wrapped: () -> Unit = {},
     /** An album or playlist downloaded as a whole, by its id. */
     val downloaded: (String) -> Unit = {},
-    val lossless: () -> Unit = {},
 )
 
 private const val YT_PLAYLISTS = "library:ytPlaylists"
@@ -172,7 +171,8 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
     var naming by remember { mutableStateOf(false) }
     if (naming) NewPlaylistDialog(signedIn, onDismiss = { naming = false }) { name, privacy -> naming = false; nav.playlist(LibraryStore.createPlaylist(name, privacy = privacy)) }
-    val doneCount = finished.size
+    val losslessEntries by com.opentune.data.lossless.LosslessDownloads.entries.collectAsState()
+    val doneCount = finished.size + losslessEntries.values.count { it.state == com.opentune.data.lossless.LosslessState.DONE }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     val page: @Composable () -> Unit = { LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -206,9 +206,6 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Shortcut(Icons.Rounded.LibraryMusic, "On this phone", "Local files", nav.local, Modifier.weight(1f))
                     Shortcut(Icons.Rounded.History, "Replay", "Your top songs", nav.replay, Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Shortcut(Icons.Rounded.GraphicEq, "Lossless", "FLAC downloads", nav.lossless, Modifier.weight(1f))
                 }
                 val server by Subsonic.server.collectAsState()
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -525,26 +522,32 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
 
 /** Songs saved for offline listening, newest first, including ones still on their way. */
 @Composable
-fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
+fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit, onProviders: () -> Unit = {}) {
     val context = LocalContext.current
     val entries by Downloads.entries.collectAsState()
     val list = remember(entries) { entries.values.sortedByDescending { it.addedAt } }
-    val ready = remember(list) { list.filter { it.state == DownloadState.DONE }.map { it.song.toSong() } }
+    val flacEntries by com.opentune.data.lossless.LosslessDownloads.entries.collectAsState()
+    val ready = remember(list, flacEntries) {
+        list.filter { it.state == DownloadState.DONE }.map { it.song.toSong() } +
+            flacEntries.values.filter { it.state == com.opentune.data.lossless.LosslessState.DONE }.map(com.opentune.data.lossless.LosslessDownloads::song)
+    }
+    val flacItems = com.opentune.ui.lossless.losslessDownloadItems(actions, onProviders)
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader("Downloads", onBack = onBack) }
-        if (list.isEmpty()) {
+        if (list.isEmpty() && flacEntries.isEmpty()) {
             item {
                 MessageState(Icons.Rounded.Download, "No downloads yet", Modifier.padding(top = 32.dp), message = "Pick Download from any song's menu to keep it for offline listening.")
             }
             return@LazyColumn
         }
-        item {
+        if (ready.isNotEmpty()) item {
             PlayButtons(
                 onPlay = { actions.playAll(ready, 0, false, "Downloads") },
                 onShuffle = { actions.playAll(ready, 0, true, "Downloads") },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             )
         }
+        flacItems()
         items(list, key = { it.song.videoId }) { e ->
             val song = e.song.toSong()
             SongListItem(

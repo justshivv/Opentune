@@ -109,9 +109,10 @@ fun DownloadAllButton(songs: List<Song>, modifier: Modifier = Modifier, list: Do
     }
     val progress by animateFloatAsState(if (wanted.isEmpty()) 0f else done.toFloat() / wanted.size, tween(500), label = "downloaded")
     val scheme = MaterialTheme.colorScheme
+    val songMenu = com.opentune.ui.components.LocalSongMenu.current
     val downloadRemaining = {
         started = true
-        wanted.forEach { Downloads.enqueue(context, it) }
+        songMenu?.download?.invoke(wanted)
         list?.let { com.opentune.data.download.DownloadedLists.save(it.id, it.title, it.subtitle, it.thumbnailUrl, songs.map { s -> s.videoId }) }
     }
     if (options) FloatingCard(onDismiss = { options = false }, title = "Playlist downloads", icon = Icons.Rounded.Download) {

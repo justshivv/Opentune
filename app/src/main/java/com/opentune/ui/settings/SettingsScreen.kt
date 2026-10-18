@@ -434,6 +434,8 @@ private fun settingsSections(
     val lib by AppSettings.library.collectAsState()
     val metered = remember { AppSettings.onMeteredNetwork() }
     var qualityDialog by remember { mutableStateOf<Boolean?>(null) } // true = Wi-Fi, false = mobile
+    var downloadProviders by remember { mutableStateOf(false) }
+    if (downloadProviders) DownloadProvidersSheet { downloadProviders = false }
     var verifyLossless by remember { mutableStateOf(false) }
     var qobuzRelayDialog by remember { mutableStateOf(false) }
     if (qobuzRelayDialog) QobuzRelayDialog(pb.qobuzRelayUrl) { qobuzRelayDialog = false }
@@ -701,6 +703,9 @@ private fun settingsSections(
                 Entry("Prefer hi-res lossless", "24 bit flac qobuz") {
                     ToggleRow("Prefer hi-res lossless", pb.losslessHiRes, { v -> AppSettings.updatePlayback { it.copy(losslessHiRes = v) } }, summary = "Prefer hi-res for background upgrades too. Max always checks hi-res first. Uses more data.", icon = Icons.Rounded.HighQuality)
                 },
+                Entry("Download providers", "flac lossless import repository verification amazon tidal qobuz") {
+                    SettingRow("Download providers", icon = Icons.Rounded.HighQuality, summary = "Import providers and manage browser verification", onClick = { downloadProviders = true })
+                }
                 Entry("SpotiFLAC verification", "lossless session connect verify") {
                     SettingRow("SpotiFLAC verification", icon = Icons.Rounded.HighQuality, summary = if (losslessConnected) "Connected · tap to renew" else if (losslessNeedsVerification) "Verify again · provider session needs renewing" else "Optional · public providers work without it", onClick = { verifyLossless = true })
                 },

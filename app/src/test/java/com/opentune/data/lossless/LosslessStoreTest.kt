@@ -16,6 +16,12 @@ class LosslessStoreTest {
     @get:Rule val temp = TemporaryFolder()
     private val track = LosslessTrack("B012345678", "Wo Noor", "AP Dhillon", durationMs = 190000)
     private fun entry() = LosslessEntry(track, UUID.randomUUID().toString())
+    @Test fun sourceSongLinksSurviveRestartAlongsideExistingDownloads() {
+        val store = LosslessStore(temp.newFolder())
+        val e = entry().copy(track = track.copy(sourceIds = setOf("abcdefghijk")))
+        store.put(e)
+        assertEquals(setOf("abcdefghijk"), LosslessStore(store.root).entries.value[track.id]!!.track.sourceIds)
+    }
     @Test fun temporaryPreviewUrlsNeverEnterTheDurableDownloadIndex() {
         val store = LosslessStore(temp.newFolder())
         val e = entry().copy(track = track.copy(previewUrl = "https://cdn.example/preview?temporary=secret"))

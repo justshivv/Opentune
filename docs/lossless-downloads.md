@@ -1,25 +1,28 @@
 # Lossless downloads
 
-Based on main 41054c7 (0.4.18). Open Library → Lossless.
+Based on main 41054c7 (0.4.18), available on the preview branch only.
 
-1. Open Providers, import the SpotiFLAC registry URL, and install Amazon Music, Qobuz, or Tidal.
-   Packages are downloaded, checked against the registry SHA-256, inspected and compiled.
-2. Select an installed provider, search by song or artist and select the recording.
-3. Choose a provider's FLAC quality and Download FLAC, or Play FLAC → Prepare & play.
-   Play prepares/checks the complete file, keeps it for offline use and starts it
-   while this page is open and foregrounded. Network restrictions still apply.
-   Short previews appear only when supplied by the provider and are labelled separately.
-4. Connect in the browser if prompted. Auth Tab-capable browsers (Chrome 137+)
-   return directly to a private activity and close automatically. The extension's
-   callback scheme is captured only inside this browser session, never registered
-   in OpenTune's intent filters. Older browsers retain the OpenTune callback and
-   paste fallback. If the browser does not return, use Copy link, then Paste browser result →
-   Paste → Verify link. Complete callback URLs require matching state. An exact
-   grant-only code can be submitted explicitly during an active verification.
-5. Waiting downloads resume after connection; Resume is also available.
-6. The queue shows request, transfer, preparation and validation stages.
-7. Completed files show measured FLAC precision and sample rate. Play offline,
-   Export to a chosen folder, or Remove the private copy. Exported copies remain.
+1. Open Settings → Audio → Download providers. Import the SpotiFLAC registry URL,
+   then install Amazon Music, Qobuz or Tidal. Each package is checked before use.
+2. Manage connection opens browser verification. Auth Tab-capable browsers return
+   automatically to the private activity; older browsers retain the callback/paste
+   fallback. Sessions remain scoped to the installed provider version.
+3. Tap Download in a song's menu, player menu or playlist. A bottom sheet offers
+   standard compressed qualities and installed providers' FLAC tiers. Standard
+   quality is stored per job and preserved on retry, independent of later settings.
+4. Selecting a connected provider checks each song's title, credited artists and
+   duration against its catalog. Missing or failed matches are shown and skipped,
+   never silently replaced with another song or lossy audio. Catalog support does
+   not guarantee a particular sample rate; the completed file is measured.
+5. Library → Downloads contains the ordinary downloads, FLAC queue and saved files.
+   Older saved FLAC remains available. Progress, network waits, Retry, verification,
+   Cancel, Details, Play, Export and Remove remain accessible here.
+6. New FLAC downloads are linked to the original song so playing that song again
+   can use the checked offline file. Imported older files still play from Downloads.
+   Exported copies remain untouched when the app's private copy is removed.
+
+There is no standalone Lossless destination. Provider import and verification are
+settings; quality choice belongs to Download; saved music belongs to Downloads.
 
 ## Architecture
 
@@ -28,7 +31,7 @@ host provides the SpotiFLAC APIs for HTTP, per-provider signed sessions, isolate
 file downloads, sequential segments, hashing, storage and cancellation. The host
 uses the manifest's app-version scope and the upstream runtime request headers.
 It supports the reviewed Amazon, Qobuz and Tidal packages; other registry entries
-show a compatibility message and cannot be installed in this Lossless section.
+show a compatibility message and cannot be installed.
 
 Package import is limited to the two requested SpotiFLAC repository aliases.
 SHA-256, package identity/version, required runtime features, archive paths and

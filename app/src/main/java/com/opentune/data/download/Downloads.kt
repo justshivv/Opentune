@@ -76,6 +76,7 @@ data class DownloadEntry(
     val addedAt: Long = System.currentTimeMillis(),
     /** Identifies the worker allowed to publish updates, including after cancellation/retry. */
     val workId: String? = null,
+    val maxKbps: Int? = null,
 )
 
 /**
@@ -152,7 +153,7 @@ object Downloads {
         return File(folder, "$videoId.lyrics.json")
     }
 
-    fun enqueue(context: Context, song: Song) {
+    fun enqueue(context: Context, song: Song, maxKbps: Int = AppSettings.library.value.downloadQuality.maxKbps) {
         if (!com.opentune.data.isYouTubeId(song.videoId)) return
         val existing = _entries.value[song.videoId]
         if (existing?.state == DownloadState.DONE || existing?.state == DownloadState.DOWNLOADING || existing?.state == DownloadState.QUEUED) return
@@ -163,7 +164,7 @@ object Downloads {
             .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 15, java.util.concurrent.TimeUnit.SECONDS)
             .addTag(TAG)
             .build()
-        put(song.videoId) { DownloadEntry(SongRef.of(song), workId = request.id.toString()) }
+        put(song.videoId) { DownloadEntry(SongRef.of(song), workId = request.id.toString(), maxKbps = maxKbps) }
         WorkManager.getInstance(context).enqueueUniqueWork(workName(song.videoId), ExistingWorkPolicy.REPLACE, request)
     }
 
@@ -205,7 +206,7 @@ object Downloads {
     fun retry(context: Context, videoId: String) {
         val e = _entries.value[videoId]?.takeIf { it.state == DownloadState.FAILED } ?: return
         remove(context, videoId)
-        enqueue(context, e.song.toSong())
+        enqueue(context, e.song.toSong(), e.maxKbps ?: AppSettings.library.value.downloadQuality.maxKbps)
     }
 
     /** Reject stale callbacks from removed/replaced workers atomically. */
@@ -249,7 +250,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val jobDir = File(Downloads.directory(), "$id.${this.id}")
         publish { it.copy(state = DownloadState.DOWNLOADING, error = null) }
         return try {
-            val maxKbps = AppSettings.library.value.downloadQuality.maxKbps
+            val maxKbps = entry.maxKbps ?: AppSettings.library.value.downloadQuality.maxKbps
             val dir = jobDir.apply { mkdirs() }
             // A playlist queues every song at once; a few at a time each get the
             // bandwidth, and YouTube isn't asked for dozens of streams together.
