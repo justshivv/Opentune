@@ -61,6 +61,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.opentune.data.model.Song
 import com.opentune.data.model.ROW_ART_PX
 import com.opentune.data.model.artworkAt
 import androidx.compose.ui.graphics.graphicsLayer

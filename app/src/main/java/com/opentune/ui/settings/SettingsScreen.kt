@@ -705,7 +705,7 @@ private fun settingsSections(
                 },
                 Entry("Download providers", "flac lossless import repository verification amazon tidal qobuz") {
                     SettingRow("Download providers", icon = Icons.Rounded.HighQuality, summary = "Import providers and manage browser verification", onClick = { downloadProviders = true })
-                }
+                },
                 Entry("SpotiFLAC verification", "lossless session connect verify") {
                     SettingRow("SpotiFLAC verification", icon = Icons.Rounded.HighQuality, summary = if (losslessConnected) "Connected · tap to renew" else if (losslessNeedsVerification) "Verify again · provider session needs renewing" else "Optional · public providers work without it", onClick = { verifyLossless = true })
                 },
