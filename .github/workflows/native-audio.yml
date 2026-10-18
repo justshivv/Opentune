@@ -1,0 +1,49 @@
+name: Native audio release test
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'app/src/main/java/com/opentune/data/lossless/**'
+      - 'app/src/androidTest/**'
+      - 'app/proguard-rules.pro'
+      - 'app/build.gradle.kts'
+      - '.github/workflows/native-audio.yml'
+permissions:
+  contents: read
+concurrency:
+  group: native-audio-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  release-device:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-37.0 build-tools;36.0.0
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build shrunk app and instrumentation
+        run: ./gradlew --no-daemon -PnativeReleaseTest=true -PuniversalOnly=true assembleRelease assembleReleaseAndroidTest
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Prepare and validate audio in the release APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: ./gradlew --no-daemon -PnativeReleaseTest=true -PuniversalOnly=true connectedReleaseAndroidTest
+      - name: Native audio reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-audio-reports
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/

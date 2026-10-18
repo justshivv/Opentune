@@ -69,4 +69,16 @@ class AmazonAdapterTest {
         assertEquals("null", args[args.indexOf("-f") + 1])
         assertFalse(args.contains("-c:a"))
     }
+    @Test fun nativeLoaderErrorsBecomeActionableWithoutLeakingArguments() {
+        val error = Error("private path or key", UnsatisfiedLinkError("secret provider key"))
+        val message = AmazonAudio.nativeEngineFailure(error).message.orEmpty()
+        assertTrue(message.contains("Native audio engine"))
+        assertTrue(message.contains("UnsatisfiedLinkError"))
+        assertFalse(message.contains("secret"))
+        assertFalse(message.contains("private path"))
+        assertThrows(kotlinx.coroutines.CancellationException::class.java) {
+            AmazonAudio.nativeEngineFailure(kotlinx.coroutines.CancellationException("cancelled"))
+        }
+        assertThrows(OutOfMemoryError::class.java) { AmazonAudio.nativeEngineFailure(OutOfMemoryError()) }
+    }
 }

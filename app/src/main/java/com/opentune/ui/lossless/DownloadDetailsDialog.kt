@@ -26,6 +26,7 @@ internal fun DownloadDetailsDialog(entry: LosslessEntry, network: DownloadNetwor
     val time = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
     val report = buildString {
         appendLine("OpenTune ${BuildConfig.VERSION_NAME}")
+        appendLine("Android API ${android.os.Build.VERSION.SDK_INT} · ABI ${android.os.Build.SUPPORTED_ABIS.joinToString()}")
         appendLine("${entry.track.title} · ${entry.track.artist}")
         appendLine("Provider: ${ProviderPackages.displayName(entry.track.provider)} ${pkg?.version ?: "not installed"}")
         pkg?.let { appendLine("Package SHA-256: ${it.listing.sha256}") }

@@ -92,6 +92,8 @@ internal object ProviderRuntime {
         val pkg = ProviderPackages.get(track.provider) ?: throw LosslessFailure("Install ${ProviderPackages.displayName(track.provider)} in Providers, then retry.")
         require(pkg.qualities.any { it.first == quality }) { "Choose an available lossless quality" }
         require(folder.usableSpace >= 1024L * 1024 * 1024) { "At least 1 GB free space is needed" }
+        event("Checking local audio engine")
+        event("Audio engine ready · FFmpeg ${AmazonAudio.checkEngine()}")
         val invocation = Invocation(pkg, currentCoroutineContext(), folder, progress, event, 8 * 60_000)
         progress(LosslessState.REQUESTING, 0, 0)
         event("Running ${pkg.name} ${pkg.version} · ${pkg.listing.sha256.take(12)}")

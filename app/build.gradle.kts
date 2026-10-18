@@ -87,6 +87,8 @@ android {
         // Robolectric tests (the media library) read the merged manifest and resources.
         unitTests.isIncludeAndroidResources = true
     }
+    // Exercise the shipped, shrunk native engine rather than a JVM substitute.
+    testBuildType = providers.gradleProperty("nativeReleaseTest").map { if (it.toBoolean()) "release" else "debug" }.getOrElse("debug")
 }
 
 kotlin {

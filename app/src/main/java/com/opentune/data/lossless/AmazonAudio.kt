@@ -83,6 +83,7 @@ internal object AmazonAudio {
     internal suspend fun finishDownloadedFile(input: File, output: File, key: String, expectedDurationMs: Long,
         progress: (LosslessState, Long, Long) -> Unit): LosslessSource.FlacInfo {
         require(input.isFile && input.length() in 43..MAX_BYTES)
+        require(input.canonicalFile != output.canonicalFile) { "Preparation needs a separate output file" }
         progress(LosslessState.PREPARING, input.length(), input.length())
         if (key.isEmpty() && readInfo(input) != null) {
             if (!input.renameTo(output)) throw LosslessFailure("Could not save downloaded FLAC.")
@@ -168,15 +169,34 @@ internal object AmazonAudio {
         addAll(listOf("-i", input, "-map", "0:a:0", "-vn", "-c:a", "copy", "-f", "flac", output))
     }.toTypedArray()
     private suspend fun convert(input: File, output: File, key: String) = runFfmpeg(conversionArguments(input.path, output.path, key), output)
-    private suspend fun runFfmpeg(arguments: Array<String>, output: File) = suspendCancellableCoroutine<Unit> { continuation ->
+    /** Fail before transferring a large file if the shipped native engine cannot load. */
+    internal fun checkEngine(): String = try { FFmpegKitConfig.getVersion() }
+        catch (error: Throwable) { throw nativeEngineFailure(error) }
+
+    internal fun nativeEngineFailure(error: Throwable): LosslessFailure {
+        if (error is CancellationException || error is VirtualMachineError || error is ThreadDeath) throw error
+        // NativeLoader wraps UnsatisfiedLinkError in Error; Exception-only catches miss it.
+        // Never include raw exception text: session arguments can contain a provider key.
+        val kinds = generateSequence(error) { it.cause }.take(4).map { it.javaClass.simpleName }.joinToString(" → ")
+        return LosslessFailure("Native audio engine could not start ($kinds). Install the latest preview and retry. If it continues, copy download diagnostics.")
+    }
+    private suspend fun runFfmpeg(arguments: Array<String>, output: File) {
+      try { suspendCancellableCoroutine<Unit> { continuation ->
         val session = FFmpegSession.create(arguments, { result ->
-            // FFmpeg's in-memory history retains arguments; discard the ephemeral key immediately.
-            FFmpegKitConfig.clearSessions()
-            if (!continuation.isActive) { output.delete(); return@create }
-            if (ReturnCode.isSuccess(result.returnCode)) continuation.resume(Unit)
-            else continuation.resumeWithException(IOException("Audio container conversion failed"))
+            try {
+                // FFmpeg's in-memory history retains arguments; discard the ephemeral key immediately.
+                FFmpegKitConfig.clearSessions()
+                if (!continuation.isActive) { output.delete(); return@create }
+                if (ReturnCode.isSuccess(result.returnCode)) continuation.resume(Unit)
+                else continuation.resumeWithException(LosslessFailure("Audio preparation or validation failed (FFmpeg exit ${result.returnCode?.value ?: "unknown"}). The downloaded file was not saved as playable FLAC."))
+            } catch (error: Throwable) {
+                val failure = nativeEngineFailure(error)
+                if (continuation.isActive) continuation.resumeWithException(failure)
+            }
         }, null, null, LogRedirectionStrategy.NEVER_PRINT_LOGS)
         FFmpegKitConfig.asyncFFmpegExecute(session)
-        continuation.invokeOnCancellation { FFmpegKit.cancel(session.sessionId) }
+        continuation.invokeOnCancellation { runCatching { FFmpegKit.cancel(session.sessionId) } }
+      } } catch (error: LosslessFailure) { throw error }
+        catch (error: Throwable) { throw nativeEngineFailure(error) }
     }
 }

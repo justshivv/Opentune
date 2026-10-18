@@ -119,7 +119,11 @@ internal object LosslessDownloads {
                 workStates.value = infos.associate { it.id.toString() to it.state }
                 infos.filter { it.state.isFinished }.forEach { info ->
                     entries.value.values.firstOrNull { it.workId == info.id.toString() && it.state.active }?.let { e ->
-                        store.update(e.track.key, e.workId) { it.copy(state = LosslessState.FAILED, error = "Android stopped this download. Tap Retry.") }
+                        store.update(e.track.key, e.workId) {
+                            val message = "Download ended during ${it.state.label.lowercase()} (worker ${info.state.name}). Tap Retry; copy diagnostics if it happens again."
+                            it.copy(state = LosslessState.FAILED, error = message,
+                                events = (it.events + DownloadEvent(System.currentTimeMillis(), message)).takeLast(40))
+                        }
                     }
                 }
             }
