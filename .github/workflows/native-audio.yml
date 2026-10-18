@@ -6,6 +6,7 @@ on:
       - 'app/src/main/java/com/opentune/data/lossless/**'
       - 'app/src/androidTest/**'
       - 'app/proguard-rules.pro'
+      - 'app/proguard-native-test.pro'
       - 'app/build.gradle.kts'
       - '.github/workflows/native-audio.yml'
 permissions:
@@ -47,3 +48,11 @@ jobs:
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
+      - name: Device test failure details
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for path in Path('app/build/outputs/androidTest-results').rglob('*.xml'):
+              print(path.read_text()[:20000])
+          PY

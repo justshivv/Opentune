@@ -53,6 +53,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Instrumentation shares the app's Kotlin runtime. Keep its facade classes
+            // for AndroidJUnitRunner; FFmpeg still uses the production shrink rules.
+            if (providers.gradleProperty("nativeReleaseTest").orNull == "true") {
+                proguardFiles("proguard-native-test.pro")
+            }
             signingConfig = if (unsignedRelease) null else (signingConfigs.findByName("release") ?: signingConfigs.getByName("debug"))
         }
     }
