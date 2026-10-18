@@ -110,7 +110,14 @@ internal fun LosslessScreen(contentPadding: PaddingValues, actions: SongActions,
                 }
             }
         }
-        notice?.let { item { Column(Modifier.padding(horizontal = 20.dp)) { Text(it); TextButton(onClick = { notice = null }) { Text("Dismiss") } } }
+        notice?.let { message ->
+            item {
+                Column(Modifier.padding(horizontal = 20.dp)) {
+                    Text(message)
+                    TextButton(onClick = { notice = null }) { Text("Dismiss") }
+                }
+            }
+        }
         item { Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(tab == 0, { tab = 0 }, label = { Text("Find music") })
             FilterChip(tab == 1, { tab = 1 }, label = { Text("Downloads (${entries.size})") })
