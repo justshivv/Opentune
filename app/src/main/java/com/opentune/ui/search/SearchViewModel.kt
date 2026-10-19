@@ -17,7 +17,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import com.opentune.data.addons.Addons
 import com.opentune.data.innertube.StreamResolver
 import kotlinx.coroutines.Dispatchers
 
@@ -84,6 +86,8 @@ class SearchViewModel : ViewModel() {
         // A search made a minute ago comes back at once; it's refreshed anyway.
         _results.value = recentSearches[key]?.let { UiState.Success(it) } ?: UiState.Loading
         searchJob = viewModelScope.launch {
+            // Addons answer alongside YouTube, and their songs follow its results.
+            val fromAddons = if (f == SearchFilter.ALL || f == SearchFilter.SONGS) async { Addons.search(q) } else null
             val fresh = try {
                 UiState.Success(MusicRepository.search(q, f))
             } catch (e: CancellationException) {
@@ -91,13 +95,24 @@ class SearchViewModel : ViewModel() {
             } catch (e: Exception) {
                 if (_results.value is UiState.Success) null else UiState.Error(friendlyError(e))
             }
-            fresh?.let { _results.value = it }
+            // Addon songs from the last time stay in place until their new answers come.
+            val earlier = recentSearches[key].orEmpty().filter(::fromAddon)
+            fresh?.let { _results.value = if (it is UiState.Success) UiState.Success(it.data + earlier) else it }
             (fresh as? UiState.Success)?.data?.let { rows ->
-                recentSearches[key] = rows
+                recentSearches[key] = rows + earlier
                 warmTopResult(rows)
             }
+            if (fromAddons == null) return@launch
+            val extra = fromAddons.await().flatMap { (_, songs) -> songs.map { SearchResult.Track(it) } }
+            val shown = (_results.value as? UiState.Success)?.data
+            if (shown == null && extra.isEmpty()) return@launch
+            val rows = shown.orEmpty().filterNot(::fromAddon) + extra
+            _results.value = UiState.Success(rows)
+            recentSearches[key] = rows
         }
     }
+
+    private fun fromAddon(r: SearchResult) = r is SearchResult.Track && Addons.isAddon(r.song.videoId)
 
     /**
      * Finds the stream for the first song in the results before it's tapped,

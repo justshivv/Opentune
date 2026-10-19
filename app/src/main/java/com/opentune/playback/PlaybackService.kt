@@ -993,6 +993,7 @@ class PlaybackService : MediaLibraryService() {
             LocalMusic.isLocal(item.mediaId) -> "Local file"
             Radio.isRadio(item.mediaId) -> "Internet radio"
             Subsonic.isSubsonic(item.mediaId) -> "Your music server"
+            com.opentune.data.addons.Addons.isAddon(item.mediaId) -> com.opentune.data.addons.Addons.addonOf(item.mediaId)?.let { "Addon · ${it.name}" } ?: "Addon"
             uri?.scheme == "file" -> "Downloaded file"
             else -> StreamResolver.engineFor(item.mediaId, uri?.let(::isUpgradedUri) == true)?.let { "YouTube · $it" } ?: "YouTube · cached stream or resolving"
         }

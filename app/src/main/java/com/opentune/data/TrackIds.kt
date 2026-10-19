@@ -6,8 +6,8 @@ import com.opentune.data.subsonic.Subsonic
 
 /**
  * Whether a song id is a YouTube video id, as opposed to a file on this
- * phone, a song on your own server or a radio station. Only YouTube songs can be resolved,
+ * phone, a song on your own server, an addon's song or a radio station. Only YouTube songs can be resolved,
  * downloaded, upgraded, shared, followed with radio or measured for
  * loudness by YouTube.
  */
-fun isYouTubeId(id: String): Boolean = !com.opentune.data.lossless.LosslessDownloads.isLossless(id) && !LocalMusic.isLocal(id) && !Subsonic.isSubsonic(id) && !Radio.isRadio(id)
+fun isYouTubeId(id: String): Boolean = !com.opentune.data.lossless.LosslessDownloads.isLossless(id) && !LocalMusic.isLocal(id) && !Subsonic.isSubsonic(id) && !Radio.isRadio(id) && !com.opentune.data.addons.Addons.isAddon(id)

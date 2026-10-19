@@ -79,6 +79,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         com.opentune.data.together.Together.init(this)
         LastFm.init(this)
         Subsonic.init(this)
+        com.opentune.data.addons.Addons.init(this)
         ListenBrainz.init(this)
         com.opentune.data.radio.Radio.init(this)
         com.opentune.data.releases.NewReleases.init(this)

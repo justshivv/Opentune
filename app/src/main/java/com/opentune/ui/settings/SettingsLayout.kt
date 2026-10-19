@@ -99,9 +99,10 @@ internal val SETTINGS_CATEGORIES = listOf(
         ),
     ),
     SettingsCategory(
-        "services", "Connected services", "Music server, Last.fm and ListenBrainz", Icons.Rounded.Cable,
+        "services", "Connected services", "Music server, addons, Last.fm and ListenBrainz", Icons.Rounded.Cable,
         listOf(
             "Your music server" to listOf("Music server", "Disconnect server"),
+            "Addons" to listOf("Addons"),
             "Last.fm" to listOf("Last.fm scrobbling", "Disconnect Last.fm"),
             "ListenBrainz" to listOf("ListenBrainz", "Disconnect ListenBrainz"),
         ),
