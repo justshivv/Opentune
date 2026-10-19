@@ -5,7 +5,7 @@ name: Test APK (no release)
 on:
   workflow_dispatch:
   push:
-    branches: [claude/wizardly-sagan-8ge2ek, fix/home-library-playback]
+    branches: [claude/wizardly-sagan-8ge2ek, fix/home-library-playback, feat/lossless-downloads]
 permissions:
   contents: read
 concurrency:

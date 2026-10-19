@@ -84,6 +84,7 @@ class ReadmeScreenshotTest {
         val context = ApplicationProvider.getApplicationContext<android.app.Application>()
         AppSettings.init(context)
         LibraryStore.init(context)
+        com.opentune.data.lossless.LosslessDownloads.store = com.opentune.data.lossless.LosslessStore(File(context.cacheDir, "readme-lossless-test"))
         AppSettings.updateUi { it.copy(liquidGlass = false) }
         val engine = FakeImageLoaderEngine.Builder().apply {
             art!!.listFiles { f -> f.extension == "jpg" }!!.forEach { f ->

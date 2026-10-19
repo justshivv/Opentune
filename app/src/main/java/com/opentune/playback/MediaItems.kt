@@ -34,13 +34,17 @@ private const val EXTRA_SMART_SHUFFLE = "smartShuffle"
  * everything else resolves on open.
  */
 fun trackUri(videoId: String): Uri = when {
+    com.opentune.data.lossless.LosslessDownloads.isLossless(videoId) -> com.opentune.data.lossless.LosslessDownloads.fileFor(videoId)?.let(Uri::fromFile) ?: Uri.EMPTY
     LocalMusic.isLocal(videoId) -> LocalMusic.contentUri(videoId)
     // Your own server streams the stored file directly; Uri.EMPTY fails the
     // item cleanly if the server has been disconnected since it was queued.
     Subsonic.isSubsonic(videoId) -> Subsonic.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
     // A station streams from its own server.
     Radio.isRadio(videoId) -> Radio.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
-    else -> Downloads.fileFor(videoId)?.let(Uri::fromFile)
+    // An addon's song asks the addon for its file on open, since its links may expire.
+    com.opentune.data.addons.Addons.isAddon(videoId) -> streamUri(videoId, upgraded = false)
+    else -> com.opentune.data.lossless.LosslessDownloads.fileFor(videoId)?.let(Uri::fromFile)
+        ?: Downloads.fileFor(videoId)?.let(Uri::fromFile)
         ?: streamUri(videoId, upgraded = UpgradedTracks.contains(videoId))
 }
 
@@ -80,7 +84,7 @@ fun Song.toMediaItem(): MediaItem =
                 .setTitle(title)
                 .setArtist(artist)
                 // A downloaded cover keeps the notification and lock screen right offline.
-                .setArtworkUri(Downloads.artFor(videoId)?.let(Uri::fromFile) ?: Subsonic.resolveCover(thumbnailUrl)?.let(Uri::parse))
+                .setArtworkUri(com.opentune.data.lossless.LosslessDownloads.artFor(videoId)?.let(Uri::fromFile) ?: Downloads.artFor(videoId)?.let(Uri::fromFile) ?: Subsonic.resolveCover(thumbnailUrl)?.let(Uri::parse))
                 .setAlbumTitle(albumName)
                 .setExtras(
                     Bundle().apply {

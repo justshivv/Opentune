@@ -88,6 +88,7 @@ class SongActions(
     val addToQueue: (Song) -> Unit,
     /** Shuffle with similar songs mixed in: a long press on Shuffle. */
     val smartShuffle: (List<Song>, String?) -> Unit = { songs, source -> playAll(songs, 0, true, source) },
+    val pause: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)

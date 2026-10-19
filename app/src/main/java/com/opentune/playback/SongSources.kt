@@ -15,6 +15,7 @@ import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.opentune.data.Http
+import com.opentune.data.addons.Addons
 import com.opentune.data.innertube.StreamResolver
 import com.opentune.data.lossless.ExternalStreams
 import java.io.IOException
@@ -59,6 +60,7 @@ internal fun resolveTrack(dataSpec: DataSpec): DataSpec {
         runBlocking {
             val losslessKey = externalStreamKeyOf(dataSpec.uri)
             when {
+                Addons.isAddon(videoId) -> Addons.stream(videoId).url
                 losslessKey != null -> ExternalStreams.resolve(videoId, losslessKey)
                 isUpgradedUri(dataSpec.uri) -> StreamResolver.resolveUpgrade(videoId)
                 else -> StreamResolver.resolve(videoId)
@@ -72,7 +74,7 @@ internal fun resolveTrack(dataSpec: DataSpec): DataSpec {
     // googlevideo expects the media request to look like the client that
     // minted the URL; these are also the headers StreamResolver probed with.
     return dataSpec.withUri(url.toUri())
-        .withAdditionalHeaders(if (externalStreamKeyOf(dataSpec.uri) != null) emptyMap() else StreamResolver.mediaHeadersFor(url))
+        .withAdditionalHeaders(if (externalStreamKeyOf(dataSpec.uri) != null || Addons.isAddon(videoId)) emptyMap() else StreamResolver.mediaHeadersFor(url))
 }
 
 /**

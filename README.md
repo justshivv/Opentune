@@ -326,6 +326,12 @@ iOS 16 or newer.
   as they're stored, so FLAC and hi-res files stay lossless. Also in
   Android Auto. Only a sign-in token is kept, never the password, and it's
   left out of backups.
+- **Addons** (optional): add a music catalogue someone runs, such as a
+  label, a band or a Creative Commons library, by its URL. Its songs show
+  in search under its name and play like any other. An addon is a small
+  web server that answers three JSON requests; the
+  [guide](https://justshivv.github.io/Opentune/addons/) shows how to make
+  one for music you have the right to share.
 - **ListenBrainz** (optional): send what you play to your open
   ListenBrainz history with your user token, and get its recommendations
   as a shelf on Home.

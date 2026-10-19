@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.opentune.data.addons.Addons
 import com.opentune.data.model.BrowseItem
 import com.opentune.data.model.BrowseType
 import com.opentune.data.model.CARD_ART_PX
@@ -269,7 +270,11 @@ private fun Results(
 
 private fun sectionOf(r: SearchResult): String = when (r) {
     is SearchResult.TopTrack -> "Top result"
-    is SearchResult.Track -> if (r.song.isVideo) "Videos" else "Songs"
+    is SearchResult.Track -> when {
+        Addons.isAddon(r.song.videoId) -> "From " + (Addons.addonOf(r.song.videoId)?.name ?: "an addon")
+        r.song.isVideo -> "Videos"
+        else -> "Songs"
+    }
     is SearchResult.Browse -> when (r.item.type) {
         BrowseType.ARTIST -> "Artists"
         BrowseType.ALBUM -> "Albums"

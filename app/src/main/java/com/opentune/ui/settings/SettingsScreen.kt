@@ -51,6 +51,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Dock
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
@@ -413,6 +414,8 @@ private fun settingsSections(
     val listenBrainz by ListenBrainz.account.collectAsState()
     val listensWaiting by ListenBrainz.queued.collectAsState()
     val musicServer by Subsonic.server.collectAsState()
+    var addonsDialog by remember { mutableStateOf(false) }
+    val addons by com.opentune.data.addons.Addons.installed.collectAsState()
     var lyricsAnimationDialog by remember { mutableStateOf(false) }
     var dockMotionDialog by remember { mutableStateOf(false) }
     var dockLensDialog by remember { mutableStateOf(false) }
@@ -434,6 +437,8 @@ private fun settingsSections(
     val lib by AppSettings.library.collectAsState()
     val metered = remember { AppSettings.onMeteredNetwork() }
     var qualityDialog by remember { mutableStateOf<Boolean?>(null) } // true = Wi-Fi, false = mobile
+    var downloadProviders by remember { mutableStateOf(false) }
+    if (downloadProviders) DownloadProvidersSheet { downloadProviders = false }
     var verifyLossless by remember { mutableStateOf(false) }
     var qobuzRelayDialog by remember { mutableStateOf(false) }
     if (qobuzRelayDialog) QobuzRelayDialog(pb.qobuzRelayUrl) { qobuzRelayDialog = false }
@@ -491,6 +496,7 @@ private fun settingsSections(
     if (lyricsSourcesDialog) LyricsSourcesDialog(onDismiss = { lyricsSourcesDialog = false })
     if (lastFmDialog) LastFmDialog(onDismiss = { lastFmDialog = false })
     if (serverDialog) ServerDialog(onDismiss = { serverDialog = false })
+    if (addonsDialog) AddonsDialog(onDismiss = { addonsDialog = false })
     if (listenBrainzDialog) ListenBrainzDialog(onDismiss = { listenBrainzDialog = false })
     if (sponsorBlockDialog) SponsorBlockDialog(onDismiss = { sponsorBlockDialog = false })
     update?.let { UpdateDialog(it, onDismiss = { update = null }) }
@@ -700,6 +706,9 @@ private fun settingsSections(
                 },
                 Entry("Prefer hi-res lossless", "24 bit flac qobuz") {
                     ToggleRow("Prefer hi-res lossless", pb.losslessHiRes, { v -> AppSettings.updatePlayback { it.copy(losslessHiRes = v) } }, summary = "Prefer hi-res for background upgrades too. Max always checks hi-res first. Uses more data.", icon = Icons.Rounded.HighQuality)
+                },
+                Entry("Download providers", "flac lossless import repository verification amazon tidal qobuz") {
+                    SettingRow("Download providers", icon = Icons.Rounded.HighQuality, summary = "Import providers and manage browser verification", onClick = { downloadProviders = true })
                 },
                 Entry("SpotiFLAC verification", "lossless session connect verify") {
                     SettingRow("SpotiFLAC verification", icon = Icons.Rounded.HighQuality, summary = if (losslessConnected) "Connected · tap to renew" else if (losslessNeedsVerification) "Verify again · provider session needs renewing" else "Optional · public providers work without it", onClick = { verifyLossless = true })
@@ -1249,6 +1258,18 @@ private fun settingsSections(
                 if (musicServer != null) Entry("Disconnect server", "sign out subsonic") {
                     SettingRow("Disconnect server", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { Subsonic.disconnect() })
                 } else null,
+                Entry("Addons", "addon extension catalogue source label artist free music") {
+                    NavRow(
+                        "Addons",
+                        { addonsDialog = true },
+                        summary = when (val on = addons.count { it.enabled }) {
+                            0 -> if (addons.isEmpty()) "Add music catalogues other people run, by URL" else "All switched off"
+                            1 -> addons.first { it.enabled }.name
+                            else -> "$on addons on"
+                        },
+                        icon = Icons.Rounded.Extension,
+                    )
+                },
             ),
         ),
         Section(

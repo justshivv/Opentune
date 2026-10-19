@@ -43,8 +43,28 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Fetch pinned provider fixtures
+        run: python3 scripts/fetch-provider-fixtures.py
+
+      - name: Lossless download regressions
+        run: ./gradlew --no-daemon testDebugUnitTest --tests '*ExtensionProtocolTest' --tests '*ExtensionSessionManagerTest' --tests '*AmazonAdapterTest' --tests '*LosslessStoreTest' --tests '*LosslessCardTest' --tests '*ProviderReturnLinkDialogTest' --tests '*ProviderRuntimeTest' --tests '*ProviderPackageTest' --tests '*DownloadNetworkTest' --tests '*DownloadMatchTest' --tests '*DownloadQualitySheetTest'
+
       - name: Build, unit tests and lint
         run: ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
+
+      - name: Lossless test failure details
+        if: failure()
+        run: |
+          python3 - <<'PYTEST'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          for path in Path('app/build/test-results').rglob('TEST-*.xml'):
+              for case in ET.parse(path).getroot().findall('testcase'):
+                  for failure in case.findall('failure'):
+                      print(case.attrib.get('name', ''))
+                      print(failure.attrib.get('message', ''))
+                      print((failure.text or '')[:8000])
+          PYTEST
 
       - name: Release build (R8 shrinking)
         run: ./gradlew --no-daemon assembleRelease

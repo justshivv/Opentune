@@ -98,6 +98,8 @@ class SongMenuActions(
     val dontPlayArtist: (Song) -> Unit = { LibraryStore.hideArtist(it) },
     /** Adds a song smart shuffle mixed in to the playlist the queue came from. */
     val keepInPlaylist: (Song, String) -> Unit = { s, id -> LibraryStore.addToPlaylist(id, s); com.opentune.playback.SmartShuffle.keep(s.videoId) },
+    val download: (List<Song>) -> Unit = {},
+    val openDownloads: () -> Unit = {},
 )
 
 val LocalSongMenu = staticCompositionLocalOf<SongMenuActions?> { null }
@@ -131,6 +133,8 @@ fun SongMenuSheet(
         ?.let { id -> playlists.firstOrNull { it.id == id } }
         ?.takeIf { p -> p.songs.none { it.videoId == song.videoId } }
     val download = downloads[song.videoId]
+    val losslessDownloads by com.opentune.data.lossless.LosslessDownloads.entries.collectAsState()
+    val losslessDownload = losslessDownloads.values.firstOrNull { song.videoId in it.track.sourceIds || song.videoId == it.track.song().videoId }
     // Files on this phone and songs on your server: no YouTube actions.
     val local = !isYouTubeId(song.videoId)
     var pickPlaylist by remember { mutableStateOf(false) }
@@ -158,7 +162,9 @@ fun SongMenuSheet(
                 QuickAction(if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (isLiked) "Liked" else "Like", active = isLiked) {
                     LibraryStore.setLiked(song, !isLiked)
                 }
-                if (!local) {
+                if (losslessDownload != null) {
+                    QuickAction(Icons.Rounded.DownloadDone, "FLAC", active = losslessDownload.state == com.opentune.data.lossless.LosslessState.DONE) { close(); actions?.openDownloads?.invoke() }
+                } else if (!local) {
                     val (icon, label) = when (download?.state) {
                         DownloadState.DONE -> Icons.Rounded.DeleteOutline to "Remove"
                         DownloadState.QUEUED -> Icons.Rounded.Close to "Waiting"
@@ -174,8 +180,7 @@ fun SongMenuSheet(
                     QuickAction(icon, label, active = download?.state == DownloadState.DONE, progress = ring) {
                         when (download?.state) {
                             DownloadState.DONE, DownloadState.QUEUED, DownloadState.DOWNLOADING -> Downloads.remove(context, song.videoId)
-                            DownloadState.FAILED -> Downloads.retry(context, song.videoId)
-                            null -> Downloads.enqueue(context, song)
+                            DownloadState.FAILED, null -> { close(); actions?.download?.invoke(listOf(song)) }
                         }
                     }
                 }
@@ -196,7 +201,12 @@ fun SongMenuSheet(
         val card = LocalFloatingCard.current
         val close: () -> Unit = { card?.close() ?: onDismiss() }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            if (losslessDownload != null) {
+                MenuRow(Icons.Rounded.Download, "Manage FLAC download") { close(); actions?.openDownloads?.invoke() }
+                if (!local) MenuRow(Icons.Rounded.Download, "Choose download quality") { close(); actions?.download?.invoke(listOf(song)) }
+            }
             if (!local && download != null) {
+                MenuRow(Icons.Rounded.Download, "Choose download quality") { close(); actions?.download?.invoke(listOf(song)) }
                 val downloading = download.state == DownloadState.QUEUED || download.state == DownloadState.DOWNLOADING
                 MenuRow(if (downloading) Icons.Rounded.Close else Icons.Rounded.DeleteOutline,
                     if (downloading) "Cancel download" else "Remove download") {

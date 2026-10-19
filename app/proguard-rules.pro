@@ -25,6 +25,10 @@
 -keep class com.dokar.quickjs.** { *; }
 -keep class org.jsoup.** { *; }
 
+# FFmpeg's JNI library resolves callback methods/classes by name. The native
+# AAR is used directly, so Flutter plugin consumer rules do not apply here.
+-keep class com.antonkarpenko.ffmpegkit.** { *; }
+
 # The PoToken WebView calls back into Kotlin by method name.
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;

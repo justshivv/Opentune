@@ -61,6 +61,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.opentune.data.model.Song
 import com.opentune.data.model.ROW_ART_PX
 import com.opentune.data.model.artworkAt
 import androidx.compose.ui.graphics.graphicsLayer
@@ -223,6 +224,7 @@ fun AppRoot(vm: PlayerViewModel) {
             playNext = vm::playNext,
             addToQueue = vm::addToQueue,
             smartShuffle = { songs, source -> vm.smartShuffle(songs, source) },
+            pause = vm.player::pause,
         )
     }
     val openItem: (ShelfItem) -> Unit = remember(nav, vm) { { item ->
@@ -233,7 +235,11 @@ fun AppRoot(vm: PlayerViewModel) {
         }
     } }
     // `song` is read when a menu action runs, so the menu doesn't need rebuilding as songs change.
+    var downloadSongs by remember { mutableStateOf<List<Song>?>(null) }
+    var downloadProviders by remember { mutableStateOf(false) }
     val songMenu = remember(nav, vm) { SongMenuActions(
+        download = { downloadSongs = it },
+        openDownloads = { playerOpen = false; nav.navigate("downloads") },
         playNext = vm::playNext,
         addToQueue = vm::addToQueue,
         startRadio = vm::startRadio,
@@ -562,7 +568,7 @@ fun AppRoot(vm: PlayerViewModel) {
                         )
                     }
                     composable("login") { LoginScreen(onDone = { nav.popBackStack() }) }
-                    composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }, onProviders = { downloadProviders = true }) }
                     composable("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }
@@ -775,6 +781,10 @@ fun AppRoot(vm: PlayerViewModel) {
             // menu can be seen. Only one of the two is ever there.
             if (playerCovers) SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp))
         }
+        downloadSongs?.let { songs ->
+            com.opentune.ui.lossless.DownloadQualitySheet(songs, onDismiss = { downloadSongs = null }, onProviders = { downloadProviders = true }, onDownloads = { downloadSongs = null; playerOpen = false; nav.navigate("downloads") })
+        }
+        if (downloadProviders) com.opentune.ui.settings.DownloadProvidersSheet { downloadProviders = false }
         if (opening) {
             com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })
         }

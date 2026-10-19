@@ -22,10 +22,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.audio.AudioSink
-import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.session.MediaSession
@@ -163,16 +160,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val floatOutput = AppSettings.playback.value.floatOutput
-        val renderers = object : DefaultRenderersFactory(context) {
-            override fun buildAudioSink(
-                context: Context,
-                enableFloatOutput: Boolean,
-                enableAudioTrackPlaybackParams: Boolean,
-            ): AudioSink = DefaultAudioSink.Builder(context)
-                .setEnableFloatOutput(floatOutput)
-                .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain(dsp))
-                .build()
-        }
+        val renderers = MusicRenderersFactory(context, floatOutput, arrayOf(dsp))
 
         // Start as soon as a little audio is in: the defaults wait for 2.5 s,
         // which is video-sized caution. A stream starts after half a second buffered
@@ -200,6 +188,16 @@ class PlaybackService : MediaLibraryService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
         player.addListener(playerListener)
+        player.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onAudioDecoderInitialized(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+                NerdStats.onAudioDecoder(decoderName)
+            }
+            override fun onAudioUnderrun(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                bufferSize: Int, bufferSizeMs: Long, elapsedSinceLastFeedMs: Long) {
+                NerdStats.onAudioUnderrun()
+            }
+        })
 
         val effects = SoundEffects(player)
         soundEffects = effects
@@ -632,6 +630,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            NerdStats.resetAudioUnderruns()
             updateExternalStats()
             applyLoudness()
             scheduleUpgrade()
@@ -984,17 +983,21 @@ class PlaybackService : MediaLibraryService() {
         val key = uri?.let(::externalStreamKeyOf)
         val rendition = if (item != null && key != null) ExternalStreams.get(item.mediaId, key) else null
         NerdStats.onExternalSource(rendition?.label)
+        val savedLossless = item?.mediaId?.takeIf { uri?.scheme == "file" }
+            ?.let { com.opentune.data.lossless.LosslessDownloads.entry(it) }?.takeIf { it.state == com.opentune.data.lossless.LosslessState.DONE }
         val provider = when {
             item == null -> "No track selected"
+            savedLossless != null -> "${com.opentune.data.lossless.ProviderPackages.displayName(savedLossless.track.provider)} · downloaded FLAC"
             rendition != null -> rendition.provider
             uri?.let(::startupToken) != null -> "Loading audio…"
             LocalMusic.isLocal(item.mediaId) -> "Local file"
             Radio.isRadio(item.mediaId) -> "Internet radio"
             Subsonic.isSubsonic(item.mediaId) -> "Your music server"
+            com.opentune.data.addons.Addons.isAddon(item.mediaId) -> com.opentune.data.addons.Addons.addonOf(item.mediaId)?.let { "Addon · ${it.name}" } ?: "Addon"
             uri?.scheme == "file" -> "Downloaded file"
             else -> StreamResolver.engineFor(item.mediaId, uri?.let(::isUpgradedUri) == true)?.let { "YouTube · $it" } ?: "YouTube · cached stream or resolving"
         }
-        NerdStats.onPlaybackSource(NerdStats.Source(provider, rendition?.bits, rendition?.sampleRate,
+        NerdStats.onPlaybackSource(NerdStats.Source(provider, savedLossless?.bits ?: rendition?.bits, savedLossless?.sampleRate ?: rendition?.sampleRate,
             rendition?.kbps ?: if (rendition == null && item != null && uri?.let(::videoIdOf) != null)
                 StreamResolver.bitrateFor(item.mediaId, isUpgradedUri(uri)) else null,
             selectionDetail = if (item != null && uri?.let(::videoIdOf) != null && uri.let(::startupToken) == null)
@@ -1212,7 +1215,7 @@ class PlaybackService : MediaLibraryService() {
         val seed = seedItem.mediaId
         // Radio is a YouTube feature; a local file has none. A song on your own
         // server carries on with more of the server's songs, picked at random.
-        if (LocalMusic.isLocal(seed) || Radio.isRadio(seed)) return
+        if (LocalMusic.isLocal(seed) || Radio.isRadio(seed) || com.opentune.data.lossless.LosslessDownloads.isLossless(seed)) return
         if (seed in exhaustedSeeds) return
         if (radioJob?.isActive == true && radioSeed == seed) return
 

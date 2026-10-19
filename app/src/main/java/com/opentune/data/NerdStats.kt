@@ -9,6 +9,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * asked for to making sound.
  */
 object NerdStats {
+    private val _audioDecoder = MutableStateFlow<String?>(null)
+    val audioDecoder = _audioDecoder.asStateFlow()
+    private val _audioUnderruns = MutableStateFlow(0)
+    val audioUnderruns = _audioUnderruns.asStateFlow()
+    fun onAudioDecoder(name: String) { _audioDecoder.value = name }
+    fun onAudioUnderrun() { _audioUnderruns.value++ }
+    fun resetAudioUnderruns() { _audioUnderruns.value = 0 }
     data class Source(val provider: String, val bits: Int? = null, val sampleRate: Int? = null, val kbps: Int? = null,
         val selectionDetail: String? = null, val mediaId: String? = null)
     private val _playbackSource = MutableStateFlow<Source?>(null)

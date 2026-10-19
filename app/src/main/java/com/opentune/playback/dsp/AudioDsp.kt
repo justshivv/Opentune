@@ -255,12 +255,8 @@ class DspAudioProcessor : BaseAudioProcessor() {
         if (enc != C.ENCODING_PCM_16BIT && enc != C.ENCODING_PCM_FLOAT) {
             throw UnhandledAudioFormatException(inputAudioFormat)
         }
-        channels = inputAudioFormat.channelCount
-        sampleRate = inputAudioFormat.sampleRate
-        isFloat = enc == C.ENCODING_PCM_FLOAT
-        frame = FloatArray(channels)
-        space = if (sampleRate > 0) Space3D(sampleRate) else null
-        applied = null
+        // configure() stages the NEXT format. The sink may still drain samples
+        // from the current track until flush() commits that format.
         return inputAudioFormat
     }
 
@@ -402,14 +398,27 @@ class DspAudioProcessor : BaseAudioProcessor() {
     }
 
     override fun onFlush() {
-        filters.forEach { ch -> ch.forEach { it.reset() } }
-        space?.reset()
+        channels = inputAudioFormat.channelCount.coerceAtLeast(0)
+        sampleRate = inputAudioFormat.sampleRate.coerceAtLeast(0)
+        isFloat = inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT
+        frame = FloatArray(channels)
+        space = if (sampleRate > 0) Space3D(sampleRate) else null
+        filters = emptyArray()
+        applied = null
+        orbit = 0.0
+        earAt = 0
+        earDelay.forEach { it.fill(0f) }
+        behindLow.fill(0f)
         com.opentune.playback.AudioLevels.flush()
     }
 
     override fun onReset() {
         filters = emptyArray()
         applied = null
+        channels = 0
+        sampleRate = 0
+        frame = FloatArray(0)
+        space = null
     }
 
     companion object {

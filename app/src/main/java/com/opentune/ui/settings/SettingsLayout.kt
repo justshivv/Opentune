@@ -41,6 +41,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         listOf(
             "Streaming quality" to listOf("On Wi-Fi", "On mobile data", "Upgrade quality while playing"),
             "Higher-quality sources" to listOf("Lossless streaming", "Unmetered networks only", "Prefer hi-res lossless", "Qobuz relay", "SpotiFLAC verification", "Disconnect SpotiFLAC"),
+            "Downloads" to listOf("Download providers"),
             "Loudness" to listOf("Loudness normalization", "Volume level", "Normalize on the phone speaker"),
             "Sound" to listOf("Equalizer", "Clarity", "Spatial audio", "System audio effects"),
             "Output" to listOf("Output precision", "Prefer USB DAC", "Bit-perfect USB output"),
@@ -98,9 +99,10 @@ internal val SETTINGS_CATEGORIES = listOf(
         ),
     ),
     SettingsCategory(
-        "services", "Connected services", "Music server, Last.fm and ListenBrainz", Icons.Rounded.Cable,
+        "services", "Connected services", "Music server, addons, Last.fm and ListenBrainz", Icons.Rounded.Cable,
         listOf(
             "Your music server" to listOf("Music server", "Disconnect server"),
+            "Addons" to listOf("Addons"),
             "Last.fm" to listOf("Last.fm scrobbling", "Disconnect Last.fm"),
             "ListenBrainz" to listOf("ListenBrainz", "Disconnect ListenBrainz"),
         ),

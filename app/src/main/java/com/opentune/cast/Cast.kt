@@ -181,6 +181,11 @@ object Cast {
             }.getOrNull()?.substringBefore(';')?.takeIf { it.startsWith("audio/") } ?: "audio/mpeg"
             return@withContext media(CastServer.publish(CastServer.Source.Web(type) { url to emptyMap() }, host), type)
         }
+        if (com.opentune.data.addons.Addons.isAddon(id)) {
+            val stream = runCatching { com.opentune.data.addons.Addons.stream(id) }.getOrNull() ?: return@withContext null
+            val type = stream.mimeType ?: "audio/mpeg"
+            return@withContext media(CastServer.publish(CastServer.Source.Web(type) { stream.url to emptyMap() }, host), type)
+        }
         // A download plays from the phone, if the device can take its format.
         Downloads.fileFor(id)?.let { file ->
             val type = typeOf(file.extension)

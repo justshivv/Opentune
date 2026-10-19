@@ -143,6 +143,7 @@ class ChoiceSheetScreenshotTest {
     /** The song menu opens at half height, and dragging its top takes it up. */
     @Test fun songMenuHalfThenFull() {
         com.opentune.data.library.LibraryStore.init(compose.activity)
+        com.opentune.data.lossless.LosslessDownloads.store = com.opentune.data.lossless.LosslessStore(File(compose.activity.cacheDir, "menu-lossless-test"))
         val song = com.opentune.data.model.Song("4NRXx6U8ABQ", "Blinding Lights", "The Weeknd", null, "3:20")
         val menu = com.opentune.ui.components.SongMenuActions({}, {}, {}, {}, {}, dislike = {}, playVideoVersion = {})
         show {

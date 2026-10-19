@@ -43,6 +43,8 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
     val sound by AppSettings.sound.collectAsState()
     val pb by AppSettings.playback.collectAsState()
     val source by NerdStats.playbackSource.collectAsState()
+    val decoder by NerdStats.audioDecoder.collectAsState()
+    val underruns by NerdStats.audioUnderruns.collectAsState()
     val lossless by NerdStats.externalSource.collectAsState()
     val gain by NerdStats.loudnessGainDb.collectAsState()
     val speakerHold by NerdStats.loudnessOffOnSpeaker.collectAsState()
@@ -70,6 +72,8 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Stage(Tone.INFO, "Source", source?.provider ?: "Waiting for the stream")
                 Stage(Tone.INFO, "Audio quality", signalQuality(format, source))
+                decoder?.let { Stage(if (underruns == 0) Tone.INFO else Tone.CHANGED, "Audio decoder",
+                    "$it · $underruns buffer underruns on this track") }
                 source?.selectionDetail?.let { Stage(Tone.INFO, "Source selection", it) }
                 Stage(
                     if (dspStages.isEmpty()) Tone.CLEAN else Tone.CHANGED,
