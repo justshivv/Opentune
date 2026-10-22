@@ -871,7 +871,11 @@ fun AppRoot(vm: PlayerViewModel) {
             if (sheetMorph) {
                 // Out of the mini player as one card, and back into it.
                 var sheetSettled by remember { mutableStateOf(false) }
-                com.opentune.ui.components.PlayerSheet(open = sheetOpen && song != null, onSettled = { sheetSettled = it }) {
+                com.opentune.ui.components.PlayerSheet(
+                    open = sheetOpen && song != null,
+                    onSettled = { sheetSettled = it },
+                    face = { round -> MiniPlayerBar(vm, onExpand = {}, modifier = Modifier.fillMaxSize(), inline = round, replica = true) },
+                ) {
                     playerSheet(sheetSettled)
                 }
             } else {

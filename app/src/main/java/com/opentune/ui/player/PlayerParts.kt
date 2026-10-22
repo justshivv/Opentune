@@ -744,6 +744,12 @@ fun MiniPlayer(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     inline: Boolean = false,
+    /**
+     * A still copy drawn inside the shrinking player card (see PlayerSheet):
+     * the same look, with no gestures, a solid face instead of glass, and
+     * not registered as where the mini player is.
+     */
+    replica: Boolean = false,
 ) {
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -755,30 +761,40 @@ fun MiniPlayer(
     val colourFromCover = com.opentune.data.settings.AppSettings.ui.collectAsState().value.miniPlayerTint
     val tint by animateColorAsState(((if (colourFromCover) seed else null) ?: MaterialTheme.colorScheme.surfaceContainerHigh).copy(alpha = 0.38f), tween(600), label = "miniTint")
 
+    val solid = MaterialTheme.colorScheme.surfaceContainerHigh
+    val replicaFace = androidx.compose.ui.graphics.lerp(solid, tint.copy(alpha = 1f), tint.alpha)
+    val landing: Modifier = if (replica) Modifier else with(com.opentune.ui.components.PlayerMorph) { Modifier.miniLanding().hiddenWhilePulled() }
     if (inline) {
         Box(
             modifier
-                .then(with(com.opentune.ui.components.PlayerMorph) { Modifier.miniBarLanding(round = true) })
-                .glass(CircleShape, tint)
-                .pullToOpen(round = true, onOpen = onClick)
-                .clickable(onClick = onClick)
+                .then(
+                    if (replica) Modifier.clip(CircleShape).background(replicaFace)
+                    else with(com.opentune.ui.components.PlayerMorph) { Modifier.miniBarLanding(round = true).miniUnderCard() }
+                        .glass(CircleShape, tint)
+                        .pullToOpen(round = true, onOpen = onClick)
+                        .clickable(onClick = onClick),
+                )
                 .padding(4.dp),
             contentAlignment = Alignment.Center,
         ) {
             ProgressRing(progress, accent, track, stroke = 3.dp, modifier = Modifier.matchParentSize())
-            Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), with(com.opentune.ui.components.PlayerMorph) { Modifier.padding(4.dp).fillMaxSize().miniLanding().hiddenWhilePulled() }, CircleShape)
+            Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.padding(4.dp).fillMaxSize().then(landing), CircleShape)
             if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize(), strokeWidth = 3.dp, color = accent)
         }
         return
     }
 
     val shape = RoundedCornerShape(22.dp)
+    if (replica) {
+        Box(modifier.clip(shape).background(replicaFace)) { MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, {}, {}, landing) }
+        return
+    }
     Surface(
         onClick = onClick,
         shape = shape,
         color = Color.Transparent,
         modifier = modifier
-            .then(with(com.opentune.ui.components.PlayerMorph) { Modifier.miniBarLanding(round = false) })
+            .then(with(com.opentune.ui.components.PlayerMorph) { Modifier.miniBarLanding(round = false).miniUnderCard() })
             .graphicsLayer { translationX = offsetX.value }
             .glass(shape, tint)
             .pullToOpen(round = false, onOpen = onClick)
@@ -798,10 +814,20 @@ fun MiniPlayer(
                 }
             },
     ) {
+        MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, onTogglePlay, onNext, landing)
+    }
+}
+
+/** The mini player's row: cover, title and artist, play in its progress ring, next. */
+@Composable
+private fun MiniRow(
+    song: Song, isPlaying: Boolean, isBuffering: Boolean, hasNext: Boolean, progress: () -> Float,
+    accent: Color, track: Color, onTogglePlay: () -> Unit, onNext: () -> Unit, landing: Modifier,
+) {
         Row(Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), with(com.opentune.ui.components.PlayerMorph) { Modifier.size(44.dp).miniLanding().hiddenWhilePulled() }, RoundedCornerShape(12.dp))
+                    Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(44.dp).then(landing), RoundedCornerShape(12.dp))
                     Column(Modifier.padding(start = 12.dp)) {
                         Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         com.opentune.ui.components.SubtitleLine(s.artist, explicit = s.isExplicit == true, style = MaterialTheme.typography.bodySmall)
@@ -818,7 +844,6 @@ fun MiniPlayer(
                 Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(26.dp))
             }
         }
-    }
 }
 
 /**
