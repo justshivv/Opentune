@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AllInclusive
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Close
@@ -235,6 +236,14 @@ private fun QueueRow(song: Song, isCurrent: Boolean, isPlaying: Boolean, handle:
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (song.smartShuffle) {
                     Icon(Icons.Rounded.AutoAwesome, "Added by smart shuffle", Modifier.padding(end = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+                // Songs queued by hand stay next whatever is started; autoplay's come after everything.
+                when (song.queueTier) {
+                    com.opentune.data.model.QueueTier.USER ->
+                        Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Queued by you", Modifier.padding(end = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    com.opentune.data.model.QueueTier.AUTOPLAY ->
+                        Icon(Icons.Rounded.AllInclusive, "Added by autoplay", Modifier.padding(end = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    com.opentune.data.model.QueueTier.CONTEXT -> Unit
                 }
                 Text(song.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

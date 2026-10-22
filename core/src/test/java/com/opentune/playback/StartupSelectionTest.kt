@@ -70,8 +70,13 @@ class StartupSelectionTest {
     }
 
     @Test fun lowerQualityDoesNotCheckExternalCache() = runBlocking {
-        val selection = StartupSelection(song, original, { false }, findJioSaavn = { _, _ -> error("Unexpected lookup") }) { error("Unexpected lookup") }
+        val selection = StartupSelection(song, original, { false }, { false }, findJioSaavn = { _, _ -> error("Unexpected lookup") }) { error("Unexpected lookup") }
         assertEquals(original, selection.resolve(spec).uri)
+    }
+
+    @Test fun aLosslessFileFoundAheadStartsTheSongBelowMax() = runBlocking {
+        val selection = StartupSelection(song, original, { false }, { true }, findJioSaavn = { _, _ -> error("Below Max nothing is searched") }) { flac }
+        assertEquals("flac", externalStreamKeyOf(selection.resolve(spec).uri))
     }
 
     @Test fun aLateExternalResultCannotChangeBytesDuringASeek() = runBlocking {

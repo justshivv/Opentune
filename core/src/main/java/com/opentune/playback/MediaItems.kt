@@ -9,6 +9,7 @@ import androidx.media3.common.Player
 import com.opentune.data.download.Downloads
 import com.opentune.data.innertube.UpgradedTracks
 import com.opentune.data.local.LocalMusic
+import com.opentune.data.model.QueueTier
 import com.opentune.data.model.Song
 import com.opentune.data.subsonic.Subsonic
 import com.opentune.data.radio.Radio
@@ -28,6 +29,7 @@ private const val EXTRA_THUMB = "thumb"
 private const val EXTRA_EXPLICIT = "explicit"
 private const val EXTRA_ARTIST_ID = "artistId"
 private const val EXTRA_SMART_SHUFFLE = "smartShuffle"
+private const val EXTRA_TIER = "tier"
 
 /**
  * Local files play straight from MediaStore and downloads from their file;
@@ -92,6 +94,7 @@ fun Song.toMediaItem(): MediaItem =
                         // Kept so "Don't play [artist]" from the player knows the artist by id too.
                         artistId?.let { putString(EXTRA_ARTIST_ID, it) }
                         if (smartShuffle) putBoolean(EXTRA_SMART_SHUFFLE, true)
+                        if (queueTier != QueueTier.CONTEXT) putString(EXTRA_TIER, queueTier.name)
                     },
                 )
                 .build(),
@@ -109,7 +112,12 @@ fun MediaItem.toSong(): Song =
         isExplicit = mediaMetadata.extras?.takeIf { it.containsKey(EXTRA_EXPLICIT) }?.getBoolean(EXTRA_EXPLICIT),
         artistId = mediaMetadata.extras?.getString(EXTRA_ARTIST_ID),
         smartShuffle = mediaMetadata.extras?.getBoolean(EXTRA_SMART_SHUFFLE) == true,
+        queueTier = mediaMetadata.extras?.getString(EXTRA_TIER)?.let { t -> QueueTier.entries.firstOrNull { it.name == t } } ?: QueueTier.CONTEXT,
     )
+
+/** Which part of the queue this entry is in. */
+val MediaItem.queueTier: QueueTier
+    get() = mediaMetadata.extras?.getString(EXTRA_TIER)?.let { t -> QueueTier.entries.firstOrNull { it.name == t } } ?: QueueTier.CONTEXT
 
 /**
  * Queue indices in the order they will play from here: the current item

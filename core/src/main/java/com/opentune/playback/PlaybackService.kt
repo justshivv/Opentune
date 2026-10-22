@@ -57,6 +57,7 @@ import com.opentune.data.NerdStats
 import com.opentune.data.history.History
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.innertube.StreamResolver
+import com.opentune.data.model.QueueTier
 import com.opentune.data.model.Song
 import com.opentune.data.reco.Recommendations
 import com.opentune.data.settings.AppSettings
@@ -397,8 +398,23 @@ class PlaybackService : MediaLibraryService() {
     private fun restoreQueue(player: ExoPlayer) {
         if (player.mediaItemCount > 0) return
         val saved = QueueStore.load() ?: return
-        val items = saved.songs.map { it.toSong().toMediaItem() }
+        val items = saved.songs.mapIndexed { i, ref ->
+            ref.toSong().copy(queueTier = saved.tiers?.getOrNull(i) ?: QueueTier.CONTEXT).toMediaItem()
+        }
         player.setMediaItems(items, saved.index.coerceIn(items.indices), saved.positionMs.coerceAtLeast(0))
+        player.shuffleModeEnabled = saved.shuffle
+        player.repeatMode = saved.repeat
+    }
+
+    /**
+     * With the whole queue on repeat, songs queued by hand play once: when a
+     * song of the list comes round, the ones already played leave.
+     */
+    private fun dropPlayedHandQueued() {
+        val player = mediaSession?.player ?: return
+        if (player.repeatMode != Player.REPEAT_MODE_ALL || player.shuffleModeEnabled) return
+        val tiers = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueTier }
+        QueueTimeline.playedUser(tiers, player.currentMediaItemIndex).asReversed().forEach(player::removeMediaItem)
     }
 
     /** Saves the queue every few seconds while it changes or plays. */
@@ -407,8 +423,14 @@ class PlaybackService : MediaLibraryService() {
         while (true) {
             delay(QUEUE_SAVE_MS)
             if (player.mediaItemCount == 0) continue
-            val songs = (0 until player.mediaItemCount).map { SongRef.of(player.getMediaItemAt(it).toSong()) }
-            val saved = QueueStore.Saved(songs, player.currentMediaItemIndex, player.currentPosition)
+            val items = (0 until player.mediaItemCount).map { player.getMediaItemAt(it) }
+            val tiers = items.map { it.queueTier }
+            val saved = QueueStore.Saved(
+                items.map { SongRef.of(it.toSong()) }, player.currentMediaItemIndex, player.currentPosition,
+                tiers = tiers.takeIf { t -> t.any { it != QueueTier.CONTEXT } },
+                shuffle = player.shuffleModeEnabled,
+                repeat = player.repeatMode,
+            )
             if (saved == last) continue
             last = saved
             withContext(Dispatchers.IO) { QueueStore.save(saved) }
@@ -725,6 +747,8 @@ class PlaybackService : MediaLibraryService() {
             applyLoudness()
             if (!swap) scheduleUpgrade()
             if (!swap) prefetchAhead()
+            // After this callback, not inside it: the queue changes under it otherwise.
+            if (!swap) scope.launch(Dispatchers.Main) { dropPlayedHandQueued() }
             // Nothing but a blend or a swap turns the main player down; outside
             // one, a new song always starts at full level.
             (mediaSession?.player as? ExoPlayer)?.let { p ->
@@ -1652,7 +1676,7 @@ class PlaybackService : MediaLibraryService() {
                 return@launch
             }
             val ended = player.playbackState == Player.STATE_ENDED
-            player.addMediaItems(additions.map { it.toMediaItem() })
+            player.addMediaItems(additions.map { it.copy(queueTier = QueueTier.AUTOPLAY).toMediaItem() })
             // The song finished before the next ones came; carry on into them.
             if (ended) {
                 player.seekToNextMediaItem()

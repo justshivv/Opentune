@@ -519,9 +519,10 @@ fun CollectionScreen(
                                 ListPlayRow(
                                     enabled = !c?.songs.isNullOrEmpty(),
                                     saved = saved,
-                                    onPlay = { c?.let { actions.playAll(it.songs, 0, false, it.title) } },
-                                    onShuffle = { c?.let { actions.playAll(it.songs, 0, true, it.title) } },
-                                    onSmartShuffle = { c?.let { actions.smartShuffle(it.songs, it.title) } },
+                                    // While the list is searched or sorted, the buttons play what's shown, as it's shown.
+                                    onPlay = { c?.let { actions.playAll(shown.ifEmpty { it.songs }, 0, false, it.title) } },
+                                    onShuffle = { c?.let { actions.playAll(shown.ifEmpty { it.songs }, 0, true, it.title) } },
+                                    onSmartShuffle = { c?.let { actions.smartShuffle(shown.ifEmpty { it.songs }, it.title) } },
                                     onSave = {
                                         c?.let {
                                             com.opentune.data.library.LibraryStore.setSaved(
