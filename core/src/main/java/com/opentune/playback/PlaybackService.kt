@@ -1160,15 +1160,8 @@ class PlaybackService : MediaLibraryService() {
                 if (player.currentMediaItem?.mediaId != id) return@launch
                 val left = player.duration - player.currentPosition
                 if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { tell("Too close to the end of the song to switch"); return@launch }
-                // A slow first fetch gets another go: the add-on's stream is often
-                // quicker once its server has it ready.
-                var ok = swapToUpgrade(player, id, externalStreamUri(id, lossless.key))
-                repeat(UPGRADE_RETRIES) {
-                    if (ok || player.currentMediaItem?.mediaId != id) return@repeat
-                    if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS + UPGRADE_RETRY_MS) return@repeat
-                    delay(UPGRADE_RETRY_MS)
-                    if (player.currentMediaItem?.mediaId == id) ok = swapToUpgrade(player, id, externalStreamUri(id, lossless.key))
-                }
+                val candidates = ExternalStreams.alternatives(id).ifEmpty { listOf(lossless) }
+                val ok = swapToBestAnswering(player, id, candidates, existing)
                 if (!ok && player.currentMediaItem?.mediaId == id) {
                     ExternalStreams.swapFailed(id)
                     updateExternalStats()
@@ -1226,6 +1219,69 @@ class PlaybackService : MediaLibraryService() {
                     .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
             }
         }
+    }
+
+    /**
+     * Moves [id] onto the best of [candidates] (verified files of the same
+     * recording) that actually serves its audio. All of them are pinged at
+     * once; the song moves onto the best that has answered, and again onto a
+     * better one that answers after, so a source that verified but won't
+     * hand over its stream never keeps another from playing. A file whose
+     * stream doesn't load is passed over for the next. True if it moved at all.
+     */
+    private suspend fun swapToBestAnswering(
+        player: ExoPlayer,
+        id: String,
+        candidates: List<ExternalStreams.Rendition>,
+        current: ExternalStreams.Rendition?,
+    ): Boolean = kotlinx.coroutines.coroutineScope {
+        fun score(r: ExternalStreams.Rendition) = com.opentune.data.addons.AddonResolver.qualityScore(r.bits, r.sampleRate)
+        var playing = if (current?.lossless == true) score(current) else -1L
+        val upgrades = candidates.filter { score(it) > playing || current?.lossless != true }
+        if (upgrades.isEmpty()) return@coroutineScope false
+        val answers = kotlinx.coroutines.channels.Channel<ExternalStreams.Rendition?>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+        val pings = upgrades.map { r ->
+            launch(Dispatchers.IO) {
+                val alive = kotlinx.coroutines.withTimeoutOrNull(PING_LIMIT_MS) {
+                    runCatching { com.opentune.data.addons.AddonHttp.bytes(r.url, PING_BYTES, true).isNotEmpty() }.getOrDefault(false)
+                } == true
+                answers.send(r.takeIf { alive })
+            }
+        }
+        var waiting = pings.size
+        var moved = false
+        val pending = mutableListOf<ExternalStreams.Rendition>()
+        fun take(r: ExternalStreams.Rendition?) { waiting--; if (r != null) pending += r }
+        try {
+            while (true) {
+                if (pending.isEmpty()) {
+                    if (waiting == 0) break
+                    take(answers.receive())
+                }
+                // Whatever else has answered meanwhile is weighed too: the best of them goes first.
+                while (true) {
+                    val more = answers.tryReceive()
+                    if (!more.isSuccess) break
+                    take(more.getOrNull())
+                }
+                val best = pending.maxByOrNull(::score) ?: continue
+                pending.remove(best)
+                if (moved && score(best) <= playing) { pending.clear(); continue }
+                if (player.currentMediaItem?.mediaId != id) break
+                if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS) break
+                if (swapToUpgrade(player, id, externalStreamUri(id, best.key))) {
+                    moved = true
+                    playing = score(best)
+                    updateExternalStats()
+                    pending.removeAll { score(it) <= playing }
+                } else {
+                    Log.w(TAG, "${best.provider}'s stream for $id didn't load; trying the next verified source")
+                }
+            }
+        } finally {
+            pings.forEach { it.cancel() }
+        }
+        moved
     }
 
     /** Builds the silent player [prebuffer] loads an upgrade with; set in [onCreate]. */
@@ -1955,14 +2011,15 @@ class PlaybackService : MediaLibraryService() {
         /** Playing this long means the track's stream really works. */
         const val PLAYED_OK_MS = 10_000L
         const val UPGRADE_MIN_REMAINING_MS = 20_000L
+        /** A source's file is pinged with a read this size... */
+        const val PING_BYTES = 65_536
+        /** ...and counted as not answering after this long. */
+        const val PING_LIMIT_MS = 20_000L
         /** An upgrade is fetched this far past the playing position before it's swapped in. */
         const val AUDITION_AHEAD_MS = 12_000L
         /** It starts loading a little ahead, for the time the loading itself takes. */
         const val AUDITION_LEAD_MS = 1_500L
         const val AUDITION_TIMEOUT_MS = 25_000L
-        /** Further tries at a lossless swap that didn't take, [UPGRADE_RETRY_MS] apart. */
-        const val UPGRADE_RETRIES = 2
-        const val UPGRADE_RETRY_MS = 15_000L
         /** The volume dip around a swap: quickly down, gently back. */
         /** Each crossfade between the main player and the bridge. */
         const val BRIDGE_FADE_MS = 260L

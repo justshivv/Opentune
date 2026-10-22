@@ -30,8 +30,20 @@ object AddonResolver {
         report: (String) -> Unit = {},
         late: (AddonStream) -> Unit = {},
         clientFor: (String) -> AddonClient = AddonClient::forBase,
-        probe: suspend (String, Int, Boolean) -> ByteArray = AddonHttp::bytes): AddonStream? = withContext(Dispatchers.IO) {
-        if (durationMs <= 0) return@withContext null
+        probe: suspend (String, Int, Boolean) -> ByteArray = AddonHttp::bytes): AddonStream? =
+        resolveAll(song, durationMs, download, bestAvailable, report, late, clientFor, probe).firstOrNull()
+
+    /**
+     * Every verified match [resolve] found, best first (ties in the
+     * listener's order): when the best one's stream won't load, the next
+     * can be tried rather than giving up on lossless.
+     */
+    suspend fun resolveAll(song: Song, durationMs: Long, download: Boolean = false, bestAvailable: Boolean = false,
+        report: (String) -> Unit = {},
+        late: (AddonStream) -> Unit = {},
+        clientFor: (String) -> AddonClient = AddonClient::forBase,
+        probe: suspend (String, Int, Boolean) -> ByteArray = AddonHttp::bytes): List<AddonStream> = withContext(Dispatchers.IO) {
+        if (durationMs <= 0) return@withContext emptyList()
         val identity = CatalogIdentity(song.title, song.artist, null, durationMs)
         // The best each add-on has: hi-res where it offers it, else lossless.
         val tier = "HI_RES_LOSSLESS"
@@ -102,7 +114,7 @@ object AddonResolver {
             return answer
         }
         val addons = AddonStore.addons.value
-        if (addons.isEmpty()) return@withContext null
+        if (addons.isEmpty()) return@withContext emptyList()
         // The add-ons run here, apart from the caller, so returning early cancels none of them.
         val work = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
         val answers = kotlinx.coroutines.channels.Channel<Pair<Int, AddonStream?>>(kotlinx.coroutines.channels.Channel.UNLIMITED)
@@ -147,8 +159,12 @@ object AddonResolver {
                 work.cancel()
             }
         }
-        best
+        ranked(found.toList())
     }
+
+    /** [found]'s streams, best quality first, the earlier in the listener's order on a tie. */
+    internal fun ranked(found: List<AddonStream?>): List<AddonStream> =
+        found.filterNotNull().sortedByDescending { qualityScore(it.bits, it.sampleRate) }
 
     /** The best of [found] (in the listener's order, nulls for add-ons with nothing): highest quality, the earlier one on a tie. */
     internal fun pickBest(found: List<AddonStream?>): AddonStream? {
