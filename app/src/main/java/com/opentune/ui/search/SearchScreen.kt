@@ -63,6 +63,9 @@ import com.opentune.data.model.SearchResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.opentune.data.model.Song
 import com.opentune.data.model.UiState
 import com.opentune.data.model.artworkAt
@@ -84,6 +87,11 @@ fun SearchScreen(
     onBrowse: (BrowseItem) -> Unit,
     /** Opens the page that names a song from what the microphone hears. */
     onRecognize: (() -> Unit)? = null,
+    /**
+     * Explore, when it has no tab of its own: it fills the page until the bar
+     * is tapped or holds a search, and the bar's back arrow brings it back.
+     */
+    explore: (@Composable () -> Unit)? = null,
     vm: SearchViewModel = viewModel(),
 ) {
     val query by vm.query.collectAsState()
@@ -94,21 +102,36 @@ fun SearchScreen(
     val results by vm.results.collectAsState()
     val recent by AppSettings.recentSearches.collectAsState()
     val focus = LocalFocusManager.current
+    var focused by remember { mutableStateOf(false) }
+    val searching = explore == null || focused || query.isNotEmpty()
 
     fun submit(q: String) {
         focus.clearFocus()
         vm.submit(q)
     }
 
+    // Back to Explore: the bar lets go and empties.
+    val leave = {
+        focus.clearFocus()
+        vm.onQueryChange("")
+    }
+    androidx.activity.compose.BackHandler(enabled = explore != null && searching, onBack = leave)
+
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
         TextField(
             value = query,
             onValueChange = vm::onQueryChange,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
+                .onFocusChanged { focused = it.isFocused },
             singleLine = true,
             shape = CircleShape,
             placeholder = { Text("Songs, albums, artists") },
-            leadingIcon = { Icon(Icons.Filled.Search, null) },
+            leadingIcon = {
+                androidx.compose.animation.Crossfade(explore != null && searching, label = "searchLead") { back ->
+                    if (back) IconButton(onClick = leave) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to Explore") }
+                    else Icon(Icons.Filled.Search, null)
+                }
+            },
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { vm.onQueryChange("") }) { Icon(Icons.Filled.Close, "Clear") }
@@ -127,6 +150,7 @@ fun SearchScreen(
         )
 
         when {
+            !searching -> explore?.invoke()
             submitted == null || submitted != query.trim() -> Typing(
                 query = query,
                 suggestions = suggestions,

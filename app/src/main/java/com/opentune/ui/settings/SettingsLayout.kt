@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.Cable
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -43,10 +44,16 @@ internal val SETTINGS_CATEGORIES = listOf(
         "audio", "Audio", "Quality, loudness, effects and output", Icons.Rounded.GraphicEq,
         listOf(
             "Streaming quality" to listOf("On Wi-Fi", "On mobile data", "Upgrade quality while playing"),
-            "Higher-quality sources" to listOf("Lossless streaming", "Unmetered networks only", "Audio add-ons"),
             "Loudness" to listOf("Loudness normalization", "Volume level", "Normalize on the phone speaker"),
             "Sound" to listOf("Equalizer", "Clarity", "Spatial audio", "System audio effects"),
             "Output" to listOf("Output precision", "Prefer USB DAC", "Bit-perfect USB output"),
+        ),
+    ),
+    SettingsCategory(
+        "addons", "Add-ons", "Audio sources you add by URL, and when they're used", Icons.Rounded.Extension,
+        listOf(
+            "Audio add-ons" to listOf("Audio add-ons"),
+            "When they're used" to listOf("Lossless streaming", "Unmetered networks only"),
         ),
     ),
     SettingsCategory(
@@ -65,6 +72,7 @@ internal val SETTINGS_CATEGORIES = listOf(
             "Colour" to listOf("Color from artwork", "Mini player takes the cover's colour", "Artist pages take the photo's colour", "Material You", "Accent color", "Palette style"),
             "Glass" to listOf("Liquid Glass", "Glass style", "Frosted top edge", "Reduce dynamic blur"),
             "Feel" to listOf("Haptic feedback", "High refresh rate", "Wide-screen layout"),
+            "Pages" to listOf("Explore as its own tab"),
         ),
     ),
     SettingsCategory(

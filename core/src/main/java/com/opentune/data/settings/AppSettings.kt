@@ -396,6 +396,8 @@ data class InterfaceSettings(
     val welcome: WelcomeState = WelcomeState.UNDECIDED,
     /** On wide windows (tablets, unfolded phones, phones on their side): the tabs in a rail and pages in a readable column. */
     val wideLayout: Boolean = true,
+    /** Explore has its own tab; off, it leaves the dock and fills the Search page until a search starts. */
+    val separateExplore: Boolean = true,
     /** On large screens, the player stays docked beside the page while a song is loaded. */
     val sidePlayer: Boolean = true,
     /** Your top songs play behind the Wrapped story; off is its mute button, kept for next time. */

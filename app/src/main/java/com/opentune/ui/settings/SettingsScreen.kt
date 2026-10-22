@@ -59,6 +59,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FilterAlt
@@ -1032,6 +1033,15 @@ private fun settingsSections(
                 },
                 Entry("High performance mode", "120hz 90hz smooth fps refresh rate frame rate scrolling performance battery unrestricted lag") {
                     HighPerformanceRows(ui)
+                },
+                Entry("Explore as its own tab", "explore tab dock search page navigation moods genres") {
+                    ToggleRow(
+                        "Explore as its own tab",
+                        ui.separateExplore,
+                        { v -> AppSettings.updateUi { it.copy(separateExplore = v) } },
+                        summary = if (ui.separateExplore) "Explore has a tab in the dock" else "Explore fills the Search page until you start a search",
+                        icon = Icons.Rounded.Explore,
+                    )
                 },
                 Entry("Wide-screen layout", "tablet foldable large screen landscape rail side navigation dock columns") {
                     ToggleRow(
