@@ -119,9 +119,15 @@ private fun khzLabel(hz: Int): String =
 /** Whether [source] is the best there is: lossless, rather than a lossy stream at any bitrate. */
 internal fun isHighestQuality(source: NerdStats.Source?, format: AudioFormatInfo?): Boolean {
     if (source == null || source.provider.startsWith("Checking highest")) return false
+    // Some streams (an add-on's DASH or HLS FLAC) name their codec in a way that
+    // doesn't say FLAC; no lossy stream runs anywhere near this bitrate, though.
+    if ((format?.bitrateKbps ?: 0) >= LOSSLESS_MIN_KBPS) return true
     val codec = format?.codec ?: return false
     return LOSSLESS_CODECS.any { codec.contains(it, ignoreCase = true) }
 }
+
+/** Above any lossy codec's top rate (AAC and Opus stop near 512 kbps for stereo). */
+private const val LOSSLESS_MIN_KBPS = 700
 
 private val LOSSLESS_CODECS = listOf("FLAC", "ALAC", "WAV", "AIFF", "DSD", "WavPack", "APE")
 

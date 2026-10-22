@@ -14,7 +14,10 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Prefer a cached source or a quick JioSaavn match; never wait for FLAC at startup. */
+/**
+ * Prefer a cached source or a quick JioSaavn match, tried before YouTube's own
+ * stream is looked up; never wait for FLAC at startup.
+ */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class StartupSelection(
     private val song: Song,
@@ -24,6 +27,8 @@ internal class StartupSelection(
     private val losslessWanted: () -> Boolean = { ExternalStreams.allowed(true) },
     /** A stream picked by hand in Search's Add-ons tab for this song, if there is one. */
     private val picked: (String) -> ExternalStreams.Rendition? = { id -> ExternalStreams.cached(id)?.takeIf { it.picked } },
+    /** Whether JioSaavn may be tried before YouTube's own stream: whenever external sources are allowed, not only at Max. */
+    private val saavnWanted: () -> Boolean = { ExternalStreams.allowed(false) },
     private val lookupBudgetMs: Long = 900L,
     private val findJioSaavn: suspend (Song, Long) -> ExternalStreams.Rendition? = ExternalStreams::findJioSaavn,
     private val cached: (String) -> ExternalStreams.Rendition? = ExternalStreams::cached,
@@ -38,7 +43,7 @@ internal class StartupSelection(
             // A stream picked by hand in Search starts the song whatever the quality setting.
             val ready = picked(song.videoId)?.takeIf { it.mimeType == null }
                 ?: if (maximum() || losslessWanted()) cached(song.videoId)?.takeIf { it.mimeType == null && it.lossless } else null
-            val rendition = ready ?: if (maximum()) try {
+            val rendition = ready ?: if (maximum() || saavnWanted()) try {
                 withTimeoutOrNull(lookupBudgetMs) { findJioSaavn(song, song.durationMillis()) }
             } catch (e: CancellationException) {
                 throw e

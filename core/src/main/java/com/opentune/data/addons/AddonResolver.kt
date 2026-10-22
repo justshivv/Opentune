@@ -5,6 +5,7 @@ import com.opentune.data.lossless.LosslessSource
 import com.opentune.data.model.Song
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -13,21 +14,28 @@ object AddonResolver {
     fun failed(addon: String, song: String) { failures["$addon:$song"] = System.nanoTime() / 1_000_000 + 120_000 }
     fun retry() { failures.clear() }
 
-    /** First verified match wins, in the listener's order. Playback never waits on this search. */
+    /**
+     * Every usable add-on is asked at once, each given [PER_ADDON_MS]; of the
+     * verified matches that come back, the best quality wins, and between
+     * equals the one higher in the listener's order. One slow, failing or
+     * rate-limited add-on no longer holds up the rest, as it did when they
+     * were asked one after another. Playback never waits on this search.
+     */
     suspend fun resolve(song: Song, durationMs: Long, download: Boolean = false, bestAvailable: Boolean = false,
         report: (String) -> Unit = {},
         clientFor: (String) -> AddonClient = AddonClient::forBase,
         probe: suspend (String, Int, Boolean) -> ByteArray = AddonHttp::bytes): AddonStream? = withContext(Dispatchers.IO) {
         if (durationMs <= 0) return@withContext null
         val identity = CatalogIdentity(song.title, song.artist, null, durationMs)
-        var best: AddonStream? = null
-        val tier = if (bestAvailable) "HI_RES_LOSSLESS" else "LOSSLESS"
-        for (addon in AddonStore.addons.value) {
-            if (!addon.enabled) continue
-            if ((failures["${addon.key}:${song.videoId}"] ?: 0) > System.nanoTime() / 1_000_000) { report("${addon.manifest.name}: recent playback failure; trying the next add-on"); continue }
-            if (!AddonStore.usable(addon)) { report("${addon.manifest.name}: needs a supported lossless output"); continue }
-            if (download && !addon.manifest.downloads) { report("${addon.manifest.name}: streaming only"); continue }
-            val result = withTimeoutOrNull(10_000) {
+        // The best each add-on has: hi-res where it offers it, else lossless.
+        val tier = "HI_RES_LOSSLESS"
+        suspend fun attempt(addon: AudioAddon): AddonStream? {
+            if (!addon.enabled) return null
+            if ((failures["${addon.key}:${song.videoId}"] ?: 0) > System.nanoTime() / 1_000_000) { report("${addon.manifest.name}: recent playback failure; skipped"); return null }
+            if (!AddonStore.usable(addon)) { report("${addon.manifest.name}: needs a supported lossless output"); return null }
+            if (download && !addon.manifest.downloads) { report("${addon.manifest.name}: streaming only"); return null }
+            val started = System.nanoTime()
+            val answer = withTimeoutOrNull(PER_ADDON_MS) {
                 try {
                     val client = clientFor(addon.base)
                     val manifest = client.manifest().let { if (addon.admin) it.copy(name = addon.manifest.name) else it }
@@ -84,13 +92,26 @@ object AddonResolver {
                 catch (e: AddonHttp.Failure) { report("${addon.manifest.name}: HTTP ${e.status}${if (e.status == 429) " · rate limited" else ""}"); null }
                 catch (_: Exception) { report("${addon.manifest.name}: unavailable or invalid response"); null }
             }
-            if (result != null) {
-                if (!bestAvailable) return@withContext result
-                if (best == null || qualityScore(result.bits, result.sampleRate) > qualityScore(best.bits, best.sampleRate)) best = result
-            }
+            if (answer == null && System.nanoTime() - started >= PER_ADDON_MS * 1_000_000) report("${addon.manifest.name}: no answer in time")
+            return answer
         }
-        best
+        val found = kotlinx.coroutines.coroutineScope {
+            AddonStore.addons.value.map { addon -> async { attempt(addon) } }.map { it.await() }
+        }
+        pickBest(found)
     }
+
+    /** The best of [found] (in the listener's order, nulls for add-ons with nothing): highest quality, the earlier one on a tie. */
+    internal fun pickBest(found: List<AddonStream?>): AddonStream? {
+        var best: AddonStream? = null
+        for (s in found) {
+            if (s == null) continue
+            if (best == null || qualityScore(s.bits, s.sampleRate) > qualityScore(best.bits, best.sampleRate)) best = s
+        }
+        return best
+    }
+
+    private const val PER_ADDON_MS = 8_000L
     /** Unknown quality never outranks measured CD quality; ties preserve source priority. */
     fun qualityScore(bits: Int?, rate: Int?): Long = (bits ?: 0).toLong() * (rate ?: 0)
 }

@@ -15,7 +15,8 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35], application = Application::class)
 class AddonResolverTest {
     private val song = Song(videoId = "test-song", title = "Wo Noor", artist = "AP Dhillon", thumbnailUrl = null)
-    private val calls = mutableListOf<String>()
+    // Add-ons are asked at once, from several threads.
+    private val calls: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     @Before fun setup() {
         val context = ApplicationProvider.getApplicationContext<Application>()
         context.getSharedPreferences("audio_addons", 0).edit().clear().commit()
@@ -42,13 +43,13 @@ class AddonResolverTest {
     @Test fun followsPriorityFallsBackAndRejectsUnrelatedRecording() = runBlocking {
         add("bad"); add("good"); add("last")
         val result = resolve()!!
+        // Every add-on is asked at once; of equal quality, the higher in the order wins.
         assertEquals("good", result.provider)
         assertEquals(16, result.bits); assertEquals(44100, result.sampleRate)
-        assertFalse(calls.any { "/wrong" in it || "last.example" in it })
-        assertTrue(calls.first().contains("bad.example"))
+        assertFalse(calls.any { "/wrong" in it })
+        assertTrue(calls.any { "bad.example" in it } && calls.any { "last.example" in it })
         calls.clear(); AddonStore.move(AddonStore.addons.value.last().key, -2)
         assertEquals("last", resolve()!!.provider)
-        assertFalse(calls.any { "bad.example" in it || "good.example" in it })
     }
     @Test fun disabledGatedAndStreamingOnlySourcesReceiveNoDownloadRequests() = runBlocking {
         add("disabled"); AddonStore.enable(AddonStore.addons.value.first().key, false)

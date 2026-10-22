@@ -1079,25 +1079,33 @@ class PlaybackService : MediaLibraryService() {
             }
             if (alreadyExternal() && !force) return@launch
             val duration = player.duration.takeIf { it > 0 } ?: item.toSong().durationMillis()
+            // The FLAC search (every add-on at once) and JioSaavn go out together.
+            // JioSaavn usually answers first and is played while the FLAC is still
+            // being verified; a verified FLAC then takes over, so a lossy stream
+            // found first never keeps a lossless one from playing.
+            val flac = if (Podcasts.isEpisode(id)) null else async {
+                ExternalStreams.find(item.toSong(), duration, force = force,
+                    beforePlayback = AppSettings.effectiveAudioQuality == com.opentune.data.settings.AudioQuality.MAX,
+                    losslessOnly = true)
+            }
             // A slow startup lookup can finish here without delaying audible playback.
             val saavn = if (!Podcasts.isEpisode(id) && externalStreamKeyOf(selectedUri(uri)) == null)
                 ExternalStreams.findJioSaavn(item.toSong(), duration) else null
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
-            if (player.currentMediaItem?.localConfiguration?.uri != uri) return@launch
-            if (saavn != null && ExternalStreams.allowed(saavn.lossless)) {
+            if (player.currentMediaItem?.localConfiguration?.uri != uri) { flac?.cancel(); return@launch }
+            if (saavn != null && !saavn.lossless && ExternalStreams.allowed(false) && flac?.isCompleted != true) {
                 val left = player.duration - player.currentPosition
-                if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { tell("Too close to the end of the song to switch"); return@launch }
-                swapped(swapToUpgrade(player, id, externalStreamUri(id, saavn.key)))
-                return@launch
+                if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { flac?.cancel(); tell("Too close to the end of the song to switch"); return@launch }
+                swapToUpgrade(player, id, externalStreamUri(id, saavn.key))
             }
-            val lossless = if (Podcasts.isEpisode(id)) null else ExternalStreams.find(item.toSong(), duration, force = force,
-                beforePlayback = AppSettings.effectiveAudioQuality == com.opentune.data.settings.AudioQuality.MAX,
-                losslessOnly = true)
+            val lossless = flac?.await()
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
-            if (player.currentMediaItem?.localConfiguration?.uri != uri) return@launch
+            // Still this song, maybe now on the JioSaavn stream switched to above.
+            if (player.currentMediaItem?.mediaId != id) return@launch
+            val playing = player.currentMediaItem?.localConfiguration?.uri ?: return@launch
             updateExternalStats()
             if (lossless != null && ExternalStreams.allowed(lossless.lossless)) {
-                val existing = externalStreamKeyOf(selectedUri(uri))?.let { ExternalStreams.get(id, it) }
+                val existing = externalStreamKeyOf(selectedUri(playing))?.let { ExternalStreams.get(id, it) }
                 if (existing?.lossless == true && com.opentune.data.addons.AddonResolver.qualityScore(lossless.bits, lossless.sampleRate) <=
                     com.opentune.data.addons.AddonResolver.qualityScore(existing.bits, existing.sampleRate)) { tell("Already playing the best quality there is for this song"); return@launch }
                 val left = player.duration - player.currentPosition
@@ -1118,8 +1126,8 @@ class PlaybackService : MediaLibraryService() {
                 swapped(ok)
                 return@launch
             }
-            if (externalStreamKeyOf(selectedUri(uri)) != null) { tell("Already playing the best quality there is for this song"); return@launch }
-            if (isUpgradedUri(uri)) { tell("Already playing the best quality there is for this song"); return@launch }
+            if (externalStreamKeyOf(selectedUri(playing)) != null) { tell("Already playing the best quality there is for this song"); return@launch }
+            if (isUpgradedUri(playing)) { tell("Already playing the best quality there is for this song"); return@launch }
             if (!force && !AppSettings.playback.value.qualityUpgrade) return@launch
             val found = withContext(Dispatchers.IO) { runCatching { StreamResolver.findUpgrade(id, force) }.getOrDefault(false) }
             if (player.currentMediaItem?.mediaId != id) return@launch
