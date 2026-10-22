@@ -113,7 +113,15 @@ object MusicRepository {
     private val homeRefreshRequested = java.util.concurrent.atomic.AtomicBoolean(false)
 
     /** Keep visible content until refreshed recommendations arrive. */
-    fun refreshHomeRecommendations() { homeRefreshRequested.set(true) }
+    fun refreshHomeRecommendations() {
+        homeRefreshRequested.set(true)
+        homeRefreshes.incrementAndGet()
+    }
+
+    /** How many times Home has been refreshed: each refresh seeds its picks from a different recent song. */
+    private val homeRefreshes = java.util.concurrent.atomic.AtomicInteger(0)
+    /** The songs the last picks shelf showed, so a refresh brings new ones forward. */
+    @Volatile private var lastPicks: Set<String> = emptySet()
 
     suspend fun home(): List<HomeShelf> = io {
         if (homeRefreshRequested.getAndSet(false)) {
@@ -252,7 +260,7 @@ object MusicRepository {
             }
         }.awaitAll().filterNotNull()
         _seeds.value = seeds
-        val shelves = listOfNotNull(HomeSeed.quickPicks(seeds))
+        val shelves = listOfNotNull(HomeSeed.quickPicks(seeds, homeRefreshes.get()))
         seedCache = ids to Fetched(shelves, now)
         shelves
     }
@@ -264,10 +272,24 @@ object MusicRepository {
     private suspend fun radioShelf(): List<HomeShelf> {
         // A hidden song or artist isn't a seed for more of the same.
         val hidden = com.opentune.data.library.LibraryStore.hidden.value
-        val last = History.records.value.firstOrNull { !hidden.hides(it.videoId, it.artist) } ?: return emptyList()
+        // Each refresh turns to the next of the last few songs heard, so pulling
+        // Home down brings different picks, not the same radio again.
+        val recent = History.records.value.asSequence()
+            .filter { !hidden.hides(it.videoId, it.artist) }
+            .distinctBy { it.videoId }
+            .take(RECENT_SEEDS)
+            .toList()
+        if (recent.isEmpty()) return emptyList()
+        val turn = homeRefreshes.get()
+        val last = recent[turn % recent.size]
         val result = Recommendations.after(last.toSong(), AppSettings.playback.value.recommender)
-        val songs = result.songs.filter { it.videoId != last.videoId }.take(20)
+        val heard = recent.mapTo(HashSet()) { it.videoId }
+        val fresh = result.songs.filter { it.videoId != last.videoId && it.videoId !in heard }
+        // What the last shelf showed goes to the back, and the order changes with each refresh.
+        val (seen, unseen) = fresh.partition { it.videoId in lastPicks }
+        val songs = (unseen.shuffled(kotlin.random.Random(turn)) + seen).take(20)
         if (songs.size < 4) return emptyList()
+        lastPicks = songs.mapTo(HashSet()) { it.videoId }
         val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
         val by = if (result.engine == Recommender.YOUTUBE) "Picked for you" else "Picked by ${result.engine.label}"
         return listOf(HomeShelf("Because you played ${last.title}", items, by))
@@ -355,6 +377,8 @@ object MusicRepository {
 
     private const val MAX_HOME_PAGES = 8
     private const val EXTRAS_FRESH_MS = 30 * 60 * 1000L
+    /** How many recent songs Home's picks take turns to start from. */
+    private const val RECENT_SEEDS = 6
     private const val MAX_PICKS = 16
 
     /**

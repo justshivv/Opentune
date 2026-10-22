@@ -51,6 +51,16 @@ object ExternalStreams {
         reports[videoId] = detail
     }
 
+    /**
+     * The picked stream was found but playback couldn't switch to it: said so
+     * under what was picked, so the pipeline doesn't read as if it's playing.
+     */
+    fun swapFailed(videoId: String) {
+        val picked = reports[videoId] ?: return
+        if ("Couldn't switch" in picked) return
+        report(videoId, "$picked\nCouldn't switch to it: the stream didn't load in time. YouTube keeps playing; it's tried again next song.")
+    }
+
     fun allowed(lossless: Boolean? = null): Boolean = AppSettings.playback.value.let {
         val maximum = AppSettings.effectiveAudioQuality == AudioQuality.MAX
         val enabled = when (lossless) { true -> maximum || it.losslessStreaming; false -> it.jioSaavnQuality; null -> maximum || it.losslessStreaming || it.jioSaavnQuality }

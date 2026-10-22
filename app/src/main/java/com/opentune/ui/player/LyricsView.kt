@@ -283,7 +283,13 @@ private fun PlainLyrics(text: String, source: String, note: String? = "These lyr
         val style = lyricsStyle()
         val romanize = AppSettings.lyrics.collectAsState().value.romanize
         val romanized by androidx.compose.runtime.produceState<List<String?>>(emptyList(), text, romanize) {
-            value = if (!romanize) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Romanizer.lines(text.lines()) }
+            if (!romanize) { value = emptyList(); return@produceState }
+            val texts = text.lines()
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Romanizer.lines(texts) }
+            // Japanese with kanji: the offline reading first, then the full one when it arrives.
+            if (com.opentune.data.lyrics.JapaneseReadings.wanted(texts)) {
+                com.opentune.data.lyrics.JapaneseReadings.lines(texts)?.let { read -> value = read.mapIndexed { i, r -> r ?: value.getOrNull(i) } }
+            }
         }
         val dimmed = MaterialTheme.colorScheme.onSurfaceVariant
         val shown = remember(text, romanized, dimmed) {
@@ -333,7 +339,13 @@ private fun SyncedLyrics(
     androidx.activity.compose.BackHandler(enabled = selecting) { selection?.clear() }
     val romanize = AppSettings.lyrics.collectAsState().value.romanize
     val romanized by androidx.compose.runtime.produceState<List<String?>>(emptyList(), lines, romanize) {
-        value = if (!romanize) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Romanizer.lines(lines.map { it.text }) }
+        if (!romanize) { value = emptyList(); return@produceState }
+        val texts = lines.map { it.text }
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Romanizer.lines(texts) }
+        // Japanese with kanji: the offline reading first, then the full one when it arrives.
+        if (com.opentune.data.lyrics.JapaneseReadings.wanted(texts)) {
+            com.opentune.data.lyrics.JapaneseReadings.lines(texts)?.let { read -> value = read.mapIndexed { i, r -> r ?: value.getOrNull(i) } }
+        }
     }
     // Two singers trade lines: the second voice's sit on the other side.
     val duet = remember(lines) { lines.any { it.voice == VOICE_SECOND } }
@@ -578,6 +590,9 @@ private const val GLIDE_STIFFNESS = 64f
 private const val GLIDE_DAMPING = 16f
 
 /** How one [LyricsAnimation] treats lines: sizes, blur per line away, and glow. */
+/** How far, as a share of a row's height, a letter can reach past its row's box. */
+private const val GLYPH_OVERHANG = 0.35f
+
 /** Empty room round a blurred line inside its blur's buffer, so the blur fades out before the buffer's edge. */
 private val BLUR_BLEED = 28.dp
 
@@ -773,7 +788,19 @@ private fun wordBoxesOf(layout: TextLayoutResult?, line: LyricLine, text: String
             (first..last).mapNotNull { row ->
                 val from = maxOf(start, l.getLineStart(row))
                 val to = minOf(visibleEnd, l.getLineEnd(row, visibleEnd = true))
-                if (to > from) l.getPathForRange(from, to).getBounds() else null
+                if (to <= from) return@mapNotNull null
+                val box = l.getPathForRange(from, to).getBounds()
+                // Glyphs reach past their row: the dots of i and j above the first
+                // row (the line height is set tight), tails below the last, and a
+                // j's hook left of a row's first word. The box takes them in where
+                // no other word can be, so no part of a letter stays lit early.
+                val pad = box.height * GLYPH_OVERHANG
+                Rect(
+                    left = if (from == l.getLineStart(row)) box.left - pad else box.left,
+                    top = if (row == 0) box.top - pad else box.top,
+                    right = if (to == l.getLineEnd(row, visibleEnd = true)) box.right + pad else box.right,
+                    bottom = if (row == l.lineCount - 1) box.bottom + pad else box.bottom,
+                )
             }
         }
         start = end

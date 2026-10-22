@@ -123,6 +123,8 @@ class PlaybackService : MediaLibraryService() {
 
     private var soundEffects: SoundEffects? = null
     private val dsp = DspAudioProcessor()
+    /** The same effects, for the bridge player that carries a song across a quality swap. */
+    private val bridgeDsp = DspAudioProcessor()
     private var audioManager: AudioManager? = null
     private val startupSelections = ConcurrentHashMap<String, StartupSelection>()
 
@@ -180,7 +182,10 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val floatOutput = AppSettings.playback.value.floatOutput
-        val renderers = object : DefaultRenderersFactory(context) {
+        // The main player and the bridge decode the same way: the bridge used to
+        // take the phone's default FLAC decoder, which some phones can't play
+        // add-on FLAC with, so the swap to it failed and the song stayed on YouTube.
+        fun renderersFor(effects: DspAudioProcessor) = object : DefaultRenderersFactory(context) {
             init {
                 setEnableDecoderFallback(true)
                 setMediaCodecSelector { mime, secure, tunneling ->
@@ -197,9 +202,10 @@ class PlaybackService : MediaLibraryService() {
                 enableAudioTrackPlaybackParams: Boolean,
             ): AudioSink = DefaultAudioSink.Builder(context)
                 .setEnableFloatOutput(floatOutput)
-                .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain(dsp))
+                .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain(effects))
                 .build()
         }
+        val renderers = renderersFor(dsp)
 
         // Start as soon as a little audio is in: the defaults wait for 2.5 s,
         // which is video-sized caution. A stream starts after half a second buffered
@@ -238,7 +244,7 @@ class PlaybackService : MediaLibraryService() {
         // better stream from where the song is, through the same sources and
         // so into the same cache, and the swap then reads what it fetched.
         auditionPlayer = {
-            ExoPlayer.Builder(context)
+            ExoPlayer.Builder(context, renderersFor(bridgeDsp))
                 .setMediaSourceFactory(qualitySources)
                 .setLoadControl(
                     DefaultLoadControl.Builder()
@@ -262,7 +268,7 @@ class PlaybackService : MediaLibraryService() {
                 } else {
                     DspParams(eq, sound.bassBoost, pb.spatialAudio, pb.clarity, eightDPeriod = sound.eightD.periodSeconds, spacePeriod = sound.space.periodSeconds)
                 }
-            }.distinctUntilChanged().collect { dsp.params = it }
+            }.distinctUntilChanged().collect { dsp.params = it; bridgeDsp.params = it }
         }
         scope.launch {
             AppSettings.playback.map { it.skipSilence }.distinctUntilChanged().collect { player.skipSilenceEnabled = it }
@@ -1036,7 +1042,20 @@ class PlaybackService : MediaLibraryService() {
                     com.opentune.data.addons.AddonResolver.qualityScore(existing.bits, existing.sampleRate)) { tell("Already playing the best quality there is for this song"); return@launch }
                 val left = player.duration - player.currentPosition
                 if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { tell("Too close to the end of the song to switch"); return@launch }
-                swapped(swapToUpgrade(player, id, externalStreamUri(id, lossless.key)))
+                // A slow first fetch gets another go: the add-on's stream is often
+                // quicker once its server has it ready.
+                var ok = swapToUpgrade(player, id, externalStreamUri(id, lossless.key))
+                repeat(UPGRADE_RETRIES) {
+                    if (ok || player.currentMediaItem?.mediaId != id) return@repeat
+                    if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS + UPGRADE_RETRY_MS) return@repeat
+                    delay(UPGRADE_RETRY_MS)
+                    if (player.currentMediaItem?.mediaId == id) ok = swapToUpgrade(player, id, externalStreamUri(id, lossless.key))
+                }
+                if (!ok && player.currentMediaItem?.mediaId == id) {
+                    ExternalStreams.swapFailed(id)
+                    updateExternalStats()
+                }
+                swapped(ok)
                 return@launch
             }
             if (externalStreamKeyOf(selectedUri(uri)) != null) { tell("Already playing the best quality there is for this song"); return@launch }
@@ -1181,20 +1200,20 @@ class PlaybackService : MediaLibraryService() {
                 @Suppress("UNREACHABLE_CODE") false
             } ?: false
             if (!loaded) {
-                Log.w(TAG, "The better stream for $id didn't load in time; staying on this one")
-                return false
+                Log.w(TAG, "The bridge couldn't load the better stream for $id; trying the plain swap")
+                return null
             }
-            // The queue may have moved on, a blend begun or playback stopped while it loaded.
-            if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id ||
-                crossfade?.blending == true || !player.isPlaying
-            ) return false
+            // The queue may have moved on or a blend begun while it loaded.
+            if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id || crossfade?.blending == true) return false
+            // Paused while it loaded: the plain swap needs no bridge.
+            if (!player.isPlaying) return null
 
             // 1. The bridge plays, silent, in step with the song as it is heard now.
             bridge.volume = 0f
             bridge.playWhenReady = true
             if (!lineUp(follower = bridge, leader = player)) {
-                Log.w(TAG, "Couldn't line the better stream for $id up with the song; staying on this one")
-                return false
+                Log.w(TAG, "Couldn't line the better stream for $id up with the song; trying the plain swap")
+                return null
             }
             // 2. The sound moves onto it.
             crossfadeVolumes(from = player, to = bridge, BRIDGE_FADE_MS)
@@ -1755,6 +1774,9 @@ class PlaybackService : MediaLibraryService() {
         /** It starts loading a little ahead, for the time the loading itself takes. */
         const val AUDITION_LEAD_MS = 1_500L
         const val AUDITION_TIMEOUT_MS = 25_000L
+        /** Further tries at a lossless swap that didn't take, [UPGRADE_RETRY_MS] apart. */
+        const val UPGRADE_RETRIES = 2
+        const val UPGRADE_RETRY_MS = 15_000L
         /** The volume dip around a swap: quickly down, gently back. */
         /** Each crossfade between the main player and the bridge. */
         const val BRIDGE_FADE_MS = 260L
