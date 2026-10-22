@@ -387,6 +387,20 @@ fun AppRoot(vm: PlayerViewModel) {
                 playerOpen = true
             }
             is LinkTarget.Browse -> nav.openBrowse(link.browseId)
+            // Read for its title and artist, then found on YouTube Music; autoplay carries on from it.
+            is LinkTarget.Elsewhere -> {
+                vm.player.connected.first { it }
+                val named = com.opentune.data.links.MusicLinks.resolve(link.url)
+                val match = named?.let { n ->
+                    runCatching { MusicRepository.search("${n.title} ${n.artist}".trim(), SearchFilter.SONGS) }.getOrDefault(emptyList())
+                        .firstNotNullOfOrNull { (it as? SearchResult.TopTrack)?.song ?: (it as? SearchResult.Track)?.song }
+                }
+                when {
+                    match != null -> { vm.play(match, "Shared link"); playerOpen = true }
+                    named != null -> com.opentune.data.Pills.error("Couldn't find \"${named.title}\" on YouTube Music")
+                    else -> com.opentune.data.Pills.error("Couldn't read that link")
+                }
+            }
             is LinkTarget.SpotifyImport -> nav.navigate("import?link=${Uri.encode(link.text)}")
             is LinkTarget.Together -> { playerOpen = false; nav.navigate("together?code=${link.code}") }
             is LinkTarget.Recognize -> { playerOpen = false; nav.navigate("recognize?listen=true") { launchSingleTop = true } }

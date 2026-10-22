@@ -4,6 +4,8 @@ import com.opentune.data.Http
 import java.text.Normalizer
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -17,9 +19,10 @@ import okhttp3.Request
 
 /**
  * lrc.red, BitChord's first lyrics source: Apple-style word-by-word TTML,
- * filed by recording (ISRC). The recording is named first by BiniLyrics,
- * which knows most songs' ISRC from their title, artist and length; failing
- * that, lrc.red's own search is asked, and a hit only counts when its title,
+ * filed by recording (ISRC). The recording is named by BiniLyrics, which
+ * knows most songs' ISRC from their title, artist and length, or else by
+ * Deezer's catalogue, asked at the same time; failing both, lrc.red's own
+ * search is asked, and a hit only counts when its title,
  * version (live, remix, sped up…), an artist and its length (within 3 s) all
  * match, so another version's timing never gets used.
  */
@@ -33,7 +36,11 @@ internal object LrcRed {
 
     suspend fun lookup(title: String, artist: String, durationMs: Long): Lyrics? {
         val cleaned = TrackNameCleaner.clean(title, artist)
-        val isrc = withTimeoutOrNull(IDENTIFY_MS) { runCatching { identify(cleaned.title, cleaned.artist, durationMs) }.getOrNull() }
+        val isrc = coroutineScope {
+            val bini = async { withTimeoutOrNull(IDENTIFY_MS) { runCatching { identify(cleaned.title, cleaned.artist, durationMs) }.getOrNull() } }
+            val deezer = async { withTimeoutOrNull(IDENTIFY_MS) { runCatching { fromDeezer(cleaned.title, cleaned.artist, durationMs) }.getOrNull() } }
+            bini.await().also { if (it != null) deezer.cancel() } ?: deezer.await()
+        }
         document(isrc)?.let { url -> fetchTtml(url, durationMs)?.let { return it } }
         val hits = runCatching { search("${cleaned.title} ${cleaned.artist}".trim()) }.getOrNull().orEmpty()
         val url = document(best(hits, cleaned.title, cleaned.artist, durationMs)?.isrc) ?: return null
@@ -58,6 +65,13 @@ internal object LrcRed {
         val body = get(url) ?: return null
         val results = (runCatching { json.parseToJsonElement(body) }.getOrNull() as? JsonObject)?.get("results") as? JsonArray ?: return null
         return (results.firstOrNull() as? JsonObject)?.get("isrc")?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+    }
+
+    /** The ISRC of Deezer's copy of this recording, by the same rules as lrc.red's own search. */
+    private suspend fun fromDeezer(title: String, artist: String, durationMs: Long): String? {
+        val hits = com.opentune.data.metadata.Deezer.search("$title $artist".trim())
+            .map { Hit(it.isrc, it.title, it.artist, it.durationS.toDouble().takeIf { s -> s > 0 }) }
+        return best(hits, title, artist, durationMs)?.isrc
     }
 
     private suspend fun search(q: String): List<Hit> {
