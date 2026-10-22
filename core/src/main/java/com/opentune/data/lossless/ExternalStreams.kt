@@ -118,17 +118,20 @@ object ExternalStreams {
         fun losslessRendition(track: LosslessSource.Track) = Rendition(java.util.UUID.randomUUID().toString(), track.url,
             "${track.provider} · lossless requested", true, now(), provider = track.provider, bits = track.bits, sampleRate = track.sampleRate,
             maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType)
-        val track = if (allowed(true)) LosslessSource.resolve(song, duration,
+        val tracks = if (allowed(true)) LosslessSource.resolveAll(song, duration,
             beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { detail.addIfAbsent(it) },
             late = { better ->
                 // A slower add-on came back with higher quality than the one already chosen: kept, and said, so playback can switch to it.
                 if (allowed(true)) {
-                    remember(videoId, losslessRendition(better))
+                    val r = losslessRendition(better)
+                    remember(videoId, r)
+                    addAlternative(videoId, r)
                     failedUntil.remove(videoId)
                     report(videoId, (reports[videoId]?.let { "$it\n" } ?: "") + "${better.provider}: answered later with higher quality")
                     _improved.tryEmit(videoId)
                 }
-            }) else null
+            }) else emptyList()
+        val track = tracks.firstOrNull()
         if (allowed(true)) detail += if (track == null) "FLAC: no verified matching stream available" else "Add-on audio selected; playback diagnostics show the decoded format"
         val saavn = if (!losslessOnly && track == null && allowed(false) && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320)))
             JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
@@ -144,7 +147,35 @@ object ExternalStreams {
             provider = track?.provider ?: "JioSaavn", bits = track?.bits, sampleRate = track?.sampleRate,
             kbps = if (track == null) 320 else null, maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track?.addonId, mimeType = track?.mimeType)
         remember(videoId, rendition)
+        // The other verified files of this recording, to fall back on if this one won't load.
+        if (track != null) {
+            alternatives[videoId] = listOf(rendition)
+            tracks.drop(1).forEach { addAlternative(videoId, losslessRendition(it)) }
+        }
         return rendition
+    }
+
+    private val alternatives = ConcurrentHashMap<String, List<Rendition>>()
+
+    private fun addAlternative(videoId: String, rendition: Rendition) {
+        if (alternatives.size > 256) alternatives.clear()
+        pinned[rendition.key] = videoId to rendition
+        alternatives.compute(videoId) { _, list ->
+            (list.orEmpty() + rendition).sortedByDescending { com.opentune.data.addons.AddonResolver.qualityScore(it.bits, it.sampleRate) }
+        }
+    }
+
+    /**
+     * Every verified lossless file found for [videoId] that may still be
+     * played, best quality first: when one won't load, playback tries the
+     * next (see PlaybackService).
+     */
+    fun alternatives(videoId: String): List<Rendition> {
+        val now = now()
+        return alternatives[videoId].orEmpty().filter {
+            now - it.at < TTL && allowed(true) &&
+                (it.addonId == null || (it.sessionRevision == com.opentune.data.addons.AddonStore.revision.value && addonAllowed(it)))
+        }
     }
 
     /**
