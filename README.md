@@ -89,6 +89,11 @@ Apple ID:
 3. With a free Apple ID, apps have to be re-signed every 7 days. SideStore
    and AltStore do it for you in the background.
 
+AltStore PAL, the version from the EU app marketplace, can't install it:
+it only takes apps that Apple has notarized and given a marketplace ID, and
+it says the source's apps "lack marketplaceID". Use SideStore or classic
+AltStore (installed with AltServer from a computer) instead.
+
 The `.ipa` itself is at
 [releases/download/ios/OpenTune-iOS.ipa](https://github.com/justshivv/Opentune/releases/download/ios/OpenTune-iOS.ipa),
 for [Sideloadly](https://sideloadly.io) or other installers. It's rebuilt
