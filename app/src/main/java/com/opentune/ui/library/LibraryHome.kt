@@ -669,11 +669,11 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         onMakePublic = {
             privateShare = false
             LibraryStore.setPlaylistPrivacy(id, PlaylistPrivacy.PUBLIC)
-            com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId)
+            com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId, com.opentune.ui.share.ListShare.coversFor(null, songs), com.opentune.ui.share.ListShare.countLine(songs.size))
         },
         onShareAnyway = {
             privateShare = false
-            com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId)
+            com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId, com.opentune.ui.share.ListShare.coversFor(null, songs), com.opentune.ui.share.ListShare.countLine(songs.size))
         },
         onDismiss = { privateShare = false },
     )
@@ -681,7 +681,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     val share: () -> Unit = {
         when {
             !signedIn || remoteId == null -> com.opentune.ui.share.ListShare.shareLocal(context, playlist.name, songs)
-            playlist.privacy?.linkWorks == true -> com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId)
+            playlist.privacy?.linkWorks == true -> com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId, com.opentune.ui.share.ListShare.coversFor(null, songs), com.opentune.ui.share.ListShare.countLine(songs.size))
             else -> privateShare = true
         }
     }

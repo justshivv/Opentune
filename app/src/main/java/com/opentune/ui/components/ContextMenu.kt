@@ -409,7 +409,7 @@ fun CollectionContextMenu(list: MenuList, anchor: Rect, onDismiss: () -> Unit, p
             add(MenuEntry("Download all", Icons.Rounded.Download) { actions.downloadAll(list.browseId) })
             add(MenuEntry("Open $kind", Icons.AutoMirrored.Rounded.KeyboardArrowRight) { actions.open(list.browseId, list.type) })
         }
-        add(MenuEntry("Share", Icons.Rounded.Share) { com.opentune.ui.share.ListShare.shareList(context, list.title, list.browseId) })
+        add(MenuEntry("Share", Icons.Rounded.Share) { com.opentune.ui.share.ListShare.shareList(context, list.title, list.browseId, listOf(list.thumbnailUrl), list.subtitle) })
         add(
             MenuEntry(if (isSaved) "Unpin" else "Pin", if (isSaved) Icons.Rounded.BookmarkRemove else Icons.Rounded.PushPin) {
                 LibraryStore.setSaved(com.opentune.data.library.SavedList(list.browseId, list.title, list.subtitle, list.thumbnailUrl), !isSaved)

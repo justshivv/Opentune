@@ -44,7 +44,7 @@ internal fun rememberOwnPlaylist(c: Collection): OwnPlaylist? {
     var privacy by remember(c.browseId, c.privacy) { mutableStateOf(c.privacy) }
     var choosing by remember { mutableStateOf(false) }
     var privateShare by remember { mutableStateOf(false) }
-    val shareNow = { ListShare.sharePlaylist(context, c.title, c.browseId) }
+    val shareNow = { ListShare.sharePlaylist(context, c.title, c.browseId, ListShare.coversFor(c.thumbnailUrl, c.songs), ListShare.countLine(c.songs.size)) }
     // Shown as changed at once, and put back if YouTube Music says no.
     val change: (PlaylistPrivacy, () -> Unit) -> Unit = { to, then ->
         val before = privacy

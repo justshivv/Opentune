@@ -1,5 +1,8 @@
 package com.opentune.ui.components
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -338,6 +341,32 @@ fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     }
 }
 
+/** One playlist to pick in [AddToPlaylistDialog]: its cover, its name, how many songs, and a tick if the song is in it. */
+@Composable
+private fun PlaylistPickRow(
+    title: String,
+    subtitle: String,
+    art: @Composable () -> Unit,
+    added: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(52.dp).clip(RoundedCornerShape(12.dp))) { art() }
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (added) Icon(Icons.Rounded.CheckCircle, "Already in this playlist", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+    }
+}
+
 /**
  * Picks one of the playlists made in the app, or makes a new one with [song]
  * in it. Signed in, the account's own YouTube Music playlists are listed too,
@@ -368,14 +397,37 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
                     if (online) AccountCopyOptions(saveOnline, { saveOnline = it }, privacy, { privacy = it }, Modifier.padding(top = 12.dp))
                 }
             } else {
-                LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                    item { MenuRow(Icons.Rounded.Add, "New playlist") { naming = true } }
+                LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    item {
+                        PlaylistPickRow(
+                            title = "New playlist",
+                            subtitle = "With this song in it",
+                            art = {
+                                Box(
+                                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                                    contentAlignment = Alignment.Center,
+                                ) { Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp)) }
+                            },
+                            onClick = { naming = true },
+                        )
+                    }
                     items(playlists, key = { it.id }) { p ->
-                        MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, "${p.name} · ${p.songs.size}") {
-                            LibraryStore.addToPlaylist(p.id, song)
-                            com.opentune.data.Pills.done("Added to ${p.name}", context)
-                            onDone()
-                        }
+                        val has = p.songs.any { it.videoId == song.videoId }
+                        PlaylistPickRow(
+                            title = p.name,
+                            subtitle = if (has) "Already in it" else if (p.songs.size == 1) "1 song" else "${p.songs.size} songs",
+                            art = { PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), RectangleShape) },
+                            added = has,
+                            onClick = {
+                                if (has) {
+                                    com.opentune.data.Pills.info("Already in ${p.name}", context)
+                                } else {
+                                    LibraryStore.addToPlaylist(p.id, song)
+                                    com.opentune.data.Pills.done("Added to ${p.name}", context)
+                                }
+                                onDone()
+                            },
+                        )
                     }
                     if (accountPlaylists.isNotEmpty()) {
                         item {
@@ -387,7 +439,11 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
                             )
                         }
                         items(accountPlaylists, key = { "yt:${it.playlistId}" }) { p ->
-                            MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, p.title) {
+                            PlaylistPickRow(
+                                title = p.title,
+                                subtitle = p.subtitle.ifBlank { "YouTube Music" },
+                                art = { Artwork(p.thumbnailUrl, Modifier.fillMaxSize(), RectangleShape, placeholder = Icons.AutoMirrored.Rounded.QueueMusic) },
+                            ) {
                                 PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
                                     if (ok) com.opentune.data.Pills.done("Added to ${p.title}", context)
                                     else com.opentune.data.Pills.error("Couldn't add it to ${p.title}", context)
