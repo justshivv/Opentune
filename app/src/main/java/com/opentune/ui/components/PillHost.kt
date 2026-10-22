@@ -45,7 +45,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -137,13 +136,20 @@ fun PillHost(reduceMotion: Boolean, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
     val lift = with(density) { 18.dp.toPx() }
     val shadow = with(density) { 10.dp.toPx() }
-    val face = MaterialTheme.colorScheme.inverseSurface
-    val ink = MaterialTheme.colorScheme.inverseOnSurface
-    val darkFace = face.luminance() < 0.5f
+    // In the app's own colours: its raised surface with a touch of the theme colour,
+    // rather than the inverse (a white pill on a dark app).
+    val colors = MaterialTheme.colorScheme
+    val face = androidx.compose.ui.graphics.lerp(colors.surfaceContainerHighest, colors.primary, 0.12f)
+    val ink = colors.onSurface
     val badge = when (pill.kind) {
-        Pills.Kind.DONE -> MaterialTheme.colorScheme.inversePrimary
-        Pills.Kind.ERROR -> if (darkFace) Color(0xFFFF6B6B) else Color(0xFFC62828)
-        Pills.Kind.INFO -> ink.copy(alpha = 0.22f)
+        Pills.Kind.DONE -> colors.primary
+        Pills.Kind.ERROR -> colors.error
+        Pills.Kind.INFO -> colors.primary.copy(alpha = 0.22f)
+    }
+    val markInk = when (pill.kind) {
+        Pills.Kind.DONE -> colors.onPrimary
+        Pills.Kind.ERROR -> colors.onError
+        Pills.Kind.INFO -> colors.primary
     }
     Box(modifier.fillMaxWidth().statusBarsPadding().padding(top = 8.dp, start = 24.dp, end = 24.dp), contentAlignment = Alignment.TopCenter) {
         Row(
@@ -173,7 +179,7 @@ fun PillHost(reduceMotion: Boolean, modifier: Modifier = Modifier) {
                 .padding(start = 7.dp, end = if (pill.action != null) 10.dp else 18.dp, top = 7.dp, bottom = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Badge(pill.kind, badge, face, { mark.value })
+            Badge(pill.kind, badge, markInk) { mark.value }
             Spacer(Modifier.width(10.dp))
             Text(
                 pill.text,
@@ -190,7 +196,7 @@ fun PillHost(reduceMotion: Boolean, modifier: Modifier = Modifier) {
                 Spacer(Modifier.width(14.dp))
                 Text(
                     action,
-                    color = MaterialTheme.colorScheme.inversePrimary,
+                    color = colors.primary,
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier
                         .graphicsLayer { alpha = ((stretch.value - 0.5f) / 0.5f).coerceIn(0f, 1f) }

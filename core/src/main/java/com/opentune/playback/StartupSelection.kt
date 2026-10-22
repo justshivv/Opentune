@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -43,8 +44,11 @@ internal class StartupSelection(
             // A stream picked by hand in Search starts the song whatever the quality setting.
             val ready = picked(song.videoId)?.takeIf { it.mimeType == null }
                 ?: if (maximum() || losslessWanted()) cached(song.videoId)?.takeIf { it.mimeType == null && it.lossless } else null
+            // The song starts on YouTube if JioSaavn is slower than the budget, but the lookup itself
+            // carries on (see ExternalStreams.findJioSaavn) and the upgrade switches to it when it answers.
             val rendition = ready ?: if (maximum() || saavnWanted()) try {
-                withTimeoutOrNull(lookupBudgetMs) { findJioSaavn(song, song.durationMillis()) }
+                val lookup = ExternalStreams.background.async { findJioSaavn(song, song.durationMillis()) }
+                withTimeoutOrNull(lookupBudgetMs) { lookup.await() }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {

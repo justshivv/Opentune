@@ -105,15 +105,19 @@ class StartupSelectionTest {
         assertEquals(1, calls)
     }
 
-    @Test fun aSlowProviderCannotHoldStartupAndItsRequestIsCancelled() = runBlocking {
+    @Test fun aSlowProviderCannotHoldStartupButItsAnswerIsNotThrownAway() = runBlocking {
+        val answered = kotlinx.coroutines.CompletableDeferred<Unit>()
         var cancelled = false
         val selection = StartupSelection(song, original, { true }, lookupBudgetMs = 20,
             findJioSaavn = { _, _ ->
-                try { kotlinx.coroutines.awaitCancellation() } finally { cancelled = true }
+                try { kotlinx.coroutines.delay(300); answered.complete(Unit); null } catch (e: kotlinx.coroutines.CancellationException) { cancelled = true; throw e }
             }, cached = { null })
         val result = kotlinx.coroutines.withTimeout(2_000) { selection.resolve(spec) }
+        // The song starts on YouTube at once...
         assertEquals(original, result.uri)
-        assertTrue(cancelled)
+        // ...while the lookup runs on to its answer, for the upgrade to use.
+        kotlinx.coroutines.withTimeout(2_000) { answered.await() }
+        assertFalse(cancelled)
     }
 
     @Test fun aQuickJioSaavnMatchTakesPriorityOverYouTube() = runBlocking {

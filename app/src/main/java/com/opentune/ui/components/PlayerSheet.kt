@@ -1,7 +1,7 @@
 package com.opentune.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +26,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.layout
+import androidx.compose.runtime.DisposableEffect
 
 /**
  * The full player growing out of the mini player as one card, and shrinking
@@ -41,7 +43,13 @@ import androidx.compose.ui.unit.dp
  * again while the card moves.
  */
 @Composable
-fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composable () -> Unit) {
+fun PlayerSheet(
+    open: Boolean,
+    onSettled: (Boolean) -> Unit,
+    /** The mini player, still: the card's face as it lands on the real one ([round] for the folded one). */
+    face: @Composable (round: Boolean) -> Unit = {},
+    content: @Composable () -> Unit,
+) {
     val t = remember { Animatable(if (open) 1f else 0f) }
     // Where the mini player's top was when last drawn, to turn a drag in pixels into the card's progress.
     val miniTop = remember { floatArrayOf(0f) }
@@ -54,7 +62,7 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
             // finger): the card starts moving once they're done, not through them.
             withFrameNanos { }
             withFrameNanos { }
-            t.animateTo(1f, spring(dampingRatio = 0.92f, stiffness = 340f, visibilityThreshold = 0.001f))
+            t.animateTo(1f, tween(sheetMs(1f - t.value, SHEET_OPEN_MS), easing = SHEET_EASING))
         } else {
             // Dragged down part of the way already: the shrink goes on from where the finger let go, at its speed.
             val dragged = PlayerMorph.sheetDrag
@@ -66,7 +74,10 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
             }
             // The page and dock come back under it on this frame.
             withFrameNanos { }
-            t.animateTo(0f, spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.001f), initialVelocity = fling)
+            // An even glide down to the mini player; after a quick flick, no slower than the finger was going.
+            val left = t.value
+            val byFling = if (fling < -0.01f) (left / -fling * 1_000f * FLING_STRETCH).toInt() else Int.MAX_VALUE
+            t.animateTo(0f, tween(minOf(sheetMs(left, SHEET_CLOSE_MS), byFling).coerceAtLeast(SHEET_MIN_MS), easing = SHEET_EASING))
             PlayerMorph.cardFrom = null
         }
     }
@@ -82,10 +93,15 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
     val shadow = with(density) { 18.dp.toPx() }
     val fallbackLift = with(density) { 120.dp.toPx() }
     val fallbackHeight = with(density) { 64.dp.toPx() }
-    val face = MaterialTheme.colorScheme.surfaceContainerHigh
     // Where the card is, 0 on the mini player and 1 filling the screen; a drag down
     // takes it toward 0 with the card's top under the finger.
     val p: () -> Float = { dragProgress(maxOf(t.value, PlayerMorph.pulling, PlayerMorph.sheetAt), PlayerMorph.sheetDrag, miniTop[0]) }
+    // The real mini player stays hidden under the card until the card lands on it.
+    DisposableEffect(Unit) {
+        PlayerMorph.sheetProgress = p
+        onDispose { if (PlayerMorph.sheetProgress === p) PlayerMorph.sheetProgress = null }
+    }
+    val miniBar = PlayerMorph.miniBar
     Box(
         Modifier
             .fillMaxSize()
@@ -123,20 +139,68 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
                     clip = false
                     shadowElevation = 0f
                 }
-                // On the mini player's size, it fades onto the real one beneath.
-                alpha = (k / 0.12f).coerceIn(0f, 1f)
+                // Over the last stretch it hands over to the real mini player, which has the same face.
+                alpha = (k / MINI_HANDOVER).coerceIn(0f, 1f)
             },
     ) {
         content()
-        // The mini player's face, coming over the player as the card gets small.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = ((0.45f - p()) / 0.45f).coerceIn(0f, 1f) }
-                .background(face),
-        )
+        // The mini player itself, coming over the player as the card gets small: drawn at the
+        // mini player's own size and place, undoing the card's scale, so by the time the card
+        // reaches it the card already looks exactly like it and nothing changes at the hand-over.
+        if (miniBar != null) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val k = p().coerceIn(0f, 1f)
+                        val w = size.width
+                        val mini = PlayerMorph.miniBar ?: return@graphicsLayer
+                        val from = PlayerMorph.cardFrom ?: Rect(0f, 0f, w, size.height)
+                        val s = ((mini.width + (from.width - mini.width) * k) / w).coerceAtLeast(0.01f)
+                        transformOrigin = TransformOrigin(0f, 0f)
+                        scaleX = 1f / s
+                        scaleY = 1f / s
+                        alpha = ((FACE_FROM - k) / (FACE_FROM - FACE_FULL)).coerceIn(0f, 1f)
+                    },
+            ) {
+                // As big as the card is on screen, so the whole card takes the mini player's face.
+                Box(
+                    Modifier.layout { measurable, constraints ->
+                        val w = constraints.maxWidth.toFloat()
+                        val h = constraints.maxHeight.toFloat()
+                        val k = p().coerceIn(0f, 1f)
+                        val mini = PlayerMorph.miniBar ?: Rect(0f, 0f, w, h)
+                        val from = PlayerMorph.cardFrom ?: Rect(0f, 0f, w, h)
+                        val width = (mini.width + (from.width - mini.width) * k).toInt().coerceAtLeast(1)
+                        val height = (mini.height + (from.height - mini.height) * k).toInt().coerceAtLeast(1)
+                        val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(width, height))
+                        layout(width, height) { placeable.place(0, 0) }
+                    },
+                ) { face(PlayerMorph.miniBarRound) }
+            }
+        }
     }
 }
+
+/**
+ * How the card moves between the mini player and the screen: a soft start,
+ * an even pace through the middle and a gentle landing, so the whole move
+ * reads instead of most of it happening in the first few frames, as the
+ * springs it replaced did.
+ */
+/** The mini player's face starts coming over the card at this progress, and is fully there by [FACE_FULL]. */
+private const val FACE_FROM = 0.5f
+private const val FACE_FULL = 0.15f
+
+internal val SHEET_EASING = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0.1f, 0.2f, 1f)
+internal const val SHEET_OPEN_MS = 500
+internal const val SHEET_CLOSE_MS = 460
+private const val SHEET_MIN_MS = 180
+/** The eased start is slower than a straight line; this keeps a flick's speed through it. */
+private const val FLING_STRETCH = 1.6f
+
+/** The time for [left] of the whole way (0..1), out of [full] for all of it. */
+private fun sheetMs(left: Float, full: Int): Int = (full * left.coerceIn(0f, 1f)).toInt().coerceAtLeast(SHEET_MIN_MS)
 
 /**
  * The card's progress [base] taken down by a drag of [dragPx]: the card's top

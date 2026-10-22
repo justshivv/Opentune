@@ -30,4 +30,23 @@ class AddonHitTest {
         ))
         assertEquals(2, merged.size)
     }
+
+    private fun yt(id: String, title: String, artist: String, length: String) = com.opentune.data.model.Song(id, title, artist, null, length)
+
+    @Test fun theMatchIsTheSameRecordingNotYouTubesTopResult() {
+        val h = hit("a", "1", "Jee Ni Lagda", "Karan Aujla", 190_000)
+        val songs = listOf(
+            yt("prev", "Wavy", "Karan Aujla", "2:41"),
+            yt("other", "Jee Ni Lagda (Lofi)", "Karan Aujla", "3:40"),
+            yt("right", "Jee Ni Lagda", "Karan Aujla & Mxrci", "3:11"),
+        )
+        assertEquals("right", h.bestMatch(songs)!!.videoId)
+    }
+
+    @Test fun withNoTitleMatchTheSongKeepsTheAddOnsTitle() {
+        val h = hit("a", "1", "Jee Ni Lagda", "Karan Aujla", 190_000)
+        val song = h.bestMatch(listOf(yt("prev", "Wavy", "Karan Aujla", "2:41")))!!
+        assertEquals("Jee Ni Lagda", song.title)
+        assertEquals("Karan Aujla", song.artist)
+    }
 }

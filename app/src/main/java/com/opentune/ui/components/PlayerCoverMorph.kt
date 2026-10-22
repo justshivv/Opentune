@@ -78,6 +78,23 @@ object PlayerMorph {
     /** Whether that mini player is the round, folded one. */
     internal var miniBarRound = false
 
+    /**
+     * The player card's progress (0 on the mini player, 1 filling the screen)
+     * while it's on screen, read frame by frame; null when it isn't.
+     */
+    internal var sheetProgress by mutableStateOf<(() -> Float)?>(null)
+
+    /**
+     * On the real mini player: hidden while the card is over it, so the card
+     * is what's seen turning into it, and coming in only over the last
+     * [MINI_HANDOVER] of the card's way, as the card lands on it with the
+     * same face (see PlayerSheet).
+     */
+    fun Modifier.miniUnderCard(): Modifier = graphicsLayer {
+        val p = sheetProgress?.invoke()
+        alpha = if (p == null) 1f else ((MINI_HANDOVER - p) / MINI_HANDOVER).coerceIn(0f, 1f)
+    }
+
     /** On the mini player itself, outside any swipe offset. */
     fun Modifier.miniBarLanding(round: Boolean): Modifier = onGloballyPositioned {
         miniBar = it.boundsInRoot()
@@ -267,7 +284,8 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
             while (PlayerMorph.awaitingPlayer() && frames++ < 12) withFrameNanos { }
             if (PlayerMorph.playerCover == null && PlayerMorph.lastPlayerCover == null) return@LaunchedEffect
             val left = 1f - openT.value
-            openT.animateTo(1f, tween((460 * left).roundToInt().coerceAtLeast(180), easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)))
+            // On the card's own timing and curve (see PlayerSheet), so the cover and the card move as one.
+            openT.animateTo(1f, tween((SHEET_OPEN_MS * left).roundToInt().coerceAtLeast(180), easing = SHEET_EASING))
         } finally {
             PlayerMorph.endOpen()
         }
@@ -279,7 +297,7 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
             // From wherever a drag down left it.
             closeT.snapTo(PlayerMorph.closeAt())
             val left = 1f - closeT.value
-            closeT.animateTo(1f, tween((360 * left).roundToInt().coerceAtLeast(160), easing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)))
+            closeT.animateTo(1f, tween((SHEET_CLOSE_MS * left).roundToInt().coerceAtLeast(160), easing = SHEET_EASING))
         } finally {
             PlayerMorph.endClose()
         }
@@ -322,3 +340,6 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
         }
     }
 }
+
+/** The last stretch of the card's way (0..1) over which it hands over to the real mini player. */
+internal const val MINI_HANDOVER = 0.06f

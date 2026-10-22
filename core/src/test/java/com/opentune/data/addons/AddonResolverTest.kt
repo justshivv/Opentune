@@ -66,6 +66,34 @@ class AddonResolverTest {
         assertTrue(calls.all { "second.example" in it })
     }
 
+    /** A FLAC header for [bits]-bit, [rate] Hz stereo, three minutes long. */
+    private fun header(bits: Int, rate: Long) = ByteArray(42).apply {
+        "fLaC".toByteArray().copyInto(this); this[4] = 0x80.toByte(); this[7] = 34
+        val packed = (rate shl 44) or (1L shl 41) or ((bits - 1).toLong() shl 36) or (rate * 180)
+        for (i in 0..7) this[18 + i] = (packed ushr (56 - i * 8)).toByte()
+    }
+
+    @Test fun aSlowerBetterAnswerIsNotCutOffButComesLate() = runBlocking {
+        add("fast"); add("slow")
+        fun named(base: String) = AddonClient(base, { url ->
+            val name = AddonProtocol.url(base).host.substringBefore('.')
+            when {
+                "manifest.json" in url -> """{"id":"$name","name":"$name","version":"1"}"""
+                "/search" in url -> """{"tracks":[{"id":"right","title":"Wo Noor","artist":"AP Dhillon","duration":180}]}"""
+                else -> """{"url":"https://cdn.example/$name","codec":"flac"}"""
+            }
+        })
+        val late = kotlinx.coroutines.CompletableDeferred<AddonStream>()
+        val result = AddonResolver.resolve(song, 180000, clientFor = ::named, late = { late.complete(it) },
+            probe = { url, _, _ -> if ("slow" in url) { kotlinx.coroutines.delay(4_000); header(24, 96_000) } else header(16, 44_100) })!!
+        // The quick one plays first, without waiting the slow one out...
+        assertEquals("fast", result.provider)
+        // ...and the slow one's better file still arrives, to switch to.
+        val better = kotlinx.coroutines.withTimeout(10_000) { late.await() }
+        assertEquals("slow", better.provider)
+        assertEquals(24, better.bits); assertEquals(96000, better.sampleRate)
+    }
+
     @Test fun bestAvailableComparesSourcesAndKeepsPriorityForTies() = runBlocking {
         add("first"); add("second")
         val result = AddonResolver.resolve(song, 180000, bestAvailable = true, clientFor = ::client,

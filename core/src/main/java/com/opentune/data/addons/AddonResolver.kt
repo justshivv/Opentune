@@ -6,6 +6,8 @@ import com.opentune.data.model.Song
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -15,14 +17,18 @@ object AddonResolver {
     fun retry() { failures.clear() }
 
     /**
-     * Every usable add-on is asked at once, each given [PER_ADDON_MS]; of the
-     * verified matches that come back, the best quality wins, and between
-     * equals the one higher in the listener's order. One slow, failing or
-     * rate-limited add-on no longer holds up the rest, as it did when they
-     * were asked one after another. Playback never waits on this search.
+     * Every usable add-on is asked at once; of the verified matches that come
+     * back, the best quality wins, and between equals the one higher in the
+     * listener's order. Nothing is cut off for being slow: once one add-on
+     * has a verified match, the others get [GRACE_MS] more and the best so
+     * far is returned, while any still working carry on in the background
+     * (up to [ADDON_LIMIT_MS], a guard against a hung connection). A later
+     * answer of higher quality than the one returned goes to [late], so it
+     * can still be switched to. With no match yet, it waits for them all.
      */
     suspend fun resolve(song: Song, durationMs: Long, download: Boolean = false, bestAvailable: Boolean = false,
         report: (String) -> Unit = {},
+        late: (AddonStream) -> Unit = {},
         clientFor: (String) -> AddonClient = AddonClient::forBase,
         probe: suspend (String, Int, Boolean) -> ByteArray = AddonHttp::bytes): AddonStream? = withContext(Dispatchers.IO) {
         if (durationMs <= 0) return@withContext null
@@ -35,7 +41,7 @@ object AddonResolver {
             if (!AddonStore.usable(addon)) { report("${addon.manifest.name}: needs a supported lossless output"); return null }
             if (download && !addon.manifest.downloads) { report("${addon.manifest.name}: streaming only"); return null }
             val started = System.nanoTime()
-            val answer = withTimeoutOrNull(PER_ADDON_MS) {
+            val answer = withTimeoutOrNull(ADDON_LIMIT_MS) {
                 try {
                     val client = clientFor(addon.base)
                     val manifest = client.manifest().let { if (addon.admin) it.copy(name = addon.manifest.name) else it }
@@ -92,13 +98,56 @@ object AddonResolver {
                 catch (e: AddonHttp.Failure) { report("${addon.manifest.name}: HTTP ${e.status}${if (e.status == 429) " · rate limited" else ""}"); null }
                 catch (_: Exception) { report("${addon.manifest.name}: unavailable or invalid response"); null }
             }
-            if (answer == null && System.nanoTime() - started >= PER_ADDON_MS * 1_000_000) report("${addon.manifest.name}: no answer in time")
+            if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) report("${addon.manifest.name}: no answer in ${ADDON_LIMIT_MS / 1_000} s")
             return answer
         }
-        val found = kotlinx.coroutines.coroutineScope {
-            AddonStore.addons.value.map { addon -> async { attempt(addon) } }.map { it.await() }
+        val addons = AddonStore.addons.value
+        if (addons.isEmpty()) return@withContext null
+        // The add-ons run here, apart from the caller, so returning early cancels none of them.
+        val work = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+        val answers = kotlinx.coroutines.channels.Channel<Pair<Int, AddonStream?>>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+        addons.forEachIndexed { i, addon ->
+            work.launch {
+                val stream = try { attempt(addon) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                answers.send(i to stream)
+            }
         }
-        pickBest(found)
+        val found = arrayOfNulls<AddonStream>(addons.size)
+        var received = 0
+        var firstMatch = 0L
+        try {
+            while (received < addons.size) {
+                val wait = if (firstMatch == 0L) Long.MAX_VALUE else GRACE_MS - (System.nanoTime() - firstMatch) / 1_000_000
+                if (wait <= 0) break
+                val (i, stream) = withTimeoutOrNull(wait) { answers.receive() } ?: break
+                received++
+                found[i] = stream
+                if (stream != null && firstMatch == 0L) firstMatch = System.nanoTime()
+            }
+        } catch (e: CancellationException) {
+            work.cancel()
+            throw e
+        }
+        val best = pickBest(found.toList())
+        if (received == addons.size) {
+            work.cancel()
+        } else {
+            // The slower ones finish on their own; a better match among them is passed on.
+            work.launch {
+                var top = best
+                repeat(addons.size - received) {
+                    val (i, stream) = answers.receive()
+                    found[i] = stream
+                    val now = pickBest(found.toList())
+                    if (stream != null && now === stream && (top == null || qualityScore(stream.bits, stream.sampleRate) > qualityScore(top!!.bits, top!!.sampleRate))) {
+                        top = stream
+                        late(stream)
+                    }
+                }
+                work.cancel()
+            }
+        }
+        best
     }
 
     /** The best of [found] (in the listener's order, nulls for add-ons with nothing): highest quality, the earlier one on a tie. */
@@ -111,7 +160,10 @@ object AddonResolver {
         return best
     }
 
-    private const val PER_ADDON_MS = 8_000L
+    /** How long the other add-ons get once one has a verified match, before the best so far is used. */
+    private const val GRACE_MS = 2_500L
+    /** Only a guard against a connection that never answers; a slow add-on is waited for. */
+    private const val ADDON_LIMIT_MS = 45_000L
     /** Unknown quality never outranks measured CD quality; ties preserve source priority. */
     fun qualityScore(bits: Int?, rate: Int?): Long = (bits ?: 0).toLong() * (rate ?: 0)
 }

@@ -1339,7 +1339,7 @@ private const val LYRICS_FOCUS_MS = 5_000L
 
 /** Mini player wired to the view model; the bottom bar places and sizes it. */
 @Composable
-fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier = Modifier, inline: Boolean = false) {
+fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier = Modifier, inline: Boolean = false, replica: Boolean = false) {
     val song by vm.currentSong.collectAsState()
     val isPlaying by vm.isPlaying.collectAsState()
     val isBuffering by vm.isBuffering.collectAsState()
@@ -1363,6 +1363,7 @@ fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier 
         onClick = onExpand,
         modifier = modifier,
         inline = inline,
+        replica = replica,
     )
 }
 
