@@ -6,6 +6,7 @@ import com.opentune.data.model.Song
 import com.opentune.data.innertube.StreamResolver
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.async
 
 /** Pins each external rendition to a unique cache key; expired URLs never become YouTube bytes. */
 object ExternalStreams {
@@ -34,9 +35,31 @@ object ExternalStreams {
     }
 
     /** JioSaavn has its own fast path; never wait for a FLAC search before it. */
+    /** Fires with a video id when a better stream for it turned up after the search had already answered. */
+    val improved: kotlinx.coroutines.flow.SharedFlow<String> get() = _improved
+    private val _improved = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    /** Lookups that outlive whoever asked: a caller that stops waiting doesn't throw the answer away. */
+    internal val background = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    private val saavnInFlight = ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Rendition?>>()
+
+    /**
+     * JioSaavn's stream for [song]. One lookup per song runs at a time, apart
+     * from the callers: song start waits for it only briefly, and when it
+     * answers later the result is kept for the upgrade, which then gets it
+     * at once instead of asking again.
+     */
     suspend fun findJioSaavn(song: Song, durationMs: Long): Rendition? {
         if (!allowed(false) || (failedUntil[song.videoId] ?: 0) > now()) return null
         cached(song.videoId)?.takeIf { it.mimeType == null }?.let { return it }
+        val lookup = saavnInFlight.computeIfAbsent(song.videoId) {
+            background.async(start = kotlinx.coroutines.CoroutineStart.LAZY) { lookupJioSaavn(song, durationMs) }
+        }
+        lookup.start()
+        return try { lookup.await() } finally { if (lookup.isCompleted) saavnInFlight.remove(song.videoId, lookup) }
+    }
+
+    private suspend fun lookupJioSaavn(song: Song, durationMs: Long): Rendition? {
         val duration = CatalogMetadata.duration(song, durationMs)
         if (duration <= 0) return null
         val url = JioSaavnSource.resolve(song, duration, report = { report(song.videoId, it) }) ?: return null
@@ -92,8 +115,20 @@ object ExternalStreams {
             return null
         }
         val detail = java.util.concurrent.CopyOnWriteArrayList<String>()
+        fun losslessRendition(track: LosslessSource.Track) = Rendition(java.util.UUID.randomUUID().toString(), track.url,
+            "${track.provider} · lossless requested", true, now(), provider = track.provider, bits = track.bits, sampleRate = track.sampleRate,
+            maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType)
         val track = if (allowed(true)) LosslessSource.resolve(song, duration,
-            beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { detail.addIfAbsent(it) }) else null
+            beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { detail.addIfAbsent(it) },
+            late = { better ->
+                // A slower add-on came back with higher quality than the one already chosen: kept, and said, so playback can switch to it.
+                if (allowed(true)) {
+                    remember(videoId, losslessRendition(better))
+                    failedUntil.remove(videoId)
+                    report(videoId, (reports[videoId]?.let { "$it\n" } ?: "") + "${better.provider}: answered later with higher quality")
+                    _improved.tryEmit(videoId)
+                }
+            }) else null
         if (allowed(true)) detail += if (track == null) "FLAC: no verified matching stream available" else "Add-on audio selected; playback diagnostics show the decoded format"
         val saavn = if (!losslessOnly && track == null && allowed(false) && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320)))
             JioSaavnSource.resolve(song, duration, report = { detail += it }) else null

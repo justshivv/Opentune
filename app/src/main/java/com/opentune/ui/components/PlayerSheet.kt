@@ -1,7 +1,7 @@
 package com.opentune.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,7 +54,7 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
             // finger): the card starts moving once they're done, not through them.
             withFrameNanos { }
             withFrameNanos { }
-            t.animateTo(1f, spring(dampingRatio = 0.92f, stiffness = 340f, visibilityThreshold = 0.001f))
+            t.animateTo(1f, tween(sheetMs(1f - t.value, SHEET_OPEN_MS), easing = SHEET_EASING))
         } else {
             // Dragged down part of the way already: the shrink goes on from where the finger let go, at its speed.
             val dragged = PlayerMorph.sheetDrag
@@ -66,7 +66,10 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
             }
             // The page and dock come back under it on this frame.
             withFrameNanos { }
-            t.animateTo(0f, spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.001f), initialVelocity = fling)
+            // An even glide down to the mini player; after a quick flick, no slower than the finger was going.
+            val left = t.value
+            val byFling = if (fling < -0.01f) (left / -fling * 1_000f * FLING_STRETCH).toInt() else Int.MAX_VALUE
+            t.animateTo(0f, tween(minOf(sheetMs(left, SHEET_CLOSE_MS), byFling).coerceAtLeast(SHEET_MIN_MS), easing = SHEET_EASING))
             PlayerMorph.cardFrom = null
         }
     }
@@ -137,6 +140,22 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
         )
     }
 }
+
+/**
+ * How the card moves between the mini player and the screen: a soft start,
+ * an even pace through the middle and a gentle landing, so the whole move
+ * reads instead of most of it happening in the first few frames, as the
+ * springs it replaced did.
+ */
+internal val SHEET_EASING = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0.1f, 0.2f, 1f)
+internal const val SHEET_OPEN_MS = 500
+internal const val SHEET_CLOSE_MS = 460
+private const val SHEET_MIN_MS = 180
+/** The eased start is slower than a straight line; this keeps a flick's speed through it. */
+private const val FLING_STRETCH = 1.6f
+
+/** The time for [left] of the whole way (0..1), out of [full] for all of it. */
+private fun sheetMs(left: Float, full: Int): Int = (full * left.coerceIn(0f, 1f)).toInt().coerceAtLeast(SHEET_MIN_MS)
 
 /**
  * The card's progress [base] taken down by a drag of [dragPx]: the card's top

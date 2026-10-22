@@ -215,13 +215,9 @@ fun LyricsView(
     }
 }
 
-/**
- * The bar floating over the lyrics while lines are being picked for a card:
- * Cancel and Share, and with one line picked a way to line the lyrics up
- * with it (what a long press used to do).
- */
+/** The bar floating over the lyrics while lines are being picked for a card: Cancel and Share. */
 @Composable
-private fun SelectionBar(count: Int, onCancel: () -> Unit, onShare: () -> Unit, onSync: (() -> Unit)?, modifier: Modifier = Modifier) {
+private fun SelectionBar(count: Int, onCancel: () -> Unit, onShare: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier
             .clip(RoundedCornerShape(30.dp))
@@ -230,12 +226,6 @@ private fun SelectionBar(count: Int, onCancel: () -> Unit, onShare: () -> Unit, 
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (onSync != null) {
-            Box(
-                Modifier.size(52.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f)).clickable(onClick = onSync),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.Sync, "Line the lyrics up with this line", tint = Color.White) }
-        }
         Row(
             Modifier.height(52.dp).width(130.dp).clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onCancel),
             horizontalArrangement = Arrangement.Center,
@@ -479,14 +469,10 @@ private fun SyncedLyrics(
             exit = fadeOut() + androidx.compose.animation.slideOutVertically { it },
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
         ) {
-            val only = selection?.singleOrNull()
             SelectionBar(
                 count = selection?.size ?: 0,
                 onCancel = { haptics.tick(); selection?.clear(); following = true },
                 onShare = { haptics.press(); onShareSelection?.invoke(); following = true },
-                onSync = if (only != null && onSyncLine != null) {
-                    { lines.getOrNull(only)?.let { onSyncLine(it.startMs) }; selection.clear(); following = true }
-                } else null,
             )
         }
     }

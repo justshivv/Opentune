@@ -22,7 +22,8 @@ internal object JioSaavnSource {
         var reported = false
         fun rejected(reason: String): String? { reported = true; report("JioSaavn: $reason"); return null }
         try {
-            val result = withTimeoutOrNull(10_000) {
+            // Only a guard against a hung connection; a slow but real answer is waited for.
+            val result = withTimeoutOrNull(30_000) {
                 val identity = CatalogIdentity(song.title, song.artist, song.albumName, durationMs)
                 // Artist searches can fill the first page with compilations;
                 // ask for the requested album first, without relaxing identity.

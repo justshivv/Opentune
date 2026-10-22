@@ -344,6 +344,24 @@ class PlaybackService : MediaLibraryService() {
                 swapToUpgrade(player, id, externalStreamUri(id, rendition.key))
             }
         }
+        // A higher-quality FLAC from an add-on that answered after the search had picked one:
+        // once any switch already under way is done, the song moves onto it the same seamless way.
+        scope.launch {
+            ExternalStreams.improved.collect { id ->
+                val player = mediaSession?.player as? ExoPlayer ?: return@collect
+                if (player.currentMediaItem?.mediaId != id) return@collect
+                upgradeJob?.join()
+                if (player.currentMediaItem?.mediaId != id) return@collect
+                val better = ExternalStreams.cached(id)?.takeIf { it.lossless && ExternalStreams.allowed(true) } ?: return@collect
+                val playing = player.currentMediaItem?.localConfiguration?.uri ?: return@collect
+                val existing = externalStreamKeyOf(selectedUri(playing))?.let { ExternalStreams.get(id, it) }
+                if (existing?.key == better.key) return@collect
+                if (existing?.lossless == true && com.opentune.data.addons.AddonResolver.qualityScore(better.bits, better.sampleRate) <=
+                    com.opentune.data.addons.AddonResolver.qualityScore(existing.bits, existing.sampleRate)) return@collect
+                if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS) return@collect
+                if (swapToUpgrade(player, id, externalStreamUri(id, better.key))) updateExternalStats()
+            }
+        }
 
         audioManager = getSystemService(AudioManager::class.java)?.also { am ->
             am.registerAudioDeviceCallback(deviceCallback, null)

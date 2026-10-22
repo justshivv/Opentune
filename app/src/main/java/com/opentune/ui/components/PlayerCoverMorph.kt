@@ -267,7 +267,8 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
             while (PlayerMorph.awaitingPlayer() && frames++ < 12) withFrameNanos { }
             if (PlayerMorph.playerCover == null && PlayerMorph.lastPlayerCover == null) return@LaunchedEffect
             val left = 1f - openT.value
-            openT.animateTo(1f, tween((460 * left).roundToInt().coerceAtLeast(180), easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)))
+            // On the card's own timing and curve (see PlayerSheet), so the cover and the card move as one.
+            openT.animateTo(1f, tween((SHEET_OPEN_MS * left).roundToInt().coerceAtLeast(180), easing = SHEET_EASING))
         } finally {
             PlayerMorph.endOpen()
         }
@@ -279,7 +280,7 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
             // From wherever a drag down left it.
             closeT.snapTo(PlayerMorph.closeAt())
             val left = 1f - closeT.value
-            closeT.animateTo(1f, tween((360 * left).roundToInt().coerceAtLeast(160), easing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)))
+            closeT.animateTo(1f, tween((SHEET_CLOSE_MS * left).roundToInt().coerceAtLeast(160), easing = SHEET_EASING))
         } finally {
             PlayerMorph.endClose()
         }
