@@ -353,10 +353,6 @@ fun PlayerLayout(
         delay(LYRICS_FOCUS_MS)
         controlsAway = true
     }
-    // What came of an "Upgrade quality" from the menu: switched, already the best, or not in time.
-    LaunchedEffect(Unit) {
-        com.opentune.playback.PlaybackRequests.upgradeResult.collect { com.opentune.data.Pills.info(it, context) }
-    }
     // Swiping up through the lyrics slides the controls down out of the way;
     // swiping back down brings them up again. Only the finger's own scrolling
     // counts, past a short distance, so the list's glide to the next line doesn't.

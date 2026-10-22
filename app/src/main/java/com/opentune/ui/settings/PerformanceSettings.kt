@@ -18,6 +18,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,13 +58,21 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
     }
     val rates = remember { supportedRates(context) }
     val chosen = ui.refreshRateHz.takeIf { it in rates } ?: rates.lastOrNull() ?: 60
+    // Already on (from before, or turned on elsewhere) but still restricted: asked once a run,
+    // here, rather than only at the moment the switch is flipped.
+    LaunchedEffect(Unit) {
+        if (ui.highRefreshRate && !unrestricted && !askedThisRun) {
+            askedThisRun = true
+            askBattery = true
+        }
+    }
 
     ToggleRow(
         "High performance mode",
         ui.highRefreshRate,
         { v ->
             AppSettings.updateUi { it.copy(highRefreshRate = v) }
-            if (v && !unrestricted) askBattery = true
+            if (v && !unrestricted) { askedThisRun = true; askBattery = true }
         },
         summary = if (ui.highRefreshRate) "$chosen Hz requested. Android may lower it when needed." else "Runs the screen at a faster rate while OpenTune is open, for smoother scrolling",
         icon = Icons.Rounded.Speed,
@@ -75,8 +84,7 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
                 options = rates,
                 selected = chosen,
                 label = { "$it Hz" },
-                // The fastest is stored as 0, so a new screen's top rate is used as it is.
-                onSelect = { hz -> AppSettings.updateUi { it.copy(refreshRateHz = if (hz == rates.last()) 0 else hz) } },
+                onSelect = { hz -> AppSettings.updateUi { it.copy(refreshRateHz = hz) } },
             )
         })
     }
@@ -108,6 +116,9 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
     }
 }
 
+/** Whether the battery prompt has come up this run, so opening the page again doesn't ask again. */
+private var askedThisRun = false
+
 private fun isUnrestricted(context: Context): Boolean =
     context.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(context.packageName) == true
 
@@ -119,7 +130,10 @@ private fun requestUnrestricted(context: Context) {
         .recoverCatching { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
 }
 
-/** The refresh rates the screen offers at its current resolution, rounded and slowest first. */
+/** The refresh rates offered: 60, 90 and 120 Hz, those the screen has at its current resolution. */
+internal val OFFERED_RATES = listOf(60, 90, 120)
+
+/** The refresh rates the screen offers at its current resolution, of [OFFERED_RATES], slowest first. */
 private fun supportedRates(context: Context): List<Int> {
     @Suppress("DEPRECATION")
     val display = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) context.display else
@@ -128,6 +142,7 @@ private fun supportedRates(context: Context): List<Int> {
     return display.supportedModes
         .filter { it.physicalWidth == now.physicalWidth && it.physicalHeight == now.physicalHeight }
         .map { it.refreshRate.roundToInt() }
+        .filter { it in OFFERED_RATES }
         .distinct()
         .sorted()
 }
