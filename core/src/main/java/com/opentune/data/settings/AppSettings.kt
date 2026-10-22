@@ -627,6 +627,8 @@ data class SettingsState(
     val library: LibrarySettings = LibrarySettings(),
     val lyrics: LyricsSettings = LyricsSettings(),
     val recentSearches: List<String> = emptyList(),
+    /** Searches made in Search's Add-ons tab, kept apart from the YouTube ones. */
+    val recentAddonSearches: List<String> = emptyList(),
 )
 
 /** Accent choices offered when Material You is off. */
@@ -675,6 +677,8 @@ object AppSettings {
     val lyrics: StateFlow<LyricsSettings> = _lyrics.asStateFlow()
     private val _recentSearches = MutableStateFlow<List<String>>(emptyList())
     val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
+    private val _recentAddonSearches = MutableStateFlow<List<String>>(emptyList())
+    val recentAddonSearches: StateFlow<List<String>> = _recentAddonSearches.asStateFlow()
 
     /** Read by StreamResolver on every resolve: the ceiling for the network in use. */
     val effectiveAudioQuality: AudioQuality
@@ -707,6 +711,7 @@ object AppSettings {
         _library.value = s.library
         _lyrics.value = s.lyrics
         _recentSearches.value = s.recentSearches
+        _recentAddonSearches.value = s.recentAddonSearches
     }
 
     private fun update(transform: (SettingsState) -> SettingsState) {
@@ -742,6 +747,14 @@ object AppSettings {
     fun removeRecentSearch(query: String) = update { it.copy(recentSearches = it.recentSearches - query) }
 
     fun clearRecentSearches() = update { it.copy(recentSearches = emptyList()) }
+
+    fun addRecentAddonSearch(query: String) = update { s ->
+        s.copy(recentAddonSearches = (listOf(query) + s.recentAddonSearches.filterNot { it.equals(query, true) }).take(MAX_RECENT))
+    }
+
+    fun removeRecentAddonSearch(query: String) = update { it.copy(recentAddonSearches = it.recentAddonSearches - query) }
+
+    fun clearRecentAddonSearches() = update { it.copy(recentAddonSearches = emptyList()) }
 
     fun exportJson(): JsonElement = json.encodeToJsonElement(SettingsState.serializer(), _state.value)
 

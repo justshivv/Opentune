@@ -110,6 +110,24 @@ object ExternalStreams {
         return rendition
     }
 
+    /**
+     * A stream picked by hand from an add-on's search results, to start
+     * [videoId] on: the listener chose this recording, so it isn't searched
+     * for or compared again. Startup takes it at once when external sources
+     * are allowed (see [cached]).
+     */
+    fun offer(videoId: String, stream: com.opentune.data.addons.AddonStream): Rendition {
+        val rendition = Rendition(java.util.UUID.randomUUID().toString(), stream.url,
+            "${stream.provider} · ${if (stream.lossless) "lossless requested" else stream.codec}", stream.lossless, now(),
+            provider = stream.provider, bits = stream.bits, sampleRate = stream.sampleRate, kbps = stream.kbps,
+            maximumSearch = true, sessionRevision = com.opentune.data.addons.AddonStore.revision.value,
+            addonId = stream.addonId, mimeType = stream.mimeType)
+        failedUntil.remove(videoId)
+        remember(videoId, rendition)
+        report(videoId, "${stream.provider}: picked in Search")
+        return rendition
+    }
+
     internal fun remember(videoId: String, rendition: Rendition) {
         if (renditions.size > 256) renditions.clear()
         pinned.entries.removeIf { now() - it.value.second.at >= 2 * 60 * 60_000L }
