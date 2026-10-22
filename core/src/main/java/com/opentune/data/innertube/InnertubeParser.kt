@@ -576,6 +576,8 @@ object InnertubeParser {
 
         val pageCredit = pageCredit(root)
         val songs = playlistScope?.let { playlist ->
+            // Each song once: one added twice shows once, and Add to playlist
+            // won't add it again (see LibraryStore.addAllToPlaylist).
             collectRenderers(playlist, "musicResponsiveListItemRenderer")
                 .mapNotNull { parseResponsiveListItem(it, pageCredit) }
                 .distinctBy { it.videoId }

@@ -38,10 +38,10 @@ object HomeSeed {
      * one artist fills the first page, then their radios in turn. Null with
      * fewer than four songs, which Home wouldn't lay out as picks.
      */
-    fun quickPicks(seeds: List<Artist>): HomeShelf? {
-        val songs = (ExploreFeed.weave(seeds.map { it.top }) + ExploreFeed.weave(seeds.map { it.radio }))
-            .distinctBy { it.videoId }
-            .take(MAX_PICKS)
+    fun quickPicks(seeds: List<Artist>, turn: Int = 0): HomeShelf? {
+        val woven = (ExploreFeed.weave(seeds.map { it.top }) + ExploreFeed.weave(seeds.map { it.radio })).distinctBy { it.videoId }
+        // A refresh draws a different handful from everything the seeds give, in a different order.
+        val songs = (if (turn == 0) woven else woven.shuffled(kotlin.random.Random(turn))).take(MAX_PICKS)
         if (songs.size < 4) return null
         val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null, explicit = it.isExplicit == true) }
         return HomeShelf(TITLE_PREFIX + names(seeds.map { it.name }), items, "From artists you follow")

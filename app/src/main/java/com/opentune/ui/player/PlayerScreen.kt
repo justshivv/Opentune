@@ -422,7 +422,23 @@ fun PlayerLayout(
         style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
         style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST &&
         !(state.ui.fullScreenCover && (style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL))
+    // Where no cover flies (a full-screen cover, the other designs), the cover
+    // page itself follows a swipe up: 0 at rest, 1 as far as it goes. Let go
+    // past the mark, the lists come in from where it was left, not after.
+    var coverLift by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val liftTravel = with(LocalDensity.current) { COVER_LIFT_TRAVEL.toPx() }
+    var liftSettle by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    // Gone to the lists: once the cover page has played out, it's at rest for next time.
+    LaunchedEffect(pane == Pane.COVER) {
+        if (pane != Pane.COVER && coverLift > 0f) {
+            delay(COVER_LIFT_RESET_MS)
+            liftSettle?.cancel()
+            coverLift = 0f
+        }
+    }
     fun expandCover() {
+        liftSettle?.cancel()
+        coverLift = 0f
         returnPane = pane.name
         val from = smallCover
         if (flies && from != null) flight.start(from, toSmall = false)
@@ -504,17 +520,42 @@ fun PlayerLayout(
                         if (d < 0f && dragOffset == 0f) { upPull += d; d = 0f }
                         dragOffset = (dragOffset + d).coerceAtLeast(0f)
                         followUp()
+                        if (pane == Pane.COVER && style != PlayerStyle.LYRICS_FIRST && !followsSwipe) {
+                            coverLift = (-upPull / liftTravel).coerceIn(0f, 1f)
+                        }
                     },
                     // A finger landing on the card mid-spring takes hold of it where it is.
                     onDragStarted = {
                         settling?.cancel()
                         coverSettle?.cancel()
-                        upPull = if (flight.following) -flight.pull * flight.travel else 0f
+                        liftSettle?.cancel()
+                        upPull = when {
+                            flight.following -> -flight.pull * flight.travel
+                            pane == Pane.COVER && coverLift > 0f -> -coverLift * liftTravel
+                            else -> 0f
+                        }
                     },
                     onDragStopped = { velocity ->
                         if (pane == Pane.COVER && style != PlayerStyle.LYRICS_FIRST && dragOffset == 0f && (upPull < -upPx || velocity < -1_500f || flight.pull > 0.3f)) {
                             // Swiped up on the cover: it goes back up into the lyrics or queue header.
+                            // A lifted cover page keeps rising at the finger's speed as it leaves,
+                            // so nothing stops or jumps back at the moment of letting go.
+                            val lifted = coverLift > 0f
                             collapseCover()
+                            if (lifted) liftSettle = scope.launch {
+                                androidx.compose.animation.core.animate(coverLift, 1f, -velocity / liftTravel, spring(dampingRatio = 1f, stiffness = 420f)) { v, _ ->
+                                    coverLift = v.coerceIn(0f, 1f)
+                                }
+                            }
+                            upPull = 0f
+                        } else if (coverLift > 0f) {
+                            // Short of it: the cover page settles back down.
+                            liftSettle = scope.launch {
+                                androidx.compose.animation.core.animate(coverLift, 0f, -velocity / liftTravel, spring(dampingRatio = 0.85f, stiffness = 500f)) { v, _ ->
+                                    coverLift = v.coerceIn(0f, 1f)
+                                }
+                            }
+                            upPull = 0f
                         } else if (flight.following) {
                             // Short of it: the cover settles back into its place.
                             coverSettle = scope.launch {
@@ -705,6 +746,12 @@ fun PlayerLayout(
                         // page's side margin, and a clip there cut it off in a hard edge.
                         when {
                             state.ui.reduceAnimation -> fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                            // Carried up by a swipe: the cover page is already moving with the finger
+                            // and keeps going on its own, so it only fades; the lyrics rise on the
+                            // same spring, from just below.
+                            targetState == Pane.LYRICS && coverLift > 0f ->
+                                (fadeIn(tween(240, delayMillis = 40)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 420f)) { it / 8 }) togetherWith
+                                    fadeOut(tween(200, easing = FastOutSlowInEasing))
                             // Lyrics rise into place on a soft spring while the cover sinks back.
                             targetState == Pane.LYRICS ->
                                 (fadeIn(tween(220)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 650f)) { it / 5 }) togetherWith
@@ -721,7 +768,20 @@ fun PlayerLayout(
                     label = "pane",
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 ) { p ->
-                    Column(Modifier.fillMaxSize()) {
+                    Column(
+                        Modifier.fillMaxSize().graphicsLayer {
+                            // The cover page, carried up by a swipe that's still under the finger.
+                            if (p == Pane.COVER) {
+                                val k = coverLift
+                                translationY = -k * size.height * COVER_LIFT_RISE
+                                val sc = 1f - COVER_LIFT_SHRINK * k
+                                scaleX = sc
+                                scaleY = sc
+                                transformOrigin = TransformOrigin(0.5f, 0f)
+                                alpha = 1f - COVER_LIFT_FADE * k
+                            }
+                        },
+                    ) {
                         if (p == Pane.COVER && style == PlayerStyle.LYRICS_FIRST) {
                             // The lyrics are the page; the cover shrinks to the header.
                             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1346,6 +1406,15 @@ private fun Modifier.focusIn(animate: Boolean): Modifier {
  * full cover. [from] is where it left; it lands on the small cover when
  * [toSmall], on the full one otherwise, wherever that has been laid out.
  */
+/** How far a swipe goes to carry the cover page all the way. */
+private val COVER_LIFT_TRAVEL = 300.dp
+/** How much the cover page rises, shrinks and fades at the end of that swipe. */
+private const val COVER_LIFT_RISE = 0.18f
+private const val COVER_LIFT_SHRINK = 0.1f
+private const val COVER_LIFT_FADE = 0.55f
+/** Long enough for the cover page's exit to finish before its lift is put back. */
+private const val COVER_LIFT_RESET_MS = 600L
+
 private class PaneFlight {
     var from by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
         private set

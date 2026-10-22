@@ -90,7 +90,16 @@ data class Song(
      * again, if not yet played, when smart shuffle is turned off.
      */
     val smartShuffle: Boolean = false,
+    /** Which part of the queue this entry is in; see [com.opentune.playback.QueueTimeline]. */
+    val queueTier: QueueTier = QueueTier.CONTEXT,
 )
+
+/**
+ * The three parts of a queue. [CONTEXT] is the album, playlist or song that
+ * was started; [USER] the songs added by hand with Play next or Add to
+ * queue; [AUTOPLAY] the radio added after them so the music doesn't stop.
+ */
+enum class QueueTier { CONTEXT, USER, AUTOPLAY }
 
 /**
  * Artwork at a given pixel size.

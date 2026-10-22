@@ -396,6 +396,8 @@ data class InterfaceSettings(
     val welcome: WelcomeState = WelcomeState.UNDECIDED,
     /** On wide windows (tablets, unfolded phones, phones on their side): the tabs in a rail and pages in a readable column. */
     val wideLayout: Boolean = true,
+    /** Explore has its own tab; off, it leaves the dock and fills the Search page until a search starts. */
+    val separateExplore: Boolean = true,
     /** On large screens, the player stays docked beside the page while a song is loaded. */
     val sidePlayer: Boolean = true,
     /** Your top songs play behind the Wrapped story; off is its mute button, kept for next time. */
@@ -571,6 +573,7 @@ enum class LyricsAnimation(val label: String, val summary: String) {
 @Serializable
 enum class LyricsSource(val label: String, val summary: String) {
     LRC_RED("lrc.red", "Word-by-word lyrics filed by recording, as BitChord uses them first"),
+    PAXSENIX("Paxsenix", "Apple Music's word-by-word lyrics, with duets and backing vocals"),
     LRCLIB("LRCLIB", "Community lyrics, line by line and sometimes word by word"),
     LYRICSPLUS("LyricsPlus", "Word-by-word lyrics from the servers behind YouLyPlus, as Echo Music uses them"),
     BETTERLYRICS("Better Lyrics", "Word-by-word lyrics from Better Lyrics, for songs its listeners have already looked up"),
@@ -599,13 +602,14 @@ data class LyricsSettings(
     val chosen: Map<String, LyricsSource> = emptyMap(),
 ) {
     /**
-     * The saved order, with any source added since appended at the end; lrc.red,
-     * the most exact of them, goes in first when a saved order hasn't met it yet.
+     * The saved order, with any source added since appended at the end; lrc.red
+     * and Paxsenix, the most exact of them, go in first when a saved order
+     * hasn't met them yet.
      */
     val ordered: List<LyricsSourceEntry>
         get() {
             val missing = LyricsSource.entries.filter { s -> sources.none { it.source == s } }.map(::LyricsSourceEntry)
-            val (front, back) = missing.partition { it.source == LyricsSource.LRC_RED }
+            val (front, back) = missing.partition { it.source == LyricsSource.LRC_RED || it.source == LyricsSource.PAXSENIX }
             return front + sources.distinctBy { it.source } + back
         }
 }
@@ -623,6 +627,8 @@ data class SettingsState(
     val library: LibrarySettings = LibrarySettings(),
     val lyrics: LyricsSettings = LyricsSettings(),
     val recentSearches: List<String> = emptyList(),
+    /** Searches made in Search's Add-ons tab, kept apart from the YouTube ones. */
+    val recentAddonSearches: List<String> = emptyList(),
 )
 
 /** Accent choices offered when Material You is off. */
@@ -671,6 +677,8 @@ object AppSettings {
     val lyrics: StateFlow<LyricsSettings> = _lyrics.asStateFlow()
     private val _recentSearches = MutableStateFlow<List<String>>(emptyList())
     val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
+    private val _recentAddonSearches = MutableStateFlow<List<String>>(emptyList())
+    val recentAddonSearches: StateFlow<List<String>> = _recentAddonSearches.asStateFlow()
 
     /** Read by StreamResolver on every resolve: the ceiling for the network in use. */
     val effectiveAudioQuality: AudioQuality
@@ -703,6 +711,7 @@ object AppSettings {
         _library.value = s.library
         _lyrics.value = s.lyrics
         _recentSearches.value = s.recentSearches
+        _recentAddonSearches.value = s.recentAddonSearches
     }
 
     private fun update(transform: (SettingsState) -> SettingsState) {
@@ -738,6 +747,14 @@ object AppSettings {
     fun removeRecentSearch(query: String) = update { it.copy(recentSearches = it.recentSearches - query) }
 
     fun clearRecentSearches() = update { it.copy(recentSearches = emptyList()) }
+
+    fun addRecentAddonSearch(query: String) = update { s ->
+        s.copy(recentAddonSearches = (listOf(query) + s.recentAddonSearches.filterNot { it.equals(query, true) }).take(MAX_RECENT))
+    }
+
+    fun removeRecentAddonSearch(query: String) = update { it.copy(recentAddonSearches = it.recentAddonSearches - query) }
+
+    fun clearRecentAddonSearches() = update { it.copy(recentAddonSearches = emptyList()) }
 
     fun exportJson(): JsonElement = json.encodeToJsonElement(SettingsState.serializer(), _state.value)
 

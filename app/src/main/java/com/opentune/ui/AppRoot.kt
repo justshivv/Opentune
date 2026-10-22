@@ -129,7 +129,6 @@ private enum class Tab(val route: String, val label: String, val icon: ImageVect
 
 private const val SEARCH_ROUTE = "search"
 
-private val chromeTabs = Tab.entries.map { ChromeTab(it.label, it.icon, it.selectedIcon) }
 
 @Composable
 fun AppRoot(vm: PlayerViewModel) {
@@ -149,6 +148,10 @@ fun AppRoot(vm: PlayerViewModel) {
     // Scrolling any page down folds the bottom bar into one row; scrolling up unfolds it.
     val chromeScroll = rememberChromeScroll()
     val chromeUi by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    // Explore without a tab of its own lives on the Search page instead.
+    val separateExplore = chromeUi.separateExplore
+    val dockTabs = remember(separateExplore) { if (separateExplore) Tab.entries.toList() else Tab.entries - Tab.EXPLORE }
+    val chromeTabs = remember(dockTabs) { dockTabs.map { ChromeTab(it.label, it.icon, it.selectedIcon) } }
     // A page opened from inside the player (the artist, from a tap on their
     // name) folds the player away; back from that page opens the player
     // again, as it was left. Held: the page the player was over, and the page
@@ -230,6 +233,13 @@ fun AppRoot(vm: PlayerViewModel) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
+    // Explore's tab turned off while on it: back to Home, Explore is on the Search page now.
+    LaunchedEffect(separateExplore) {
+        if (!separateExplore && tab == Tab.EXPLORE) {
+            tab = Tab.HOME
+            if (route == Tab.EXPLORE.route) nav.popBackStack(Tab.HOME.route, inclusive = false)
+        }
+    }
     LaunchedEffect(route) {
         Tab.entries.firstOrNull { it.route == route }?.let { tab = it }
         chromeScroll.expand()
@@ -285,8 +295,8 @@ fun AppRoot(vm: PlayerViewModel) {
         openAlbum = { id -> fromPlayer { nav.openBrowse(id, BrowseType.ALBUM) } },
         openArtist = { id -> fromPlayer { nav.openBrowse(id, BrowseType.ARTIST) } },
         dislike = { s ->
+            // The player skips it, and its later copies in the queue, itself.
             LibraryStore.dislike(s)
-            if (s.videoId == song?.videoId) vm.skipNext()
             com.opentune.data.Pills.done("You won't hear \"${s.title}\" in autoplay again")
         },
         notInterested = { s ->
@@ -377,6 +387,20 @@ fun AppRoot(vm: PlayerViewModel) {
                 playerOpen = true
             }
             is LinkTarget.Browse -> nav.openBrowse(link.browseId)
+            // Read for its title and artist, then found on YouTube Music; autoplay carries on from it.
+            is LinkTarget.Elsewhere -> {
+                vm.player.connected.first { it }
+                val named = com.opentune.data.links.MusicLinks.resolve(link.url)
+                val match = named?.let { n ->
+                    runCatching { MusicRepository.search("${n.title} ${n.artist}".trim(), SearchFilter.SONGS) }.getOrDefault(emptyList())
+                        .firstNotNullOfOrNull { (it as? SearchResult.TopTrack)?.song ?: (it as? SearchResult.Track)?.song }
+                }
+                when {
+                    match != null -> { vm.play(match, "Shared link"); playerOpen = true }
+                    named != null -> com.opentune.data.Pills.error("Couldn't find \"${named.title}\" on YouTube Music")
+                    else -> com.opentune.data.Pills.error("Couldn't read that link")
+                }
+            }
             is LinkTarget.SpotifyImport -> nav.navigate("import?link=${Uri.encode(link.text)}")
             is LinkTarget.Together -> { playerOpen = false; nav.navigate("together?code=${link.code}") }
             is LinkTarget.Recognize -> { playerOpen = false; nav.navigate("recognize?listen=true") { launchSingleTop = true } }
@@ -463,7 +487,7 @@ fun AppRoot(vm: PlayerViewModel) {
     val selectTab: (Int) -> Unit = { i ->
         // A tab chosen is somewhere new, not a way back to the player.
         playerReturn = null
-        val t = Tab.entries[i]
+        val t = dockTabs[i]
         when {
             // On the tab's root already: Home scrolls to the top and refreshes.
             t == tab && route == t.route -> TabEvents.reselect(t.route)
@@ -483,6 +507,9 @@ fun AppRoot(vm: PlayerViewModel) {
         }
     }
     val openSearch = { if (route != SEARCH_ROUTE) nav.navigate(SEARCH_ROUTE) { launchSingleTop = true } }
+    val openMood: (com.opentune.data.model.MoodGenre) -> Unit = { mood ->
+        nav.navigate("mood/${Uri.encode(mood.browseId)}?params=${Uri.encode(mood.params.orEmpty())}&title=${Uri.encode(mood.title)}")
+    }
 
     // The opening animation, once per launch: the app comes forward out of
     // the mark as the screen dives into it.
@@ -579,12 +606,10 @@ fun AppRoot(vm: PlayerViewModel) {
                         )
                     }
                     composable(Tab.EXPLORE.route) {
-                        ExploreScreen(content, onMoodClick = { mood ->
-                            nav.navigate("mood/${Uri.encode(mood.browseId)}?params=${Uri.encode(mood.params.orEmpty())}&title=${Uri.encode(mood.title)}")
-                        }, onItemClick = openItem)
+                        ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, onOpenSettings = { nav.navigate("settings") })
                     }
                     composable(Tab.PODCASTS.route) {
-                        com.opentune.ui.podcasts.PodcastsScreen(content, actions, onOpenShow = { id -> nav.navigate("podcast/${Uri.encode(id)}") })
+                        com.opentune.ui.podcasts.PodcastsScreen(content, actions, onOpenShow = { id -> nav.navigate("podcast/${Uri.encode(id)}") }, onOpenSettings = { nav.navigate("settings") })
                     }
                     composable("podcast/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.podcasts.PodcastShowScreen(
@@ -608,6 +633,9 @@ fun AppRoot(vm: PlayerViewModel) {
                             onAddToQueue = vm::addToQueue,
                             onBrowse = { item: BrowseItem -> nav.openBrowse(item.browseId, item.type) },
                             onRecognize = { nav.navigate("recognize") },
+                            explore = if (separateExplore) null else ({
+                                ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, showHeader = false)
+                            }),
                         )
                     }
                     composable("settings") {
@@ -755,7 +783,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 BottomChrome(
                     inline = chromeScroll.inline,
                     tabs = chromeTabs,
-                    selected = if (route == SEARCH_ROUTE) null else tab.ordinal,
+                    selected = if (route == SEARCH_ROUTE) null else dockTabs.indexOf(tab).takeIf { it >= 0 },
                     onSelect = selectTab,
                     onExpand = chromeScroll::expand,
                     searchSelected = route == SEARCH_ROUTE,
@@ -773,7 +801,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 // player along the bottom of the page unless the player is docked.
                 NavRail(
                     tabs = chromeTabs,
-                    selected = if (route == SEARCH_ROUTE) null else tab.ordinal,
+                    selected = if (route == SEARCH_ROUTE) null else dockTabs.indexOf(tab).takeIf { it >= 0 },
                     onSelect = selectTab,
                     searchSelected = route == SEARCH_ROUTE,
                     onSearch = openSearch,

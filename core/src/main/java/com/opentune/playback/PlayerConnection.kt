@@ -10,6 +10,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.opentune.data.library.LibraryStore
+import com.opentune.data.model.QueueTier
 import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
 import kotlin.random.Random
@@ -206,8 +207,8 @@ class PlayerConnection(private val context: Context) {
     }
 
     /**
-     * Starts [song] on its own, replacing the queue. The service fills in
-     * radio after it.
+     * Starts [song] on its own, replacing the queue but for the songs queued
+     * by hand, which come next. The service fills in radio after them.
      */
     fun play(song: Song, source: String? = null) {
         val controller = controller ?: return
@@ -215,10 +216,18 @@ class PlayerConnection(private val context: Context) {
         _source.value = source
         endSmartShuffle()
         SmartShuffle.clear()
-        controller.setMediaItem(song.toMediaItem())
+        val kept = handQueued(controller)
+        controller.setMediaItems((listOf(song.copy(queueTier = QueueTier.CONTEXT)) + kept).map { it.toMediaItem() }, 0, 0L)
         controller.prepare()
         controller.play()
     }
+
+    private fun tiers(controller: MediaController) = (0 until controller.mediaItemCount).map { controller.getMediaItemAt(it).queueTier }
+
+    /** The songs queued by hand still to come, which starting something else keeps. */
+    private fun handQueued(controller: MediaController): List<Song> =
+        if (controller.mediaItemCount == 0) emptyList()
+        else QueueTimeline.upcomingUser(tiers(controller), controller.currentMediaItemIndex).map { controller.getMediaItemAt(it).toSong() }
 
     /**
      * Replaces the queue with [songs], starting at [startIndex]. With
@@ -250,10 +259,19 @@ class PlayerConnection(private val context: Context) {
         val seed = Random.nextLong()
         // Smart shuffle starts on the list alone, in the order the mix will
         // have, so the first song plays at once; the picks are slotted in later.
+        val list = songs.map { it.copy(queueTier = QueueTier.CONTEXT) }
         val ordered = when {
-            mixing -> SmartShuffle.mix(songs, emptyList(), LibraryStore.hidden.value, seed)
-            shuffled -> songs.shuffled()
-            else -> songs
+            mixing -> SmartShuffle.mix(list, emptyList(), LibraryStore.hidden.value, seed)
+            shuffled -> list.shuffled()
+            else -> list
+        }.let { o ->
+            // Songs queued by hand come right after the first song. Smart shuffle
+            // slots its picks by position, so it starts on the list alone.
+            val kept = if (mixing) emptyList() else handQueued(controller)
+            if (kept.isEmpty()) o else {
+                val at = (if (shuffled) 0 else startIndex.coerceIn(o.indices)) + 1
+                o.take(at) + kept + o.drop(at)
+            }
         }
         controller.shuffleModeEnabled = false
         controller.setMediaItems(
@@ -400,17 +418,16 @@ class PlayerConnection(private val context: Context) {
     }
 
     /** Queues [song] right after the current track. */
-    fun playNext(song: Song) {
-        val controller = controller ?: return
-        if (controller.mediaItemCount == 0) return play(song)
-        controller.addMediaItem(controller.currentMediaItemIndex + 1, song.toMediaItem())
-    }
+    fun playNext(song: Song) = queueByHand(song, next = true)
 
-    /** Queues [song] at the end. */
-    fun addToQueue(song: Song) {
+    /** Queues [song] after the other songs queued by hand, ahead of the rest of the list and autoplay. */
+    fun addToQueue(song: Song) = queueByHand(song, next = false)
+
+    private fun queueByHand(song: Song, next: Boolean) {
         val controller = controller ?: return
         if (controller.mediaItemCount == 0) return play(song)
-        controller.addMediaItem(song.toMediaItem())
+        val at = QueueTimeline.userInsertIndex(tiers(controller), controller.currentMediaItemIndex, next)
+        controller.addMediaItem(at, song.copy(queueTier = QueueTier.USER).toMediaItem())
     }
 
     fun togglePlayPause() {
@@ -458,9 +475,26 @@ class PlayerConnection(private val context: Context) {
         controller?.seekToPrevious()
     }
 
+    /**
+     * Plays queue row [index]. Further down the queue, the songs queued by
+     * hand are kept coming next, as [QueueTimeline.jump] says; with shuffle on
+     * the rows aren't in play order, so it's a plain jump.
+     */
     fun playQueueItem(index: Int) {
         val controller = controller ?: return
-        controller.seekToDefaultPosition(index)
+        val jump = if (controller.shuffleModeEnabled) null else QueueTimeline.jump(tiers(controller), controller.currentMediaItemIndex, index)
+        if (jump == null) {
+            controller.seekToDefaultPosition(index)
+            controller.play()
+            return
+        }
+        val (removals, moves) = QueueTimeline.edits(controller.mediaItemCount, jump.order)
+        removals.forEach { controller.removeMediaItem(it) }
+        moves.forEach { (from, to) -> controller.moveMediaItem(from, to) }
+        if (jump.promote) {
+            controller.replaceMediaItem(jump.target, controller.getMediaItemAt(jump.target).toSong().copy(queueTier = QueueTier.CONTEXT).toMediaItem())
+        }
+        controller.seekToDefaultPosition(jump.target)
         controller.play()
     }
 

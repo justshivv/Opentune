@@ -1,5 +1,19 @@
 package com.opentune.ui.search
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.height
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,6 +77,9 @@ import com.opentune.data.model.SearchResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.opentune.data.model.Song
 import com.opentune.data.model.UiState
 import com.opentune.data.model.artworkAt
@@ -84,30 +101,66 @@ fun SearchScreen(
     onBrowse: (BrowseItem) -> Unit,
     /** Opens the page that names a song from what the microphone hears. */
     onRecognize: (() -> Unit)? = null,
+    /**
+     * Explore, when it has no tab of its own: it fills the page until the bar
+     * is tapped or holds a search, and the bar's back arrow brings it back.
+     */
+    explore: (@Composable () -> Unit)? = null,
     vm: SearchViewModel = viewModel(),
 ) {
     val query by vm.query.collectAsState()
     val submitted by vm.submitted.collectAsState()
     val filter by vm.filter.collectAsState()
     val suggestions by vm.suggestions.collectAsState()
+    val live by vm.live.collectAsState()
     val results by vm.results.collectAsState()
     val recent by AppSettings.recentSearches.collectAsState()
+    val recentAddon by AppSettings.recentAddonSearches.collectAsState()
+    val source by vm.source.collectAsState()
+    val library by vm.library.collectAsState()
+    val addons by vm.addons.collectAsState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val focus = LocalFocusManager.current
+    var focused by remember { mutableStateOf(false) }
+    val searching = explore == null || focused || query.isNotEmpty()
 
     fun submit(q: String) {
         focus.clearFocus()
-        vm.submit(q)
+        if (source == SearchSource.YOUTUBE) vm.submit(q) else { vm.onQueryChange(q); vm.remember(q) }
     }
+
+    // An add-on's track plays as the same song from YouTube Music, started on the add-on's stream.
+    val playHit: (AddonHit) -> Unit = { hit ->
+        focus.clearFocus()
+        vm.remember(query)
+        scope.launch {
+            val song = vm.songFor(hit)
+            if (song != null) onPlay(song) else com.opentune.data.Pills.error("Couldn't find \"${hit.track.title}\" to play")
+        }
+    }
+
+    // Back to Explore: the bar lets go and empties.
+    val leave = {
+        focus.clearFocus()
+        vm.onQueryChange("")
+    }
+    androidx.activity.compose.BackHandler(enabled = explore != null && searching, onBack = leave)
 
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
         TextField(
             value = query,
             onValueChange = vm::onQueryChange,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
+                .onFocusChanged { focused = it.isFocused },
             singleLine = true,
             shape = CircleShape,
-            placeholder = { Text("Songs, albums, artists") },
-            leadingIcon = { Icon(Icons.Filled.Search, null) },
+            placeholder = { Text(source.placeholder) },
+            leadingIcon = {
+                androidx.compose.animation.Crossfade(explore != null && searching, label = "searchLead") { back ->
+                    if (back) IconButton(onClick = leave) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to Explore") }
+                    else Icon(Icons.Filled.Search, null)
+                }
+            },
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(onClick = { vm.onQueryChange("") }) { Icon(Icons.Filled.Close, "Clear") }
@@ -124,8 +177,23 @@ fun SearchScreen(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { submit(query) }),
         )
+        // Where to look, while the bar is in use.
+        androidx.compose.animation.AnimatedVisibility(
+            focused,
+            enter = androidx.compose.animation.fadeIn(tween(180)) + androidx.compose.animation.expandVertically(spring(dampingRatio = 1f, stiffness = 600f)),
+            exit = androidx.compose.animation.fadeOut(tween(140)) + androidx.compose.animation.shrinkVertically(spring(dampingRatio = 1f, stiffness = 600f)),
+        ) {
+            SourceBar(source, vm::setSource, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp))
+        }
 
         when {
+            !searching -> explore?.invoke()
+            source == SearchSource.LIBRARY -> LibraryResults(query, library, contentPadding, currentVideoId, isPlaying, { focus.clearFocus(); onPlay(it) }, onPlayNext, onAddToQueue)
+            source == SearchSource.ADDONS -> AddonResults(
+                query, addons, recentAddon, contentPadding,
+                onPick = { vm.onQueryChange(it) },
+                onPlay = playHit,
+            )
             submitted == null || submitted != query.trim() -> Typing(
                 query = query,
                 suggestions = suggestions,
@@ -133,6 +201,13 @@ fun SearchScreen(
                 contentPadding = contentPadding,
                 onPick = ::submit,
                 onFill = vm::onQueryChange,
+                live = live,
+                currentVideoId = currentVideoId,
+                isPlaying = isPlaying,
+                onPlay = { focus.clearFocus(); onPlay(it) },
+                onPlayNext = onPlayNext,
+                onAddToQueue = onAddToQueue,
+                onBrowse = { focus.clearFocus(); onBrowse(it) },
             )
             else -> Column {
                 LazyRow(
@@ -157,6 +232,13 @@ private fun Typing(
     contentPadding: PaddingValues,
     onPick: (String) -> Unit,
     onFill: (String) -> Unit,
+    live: List<SearchResult> = emptyList(),
+    currentVideoId: String? = null,
+    isPlaying: Boolean = false,
+    onPlay: (Song) -> Unit = {},
+    onPlayNext: (Song) -> Unit = {},
+    onAddToQueue: (Song) -> Unit = {},
+    onBrowse: (BrowseItem) -> Unit = {},
 ) {
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         if (query.isBlank()) {
@@ -183,10 +265,51 @@ private fun Typing(
                 }
             }
         } else {
-            items(suggestions) { s ->
+            // A few ways to finish the words, then what they already find.
+            val shownSuggestions = if (live.isEmpty()) suggestions else suggestions.take(LIVE_SUGGESTIONS)
+            items(shownSuggestions, key = { "s:$it" }) { s ->
                 QueryRow(s, Icons.Filled.Search, onClick = { onPick(s) }) {
                     IconButton(onClick = { onFill(s) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, "Use this", modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+            if (live.isNotEmpty()) {
+                item(key = "live-divider") {
+                    androidx.compose.material3.HorizontalDivider(
+                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        thickness = 0.75.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                }
+                items(live, key = { r ->
+                    when (r) {
+                        is SearchResult.TopTrack -> "lt:${r.song.videoId}"
+                        is SearchResult.Track -> "lv:${r.song.videoId}"
+                        is SearchResult.Browse -> "lb:${r.item.browseId}"
+                    }
+                }) { r ->
+                    Box(Modifier.animateItem()) {
+                        when (r) {
+                            // As plain rows here: the big card is for the full results.
+                            is SearchResult.TopTrack -> SongListItem(
+                                song = r.song,
+                                onClick = { onPlay(r.song) },
+                                isCurrent = r.song.videoId == currentVideoId,
+                                isPlaying = isPlaying,
+                                onPlayNext = { onPlayNext(r.song) },
+                                onAddToQueue = { onAddToQueue(r.song) },
+                            )
+                            is SearchResult.Track -> SongListItem(
+                                song = r.song,
+                                onClick = { onPlay(r.song) },
+                                isCurrent = r.song.videoId == currentVideoId,
+                                isPlaying = isPlaying,
+                                onPlayNext = { onPlayNext(r.song) },
+                                onAddToQueue = { onAddToQueue(r.song) },
+                            )
+                            is SearchResult.Browse -> BrowseRow(r.item, onClick = { onBrowse(r.item) })
+                        }
                     }
                 }
             }
@@ -251,7 +374,7 @@ private fun Results(
                     }) { r ->
                         Box(Modifier.animateItem()) {
                             when (r) {
-                                is SearchResult.TopTrack -> TopResult(r.song, onPlay = { onPlay(r.song) })
+                                is SearchResult.TopTrack -> TopResult(r.song, onPlay = { onPlay(r.song) }, isCurrent = r.song.videoId == currentVideoId)
                                 is SearchResult.Track -> SongListItem(
                                     song = r.song,
                                     onClick = { onPlay(r.song) },
@@ -282,7 +405,7 @@ private fun sectionOf(r: SearchResult): String = when (r) {
 }
 
 @Composable
-private fun TopResult(song: Song, onPlay: () -> Unit) {
+private fun TopResult(song: Song, onPlay: () -> Unit, isCurrent: Boolean = false) {
     Surface(
         onClick = onPlay,
         shape = MaterialTheme.shapes.large,
@@ -293,7 +416,14 @@ private fun TopResult(song: Song, onPlay: () -> Unit) {
             Artwork(song.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.size(84.dp), MaterialTheme.shapes.medium)
             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                 Text("Top result", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                Text(song.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    song.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    // The song that's playing reads in the accent, as it does in the rows.
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified,
+                )
                 com.opentune.ui.components.SubtitleLine(song.artist, explicit = song.isExplicit == true, color = MaterialTheme.colorScheme.onSecondaryContainer)
             }
             FilledIconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.PlayArrow, "Play") }
@@ -358,3 +488,152 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit) {
     }
 }
 
+
+/** How many suggestions stay above the live results. */
+private const val LIVE_SUGGESTIONS = 3
+
+/** YouTube, Library or Add-ons: one rounded track, the chosen one lit on a pill that slides to it. */
+@Composable
+internal fun SourceBar(selected: SearchSource, onSelect: (SearchSource) -> Unit, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(16.dp)).background(colors.surfaceContainerHigh).padding(4.dp),
+    ) {
+        val segment = maxWidth / SearchSource.entries.size
+        val at by androidx.compose.animation.core.animateDpAsState(segment * selected.ordinal, spring(dampingRatio = 0.85f, stiffness = 500f), label = "sourcePill")
+        Box(Modifier.offset(x = at).width(segment).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(colors.onSurface))
+        Row(Modifier.fillMaxSize()) {
+            SearchSource.entries.forEach { s ->
+                val on = s == selected
+                val text by androidx.compose.animation.animateColorAsState(if (on) colors.surface else colors.onSurfaceVariant, label = "sourceText")
+                Box(
+                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                        // Not focusable, so tapping a tab leaves the keyboard and the bar as they are.
+                        .pointerInput(s) { detectTapGestures { onSelect(s) } }
+                        .semantics { role = Role.Tab; this.selected = on; contentDescription = s.label },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(s.label, style = MaterialTheme.typography.titleSmall, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium, color = text)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceHint(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 36.dp),
+    )
+}
+
+/** Your own songs that match: liked, in your playlists, downloaded, or in the Local Music folder. */
+@Composable
+private fun LibraryResults(
+    query: String,
+    found: List<Song>?,
+    contentPadding: PaddingValues,
+    currentVideoId: String?,
+    isPlaying: Boolean,
+    onPlay: (Song) -> Unit,
+    onPlayNext: (Song) -> Unit,
+    onAddToQueue: (Song) -> Unit,
+) {
+    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+        when {
+            query.isBlank() || found == null -> item { SourceHint("Search your liked songs, playlists, downloads and the songs in your Local Music folder.") }
+            found.isEmpty() -> item { SourceHint("Nothing in your library matches \"${query.trim()}\".") }
+            else -> items(found, key = { "lib:${it.videoId}" }) { song ->
+                SongListItem(
+                    song = song,
+                    onClick = { onPlay(song) },
+                    isCurrent = song.videoId == currentVideoId,
+                    isPlaying = isPlaying,
+                    onPlayNext = { onPlayNext(song) },
+                    onAddToQueue = { onAddToQueue(song) },
+                )
+            }
+        }
+    }
+}
+
+/** What your add-ons found, each with its own cover, quality and length; and the searches made here before. */
+@Composable
+private fun AddonResults(
+    query: String,
+    found: com.opentune.data.model.UiState<List<AddonHit>>?,
+    recent: List<String>,
+    contentPadding: PaddingValues,
+    onPick: (String) -> Unit,
+    onPlay: (AddonHit) -> Unit,
+) {
+    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+        if (query.isBlank() || found == null) {
+            if (recent.isEmpty()) {
+                item { SourceHint("Search every enabled add-on at once. The song you pick starts on that add-on's stream.") }
+            } else {
+                item {
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Recent searches", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = AppSettings::clearRecentAddonSearches) { Text("Clear all") }
+                    }
+                }
+                items(recent, key = { "ar:$it" }) { q ->
+                    QueryRow(q, Icons.Filled.History, onClick = { onPick(q) }) {
+                        IconButton(onClick = { AppSettings.removeRecentAddonSearch(q) }) { Icon(Icons.Filled.Close, "Remove") }
+                    }
+                }
+            }
+            return@LazyColumn
+        }
+        when (found) {
+            is com.opentune.data.model.UiState.Loading -> items(6, key = { "ap$it" }) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    com.opentune.ui.components.Placeholder(Modifier.size(56.dp), RoundedCornerShape(10.dp))
+                    Spacer(Modifier.width(14.dp))
+                    com.opentune.ui.components.Placeholder(Modifier.weight(1f).height(18.dp), RoundedCornerShape(6.dp))
+                }
+            }
+            is com.opentune.data.model.UiState.Error -> item { SourceHint(found.message) }
+            is com.opentune.data.model.UiState.Success ->
+                if (found.data.isEmpty()) item { SourceHint("None of your add-ons has \"${query.trim()}\".") }
+                else items(found.data, key = { "ah:${it.addon.key}:${it.track.id}" }) { hit -> AddonRow(hit, onClick = { onPlay(hit) }) }
+        }
+    }
+}
+
+@Composable
+internal fun AddonRow(hit: AddonHit, onClick: () -> Unit) {
+    val t = hit.track
+    val colors = MaterialTheme.colorScheme
+    val codec = t.format.lowercase()
+    val quality = if (codec.isBlank() || codec in setOf("flac", "alac", "wav", "pcm")) "Lossless" else codec.uppercase()
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        com.opentune.ui.components.Artwork(t.artwork, Modifier.size(56.dp), RoundedCornerShape(10.dp))
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            Text(t.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.GraphicEq, null, Modifier.size(14.dp), tint = colors.onSurfaceVariant)
+                Text(
+                    listOf(quality, t.artist.ifBlank { hit.manifest.name }).joinToString(" · "),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+        }
+        if (t.durationMs > 0) {
+            val secs = t.durationMs / 1000
+            Text("%d:%02d".format(secs / 60, secs % 60), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, modifier = Modifier.padding(start = 10.dp))
+        }
+    }
+}

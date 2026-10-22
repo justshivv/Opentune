@@ -117,6 +117,10 @@ object LibraryStore {
     /** Albums and playlists saved with their heart, newest first. */
     val savedLists: StateFlow<List<SavedList>> = _savedLists.asStateFlow()
 
+    private val _disliked = MutableStateFlow<Set<String>>(emptySet())
+    /** The videoIds marked "Dislike". */
+    val disliked: StateFlow<Set<String>> = _disliked.asStateFlow()
+
     private val _hidden = MutableStateFlow(HiddenList.EMPTY)
     /** Songs and artists kept out of autoplay, radio, smart shuffle and Home's picks. */
     val hidden: StateFlow<HiddenList> = _hidden.asStateFlow()
@@ -172,6 +176,7 @@ object LibraryStore {
         _playlists.value = d.playlists
         _savedLists.value = d.savedLists
         _hidden.value = HiddenList(d.hiddenSongs, d.hiddenArtists)
+        _disliked.value = d.disliked
         LibraryArtwork.keep(d.liked.map { it.thumbnailUrl } + d.playlists.flatMap { p -> p.songs.map { it.thumbnailUrl } })
     }
 

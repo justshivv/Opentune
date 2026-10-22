@@ -20,6 +20,10 @@ internal class StartupSelection(
     private val song: Song,
     private val original: Uri,
     private val maximum: () -> Boolean = { AppSettings.effectiveAudioQuality == AudioQuality.MAX },
+    /** Whether lossless is wanted at all, at any quality setting (an add-on can give it). */
+    private val losslessWanted: () -> Boolean = { ExternalStreams.allowed(true) },
+    /** A stream picked by hand in Search's Add-ons tab for this song, if there is one. */
+    private val picked: (String) -> ExternalStreams.Rendition? = { id -> ExternalStreams.cached(id)?.takeIf { it.picked } },
     private val lookupBudgetMs: Long = 900L,
     private val findJioSaavn: suspend (Song, Long) -> ExternalStreams.Rendition? = ExternalStreams::findJioSaavn,
     private val cached: (String) -> ExternalStreams.Rendition? = ExternalStreams::cached,
@@ -30,7 +34,11 @@ internal class StartupSelection(
     suspend fun resolve(spec: DataSpec): DataSpec = mutex.withLock {
         currentCoroutineContext().ensureActive()
         if (selected == null) {
-            val rendition = if (maximum()) cached(song.videoId)?.takeIf { it.mimeType == null } ?: try {
+            // A lossless file found ahead of time starts the song whenever lossless is on, not only at Max.
+            // A stream picked by hand in Search starts the song whatever the quality setting.
+            val ready = picked(song.videoId)?.takeIf { it.mimeType == null }
+                ?: if (maximum() || losslessWanted()) cached(song.videoId)?.takeIf { it.mimeType == null && it.lossless } else null
+            val rendition = ready ?: if (maximum()) try {
                 withTimeoutOrNull(lookupBudgetMs) { findJioSaavn(song, song.durationMillis()) }
             } catch (e: CancellationException) {
                 throw e

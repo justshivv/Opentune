@@ -1,5 +1,10 @@
 package com.opentune.ui.components
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -84,7 +89,7 @@ class SongMenuActions(
     val startRadio: (Song) -> Unit,
     val openAlbum: (String) -> Unit,
     val openArtist: (String) -> Unit,
-    /** Marks a song as disliked; the shell also skips it if it's playing. */
+    /** Marks a song as disliked; the player skips it if it's playing, and drops its queued copies. */
     val dislike: (Song) -> Unit = LibraryStore::dislike,
     /** Plays the music video's audio in place of the song. */
     val playVideoVersion: ((Song) -> Unit)? = null,
@@ -338,6 +343,32 @@ fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     }
 }
 
+/** One playlist to pick in [AddToPlaylistDialog]: its cover, its name, how many songs, and a tick if the song is in it. */
+@Composable
+private fun PlaylistPickRow(
+    title: String,
+    subtitle: String,
+    art: @Composable () -> Unit,
+    added: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(52.dp).clip(RoundedCornerShape(12.dp))) { art() }
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (added) Icon(Icons.Rounded.CheckCircle, "Already in this playlist", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+    }
+}
+
 /**
  * Picks one of the playlists made in the app, or makes a new one with [song]
  * in it. Signed in, the account's own YouTube Music playlists are listed too,
@@ -354,6 +385,24 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
     // A file on this phone can't go on YouTube Music.
     val online = signedIn && isYouTubeId(song.videoId)
     val accountPlaylists = if (online) remember(account, owned, playlists) { PlaylistLinks.pickable(account, owned, playlists) } else emptyList()
+    // Which of the account's playlists already have the song, looked up as the sheet opens.
+    val inAccount = remember(song.videoId) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    LaunchedEffect(accountPlaylists, song.videoId) {
+        val gate = kotlinx.coroutines.sync.Semaphore(ACCOUNT_LOOKUPS)
+        kotlinx.coroutines.coroutineScope {
+            accountPlaylists.take(MAX_ACCOUNT_CHECKED).filter { it.playlistId !in inAccount }.forEach { p ->
+                launch {
+                    gate.acquire()
+                    try {
+                        runCatching { com.opentune.data.MusicRepository.collection(p.browseId) }.getOrNull()
+                            ?.let { c -> inAccount[p.playlistId] = c.songs.any { it.videoId == song.videoId } }
+                    } finally {
+                        gate.release()
+                    }
+                }
+            }
+        }
+    }
     var naming by remember { mutableStateOf(playlists.isEmpty() && accountPlaylists.isEmpty()) }
     var name by remember { mutableStateOf("") }
     var saveOnline by remember { mutableStateOf(true) }
@@ -368,14 +417,37 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
                     if (online) AccountCopyOptions(saveOnline, { saveOnline = it }, privacy, { privacy = it }, Modifier.padding(top = 12.dp))
                 }
             } else {
-                LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                    item { MenuRow(Icons.Rounded.Add, "New playlist") { naming = true } }
+                LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    item {
+                        PlaylistPickRow(
+                            title = "New playlist",
+                            subtitle = "With this song in it",
+                            art = {
+                                Box(
+                                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                                    contentAlignment = Alignment.Center,
+                                ) { Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp)) }
+                            },
+                            onClick = { naming = true },
+                        )
+                    }
                     items(playlists, key = { it.id }) { p ->
-                        MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, "${p.name} · ${p.songs.size}") {
-                            LibraryStore.addToPlaylist(p.id, song)
-                            com.opentune.data.Pills.done("Added to ${p.name}", context)
-                            onDone()
-                        }
+                        val has = p.songs.any { it.videoId == song.videoId }
+                        PlaylistPickRow(
+                            title = p.name,
+                            subtitle = if (has) "Already in it" else if (p.songs.size == 1) "1 song" else "${p.songs.size} songs",
+                            art = { PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), RectangleShape) },
+                            added = has,
+                            onClick = {
+                                if (has) {
+                                    com.opentune.data.Pills.info("Already in ${p.name}", context)
+                                } else {
+                                    LibraryStore.addToPlaylist(p.id, song)
+                                    com.opentune.data.Pills.done("Added to ${p.name}", context)
+                                }
+                                onDone()
+                            },
+                        )
                     }
                     if (accountPlaylists.isNotEmpty()) {
                         item {
@@ -387,7 +459,18 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
                             )
                         }
                         items(accountPlaylists, key = { "yt:${it.playlistId}" }) { p ->
-                            MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, p.title) {
+                            val has = inAccount[p.playlistId] == true
+                            PlaylistPickRow(
+                                title = p.title,
+                                subtitle = if (has) "Already in it" else p.subtitle.ifBlank { "YouTube Music" },
+                                art = { Artwork(p.thumbnailUrl, Modifier.fillMaxSize(), RectangleShape, placeholder = Icons.AutoMirrored.Rounded.QueueMusic) },
+                                added = has,
+                            ) {
+                                if (has) {
+                                    com.opentune.data.Pills.info("Already in ${p.title}", context)
+                                    onDone()
+                                    return@PlaylistPickRow
+                                }
                                 PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
                                     if (ok) com.opentune.data.Pills.done("Added to ${p.title}", context)
                                     else com.opentune.data.Pills.error("Couldn't add it to ${p.title}", context)
@@ -411,3 +494,7 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
         dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
     )
 }
+
+/** Account playlists looked up at once, and at most, to mark the ones that already have the song. */
+private const val ACCOUNT_LOOKUPS = 4
+private const val MAX_ACCOUNT_CHECKED = 30

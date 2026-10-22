@@ -86,17 +86,27 @@ import kotlin.math.absoluteValue
  * tablet; see [TileColumns]).
  */
 @Composable
-fun ExploreScreen(contentPadding: PaddingValues, onMoodClick: (MoodGenre) -> Unit, onItemClick: (ShelfItem) -> Unit) {
+fun ExploreScreen(
+    contentPadding: PaddingValues,
+    onMoodClick: (MoodGenre) -> Unit,
+    onItemClick: (ShelfItem) -> Unit,
+    onOpenSettings: (() -> Unit)? = null,
+    /** False inside the Search page, which has its own bar at the top. */
+    showHeader: Boolean = true,
+) {
+    val header: (@Composable () -> Unit)? = if (!showHeader) null else ({
+        PageHeader("Explore", actions = onOpenSettings?.let { open -> { com.opentune.ui.components.AccountButton(open) } })
+    })
     val loader = rememberLoader("explore:canvas") { ExploreFeed.load() }
     val state by loader.state.collectAsState()
     var filter by rememberSaveable { mutableStateOf<String?>(null) }
 
     when (val s = state) {
         is UiState.Error -> Column(Modifier.fillMaxSize()) {
-            PageHeader("Explore")
+            header?.invoke()
             Box(Modifier.fillMaxSize().padding(contentPadding), Alignment.Center) { ErrorState(s.message, onRetry = { loader.reload() }) }
         }
-        else -> ExploreBoard((s as? UiState.Success)?.data, contentPadding, filter, { filter = it }, onMoodClick, onItemClick)
+        else -> ExploreBoard((s as? UiState.Success)?.data, contentPadding, filter, { filter = it }, onMoodClick, onItemClick, header)
     }
 }
 
@@ -109,6 +119,7 @@ internal fun ExploreBoard(
     onFilter: (String?) -> Unit,
     onMoodClick: (MoodGenre) -> Unit,
     onItemClick: (ShelfItem) -> Unit,
+    header: (@Composable () -> Unit)? = { PageHeader("Explore") },
 ) {
     val tiles = remember(canvas, filter) { canvas?.tiles?.filter { filter == null || it.kind.name == filter }.orEmpty() }
     LazyVerticalStaggeredGrid(
@@ -118,7 +129,7 @@ internal fun ExploreBoard(
         verticalItemSpacing = 10.dp,
         modifier = Modifier.fillMaxSize(),
     ) {
-        item(span = StaggeredGridItemSpan.FullLine, key = "header") { PageHeader("Explore") }
+        if (header != null) item(span = StaggeredGridItemSpan.FullLine, key = "header") { header() }
         if (canvas == null) {
             item(span = StaggeredGridItemSpan.FullLine, key = "pillsLoading") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 4.dp)) {

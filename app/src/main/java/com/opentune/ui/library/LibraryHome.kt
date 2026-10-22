@@ -176,15 +176,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
 
     val page: @Composable () -> Unit = { LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item {
-            PageHeader("Library", actions = {
-                com.opentune.ui.components.WithUpdateDot {
-                    GlassIconButton(Icons.Rounded.Settings, "Settings", nav.settings) {
-                        val photo = account?.thumbnailUrl
-                        if (photo != null) Artwork(photo, Modifier.size(44.dp), androidx.compose.foundation.shape.CircleShape)
-                        else Icon(Icons.Rounded.Settings, "Settings", Modifier.size(26.dp))
-                    }
-                }
-            })
+            PageHeader("Library", actions = { com.opentune.ui.components.AccountButton(nav.settings) })
         }
         item {
             YearCard(
@@ -669,11 +661,11 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         onMakePublic = {
             privateShare = false
             LibraryStore.setPlaylistPrivacy(id, PlaylistPrivacy.PUBLIC)
-            com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId)
+            com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId, com.opentune.ui.share.ListShare.coversFor(null, songs), com.opentune.ui.share.ListShare.countLine(songs.size))
         },
         onShareAnyway = {
             privateShare = false
-            com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId)
+            com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId, com.opentune.ui.share.ListShare.coversFor(null, songs), com.opentune.ui.share.ListShare.countLine(songs.size))
         },
         onDismiss = { privateShare = false },
     )
@@ -681,7 +673,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     val share: () -> Unit = {
         when {
             !signedIn || remoteId == null -> com.opentune.ui.share.ListShare.shareLocal(context, playlist.name, songs)
-            playlist.privacy?.linkWorks == true -> com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId)
+            playlist.privacy?.linkWorks == true -> com.opentune.ui.share.ListShare.sharePlaylist(context, playlist.name, remoteId, com.opentune.ui.share.ListShare.coversFor(null, songs), com.opentune.ui.share.ListShare.countLine(songs.size))
             else -> privateShare = true
         }
     }

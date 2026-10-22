@@ -220,6 +220,9 @@ private const val BEAM_DP_PER_S = 260f
 /** A rest between runs, with the rail dark. */
 private const val BEAM_REST_MS = 700L
 
+/** The share of the last turn the light takes to fade out over. */
+private const val BEAM_FADE = 0.35f
+
 /**
  * The nodes down one rail. The rail, the rings' glow and the light are all
  * drawn here, over the rows, from a clock read only while drawing, so a frame
@@ -271,7 +274,7 @@ private fun Timeline(stages: List<Stage>) {
                     val act = (1f - off / falloff).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
                     drawRing(ink, Offset(cx, cy), r, act)
                 }
-                if (head >= 0f) drawBeam(path, head, ink)
+                if (head >= 0f) drawBeam(path, head, ink, fade = path.remaining(head).let { left -> (left / BEAM_FADE).coerceIn(0f, 1f) })
             },
     ) {
         Column {
@@ -289,14 +292,17 @@ private fun Timeline(stages: List<Stage>) {
 
 /**
  * The light's route: down the rail into each ring at its top, one and a half
- * turns round it, out at the bottom, and on to the next. Distances are in px.
+ * turns round it, out at the bottom, and on to the next. At the last ring it
+ * goes once round and ends there, back at the top, rather than running on
+ * down past the last step. Distances are in px.
  */
 private class BeamPath(private val centres: List<Float>, private val cx: Float, private val r: Float, lead: Float) {
-    private val orbitLen = 3f * PI.toFloat() * r
+    /** Turns round ring [i], in half turns: three to pass through, two to end on. */
+    private fun halfTurns(i: Int) = if (i == centres.lastIndex) 2 else 3
+    private fun orbitLen(i: Int) = halfTurns(i) * PI.toFloat() * r
     /** Where each ring's orbit starts along the route. */
     private val orbitStart = FloatArray(centres.size)
     private val startY = (centres.first() - r - lead).coerceAtLeast(0f)
-    private val endY = centres.last() + r + lead
     val length: Float
 
     init {
@@ -305,27 +311,31 @@ private class BeamPath(private val centres: List<Float>, private val cx: Float, 
         centres.forEachIndexed { i, cy ->
             d += (cy - r) - y
             orbitStart[i] = d
-            d += orbitLen
+            d += orbitLen(i)
             y = cy + r
         }
-        length = d + (endY - y)
+        length = d
     }
 
-    fun orbit(i: Int) = orbitStart[i] to orbitStart[i] + orbitLen
+    fun orbit(i: Int) = orbitStart[i] to orbitStart[i] + orbitLen(i)
+
+    /** How much of the last turn is left, 1 until the light reaches the last ring and 0 at the very end. */
+    fun remaining(d: Float): Float {
+        val s = orbitStart.last()
+        return if (d <= s) 1f else (1f - (d - s) / orbitLen(centres.lastIndex)).coerceIn(0f, 1f)
+    }
 
     fun at(d: Float): Offset {
-        var y = startY
         centres.forEachIndexed { i, cy ->
             val s = orbitStart[i]
             if (d < s) return Offset(cx, (cy - r) - (s - d))
-            if (d <= s + orbitLen) {
-                // From the top, clockwise on screen, ending at the bottom.
-                val a = (-PI / 2 + (d - s) / orbitLen * 3 * PI).toFloat()
+            if (d <= s + orbitLen(i) || i == centres.lastIndex) {
+                // From the top, clockwise on screen.
+                val a = (-PI / 2 + (d - s).coerceAtMost(orbitLen(i)) / orbitLen(i) * halfTurns(i) * PI).toFloat()
                 return Offset(cx + r * cos(a), cy + r * sin(a))
             }
-            y = cy + r
         }
-        return Offset(cx, y + (d - (orbitStart.last() + orbitLen)))
+        return Offset(cx, centres.last() - r)
     }
 }
 
@@ -341,21 +351,26 @@ private fun DrawScope.drawRing(ink: Color, c: Offset, r: Float, act: Float) {
     drawCircle(ink.copy(alpha = 0.35f + 0.6f * act), r, c, style = Stroke(1.2.dp.toPx()))
 }
 
-/** The light: a bright head with a tail that follows the route back, round a ring as well as down the rail. */
-private fun DrawScope.drawBeam(path: BeamPath, head: Float, ink: Color) {
+/**
+ * The light: a bright head with a tail that follows the route back, round a
+ * ring as well as down the rail. [fade] takes it out over the end of its last
+ * turn, so it ends on the last ring instead of stopping dead.
+ */
+private fun DrawScope.drawBeam(path: BeamPath, head: Float, ink: Color, fade: Float = 1f) {
+    if (fade <= 0f) return
     val tail = 40.dp.toPx()
     val steps = 22
     for (k in steps downTo 0) {
         val d = head - tail * k / steps
         if (d < 0f) continue
-        val fade = 1f - k / steps.toFloat()
+        val f = 1f - k / steps.toFloat()
         val p = path.at(d)
-        drawCircle(ink.copy(alpha = 0.10f * fade * fade), 5.dp.toPx(), p, blendMode = BlendMode.Plus)
-        drawCircle(ink.copy(alpha = 0.95f * fade * fade), 1.3.dp.toPx(), p)
+        drawCircle(ink.copy(alpha = 0.10f * f * f * fade), 5.dp.toPx(), p, blendMode = BlendMode.Plus)
+        drawCircle(ink.copy(alpha = 0.95f * f * f * fade), 1.3.dp.toPx(), p)
     }
     val h = path.at(head)
-    drawCircle(Brush.radialGradient(listOf(ink.copy(alpha = 0.55f), Color.Transparent), center = h, radius = 8.dp.toPx()), 8.dp.toPx(), h, blendMode = BlendMode.Plus)
-    drawCircle(Color.White, 2.dp.toPx(), h)
+    drawCircle(Brush.radialGradient(listOf(ink.copy(alpha = 0.55f * fade), Color.Transparent), center = h, radius = 8.dp.toPx()), 8.dp.toPx(), h, blendMode = BlendMode.Plus)
+    drawCircle(Color.White.copy(alpha = fade), 2.dp.toPx(), h)
 }
 
 @Composable

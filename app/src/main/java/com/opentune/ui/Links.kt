@@ -14,6 +14,8 @@ sealed interface LinkTarget {
     data class Browse(val browseId: String) : LinkTarget
     /** "Play … on OpenTune" from the Assistant; blank means "play some music". */
     data class PlaySearch(val query: String) : LinkTarget
+    /** A song on another service (Apple Music, Deezer, Tidal…), to find and play here. */
+    data class Elsewhere(val url: String) : LinkTarget
     /** A Spotify playlist, album or song shared to the app, to bring over. */
     data class SpotifyImport(val text: String) : LinkTarget
     /** An invite to a Listen together room. */
@@ -92,7 +94,11 @@ object Links {
             _incoming.value = LinkTarget.SpotifyImport(text)
             return
         }
-        parse(text)?.let { _incoming.value = it }
+        parse(text)?.let {
+            _incoming.value = it
+            return
+        }
+        com.opentune.data.links.MusicLinks.linkIn(text)?.let { _incoming.value = LinkTarget.Elsewhere(it) }
     }
 
     fun consumed() {

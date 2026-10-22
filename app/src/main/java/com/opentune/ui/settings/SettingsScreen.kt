@@ -59,6 +59,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FilterAlt
@@ -709,7 +710,7 @@ private fun settingsSections(
                     SettingRow("Output precision", summary = outputSummary(context, pb.floatOutput), icon = Icons.Rounded.GraphicEq, beta = true, below = {
                         PillSegmented(listOf(false, true), pb.floatOutput, { if (it) "32-bit float" else "16-bit PCM" }, { v -> AppSettings.updatePlayback { it.copy(floatOutput = v) } })
                         Text(
-                            "Float keeps hi-res local files in 32-bit to the output and plays them without effects. Takes effect after a restart.",
+                            "Float keeps hi-res files in 32-bit all the way to the output, effects included. 16-bit is dithered once, after the effects. Takes effect after a restart.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp),
@@ -1032,6 +1033,15 @@ private fun settingsSections(
                 },
                 Entry("High performance mode", "120hz 90hz smooth fps refresh rate frame rate scrolling performance battery unrestricted lag") {
                     HighPerformanceRows(ui)
+                },
+                Entry("Explore as its own tab", "explore tab dock search page navigation moods genres") {
+                    ToggleRow(
+                        "Explore as its own tab",
+                        ui.separateExplore,
+                        { v -> AppSettings.updateUi { it.copy(separateExplore = v) } },
+                        summary = if (ui.separateExplore) "Explore has a tab in the dock" else "Explore fills the Search page until you start a search",
+                        icon = Icons.Rounded.Explore,
+                    )
                 },
                 Entry("Wide-screen layout", "tablet foldable large screen landscape rail side navigation dock columns") {
                     ToggleRow(

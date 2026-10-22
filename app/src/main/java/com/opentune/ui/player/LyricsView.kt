@@ -75,6 +75,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -283,7 +284,13 @@ private fun PlainLyrics(text: String, source: String, note: String? = "These lyr
         val style = lyricsStyle()
         val romanize = AppSettings.lyrics.collectAsState().value.romanize
         val romanized by androidx.compose.runtime.produceState<List<String?>>(emptyList(), text, romanize) {
-            value = if (!romanize) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Romanizer.lines(text.lines()) }
+            if (!romanize) { value = emptyList(); return@produceState }
+            val texts = text.lines()
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Romanizer.lines(texts) }
+            // Japanese with kanji: the offline reading first, then the full one when it arrives.
+            if (com.opentune.data.lyrics.JapaneseReadings.wanted(texts)) {
+                com.opentune.data.lyrics.JapaneseReadings.lines(texts)?.let { read -> value = read.mapIndexed { i, r -> r ?: value.getOrNull(i) } }
+            }
         }
         val dimmed = MaterialTheme.colorScheme.onSurfaceVariant
         val shown = remember(text, romanized, dimmed) {
@@ -333,7 +340,13 @@ private fun SyncedLyrics(
     androidx.activity.compose.BackHandler(enabled = selecting) { selection?.clear() }
     val romanize = AppSettings.lyrics.collectAsState().value.romanize
     val romanized by androidx.compose.runtime.produceState<List<String?>>(emptyList(), lines, romanize) {
-        value = if (!romanize) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Romanizer.lines(lines.map { it.text }) }
+        if (!romanize) { value = emptyList(); return@produceState }
+        val texts = lines.map { it.text }
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Romanizer.lines(texts) }
+        // Japanese with kanji: the offline reading first, then the full one when it arrives.
+        if (com.opentune.data.lyrics.JapaneseReadings.wanted(texts)) {
+            com.opentune.data.lyrics.JapaneseReadings.lines(texts)?.let { read -> value = read.mapIndexed { i, r -> r ?: value.getOrNull(i) } }
+        }
     }
     // Two singers trade lines: the second voice's sit on the other side.
     val duet = remember(lines) { lines.any { it.voice == VOICE_SECOND } }
@@ -578,6 +591,9 @@ private const val GLIDE_STIFFNESS = 64f
 private const val GLIDE_DAMPING = 16f
 
 /** How one [LyricsAnimation] treats lines: sizes, blur per line away, and glow. */
+/** How far, as a share of a row's height, a letter can reach past its row's box. */
+private const val GLYPH_OVERHANG = 0.35f
+
 /** Empty room round a blurred line inside its blur's buffer, so the blur fades out before the buffer's edge. */
 private val BLUR_BLEED = 28.dp
 
@@ -656,8 +672,10 @@ private fun LyricLineView(
         line.voice == VOICE_TOGETHER -> TextAlign.Center
         else -> TextAlign.Start
     }
-    val origin = when (align) { TextAlign.Center -> 0.5f; TextAlign.End -> 1f; else -> 0f }
-    val base = lyricsStyle().copy(textAlign = align)
+    // A right-to-left line starts at the right: Start and End swap sides, and it sweeps leftwards.
+    val rtl = remember(line) { com.opentune.data.lyrics.readsRightToLeft(line) }
+    val origin = when (align) { TextAlign.Center -> 0.5f; TextAlign.End -> if (rtl) 0f else 1f; else -> if (rtl) 1f else 0f }
+    val base = lyricsStyle().copy(textAlign = align, textDirection = if (rtl) TextDirection.Rtl else TextDirection.Ltr)
     val style = if ((motion.glow || ui.lyricsGlow) && isActive) base.copy(shadow = Shadow(bright.copy(alpha = 0.55f), blurRadius = 24f)) else base
     val text = remember(line) { if (line.words.isEmpty()) line.text else line.words.joinToString("") { it.text } }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -725,7 +743,7 @@ private fun LyricLineView(
                     .fillMaxWidth()
                     // Its own layer, so dimming the unsung words doesn't punch through what's behind.
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .drawWithContent { drawContent(); sweepDim(line, wordBoxes, position(), 0.4f) },
+                    .drawWithContent { drawContent(); sweepDim(line, wordBoxes, position(), 0.4f, rtl) },
             )
         } else {
             Text(
@@ -773,7 +791,19 @@ private fun wordBoxesOf(layout: TextLayoutResult?, line: LyricLine, text: String
             (first..last).mapNotNull { row ->
                 val from = maxOf(start, l.getLineStart(row))
                 val to = minOf(visibleEnd, l.getLineEnd(row, visibleEnd = true))
-                if (to > from) l.getPathForRange(from, to).getBounds() else null
+                if (to <= from) return@mapNotNull null
+                val box = l.getPathForRange(from, to).getBounds()
+                // Glyphs reach past their row: the dots of i and j above the first
+                // row (the line height is set tight), tails below the last, and a
+                // j's hook left of a row's first word. The box takes them in where
+                // no other word can be, so no part of a letter stays lit early.
+                val pad = box.height * GLYPH_OVERHANG
+                Rect(
+                    left = if (from == l.getLineStart(row)) box.left - pad else box.left,
+                    top = if (row == 0) box.top - pad else box.top,
+                    right = if (to == l.getLineEnd(row, visibleEnd = true)) box.right + pad else box.right,
+                    bottom = if (row == l.lineCount - 1) box.bottom + pad else box.bottom,
+                )
             }
         }
         start = end
@@ -815,7 +845,7 @@ internal fun SungLine(line: LyricLine, position: () -> Long, style: androidx.com
  * lands. A word split over two rows fills its first piece, then its second.
  * Done at draw time, so the line isn't measured again every frame.
  */
-private fun DrawScope.sweepDim(line: LyricLine, boxes: List<List<Rect>>, positionMs: Long, removal: Float) {
+private fun DrawScope.sweepDim(line: LyricLine, boxes: List<List<Rect>>, positionMs: Long, removal: Float, rtl: Boolean = false) {
     // A wide soft edge, as BitChord's: the light eases across each word rather than wiping it.
     val feather = 26.dp.toPx()
     line.words.forEachIndexed { i, word ->
@@ -831,9 +861,15 @@ private fun DrawScope.sweepDim(line: LyricLine, boxes: List<List<Rect>>, positio
             val pieceT = ((t * total - before) / box.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
             before += box.width
             if (pieceT >= 1f || box.isEmpty) return@forEach
-            val litX = box.left + (box.width + feather) * pieceT
+            val travel = (box.width + feather) * pieceT
+            val litX = if (rtl) box.right - travel else box.left + travel
             drawRect(
-                brush = Brush.horizontalGradient(
+                brush = if (rtl) Brush.horizontalGradient(
+                    0f to Color.Black.copy(alpha = removal),
+                    1f to Color.Transparent,
+                    startX = litX,
+                    endX = litX + feather,
+                ) else Brush.horizontalGradient(
                     0f to Color.Transparent,
                     1f to Color.Black.copy(alpha = removal),
                     startX = litX - feather,

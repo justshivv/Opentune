@@ -57,6 +57,7 @@ import com.opentune.data.NerdStats
 import com.opentune.data.history.History
 import com.opentune.data.local.LocalMusic
 import com.opentune.data.innertube.StreamResolver
+import com.opentune.data.model.QueueTier
 import com.opentune.data.model.Song
 import com.opentune.data.reco.Recommendations
 import com.opentune.data.settings.AppSettings
@@ -65,6 +66,8 @@ import com.opentune.playback.dsp.DspParams
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.media3.common.Tracks
@@ -123,6 +126,8 @@ class PlaybackService : MediaLibraryService() {
 
     private var soundEffects: SoundEffects? = null
     private val dsp = DspAudioProcessor()
+    /** The same effects, for the bridge player that carries a song across a quality swap. */
+    private val bridgeDsp = DspAudioProcessor()
     private var audioManager: AudioManager? = null
     private val startupSelections = ConcurrentHashMap<String, StartupSelection>()
 
@@ -180,7 +185,10 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val floatOutput = AppSettings.playback.value.floatOutput
-        val renderers = object : DefaultRenderersFactory(context) {
+        // The main player and the bridge decode the same way: the bridge used to
+        // take the phone's default FLAC decoder, which some phones can't play
+        // add-on FLAC with, so the swap to it failed and the song stayed on YouTube.
+        fun renderersFor(effects: DspAudioProcessor) = object : DefaultRenderersFactory(context) {
             init {
                 setEnableDecoderFallback(true)
                 setMediaCodecSelector { mime, secure, tunneling ->
@@ -195,11 +203,17 @@ class PlaybackService : MediaLibraryService() {
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
-            ): AudioSink = DefaultAudioSink.Builder(context)
-                .setEnableFloatOutput(floatOutput)
-                .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain(dsp))
-                .build()
+            ): AudioSink = com.opentune.playback.dsp.PrecisionAudioSink(
+                // The effects run in the precision sink, on float samples, not in Media3's chain.
+                DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(floatOutput)
+                    .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain())
+                    .build(),
+                effects,
+                floatWanted = { floatOutput },
+            )
         }
+        val renderers = renderersFor(dsp)
 
         // Start as soon as a little audio is in: the defaults wait for 2.5 s,
         // which is video-sized caution. A stream starts after half a second buffered
@@ -238,7 +252,7 @@ class PlaybackService : MediaLibraryService() {
         // better stream from where the song is, through the same sources and
         // so into the same cache, and the swap then reads what it fetched.
         auditionPlayer = {
-            ExoPlayer.Builder(context)
+            ExoPlayer.Builder(context, renderersFor(bridgeDsp))
                 .setMediaSourceFactory(qualitySources)
                 .setLoadControl(
                     DefaultLoadControl.Builder()
@@ -262,7 +276,7 @@ class PlaybackService : MediaLibraryService() {
                 } else {
                     DspParams(eq, sound.bassBoost, pb.spatialAudio, pb.clarity, eightDPeriod = sound.eightD.periodSeconds, spacePeriod = sound.space.periodSeconds)
                 }
-            }.distinctUntilChanged().collect { dsp.params = it }
+            }.distinctUntilChanged().collect { dsp.params = it; bridgeDsp.params = it }
         }
         scope.launch {
             AppSettings.playback.map { it.skipSilence }.distinctUntilChanged().collect { player.skipSilenceEnabled = it }
@@ -350,9 +364,36 @@ class PlaybackService : MediaLibraryService() {
         }
         // Likes changed anywhere (the app, the widget) show on the heart at once.
         scope.launch { LibraryStore.liked.collect { refreshButtons() } }
+        scope.launch { skipDisliked(player) }
 
         restoreQueue(player)
         scope.launch { keepQueueSaved(player) }
+    }
+
+    /**
+     * A song disliked anywhere (the app, the notification, a car) stops being
+     * heard: if it's playing it's skipped, and the copies of it still to come
+     * leave the queue. Songs already played stay, so going back still works.
+     */
+    private suspend fun skipDisliked(player: ExoPlayer) {
+        var before: Set<String>? = null
+        LibraryStore.disliked.collect { now ->
+            val fresh = before?.let { now - it }.orEmpty()
+            before = now
+            if (fresh.isEmpty()) return@collect
+            // A guest's queue mirrors the host's: it asks the host to skip, and changes nothing here.
+            if (com.opentune.data.together.Together.room.value?.following == true) {
+                if (player.currentMediaItem?.mediaId in fresh) com.opentune.data.together.Together.intercept(com.opentune.data.together.Together.Control.Next)
+                return@collect
+            }
+            val current = player.currentMediaItemIndex
+            for (i in player.mediaItemCount - 1 downTo current + 1) {
+                if (player.getMediaItemAt(i).mediaId in fresh) player.removeMediaItem(i)
+            }
+            if (player.currentMediaItem?.mediaId in fresh && !com.opentune.data.together.Together.intercept(com.opentune.data.together.Together.Control.Next)) {
+                if (player.hasNextMediaItem()) player.seekToNextMediaItem() else player.pause()
+            }
+        }
     }
 
     /**
@@ -362,8 +403,23 @@ class PlaybackService : MediaLibraryService() {
     private fun restoreQueue(player: ExoPlayer) {
         if (player.mediaItemCount > 0) return
         val saved = QueueStore.load() ?: return
-        val items = saved.songs.map { it.toSong().toMediaItem() }
+        val items = saved.songs.mapIndexed { i, ref ->
+            ref.toSong().copy(queueTier = saved.tiers?.getOrNull(i) ?: QueueTier.CONTEXT).toMediaItem()
+        }
         player.setMediaItems(items, saved.index.coerceIn(items.indices), saved.positionMs.coerceAtLeast(0))
+        player.shuffleModeEnabled = saved.shuffle
+        player.repeatMode = saved.repeat
+    }
+
+    /**
+     * With the whole queue on repeat, songs queued by hand play once: when a
+     * song of the list comes round, the ones already played leave.
+     */
+    private fun dropPlayedHandQueued() {
+        val player = mediaSession?.player ?: return
+        if (player.repeatMode != Player.REPEAT_MODE_ALL || player.shuffleModeEnabled) return
+        val tiers = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).queueTier }
+        QueueTimeline.playedUser(tiers, player.currentMediaItemIndex).asReversed().forEach(player::removeMediaItem)
     }
 
     /** Saves the queue every few seconds while it changes or plays. */
@@ -372,8 +428,14 @@ class PlaybackService : MediaLibraryService() {
         while (true) {
             delay(QUEUE_SAVE_MS)
             if (player.mediaItemCount == 0) continue
-            val songs = (0 until player.mediaItemCount).map { SongRef.of(player.getMediaItemAt(it).toSong()) }
-            val saved = QueueStore.Saved(songs, player.currentMediaItemIndex, player.currentPosition)
+            val items = (0 until player.mediaItemCount).map { player.getMediaItemAt(it) }
+            val tiers = items.map { it.queueTier }
+            val saved = QueueStore.Saved(
+                items.map { SongRef.of(it.toSong()) }, player.currentMediaItemIndex, player.currentPosition,
+                tiers = tiers.takeIf { t -> t.any { it != QueueTier.CONTEXT } },
+                shuffle = player.shuffleModeEnabled,
+                repeat = player.repeatMode,
+            )
             if (saved == last) continue
             last = saved
             withContext(Dispatchers.IO) { QueueStore.save(saved) }
@@ -689,6 +751,9 @@ class PlaybackService : MediaLibraryService() {
             updateExternalStats()
             applyLoudness()
             if (!swap) scheduleUpgrade()
+            if (!swap) prefetchAhead()
+            // After this callback, not inside it: the queue changes under it otherwise.
+            if (!swap) scope.launch(Dispatchers.Main) { dropPlayedHandQueued() }
             // Nothing but a blend or a swap turns the main player down; outside
             // one, a new song always starts at full level.
             (mediaSession?.player as? ExoPlayer)?.let { p ->
@@ -1003,7 +1068,8 @@ class PlaybackService : MediaLibraryService() {
             else "The better stream didn't load in time, so this one keeps playing",
         )
         upgradeJob = scope.launch {
-            if (!force) delay(UPGRADE_DELAY_MS)
+            // Its source found ahead of time: switch within a moment, not after the usual wait.
+            if (!force) delay(if (ExternalStreams.cached(id) != null) UPGRADE_READY_DELAY_MS else UPGRADE_DELAY_MS)
             val startup = startupToken(uri)?.let { startupSelections[it] }
             if (startup != null && startup.selected == null) {
                 if (kotlinx.coroutines.withTimeoutOrNull(30_000) {
@@ -1036,7 +1102,20 @@ class PlaybackService : MediaLibraryService() {
                     com.opentune.data.addons.AddonResolver.qualityScore(existing.bits, existing.sampleRate)) { tell("Already playing the best quality there is for this song"); return@launch }
                 val left = player.duration - player.currentPosition
                 if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { tell("Too close to the end of the song to switch"); return@launch }
-                swapped(swapToUpgrade(player, id, externalStreamUri(id, lossless.key)))
+                // A slow first fetch gets another go: the add-on's stream is often
+                // quicker once its server has it ready.
+                var ok = swapToUpgrade(player, id, externalStreamUri(id, lossless.key))
+                repeat(UPGRADE_RETRIES) {
+                    if (ok || player.currentMediaItem?.mediaId != id) return@repeat
+                    if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS + UPGRADE_RETRY_MS) return@repeat
+                    delay(UPGRADE_RETRY_MS)
+                    if (player.currentMediaItem?.mediaId == id) ok = swapToUpgrade(player, id, externalStreamUri(id, lossless.key))
+                }
+                if (!ok && player.currentMediaItem?.mediaId == id) {
+                    ExternalStreams.swapFailed(id)
+                    updateExternalStats()
+                }
+                swapped(ok)
                 return@launch
             }
             if (externalStreamKeyOf(selectedUri(uri)) != null) { tell("Already playing the best quality there is for this song"); return@launch }
@@ -1051,6 +1130,36 @@ class PlaybackService : MediaLibraryService() {
         }
         val currentJob = upgradeJob
         currentJob?.invokeOnCompletion { if (upgradeJob === currentJob) NerdStats.onUpgrade(null) }
+    }
+
+    private var aheadJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Finds the lossless source for the next [PREFETCH_AHEAD] songs while this
+     * one plays, so each starts on it (or swaps to it within a second or two)
+     * instead of waiting for a lookup after it's begun. Only where lossless is
+     * on for this network; local, server and downloaded songs are left alone.
+     */
+    private fun prefetchAhead() {
+        if (!ExternalStreams.allowed(true)) return
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val from = player.currentMediaItemIndex
+        val ahead = (1..PREFETCH_AHEAD).mapNotNull { i -> (from + i).takeIf { it in 0 until player.mediaItemCount } }
+            .map { player.getMediaItemAt(it) }
+            .filter { item ->
+                val id = item.mediaId
+                val uri = item.localConfiguration?.uri
+                isYouTubeId(id) && !Podcasts.isEpisode(id) && uri?.scheme != "file" && ExternalStreams.cached(id) == null
+            }
+        aheadJob?.cancel()
+        if (ahead.isEmpty()) return
+        aheadJob = scope.launch {
+            for (item in ahead) {
+                val song = item.toSong()
+                runCatching { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+            }
+        }
     }
 
     /** Builds the silent player [prebuffer] loads an upgrade with; set in [onCreate]. */
@@ -1181,20 +1290,20 @@ class PlaybackService : MediaLibraryService() {
                 @Suppress("UNREACHABLE_CODE") false
             } ?: false
             if (!loaded) {
-                Log.w(TAG, "The better stream for $id didn't load in time; staying on this one")
-                return false
+                Log.w(TAG, "The bridge couldn't load the better stream for $id; trying the plain swap")
+                return null
             }
-            // The queue may have moved on, a blend begun or playback stopped while it loaded.
-            if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id ||
-                crossfade?.blending == true || !player.isPlaying
-            ) return false
+            // The queue may have moved on or a blend begun while it loaded.
+            if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id || crossfade?.blending == true) return false
+            // Paused while it loaded: the plain swap needs no bridge.
+            if (!player.isPlaying) return null
 
             // 1. The bridge plays, silent, in step with the song as it is heard now.
             bridge.volume = 0f
             bridge.playWhenReady = true
             if (!lineUp(follower = bridge, leader = player)) {
-                Log.w(TAG, "Couldn't line the better stream for $id up with the song; staying on this one")
-                return false
+                Log.w(TAG, "Couldn't line the better stream for $id up with the song; trying the plain swap")
+                return null
             }
             // 2. The sound moves onto it.
             crossfadeVolumes(from = player, to = bridge, BRIDGE_FADE_MS)
@@ -1513,15 +1622,35 @@ class PlaybackService : MediaLibraryService() {
             // A song started on its own asks for radio while its own stream is
             // still loading, which is when a request is most likely to fail; a
             // failure must not leave the song to end in silence, so ask again.
-            var radio: List<Song>? = null
+            // The last song leads; a couple of earlier ones in the queue, by other
+            // artists, are asked for too, so what comes next follows the whole
+            // queue rather than only its last song.
+            val engine = AppSettings.playback.value.recommender
+            val queue = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toSong() }
+            val others = if (Subsonic.isSubsonic(seed)) emptyList() else Autoplay.seeds(queue) { s ->
+                isYouTubeId(s.videoId) && !Podcasts.isEpisode(s.videoId)
+            }.drop(1)
+            val extra = others.map { s ->
+                async {
+                    try {
+                        Recommendations.after(s, engine).songs
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Radio for ${s.videoId} failed", e)
+                        emptyList()
+                    }
+                }
+            }
+            var lead: List<Song>? = null
             for ((attempt, wait) in RADIO_RETRY_MS.withIndex()) {
                 if (wait > 0) delay(wait)
-                radio = try {
+                lead = try {
                     if (Subsonic.isSubsonic(seed)) {
                         Subsonic.randomSongs(RADIO_FROM_SERVER)
                     } else {
                         // YouTube Music, Spotify or JioSaavn, as chosen; the songs always play from YouTube Music.
-                        Recommendations.after(seedItem.toSong(), AppSettings.playback.value.recommender).songs
+                        Recommendations.after(seedItem.toSong(), engine).songs
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -1529,9 +1658,13 @@ class PlaybackService : MediaLibraryService() {
                     Log.w(TAG, "Radio for $seed failed (try ${attempt + 1})", e)
                     null
                 }
-                if (!radio.isNullOrEmpty()) break
+                if (!lead.isNullOrEmpty()) break
             }
-            if (radio.isNullOrEmpty()) return@launch
+            if (lead.isNullOrEmpty()) {
+                extra.forEach { it.cancel() }
+                return@launch
+            }
+            val radio = Autoplay.blend(listOf(lead) + extra.awaitAll(), queue)
             // The queue may have been replaced while the request was out; radio
             // for a track that's no longer last doesn't belong at the end.
             val count = player.mediaItemCount
@@ -1548,7 +1681,7 @@ class PlaybackService : MediaLibraryService() {
                 return@launch
             }
             val ended = player.playbackState == Player.STATE_ENDED
-            player.addMediaItems(additions.map { it.toMediaItem() })
+            player.addMediaItems(additions.map { it.copy(queueTier = QueueTier.AUTOPLAY).toMediaItem() })
             // The song finished before the next ones came; carry on into them.
             if (ended) {
                 player.seekToNextMediaItem()
@@ -1705,6 +1838,10 @@ class PlaybackService : MediaLibraryService() {
         val VOLUME_RECEIVER_FLAGS = if (android.os.Build.VERSION.SDK_INT >= 33) Context.RECEIVER_EXPORTED else 0
         const val QUEUE_SAVE_MS = 5_000L
         const val UPGRADE_DELAY_MS = 8_000L
+        /** The wait before swapping to a source that was already found ahead of time. */
+        const val UPGRADE_READY_DELAY_MS = 1_500L
+        /** How many songs ahead the lossless source is looked up. */
+        const val PREFETCH_AHEAD = 2
         /** Songs a server queue carries on with when it runs out. */
         const val RADIO_FROM_SERVER = 25
         /** With "end of song", how long the song fades out before it stops. */
@@ -1755,6 +1892,9 @@ class PlaybackService : MediaLibraryService() {
         /** It starts loading a little ahead, for the time the loading itself takes. */
         const val AUDITION_LEAD_MS = 1_500L
         const val AUDITION_TIMEOUT_MS = 25_000L
+        /** Further tries at a lossless swap that didn't take, [UPGRADE_RETRY_MS] apart. */
+        const val UPGRADE_RETRIES = 2
+        const val UPGRADE_RETRY_MS = 15_000L
         /** The volume dip around a swap: quickly down, gently back. */
         /** Each crossfade between the main player and the bridge. */
         const val BRIDGE_FADE_MS = 260L

@@ -58,9 +58,9 @@ class SettingsDefaultsTest {
         assertTrue(settings.playback.losslessUnmeteredOnly)
         assertFalse(settings.lyrics.preferWordSynced)
         assertFalse(settings.lyrics.romanize)
-        // lrc.red, new since this was saved, goes in ahead; the saved entry comes next, still off.
-        assertEquals(listOf(LyricsSource.LRC_RED, LyricsSource.SIMPMUSIC), settings.lyrics.ordered.take(2).map { it.source })
-        assertFalse(settings.lyrics.ordered[1].enabled)
+        // lrc.red and Paxsenix, new since this was saved, go in ahead; the saved entry comes next, still off.
+        assertEquals(listOf(LyricsSource.LRC_RED, LyricsSource.PAXSENIX, LyricsSource.SIMPMUSIC), settings.lyrics.ordered.take(3).map { it.source })
+        assertFalse(settings.lyrics.ordered[2].enabled)
         assertEquals(500L, settings.lyrics.offsets["4NRXx6U8ABQ"])
         assertEquals(LyricsSource.SIMPMUSIC, settings.lyrics.chosen["4NRXx6U8ABQ"])
         assertEquals(settings, json.decodeFromString<SettingsState>(json.encodeToString(settings)))

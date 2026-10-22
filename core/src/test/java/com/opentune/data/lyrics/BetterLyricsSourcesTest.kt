@@ -24,6 +24,23 @@ class BetterLyricsSourcesTest {
         assertTrue(lines.none { it.wordSynced })
     }
 
+    @Test fun ttmlTextDirectionIsKeptPerLine() {
+        val xml = """<tt xml:lang="ar"><body><div>
+            <p begin="1.0" end="2.0">مرحبا</p>
+            <p begin="2.0" end="3.0" tts:direction="ltr">hello</p>
+            </div><div xml:lang="en"><p begin="3.0" end="4.0">again</p></div></body></tt>"""
+        val lines = Ttml.parse(xml)
+        assertEquals(listOf(true, false, false), lines.map { it.rtl })
+        // Saved with a download and read back, the direction stays.
+        val json = Json.encodeToString(Lyrics.serializer(), Lyrics.Synced(lines, "Test"))
+        assertEquals(lines, (Json.decodeFromString(Lyrics.serializer(), json) as Lyrics.Synced).lines)
+    }
+
+    @Test fun directionFallsBackToTheScript() {
+        assertTrue(readsRightToLeft(LyricLine(0, 1, "שלום world", emptyList(), false)))
+        assertTrue(!readsRightToLeft(LyricLine(0, 1, "hello שלום", emptyList(), false)))
+    }
+
     @Test fun ttmlDuetsAndBackingVocals() {
         val xml = """<tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><head><metadata>
             <ttm:agent type="person" xml:id="v1"/><ttm:agent type="person" xml:id="v2"/><ttm:agent type="group" xml:id="v1000"/>

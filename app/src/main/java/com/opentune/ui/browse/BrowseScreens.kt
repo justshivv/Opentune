@@ -1,5 +1,8 @@
 package com.opentune.ui.browse
 
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.gestures.animateScrollBy
 import com.opentune.ui.components.GlassPage
 import com.opentune.ui.components.LocalHazeState
 import androidx.compose.ui.layout.layout
@@ -390,7 +393,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
                 c.songs.forEach { com.opentune.data.download.Downloads.enqueue(context, it) }
                 com.opentune.data.Pills.done("Downloading ${c.songs.size} songs", context)
             }
-            com.opentune.ui.components.MenuRow(Icons.Filled.Share, "Share") { close(); com.opentune.ui.share.ListShare.shareList(context, c.title, c.browseId) }
+            com.opentune.ui.components.MenuRow(Icons.Filled.Share, "Share") { close(); com.opentune.ui.share.ListShare.shareList(context, c.title, c.browseId, com.opentune.ui.share.ListShare.coversFor(c.thumbnailUrl, c.songs, album = c.browseId.startsWith("MPRE")), c.subtitle) }
             com.opentune.ui.components.MenuRow(if (saved) Icons.Filled.BookmarkRemove else Icons.Filled.PushPin, if (saved) "Unpin" else "Pin") {
                 close()
                 com.opentune.data.library.LibraryStore.setSaved(com.opentune.data.library.SavedList(c.browseId, c.title, c.subtitle, c.thumbnailUrl), !saved)
@@ -516,9 +519,10 @@ fun CollectionScreen(
                                 ListPlayRow(
                                     enabled = !c?.songs.isNullOrEmpty(),
                                     saved = saved,
-                                    onPlay = { c?.let { actions.playAll(it.songs, 0, false, it.title) } },
-                                    onShuffle = { c?.let { actions.playAll(it.songs, 0, true, it.title) } },
-                                    onSmartShuffle = { c?.let { actions.smartShuffle(it.songs, it.title) } },
+                                    // While the list is searched or sorted, the buttons play what's shown, as it's shown.
+                                    onPlay = { c?.let { actions.playAll(shown.ifEmpty { it.songs }, 0, false, it.title) } },
+                                    onShuffle = { c?.let { actions.playAll(shown.ifEmpty { it.songs }, 0, true, it.title) } },
+                                    onSmartShuffle = { c?.let { actions.smartShuffle(shown.ifEmpty { it.songs }, it.title) } },
                                     onSave = {
                                         c?.let {
                                             com.opentune.data.library.LibraryStore.setSaved(
@@ -542,7 +546,20 @@ fun CollectionScreen(
                                     )
                                 }
                                 androidx.compose.animation.AnimatedVisibility(searching) {
-                                    ListSearchField(query, { query = it }, onClear = { query = ""; searching = false }, Modifier.padding(bottom = 12.dp))
+                                    // Opened, the field rises to just under the bar, clear of the
+                                    // keyboard that comes up with it, instead of staying down under the cover.
+                                    val density = androidx.compose.ui.platform.LocalDensity.current
+                                    val topInset = WindowInsets.statusBars.getTop(density)
+                                    var fieldY by remember { mutableStateOf<Float?>(null) }
+                                    LaunchedEffect(fieldY != null) {
+                                        val y = fieldY ?: return@LaunchedEffect
+                                        val below = topInset + with(density) { SEARCH_FIELD_TOP.toPx() }
+                                        listState.animateScrollBy(y - below)
+                                    }
+                                    ListSearchField(
+                                        query, { query = it }, onClear = { query = ""; searching = false },
+                                        Modifier.padding(bottom = 12.dp).onGloballyPositioned { if (fieldY == null) fieldY = it.positionInRoot().y },
+                                    )
                                 }
                             }
                         }
@@ -575,8 +592,15 @@ fun CollectionScreen(
                             )
                         }
                     }
+                    // Room to scroll the search field up clear of the keyboard, however short the list.
+                    if (searching) item(key = "search-room") {
+                        Spacer(Modifier.height(androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp))
+                    }
                 }
             }
         }
     }
 }
+
+/** How far below the status bar an opened list search sits: just under the top bar. */
+private val SEARCH_FIELD_TOP = 76.dp
