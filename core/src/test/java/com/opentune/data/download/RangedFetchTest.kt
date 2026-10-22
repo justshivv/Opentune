@@ -55,6 +55,22 @@ class RangedFetchTest {
         part.delete()
         Unit
     }
+    @Test fun aServerWithoutRangesSendsTheWholeFile() = runBlocking {
+        // Answers every request, Range or not, with the whole file and a 200, as many add-ons' hosts do.
+        val whole = OkHttpClient.Builder().addInterceptor { chain ->
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .header("Content-Type", "audio/flac")
+                .body(data.toResponseBody()).build()
+        }.build()
+        val part = File.createTempFile("ranged", ".part")
+        var last = 0f
+        RangedFetch.fetch(whole, "https://media.invalid/file.flac", emptyMap(), part) { last = it }
+        assertArrayEquals(data, part.readBytes())
+        assertTrue(last > 0.9f)
+        part.delete()
+        Unit
+    }
+
     @Test fun rejectsWrongRangeEvenWhenResponseHasTheExpectedLength() = runBlocking {
         rejectsResponse("bytes 1-16/16", ByteArray(16), "audio/mp4")
     }

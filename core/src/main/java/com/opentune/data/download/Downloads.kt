@@ -281,13 +281,28 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             // A playlist queues every song at once; a few at a time each get the
             // bandwidth, and YouTube isn't asked for dozens of streams together.
             val target = songsAtOnce.withPermit {
-                if (maxKbps == Int.MAX_VALUE) addon = com.opentune.data.addons.AddonResolver.resolve(entry.song.toSong(), parseDuration(entry.song.durationText), download = true)
-                val chosen = addon
-                if (chosen != null && chosen.extension != null) {
-                    File(dir, "$id.${chosen.extension}").also { target ->
-                        fetch(chosen.url, File(dir, "$id.part"), target, entry.song.title, chosen) { p -> publish { it.copy(progress = p) } }
+                // Lossless: every add-on that allows downloads and has this recording verified,
+                // best file first; one that won't hand its file over is passed over for the
+                // next, and with none that works the song comes from the normal stream.
+                if (maxKbps == Int.MAX_VALUE) {
+                    val candidates = com.opentune.data.addons.AddonResolver
+                        .resolveAll(entry.song.toSong(), parseDuration(entry.song.durationText), download = true)
+                        .filter { it.extension != null }
+                    for (candidate in candidates) {
+                        val file = File(dir, "$id.${candidate.extension}")
+                        try {
+                            fetch(candidate.url, File(dir, "$id.part"), file, entry.song.title, candidate) { p -> publish { it.copy(progress = p) } }
+                            addon = candidate
+                            return@withPermit file
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            com.opentune.data.addons.AddonResolver.failed(candidate.addonId, id)
+                            Log.w(TAG, "${candidate.provider} wouldn't hand over $id (${e.javaClass.simpleName}: ${e.message}); trying the next source")
+                            publish { it.copy(progress = 0f) }
+                        }
                     }
-                } else {
+                }
                 // Exported copies have to be AAC in MP4: the Music folder refuses WebM.
                 val stream = StreamResolver.resolveForDownload(id, maxKbps, requireM4a = exporting)
                 File(dir, "$id.${stream.downloadExtension}").also { target ->
@@ -295,7 +310,6 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
                         publish { it.copy(progress = p) }
                     }
                 }
-            }
             }
             val art = runCatching { fetchArt(entry.song.thumbnailUrl.artworkAt(PLAYER_ART_PX), File(dir, "$id.jpg")) }.getOrNull()
             publish {
@@ -319,15 +333,12 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (addon != null) {
-                com.opentune.data.addons.AddonResolver.failed(addon!!.addonId, id)
-                Log.w(TAG, "Add-on download of $id failed (${e.javaClass.simpleName})")
-            } else Log.w(TAG, "Download of $id failed", e)
+            Log.w(TAG, "Download of $id failed", e)
             // A stream YouTube wouldn't hand over just then fails the same way as a
             // dropped connection: both are worth another go a little later.
             val retrying = runAttemptCount < MAX_ATTEMPTS
             publish { it.copy(state = if (retrying) DownloadState.QUEUED else DownloadState.FAILED,
-                progress = 0f, error = if (addon != null) "Add-on download failed. Retry to check the next available source." else e.message) }
+                progress = 0f, error = e.message) }
             if (retrying) Result.retry() else Result.failure()
         } finally {
             val current = Downloads.entryNow(id)
@@ -428,6 +439,8 @@ internal object RangedFetch {
         part.delete()
         val total = url.toHttpUrlOrNull()?.queryParameter("clen")?.toLongOrNull()?.takeIf { it > 0 }
             ?: sizeFrom(client, url, headers)
+            // A server that doesn't serve ranges (many add-ons' file hosts) sends the file whole.
+            ?: return@withContext fetchWhole(client, url, headers, part, maxBytes, onProgress)
         require(total in 1..maxBytes) { "Audio file exceeds the download size limit." }
         val done = AtomicLong(0)
         val reported = AtomicLong(0)
@@ -454,8 +467,12 @@ internal object RangedFetch {
         if (part.length() != total) throw IOException("Download came out the wrong size")
     }
 
-    /** The file's size, from the total in a one-byte range's Content-Range. */
-    private fun sizeFrom(client: OkHttpClient, url: String, headers: Map<String, String>): Long {
+    /**
+     * The file's size, from the total in a one-byte range's Content-Range;
+     * null when the server doesn't serve ranges (it answers with the whole
+     * file, or without a total).
+     */
+    private fun sizeFrom(client: OkHttpClient, url: String, headers: Map<String, String>): Long? {
         val request = Request.Builder().url(url).apply {
             headers.forEach { (k, v) -> header(k, v) }
             header("Accept-Encoding", "identity")
@@ -463,8 +480,60 @@ internal object RangedFetch {
         }.build()
         client.newCall(request).execute().use { r ->
             if (!r.isSuccessful) throw IOException("Server answered ${r.code}")
+            if (r.code != 206) return null
             return r.header("Content-Range")?.substringAfterLast('/')?.toLongOrNull()?.takeIf { it > 0 }
-                ?: throw IOException("Server didn't say how big the file is")
+        }
+    }
+
+    /** The whole file in one request, from the start, tried a few times. */
+    private suspend fun fetchWhole(
+        client: OkHttpClient,
+        url: String,
+        headers: Map<String, String>,
+        part: File,
+        maxBytes: Long,
+        onProgress: (Float) -> Unit,
+    ) {
+        var attempt = 0
+        while (true) {
+            try {
+                runInterruptible {
+                    val request = Request.Builder().url(url).apply {
+                        headers.forEach { (k, v) -> header(k, v) }
+                        header("Accept-Encoding", "identity")
+                    }.build()
+                    client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) throw IOException("Server answered ${response.code}")
+                        val type = response.header("Content-Type").orEmpty().lowercase()
+                        if (type.contains("text/") || type.contains("json") || type.contains("html")) {
+                            throw IOException("Server returned a page instead of audio")
+                        }
+                        val body = response.body ?: throw IOException("Empty response")
+                        val length = body.contentLength().takeIf { it > 0 }
+                        if (length != null && length > maxBytes) throw IOException("Audio file exceeds the download size limit.")
+                        var got = 0L
+                        var reported = 0L
+                        part.outputStream().buffered().use { out ->
+                            val input = body.byteStream()
+                            val buf = ByteArray(64 * 1024)
+                            while (true) {
+                                val n = input.read(buf)
+                                if (n < 0) break
+                                got += n
+                                if (got > maxBytes) throw IOException("Audio file exceeds the download size limit.")
+                                out.write(buf, 0, n)
+                                if (length != null && got - reported > 256 * 1024) { reported = got; onProgress(got.toFloat() / length) }
+                            }
+                        }
+                        if (got == 0L || (length != null && got != length)) throw IOException("Download came out the wrong size")
+                    }
+                }
+                return
+            } catch (e: IOException) {
+                part.delete()
+                if (++attempt >= ATTEMPTS) throw e
+                delay(500L * attempt)
+            }
         }
     }
 
