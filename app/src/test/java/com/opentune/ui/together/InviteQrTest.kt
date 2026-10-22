@@ -19,8 +19,15 @@ class InviteQrTest {
         assertEquals(code, RoomCode.parse(decode(qr)))
     }
 
+    /** One of the codes whose best-scored mask a reader couldn't find. */
+    @Test fun aCodeTheDefaultMaskHidesStillReads() {
+        val link = RoomCode.parse("HQFK-FLBW-FRUU")!!.link
+        assertTrue(link, link.endsWith("#code=HQFKFLBWFRUU"))
+        assertEquals(link, decode(qrModules(link)))
+    }
+
     @Test fun everyRoomFits() {
-        repeat(20) {
+        repeat(200) {
             val code = RoomCode.generate()
             assertEquals(code.link, decode(qrModules(code.link)))
         }
