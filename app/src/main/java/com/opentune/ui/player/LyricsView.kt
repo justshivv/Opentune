@@ -524,17 +524,22 @@ private fun buildLyricRows(lines: List<LyricLine>): List<LyricRow> {
 /**
  * Three dots for an instrumental break. They fill in one after another as the
  * break runs out, so you can see the next line coming, and breathe while they wait.
+ *
+ * The row keeps its height whether the dots show or not, and they only fade:
+ * a row growing and shrinking moved the lines under the scroll's own glide,
+ * and the line after a break shook and settled instead of arriving smoothly.
  */
 @Composable
 private fun GapDots(visible: Boolean, progress: () -> Float) {
-    AnimatedVisibility(visible, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+    val shown by animateFloatAsState(if (visible) 1f else 0f, tween(if (visible) 420 else 260), label = "gapShown")
+    run {
         val transition = rememberInfiniteTransition(label = "gap")
         val breath by transition.animateFloat(0.92f, 1.08f, infiniteRepeatable(tween(1_200), RepeatMode.Reverse), label = "breath")
         val ink = MaterialTheme.colorScheme.onSurface
         Row(
             Modifier
                 .padding(vertical = 18.dp)
-                .graphicsLayer { scaleX = breath; scaleY = breath; transformOrigin = TransformOrigin(0f, 0.5f) },
+                .graphicsLayer { scaleX = breath; scaleY = breath; alpha = shown; transformOrigin = TransformOrigin(0f, 0.5f) },
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             repeat(3) { i ->
@@ -586,9 +591,9 @@ private suspend fun glideTo(state: LazyListState, index: Int, reduced: Boolean, 
     speed.pxPerS = 0f
 }
 
-/** About 0.6 s to settle, as the old 650 ms glide did; critically damped. */
-private const val GLIDE_STIFFNESS = 64f
-private const val GLIDE_DAMPING = 16f
+/** About 0.8 s to settle, a softer arrival than before; critically damped (damping = 2·√stiffness), so it never overshoots. */
+private const val GLIDE_STIFFNESS = 42f
+private const val GLIDE_DAMPING = 12.96f
 
 /** How one [LyricsAnimation] treats lines: sizes, blur per line away, and glow. */
 /** How far, as a share of a row's height, a letter can reach past its row's box. */
@@ -902,12 +907,13 @@ internal fun SettingUpBadge(modifier: Modifier = Modifier) {
     }
 }
 
-/** Three dots breathing in sequence while an intro plays. */
+/** Three dots breathing in sequence while an intro plays; like [GapDots], they fade but keep their room. */
 @Composable
 private fun IntroDots(visible: Boolean) {
-    AnimatedVisibility(visible, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+    val shown by animateFloatAsState(if (visible) 1f else 0f, tween(if (visible) 420 else 260), label = "introShown")
+    run {
         val transition = rememberInfiniteTransition(label = "intro")
-        Row(Modifier.padding(vertical = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.padding(vertical = 18.dp).graphicsLayer { alpha = shown }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             repeat(3) { i ->
                 val s by transition.animateFloat(
                     0.6f,
@@ -945,7 +951,8 @@ private fun Credit(source: String) {
 
 private const val RESUME_FOLLOW_MS = 3_000L
 /** Where the current line sits, as a share of the height from the top: room for one line above it. */
-private const val LINE_ANCHOR = 0.16f
+/** Where the active line sits, down from the top: high, with only a sliver of the line before it showing. */
+private const val LINE_ANCHOR = 0.085f
 /** How far ahead of its timestamp a line lights up. */
 private const val LINE_LEAD_MS = 150L
 
