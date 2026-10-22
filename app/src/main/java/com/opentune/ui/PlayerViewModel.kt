@@ -72,7 +72,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun watchLyrics() {
         combine(
-            currentSong.distinctUntilChangedBy { it?.videoId },
+            // A new title on the same id (a song from an add-on matched to an upload) is a new song too.
+            currentSong.distinctUntilChangedBy { it?.let { s -> Triple(s.videoId, s.title, s.artist) } },
             AppSettings.lyrics.map { Triple(it.ordered, it.preferWordSynced, it.chosen) }.distinctUntilChanged(),
         ) { song, _ -> song }.collectLatest { song ->
             if (song == null) return@collectLatest

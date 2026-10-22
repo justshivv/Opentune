@@ -814,6 +814,10 @@ private fun LyricLineView(
 private fun wordBoxesOf(layout: TextLayoutResult?, line: LyricLine, text: String): List<List<Rect>> {
     val l = layout ?: return emptyList()
     var start = 0
+    // Where the word before ended on each row: a word's box reaches back to it, so the gap
+    // between them (where a j's hook or a slanted letter's foot reaches) is lit with the
+    // word that follows, not left lit from the start.
+    val prevRight = HashMap<Int, Float>()
     return line.words.map { w ->
         val end = (start + w.text.length).coerceAtMost(text.length)
         var visibleEnd = end
@@ -834,8 +838,10 @@ private fun wordBoxesOf(layout: TextLayoutResult?, line: LyricLine, text: String
                 // j's hook left of a row's first word. The box takes them in where
                 // no other word can be, so no part of a letter stays lit early.
                 val pad = box.height * GLYPH_OVERHANG
+                val before = prevRight[row]
+                prevRight[row] = box.right
                 Rect(
-                    left = if (from == l.getLineStart(row)) box.left - pad else box.left,
+                    left = if (from == l.getLineStart(row)) box.left - pad else minOf(box.left, before ?: box.left),
                     top = if (row == 0) box.top - pad else box.top,
                     right = if (to == l.getLineEnd(row, visibleEnd = true)) box.right + pad else box.right,
                     bottom = if (row == l.lineCount - 1) box.bottom + pad else box.bottom,

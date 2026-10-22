@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.opentune.data.MusicRepository
 import com.opentune.data.model.SearchFilter
 import com.opentune.data.model.SearchResult
+import com.opentune.data.model.durationMillis
 import com.opentune.data.model.UiState
 import com.opentune.data.settings.AppSettings
 import com.opentune.ui.friendlyError
@@ -49,8 +50,35 @@ class AddonHit(
         return a.durationMs <= 0 || b.durationMs <= 0 || kotlin.math.abs(a.durationMs - b.durationMs) <= SAME_RECORDING_MS
     }
 
+    /**
+     * Of YouTube Music's [songs] for this track, the same recording: title
+     * (without bracketed extras) and lead artist alike, and lengths close
+     * where both are known. Only the title has to agree when nothing else
+     * does. With no title match at all, the top result with this track's
+     * own title and artist, so the lyrics looked up are this song's rather
+     * than whatever YouTube put first (sometimes the song just played).
+     */
+    fun bestMatch(songs: List<com.opentune.data.model.Song>): com.opentune.data.model.Song? {
+        if (songs.isEmpty()) return null
+        val title = titleKey(track.title)
+        val artist = norm(lead(track.artist))
+        fun titleOk(s: com.opentune.data.model.Song) = titleKey(s.title) == title
+        fun artistOk(s: com.opentune.data.model.Song) = artist.isNotEmpty() && norm(s.artist).contains(artist)
+        fun lengthOk(s: com.opentune.data.model.Song): Boolean {
+            val ms = s.durationMillis()
+            return track.durationMs <= 0 || ms <= 0 || kotlin.math.abs(track.durationMs - ms) <= MATCH_LENGTH_MS
+        }
+        return songs.firstOrNull { titleOk(it) && artistOk(it) && lengthOk(it) }
+            ?: songs.firstOrNull { titleOk(it) && artistOk(it) }
+            ?: songs.firstOrNull { titleOk(it) }
+            ?: songs.first().copy(title = track.title, artist = track.artist)
+    }
+
     companion object {
         const val SAME_RECORDING_MS = 2_000L
+        /** A YouTube upload's length can differ from the add-on's file by a few seconds of silence. */
+        const val MATCH_LENGTH_MS = 4_000L
+        private fun titleKey(s: String) = norm(s.replace(Regex("\\s*[(\\[][^)\\]]*[)\\]]"), "").substringBefore(" - "))
         private fun norm(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), "")
         private fun lead(s: String) = s.substringBefore(",").substringBefore("&").substringBefore(" feat").trim()
 
@@ -190,8 +218,9 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
         return matches.getOrPut(hit.key) {
             viewModelScope.async(Dispatchers.IO) {
                 val query = "${hit.track.title} ${hit.track.artist}".trim()
-                runCatching { MusicRepository.search(query, SearchFilter.SONGS) }.getOrDefault(emptyList())
-                    .firstNotNullOfOrNull { (it as? SearchResult.TopTrack)?.song ?: (it as? SearchResult.Track)?.song }
+                val songs = runCatching { MusicRepository.search(query, SearchFilter.SONGS) }.getOrDefault(emptyList())
+                    .mapNotNull { (it as? SearchResult.TopTrack)?.song ?: (it as? SearchResult.Track)?.song }
+                hit.bestMatch(songs)
             }
         }
     }
