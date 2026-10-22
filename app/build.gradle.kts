@@ -124,8 +124,12 @@ dependencies {
     // Services, library, settings and the player service, shared with the watch app.
     implementation(project(":core"))
 
-    // ---- QR codes: the Listen together invite. Encoder only; no Android parts. ----
+    // ---- QR codes: the Listen together invite and the TV's sign-in code, drawn and read. No Android parts. ----
     implementation("com.google.zxing:core:3.5.4")
+    // ---- The camera for scanning a QR code in the app (no Google services). ----
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
 
     // ---- Images ----
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
