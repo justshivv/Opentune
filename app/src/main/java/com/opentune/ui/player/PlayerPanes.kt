@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AllInclusive
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bedtime
@@ -304,13 +306,41 @@ fun LyricPreview(lyrics: LyricsState, position: () -> Long, onOpen: () -> Unit, 
 /** A round glass button that lights up while its mode is on. */
 @Composable
 fun GlassToggle(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit, size: androidx.compose.ui.unit.Dp = 52.dp) {
-    val bg by animateColorAsState(if (selected) Color.White.copy(alpha = 0.22f) else Color.Transparent, label = "toggle")
+    val bg by animateColorAsState(if (selected) Color.White.copy(alpha = 0.22f) else Color.Transparent, BUTTON_SETTLE, label = "toggle")
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val scale = pressScale(press, selected)
     Box(
-        Modifier.size(size).clip(CircleShape).background(bg).clickable(onClick = onClick),
+        Modifier.size(size).graphicsLayer { scaleX = scale.value; scaleY = scale.value }
+            .clip(CircleShape).background(bg).clickable(press, androidx.compose.material3.ripple(), onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, label, Modifier.size(size * 0.5f))
     }
+}
+
+/** How a colour or size settles after a tap: quick, with no bounce past the mark. */
+private val BUTTON_SETTLE = spring<Color>(dampingRatio = 1f, stiffness = 500f)
+
+/**
+ * A button's size under the finger: it gives a little while pressed and
+ * springs back with a small overshoot, and a button that turns on gets a
+ * brief swell, so taps feel answered rather than only recoloured.
+ */
+@Composable
+private fun pressScale(press: androidx.compose.foundation.interaction.InteractionSource, selected: Boolean): androidx.compose.runtime.State<Float> {
+    val pressed by press.collectIsPressedAsState()
+    val swell = remember { androidx.compose.animation.core.Animatable(1f) }
+    var first by remember { mutableStateOf(true) }
+    LaunchedEffect(selected) {
+        if (first) { first = false; return@LaunchedEffect }
+        if (selected) {
+            swell.animateTo(1.08f, spring(dampingRatio = 1f, stiffness = 900f))
+            swell.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 500f))
+        }
+    }
+    val target = if (pressed) 0.88f else 1f
+    val pressedScale = animateFloatAsState(target, spring(dampingRatio = if (pressed) 1f else 0.5f, stiffness = if (pressed) 1_200f else 450f), label = "press")
+    return remember { derivedStateOf { pressedScale.value * swell.value } }
 }
 
 /**
@@ -320,12 +350,16 @@ fun GlassToggle(icon: ImageVector, label: String, selected: Boolean, onClick: ()
  */
 @Composable
 fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit, width: androidx.compose.ui.unit.Dp = 76.dp) {
-    val bg by animateColorAsState(if (selected) Color.White.copy(alpha = 0.20f) else Color.Transparent, label = "pillButton")
+    val bg by animateColorAsState(if (selected) Color.White.copy(alpha = 0.20f) else Color.Transparent, BUTTON_SETTLE, label = "pillButton")
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val scale = pressScale(press, selected)
     Box(
-        Modifier.fillMaxHeight().width(width).background(bg).clickable(onClickLabel = label, onClick = onClick),
+        Modifier.fillMaxHeight().width(width).background(bg)
+            .clickable(press, androidx.compose.material3.ripple(), onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, label, Modifier.size(26.dp))
+        // The segment's fill stays put in the pill; the icon is what gives under the finger.
+        Icon(icon, label, Modifier.size(26.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value })
     }
 }
 

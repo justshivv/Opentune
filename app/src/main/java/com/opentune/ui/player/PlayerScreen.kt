@@ -432,6 +432,7 @@ fun PlayerLayout(
     LaunchedEffect(pane == Pane.COVER) {
         if (pane != Pane.COVER && coverLift > 0f) {
             delay(COVER_LIFT_RESET_MS)
+            liftSettle?.cancel()
             coverLift = 0f
         }
     }
@@ -537,8 +538,15 @@ fun PlayerLayout(
                     onDragStopped = { velocity ->
                         if (pane == Pane.COVER && style != PlayerStyle.LYRICS_FIRST && dragOffset == 0f && (upPull < -upPx || velocity < -1_500f || flight.pull > 0.3f)) {
                             // Swiped up on the cover: it goes back up into the lyrics or queue header.
-                            // A lifted cover page stays lifted as it leaves, so nothing jumps back first.
+                            // A lifted cover page keeps rising at the finger's speed as it leaves,
+                            // so nothing stops or jumps back at the moment of letting go.
+                            val lifted = coverLift > 0f
                             collapseCover()
+                            if (lifted) liftSettle = scope.launch {
+                                androidx.compose.animation.core.animate(coverLift, 1f, -velocity / liftTravel, spring(dampingRatio = 1f, stiffness = 420f)) { v, _ ->
+                                    coverLift = v.coerceIn(0f, 1f)
+                                }
+                            }
                             upPull = 0f
                         } else if (coverLift > 0f) {
                             // Short of it: the cover page settles back down.
@@ -738,6 +746,12 @@ fun PlayerLayout(
                         // page's side margin, and a clip there cut it off in a hard edge.
                         when {
                             state.ui.reduceAnimation -> fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                            // Carried up by a swipe: the cover page is already moving with the finger
+                            // and keeps going on its own, so it only fades; the lyrics rise on the
+                            // same spring, from just below.
+                            targetState == Pane.LYRICS && coverLift > 0f ->
+                                (fadeIn(tween(240, delayMillis = 40)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 420f)) { it / 8 }) togetherWith
+                                    fadeOut(tween(200, easing = FastOutSlowInEasing))
                             // Lyrics rise into place on a soft spring while the cover sinks back.
                             targetState == Pane.LYRICS ->
                                 (fadeIn(tween(220)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 650f)) { it / 5 }) togetherWith
