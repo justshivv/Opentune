@@ -31,7 +31,8 @@ object LogExport {
             ).redirectErrorStream(true).start()
             process.inputStream.bufferedReader().use { it.readText() }.takeLast(SYSTEM_CHARS)
         }.getOrElse { "Couldn't read logcat: ${it.message}" }
-        val text = "$header\n== App log ==\n$own\n\n== System warnings and errors ==\n$system"
+        val crash = CrashLog.last()?.let { "\n\n== Last crash ==\n$it" }.orEmpty()
+        val text = "$header\n== App log ==\n$own\n\n== System warnings and errors ==\n$system$crash"
         STREAM_QUERY.replace(text, "googlevideo.com/…").replace(SERVER_SECRET, "$1…")
     }
 

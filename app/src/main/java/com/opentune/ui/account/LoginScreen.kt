@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.opentune.data.account.AccountStore
@@ -46,6 +47,9 @@ fun LoginScreen(onDone: () -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var finished by remember { mutableStateOf(false) }
     var webView by remember { mutableStateOf<WebView?>(null) }
+    // Some devices (most TVs, and phones with Android System WebView turned off or mid-update)
+    // can't make a WebView: creating one throws. That's said here instead of closing the app.
+    var unavailable by remember { mutableStateOf(false) }
     DisposableEffect(Unit) {
         onDispose {
             webView?.run {
@@ -59,8 +63,15 @@ fun LoginScreen(onDone: () -> Unit) {
         AndroidView(
             modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = 72.dp),
             factory = { context ->
-                CookieManager.getInstance().setAcceptCookie(true)
-                WebView(context).apply {
+                val view = runCatching {
+                    CookieManager.getInstance().setAcceptCookie(true)
+                    WebView(context)
+                }.onFailure {
+                    android.util.Log.w("LoginScreen", "No WebView for sign-in", it)
+                    unavailable = true
+                    loading = false
+                }.getOrNull() ?: return@AndroidView android.view.View(context)
+                view.apply {
                     webView = this
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
@@ -85,6 +96,15 @@ fun LoginScreen(onDone: () -> Unit) {
                 }
             },
         )
+        if (unavailable) {
+            Text(
+                "Sign-in needs Android System WebView, which isn't working on this device. Update or turn it on in the " +
+                    "Play Store, or sign in on your phone and use Link a device to sign this one in.",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
+            )
+        }
         Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 8.dp)) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 GlassBackButton(onDone)

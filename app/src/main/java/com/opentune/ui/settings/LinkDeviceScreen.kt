@@ -2,7 +2,6 @@ package com.opentune.ui.settings
 
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.provider.MediaStore
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -104,6 +103,17 @@ fun LinkDeviceScreen(
     var target by rememberSaveable { mutableStateOf(LinkTarget.TV) }
     var receiving by remember { mutableStateOf(false) }
     var casting by remember { mutableStateOf(false) }
+    var scanning by remember { mutableStateOf(false) }
+    // The TV's code read here goes the same way as one scanned with the phone's camera app:
+    // a sign-in code asks to approve, any other OpenTune link opens.
+    if (scanning) com.opentune.ui.account.QrScannerDialog(onDismiss = { scanning = false }) { text ->
+        scanning = false
+        val view = Intent(Intent.ACTION_VIEW, text.toUri())
+        if (!com.opentune.ui.account.PairingLinks.receive(view)) {
+            if (com.opentune.ui.Links.parse(text) != null || text.startsWith("opentune://")) com.opentune.ui.Links.receive(view)
+            else Pills.error("That isn't an OpenTune code", context)
+        }
+    }
     val signedIn by AccountStore.signedIn.collectAsState()
     if (receiving) com.opentune.ui.account.ReceiveSessionSheet { receiving = false }
     if (casting) com.opentune.ui.cast.CastSheet { casting = false }
@@ -117,8 +127,9 @@ fun LinkDeviceScreen(
         runCatching { context.startActivity(Intent.createChooser(send, "Send the link")) }
     }
     fun camera() {
-        runCatching { context.startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)) }
-            .onFailure { Pills.error("No camera app found. Scan the code with any QR scanner", context) }
+        // Scanned here, in the app; a phone without a camera can still scan with any other phone's camera app.
+        if (context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)) scanning = true
+        else Pills.error("This device has no camera. Scan the code with the phone's camera app", context)
     }
 
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -230,7 +241,7 @@ private fun TvSteps(
             )
         }
         Step(2, "Show the code on the TV", "On the TV, open Settings, then Link a device, and choose Show the code.")
-        Step(3, "Scan it with this phone", "Point the camera at the code and approve on this phone.", last = true) {
+        Step(3, "Scan it with this phone", "Scan it right here in OpenTune, or with the phone's own camera app, then approve on this phone.", last = true) {
             if (signedIn) {
                 Buttons({ SheetButton("Open the camera", onClick = camera, icon = Icons.Rounded.CameraAlt, tone = SheetTone.Primary) })
             } else {
