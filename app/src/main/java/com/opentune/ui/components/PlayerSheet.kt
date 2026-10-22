@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composable () -> Unit) {
     val t = remember { Animatable(if (open) 1f else 0f) }
+    // Where the mini player's top was when last drawn, to turn a drag in pixels into the card's progress.
+    val miniTop = remember { floatArrayOf(0f) }
     LaunchedEffect(open) {
         if (open) {
             if (PlayerMorph.sheetAt > t.value) t.snapTo(PlayerMorph.sheetAt)
@@ -54,9 +56,17 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
             withFrameNanos { }
             t.animateTo(1f, spring(dampingRatio = 0.92f, stiffness = 340f, visibilityThreshold = 0.001f))
         } else {
+            // Dragged down part of the way already: the shrink goes on from where the finger let go, at its speed.
+            val dragged = PlayerMorph.sheetDrag
+            val fling = PlayerMorph.sheetFling
+            if (dragged > 0f) {
+                t.snapTo(dragProgress(t.value, dragged, miniTop[0]))
+                PlayerMorph.sheetDrag = 0f
+                PlayerMorph.sheetFling = 0f
+            }
             // The page and dock come back under it on this frame.
             withFrameNanos { }
-            t.animateTo(0f, spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.001f))
+            t.animateTo(0f, spring(dampingRatio = 1f, stiffness = 420f, visibilityThreshold = 0.001f), initialVelocity = fling)
             PlayerMorph.cardFrom = null
         }
     }
@@ -73,8 +83,9 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
     val fallbackLift = with(density) { 120.dp.toPx() }
     val fallbackHeight = with(density) { 64.dp.toPx() }
     val face = MaterialTheme.colorScheme.surfaceContainerHigh
-    // Where the card is, 0 on the mini player and 1 filling the screen.
-    val p: () -> Float = { maxOf(t.value, PlayerMorph.pulling, PlayerMorph.sheetAt) }
+    // Where the card is, 0 on the mini player and 1 filling the screen; a drag down
+    // takes it toward 0 with the card's top under the finger.
+    val p: () -> Float = { dragProgress(maxOf(t.value, PlayerMorph.pulling, PlayerMorph.sheetAt), PlayerMorph.sheetDrag, miniTop[0]) }
     Box(
         Modifier
             .fillMaxSize()
@@ -82,9 +93,10 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
                 val w = size.width
                 val h = size.height
                 if (w <= 0f || h <= 0f) return@graphicsLayer
-                val k = p().coerceIn(0f, 1f)
                 val mini = PlayerMorph.miniBar
                     ?: Rect(w * 0.04f, h - fallbackLift - fallbackHeight, w * 0.96f, h - fallbackLift)
+                miniTop[0] = mini.top
+                val k = p().coerceIn(0f, 1f)
                 val card = PlayerMorph.cardFrom
                 val from = card ?: Rect(0f, 0f, w, h)
                 fun lerp(a: Float, b: Float) = a + (b - a) * k
@@ -125,6 +137,14 @@ fun PlayerSheet(open: Boolean, onSettled: (Boolean) -> Unit, content: @Composabl
         )
     }
 }
+
+/**
+ * The card's progress [base] taken down by a drag of [dragPx]: the card's top
+ * runs from the screen's top (1) to the mini player's [miniTop] (0), so
+ * this keeps it under the finger.
+ */
+private fun dragProgress(base: Float, dragPx: Float, miniTop: Float): Float =
+    if (dragPx <= 0f || miniTop <= 0f) base else minOf(base, 1f - (dragPx / miniTop).coerceIn(0f, 1f))
 
 /** The card's outline: [height] tall from the top, with [corner] corners, in the layer's own pixels. */
 private class CardShape(private val height: Float, private val corner: Float) : Shape {

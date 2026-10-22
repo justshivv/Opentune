@@ -92,6 +92,15 @@ object PlayerMorph {
     var sheetMorph by mutableStateOf(false)
     /** How far a pull up had taken the card when the player was let open. */
     internal var sheetAt by mutableFloatStateOf(0f)
+
+    /**
+     * Pixels a finger has dragged the open player down, while [sheetMorph]:
+     * the card shrinks toward the mini player under the finger, and when let
+     * go the shrink carries on from there at [sheetFling] (card heights per
+     * second, negative toward the mini player).
+     */
+    var sheetDrag by mutableFloatStateOf(0f)
+    var sheetFling = 0f
     /** Where the player's card was when a drag down let go, in the root, and its corner in px. */
     internal var cardFrom by mutableStateOf<Rect?>(null)
     internal var cardCornerPx = 0f
