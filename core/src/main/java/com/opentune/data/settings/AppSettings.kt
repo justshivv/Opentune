@@ -573,6 +573,7 @@ enum class LyricsAnimation(val label: String, val summary: String) {
 @Serializable
 enum class LyricsSource(val label: String, val summary: String) {
     LRC_RED("lrc.red", "Word-by-word lyrics filed by recording, as BitChord uses them first"),
+    PAXSENIX("Paxsenix", "Apple Music's word-by-word lyrics, with duets and backing vocals"),
     LRCLIB("LRCLIB", "Community lyrics, line by line and sometimes word by word"),
     LYRICSPLUS("LyricsPlus", "Word-by-word lyrics from the servers behind YouLyPlus, as Echo Music uses them"),
     BETTERLYRICS("Better Lyrics", "Word-by-word lyrics from Better Lyrics, for songs its listeners have already looked up"),
@@ -601,13 +602,14 @@ data class LyricsSettings(
     val chosen: Map<String, LyricsSource> = emptyMap(),
 ) {
     /**
-     * The saved order, with any source added since appended at the end; lrc.red,
-     * the most exact of them, goes in first when a saved order hasn't met it yet.
+     * The saved order, with any source added since appended at the end; lrc.red
+     * and Paxsenix, the most exact of them, go in first when a saved order
+     * hasn't met them yet.
      */
     val ordered: List<LyricsSourceEntry>
         get() {
             val missing = LyricsSource.entries.filter { s -> sources.none { it.source == s } }.map(::LyricsSourceEntry)
-            val (front, back) = missing.partition { it.source == LyricsSource.LRC_RED }
+            val (front, back) = missing.partition { it.source == LyricsSource.LRC_RED || it.source == LyricsSource.PAXSENIX }
             return front + sources.distinctBy { it.source } + back
         }
 }

@@ -261,6 +261,7 @@ object LyricsRepository {
     private suspend fun ask(source: LyricsSource, videoId: String, title: String, artist: String, durationMs: Long): Result<Lyrics?> = runCatching {
         when (source) {
             LyricsSource.LRC_RED -> LrcRed.lookup(title, artist, durationMs)
+            LyricsSource.PAXSENIX -> Paxsenix.lookup(title, artist, durationMs)
             LyricsSource.LRCLIB -> lookup(title, artist, durationMs)
             LyricsSource.LYRICSPLUS -> LyricsPlus.lookup(title, artist, durationMs)
             LyricsSource.BETTERLYRICS -> BetterLyrics.lookup(title, artist, durationMs)
