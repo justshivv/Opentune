@@ -1,5 +1,6 @@
 package com.opentune
 
+import kotlin.math.roundToInt
 import androidx.compose.runtime.getValue
 import android.content.Intent
 import android.os.Build
@@ -111,10 +112,12 @@ class MainActivity : ComponentActivity() {
         val now = display.mode
         val modes = display.supportedModes
             .filter { it.physicalWidth == now.physicalWidth && it.physicalHeight == now.physicalHeight }
+        // Only 60, 90 and 120 Hz are offered; "fastest" (0, from before) is the fastest of those.
+        val offered = modes.filter { it.refreshRate.roundToInt() in com.opentune.ui.settings.OFFERED_RATES }.ifEmpty { modes }
         val best = when {
             !on -> null
-            hz <= 0 -> modes.maxByOrNull { it.refreshRate }
-            else -> modes.minByOrNull { kotlin.math.abs(it.refreshRate - hz) }
+            hz <= 0 -> offered.maxByOrNull { it.refreshRate }
+            else -> offered.minByOrNull { kotlin.math.abs(it.refreshRate - hz) }
         }
         val id = best?.modeId ?: 0
         if (window.attributes.preferredDisplayModeId != id) {
