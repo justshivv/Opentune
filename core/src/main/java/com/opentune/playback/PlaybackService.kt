@@ -203,10 +203,15 @@ class PlaybackService : MediaLibraryService() {
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
-            ): AudioSink = DefaultAudioSink.Builder(context)
-                .setEnableFloatOutput(floatOutput)
-                .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain(effects))
-                .build()
+            ): AudioSink = com.opentune.playback.dsp.PrecisionAudioSink(
+                // The effects run in the precision sink, on float samples, not in Media3's chain.
+                DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(floatOutput)
+                    .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain())
+                    .build(),
+                effects,
+                floatWanted = { floatOutput },
+            )
         }
         val renderers = renderersFor(dsp)
 
