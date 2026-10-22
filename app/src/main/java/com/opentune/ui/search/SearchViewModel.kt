@@ -29,8 +29,42 @@ enum class SearchSource(val label: String, val placeholder: String) {
     ADDONS("Add-ons", "Search your add-ons"),
 }
 
-/** A track one of your add-ons found, with the add-on that has it. */
-class AddonHit(val track: com.opentune.data.addons.AddonTrack, val addon: com.opentune.data.addons.AudioAddon, val manifest: com.opentune.data.addons.AddonManifest)
+/**
+ * A track one of your add-ons found, with the add-on that has it, and the
+ * same recording as other add-ons have it ([alternates]), shown as one row.
+ */
+class AddonHit(
+    val track: com.opentune.data.addons.AddonTrack,
+    val addon: com.opentune.data.addons.AudioAddon,
+    val manifest: com.opentune.data.addons.AddonManifest,
+    val alternates: List<AddonHit> = emptyList(),
+) {
+    val key get() = "${addon.key}:${track.id}"
+
+    /** The same recording: title and lead artist alike, lengths within [SAME_RECORDING_MS]. */
+    fun sameRecording(other: AddonHit): Boolean {
+        val a = track
+        val b = other.track
+        if (norm(a.title) != norm(b.title) || norm(lead(a.artist)) != norm(lead(b.artist))) return false
+        return a.durationMs <= 0 || b.durationMs <= 0 || kotlin.math.abs(a.durationMs - b.durationMs) <= SAME_RECORDING_MS
+    }
+
+    companion object {
+        const val SAME_RECORDING_MS = 2_000L
+        private fun norm(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), "")
+        private fun lead(s: String) = s.substringBefore(",").substringBefore("&").substringBefore(" feat").trim()
+
+        /** [hits] with each recording once, at the place of its first copy; the others become its alternates. */
+        fun merged(hits: List<AddonHit>): List<AddonHit> {
+            val kept = mutableListOf<Pair<AddonHit, MutableList<AddonHit>>>()
+            for (h in hits) {
+                val same = kept.firstOrNull { it.first.sameRecording(h) }
+                if (same != null) same.second += h else kept += h to mutableListOf()
+            }
+            return kept.map { (h, more) -> AddonHit(h.track, h.addon, h.manifest, more) }
+        }
+    }
+}
 
 class SearchViewModel(application: android.app.Application) : androidx.lifecycle.AndroidViewModel(application) {
     private val _source = MutableStateFlow(SearchSource.YOUTUBE)
@@ -139,11 +173,30 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
             }.map { it.await() }
         }
         if (found.all { it == null }) return UiState.Error("Your add-ons didn't answer. Try again in a moment.")
-        // Each add-on's best first, taken in turn, so one add-on doesn't fill the list.
+        // Each add-on's best first, taken in turn, so one add-on doesn't fill the list;
+        // a recording several add-ons have shows once.
         val lists = found.map { it.orEmpty() }
         val woven = (0 until (lists.maxOfOrNull { it.size } ?: 0)).flatMap { i -> lists.mapNotNull { it.getOrNull(i) } }
-        return UiState.Success(woven)
+        val merged = AddonHit.merged(woven)
+        prefetchMatches(merged.take(PREFETCH_MATCHES))
+        return UiState.Success(merged)
     }
+
+    /** The same song on YouTube Music for each hit, looked up ahead so a tap plays at once. */
+    private val matches = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Deferred<com.opentune.data.model.Song?>>()
+
+    private fun matchFor(hit: AddonHit): kotlinx.coroutines.Deferred<com.opentune.data.model.Song?> {
+        if (matches.size > 200) matches.clear()
+        return matches.getOrPut(hit.key) {
+            viewModelScope.async(Dispatchers.IO) {
+                val query = "${hit.track.title} ${hit.track.artist}".trim()
+                runCatching { MusicRepository.search(query, SearchFilter.SONGS) }.getOrDefault(emptyList())
+                    .firstNotNullOfOrNull { (it as? SearchResult.TopTrack)?.song ?: (it as? SearchResult.Track)?.song }
+            }
+        }
+    }
+
+    private fun prefetchMatches(hits: List<AddonHit>) = hits.forEach { matchFor(it) }
 
     /**
      * Plays [hit]: the same song is found on YouTube Music, for its lyrics,
@@ -151,20 +204,36 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
      * picked, at the best quality it has, is handed to the player to start
      * on, whatever the quality setting. Null when no match was found.
      */
-    suspend fun songFor(hit: AddonHit): com.opentune.data.model.Song? = kotlinx.coroutines.coroutineScope {
-        val stream = async {
-            runCatching {
-                // The add-on's best: hi-res where it has it, else lossless, else what it serves.
-                com.opentune.data.addons.AddonClient.forBase(hit.addon.base).stream(hit.track.id, hit.manifest, BEST_TIER)
-                    .copy(addonId = hit.addon.key, provider = hit.manifest.name)
-            }.getOrNull()
+    suspend fun songFor(hit: AddonHit): com.opentune.data.model.Song? {
+        // Every add-on that has the recording is asked for its stream at once.
+        val streams = (listOf(hit) + hit.alternates).map { h ->
+            viewModelScope.async(Dispatchers.IO) {
+                runCatching {
+                    // The add-on's best: hi-res where it has it, else lossless, else what it serves.
+                    com.opentune.data.addons.AddonClient.forBase(h.addon.base).stream(h.track.id, h.manifest, BEST_TIER)
+                        .copy(addonId = h.addon.key, provider = h.manifest.name)
+                }.getOrNull()
+            }
         }
-        val query = "${hit.track.title} ${hit.track.artist}".trim()
-        val match = runCatching { MusicRepository.search(query, SearchFilter.SONGS) }.getOrDefault(emptyList())
-            .firstNotNullOfOrNull { (it as? SearchResult.TopTrack)?.song ?: (it as? SearchResult.Track)?.song }
-        val picked = stream.await()
-        if (match != null && picked != null) com.opentune.data.lossless.ExternalStreams.offer(match.videoId, picked)
-        match
+        val match = matchFor(hit).await() ?: run { streams.forEach { it.cancel() }; return null }
+        suspend fun best() = streams.filter { it.isCompleted }.mapNotNull { it.await() }
+            .maxWithOrNull(compareBy<com.opentune.data.addons.AddonStream> { it.lossless }
+                .thenBy { com.opentune.data.addons.AddonResolver.qualityScore(it.bits, it.sampleRate) })
+        // A moment for the streams, so the song can start on one; then it starts anyway.
+        kotlinx.coroutines.withTimeoutOrNull(STREAM_HEAD_START_MS) { streams.forEach { it.await() } }
+        val first = best()
+        if (first != null) com.opentune.data.lossless.ExternalStreams.offer(match.videoId, first)
+        if (streams.any { !it.isCompleted }) viewModelScope.launch {
+            // A better stream that answers after the song has started takes over.
+            streams.forEach { runCatching { it.await() } }
+            val later = best() ?: return@launch
+            if (later.url != first?.url && (first == null || later.lossless && !first.lossless ||
+                    com.opentune.data.addons.AddonResolver.qualityScore(later.bits, later.sampleRate) > com.opentune.data.addons.AddonResolver.qualityScore(first.bits, first.sampleRate))) {
+                com.opentune.data.lossless.ExternalStreams.offer(match.videoId, later)
+                com.opentune.playback.PlaybackRequests.switchToPicked(match.videoId)
+            }
+        }
+        return match
     }
 
     /** Remembers [q] as a search in the tab it was made in. */
@@ -274,6 +343,8 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
         const val MAX_LIBRARY_ROWS = 100
         const val ADDON_SEARCH_MS = 10_000L
         const val BEST_TIER = "HI_RES_LOSSLESS"
+        const val PREFETCH_MATCHES = 8
+        const val STREAM_HEAD_START_MS = 1_200L
     }
 
     private val recentSearches = object : LinkedHashMap<String, List<SearchResult>>(32, 0.75f, true) {

@@ -82,7 +82,7 @@ object ExternalStreams {
         if (force) failedUntil.remove(videoId)
         if ((failedUntil[videoId] ?: 0) > now) return null
         renditions[videoId]?.takeIf {
-            !force && (!losslessOnly || it.lossless) && now - it.at < TTL && allowed(it.lossless) &&
+            !force && (!losslessOnly || it.lossless) && now - it.at < TTL && (it.picked || allowed(it.lossless)) &&
                 (it.addonId == null || (it.sessionRevision == com.opentune.data.addons.AddonStore.revision.value && addonAllowed(it))) && (!beforePlayback || it.maximumSearch) &&
                 (it.lossless || beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
         }?.let { return it }

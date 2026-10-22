@@ -332,6 +332,18 @@ class PlaybackService : MediaLibraryService() {
             }
         }
         scope.launch { PlaybackRequests.upgrade.collect { scheduleUpgrade(force = true) } }
+        // A stream picked in Search's Add-ons tab that came in after its song had started.
+        scope.launch {
+            PlaybackRequests.picked.collect { id ->
+                val player = mediaSession?.player as? ExoPlayer ?: return@collect
+                if (player.currentMediaItem?.mediaId != id) return@collect
+                val rendition = ExternalStreams.cached(id)?.takeIf { it.picked } ?: return@collect
+                val uri = player.currentMediaItem?.localConfiguration?.uri ?: return@collect
+                if (externalStreamKeyOf(selectedUri(uri)) == rendition.key) return@collect
+                upgradeJob?.cancel()
+                swapToUpgrade(player, id, externalStreamUri(id, rendition.key))
+            }
+        }
 
         audioManager = getSystemService(AudioManager::class.java)?.also { am ->
             am.registerAudioDeviceCallback(deviceCallback, null)
