@@ -31,6 +31,7 @@ object AddonHttp {
         var address = AddonProtocol.url(url)
         repeat(5) {
             val response = request(Request.Builder().url(address).header("Accept", if (prefix) "*/*" else "application/json")
+                .header("User-Agent", "BitChord/v1.8.1")
                 .apply { if (prefix) header("Range", "bytes=0-${limit - 1}") }.build(), limit, prefix)
             if (response.redirect != null) { address = AddonProtocol.url(address.resolve(response.redirect)?.toString() ?: error("Invalid redirect")) }
             else return response.bytes
