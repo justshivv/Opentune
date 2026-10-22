@@ -65,6 +65,8 @@ import com.opentune.playback.dsp.DspParams
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.media3.common.Tracks
@@ -356,9 +358,36 @@ class PlaybackService : MediaLibraryService() {
         }
         // Likes changed anywhere (the app, the widget) show on the heart at once.
         scope.launch { LibraryStore.liked.collect { refreshButtons() } }
+        scope.launch { skipDisliked(player) }
 
         restoreQueue(player)
         scope.launch { keepQueueSaved(player) }
+    }
+
+    /**
+     * A song disliked anywhere (the app, the notification, a car) stops being
+     * heard: if it's playing it's skipped, and the copies of it still to come
+     * leave the queue. Songs already played stay, so going back still works.
+     */
+    private suspend fun skipDisliked(player: ExoPlayer) {
+        var before: Set<String>? = null
+        LibraryStore.disliked.collect { now ->
+            val fresh = before?.let { now - it }.orEmpty()
+            before = now
+            if (fresh.isEmpty()) return@collect
+            // A guest's queue mirrors the host's: it asks the host to skip, and changes nothing here.
+            if (com.opentune.data.together.Together.room.value?.following == true) {
+                if (player.currentMediaItem?.mediaId in fresh) com.opentune.data.together.Together.intercept(com.opentune.data.together.Together.Control.Next)
+                return@collect
+            }
+            val current = player.currentMediaItemIndex
+            for (i in player.mediaItemCount - 1 downTo current + 1) {
+                if (player.getMediaItemAt(i).mediaId in fresh) player.removeMediaItem(i)
+            }
+            if (player.currentMediaItem?.mediaId in fresh && !com.opentune.data.together.Together.intercept(com.opentune.data.together.Together.Control.Next)) {
+                if (player.hasNextMediaItem()) player.seekToNextMediaItem() else player.pause()
+            }
+        }
     }
 
     /**
@@ -1564,15 +1593,35 @@ class PlaybackService : MediaLibraryService() {
             // A song started on its own asks for radio while its own stream is
             // still loading, which is when a request is most likely to fail; a
             // failure must not leave the song to end in silence, so ask again.
-            var radio: List<Song>? = null
+            // The last song leads; a couple of earlier ones in the queue, by other
+            // artists, are asked for too, so what comes next follows the whole
+            // queue rather than only its last song.
+            val engine = AppSettings.playback.value.recommender
+            val queue = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toSong() }
+            val others = if (Subsonic.isSubsonic(seed)) emptyList() else Autoplay.seeds(queue) { s ->
+                isYouTubeId(s.videoId) && !Podcasts.isEpisode(s.videoId)
+            }.drop(1)
+            val extra = others.map { s ->
+                async {
+                    try {
+                        Recommendations.after(s, engine).songs
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Radio for ${s.videoId} failed", e)
+                        emptyList()
+                    }
+                }
+            }
+            var lead: List<Song>? = null
             for ((attempt, wait) in RADIO_RETRY_MS.withIndex()) {
                 if (wait > 0) delay(wait)
-                radio = try {
+                lead = try {
                     if (Subsonic.isSubsonic(seed)) {
                         Subsonic.randomSongs(RADIO_FROM_SERVER)
                     } else {
                         // YouTube Music, Spotify or JioSaavn, as chosen; the songs always play from YouTube Music.
-                        Recommendations.after(seedItem.toSong(), AppSettings.playback.value.recommender).songs
+                        Recommendations.after(seedItem.toSong(), engine).songs
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -1580,9 +1629,13 @@ class PlaybackService : MediaLibraryService() {
                     Log.w(TAG, "Radio for $seed failed (try ${attempt + 1})", e)
                     null
                 }
-                if (!radio.isNullOrEmpty()) break
+                if (!lead.isNullOrEmpty()) break
             }
-            if (radio.isNullOrEmpty()) return@launch
+            if (lead.isNullOrEmpty()) {
+                extra.forEach { it.cancel() }
+                return@launch
+            }
+            val radio = Autoplay.blend(listOf(lead) + extra.awaitAll(), queue)
             // The queue may have been replaced while the request was out; radio
             // for a track that's no longer last doesn't belong at the end.
             val count = player.mediaItemCount

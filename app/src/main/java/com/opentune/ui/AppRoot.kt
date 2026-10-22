@@ -285,8 +285,8 @@ fun AppRoot(vm: PlayerViewModel) {
         openAlbum = { id -> fromPlayer { nav.openBrowse(id, BrowseType.ALBUM) } },
         openArtist = { id -> fromPlayer { nav.openBrowse(id, BrowseType.ARTIST) } },
         dislike = { s ->
+            // The player skips it, and its later copies in the queue, itself.
             LibraryStore.dislike(s)
-            if (s.videoId == song?.videoId) vm.skipNext()
             com.opentune.data.Pills.done("You won't hear \"${s.title}\" in autoplay again")
         },
         notInterested = { s ->

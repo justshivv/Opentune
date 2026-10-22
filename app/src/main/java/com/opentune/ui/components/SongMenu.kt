@@ -87,7 +87,7 @@ class SongMenuActions(
     val startRadio: (Song) -> Unit,
     val openAlbum: (String) -> Unit,
     val openArtist: (String) -> Unit,
-    /** Marks a song as disliked; the shell also skips it if it's playing. */
+    /** Marks a song as disliked; the player skips it if it's playing, and drops its queued copies. */
     val dislike: (Song) -> Unit = LibraryStore::dislike,
     /** Plays the music video's audio in place of the song. */
     val playVideoVersion: ((Song) -> Unit)? = null,
