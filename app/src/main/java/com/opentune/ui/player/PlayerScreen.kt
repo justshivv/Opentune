@@ -307,6 +307,9 @@ fun PlayerLayout(
     // small one and it grows into the big one (the lyrics make way); swipe up on
     // the big one and it goes back into the header of the view it came from.
     var returnPane by rememberSaveable { mutableStateOf<String?>(null) }
+    // The list last shown, so it stays put while the page goes back to the cover.
+    var lastList by rememberSaveable { mutableStateOf(Pane.LYRICS.name) }
+    LaunchedEffect(pane) { if (pane != Pane.COVER) lastList = pane.name }
     var smallCover by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val flight = remember { PaneFlight() }
     var showRemix by remember { mutableStateOf(false) }
@@ -480,19 +483,34 @@ fun PlayerLayout(
     // when it's known where that header's cover sits.
     val followsSwipe = flies && pane == Pane.COVER && style != PlayerStyle.LYRICS_FIRST
     val minFlightTravel = with(LocalDensity.current) { 120.dp.toPx() }
+    // Where the header's small cover will be, before the lists have ever been shown:
+    // the header row starts at the top left of the page, 8dp down, and its cover is 64dp.
+    var paneCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    val headerInset = with(LocalDensity.current) { 8.dp.toPx() }
+    val headerCover = with(LocalDensity.current) { 64.dp.toPx() }
+    fun headerHome(): androidx.compose.ui.geometry.Rect? {
+        flight.lastSmall?.let { return it }
+        val at = paneCoords?.takeIf { it.isAttached }?.positionInRoot() ?: return null
+        return androidx.compose.ui.geometry.Rect(at.x, at.y + headerInset, at.x + headerCover, at.y + headerInset + headerCover)
+    }
     fun followUp() {
         // Not over a tap's flight already on its way.
         if (!followsSwipe || (flight.active && !flight.following)) return
         val big = com.opentune.ui.components.PlayerMorph.playerCover?.let(com.opentune.ui.components.PlayerMorph::scaled)
-        val home = flight.lastSmall
         if (flight.following) {
             flight.pull = (-upPull / flight.travel).coerceIn(0f, 1f)
-        } else if (upPull < 0f && big != null && home != null && big.height > home.height * 2f && big.top - home.top > minFlightTravel) {
+            return
+        }
+        val home = headerHome() ?: return
+        // Measured centre to centre: the full cover's top can sit level with the
+        // header's, so a top-to-top distance came out at nothing and the cover
+        // never followed the finger.
+        val travel = (big?.center?.y ?: 0f) - home.center.y
+        if (upPull < 0f && big != null && big.height > home.height * 2f && travel > minFlightTravel) {
             // Only from the full cover as it is now: a position left from an earlier
-            // flight (no bigger than the small one, or barely below it) made the
-            // cover leap to the header at the first touch and freeze there.
-            val travel = big.top - home.top
-            flight.follow(big, (-upPull / travel).coerceIn(0f, 1f), travel)
+            // flight (no bigger than the small one) made the cover leap to the
+            // header at the first touch and freeze there.
+            flight.follow(big, home, (-upPull / travel).coerceIn(0f, 1f), travel)
         }
     }
 
@@ -747,8 +765,18 @@ fun PlayerLayout(
                 // Lyrics and queue: a compact header, then the list.
                 // Lyrics and queue share one layout (the header stays put and only the
                 // list below it changes), so the outer change is cover against list.
-                AnimatedContent(
-                    if (pane == Pane.COVER) Pane.COVER else Pane.LYRICS,
+                // While a swipe up carries the cover, the change to the lists is scrubbed by
+                // the finger, so the lists come in as the cover shrinks rather than after
+                // letting go; let go, it plays on from there, or back if it's short.
+                val outerPane = if (pane == Pane.COVER) Pane.COVER else Pane.LYRICS
+                val paneState = remember { androidx.compose.animation.core.SeekableTransitionState(outerPane) }
+                LaunchedEffect(outerPane, flight.following) {
+                    if (flight.following && outerPane == Pane.COVER) {
+                        androidx.compose.runtime.snapshotFlow { flight.pull }.collect { paneState.seekTo(it.coerceIn(0f, 1f), Pane.LYRICS) }
+                    } else if (state.ui.reduceAnimation) paneState.snapTo(outerPane)
+                    else paneState.animateTo(outerPane)
+                }
+                androidx.compose.animation.core.rememberTransition(paneState, label = "pane").AnimatedContent(
                     transitionSpec = {
                         // Not clipped to the pane: a blurred lyric line spreads past the
                         // page's side margin, and a clip there cut it off in a hard edge.
@@ -773,11 +801,10 @@ fun PlayerLayout(
                                     (fadeOut(tween(180)) + scaleOut(tween(220), 0.98f))
                         } using androidx.compose.animation.SizeTransform(clip = false)
                     },
-                    label = "pane",
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 ) { p ->
                     Column(
-                        Modifier.fillMaxSize().graphicsLayer {
+                        Modifier.fillMaxSize().onGloballyPositioned { paneCoords = it }.graphicsLayer {
                             // The cover page, carried up by a swipe that's still under the finger.
                             if (p == Pane.COVER) {
                                 val k = coverLift
@@ -866,7 +893,10 @@ fun PlayerLayout(
                             // spring while the old one lifts a little and fades, under a still header.
                             // Both stay composed once shown, and only their layers move: switching
                             // never builds a list (or scrolls the lyrics to their line) mid-slide.
-                            val list = pane.takeIf { it != Pane.COVER } ?: Pane.LYRICS
+                            // On the cover, mid-swipe: the list the swipe goes to. Leaving: the one that was up.
+                            val list = pane.takeIf { it != Pane.COVER }
+                                ?: if (flight.following) returnPane?.let { runCatching { Pane.valueOf(it) }.getOrNull() }?.takeIf { it != Pane.COVER } ?: Pane.QUEUE
+                                else runCatching { Pane.valueOf(lastList) }.getOrDefault(Pane.LYRICS)
                             val toQueue = remember { androidx.compose.animation.core.Animatable(if (list == Pane.QUEUE) 1f else 0f) }
                             LaunchedEffect(list, state.ui.reduceAnimation) {
                                 val target = if (list == Pane.QUEUE) 1f else 0f
@@ -1035,7 +1065,7 @@ fun PlayerLayout(
             if (flight.active) {
                 val from = flight.from
                 // Before the header is back (a swipe still under the finger), where it was last.
-                val to = flight.target(smallCover) ?: flight.lastSmall.takeIf { flight.toSmall }
+                val to = flight.target(smallCover) ?: (flight.home ?: flight.lastSmall).takeIf { flight.toSmall }
                 val origin = playerCoords?.takeIf { it.isAttached }?.positionInRoot() ?: androidx.compose.ui.geometry.Offset.Zero
                 if (from != null && to != null) {
                     // Progress is read in the layer only: the finger or the runner, frame by frame.
@@ -1424,10 +1454,15 @@ private class PaneFlight {
         runs++
     }
 
-    /** The full cover swiped up to [p] of the way, from its place at [from]. */
-    fun follow(from: androidx.compose.ui.geometry.Rect, p: Float, travel: Float) {
+    /** Where a swipe is carrying the cover: the header's cover, measured or worked out. */
+    var home: androidx.compose.ui.geometry.Rect? = null
+        private set
+
+    /** The full cover swiped up to [p] of the way, from its place at [from] toward [home]. */
+    fun follow(from: androidx.compose.ui.geometry.Rect, home: androidx.compose.ui.geometry.Rect, p: Float, travel: Float) {
         if (!following) {
             this.from = from
+            this.home = home
             this.toSmall = true
             this.travel = travel
             following = true
@@ -1451,6 +1486,7 @@ private class PaneFlight {
         following = false
         pull = 0f
         from = null
+        home = null
         com.opentune.ui.components.PlayerMorph.flying = false
     }
 }
