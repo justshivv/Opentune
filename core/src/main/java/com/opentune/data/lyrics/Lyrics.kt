@@ -23,7 +23,24 @@ data class LyricLine(
     val voice: Int = VOICE_LEAD,
     /** Backing vocals sung under this line, shown smaller beneath it. */
     val background: String? = null,
+    /**
+     * Right to left (Arabic, Hebrew, Persian, Urdu), as the source marks it;
+     * null when it doesn't say, and the text's own script decides. Kept with
+     * downloaded lyrics like the rest of the line.
+     */
+    val rtl: Boolean? = null,
 )
+
+/** Whether [line] reads right to left: as its source says, else by its first letter with a direction. */
+fun readsRightToLeft(line: LyricLine): Boolean = line.rtl ?: run {
+    for (c in line.text) {
+        when (Character.getDirectionality(c)) {
+            Character.DIRECTIONALITY_RIGHT_TO_LEFT, Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC -> return@run true
+            Character.DIRECTIONALITY_LEFT_TO_RIGHT -> return@run false
+        }
+    }
+    false
+}
 
 const val VOICE_LEAD = 0
 const val VOICE_SECOND = 1

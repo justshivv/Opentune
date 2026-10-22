@@ -75,6 +75,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -671,8 +672,10 @@ private fun LyricLineView(
         line.voice == VOICE_TOGETHER -> TextAlign.Center
         else -> TextAlign.Start
     }
-    val origin = when (align) { TextAlign.Center -> 0.5f; TextAlign.End -> 1f; else -> 0f }
-    val base = lyricsStyle().copy(textAlign = align)
+    // A right-to-left line starts at the right: Start and End swap sides, and it sweeps leftwards.
+    val rtl = remember(line) { com.opentune.data.lyrics.readsRightToLeft(line) }
+    val origin = when (align) { TextAlign.Center -> 0.5f; TextAlign.End -> if (rtl) 0f else 1f; else -> if (rtl) 1f else 0f }
+    val base = lyricsStyle().copy(textAlign = align, textDirection = if (rtl) TextDirection.Rtl else TextDirection.Ltr)
     val style = if ((motion.glow || ui.lyricsGlow) && isActive) base.copy(shadow = Shadow(bright.copy(alpha = 0.55f), blurRadius = 24f)) else base
     val text = remember(line) { if (line.words.isEmpty()) line.text else line.words.joinToString("") { it.text } }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -740,7 +743,7 @@ private fun LyricLineView(
                     .fillMaxWidth()
                     // Its own layer, so dimming the unsung words doesn't punch through what's behind.
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .drawWithContent { drawContent(); sweepDim(line, wordBoxes, position(), 0.4f) },
+                    .drawWithContent { drawContent(); sweepDim(line, wordBoxes, position(), 0.4f, rtl) },
             )
         } else {
             Text(
@@ -842,7 +845,7 @@ internal fun SungLine(line: LyricLine, position: () -> Long, style: androidx.com
  * lands. A word split over two rows fills its first piece, then its second.
  * Done at draw time, so the line isn't measured again every frame.
  */
-private fun DrawScope.sweepDim(line: LyricLine, boxes: List<List<Rect>>, positionMs: Long, removal: Float) {
+private fun DrawScope.sweepDim(line: LyricLine, boxes: List<List<Rect>>, positionMs: Long, removal: Float, rtl: Boolean = false) {
     // A wide soft edge, as BitChord's: the light eases across each word rather than wiping it.
     val feather = 26.dp.toPx()
     line.words.forEachIndexed { i, word ->
@@ -858,9 +861,15 @@ private fun DrawScope.sweepDim(line: LyricLine, boxes: List<List<Rect>>, positio
             val pieceT = ((t * total - before) / box.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
             before += box.width
             if (pieceT >= 1f || box.isEmpty) return@forEach
-            val litX = box.left + (box.width + feather) * pieceT
+            val travel = (box.width + feather) * pieceT
+            val litX = if (rtl) box.right - travel else box.left + travel
             drawRect(
-                brush = Brush.horizontalGradient(
+                brush = if (rtl) Brush.horizontalGradient(
+                    0f to Color.Black.copy(alpha = removal),
+                    1f to Color.Transparent,
+                    startX = litX,
+                    endX = litX + feather,
+                ) else Brush.horizontalGradient(
                     0f to Color.Transparent,
                     1f to Color.Black.copy(alpha = removal),
                     startX = litX - feather,

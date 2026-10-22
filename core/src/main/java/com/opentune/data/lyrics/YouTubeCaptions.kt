@@ -139,7 +139,11 @@ object Unison {
 internal object Ttml {
     fun parse(xml: String): List<LyricLine> {
         val voices = voicesOf(xml)
+        // Direction is inherited: from the document, then each <div>, then the <p> itself.
+        val doc = directionOf(Regex("""<(?:tt|body)\b([^>]*)>""").findAll(xml).map { it.groupValues[1] }.joinToString(" "))
+        val divs = Regex("""<div\b([^>]*)>""").findAll(xml).map { it.range.first to directionOf(it.groupValues[1]) }.toList()
         return Regex("""<p\b([^>]*)>(.*?)</p>""", RegexOption.DOT_MATCHES_ALL).findAll(xml).mapNotNull { p ->
+            val rtl = directionOf(p.groupValues[1]) ?: divs.lastOrNull { it.first < p.range.first }?.second ?: doc
             val start = time(attr(p.groupValues[1], "begin")) ?: return@mapNotNull null
             val end = time(attr(p.groupValues[1], "end")) ?: start + 4_000
             // Backing vocals come wrapped in a span of their own; they're shown under the line.
@@ -158,8 +162,8 @@ internal object Ttml {
             val text = if (spans.isNotEmpty()) spans.joinToString("") { it.text }.replace(Regex("\\s+"), " ").trim()
             else unescape(inner.replace(Regex("<[^>]+>"), "")).replace(Regex("\\s+"), " ").trim()
             if (text.isEmpty()) return@mapNotNull null
-            if (spans.size >= 2) LyricLine(start, end, text, spans, wordSynced = true, voice = voice, background = background)
-            else LyricLine(start, end, text, LrcParser.spreadWords(text, start, end), wordSynced = false, voice = voice, background = background)
+            if (spans.size >= 2) LyricLine(start, end, text, spans, wordSynced = true, voice = voice, background = background, rtl = rtl)
+            else LyricLine(start, end, text, LrcParser.spreadWords(text, start, end), wordSynced = false, voice = voice, background = background, rtl = rtl)
         }.toList()
     }
 
@@ -173,6 +177,18 @@ internal object Ttml {
             id to if (attr(m.groupValues[1], "type") == "group") VOICE_TOGETHER else if (person++ % 2 == 0) VOICE_LEAD else VOICE_SECOND
         }.toMap()
     }
+
+    /** True for `tts:direction="rtl"` or a right-to-left `xml:lang`, false for `ltr`, null when neither says. */
+    internal fun directionOf(attrs: String): Boolean? {
+        when (attr(attrs, "tts:direction")) {
+            "rtl" -> return true
+            "ltr" -> return false
+        }
+        val lang = attr(attrs, "xml:lang")?.substringBefore('-')?.lowercase() ?: return null
+        return lang in RTL_LANGUAGES
+    }
+
+    private val RTL_LANGUAGES = setOf("ar", "he", "iw", "fa", "ur", "yi", "ps", "sd", "ug", "dv", "ku", "ckb")
 
     private fun attr(attrs: String, name: String) = Regex("""\b$name="([^"]+)"""").find(attrs)?.groupValues?.get(1)
 
