@@ -90,6 +90,7 @@ fun SearchScreen(
     val submitted by vm.submitted.collectAsState()
     val filter by vm.filter.collectAsState()
     val suggestions by vm.suggestions.collectAsState()
+    val live by vm.live.collectAsState()
     val results by vm.results.collectAsState()
     val recent by AppSettings.recentSearches.collectAsState()
     val focus = LocalFocusManager.current
@@ -133,6 +134,13 @@ fun SearchScreen(
                 contentPadding = contentPadding,
                 onPick = ::submit,
                 onFill = vm::onQueryChange,
+                live = live,
+                currentVideoId = currentVideoId,
+                isPlaying = isPlaying,
+                onPlay = { focus.clearFocus(); onPlay(it) },
+                onPlayNext = onPlayNext,
+                onAddToQueue = onAddToQueue,
+                onBrowse = { focus.clearFocus(); onBrowse(it) },
             )
             else -> Column {
                 LazyRow(
@@ -157,6 +165,13 @@ private fun Typing(
     contentPadding: PaddingValues,
     onPick: (String) -> Unit,
     onFill: (String) -> Unit,
+    live: List<SearchResult> = emptyList(),
+    currentVideoId: String? = null,
+    isPlaying: Boolean = false,
+    onPlay: (Song) -> Unit = {},
+    onPlayNext: (Song) -> Unit = {},
+    onAddToQueue: (Song) -> Unit = {},
+    onBrowse: (BrowseItem) -> Unit = {},
 ) {
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         if (query.isBlank()) {
@@ -183,10 +198,51 @@ private fun Typing(
                 }
             }
         } else {
-            items(suggestions) { s ->
+            // A few ways to finish the words, then what they already find.
+            val shownSuggestions = if (live.isEmpty()) suggestions else suggestions.take(LIVE_SUGGESTIONS)
+            items(shownSuggestions, key = { "s:$it" }) { s ->
                 QueryRow(s, Icons.Filled.Search, onClick = { onPick(s) }) {
                     IconButton(onClick = { onFill(s) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, "Use this", modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+            if (live.isNotEmpty()) {
+                item(key = "live-divider") {
+                    androidx.compose.material3.HorizontalDivider(
+                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        thickness = 0.75.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                }
+                items(live, key = { r ->
+                    when (r) {
+                        is SearchResult.TopTrack -> "lt:${r.song.videoId}"
+                        is SearchResult.Track -> "lv:${r.song.videoId}"
+                        is SearchResult.Browse -> "lb:${r.item.browseId}"
+                    }
+                }) { r ->
+                    Box(Modifier.animateItem()) {
+                        when (r) {
+                            // As plain rows here: the big card is for the full results.
+                            is SearchResult.TopTrack -> SongListItem(
+                                song = r.song,
+                                onClick = { onPlay(r.song) },
+                                isCurrent = r.song.videoId == currentVideoId,
+                                isPlaying = isPlaying,
+                                onPlayNext = { onPlayNext(r.song) },
+                                onAddToQueue = { onAddToQueue(r.song) },
+                            )
+                            is SearchResult.Track -> SongListItem(
+                                song = r.song,
+                                onClick = { onPlay(r.song) },
+                                isCurrent = r.song.videoId == currentVideoId,
+                                isPlaying = isPlaying,
+                                onPlayNext = { onPlayNext(r.song) },
+                                onAddToQueue = { onAddToQueue(r.song) },
+                            )
+                            is SearchResult.Browse -> BrowseRow(r.item, onClick = { onBrowse(r.item) })
+                        }
                     }
                 }
             }
@@ -251,7 +307,7 @@ private fun Results(
                     }) { r ->
                         Box(Modifier.animateItem()) {
                             when (r) {
-                                is SearchResult.TopTrack -> TopResult(r.song, onPlay = { onPlay(r.song) })
+                                is SearchResult.TopTrack -> TopResult(r.song, onPlay = { onPlay(r.song) }, isCurrent = r.song.videoId == currentVideoId)
                                 is SearchResult.Track -> SongListItem(
                                     song = r.song,
                                     onClick = { onPlay(r.song) },
@@ -282,7 +338,7 @@ private fun sectionOf(r: SearchResult): String = when (r) {
 }
 
 @Composable
-private fun TopResult(song: Song, onPlay: () -> Unit) {
+private fun TopResult(song: Song, onPlay: () -> Unit, isCurrent: Boolean = false) {
     Surface(
         onClick = onPlay,
         shape = MaterialTheme.shapes.large,
@@ -293,7 +349,14 @@ private fun TopResult(song: Song, onPlay: () -> Unit) {
             Artwork(song.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.size(84.dp), MaterialTheme.shapes.medium)
             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                 Text("Top result", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                Text(song.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    song.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    // The song that's playing reads in the accent, as it does in the rows.
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified,
+                )
                 com.opentune.ui.components.SubtitleLine(song.artist, explicit = song.isExplicit == true, color = MaterialTheme.colorScheme.onSecondaryContainer)
             }
             FilledIconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.PlayArrow, "Play") }
@@ -358,3 +421,6 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit) {
     }
 }
 
+
+/** How many suggestions stay above the live results. */
+private const val LIVE_SUGGESTIONS = 3

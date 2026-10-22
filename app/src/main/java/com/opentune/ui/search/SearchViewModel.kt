@@ -35,6 +35,10 @@ class SearchViewModel : ViewModel() {
     private val _suggestions = MutableStateFlow<List<String>>(emptyList())
     val suggestions = _suggestions.asStateFlow()
 
+    /** What a search for the text so far finds, shown under the suggestions while typing. */
+    private val _live = MutableStateFlow<List<SearchResult>>(emptyList())
+    val live = _live.asStateFlow()
+
     private val _results = MutableStateFlow<UiState<List<SearchResult>>>(UiState.Loading)
     val results = _results.asStateFlow()
 
@@ -42,6 +46,26 @@ class SearchViewModel : ViewModel() {
 
     init {
         viewModelScope.launch { watchSuggestions() }
+        viewModelScope.launch { watchLive() }
+    }
+
+    /**
+     * Searches as the words come, a moment after typing stops: the songs,
+     * artists and lists found go under the suggestions, so what's wanted can
+     * often be tapped without pressing search at all. The search is kept,
+     * so pressing search then shows the full results at once.
+     */
+    @OptIn(FlowPreview::class)
+    private suspend fun watchLive() {
+        _query.map { it.trim() }.distinctUntilChanged().debounce(LIVE_DEBOUNCE_MS).collectLatest { q ->
+            if (q.length < 2 || q == _submitted.value) {
+                if (q.isEmpty()) _live.value = emptyList()
+                return@collectLatest
+            }
+            val key = "${SearchFilter.ALL}:${q.lowercase()}"
+            val rows = recentSearches[key] ?: runCatching { MusicRepository.search(q, SearchFilter.ALL) }.getOrNull()?.also { recentSearches[key] = it }
+            if (rows != null) _live.value = rows.take(LIVE_ROWS)
+        }
     }
 
     @OptIn(FlowPreview::class)
@@ -113,6 +137,11 @@ class SearchViewModel : ViewModel() {
             }
         } ?: return
         viewModelScope.launch(Dispatchers.IO) { runCatching { StreamResolver.resolve(top.videoId) } }
+    }
+
+    private companion object {
+        const val LIVE_DEBOUNCE_MS = 380L
+        const val LIVE_ROWS = 12
     }
 
     private val recentSearches = object : LinkedHashMap<String, List<SearchResult>>(32, 0.75f, true) {

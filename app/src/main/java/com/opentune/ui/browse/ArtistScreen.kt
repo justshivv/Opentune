@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -267,6 +268,17 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
     val ui by AppSettings.ui.collectAsState()
     val still = ui.reduceAnimation
     val background = MaterialTheme.colorScheme.background
+    // Apple Music's header for the artist, when it has one: a sharper photo, and
+    // for some a looping video. YouTube's photo shows until (and unless) it comes.
+    val name = page?.name
+    var apple by remember(name) { mutableStateOf(name?.let { com.opentune.data.covers.AppleArtistArtRepository.cached(it) }) }
+    androidx.compose.runtime.LaunchedEffect(name) { if (name != null && apple == null) apple = com.opentune.data.covers.AppleArtistArtRepository.artFor(name) }
+    val shown = apple?.heroUrl ?: photo
+    // The clip only where moving pictures are welcome and data is free.
+    val video = apple?.videoUrl?.takeIf { !still && !AppSettings.onMeteredNetwork() }
+    val drift: androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit = {
+        if (!still && listState.firstVisibleItemIndex == 0) translationY = listState.firstVisibleItemScrollOffset * PARALLAX
+    }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Square on a phone; on a wide window it would be a wall, so it stops growing.
         val photoHeight = min(maxWidth, MAX_PHOTO_HEIGHT)
@@ -286,15 +298,29 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
                 Placeholder(Modifier.fillMaxSize(), RectangleShape)
             } else {
                 Artwork(
-                    photo,
-                    Modifier.fillMaxSize().graphicsLayer {
-                        if (!still && listState.firstVisibleItemIndex == 0) {
-                            translationY = listState.firstVisibleItemScrollOffset * PARALLAX
-                        }
-                    },
+                    shown,
+                    Modifier.fillMaxSize().graphicsLayer(drift),
                     shape = RectangleShape,
                     placeholder = Icons.Filled.Person,
                 )
+                if (video != null) ArtistVideo(video, Modifier.fillMaxSize().graphicsLayer(drift))
+                // The lower part goes soft as it nears the page: a blurred copy of the
+                // photo, faded in from about halfway down, under the fade to the page.
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && video == null) {
+                    Artwork(
+                        shown,
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(drift)
+                            .blur(HERO_BLUR, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle)
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(BLUR_MASK, blendMode = BlendMode.DstIn)
+                            },
+                        shape = RectangleShape,
+                    )
+                }
             }
         }
         // Keeps the status bar readable over a bright photo, in whichever way the theme draws it.
@@ -626,6 +652,55 @@ private const val ARTIST_PHOTO_PX = 1080
 private const val PARALLAX = 0.4f
 
 /** Where the photo melts into the page: solid for the top half, gone at the bottom edge. */
+/**
+ * Apple's looping artist video, silent, over the photo: it fades in once its
+ * first frame is drawn, so a slow start shows the photo rather than black,
+ * and it pauses while the app isn't in front.
+ */
+@Composable
+private fun ArtistVideo(url: String, modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    var drawn by remember(url) { mutableStateOf(false) }
+    val fade by androidx.compose.animation.core.animateFloatAsState(if (drawn) 1f else 0f, androidx.compose.animation.core.tween(600), label = "artistVideo")
+    val player = remember(url) {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+            volume = 0f
+            repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+            setMediaItem(androidx.media3.common.MediaItem.fromUri(url))
+            addListener(object : androidx.media3.common.Player.Listener {
+                override fun onRenderedFirstFrame() { drawn = true }
+            })
+            prepare()
+            playWhenReady = true
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(player, lifecycle) {
+        val watch = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_START -> player.play()
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> player.pause()
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(watch)
+        onDispose {
+            lifecycle.removeObserver(watch)
+            player.release()
+        }
+    }
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { c -> android.view.TextureView(c).also(player::setVideoTextureView) },
+        modifier = modifier.graphicsLayer { alpha = fade },
+    )
+}
+
+/** How soft the bottom of the artist's photo gets. */
+private val HERO_BLUR = 26.dp
+
+/** Where the blurred copy shows: nothing at the top, all of it near the bottom. */
+private val BLUR_MASK = Brush.verticalGradient(0.45f to Color.Transparent, 0.85f to Color.Black)
+
 private val PHOTO_FADE = Brush.verticalGradient(
     0f to Color.Black,
     0.45f to Color.Black,
