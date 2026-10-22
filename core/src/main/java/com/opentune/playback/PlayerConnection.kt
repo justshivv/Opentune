@@ -198,7 +198,10 @@ class PlayerConnection(private val context: Context) {
         val duration = player.duration.takeIf { it > 0 } ?: 0L
         _durationMs.value = duration
         _durationOf.value = player.currentMediaItem?.mediaId to duration
-        _isPlaying.value = player.isPlaying
+        // Buffering on the way, with playback meant to go on (a quality switch
+        // loading its stream, a stall), still counts as playing: the button
+        // flipped to play and back for that moment at every upgrade.
+        _isPlaying.value = player.isPlaying || (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING)
         _isBuffering.value = player.playbackState == Player.STATE_BUFFERING
         _playWhenReady.value = player.playWhenReady
         // A track that started, or a recovery the service made on its own,

@@ -434,6 +434,10 @@ fun PlayerLayout(
             delay(COVER_LIFT_RESET_MS)
             liftSettle?.cancel()
             coverLift = 0f
+        } else if (pane == Pane.COVER && coverLift > 0f) {
+            // Back on the cover by any way at all: it comes back whole, not shrunk where the last swipe left it.
+            liftSettle?.cancel()
+            coverLift = 0f
         }
     }
     fun expandCover() {
@@ -444,13 +448,13 @@ fun PlayerLayout(
         if (flies && from != null) flight.start(from, toSmall = false)
         paneName = Pane.COVER.name
     }
-    fun collapseCover() {
+    fun collapseCover(fly: Boolean = true) {
         val back = returnPane?.let { runCatching { Pane.valueOf(it) }.getOrNull() }?.takeIf { it != Pane.COVER } ?: Pane.QUEUE
         val from = com.opentune.ui.components.PlayerMorph.playerCover?.let(com.opentune.ui.components.PlayerMorph::scaled)
         smallCover = null
         // A swipe already carrying the cover: it goes on from where the finger let go.
         if (flight.following) flight.finish()
-        else if (flies && from != null) flight.start(from, toSmall = true)
+        else if (fly && flies && from != null) flight.start(from, toSmall = true)
         paneName = back.name
         returnPane = null
     }
@@ -475,6 +479,7 @@ fun PlayerLayout(
     // The full cover follows a swipe up toward the header it goes back into,
     // when it's known where that header's cover sits.
     val followsSwipe = flies && pane == Pane.COVER && style != PlayerStyle.LYRICS_FIRST
+    val minFlightTravel = with(LocalDensity.current) { 120.dp.toPx() }
     fun followUp() {
         // Not over a tap's flight already on its way.
         if (!followsSwipe || (flight.active && !flight.following)) return
@@ -482,8 +487,11 @@ fun PlayerLayout(
         val home = flight.lastSmall
         if (flight.following) {
             flight.pull = (-upPull / flight.travel).coerceIn(0f, 1f)
-        } else if (upPull < 0f && big != null && home != null) {
-            val travel = (big.top - home.top).coerceAtLeast(1f)
+        } else if (upPull < 0f && big != null && home != null && big.height > home.height * 2f && big.top - home.top > minFlightTravel) {
+            // Only from the full cover as it is now: a position left from an earlier
+            // flight (no bigger than the small one, or barely below it) made the
+            // cover leap to the header at the first touch and freeze there.
+            val travel = big.top - home.top
             flight.follow(big, (-upPull / travel).coerceIn(0f, 1f), travel)
         }
     }
@@ -496,6 +504,8 @@ fun PlayerLayout(
                     // Dragging down turns the player into a card over the app,
                     // the way iOS sheets do: it shrinks from the top edge and
                     // its corners round, so the screen behind shows around it.
+                    // With the sheet morph, the card is moved by the sheet itself, toward the mini player.
+                    if (com.opentune.ui.components.PlayerMorph.sheetMorph) return@graphicsLayer
                     val p = (dragOffset / (dismissPx * 2)).coerceIn(0f, 1f)
                     translationY = dragOffset * 0.9f
                     val scale = 1f - 0.12f * p
@@ -519,8 +529,12 @@ fun PlayerLayout(
                         // Upward, with the card at rest: a swipe up on the cover, counted on its own.
                         if (d < 0f && dragOffset == 0f) { upPull += d; d = 0f }
                         dragOffset = (dragOffset + d).coerceAtLeast(0f)
+                        // The card shrinks toward the mini player under the finger.
+                        if (com.opentune.ui.components.PlayerMorph.sheetMorph) com.opentune.ui.components.PlayerMorph.sheetDrag = dragOffset
                         followUp()
-                        if (pane == Pane.COVER && style != PlayerStyle.LYRICS_FIRST && !followsSwipe) {
+                        // When the cover itself can't fly with the finger, the whole cover page
+                        // lifts with it instead, so a swipe up always moves something.
+                        if (pane == Pane.COVER && style != PlayerStyle.LYRICS_FIRST && !flight.following) {
                             coverLift = (-upPull / liftTravel).coerceIn(0f, 1f)
                         }
                     },
@@ -541,7 +555,7 @@ fun PlayerLayout(
                             // A lifted cover page keeps rising at the finger's speed as it leaves,
                             // so nothing stops or jumps back at the moment of letting go.
                             val lifted = coverLift > 0f
-                            collapseCover()
+                            collapseCover(fly = !lifted)
                             if (lifted) liftSettle = scope.launch {
                                 androidx.compose.animation.core.animate(coverLift, 1f, -velocity / liftTravel, spring(dampingRatio = 1f, stiffness = 420f)) { v, _ ->
                                     coverLift = v.coerceIn(0f, 1f)
@@ -568,18 +582,10 @@ fun PlayerLayout(
                         } else if (dragOffset > dismissPx || velocity > 2_000f) {
                             val size = playerCoords?.takeIf { it.isAttached }?.size
                             if (com.opentune.ui.components.PlayerMorph.sheetMorph && size != null) {
-                                // The card as drawn right now, handed to the shrink into the
-                                // mini player, which takes it from exactly here.
-                                val w = size.width.toFloat()
-                                val h = size.height.toFloat()
-                                val p = (dragOffset / (dismissPx * 2)).coerceIn(0f, 1f)
-                                val s = 1f - 0.12f * p
-                                val left = w * (1f - s) / 2f
-                                val top = dragOffset * 0.9f
-                                com.opentune.ui.components.PlayerMorph.handOff(
-                                    androidx.compose.ui.geometry.Rect(left, top, left + w * s, top + h * s),
-                                    cornerPx = cardCornerPx * p * s,
-                                )
+                                // The card is already part of the way to the mini player, under
+                                // the finger; the shrink carries on from there at the finger's speed.
+                                val travel = (com.opentune.ui.components.PlayerMorph.miniBar?.top ?: size.height * 0.85f).coerceAtLeast(1f)
+                                com.opentune.ui.components.PlayerMorph.sheetFling = -velocity.coerceAtLeast(0f) / travel
                                 dragOffset = 0f
                             }
                             // Otherwise leave the card as it is: the exit slide carries it away from here.
@@ -588,8 +594,10 @@ fun PlayerLayout(
                             settling = scope.launch {
                                 androidx.compose.animation.core.animate(dragOffset, 0f, velocity, spring(dampingRatio = 0.82f, stiffness = 420f)) { v, _ ->
                                     dragOffset = v.coerceAtLeast(0f)
+                                    if (com.opentune.ui.components.PlayerMorph.sheetMorph) com.opentune.ui.components.PlayerMorph.sheetDrag = dragOffset
                                 }
                                 dragOffset = 0f
+                                com.opentune.ui.components.PlayerMorph.sheetDrag = 0f
                             }
                         }
                     },

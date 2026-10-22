@@ -71,4 +71,13 @@ object PlaybackRequests {
     fun report(message: String) {
         _upgradeResult.tryEmit(message)
     }
+
+    private val _picked = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** Songs whose stream picked in Search arrived after they'd started: switch to it. */
+    val picked: kotlinx.coroutines.flow.SharedFlow<String> = _picked
+
+    /** The stream picked in Search for [videoId] is ready now; if that song is playing, it moves onto it. */
+    fun switchToPicked(videoId: String) {
+        _picked.tryEmit(videoId)
+    }
 }

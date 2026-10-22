@@ -68,11 +68,11 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "look", "Look and feel", "Theme, colour, glass and haptics", Icons.Rounded.Palette,
         listOf(
+            "Tabs" to listOf("Separate Explore tab"),
             "Theme" to listOf("Theme", "Pure black"),
             "Colour" to listOf("Color from artwork", "Mini player takes the cover's colour", "Artist pages take the photo's colour", "Material You", "Accent color", "Palette style"),
             "Glass" to listOf("Liquid Glass", "Glass style", "Frosted top edge", "Reduce dynamic blur"),
             "Feel" to listOf("Haptic feedback", "High refresh rate", "Wide-screen layout"),
-            "Pages" to listOf("Explore as its own tab"),
         ),
     ),
     SettingsCategory(
@@ -135,7 +135,7 @@ internal val SETTINGS_CATEGORIES = listOf(
 /** How the main Settings page groups its categories. */
 internal val SETTINGS_HOME = listOf(
     "You" to listOf("account"),
-    "Sound" to listOf("audio", "playback", "lyrics"),
+    "Sound" to listOf("audio", "addons", "playback", "lyrics"),
     "Look" to listOf("look", "player", "motion"),
     "Your music" to listOf("library", "services", "data"),
     "App" to listOf("about"),
