@@ -161,11 +161,35 @@ internal class QrModules(val size: Int, private val dark: BooleanArray) {
     operator fun get(x: Int, y: Int) = dark[y * size + x]
 }
 
-/** Encodes [text] at medium error correction, which still reads off a scuffed or dim screen. */
+/**
+ * Encodes [text] at medium error correction, which still reads off a scuffed
+ * or dim screen. The mask the encoder scores best can, about once in a
+ * thousand codes, leave a pattern a scanner mistakes for a corner mark; each
+ * code is read back once here, and if it doesn't read, the first other mask
+ * that does is used.
+ */
 internal fun qrModules(text: String): QrModules {
-    val matrix = Encoder.encode(text, ErrorCorrectionLevel.M).matrix
-    val n = matrix.width
-    return QrModules(n, BooleanArray(n * n) { matrix.get(it % n, it / n).toInt() == 1 })
+    fun modules(mask: Int?): QrModules {
+        val hints = mask?.let { mapOf(com.google.zxing.EncodeHintType.QR_MASK_PATTERN to it) }
+        val matrix = Encoder.encode(text, ErrorCorrectionLevel.M, hints).matrix
+        val n = matrix.width
+        return QrModules(n, BooleanArray(n * n) { matrix.get(it % n, it / n).toInt() == 1 })
+    }
+    val best = modules(null)
+    if (readBack(best) == text) return best
+    return (0 until 8).asSequence().map(::modules).firstOrNull { readBack(it) == text } ?: best
+}
+
+/** What a scanner reads from [qr], drawn plainly with a quiet zone, or null. */
+internal fun readBack(qr: QrModules, scale: Int = 4, quiet: Int = 4): String? {
+    val side = (qr.size + quiet * 2) * scale
+    val pixels = IntArray(side * side) { i ->
+        val x = (i % side) / scale - quiet
+        val y = (i / side) / scale - quiet
+        if (x in 0 until qr.size && y in 0 until qr.size && qr[x, y]) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+    }
+    val bitmap = com.google.zxing.BinaryBitmap(com.google.zxing.common.HybridBinarizer(com.google.zxing.RGBLuminanceSource(side, side, pixels)))
+    return runCatching { com.google.zxing.qrcode.QRCodeReader().decode(bitmap).text }.getOrNull()
 }
 
 /** Opens the share sheet with the room's link and code. */
