@@ -984,67 +984,34 @@ fun PlayerLayout(
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     GlassToggle(PlayerIcons.Lyrics, "Lyrics", pane == Pane.LYRICS, { toggle(Pane.LYRICS) })
-                    // One pill that morphs between the two sets of buttons: its fill
-                    // stretches or narrows to the new set and takes its colour, drawn
-                    // each frame without measuring anything again, while the buttons
-                    // fade across inside it.
+                    // One pill that morphs between sleep and output, and the queue's modes.
                     val inQueueNow = pane == Pane.QUEUE
-                    val pillFill by androidx.compose.animation.animateColorAsState(
-                        if (inQueueNow) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White.copy(alpha = 0.14f),
-                        tween(if (state.ui.reduceAnimation) 0 else 280),
-                        label = "pillFill",
-                    )
-                    val pillWidth = remember { androidx.compose.animation.core.Animatable(0f) }
-                    var pillTarget by remember { mutableFloatStateOf(0f) }
-                    LaunchedEffect(pillTarget) {
-                        if (pillTarget <= 0f) return@LaunchedEffect
-                        if (pillWidth.value <= 0f || state.ui.reduceAnimation) pillWidth.snapTo(pillTarget)
-                        else pillWidth.animateTo(pillTarget, spring(dampingRatio = 0.82f, stiffness = 420f))
-                    }
-                    Box(
-                        Modifier.weight(1f).height(52.dp).drawBehind {
-                            val w = pillWidth.value
-                            if (w > 0f) drawRoundRect(
-                                pillFill,
-                                topLeft = androidx.compose.ui.geometry.Offset((size.width - w) / 2f, 0f),
-                                size = androidx.compose.ui.geometry.Size(w, size.height),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f),
-                            )
-                        },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AnimatedContent(
-                            inQueueNow,
-                            transitionSpec = {
-                                (fadeIn(tween(220, delayMillis = 60)) + scaleIn(tween(260, easing = FastOutSlowInEasing), 0.9f)) togetherWith
-                                    (fadeOut(tween(140)) + scaleOut(tween(200), 0.9f)) using
-                                    androidx.compose.animation.SizeTransform(clip = false) { _, _ -> androidx.compose.animation.core.snap() }
-                            },
-                            label = "pill",
-                        ) { inQueue ->
-                            val measure = Modifier.onSizeChanged { if (inQueue == inQueueNow) pillTarget = it.width.toFloat() }
-                            if (inQueue) {
-                                Box(measure) { ModesPill(state.shuffleMode, state.smartShuffleAvailable, state.repeatMode, actions.toggleShuffle, actions.cycleRepeat, filled = false) }
-                            } else {
-                                // Its two halves split by a hairline; the fill is the morphing one behind.
-                                Row(
-                                    measure.height(52.dp).clip(RoundedCornerShape(30.dp)),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    // Each half is the button: a press fills the half, not a circle round the icon.
-                                    PillButton(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true })
-                                    Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
-                                    PillButton(
-                                        outputRoute.icon,
-                                        "Audio output",
-                                        // Headphones only change the icon; lit up is for casting, a session to notice.
-                                        outputRoute == OutputRoute.CAST,
-                                        { showOutput = true },
-                                    )
-                                }
+                    MorphPill(
+                        second = inQueueNow,
+                        animate = !state.ui.reduceAnimation,
+                        firstFill = Color.White.copy(alpha = 0.14f),
+                        secondFill = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.weight(1f),
+                        first = { enabled ->
+                            // Its two halves split by a hairline; the fill is the morphing one behind.
+                            Row(Modifier.height(52.dp).clip(RoundedCornerShape(30.dp)), verticalAlignment = Alignment.CenterVertically) {
+                                // Each half is the button: a press fills the half, not a circle round the icon.
+                                PillButton(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true }, enabled = enabled)
+                                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                PillButton(
+                                    outputRoute.icon,
+                                    "Audio output",
+                                    // Headphones only change the icon; lit up is for casting, a session to notice.
+                                    outputRoute == OutputRoute.CAST,
+                                    { showOutput = true },
+                                    enabled = enabled,
+                                )
                             }
-                        }
-                    }
+                        },
+                        secondContent = { enabled ->
+                            ModesPill(state.shuffleMode, state.smartShuffleAvailable, state.repeatMode, actions.toggleShuffle, actions.cycleRepeat, filled = false, enabled = enabled)
+                        },
+                    )
                     GlassToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
                 }
                 if (!minimal && roomy) Text(

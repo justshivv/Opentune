@@ -1055,9 +1055,11 @@ class PlaybackService : MediaLibraryService() {
     private var swappingTo: String? = null
 
     /**
-     * A few seconds into each song, off the start path, asks
-     * [StreamResolver.findUpgrade] whether a clearly better stream exists,
-     * and swaps to it in place if so. Also run from the player's menu.
+     * As each song starts, looks for a better stream (a verified FLAC from the
+     * add-ons, JioSaavn, or [StreamResolver.findUpgrade]) and swaps to it in
+     * place once the song is sounding with a little buffered, so the search
+     * runs alongside the start rather than after it. Also run from the
+     * player's menu.
      */
     private fun scheduleUpgrade(force: Boolean = false) {
         upgradeJob?.cancel()
@@ -1079,9 +1081,18 @@ class PlaybackService : MediaLibraryService() {
             if (ok) "Switched to ${ExternalStreams.selectionDetail(id) ?: NerdStats.externalSource.value ?: "a better stream"}"
             else "The better stream didn't load in time, so this one keeps playing",
         )
+        /**
+         * Before a swap: the song is playing with some of it buffered, so the
+         * second stream's fetch doesn't hold up the first one's start. Paused,
+         * or slow to start, it goes ahead after a while anyway.
+         */
+        suspend fun started() {
+            if (force) return
+            kotlinx.coroutines.withTimeoutOrNull(UPGRADE_START_WAIT_MS) {
+                while (!(player.isPlaying && player.currentPosition >= UPGRADE_SETTLE_MS && player.totalBufferedDuration >= UPGRADE_BUFFERED_MS)) delay(50)
+            }
+        }
         upgradeJob = scope.launch {
-            // Its source found ahead of time: switch within a moment, not after the usual wait.
-            if (!force) delay(if (ExternalStreams.cached(id) != null) UPGRADE_READY_DELAY_MS else UPGRADE_DELAY_MS)
             val startup = startupToken(uri)?.let { startupSelections[it] }
             if (startup != null && startup.selected == null) {
                 if (kotlinx.coroutines.withTimeoutOrNull(30_000) {
@@ -1091,24 +1102,31 @@ class PlaybackService : MediaLibraryService() {
             }
             if (alreadyExternal() && !force) return@launch
             val duration = player.duration.takeIf { it > 0 } ?: item.toSong().durationMillis()
-            // The FLAC search (every add-on at once) and JioSaavn go out together.
-            // JioSaavn usually answers first and is played while the FLAC is still
-            // being verified; a verified FLAC then takes over, so a lossy stream
-            // found first never keeps a lossless one from playing.
+            // The FLAC search (every add-on at once) and JioSaavn go out together, and
+            // whichever answers first is acted on. JioSaavn usually does and is played
+            // while the FLAC is still being verified; a verified FLAC then takes over,
+            // so a lossy stream found first never keeps a lossless one from playing,
+            // and a FLAC found first doesn't wait for JioSaavn at all.
             val flac = if (Podcasts.isEpisode(id)) null else async {
                 ExternalStreams.find(item.toSong(), duration, force = force,
                     beforePlayback = AppSettings.effectiveAudioQuality == com.opentune.data.settings.AudioQuality.MAX,
                     losslessOnly = true)
             }
             // A slow startup lookup can finish here without delaying audible playback.
-            val saavn = if (!Podcasts.isEpisode(id) && externalStreamKeyOf(selectedUri(uri)) == null)
-                ExternalStreams.findJioSaavn(item.toSong(), duration) else null
+            val saavnSearch = if (!Podcasts.isEpisode(id) && externalStreamKeyOf(selectedUri(uri)) == null)
+                async { ExternalStreams.findJioSaavn(item.toSong(), duration) } else null
+            val flacFirst = flac != null && saavnSearch != null && kotlinx.coroutines.selects.select {
+                flac.onAwait { it != null }
+                saavnSearch.onAwait { false }
+            }
+            val saavn = if (flacFirst) { saavnSearch?.cancel(); null } else saavnSearch?.await()
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             if (player.currentMediaItem?.localConfiguration?.uri != uri) { flac?.cancel(); return@launch }
             if (saavn != null && !saavn.lossless && ExternalStreams.allowed(false) && flac?.isCompleted != true) {
+                started()
                 val left = player.duration - player.currentPosition
                 if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { flac?.cancel(); tell("Too close to the end of the song to switch"); return@launch }
-                swapToUpgrade(player, id, externalStreamUri(id, saavn.key))
+                if (player.currentMediaItem?.localConfiguration?.uri == uri) swapToUpgrade(player, id, externalStreamUri(id, saavn.key))
             }
             val lossless = flac?.await()
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
@@ -1120,6 +1138,8 @@ class PlaybackService : MediaLibraryService() {
                 val existing = externalStreamKeyOf(selectedUri(playing))?.let { ExternalStreams.get(id, it) }
                 if (existing?.lossless == true && com.opentune.data.addons.AddonResolver.qualityScore(lossless.bits, lossless.sampleRate) <=
                     com.opentune.data.addons.AddonResolver.qualityScore(existing.bits, existing.sampleRate)) { tell("Already playing the best quality there is for this song"); return@launch }
+                started()
+                if (player.currentMediaItem?.mediaId != id) return@launch
                 val left = player.duration - player.currentPosition
                 if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { tell("Too close to the end of the song to switch"); return@launch }
                 // A slow first fetch gets another go: the add-on's stream is often
@@ -1144,6 +1164,8 @@ class PlaybackService : MediaLibraryService() {
             val found = withContext(Dispatchers.IO) { runCatching { StreamResolver.findUpgrade(id, force) }.getOrDefault(false) }
             if (player.currentMediaItem?.mediaId != id) return@launch
             if (!found) { tell("No better stream found; this is the best quality there is for this song"); return@launch }
+            started()
+            if (player.currentMediaItem?.mediaId != id) return@launch
             val left = player.duration - player.currentPosition
             if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { tell("Too close to the end of the song to switch"); return@launch }
             swapped(swapToUpgrade(player, id))
@@ -1155,13 +1177,17 @@ class PlaybackService : MediaLibraryService() {
     private var aheadJob: kotlinx.coroutines.Job? = null
 
     /**
-     * Finds the lossless source for the next [PREFETCH_AHEAD] songs while this
-     * one plays, so each starts on it (or swaps to it within a second or two)
-     * instead of waiting for a lookup after it's begun. Only where lossless is
-     * on for this network; local, server and downloaded songs are left alone.
+     * Finds the better sources for the next [PREFETCH_AHEAD] songs while this
+     * one plays: JioSaavn first, a quick answer that lets the song start on it
+     * at once, then the lossless one, so each starts on the best found (or
+     * swaps to it as soon as it's sounding) instead of waiting for a lookup
+     * after it's begun. Only what's on for this network; local, server and
+     * downloaded songs are left alone.
      */
     private fun prefetchAhead() {
-        if (!ExternalStreams.allowed(true)) return
+        val lossless = ExternalStreams.allowed(true)
+        val saavn = ExternalStreams.allowed(false)
+        if (!lossless && !saavn) return
         val player = mediaSession?.player as? ExoPlayer ?: return
         val from = player.currentMediaItemIndex
         val ahead = (1..PREFETCH_AHEAD).mapNotNull { i -> (from + i).takeIf { it in 0 until player.mediaItemCount } }
@@ -1169,14 +1195,16 @@ class PlaybackService : MediaLibraryService() {
             .filter { item ->
                 val id = item.mediaId
                 val uri = item.localConfiguration?.uri
-                isYouTubeId(id) && !Podcasts.isEpisode(id) && uri?.scheme != "file" && ExternalStreams.cached(id) == null
+                isYouTubeId(id) && !Podcasts.isEpisode(id) && uri?.scheme != "file" && ExternalStreams.cached(id)?.lossless != true
             }
         aheadJob?.cancel()
         if (ahead.isEmpty()) return
         aheadJob = scope.launch {
             for (item in ahead) {
                 val song = item.toSong()
-                runCatching { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
+                if (saavn) runCatching { ExternalStreams.findJioSaavn(song, song.durationMillis()) }
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                if (lossless) runCatching { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
                     .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
             }
         }
@@ -1857,9 +1885,11 @@ class PlaybackService : MediaLibraryService() {
          */
         val VOLUME_RECEIVER_FLAGS = if (android.os.Build.VERSION.SDK_INT >= 33) Context.RECEIVER_EXPORTED else 0
         const val QUEUE_SAVE_MS = 5_000L
-        const val UPGRADE_DELAY_MS = 8_000L
-        /** The wait before swapping to a source that was already found ahead of time. */
-        const val UPGRADE_READY_DELAY_MS = 1_500L
+        /** A swap waits for the song to have played this much, with [UPGRADE_BUFFERED_MS] ahead of it... */
+        const val UPGRADE_SETTLE_MS = 300L
+        const val UPGRADE_BUFFERED_MS = 4_000L
+        /** ...or for this long at most, when it's paused or slow to start. */
+        const val UPGRADE_START_WAIT_MS = 6_000L
         /** How many songs ahead the lossless source is looked up. */
         const val PREFETCH_AHEAD = 2
         /** Songs a server queue carries on with when it runs out. */
