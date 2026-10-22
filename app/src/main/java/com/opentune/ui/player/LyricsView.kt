@@ -383,6 +383,7 @@ private fun SyncedLyrics(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The current line sits near the top, leaving room for just the line before it.
         val anchor = maxHeight * LINE_ANCHOR
+        val waveMaxPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
         LaunchedEffect(activeRow, following, reduced) {
             if (!following) {
                 glide.pxPerS = 0f
@@ -395,7 +396,7 @@ private fun SyncedLyrics(
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(top = anchor, bottom = maxHeight * 0.6f),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().softEdges(top = EDGE_FADE_TOP, bottom = EDGE_FADE_BOTTOM),
         ) {
             item(key = "intro") {
                 val firstStart = lines.firstOrNull()?.startMs ?: 0L
@@ -403,6 +404,7 @@ private fun SyncedLyrics(
                 IntroDots(visible = waiting)
             }
             itemsIndexed(rows, key = { _, row -> row.key }) { r, row ->
+                Box(Modifier.graphicsLayer { translationY = waveLag(r - activeRow, glide.pxPerS, waveMaxPx) }) {
                 when (row) {
                     is LyricRow.Line -> {
                         val i = row.index
@@ -446,6 +448,7 @@ private fun SyncedLyrics(
                         progress = { ((clock() - row.gap.startMs).toFloat() / (row.gap.endMs - row.gap.startMs)).coerceIn(0f, 1f) },
                     )
                 }
+                }
             }
             item(key = "credit") { Credit(source) }
         }
@@ -479,7 +482,49 @@ private fun SyncedLyrics(
 }
 
 /** How fast the list was gliding, kept from one line to the next. */
-private class GlideSpeed { var pxPerS = 0f }
+/**
+ * Lines thin out toward the list's top and bottom edges instead of being cut
+ * off along a hard line there: the list is drawn into its own layer and
+ * faded out over [top] and [bottom] with a gradient mask.
+ */
+private fun Modifier.softEdges(top: androidx.compose.ui.unit.Dp, bottom: androidx.compose.ui.unit.Dp): Modifier =
+    graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            val h = size.height
+            if (h <= 0f) return@drawWithContent
+            val t = (top.toPx() / h).coerceIn(0f, 0.5f)
+            val b = (bottom.toPx() / h).coerceIn(0f, 0.5f)
+            drawRect(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    0f to Color.Transparent, t to Color.Black, (1f - b) to Color.Black, 1f to Color.Transparent,
+                ),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+            )
+        }
+
+private val EDGE_FADE_TOP = 18.dp
+private val EDGE_FADE_BOTTOM = 96.dp
+
+/** The glide's speed, read frame by frame by each line's lag (see [waveLag]). */
+private class GlideSpeed { var pxPerS by androidx.compose.runtime.mutableFloatStateOf(0f) }
+
+/**
+ * How far a row [rowsBelow] under the current one trails the list while it
+ * glides at [pxPerS]: each row follows the one above a moment later, so the
+ * gaps open as the lines move and close as they settle, a soft wave rather
+ * than one rigid block. Rows at or above the current one don't trail.
+ */
+private fun waveLag(rowsBelow: Int, pxPerS: Float, maxPx: Float): Float {
+    if (rowsBelow <= 0) return 0f
+    val lag = pxPerS * WAVE_STEP_S * rowsBelow.coerceAtMost(WAVE_ROWS)
+    return lag.coerceIn(-maxPx, maxPx)
+}
+
+/** Each row trails the one above by this much of the glide's motion. */
+private const val WAVE_STEP_S = 0.035f
+/** Rows further down trail no more than this many rows' worth. */
+private const val WAVE_ROWS = 6
 
 /** One row of the synced list: a sung line, or the instrumental break after one. */
 private sealed interface LyricRow {
@@ -577,9 +622,9 @@ private suspend fun glideTo(state: LazyListState, index: Int, reduced: Boolean, 
     speed.pxPerS = 0f
 }
 
-/** About 0.8 s to settle, a softer arrival than before; critically damped (damping = 2·√stiffness), so it never overshoots. */
-private const val GLIDE_STIFFNESS = 42f
-private const val GLIDE_DAMPING = 12.96f
+/** About half a second to settle, like BitChord's; critically damped (damping = 2·√stiffness), so it never overshoots. */
+private const val GLIDE_STIFFNESS = 80f
+private const val GLIDE_DAMPING = 17.89f
 
 /** How one [LyricsAnimation] treats lines: sizes, blur per line away, and glow. */
 /** How far, as a share of a row's height, a letter can reach past its row's box. */
