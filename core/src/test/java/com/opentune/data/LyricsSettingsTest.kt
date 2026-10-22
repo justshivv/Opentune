@@ -19,15 +19,15 @@ class LyricsSettingsTest {
     @Test
     fun savedOrderIsKept() {
         val s = LyricsSettings(sources = listOf(LyricsSourceEntry(LyricsSource.YOUTUBE_MUSIC), LyricsSourceEntry(LyricsSource.LRCLIB, enabled = false)))
-        // lrc.red goes in first; other sources added in later versions (LyricsPlus, Better Lyrics, SimpMusic, KuGou, NetEase, Unison, YouTube captions) join at the end of a saved order.
-        assertEquals(listOf(LyricsSource.LRC_RED, LyricsSource.YOUTUBE_MUSIC, LyricsSource.LRCLIB, LyricsSource.LYRICSPLUS, LyricsSource.BETTERLYRICS, LyricsSource.SIMPMUSIC, LyricsSource.KUGOU, LyricsSource.NETEASE, LyricsSource.UNISON, LyricsSource.YOUTUBE_CAPTIONS), s.ordered.map { it.source })
-        assertEquals(false, s.ordered[2].enabled)
+        // lrc.red and Paxsenix go in first; other sources added in later versions (LyricsPlus, Better Lyrics, SimpMusic, KuGou, NetEase, Unison, YouTube captions) join at the end of a saved order.
+        assertEquals(listOf(LyricsSource.LRC_RED, LyricsSource.PAXSENIX, LyricsSource.YOUTUBE_MUSIC, LyricsSource.LRCLIB, LyricsSource.LYRICSPLUS, LyricsSource.BETTERLYRICS, LyricsSource.SIMPMUSIC, LyricsSource.KUGOU, LyricsSource.NETEASE, LyricsSource.UNISON, LyricsSource.YOUTUBE_CAPTIONS), s.ordered.map { it.source })
+        assertEquals(false, s.ordered[3].enabled)
     }
 
     @Test
     fun missingSourcesAreAppendedAndDuplicatesDropped() {
         val s = LyricsSettings(sources = listOf(LyricsSourceEntry(LyricsSource.YOUTUBE_MUSIC), LyricsSourceEntry(LyricsSource.YOUTUBE_MUSIC, enabled = false)))
-        assertEquals(listOf(LyricsSource.LRC_RED, LyricsSource.YOUTUBE_MUSIC, LyricsSource.LRCLIB, LyricsSource.LYRICSPLUS, LyricsSource.BETTERLYRICS, LyricsSource.SIMPMUSIC, LyricsSource.KUGOU, LyricsSource.NETEASE, LyricsSource.UNISON, LyricsSource.YOUTUBE_CAPTIONS), s.ordered.map { it.source })
-        assertEquals(true, s.ordered[1].enabled)
+        assertEquals(listOf(LyricsSource.LRC_RED, LyricsSource.PAXSENIX, LyricsSource.YOUTUBE_MUSIC, LyricsSource.LRCLIB, LyricsSource.LYRICSPLUS, LyricsSource.BETTERLYRICS, LyricsSource.SIMPMUSIC, LyricsSource.KUGOU, LyricsSource.NETEASE, LyricsSource.UNISON, LyricsSource.YOUTUBE_CAPTIONS), s.ordered.map { it.source })
+        assertEquals(true, s.ordered[2].enabled)
     }
 }

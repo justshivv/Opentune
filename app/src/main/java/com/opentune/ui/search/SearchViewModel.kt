@@ -148,12 +148,14 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
     /**
      * Plays [hit]: the same song is found on YouTube Music, for its lyrics,
      * radio and everything else, and the add-on's own stream for the track
-     * picked is handed to the player to start on. Null when no match was found.
+     * picked, at the best quality it has, is handed to the player to start
+     * on, whatever the quality setting. Null when no match was found.
      */
     suspend fun songFor(hit: AddonHit): com.opentune.data.model.Song? = kotlinx.coroutines.coroutineScope {
         val stream = async {
             runCatching {
-                com.opentune.data.addons.AddonClient.forBase(hit.addon.base).stream(hit.track.id, hit.manifest, "LOSSLESS")
+                // The add-on's best: hi-res where it has it, else lossless, else what it serves.
+                com.opentune.data.addons.AddonClient.forBase(hit.addon.base).stream(hit.track.id, hit.manifest, BEST_TIER)
                     .copy(addonId = hit.addon.key, provider = hit.manifest.name)
             }.getOrNull()
         }
@@ -271,6 +273,7 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
         const val OTHER_DEBOUNCE_MS = 300L
         const val MAX_LIBRARY_ROWS = 100
         const val ADDON_SEARCH_MS = 10_000L
+        const val BEST_TIER = "HI_RES_LOSSLESS"
     }
 
     private val recentSearches = object : LinkedHashMap<String, List<SearchResult>>(32, 0.75f, true) {

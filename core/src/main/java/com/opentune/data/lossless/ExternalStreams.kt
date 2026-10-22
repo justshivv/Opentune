@@ -12,7 +12,9 @@ object ExternalStreams {
     data class Rendition(val key: String, val url: String, val label: String, val lossless: Boolean, val at: Long,
         val provider: String = label, val bits: Int? = null, val sampleRate: Int? = null, val kbps: Int? = null,
         val maximumSearch: Boolean = false, val sessionRevision: Long = 0,
-        val addonId: String? = null, val mimeType: String? = null)
+        val addonId: String? = null, val mimeType: String? = null,
+        /** Picked by hand in Search: played whatever the quality settings say. */
+        val picked: Boolean = false)
     private val renditions = ConcurrentHashMap<String, Rendition>()
     private val pinned = ConcurrentHashMap<String, Pair<String, Rendition>>()
     private val failedUntil = ConcurrentHashMap<String, Long>()
@@ -26,7 +28,7 @@ object ExternalStreams {
         val now = now()
         if ((failedUntil[videoId] ?: 0) > now) return null
         return renditions[videoId]?.takeIf {
-            now - it.at < TTL && allowed(it.lossless) &&
+            now - it.at < TTL && (it.picked || allowed(it.lossless)) &&
                 (it.addonId == null || (it.sessionRevision == com.opentune.data.addons.AddonStore.revision.value && addonAllowed(it)))
         }
     }
@@ -121,7 +123,7 @@ object ExternalStreams {
             "${stream.provider} · ${if (stream.lossless) "lossless requested" else stream.codec}", stream.lossless, now(),
             provider = stream.provider, bits = stream.bits, sampleRate = stream.sampleRate, kbps = stream.kbps,
             maximumSearch = true, sessionRevision = com.opentune.data.addons.AddonStore.revision.value,
-            addonId = stream.addonId, mimeType = stream.mimeType)
+            addonId = stream.addonId, mimeType = stream.mimeType, picked = true)
         failedUntil.remove(videoId)
         remember(videoId, rendition)
         report(videoId, "${stream.provider}: picked in Search")
@@ -139,7 +141,7 @@ object ExternalStreams {
 
     fun resolve(videoId: String, key: String): String {
         val rendition = get(videoId, key)
-        if (rendition == null || !addonAllowed(rendition) || !allowed(rendition.lossless)) {
+        if (rendition == null || !addonAllowed(rendition) || !(rendition.picked || allowed(rendition.lossless))) {
             throw IOException("External rendition expired; resume the original stream")
         }
         return rendition.url

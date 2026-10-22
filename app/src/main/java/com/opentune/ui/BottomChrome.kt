@@ -95,6 +95,9 @@ private val MINI_ROW = 56.dp
 /** The capsule: the open tab at one end, the song's cover (or Search) at the other. */
 private val CAPSULE_WIDTH = 124.dp
 private val CAPSULE_INSET = 4.dp
+
+/** At this many tabs or fewer (Explore moved into Search), the tabs' icons and names are a size up. */
+private const val ROOMY_TABS = 3
 /** Between the now-playing card and the dock, and between the dock and Search. */
 private val CARD_GAP = 8.dp
 private val SEARCH_GAP = 10.dp
@@ -568,6 +571,7 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
                             // The other tabs fade as the edge reaches them.
                             .graphicsLayer { if (i != resting) alpha = (1f - fold() * 1.6f).coerceIn(0f, 1f) },
                         collapse = fold,
+                        roomy = c.tabs.size <= ROOMY_TABS,
                     ) {
                         if (i != shown) haptics.tick()
                         c.onSelect(i)
@@ -588,7 +592,7 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
 
 /** One destination: the icon, filled and lifted a little when open, over its name. */
 @Composable
-internal fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, collapse: () -> Float = { 0f }, onClick: () -> Unit) {
+internal fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, collapse: () -> Float = { 0f }, roomy: Boolean = false, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -619,7 +623,8 @@ internal fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, col
                 if (on) tab.selectedIcon else tab.icon,
                 null,
                 tint = fg,
-                modifier = Modifier.size(25.dp).graphicsLayer {
+                // With fewer tabs each has more room, and uses it.
+                modifier = Modifier.size(if (roomy) 29.dp else 25.dp).graphicsLayer {
                     // Folding into a button, the icon drops to the middle as the name goes.
                     val c = collapse()
                     val s = scale * (1f + 0.04f * c)
@@ -631,7 +636,7 @@ internal fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, col
         }
         Text(
             tab.label,
-            style = MaterialTheme.typography.labelSmall.let { if (ink.shade != null) it.copy(shadow = ink.shade) else it },
+            style = (if (roomy) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall).let { if (ink.shade != null) it.copy(shadow = ink.shade) else it },
             // One weight either way, so the name doesn't change width as it's picked.
             fontWeight = FontWeight.SemiBold,
             color = fg,

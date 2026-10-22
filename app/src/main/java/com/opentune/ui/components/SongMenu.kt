@@ -1,5 +1,7 @@
 package com.opentune.ui.components
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -383,6 +385,24 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
     // A file on this phone can't go on YouTube Music.
     val online = signedIn && isYouTubeId(song.videoId)
     val accountPlaylists = if (online) remember(account, owned, playlists) { PlaylistLinks.pickable(account, owned, playlists) } else emptyList()
+    // Which of the account's playlists already have the song, looked up as the sheet opens.
+    val inAccount = remember(song.videoId) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    LaunchedEffect(accountPlaylists, song.videoId) {
+        val gate = kotlinx.coroutines.sync.Semaphore(ACCOUNT_LOOKUPS)
+        kotlinx.coroutines.coroutineScope {
+            accountPlaylists.take(MAX_ACCOUNT_CHECKED).filter { it.playlistId !in inAccount }.forEach { p ->
+                launch {
+                    gate.acquire()
+                    try {
+                        runCatching { com.opentune.data.MusicRepository.collection(p.browseId) }.getOrNull()
+                            ?.let { c -> inAccount[p.playlistId] = c.songs.any { it.videoId == song.videoId } }
+                    } finally {
+                        gate.release()
+                    }
+                }
+            }
+        }
+    }
     var naming by remember { mutableStateOf(playlists.isEmpty() && accountPlaylists.isEmpty()) }
     var name by remember { mutableStateOf("") }
     var saveOnline by remember { mutableStateOf(true) }
@@ -439,11 +459,18 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
                             )
                         }
                         items(accountPlaylists, key = { "yt:${it.playlistId}" }) { p ->
+                            val has = inAccount[p.playlistId] == true
                             PlaylistPickRow(
                                 title = p.title,
-                                subtitle = p.subtitle.ifBlank { "YouTube Music" },
+                                subtitle = if (has) "Already in it" else p.subtitle.ifBlank { "YouTube Music" },
                                 art = { Artwork(p.thumbnailUrl, Modifier.fillMaxSize(), RectangleShape, placeholder = Icons.AutoMirrored.Rounded.QueueMusic) },
+                                added = has,
                             ) {
+                                if (has) {
+                                    com.opentune.data.Pills.info("Already in ${p.title}", context)
+                                    onDone()
+                                    return@PlaylistPickRow
+                                }
                                 PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
                                     if (ok) com.opentune.data.Pills.done("Added to ${p.title}", context)
                                     else com.opentune.data.Pills.error("Couldn't add it to ${p.title}", context)
@@ -467,3 +494,7 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
         dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
     )
 }
+
+/** Account playlists looked up at once, and at most, to mark the ones that already have the song. */
+private const val ACCOUNT_LOOKUPS = 4
+private const val MAX_ACCOUNT_CHECKED = 30

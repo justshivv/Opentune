@@ -1145,6 +1145,8 @@ object Innertube {
                 addJsonObject {
                     put("action", "ACTION_ADD_VIDEO")
                     put("addedVideoId", videoId)
+                    // What YouTube Music's own app sends: a song already there isn't added twice.
+                    put("dedupeOption", "DEDUPE_OPTION_SKIP")
                 }
             }
         }

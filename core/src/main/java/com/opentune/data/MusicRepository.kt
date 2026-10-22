@@ -420,7 +420,8 @@ object MusicRepository {
         val response = Innertube.browse(browseId)
         val header = InnertubeParser.parseBrowseHeader(response)
         val page = InnertubeParser.parsePlaylistShelf(response)
-        val songs = (page?.songs?.takeIf { it.isNotEmpty() } ?: InnertubeParser.collectSongsDeep(response)) + laterPages(page?.continuation)
+        // A song on two pages of the playlist, as on one, shows once.
+        val songs = ((page?.songs?.takeIf { it.isNotEmpty() } ?: InnertubeParser.collectSongsDeep(response)) + laterPages(page?.continuation)).distinctBy { it.videoId }
         // Signed out, no page has a save button, which would read as "owned".
         val owned = if (Innertube.cookie != null && InnertubeParser.isEditablePlaylist(browseId)) {
             InnertubeParser.parsePlaylistOwned(response)
@@ -465,7 +466,7 @@ object MusicRepository {
         RemotePlaylist(
             title = InnertubeParser.parseBrowseHeader(response)?.title.orEmpty(),
             privacy = InnertubeParser.parsePlaylistPrivacy(response),
-            songs = page.songs + laterPages(page.continuation),
+            songs = (page.songs + laterPages(page.continuation)).distinctBy { it.videoId },
         )
     }
 
