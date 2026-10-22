@@ -76,6 +76,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.zIndex
 import androidx.media3.common.Player
 import com.opentune.data.lyrics.Lyrics
@@ -349,19 +352,80 @@ private fun pressScale(press: androidx.compose.foundation.interaction.Interactio
  * own rounding shaping its outer end, rather than a circle round the icon.
  */
 @Composable
-fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit, width: androidx.compose.ui.unit.Dp = 76.dp) {
+fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit, width: androidx.compose.ui.unit.Dp = 76.dp, enabled: Boolean = true) {
     val bg by animateColorAsState(if (selected) Color.White.copy(alpha = 0.20f) else Color.Transparent, BUTTON_SETTLE, label = "pillButton")
     val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val scale = pressScale(press, selected)
     Box(
         Modifier.fillMaxHeight().width(width).background(bg)
-            .clickable(press, androidx.compose.material3.ripple(), onClickLabel = label, onClick = onClick),
+            .clickable(press, androidx.compose.material3.ripple(), enabled = enabled, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         // The segment's fill stays put in the pill; the icon is what gives under the finger.
         Icon(icon, label, Modifier.size(26.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value })
     }
 }
+
+/**
+ * One pill that morphs between two sets of buttons, [first] and [second]
+ * (shown when [second] is true). Its fill stretches or narrows to the new
+ * set's width and takes its colour, the buttons are clipped to it as it
+ * goes, and the old set fades out as the new one fades in. All of that is
+ * read from one value each frame, so the parts can't drift apart, and a tap
+ * back mid-way turns it round from where it is, at the speed it had. Only
+ * the set that's coming in takes taps: each gets whether it's enabled.
+ */
+@Composable
+fun MorphPill(
+    second: Boolean,
+    animate: Boolean,
+    firstFill: Color,
+    secondFill: Color,
+    modifier: Modifier = Modifier,
+    first: @Composable (enabled: Boolean) -> Unit,
+    secondContent: @Composable (enabled: Boolean) -> Unit,
+) {
+    val morph = remember { androidx.compose.animation.core.Animatable(if (second) 1f else 0f) }
+    LaunchedEffect(second, animate) {
+        val target = if (second) 1f else 0f
+        if (!animate) morph.snapTo(target) else morph.animateTo(target, spring(dampingRatio = 1f, stiffness = 340f))
+    }
+    var firstWidth by remember { mutableFloatStateOf(0f) }
+    var secondWidth by remember { mutableFloatStateOf(0f) }
+    Box(
+        modifier.height(52.dp).drawWithContent {
+            if (firstWidth <= 0f || secondWidth <= 0f) return@drawWithContent
+            val p = morph.value
+            val w = androidx.compose.ui.util.lerp(firstWidth, secondWidth, p)
+            val left = (size.width - w) / 2f
+            val path = androidx.compose.ui.graphics.Path().apply {
+                addRoundRect(androidx.compose.ui.geometry.RoundRect(left, 0f, left + w, size.height, androidx.compose.ui.geometry.CornerRadius(size.height / 2f)))
+            }
+            drawPath(path, androidx.compose.ui.graphics.lerp(firstFill, secondFill, p))
+            clipPath(path) { this@drawWithContent.drawContent() }
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        // The coming-in set is on top, so it's the one under the finger.
+        Box(
+            Modifier.zIndex(if (second) 0f else 1f)
+                .onSizeChanged { firstWidth = it.width.toFloat() }
+                .graphicsLayer { alpha = morphShown(1f - morph.value) },
+        ) { first(!second) }
+        Box(
+            Modifier.zIndex(if (second) 1f else 0f)
+                .onSizeChanged { secondWidth = it.width.toFloat() }
+                .graphicsLayer { alpha = morphShown(morph.value) },
+        ) { secondContent(second) }
+    }
+}
+
+/**
+ * How visible a set is at [p] of the way to it: nothing until 42%, then an
+ * ease in to fully there by 95%. The old set is all but gone by the middle
+ * when the new one starts, so their icons never sit on top of each other.
+ */
+internal fun morphShown(p: Float): Float = ((p - 0.42f) / 0.53f).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
 /**
  * Shuffle, repeat and autoplay in one glass pill, split by hairlines. Each
@@ -377,6 +441,8 @@ fun ModesPill(
     onRepeat: () -> Unit,
     /** False where the caller draws the pill's fill itself (a fill that morphs between pills). */
     filled: Boolean = true,
+    /** False while it's fading out of a morphing pill, so taps go to what's coming in. */
+    enabled: Boolean = true,
 ) {
     val autoplay = AppSettings.playback.collectAsState().value.autoplay
     val haptics = com.opentune.ui.components.rememberHaptics()
@@ -398,6 +464,7 @@ fun ModesPill(
             shuffle != ShuffleMode.OFF,
             SegmentMotion.WIGGLE,
             badge = if (shuffle == ShuffleMode.SMART) Icons.Rounded.AutoAwesome else null,
+            enabled = enabled,
         ) {
             val next = shuffle.next(smartShuffleAvailable)
             haptics.pattern(if (next == ShuffleMode.OFF) Haptics.Pattern.OFF else Haptics.Pattern.SHUFFLE)
@@ -421,6 +488,7 @@ fun ModesPill(
             },
             repeatMode != Player.REPEAT_MODE_OFF,
             SegmentMotion.SPIN,
+            enabled = enabled,
         ) {
             // Off, then all, then one, then off again.
             haptics.pattern(
@@ -433,7 +501,7 @@ fun ModesPill(
             onRepeat()
         }
         VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
-        PillSegment(Icons.Rounded.AllInclusive, "AutoPlay", autoplay, SegmentMotion.PULSE) {
+        PillSegment(Icons.Rounded.AllInclusive, "AutoPlay", autoplay, SegmentMotion.PULSE, enabled = enabled) {
             haptics.pattern(if (autoplay) Haptics.Pattern.OFF else Haptics.Pattern.AUTOPLAY)
             AppSettings.setAutoplay(!autoplay)
         }
@@ -446,7 +514,7 @@ private enum class SegmentMotion { WIGGLE, SPIN, PULSE }
 private var smartHintShown = false
 
 @Composable
-private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motion: SegmentMotion, badge: ImageVector? = null, onClick: () -> Unit) {
+private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motion: SegmentMotion, badge: ImageVector? = null, enabled: Boolean = true, onClick: () -> Unit) {
     val bg by animateColorAsState(if (active) Color.White.copy(alpha = 0.20f) else Color.Transparent, label = "seg")
     val fg by animateColorAsState(if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, label = "segFg")
     val reduce = AppSettings.ui.collectAsState().value.reduceAnimation
@@ -460,7 +528,7 @@ private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motio
         kick.snapTo(0f)
     }
     Box(
-        Modifier.fillMaxHeight().width(60.dp).background(bg).clickable { taps++; onClick() },
+        Modifier.fillMaxHeight().width(60.dp).background(bg).clickable(enabled = enabled) { taps++; onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
