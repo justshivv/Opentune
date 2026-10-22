@@ -1,5 +1,8 @@
 package com.opentune.ui.browse
 
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.gestures.animateScrollBy
 import com.opentune.ui.components.GlassPage
 import com.opentune.ui.components.LocalHazeState
 import androidx.compose.ui.layout.layout
@@ -542,7 +545,20 @@ fun CollectionScreen(
                                     )
                                 }
                                 androidx.compose.animation.AnimatedVisibility(searching) {
-                                    ListSearchField(query, { query = it }, onClear = { query = ""; searching = false }, Modifier.padding(bottom = 12.dp))
+                                    // Opened, the field rises to just under the bar, clear of the
+                                    // keyboard that comes up with it, instead of staying down under the cover.
+                                    val density = androidx.compose.ui.platform.LocalDensity.current
+                                    val topInset = WindowInsets.statusBars.getTop(density)
+                                    var fieldY by remember { mutableStateOf<Float?>(null) }
+                                    LaunchedEffect(fieldY != null) {
+                                        val y = fieldY ?: return@LaunchedEffect
+                                        val below = topInset + with(density) { SEARCH_FIELD_TOP.toPx() }
+                                        listState.animateScrollBy(y - below)
+                                    }
+                                    ListSearchField(
+                                        query, { query = it }, onClear = { query = ""; searching = false },
+                                        Modifier.padding(bottom = 12.dp).onGloballyPositioned { if (fieldY == null) fieldY = it.positionInRoot().y },
+                                    )
                                 }
                             }
                         }
@@ -575,8 +591,15 @@ fun CollectionScreen(
                             )
                         }
                     }
+                    // Room to scroll the search field up clear of the keyboard, however short the list.
+                    if (searching) item(key = "search-room") {
+                        Spacer(Modifier.height(androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp))
+                    }
                 }
             }
         }
     }
 }
+
+/** How far below the status bar an opened list search sits: just under the top bar. */
+private val SEARCH_FIELD_TOP = 76.dp

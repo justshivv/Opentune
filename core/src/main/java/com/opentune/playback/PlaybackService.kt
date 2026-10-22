@@ -695,6 +695,7 @@ class PlaybackService : MediaLibraryService() {
             updateExternalStats()
             applyLoudness()
             if (!swap) scheduleUpgrade()
+            if (!swap) prefetchAhead()
             // Nothing but a blend or a swap turns the main player down; outside
             // one, a new song always starts at full level.
             (mediaSession?.player as? ExoPlayer)?.let { p ->
@@ -1009,7 +1010,8 @@ class PlaybackService : MediaLibraryService() {
             else "The better stream didn't load in time, so this one keeps playing",
         )
         upgradeJob = scope.launch {
-            if (!force) delay(UPGRADE_DELAY_MS)
+            // Its source found ahead of time: switch within a moment, not after the usual wait.
+            if (!force) delay(if (ExternalStreams.cached(id) != null) UPGRADE_READY_DELAY_MS else UPGRADE_DELAY_MS)
             val startup = startupToken(uri)?.let { startupSelections[it] }
             if (startup != null && startup.selected == null) {
                 if (kotlinx.coroutines.withTimeoutOrNull(30_000) {
@@ -1070,6 +1072,36 @@ class PlaybackService : MediaLibraryService() {
         }
         val currentJob = upgradeJob
         currentJob?.invokeOnCompletion { if (upgradeJob === currentJob) NerdStats.onUpgrade(null) }
+    }
+
+    private var aheadJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Finds the lossless source for the next [PREFETCH_AHEAD] songs while this
+     * one plays, so each starts on it (or swaps to it within a second or two)
+     * instead of waiting for a lookup after it's begun. Only where lossless is
+     * on for this network; local, server and downloaded songs are left alone.
+     */
+    private fun prefetchAhead() {
+        if (!ExternalStreams.allowed(true)) return
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val from = player.currentMediaItemIndex
+        val ahead = (1..PREFETCH_AHEAD).mapNotNull { i -> (from + i).takeIf { it in 0 until player.mediaItemCount } }
+            .map { player.getMediaItemAt(it) }
+            .filter { item ->
+                val id = item.mediaId
+                val uri = item.localConfiguration?.uri
+                isYouTubeId(id) && !Podcasts.isEpisode(id) && uri?.scheme != "file" && ExternalStreams.cached(id) == null
+            }
+        aheadJob?.cancel()
+        if (ahead.isEmpty()) return
+        aheadJob = scope.launch {
+            for (item in ahead) {
+                val song = item.toSong()
+                runCatching { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+            }
+        }
     }
 
     /** Builds the silent player [prebuffer] loads an upgrade with; set in [onCreate]. */
@@ -1724,6 +1756,10 @@ class PlaybackService : MediaLibraryService() {
         val VOLUME_RECEIVER_FLAGS = if (android.os.Build.VERSION.SDK_INT >= 33) Context.RECEIVER_EXPORTED else 0
         const val QUEUE_SAVE_MS = 5_000L
         const val UPGRADE_DELAY_MS = 8_000L
+        /** The wait before swapping to a source that was already found ahead of time. */
+        const val UPGRADE_READY_DELAY_MS = 1_500L
+        /** How many songs ahead the lossless source is looked up. */
+        const val PREFETCH_AHEAD = 2
         /** Songs a server queue carries on with when it runs out. */
         const val RADIO_FROM_SERVER = 25
         /** With "end of song", how long the song fades out before it stops. */

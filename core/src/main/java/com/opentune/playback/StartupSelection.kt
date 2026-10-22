@@ -30,7 +30,9 @@ internal class StartupSelection(
     suspend fun resolve(spec: DataSpec): DataSpec = mutex.withLock {
         currentCoroutineContext().ensureActive()
         if (selected == null) {
-            val rendition = if (maximum()) cached(song.videoId)?.takeIf { it.mimeType == null } ?: try {
+            // A lossless file found ahead of time starts the song whenever lossless is on, not only at Max.
+            val ready = if (maximum() || ExternalStreams.allowed(true)) cached(song.videoId)?.takeIf { it.mimeType == null && it.lossless } else null
+            val rendition = ready ?: if (maximum()) try {
                 withTimeoutOrNull(lookupBudgetMs) { findJioSaavn(song, song.durationMillis()) }
             } catch (e: CancellationException) {
                 throw e

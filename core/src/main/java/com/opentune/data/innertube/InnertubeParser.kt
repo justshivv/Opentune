@@ -576,9 +576,10 @@ object InnertubeParser {
 
         val pageCredit = pageCredit(root)
         val songs = playlistScope?.let { playlist ->
+            // Every entry, a song added twice included: YouTube Music counts both,
+            // and dropping one made the list shorter than the playlist it shows.
             collectRenderers(playlist, "musicResponsiveListItemRenderer")
                 .mapNotNull { parseResponsiveListItem(it, pageCredit) }
-                .distinctBy { it.videoId }
         }.orEmpty()
         val knownSongs = songs.mapTo(HashSet()) { it.videoId }
         val suggested = suggestionShelves
@@ -609,7 +610,7 @@ object InnertubeParser {
         val items = root.a("onResponseReceivedActions").orEmpty()
             .mapNotNull { it.o("appendContinuationItemsAction") }
             .flatMap { it.a("continuationItems").orEmpty() }
-        val songs = items.mapNotNull { parseResponsiveListItem(it.o("musicResponsiveListItemRenderer")) }.distinctBy { it.videoId }
+        val songs = items.mapNotNull { parseResponsiveListItem(it.o("musicResponsiveListItemRenderer")) }
         val token = items.firstNotNullOfOrNull {
             it.o("continuationItemRenderer").o("continuationEndpoint").o("continuationCommand").s("token")
         }
