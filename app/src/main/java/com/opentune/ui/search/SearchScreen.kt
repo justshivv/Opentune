@@ -78,6 +78,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.opentune.data.model.Song
@@ -89,6 +90,12 @@ import com.opentune.ui.components.ErrorState
 import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.SongListItem
 import com.opentune.ui.components.SongRowPlaceholder
+
+/** Asks the search page to put the cursor in its bar: the search button tapped while it's open. */
+object SearchFocus {
+    internal val requests = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    fun request() { requests.tryEmit(Unit) }
+}
 
 @Composable
 fun SearchScreen(
@@ -122,6 +129,15 @@ fun SearchScreen(
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val focus = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
+    // The search button tapped again while here: the cursor goes into the bar, keyboard up.
+    val field = remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        SearchFocus.requests.collect {
+            runCatching { field.requestFocus() }
+            keyboard?.show()
+        }
+    }
     val searching = explore == null || focused || query.isNotEmpty()
 
     fun submit(q: String) {
@@ -151,6 +167,7 @@ fun SearchScreen(
             value = query,
             onValueChange = vm::onQueryChange,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
+                .focusRequester(field)
                 .onFocusChanged { focused = it.isFocused },
             singleLine = true,
             shape = CircleShape,
