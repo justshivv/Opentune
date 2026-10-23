@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit
 
 /** Only the first-party origin receives proofs. No APK-wide shared secret. */
 object FirstPartyAddonAuth {
+    class VerificationFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
     const val ORIGIN = "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev"
     private const val ALIAS = "opentune.addon.attestation.v1"
     private val mutex = Mutex()
@@ -54,7 +55,7 @@ object FirstPartyAddonAuth {
         check(::file.isInitialized) { "OpenTune verification has not initialized" }
         val old = runCatching { JSONObject(file.readText()) }.getOrNull()
         if (old != null && old.optLong("expires") > System.currentTimeMillis() + old.optLong("offset") + 60_000 && store.containsAlias(ALIAS)) return old
-        if (System.currentTimeMillis() < blockedUntil) throw IOException("This device could not verify OpenTune. A supported device with its bootloader locked is required. Retry in a minute.")
+        if (System.currentTimeMillis() < blockedUntil) throw VerificationFailure("OpenTune device verification failed; retry in a minute on a supported, locked device")
         try {
             val challenge = call(Request.Builder().url("$ORIGIN/auth/challenge").build())
             val offset = challenge.getLong("serverTime") - System.currentTimeMillis()
@@ -76,7 +77,12 @@ object FirstPartyAddonAuth {
             return result
         } catch (e: Exception) {
             blockedUntil = System.currentTimeMillis() + 60_000
-            throw IOException("Official OpenTune verification failed. Update OpenTune and use a supported device with a locked bootloader. ${e.message.orEmpty().take(160)}", e)
+            throw VerificationFailure(when (e) {
+                is java.net.SocketTimeoutException -> "OpenTune verification timed out; retry on a working connection"
+                is java.net.UnknownHostException -> "Cannot reach OpenTune verification; check your connection or DNS"
+                is java.security.GeneralSecurityException -> "Android could not create the hardware verification key; a supported, locked device is required"
+                else -> "OpenTune device verification failed; use the official build on a supported, locked device"
+            }, e)
         }
     }
     suspend fun authorize(request: Request, body: String = ""): Request = withContext(Dispatchers.IO) {

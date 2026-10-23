@@ -43,6 +43,7 @@ test('real certificate chain/proof checks reject wrong roots, revocation, expire
     const root = new X509Certificate(readFileSync(join(dir, 'root.pem'))), leaf = new X509Certificate(readFileSync(join(dir, 'leaf.pem')));
     const input = { challenge, chain: [leaf, root].map(c => c.raw.toString('base64')), proof: sign('sha256', bytes('OpenTune-Enrollment-v1\n' + challenge), createPrivateKey(readFileSync(join(dir, 'leaf.key')))).toString('base64url') };
     const trust = { roots: [root], revoked: {} };
+    if (process.env.ATTESTATION_TEST_FIXTURE) writeFileSync(process.env.ATTESTATION_TEST_FIXTURE, JSON.stringify({ input, root: root.toString(), signer }));
     assert.match(verifyAttestation(input, trust, [signer]), /PUBLIC KEY/);
     assert.throws(() => verifyAttestation(input, { roots: [], revoked: {} }, [signer]));
     assert.throws(() => verifyAttestation(input, { ...trust, revoked: { [leaf.serialNumber.toLowerCase()]: { status: 'REVOKED' } } }, [signer]));

@@ -30,9 +30,9 @@ jobs:
           test -n "$KEYSTORE_BASE64" || { echo 'Official release signing key is required.'; exit 1; }
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/verification.keystore"
           echo "OPENTUNE_KEYSTORE=$RUNNER_TEMP/verification.keystore" >> "$GITHUB_ENV"
-          sed -i 's/versionName = "\([^"]*\)"/versionName = "\1-verification-preview"/' app/build.gradle.kts
+          sed -i 's/versionName = "\([^"]*\)"/versionName = "\1-verification-preview.2"/' app/build.gradle.kts
       - name: Test public-source isolation
-        run: ./gradlew --no-daemon :core:testDebugUnitTest --tests com.opentune.data.addons.FirstPartyAddonAuthTest
+        run: ./gradlew --no-daemon :core:testDebugUnitTest --tests 'com.opentune.data.addons.*'
       - name: Build Android and TV client
         env:
           OPENTUNE_KEYSTORE_PASSWORD: ${{ secrets.OPENTUNE_KEYSTORE_PASSWORD }}
