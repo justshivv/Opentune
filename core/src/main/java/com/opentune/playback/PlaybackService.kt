@@ -87,6 +87,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -749,6 +750,8 @@ class PlaybackService : MediaLibraryService() {
         override fun onEvents(player: Player, events: Player.Events) {
             if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
                 for (i in 0 until player.mediaItemCount) sessionIds += player.getMediaItemAt(i).mediaId
+                // Songs added after the current one started (radio, Play next) get readied too.
+                prefetchAhead()
             }
             if (events.containsAny(
                     Player.EVENT_MEDIA_ITEM_TRANSITION,
@@ -1206,18 +1209,42 @@ class PlaybackService : MediaLibraryService() {
             .filter { item ->
                 val id = item.mediaId
                 val uri = item.localConfiguration?.uri
-                isYouTubeId(id) && !Podcasts.isEpisode(id) && uri?.scheme != "file" && ExternalStreams.cached(id)?.lossless != true
+                isYouTubeId(id) && !Podcasts.isEpisode(id) && uri?.scheme != "file"
             }
+        val ids = ahead.map { it.mediaId }
+        // The same songs already being readied (the queue changed further down): left to finish.
+        if (ids == aheadIds && aheadJob?.isActive == true) return
+        aheadIds = ids
         aheadJob?.cancel()
         if (ahead.isEmpty()) return
         aheadJob = scope.launch {
-            for (item in ahead) {
-                val song = item.toSong()
-                if (saavn) runCatching { ExternalStreams.findJioSaavn(song, song.durationMillis()) }
-                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
-                if (lossless) runCatching { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
-                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+            // Both at once, so the one after next isn't waiting on the next one's lookups.
+            ahead.map { item -> launch(Dispatchers.IO) { readyAhead(item.toSong(), saavn, lossless) } }.joinAll()
+        }
+    }
+
+    private var aheadIds: List<String> = emptyList()
+
+    /**
+     * Gets [song] ready to start in its best quality: JioSaavn first, quick to
+     * answer, then the verified lossless files. The start of the one it'll
+     * play is read now, which also wakes its server; if it doesn't answer,
+     * the next verified file is chosen instead, before the song ever starts.
+     */
+    private suspend fun readyAhead(song: com.opentune.data.model.Song, saavn: Boolean, lossless: Boolean) {
+        suspend fun attempt(block: suspend () -> Unit) = try { block() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
+        if (saavn) attempt { ExternalStreams.findJioSaavn(song, song.durationMillis()) }
+        if (!lossless) return
+        attempt { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
+        for (file in ExternalStreams.alternatives(song.videoId)) {
+            val answers = kotlinx.coroutines.withTimeoutOrNull(PING_LIMIT_MS) {
+                runCatching { com.opentune.data.addons.AddonHttp.bytes(file.url, PING_BYTES, true).isNotEmpty() }.getOrDefault(false)
+            } == true
+            if (answers) {
+                if (ExternalStreams.cached(song.videoId)?.key != file.key) ExternalStreams.remember(song.videoId, file)
+                return
             }
+            Log.w(TAG, "${file.provider}'s file for ${song.videoId} didn't answer ahead of time; readying the next one")
         }
     }
 
@@ -1353,6 +1380,11 @@ class PlaybackService : MediaLibraryService() {
         try {
             if (smooth) rampVolume(player, 0f, SWAP_DIP_MS)
             val position = player.currentPosition
+            // Through the switch the song is silent but carries on; the lyrics carry on with it.
+            if (smooth) {
+                val at = SystemClock.elapsedRealtime()
+                PlaybackRequests.soundingPosition = { position + (SystemClock.elapsedRealtime() - at) }
+            }
             swappingTo = id
             // If the player updates the item in place there's no transition to clear this.
             scope.launch { delay(2_000); if (swappingTo == id) swappingTo = null }
@@ -1363,11 +1395,13 @@ class PlaybackService : MediaLibraryService() {
             if (smooth) {
                 // Back up once the new stream is sounding.
                 kotlinx.coroutines.withTimeoutOrNull(3_000) { while (player.playbackState != Player.STATE_READY || !player.isPlaying) delay(30) }
+                PlaybackRequests.soundingPosition = null
                 rampVolume(player, level, SWAP_RISE_MS)
             }
             Log.d(TAG, "Swapped $id to its upgraded stream at ${position}ms")
             return true
         } finally {
+            PlaybackRequests.soundingPosition = null
             swapRamping = false
             // Cancelled or failed between the dip and the rise: never leave the music silent.
             if (smooth && crossfade?.blending != true && player.volume < level) player.volume = level
@@ -1427,7 +1461,9 @@ class PlaybackService : MediaLibraryService() {
                 Log.w(TAG, "Couldn't line the better stream for $id up with the song; trying the plain swap")
                 return null
             }
-            // 2. The sound moves onto it.
+            // 2. The sound moves onto it. From here the bridge is what's heard, so it's
+            // also where the lyrics and seek bar read the song's position.
+            PlaybackRequests.soundingPosition = { bridge.currentPosition }
             crossfadeVolumes(from = player, to = bridge, BRIDGE_FADE_MS)
             handedOver = true
 
@@ -1442,14 +1478,24 @@ class PlaybackService : MediaLibraryService() {
                 while (player.playbackState != Player.STATE_READY || !player.isPlaying) delay(20)
                 true
             } == true
-            if (ready) lineUp(follower = player, leader = bridge)
+            // Lined up within a few milliseconds, or the two would be heard as an echo.
+            val aligned = ready && (lineUp(follower = player, leader = bridge) || lineUp(follower = player, leader = bridge))
 
-            // 4. The sound comes back to the main player, now on the better stream.
-            crossfadeVolumes(from = bridge, to = player, BRIDGE_FADE_MS)
+            // 4. The sound comes back to the main player, now on the better stream: blended
+            // when the two play the same moment, otherwise one out before the other comes
+            // in, so two copies of the song are never heard at once out of step.
+            if (aligned) crossfadeVolumes(from = bridge, to = player, BRIDGE_FADE_MS)
+            else {
+                Log.w(TAG, "Main player for $id didn't line up with the bridge; handing back without a blend")
+                rampVolume(bridge, 0f, BRIDGE_CUT_MS)
+                rampVolume(player, 1f, BRIDGE_CUT_MS)
+            }
+            PlaybackRequests.soundingPosition = null
             handedOver = false
             Log.d(TAG, "Swapped $id to its upgraded stream at ${player.currentPosition}ms, bridged")
             return true
         } finally {
+            PlaybackRequests.soundingPosition = null
             swapRamping = false
             bridge.release()
             // However it ended, the main player sounds at full level again.
@@ -1472,7 +1518,7 @@ class PlaybackService : MediaLibraryService() {
             lead = (lead - drift).coerceIn(0L, 2_000L)
             follower.seekTo(leader.currentPosition + lead)
         }
-        return settledPlaying(follower) && kotlin.math.abs(follower.currentPosition - leader.currentPosition) <= BRIDGE_ALIGN_MS * 3
+        return settledPlaying(follower) && kotlin.math.abs(follower.currentPosition - leader.currentPosition) <= BRIDGE_ALIGN_MS * 2
     }
 
     /** Waits for [p] to be playing from a buffer, then a moment more for its position to settle. */
@@ -2022,7 +2068,9 @@ class PlaybackService : MediaLibraryService() {
         const val AUDITION_TIMEOUT_MS = 25_000L
         /** The volume dip around a swap: quickly down, gently back. */
         /** Each crossfade between the main player and the bridge. */
-        const val BRIDGE_FADE_MS = 260L
+        const val BRIDGE_FADE_MS = 160L
+        /** Each half of a hand-back without a blend: one player out, then the other in. */
+        const val BRIDGE_CUT_MS = 70L
         /** Two players this close play the same moment: their mix over a fade sounds as one. */
         const val BRIDGE_ALIGN_MS = 20L
         const val BRIDGE_ALIGN_TRIES = 5

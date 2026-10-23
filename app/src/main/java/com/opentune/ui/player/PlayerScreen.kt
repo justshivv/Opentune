@@ -161,7 +161,8 @@ fun rememberPlaybackPosition(vm: PlayerViewModel): () -> Long {
     LaunchedEffect(vm) {
         while (true) {
             if (vm.isPlaying.value) withFrameMillis { } else delay(250)
-            position.longValue = vm.positionMs()
+            // Through a quality switch, where the song is heard rather than the main player's stalled reading.
+            position.longValue = com.opentune.playback.PlaybackRequests.soundingPosition?.invoke() ?: vm.positionMs()
         }
     }
     return { position.longValue }
