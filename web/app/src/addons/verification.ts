@@ -50,8 +50,11 @@ export async function verifiedUntil(): Promise<number> {
   const value = await stored(); return value && value.expires > Date.now() + value.offset ? value.expires : 0;
 }
 export async function disconnectVerification(): Promise<void> { await stored(null); }
+export function isOfficialAddon(url: string): boolean {
+  try { return new URL(url).origin === OFFICIAL_ADDON; } catch { return false; }
+}
 export function needsVerification(url: string): boolean {
-  const u = new URL(url); return u.origin === OFFICIAL_ADDON && u.pathname !== '/' && !u.pathname.endsWith('/manifest.json') && !u.pathname.endsWith('/health');
+  const u = new URL(url); return isOfficialAddon(url) && u.pathname !== '/' && !u.pathname.endsWith('/manifest.json') && !u.pathname.endsWith('/health');
 }
 export async function verificationHeaders(url: string): Promise<Record<string, string>> {
   if (!needsVerification(url)) return {};

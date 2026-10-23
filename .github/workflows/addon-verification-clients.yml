@@ -31,6 +31,8 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/verification.keystore"
           echo "OPENTUNE_KEYSTORE=$RUNNER_TEMP/verification.keystore" >> "$GITHUB_ENV"
           sed -i 's/versionName = "\([^"]*\)"/versionName = "\1-verification-preview"/' app/build.gradle.kts
+      - name: Test public-source isolation
+        run: ./gradlew --no-daemon :core:testDebugUnitTest --tests com.opentune.data.addons.FirstPartyAddonAuthTest
       - name: Build Android and TV client
         env:
           OPENTUNE_KEYSTORE_PASSWORD: ${{ secrets.OPENTUNE_KEYSTORE_PASSWORD }}

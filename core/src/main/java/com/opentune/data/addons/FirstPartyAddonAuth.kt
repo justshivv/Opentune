@@ -30,8 +30,8 @@ object FirstPartyAddonAuth {
     private const val ALIAS = "opentune.addon.attestation.v1"
     private val mutex = Mutex()
     private lateinit var file: File
-    private val http = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
-        .callTimeout(25, TimeUnit.SECONDS).build()
+    private val http by lazy { OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
+        .callTimeout(25, TimeUnit.SECONDS).build() }
     private val store get() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     private var blockedUntil = 0L
     fun init(context: Context) { file = File(context.noBackupFilesDir, "addon-device-session.json") }

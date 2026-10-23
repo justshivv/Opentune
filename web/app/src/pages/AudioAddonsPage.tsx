@@ -5,6 +5,7 @@ import { JIOSAAVN_ORIGIN } from '@/addons/jiosaavn';
 import { SourceList } from './SourceList';
 import { settingsUi } from './settingsStyles';
 import { AddonVerification } from './AddonVerification';
+import { isOfficialAddon } from '@/addons/verification';
 export default function AudioAddonsPage() {
   const status = useAddons(s => s.status);
   const jioSaavn = useAddons(s => s.jioSaavn);
@@ -25,7 +26,7 @@ export default function AudioAddonsPage() {
 
   return <div className={settingsUi.centered}><PageHeader title="Audio sources" /><div className={settingsUi.body}>
     <p className="mx-4 mb-4 text-secondary">Your sources, in your order. OpenTune checks matching recordings and chooses the highest measured FLAC quality. Equal quality keeps your priority. Sources marked “Added by admin” are published by OpenTune; turn them off or reorder them as you like.</p>
-    <AddonVerification />
+    {sources.some(source => isOfficialAddon(source.url)) && <AddonVerification />}
     {waiting.length > 0 && <div className="ot-access mx-4 mb-4" role="status">
       <p><strong>{waiting.length === 1 ? `${waiting[0]!.name} needs your OK` : `${waiting.length} sources need your OK`}</strong>
         {waiting.length === 1 ? ' It' : ' They'} don’t let web pages ask {waiting.length === 1 ? 'it' : 'them'} directly, so the web player goes through the extension, which asks you once per host.</p>

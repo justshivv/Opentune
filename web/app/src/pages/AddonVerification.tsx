@@ -20,7 +20,7 @@ export function AddonVerification() {
   const button = 'rounded-pill bg-quinary px-4 py-2 disabled:opacity-45';
   return <section className="mx-4 mb-4 rounded-2xl bg-secondary/10 p-4" aria-label="OpenTune source verification">
     <h2 className="font-semibold">Protected OpenTune source</h2>
-    <p className="my-3 text-secondary">Approve this browser in the current official Android or TV app. The app must pass device verification. Access lasts up to 12 hours.</p>
+    <p className="my-3 text-secondary">Only OpenTune’s own source needs this verification. Your public add-ons work independently. Approve this browser in the current official Android or TV app. Access lasts up to 12 hours.</p>
     {until > Date.now() && <p className="my-3">Verified until {new Date(until).toLocaleString()}</p>}
     {!pair && <button className={button} disabled={busy} onClick={() => { setBusy(true); setMessage(''); void startPairing().then(setPair).catch(e => setMessage(e instanceof Error ? e.message : 'Could not start verification')).finally(() => setBusy(false)); }}>{busy ? 'Starting…' : until > Date.now() ? 'Verify again' : 'Verify browser'}</button>}
     {until > 0 && <button className={button} onClick={() => void disconnectVerification().then(() => { setUntil(0); setMessage('This browser’s local key and session were removed.'); })}>Disconnect browser</button>}
