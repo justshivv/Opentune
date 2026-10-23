@@ -49,34 +49,57 @@ export async function allowSource(raw: string): Promise<void> {
   await bridge.call('addon.requestPermission', { url: publicHttps(raw).href });
 }
 export type LosslessResult = { url: string; provider: string; bits: number; rate: number; duration: number; sourceId: string };
-/** Search in source order, compare measured direct FLAC quality; ties keep the listener's order. */
-export async function findLossless(recording: Recording): Promise<LosslessResult | null> {
-  let best: LosslessResult | null = null;
-  const started = Date.now();
-  for (const source of useAddons.getState().sources) {
-    if (!source.enabled || Date.now() - started > 15000) continue;
-    try {
-      useAddons.setState({ status: `Checking ${source.name}…` });
-      const manifest = manifestOf(await fetchJson(source.url));
-      // Web cannot verify the physical output route. Respect this gate conservatively.
-      if (manifest.checkValidLossless) continue;
-      const params = qualityParams(manifest);
-      const response = await fetchJson(endpoint(source.url, 'search', { ...params, q: `${recording.title} ${recording.artist}` })) as { tracks?: CatalogTrack[] };
-      const match = response.tracks?.find(x => matches(recording, x)); if (!match) continue;
-      const stream = await fetchJson(endpoint(source.url, `stream/${encodeURIComponent(match.id)}`, params)) as { url?: string; encrypted?: boolean; manifest?: string };
-      if (!stream.url || stream.encrypted || (stream.manifest && stream.manifest !== 'none')) continue;
-      const url = publicHttps(stream.url).href;
-      const r = await fetch(url, { headers: { Range: 'bytes=0-4095' }, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(6000) });
-      if (!r.ok || !r.body) continue;
-      const reader = r.body.getReader(); let bytes = new Uint8Array(0);
-      try { while (bytes.length < 42) { const part = await reader.read(); if (part.done) break; const merged = new Uint8Array(bytes.length + Math.min(part.value.length, 4096)); merged.set(bytes); merged.set(part.value.slice(0, 4096), bytes.length); bytes = merged; } }
-      finally { await reader.cancel().catch(() => {}); }
-      const info = flacInfo(bytes);
-      if (Math.abs(info.duration - recording.duration) > 3) continue;
-      const candidate = { url, provider: manifest.name, ...info, sourceId: source.id };
-      if (!best || candidate.bits * candidate.rate > best.bits * best.rate) best = candidate;
-    } catch { /* A failing source does not stop the next one or normal playback. */ }
-  }
-  useAddons.setState({ status: best ? `${best.provider} · verified FLAC` : 'No matching browser-compatible FLAC found' });
-  return best;
+/** Every verified file, best first, and why each other source had nothing. */
+export type LosslessSearch = { ranked: LosslessResult[]; notes: string[]; transient: boolean };
+/** Errors worth asking again about a little later: the server erred or was busy, it didn't say no. */
+const TRANSIENT = /HTTP (5\d\d|404|408|429)|rate limited|timed? ?out|abort|network|failed to fetch/i;
+class NoMatch extends Error {}
+async function checkSource(source: Addon, recording: Recording): Promise<LosslessResult> {
+  const manifest = manifestOf(await fetchJson(source.url));
+  // Web cannot verify the physical output route. Respect this gate conservatively.
+  if (manifest.checkValidLossless) throw new NoMatch("needs a verified lossless output, which a browser can't confirm");
+  const params = qualityParams(manifest);
+  const response = await fetchJson(endpoint(source.url, 'search', { ...params, q: `${recording.title} ${recording.artist}` })) as { tracks?: CatalogTrack[] };
+  const match = response.tracks?.find(x => matches(recording, x)); if (!match) throw new NoMatch('no matching recording');
+  const stream = await fetchJson(endpoint(source.url, `stream/${encodeURIComponent(match.id)}`, params)) as { url?: string; encrypted?: boolean; manifest?: string };
+  if (!stream.url) throw new NoMatch('no stream for the match');
+  if (stream.encrypted || (stream.manifest && stream.manifest !== 'none')) throw new NoMatch('only a segmented or encrypted stream, which plays on Android');
+  const url = publicHttps(stream.url).href;
+  const r = await fetch(url, { headers: { Range: 'bytes=0-4095' }, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(6000) });
+  if (!r.ok || !r.body) throw new Error(`its file server returned HTTP ${r.status}`);
+  const reader = r.body.getReader(); let bytes = new Uint8Array(0);
+  try { while (bytes.length < 42) { const part = await reader.read(); if (part.done) break; const merged = new Uint8Array(bytes.length + Math.min(part.value.length, 4096)); merged.set(bytes); merged.set(part.value.slice(0, 4096), bytes.length); bytes = merged; } }
+  finally { await reader.cancel().catch(() => {}); }
+  let info: ReturnType<typeof flacInfo>;
+  try { info = flacInfo(bytes); } catch { throw new NoMatch("its file isn't FLAC"); }
+  if (Math.abs(info.duration - recording.duration) > 3) throw new NoMatch('its file is a different length');
+  return { url, provider: manifest.name, ...info, sourceId: source.id };
+}
+/**
+ * Asks every enabled source at once and ranks the verified FLAC files by measured
+ * quality; equal quality keeps the listener's order. Each source has its own time
+ * limits, so a slow one never cuts off another's answer.
+ */
+export async function findLossless(recording: Recording): Promise<LosslessSearch> {
+  const sources = useAddons.getState().sources.filter(s => s.enabled);
+  useAddons.setState({ status: `Checking ${sources.map(s => s.name).join(', ')}…` });
+  const results = await Promise.allSettled(sources.map(source => checkSource(source, recording)));
+  const ranked: LosslessResult[] = []; const notes: string[] = []; let transient = false;
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') { ranked.push(result.value); return; }
+    const why = result.reason instanceof Error ? result.reason.message : String(result.reason);
+    if (!(result.reason instanceof NoMatch) && TRANSIENT.test(why)) transient = true;
+    notes.push(`${sources[i]!.name}: ${why}`);
+  });
+  // Stable sort: equal quality keeps the order the sources were listed in.
+  ranked.sort((a, b) => b.bits * b.rate - a.bits * a.rate);
+  const best = ranked[0];
+  useAddons.setState({ status: [best ? `${best.provider} · verified FLAC` : 'No matching browser-compatible FLAC found', ...notes].join('\n') });
+  return { ranked, notes, transient };
+}
+/** Adds why the verified files didn't play under what was found. */
+export function reportLoadFailures(failures: string[]): void {
+  if (!failures.length) return;
+  const found = useAddons.getState().status.split("\nCouldn't switch")[0];
+  useAddons.setState({ status: `${found}\nCouldn't switch to it: its stream didn't load.\n${failures.join('\n')}\nYouTube keeps playing.` });
 }
