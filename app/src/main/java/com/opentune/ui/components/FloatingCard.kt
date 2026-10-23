@@ -320,7 +320,7 @@ fun FloatingCard(
                                             alpha = if (frost == Frost.READY) (if (dark) 0.62f else 0.72f) else if (dark) 0.88f else 0.9f,
                                         ),
                                     )
-                                    .background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.07f else 0.18f), 0.35f to Color.Transparent))
+                                    .background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.07f else 0.18f), 0.35f to Color.White.copy(alpha = 0f)))
                                     .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.22f else 0.6f), Color.White.copy(alpha = 0.04f))), shape)
                             } else {
                                 Modifier

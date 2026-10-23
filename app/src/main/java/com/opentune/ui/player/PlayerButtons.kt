@@ -262,7 +262,7 @@ private fun CapsulePlay(isPlaying: Boolean, isBuffering: Boolean, animate: Boole
                     val x = sheen * size.width
                     drawRoundRect(
                         Brush.horizontalGradient(
-                            listOf(Color.Transparent, scheme.onPrimary.copy(alpha = 0.28f), Color.Transparent),
+                            listOf(scheme.onPrimary.copy(alpha = 0f), scheme.onPrimary.copy(alpha = 0.28f), scheme.onPrimary.copy(alpha = 0f)),
                             startX = x - size.width * 0.35f,
                             endX = x + size.width * 0.35f,
                         ),
@@ -339,9 +339,9 @@ private fun OrbitPlay(isPlaying: Boolean, isBuffering: Boolean, animate: Boolean
                     rotate(comet) {
                         drawArc(
                             Brush.sweepGradient(
-                                0f to Color.Transparent,
+                                0f to scheme.onSurface.copy(alpha = 0f),
                                 0.10f to scheme.onSurface.copy(alpha = 0.85f * cometAlpha),
-                                0.11f to Color.Transparent,
+                                0.11f to scheme.onSurface.copy(alpha = 0f),
                                 center = center,
                             ),
                             0f, 40f, false, tl, arc, style = Stroke(stroke, cap = StrokeCap.Round),

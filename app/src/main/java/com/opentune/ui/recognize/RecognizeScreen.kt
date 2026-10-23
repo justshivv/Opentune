@@ -250,7 +250,7 @@ private fun FoundCard(song: Recognized, finding: Boolean, onPlay: () -> Unit, on
         // The cover's colours glowing out behind it.
         val (a, b) = songAccents()
         Canvas(Modifier.size(320.dp)) {
-            drawCircle(Brush.radialGradient(listOf(a.copy(alpha = 0.45f), b.copy(alpha = 0.15f), Color.Transparent)), size.minDimension / 2f)
+            drawCircle(Brush.radialGradient(*com.opentune.ui.components.glowStops(a, 0.45f, b, shape = 1.4f)), size.minDimension / 2f)
         }
         Artwork(
             song.coverUrl,
@@ -330,7 +330,7 @@ private fun ListenOrb(listening: Boolean, level: () -> Float, modifier: Modifier
         val l = loud.value
         // A soft glow behind it, bigger while listening.
         drawCircle(
-            Brush.radialGradient(listOf(a.copy(alpha = 0.35f + 0.25f * o), b.copy(alpha = 0.12f * (1f + o)), Color.Transparent), c, size.minDimension / 2f),
+            Brush.radialGradient(*com.opentune.ui.components.glowStops(a, 0.35f + 0.25f * o, b, shape = 1.4f), center = c, radius = size.minDimension / 2f),
             size.minDimension / 2f,
             c,
         )

@@ -1015,6 +1015,9 @@ fun PlayerLayout(
                                 val sc = 1f - 0.06f * v
                                 scaleX = sc
                                 scaleY = sc
+                                // Faded through a layer, the page would be cut to its own box, and the
+                                // glow spilling above the cover would end in a straight line.
+                                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
                             },
                         ) { paneBody(Pane.COVER, false) }
                     }

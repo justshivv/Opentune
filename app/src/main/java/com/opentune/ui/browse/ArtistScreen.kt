@@ -335,7 +335,7 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
         // Keeps the status bar readable over a bright photo, in whichever way the theme draws it.
         Box(
             Modifier.fillMaxWidth().height(120.dp)
-                .background(Brush.verticalGradient(listOf(background.copy(alpha = 0.5f), Color.Transparent))),
+                .background(Brush.verticalGradient(listOf(background.copy(alpha = 0.5f), background.copy(alpha = 0f)))),
         )
         Column(
             Modifier.fillMaxWidth().padding(top = photoHeight - NAME_OVERLAP),

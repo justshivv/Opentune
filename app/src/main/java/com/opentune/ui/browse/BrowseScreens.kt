@@ -152,7 +152,7 @@ internal fun CollapsingBar(
                     .then(
                         if (haze == null) {
                             Modifier.graphicsLayer { alpha = frost }.drawBehind {
-                                drawRect(Brush.verticalGradient(0f to page.copy(alpha = 0.96f), 0.7f to page.copy(alpha = 0.9f), 1f to Color.Transparent))
+                                drawRect(Brush.verticalGradient(0f to page.copy(alpha = 0.96f), 0.7f to page.copy(alpha = 0.9f), 1f to page.copy(alpha = 0f)))
                             }
                         } else {
                             Modifier.hazeEffect(haze) {

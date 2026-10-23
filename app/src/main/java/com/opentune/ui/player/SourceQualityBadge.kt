@@ -77,9 +77,9 @@ internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onCli
                         val half = 9.dp.toPx()
                         // A narrow upright line of light, swept over the grey text only.
                         drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(
-                            0f to Color.Transparent,
+                            0f to colors.onSurface.copy(alpha = 0f),
                             0.5f to colors.onSurface.copy(alpha = 0.85f),
-                            1f to Color.Transparent,
+                            1f to colors.onSurface.copy(alpha = 0f),
                             startX = x - half,
                             endX = x + half),
                             blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
