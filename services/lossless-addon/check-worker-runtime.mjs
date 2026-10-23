@@ -9,10 +9,11 @@ const { build } = await import(pathToFileURL(join(modules, 'esbuild/lib/main.js'
 const { Miniflare } = await import(pathToFileURL(join(modules, 'miniflare/dist/src/index.js')));
 const source = `
 import { X509Certificate } from 'node:crypto';
-import { verifyAttestation } from './attestation.mjs';
+import { googleTrust, verifyAttestation } from './attestation.mjs';
 export default { async fetch(request) {
   const fixture = await request.json();
   try {
+    await googleTrust();
     const pem = verifyAttestation(fixture.input, { roots: [new X509Certificate(fixture.root)], revoked: {} }, [fixture.signer]);
     return Response.json({ verified: pem.includes('PUBLIC KEY') });
   } catch(e) { return Response.json({ verified:false, error:e.message }, {status:403}); }
@@ -21,9 +22,14 @@ const bundle = await build({ stdin: { contents: source, resolveDir: resolve('ser
   bundle: true, write: false, format: 'esm', platform: 'neutral', external: ['node:*'] });
 // The published local workerd binary currently supports dates through 2026-08-06.
 // Production keeps its own compatibility date; this checks the Workers crypto APIs.
-const worker = new Miniflare({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-08-06', compatibilityFlags: ['nodejs_compat'] });
+const fixture = JSON.parse(await readFile(process.env.ATTESTATION_TEST_FIXTURE, 'utf8'));
+const worker = new Miniflare({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-08-06', compatibilityFlags: ['nodejs_compat'],
+  outboundService: request => {
+    const url = new URL(request.url);
+    if (url.origin !== 'https://android.googleapis.com') return new Response('Unexpected test URL', { status: 500 });
+    return Response.json(url.pathname.endsWith('/root') ? [fixture.root] : { entries: {} });
+  } });
 try {
-  const fixture = JSON.parse(await readFile(process.env.ATTESTATION_TEST_FIXTURE, 'utf8'));
   const send = data => worker.dispatchFetch('https://runtime-check.invalid/', { method: 'POST', body: JSON.stringify(data) });
   const valid = await send(fixture); const body = await valid.json();
   assert.equal(valid.status, 200, JSON.stringify(body)); assert.equal(body.verified, true);
