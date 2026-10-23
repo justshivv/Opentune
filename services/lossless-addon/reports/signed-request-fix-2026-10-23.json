@@ -1,0 +1,129 @@
+{
+  "checkedAt": "2026-10-23T22:43:52.535Z",
+  "base": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev",
+  "manifests": [
+    {
+      "source": "monochrome",
+      "status": 200,
+      "url": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/monochrome/manifest.json"
+    },
+    {
+      "source": "archive",
+      "status": 200,
+      "url": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/archive/manifest.json"
+    },
+    {
+      "source": "musopen",
+      "status": 200,
+      "url": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/musopen/manifest.json"
+    }
+  ],
+  "upstream": {
+    "searchStatus": 401,
+    "matchingRecording": false,
+    "error": "Verify this device with the current official OpenTune app. Unsupported devices cannot use this source."
+  },
+  "security": {
+    "mode": "strict",
+    "unauthenticatedApproval": 401,
+    "challengeIssued": true,
+    "fakeEnrollment": 403,
+    "challengeReplay": 401,
+    "browserWaitsForApproval": true,
+    "unsignedAccess": [
+      {
+        "source": "monochrome",
+        "route": "search",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "monochrome",
+        "route": "search",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      },
+      {
+        "source": "monochrome",
+        "route": "stream/untrusted-id",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "monochrome",
+        "route": "stream/untrusted-id",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      },
+      {
+        "source": "archive",
+        "route": "search",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "archive",
+        "route": "search",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      },
+      {
+        "source": "archive",
+        "route": "stream/untrusted-id",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "archive",
+        "route": "stream/untrusted-id",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      },
+      {
+        "source": "musopen",
+        "route": "search",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "musopen",
+        "route": "search",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      },
+      {
+        "source": "musopen",
+        "route": "stream/untrusted-id",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "musopen",
+        "route": "stream/untrusted-id",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      }
+    ]
+  },
+  "musopen": {
+    "searchStatus": 401,
+    "candidates": 0,
+    "error": "Verify this device with the current official OpenTune app. Unsupported devices cannot use this source."
+  },
+  "evidence": {
+    "workflow": "https://github.com/justshivv/Opentune/actions/runs/40035429291",
+    "commit": "08d0eee39f36a804dcfce6836927275714f239f6",
+    "workerVersion": "6c803390-e6b5-4d39-a3dd-87b95377e677",
+    "tests": {
+      "nodeTests": 30,
+      "workerAttestation": "passed",
+      "nativeSignedRequest": "accepted in isolated actual Workers/SQLite Durable Objects",
+      "webSignedRequest": "accepted in isolated actual Workers/SQLite Durable Objects",
+      "tampering": "rejected before nonce consumption",
+      "invalidSignatures": "rejected",
+      "replay": "rejected"
+    },
+    "devicePlaybackAfterFix": "awaiting owner confirmation",
+    "publicAddonBehavior": "unchanged"
+  }
+}
