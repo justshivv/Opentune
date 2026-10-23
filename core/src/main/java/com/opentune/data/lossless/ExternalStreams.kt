@@ -119,8 +119,30 @@ object ExternalStreams {
      */
     suspend fun find(song: Song, durationMs: Long, beforePlayback: Boolean = false, force: Boolean = false, losslessOnly: Boolean = false): Rendition? {
         if (!losslessOnly || force) return findNow(song, durationMs, beforePlayback, force, losslessOnly)
+        return joined(song) { findNow(song, durationMs, beforePlayback, false, true) }
+    }
+
+    /**
+     * Asks again only the add-ons that erred in [song]'s FLAC search (an HTTP 502, no
+     * answer), leaving alone those that answered. Whatever they verify is kept to fall
+     * back on and, when better than the file chosen, made the choice and announced on
+     * [improved], so playback moves onto it in the background. False when none erred.
+     */
+    suspend fun retryErred(song: Song, durationMs: Long): Boolean {
+        if (!hasErred(song.videoId)) return false
+        joined(song) { findNow(song, durationMs, beforePlayback = false, force = false, losslessOnly = true, erredOnly = true) }
+        return true
+    }
+
+    /** Whether [rendition] was verified (its file's start read and checked) moments ago, so its server is known to answer. */
+    fun verifiedRecently(rendition: Rendition): Boolean = now() - rendition.at < VERIFIED_FRESH_MS
+
+    /** Whether some add-on erred, rather than answered, in [videoId]'s FLAC search, and so is worth asking again. */
+    fun hasErred(videoId: String): Boolean = heardFor(videoId)?.erred?.isNotEmpty() == true
+
+    private suspend fun joined(song: Song, search: suspend () -> Rendition?): Rendition? {
         val lookup = losslessInFlight.computeIfAbsent(song.videoId) {
-            background.async(start = kotlinx.coroutines.CoroutineStart.LAZY) { findNow(song, durationMs, beforePlayback, false, true) }
+            background.async(start = kotlinx.coroutines.CoroutineStart.LAZY) { search() }
                 // Gone once it's answered, whoever was waiting: a finished search is never handed out again.
                 .also { d -> d.invokeOnCompletion { losslessInFlight.remove(song.videoId, d) } }
         }
@@ -128,7 +150,26 @@ object ExternalStreams {
         return lookup.await()
     }
 
-    private suspend fun findNow(song: Song, durationMs: Long, beforePlayback: Boolean, force: Boolean, losslessOnly: Boolean): Rendition? {
+    /**
+     * What each add-on said in a song's FLAC search, so a later search for it asks only
+     * the ones that erred: [settled] answered (a verified file, kept in [alternatives], or
+     * a definite no), [erred] didn't. [lines] are their lines for the pipeline report.
+     */
+    private class Heard(val revision: Long, val at: Long, val settled: Set<String>, val erred: Set<String>, val lines: List<String>)
+    private val heard = ConcurrentHashMap<String, Heard>()
+
+    private fun heardFor(videoId: String): Heard? = heard[videoId]?.takeIf {
+        it.revision == com.opentune.data.addons.AddonStore.revision.value && now() - it.at < TTL
+    }
+
+    /** The report lines that are an add-on's own ("Name: verified FLAC"), not the search's summary. */
+    private fun addonLines(lines: List<String>): List<String> {
+        val names = com.opentune.data.addons.AddonStore.addons.value.map { "${it.manifest.name}:" }
+        return lines.filter { line -> names.any { line.startsWith(it) } }
+    }
+
+    private suspend fun findNow(song: Song, durationMs: Long, beforePlayback: Boolean, force: Boolean, losslessOnly: Boolean,
+        erredOnly: Boolean = false): Rendition? {
         val videoId = song.videoId
         if (!allowed()) {
             report(videoId, if (AppSettings.playback.value.losslessUnmeteredOnly && AppSettings.onMeteredNetwork())
@@ -142,7 +183,7 @@ object ExternalStreams {
         val saavnMissed = (saavnMissUntil[videoId] ?: 0) > now
         if (losslessMissed && (losslessOnly || saavnMissed)) return null
         renditions[videoId]?.takeIf {
-            !force && (!losslessOnly || it.lossless) && now - it.at < TTL && (it.picked || allowed(it.lossless)) &&
+            !force && !erredOnly && (!losslessOnly || it.lossless) && now - it.at < TTL && (it.picked || allowed(it.lossless)) &&
                 (it.addonId == null || (it.sessionRevision == com.opentune.data.addons.AddonStore.revision.value && addonAllowed(it))) && (!beforePlayback || it.maximumSearch) &&
                 (it.lossless || beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
         }?.let { return it }
@@ -152,11 +193,31 @@ object ExternalStreams {
             return null
         }
         val detail = java.util.concurrent.CopyOnWriteArrayList<String>()
+        // The add-ons already heard from for this song aren't asked again: their verified files
+        // are still on record, and a "no matching recording" doesn't change in a few minutes.
+        val prior = if (force) null else heardFor(videoId)
+        if (erredOnly && prior?.erred.isNullOrEmpty()) return null
+        val revision = com.opentune.data.addons.AddonStore.revision.value
+        val skip = prior?.settled.orEmpty()
+        val settledNow = ConcurrentHashMap.newKeySet<String>().apply { addAll(skip) }
+        val erredNow = ConcurrentHashMap.newKeySet<String>()
+        if (prior != null) {
+            val asked = com.opentune.data.addons.AddonStore.addons.value.filter { it.key !in skip }.map { "${it.manifest.name}:" }
+            detail += prior.lines.filterNot { line -> asked.any { line.startsWith(it) } }
+        }
+        // Dated from the song's first search, so it never outlasts the files it vouches for.
+        val heardAt = prior?.at ?: now()
+        fun noteHeard(addon: String, erred: Boolean) = synchronized(settledNow) {
+            if (erred) { erredNow += addon; settledNow -= addon } else { settledNow += addon; erredNow -= addon }
+            if (heard.size > 256) heard.clear()
+            heard[videoId] = Heard(revision, heardAt, settledNow.toSet(), erredNow.toSet(), addonLines(detail))
+        }
         fun losslessRendition(track: LosslessSource.Track) = Rendition(java.util.UUID.randomUUID().toString(), track.url,
             "${track.provider} · lossless requested", true, now(), provider = track.provider, bits = track.bits, sampleRate = track.sampleRate,
             maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType)
         val tracks = if (allowed(true) && !losslessMissed) LosslessSource.resolveAll(song, duration,
             beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { detail.addIfAbsent(it) },
+            skip = skip, settled = ::noteHeard,
             late = { later ->
                 // A slower add-on's verified file: kept to fall back on, and, when it's better than
                 // the one chosen (or nothing was), made the choice and said, so playback switches to it.
@@ -174,22 +235,33 @@ object ExternalStreams {
                     }
                 }
             }) else emptyList()
-        val track = tracks.firstOrNull()
+        fun score(x: Rendition) = com.opentune.data.addons.AddonResolver.qualityScore(x.bits, x.sampleRate)
+        // Files verified earlier in this song's search, from the add-ons not asked this time.
+        val known = if (prior != null) alternatives(videoId) else emptyList()
+        val fresh = tracks.firstOrNull()
+        val earlier = known.firstOrNull()?.takeIf { e -> fresh == null || score(e) >= com.opentune.data.addons.AddonResolver.qualityScore(fresh.bits, fresh.sampleRate) }
+        val track = fresh.takeIf { earlier == null }
         if (allowed(true) && !losslessMissed) {
             if (losslessSearched.size > 512) losslessSearched.clear()
             losslessSearched += videoId
         }
-        if (allowed(true)) detail += if (track == null) "FLAC: no verified matching stream available" else "Add-on audio selected; playback diagnostics show the decoded format"
-        val askedSaavn = !losslessOnly && track == null && allowed(false) && !saavnMissed && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
+        if (allowed(true)) detail += if (track == null && earlier == null) "FLAC: no verified matching stream available" else "Add-on audio selected; playback diagnostics show the decoded format"
+        val askedSaavn = !losslessOnly && track == null && earlier == null && allowed(false) && !saavnMissed && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
         val saavn = if (askedSaavn) JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
         report(videoId, detail.joinToString("\n").ifEmpty { "No external source eligible for this quality setting." })
-        if (track == null && allowed(true) && !losslessMissed) {
+        if (track == null && earlier == null && allowed(true) && !losslessMissed) {
             // Servers that erred or didn't answer say nothing about whether the song is there.
-            val erred = detail.any { line -> TRANSIENT.any { it in line } }
+            val erred = erredNow.isNotEmpty() || detail.any { line -> TRANSIENT.any { it in line } }
             if (erred) transientMiss += videoId
             else { transientMiss.remove(videoId); remember(losslessMissUntil, videoId) }
-        }
+        } else if (track != null || earlier != null) transientMiss.remove(videoId)
         if (askedSaavn && saavn == null) remember(saavnMissUntil, videoId)
+        // Only re-asked add-ons came back, and what they had is no better than the file on record.
+        if (earlier != null) {
+            tracks.forEach { addAlternative(videoId, losslessRendition(it)) }
+            if (renditions[videoId]?.lossless != true) remember(videoId, earlier)
+            return renditions[videoId]?.takeIf { it.lossless } ?: earlier
+        }
         if (track == null && saavn == null) return null
         // Even two FLACs of the same recording can have different byte offsets.
         val rendition = Rendition(java.util.UUID.randomUUID().toString(), track?.url ?: saavn!!,
@@ -199,8 +271,10 @@ object ExternalStreams {
         remember(videoId, rendition)
         // The other verified files of this recording, to fall back on if this one won't load.
         if (track != null) {
-            alternatives[videoId] = listOf(rendition)
+            if (prior == null) alternatives[videoId] = listOf(rendition) else addAlternative(videoId, rendition)
             tracks.drop(1).forEach { addAlternative(videoId, losslessRendition(it)) }
+            // A re-asked add-on had better than anything on record: playback moves onto it.
+            if (erredOnly) _improved.tryEmit(videoId)
         }
         return rendition
     }
@@ -270,6 +344,7 @@ object ExternalStreams {
         saavnMissUntil.clear()
         transientMiss.clear()
         losslessSearched.clear()
+        heard.clear()
         com.opentune.data.addons.AddonResolver.retry()
         reports.clear()
         // Keep currently playing rendition keys valid until the player swaps sources.
@@ -282,6 +357,8 @@ object ExternalStreams {
         if (key != null && renditions[videoId]?.key == key) renditions.remove(videoId)
         val addon = failed?.addonId
         if (addon != null) com.opentune.data.addons.AddonResolver.failed(addon, videoId)
+        // Its file broke, so its answer no longer stands: asked again, for a new link, once it may be.
+        if (addon != null) heard.computeIfPresent(videoId) { _, h -> Heard(h.revision, h.at, h.settled - addon, h.erred + addon, h.lines) }
         pinned.entries.removeIf { it.value.first == videoId && (key == null || it.key == key) }
         // Not offered again as a fallback: the next try went straight back to the file that had just failed.
         if (failed != null) alternatives.computeIfPresent(videoId) { _, list -> list.filterNot { it.key == failed.key || it.url == failed.url }.ifEmpty { null } }
@@ -317,6 +394,7 @@ object ExternalStreams {
     fun losslessSearched(videoId: String): Boolean = videoId in losslessSearched
 
     private const val MISS_MS = 60_000L
+    private const val VERIFIED_FRESH_MS = 120_000L
     /** What the add-ons report when they erred rather than answered. */
     private val TRANSIENT = listOf("HTTP ", "unavailable", "no answer", "rate limited", "temporarily")
 }

@@ -25,13 +25,16 @@ object AddonResolver {
      * (up to [ADDON_LIMIT_MS], a guard against a hung connection). A later
      * answer of higher quality than the one returned goes to [late], so it
      * can still be switched to. With no match yet, it waits for them all.
+     * [skip] names add-ons already heard from for this song, left out; each one
+     * asked is told to [settled] once it's done, with whether it erred (an HTTP
+     * error, no answer, a broken reply) rather than answered.
      */
     suspend fun resolve(song: Song, durationMs: Long, download: Boolean = false, bestAvailable: Boolean = false,
         report: (String) -> Unit = {},
         late: (AddonStream) -> Unit = {},
         clientFor: (String) -> AddonClient = AddonClient::forBase,
         probe: suspend (String, Int, Boolean) -> ByteArray = AddonHttp::bytes): AddonStream? =
-        resolveAll(song, durationMs, download, bestAvailable, report, late, clientFor, probe).firstOrNull()
+        resolveAll(song, durationMs, download, bestAvailable, report, late, clientFor = clientFor, probe = probe).firstOrNull()
 
     /**
      * Every verified match [resolve] found, best first (ties in the
@@ -41,18 +44,22 @@ object AddonResolver {
     suspend fun resolveAll(song: Song, durationMs: Long, download: Boolean = false, bestAvailable: Boolean = false,
         report: (String) -> Unit = {},
         late: (AddonStream) -> Unit = {},
+        skip: Set<String> = emptySet(),
+        settled: (addon: String, erred: Boolean) -> Unit = { _, _ -> },
         clientFor: (String) -> AddonClient = AddonClient::forBase,
         probe: suspend (String, Int, Boolean) -> ByteArray = AddonHttp::bytes): List<AddonStream> = withContext(Dispatchers.IO) {
         if (durationMs <= 0) return@withContext emptyList()
         val identity = CatalogIdentity(song.title, song.artist, null, durationMs)
         // The best each add-on has: hi-res where it offers it, else lossless.
         val tier = "HI_RES_LOSSLESS"
-        suspend fun attempt(addon: AudioAddon): AddonStream? {
+        /** [outcome]: asked over the network at all, and erred rather than answered. */
+        suspend fun attempt(addon: AudioAddon, outcome: BooleanArray): AddonStream? {
             if (!addon.enabled) return null
             if ((failures["${addon.key}:${song.videoId}"] ?: 0) > System.nanoTime() / 1_000_000) { report("${addon.manifest.name}: recent playback failure; skipped"); return null }
             if (!AddonStore.usable(addon)) { report("${addon.manifest.name}: only used with wired headphones, a USB DAC or HDMI, as its owner asks"); return null }
             if (download && !addon.manifest.downloads) { report("${addon.manifest.name}: streaming only"); return null }
             val started = System.nanoTime()
+            outcome[0] = true
             val answer = withTimeoutOrNull(ADDON_LIMIT_MS) {
                 try {
                     val client = clientFor(addon.base)
@@ -113,20 +120,22 @@ object AddonResolver {
                     }
                     null
                 } catch (e: CancellationException) { throw e }
-                catch (e: AddonHttp.Failure) { report("${addon.manifest.name}: HTTP ${e.status}${if (e.status == 429) " · rate limited" else ""}"); null }
-                catch (_: Exception) { report("${addon.manifest.name}: unavailable or invalid response"); null }
+                catch (e: AddonHttp.Failure) { outcome[1] = true; report("${addon.manifest.name}: HTTP ${e.status}${if (e.status == 429) " · rate limited" else ""}"); null }
+                catch (_: Exception) { outcome[1] = true; report("${addon.manifest.name}: unavailable or invalid response"); null }
             }
-            if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) report("${addon.manifest.name}: no answer in ${ADDON_LIMIT_MS / 1_000} s")
+            if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) { outcome[1] = true; report("${addon.manifest.name}: no answer in ${ADDON_LIMIT_MS / 1_000} s") }
             return answer
         }
-        val addons = AddonStore.addons.value
+        val addons = AddonStore.addons.value.filterNot { it.key in skip }
         if (addons.isEmpty()) return@withContext emptyList()
         // The add-ons run here, apart from the caller, so returning early cancels none of them.
         val work = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
         val answers = kotlinx.coroutines.channels.Channel<Pair<Int, AddonStream?>>(kotlinx.coroutines.channels.Channel.UNLIMITED)
         addons.forEachIndexed { i, addon ->
             work.launch {
-                val stream = try { attempt(addon) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                val outcome = BooleanArray(2)
+                val stream = try { attempt(addon, outcome) } catch (e: CancellationException) { throw e } catch (_: Exception) { outcome[1] = outcome[0]; null }
+                if (outcome[0]) settled(addon.key, outcome[1])
                 answers.send(i to stream)
             }
         }

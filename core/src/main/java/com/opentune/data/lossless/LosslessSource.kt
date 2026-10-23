@@ -18,9 +18,10 @@ object LosslessSource {
 
     /** Every verified match, best first; see [AddonResolver.resolveAll]. */
     suspend fun resolveAll(song: Song, durationMs: Long, preferHiRes: Boolean = false, bestAvailable: Boolean = false,
-        report: (String) -> Unit = {}, late: (Track) -> Unit = {}): List<Track> =
+        report: (String) -> Unit = {}, late: (Track) -> Unit = {},
+        skip: Set<String> = emptySet(), settled: (addon: String, erred: Boolean) -> Unit = { _, _ -> }): List<Track> =
         AddonResolver.resolveAll(song, durationMs, bestAvailable = preferHiRes || bestAvailable, report = report,
-            late = { late(it.toTrack()) }).map { it.toTrack() }
+            late = { late(it.toTrack()) }, skip = skip, settled = settled).map { it.toTrack() }
 
     private fun com.opentune.data.addons.AddonStream.toTrack() = Track(url, provider, bits, sampleRate, addonId, mimeType)
     internal fun flacInfo(bytes: ByteArray): FlacInfo? {

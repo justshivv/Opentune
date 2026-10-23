@@ -115,6 +115,23 @@ class AddonResolverTest {
         assertEquals("slow", kotlinx.coroutines.withTimeout(10_000) { late.await() }.provider)
     }
 
+    @Test fun eachSourceSaysWhetherItAnsweredOrErredAndAnsweredOnesCanBeLeftOut() = runBlocking {
+        add("bad"); add("good")
+        val heard = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+        val first = AddonResolver.resolveAll(song, 180000, clientFor = ::client, settled = { key, erred -> heard[key] = erred },
+            probe = { _, _, _ -> header(16, 44_100) })
+        assertEquals("good", first.single().provider)
+        val (bad, good) = AddonStore.addons.value.map { it.key }
+        // The 503 is an error to ask again about; the verified file is an answer.
+        kotlinx.coroutines.withTimeout(5_000) { while (heard.size < 2) kotlinx.coroutines.delay(10) }
+        assertEquals(true, heard[bad]); assertEquals(false, heard[good])
+        // Asked again, the one that answered is left alone: only the one that erred is asked.
+        calls.clear()
+        assertTrue(AddonResolver.resolveAll(song, 180000, clientFor = ::client, skip = setOf(good),
+            probe = { _, _, _ -> header(16, 44_100) }).isEmpty())
+        assertTrue(calls.isNotEmpty() && calls.all { "bad.example" in it })
+    }
+
     @Test fun bestAvailableComparesSourcesAndKeepsPriorityForTies() = runBlocking {
         add("first"); add("second")
         val result = AddonResolver.resolve(song, 180000, bestAvailable = true, clientFor = ::client,
