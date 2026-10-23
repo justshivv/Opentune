@@ -1143,13 +1143,28 @@ class PlaybackService : MediaLibraryService() {
             val saavn = if (flacFirst) { saavnSearch?.cancel(); null } else saavnSearch?.await()
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             if (player.currentMediaItem?.localConfiguration?.uri != uri) { flac?.cancel(); return@launch }
-            if (saavn != null && !saavn.lossless && ExternalStreams.allowed(false) && flac?.isCompleted != true) {
+            // JioSaavn plays unless a FLAC is already here to play instead; a FLAC search that
+            // finished with nothing is exactly when JioSaavn is wanted.
+            val flacReady = flac != null && flac.isCompleted && flac.getCompleted() != null
+            if (saavn != null && !saavn.lossless && ExternalStreams.allowed(false) && !flacReady) {
                 started()
                 val left = player.duration - player.currentPosition
                 if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { flac?.cancel(); tell("Too close to the end of the song to switch"); return@launch }
                 if (player.currentMediaItem?.localConfiguration?.uri == uri) swapToUpgrade(player, id, externalStreamUri(id, saavn.key))
             }
-            val lossless = flac?.await()
+            var lossless = flac?.await()
+            // Came back empty only because add-ons erred (an HTTP 404 or 502, no answer):
+            // asked again a little later in the song rather than given up on until the
+            // next one, the way only a manual Upgrade quality used to.
+            var retries = 0
+            while (lossless == null && flac != null && retries < LOSSLESS_RETRIES && ExternalStreams.missWasTransient(id)) {
+                retries++
+                delay(LOSSLESS_RETRY_MS)
+                if (player.currentMediaItem?.mediaId != id) return@launch
+                if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS + LOSSLESS_RETRY_MS) break
+                lossless = ExternalStreams.find(item.toSong(), duration, beforePlayback = AppSettings.effectiveAudioQuality == com.opentune.data.settings.AudioQuality.MAX,
+                    losslessOnly = true)
+            }
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             // Still this song, maybe now on the JioSaavn stream switched to above.
             if (player.currentMediaItem?.mediaId != id) return@launch
@@ -2057,6 +2072,9 @@ class PlaybackService : MediaLibraryService() {
         /** Playing this long means the track's stream really works. */
         const val PLAYED_OK_MS = 10_000L
         const val UPGRADE_MIN_REMAINING_MS = 20_000L
+        /** A FLAC search that failed only on server errors is asked again this many times, this far apart. */
+        const val LOSSLESS_RETRIES = 3
+        const val LOSSLESS_RETRY_MS = 12_000L
         /** A source's file is pinged with a read this size... */
         const val PING_BYTES = 65_536
         /** ...and counted as not answering after this long. */
