@@ -77,7 +77,9 @@ let trustCache;
 async function boundedJson(url, fetcher) {
   const part = url.endsWith('/root') ? 'ROOTS' : 'REVOCATIONS';
   let r;
-  try { r = await fetcher(url, { redirect: 'error', signal: AbortSignal.timeout(7000) }); }
+  // Workers fetch does not support redirect:'error'. Manual mode plus the status
+  // check below refuses redirects without rejecting every trust request locally.
+  try { r = await fetcher(url, { redirect: 'manual', signal: AbortSignal.timeout(7000) }); }
   catch { throw new Error(`ATTESTATION_${part}_NETWORK`); }
   if (!r.ok || !r.body) throw new Error(`ATTESTATION_${part}_HTTP_${r.status}`);
   const reader = r.body.getReader(), parts = []; let size = 0;
