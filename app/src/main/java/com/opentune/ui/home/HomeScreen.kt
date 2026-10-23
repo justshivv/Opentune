@@ -98,6 +98,8 @@ fun HomeScreen(
     onRecognize: (() -> Unit)? = null,
     /** The full player is open over the page, so nothing on it needs to move. */
     covered: Boolean = false,
+    /** Opens every Speed dial pick on a page of its own. */
+    onOpenSpeedDial: () -> Unit = {},
 ) {
     val loader = rememberLoader("home") { MusicRepository.home() }
     val state by loader.state.collectAsState()
@@ -116,6 +118,14 @@ fun HomeScreen(
     val first = (state as? UiState.Success<List<HomeShelf>>)?.data?.let { hidden.shelves(ContentFilter.shelves(it, hideExplicit)) }.orEmpty()
     val allShelves = first + more
     val feed = remember(allShelves) { arrangeHomeShelves(allShelves) }
+    // YouTube Music's own Speed dial when it sends one (signed in), else the songs
+    // played most on this phone, with what's hidden or filtered left out.
+    val localDial = remember(records, hidden, hideExplicit) {
+        hidden.shelves(ContentFilter.shelves(listOf(HomeShelf(com.opentune.data.history.SpeedDial.TITLE, com.opentune.data.history.SpeedDial.fromHistory(records))), hideExplicit))
+            .firstOrNull()?.items.orEmpty()
+    }
+    val speedDial = feed.speedDial?.items?.takeIf { it.size >= SPEED_DIAL_MIN } ?: localDial
+    androidx.compose.runtime.SideEffect { SpeedDialItems.items = speedDial }
     // With little history, mixes from the followed artists fill in (see HomeSeed);
     // what the user hid stays out of both.
     val seedsAll by MusicRepository.seeds.collectAsState()
@@ -226,6 +236,18 @@ fun HomeScreen(
                     }
                 }
             }
+            if (speedDial.size >= SPEED_DIAL_MIN) {
+                item(key = "speed-dial") {
+                    SpeedDialSection(
+                        speedDial,
+                        strapline = feed.speedDial?.subtitle?.takeIf { it.isNotBlank() }
+                            ?: account?.name?.substringBefore(' ').orEmpty(),
+                        avatarUrl = account?.thumbnailUrl,
+                        onItemClick = onItemClick,
+                        onOpenAll = onOpenSpeedDial,
+                    )
+                }
+            }
             item(key = "quick-picks") {
                 val historyAction: @Composable () -> Unit = {
                     IconButton(onClick = { historyOpen = true }, modifier = Modifier.size(48.dp)) {
@@ -322,7 +344,10 @@ private fun HomeShelf.isQuickPicks(): Boolean =
     items.size >= 4 && items.all { it.videoId != null && it.browseId == null }
 
 /** Home uses a single paged track list followed by collection and track cards. */
-internal data class HomeSections(val quickPicks: HomeShelf?, val cards: List<HomeShelf>)
+internal data class HomeSections(val quickPicks: HomeShelf?, val cards: List<HomeShelf>, val speedDial: HomeShelf? = null)
+
+/** Fewer picks than this and Speed dial isn't shown: there's too little to go on yet. */
+private const val SPEED_DIAL_MIN = 3
 
 /**
  * One track list, then collections and varied card shelves. Keep every recommendation.
@@ -330,7 +355,10 @@ internal data class HomeSections(val quickPicks: HomeShelf?, val cards: List<Hom
  * only made then), else the radio off the last song, else the first songs shelf.
  */
 internal fun arrangeHomeShelves(shelves: List<HomeShelf>): HomeSections {
-    val available = shelves.filter { it.items.isNotEmpty() }
+    val all = shelves.filter { it.items.isNotEmpty() }
+    // YouTube Music's Speed dial has its own place at the top, not among the cards.
+    val speedDial = all.firstOrNull { com.opentune.data.history.SpeedDial.isSpeedDial(it.title) }
+    val available = all.filterNot { com.opentune.data.history.SpeedDial.isSpeedDial(it.title) }
     val pickIndex = listOf(com.opentune.data.reco.HomeSeed.TITLE_PREFIX, "Because you played").firstNotNullOfOrNull { prefix ->
         available.indexOfFirst { it.isQuickPicks() && it.title.startsWith(prefix, ignoreCase = true) }.takeIf { it >= 0 }
     } ?: available.indexOfFirst { it.isQuickPicks() }
@@ -346,7 +374,7 @@ internal fun arrangeHomeShelves(shelves: List<HomeShelf>): HomeSections {
             tracks.getOrNull(index)?.let(::add)
         }
     }
-    return HomeSections(available.getOrNull(pickIndex), cards)
+    return HomeSections(available.getOrNull(pickIndex), cards, speedDial)
 }
 
 /**

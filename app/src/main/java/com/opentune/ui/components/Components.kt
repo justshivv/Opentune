@@ -369,7 +369,7 @@ fun DownloadBadge(state: DownloadState, progress: Float) {
 
 /** A card as it shows lifted out over its long-press menu. */
 @Composable
-private fun CardPreview(title: String, subtitle: String, thumbnailUrl: String?, round: Boolean) {
+internal fun CardPreview(title: String, subtitle: String, thumbnailUrl: String?, round: Boolean) {
     Column(Modifier.fillMaxSize().padding(10.dp)) {
         Artwork(thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), shape = if (round) CircleShape else MaterialTheme.shapes.medium)
         Spacer(Modifier.height(6.dp))
