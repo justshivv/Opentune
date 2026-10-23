@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.TransformOrigin
@@ -257,7 +258,14 @@ internal fun MorphBox(
     }
     Box(
         Modifier
-            .size(with(density) { big.width.toDp() }, with(density) { big.height.toDp() })
+            // Its own size even past the screen's edges: a full-screen cover is wider than the
+            // screen, and held to the screen's width it flew in short on the right.
+            .layout { measurable, constraints ->
+                val w = kotlin.math.ceil(big.width).toInt()
+                val h = kotlin.math.ceil(big.height).toInt()
+                val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))
+                layout(minOf(w, constraints.maxWidth), minOf(h, constraints.maxHeight)) { placeable.place(0, 0) }
+            }
             .graphicsLayer {
                 if (fullBleed) compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
                 val t = p()

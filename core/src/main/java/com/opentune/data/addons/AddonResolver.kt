@@ -50,7 +50,7 @@ object AddonResolver {
         suspend fun attempt(addon: AudioAddon): AddonStream? {
             if (!addon.enabled) return null
             if ((failures["${addon.key}:${song.videoId}"] ?: 0) > System.nanoTime() / 1_000_000) { report("${addon.manifest.name}: recent playback failure; skipped"); return null }
-            if (!AddonStore.usable(addon)) { report("${addon.manifest.name}: needs a supported lossless output"); return null }
+            if (!AddonStore.usable(addon)) { report("${addon.manifest.name}: only used with wired headphones, a USB DAC or HDMI, as its owner asks"); return null }
             if (download && !addon.manifest.downloads) { report("${addon.manifest.name}: streaming only"); return null }
             val started = System.nanoTime()
             val answer = withTimeoutOrNull(ADDON_LIMIT_MS) {
@@ -78,7 +78,7 @@ object AddonResolver {
                             val plain = try { client.stream(track.id, manifest, "LOSSLESS") } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
                             if (plain?.lossless == true) stream = plain
                         }
-                        if (!stream.lossless) { report("${manifest.name}: only compressed audio for this recording"); continue }
+                        if (!stream.lossless) { report("${manifest.name}: has this song only in compressed quality, not lossless"); continue }
                         if (download && stream.transport != null) {
                             report("${manifest.name}: segmented stream; trying the next source for a downloadable file"); continue
                         }

@@ -1391,9 +1391,10 @@ object InnertubeParser {
      */
     fun artistFromSubtitle(subtitle: String): String {
         val parts = subtitle.split(" • ").map(String::trim).filter { it.isNotBlank() }
-        return parts.firstOrNull {
-            it.lowercase() !in TYPE_WORDS && !it.matches(TALLY) && !it.matches(DURATION)
-        } ?: subtitle
+        fun credit(part: String) = part.lowercase() !in TYPE_WORDS && !part.matches(TALLY) && !part.matches(DURATION)
+        // Nothing but the kind of item, a length or a count ("Song", "Single • 3:20"): no artist,
+        // rather than one called "Song".
+        return parts.firstOrNull(::credit).orEmpty()
     }
 
     /**
