@@ -98,7 +98,8 @@ export function withAppVerification(handler, { trust = googleTrust, attest = ver
         const used = await state(env, 'challenge:' + input.challenge, 'consume'); if (!used.ok) return denied();
         let trusted;
         try { trusted = await trust(); }
-        catch { return reply({ error: 'Attestation trust service is temporarily unavailable. Try again later.', code: 'ATTESTATION_TRUST_UNAVAILABLE' }, 503); }
+        catch (e) { return reply({ error: 'Attestation trust service is temporarily unavailable. Try again later.',
+          code: /^ATTESTATION_(ROOTS|REVOCATIONS|TRUST)_[A-Z0-9_]{1,30}$/.test(e.message || '') ? e.message : 'ATTESTATION_TRUST_UNAVAILABLE' }, 503); }
         const key = attest(input, trusted, signers), session = token(), expires = Date.now() + 7 * 86400_000;
         await state(env, 'session:' + sha256(session), 'create', { key, kind: 'native', expires });
         return reply({ session, expires, serverTime: Date.now() });

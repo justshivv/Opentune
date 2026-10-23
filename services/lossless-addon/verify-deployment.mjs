@@ -21,7 +21,8 @@ assert.equal(challenge.response.status, 200);
 assert.match(challenge.body.challenge, /^[A-Za-z0-9_-]{43}$/);
 const fake = await fetch(new URL('/auth/enroll', base), { method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ challenge: challenge.body.challenge, chain: [], proof: '' }), signal: AbortSignal.timeout(20000) });
-assert.equal(fake.status, 403); await fake.body?.cancel();
+const fakeBody = await fake.json();
+assert.equal(fake.status, 403, `Enrollment check: ${fakeBody.code || 'no diagnostic code'}`);
 const replay = await fetch(new URL('/auth/enroll', base), { method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ challenge: challenge.body.challenge, chain: [], proof: '' }), signal: AbortSignal.timeout(20000) });
 assert.equal(replay.status, 401); await replay.body?.cancel();

@@ -75,12 +75,16 @@ export function validateDescription(bytes, challenge, signerDigests) {
 }
 let trustCache;
 async function boundedJson(url, fetcher) {
-  const r = await fetcher(url, { redirect: 'error', signal: AbortSignal.timeout(7000) });
-  if (!r.ok || !r.body) throw new Error('Attestation trust service unavailable');
+  const part = url.endsWith('/root') ? 'ROOTS' : 'REVOCATIONS';
+  let r;
+  try { r = await fetcher(url, { redirect: 'error', signal: AbortSignal.timeout(7000) }); }
+  catch { throw new Error(`ATTESTATION_${part}_NETWORK`); }
+  if (!r.ok || !r.body) throw new Error(`ATTESTATION_${part}_HTTP_${r.status}`);
   const reader = r.body.getReader(), parts = []; let size = 0;
-  try { for (;;) { const { value, done } = await reader.read(); if (done) break; size += value.length; if (size > 2_097_152) throw new Error('Invalid trust response'); parts.push(Buffer.from(value)); } }
+  try { for (;;) { const { value, done } = await reader.read(); if (done) break; size += value.length; if (size > 2_097_152) throw new Error(`ATTESTATION_${part}_TOO_LARGE`); parts.push(Buffer.from(value)); } }
   finally { await reader.cancel().catch(() => {}); }
-  return JSON.parse(Buffer.concat(parts).toString('utf8'));
+  try { return JSON.parse(Buffer.concat(parts).toString('utf8')); }
+  catch { throw new Error(`ATTESTATION_${part}_INVALID_JSON`); }
 }
 export async function googleTrust(fetcher = fetch) {
   if (trustCache?.until > Date.now()) return trustCache;
@@ -88,8 +92,10 @@ export async function googleTrust(fetcher = fetch) {
     boundedJson('https://android.googleapis.com/attestation/root', fetcher),
     boundedJson('https://android.googleapis.com/attestation/status', fetcher),
   ]);
-  if (!Array.isArray(roots) || !roots.length || !revocations?.entries || typeof revocations.entries !== 'object') throw new Error('Attestation trust service unavailable');
-  trustCache = { roots: roots.map(pem => new X509Certificate(pem)), revoked: revocations.entries, until: Date.now() + 3600_000 };
+  if (!Array.isArray(roots) || !roots.length || !revocations?.entries || typeof revocations.entries !== 'object') throw new Error('ATTESTATION_TRUST_INVALID_SCHEMA');
+  let certificates;
+  try { certificates = roots.map(pem => new X509Certificate(pem)); } catch { throw new Error('ATTESTATION_ROOTS_INVALID_CERTIFICATE'); }
+  trustCache = { roots: certificates, revoked: revocations.entries, until: Date.now() + 3600_000 };
   return trustCache;
 }
 /** trust is passed by the server, never from enrollment JSON. */

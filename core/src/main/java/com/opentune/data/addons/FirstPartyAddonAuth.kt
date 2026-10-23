@@ -54,7 +54,7 @@ object FirstPartyAddonAuth {
                 "/auth/enroll" -> "Device enrollment"
                 else -> "OpenTune verification"
             }
-            val code = data.optString("code").takeIf { it.matches(Regex("[A-Z_]{3,40}")) }
+            val code = data.optString("code").takeIf { it.matches(Regex("[A-Z0-9_]{3,64}")) }
             throw VerificationFailure("$stage failed (HTTP ${response.code}${code?.let { "; $it" }.orEmpty()}); retry on a supported, locked device")
         }
         data
