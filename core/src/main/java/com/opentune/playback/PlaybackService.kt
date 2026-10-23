@@ -1519,6 +1519,7 @@ class PlaybackService : MediaLibraryService() {
         player: ExoPlayer, id: String, uri: android.net.Uri = youtubeFallbackUri(id, upgraded = true),
         superseded: () -> Boolean = { false },
     ): Boolean {
+        if (superseded()) return false
         NerdStats.onUpgrade(id)
         return try {
             // Done: a note from an earlier try that it couldn't be is no longer true.
@@ -1640,7 +1641,7 @@ class PlaybackService : MediaLibraryService() {
      * the one sounding, so no gap or dip reaches the ears.
      *
      * A loaded stream that cannot align is reused by the plain replacement.
-     * A stream that has not loaded still goes through the prebuffer fallback.
+     * A failed load moves to the next verified candidate instead of loading the same file twice.
      */
     private suspend fun bridgedSwap(player: ExoPlayer, index: Int, id: String, next: MediaItem, superseded: () -> Boolean): UpgradeBridgeResult {
         val make = auditionPlayer ?: return UpgradeBridgeResult.UNAVAILABLE
@@ -1670,8 +1671,8 @@ class PlaybackService : MediaLibraryService() {
             val loaded = prepared == UpgradeBufferResult.READY
             if (!loaded) {
                 if (player.currentMediaItem?.mediaId == id) loadFailure = whyNotLoaded(bridge, from)
-                Log.w(TAG, "The bridge couldn't load the better stream for $id ($loadFailure); trying the plain swap")
-                return UpgradeBridgeResult.UNAVAILABLE
+                Log.w(TAG, "The better stream for $id didn't load ($loadFailure); trying another verified source")
+                return UpgradeBridgeResult.ABORTED
             }
             // The queue may have moved on or a blend begun while it loaded.
             if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id || crossfade?.blending == true) return UpgradeBridgeResult.ABORTED
