@@ -13,6 +13,8 @@
     --title-2-emphasized: 700 22px / 28px var(--font-family);
     --body-reduced: 400 15px / 22px var(--font-family);
     --player-pill-height: 68px;
+    /* The full player and audio details stand on dark in either mode: a pale key color, as dark mode's. */
+    --ot-key-on-dark: color-mix(in srgb, var(--ot-seed) 32%, #ffe0d5);
   }
   :root[data-appearance='light'] {
     color-scheme: light;
@@ -49,6 +51,17 @@
     --containerInnerStrokeAlpha: .12;
     --skeleton-fill: #38241d10;
     --skeleton-shimmer: #ffffff88;
+    --systemRed: #ff3b30;
+    --systemGreen: #28cd41;
+    --systemBlue: #007aff;
+    --systemGray: #8e8e93;
+    --systemGray2: #aeaeb2;
+    --systemGray3: #c7c7cc;
+    --systemGray4: #d1d1d6;
+    --systemGray5: #e5e5ea;
+    --systemGray6: #f2f2f7;
+    --radiosityShadowColor: #0000001a;
+    --dialogShadowColor: #00000040;
   }
   :root[data-appearance='dark'] {
     color-scheme: dark;
@@ -85,10 +98,23 @@
     --containerInnerStrokeAlpha: .2;
     --skeleton-fill: #ffffff12;
     --skeleton-shimmer: #ffffff14;
+    --systemRed: #ff453a;
+    --systemGreen: #32d74b;
+    --systemBlue: #0a84ff;
+    --systemGray: #98989d;
+    --systemGray2: #636366;
+    --systemGray3: #48484a;
+    --systemGray4: #3a3a3c;
+    --systemGray5: #2c2c2e;
+    --systemGray6: #1c1c1e;
+    --radiosityShadowColor: #0000004d;
+    --dialogShadowColor: #0000008c;
   }
   :root[data-appearance='dark'][data-black='true'] { --pageBG: #000; --pageBG-rgb: 0,0,0; }
+  /* Fills under white text: dark mode's key color is too pale for that, so they use a deeper seed. */
+  :root[data-appearance='light'] { --keyColorBG: var(--keyColor); }
+  :root[data-appearance='dark'] { --keyColorBG: color-mix(in srgb, var(--ot-seed) 82%, #000); }
   :root[data-appearance] {
-    --keyColorBG: var(--keyColor);
     --selectionColor: var(--keyColor);
     --keyColor-rollover: color-mix(in srgb, var(--keyColor) 85%, white);
     --keyColor-pressed: color-mix(in srgb, var(--keyColor) 85%, black);
@@ -123,11 +149,11 @@
 .ot-audio-details { position: fixed; inset: auto max(20px, calc((100vw - 560px)/2)) 24px; z-index: 10005; background: #292321; color: #f6ede9; border: 1px solid #ffffff28; border-radius: 28px; padding: 28px; margin: 0; width: auto; max-height: 80dvh; overflow: auto; }
 .ot-audio-details h2 { font-size: 25px; font-weight: 700; margin-bottom: 18px; }
 .ot-audio-details p { margin: 14px 0; overflow-wrap: anywhere; }
-.ot-audio-details button { padding: 15px; border-radius: 30px; width: 100%; background: var(--keyColor); color: #26110d; font-weight: 700; }
+.ot-audio-details button { padding: 15px; border-radius: 30px; width: 100%; background: var(--ot-key-on-dark); color: #26110d; font-weight: 700; }
 .ot-playing-from { position: absolute; top: 22px; left: 25%; right: 25%; text-align: center; text-transform: uppercase; font-size: 10px; letter-spacing: .14em; color: #ffffff99; }
 .ot-playing-from strong { display: inline-block; margin-top: 3px; text-transform: none; letter-spacing: 0; font-size: 13px; color: #ffffffdd; }
-.ot-play-button { background: var(--keyColor); color: #26110d; width: 68px; height: 68px; }
-.ot-play-button:hover { background: var(--keyColor-rollover); }
+.ot-play-button { background: var(--ot-key-on-dark); color: #26110d; width: 68px; height: 68px; }
+.ot-play-button:hover { background: color-mix(in srgb, var(--ot-key-on-dark) 85%, white); }
 .ot-player-backdrop { position: absolute; inset: 0; z-index: -1; background: linear-gradient(155deg, var(--cover-color), #100d0c 95%); }
 .ot-player-backdrop.ot-echo { background: radial-gradient(ellipse at 30% 30%, var(--cover-color), transparent 60%), radial-gradient(ellipse at 80% 80%, var(--ot-seed), #100d0c 75%); }
 [data-full-screen] .ot-player-cover { flex-shrink: 0; }
