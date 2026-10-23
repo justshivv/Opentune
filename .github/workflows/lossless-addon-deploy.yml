@@ -1,0 +1,58 @@
+name: Deploy lossless add-on
+on:
+  push:
+    branches: [main, feat/first-party-lossless-addon]
+    paths:
+      - 'services/lossless-addon/**'
+      - '.github/workflows/lossless-addon-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lossless-addon-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    # Publishing requires an explicit deployment commit or manual dispatch.
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy lossless addon]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test adapters
+        run: node --test services/lossless-addon/worker.test.mjs
+      - name: Deploy standalone Worker
+        id: worker
+        working-directory: services/lossless-addon
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo '::error::Cloudflare deployment credentials are not configured.'
+            exit 1
+          fi
+          npx --yes wrangler@4 deploy 2>&1 | tee "$RUNNER_TEMP/lossless-deploy.log"
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const log = readFileSync(`${process.env.RUNNER_TEMP}/lossless-deploy.log`, 'utf8');
+          const url = log.match(/https:\/\/opentune-lossless-addon\.[a-z0-9-]+\.workers\.dev\b/i)?.[0];
+          if (!url) throw new Error('Deployment did not report a workers.dev URL');
+          appendFileSync(process.env.GITHUB_OUTPUT, `url=${url}\n`);
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Monochrome: ${url}/monochrome/manifest.json\n\nArchive: ${url}/archive/manifest.json\n`);
+          JS
+      - name: Verify deployed manifests and Monochrome resolution
+        env:
+          ADDON_URL: ${{ steps.worker.outputs.url }}
+        run: node services/lossless-addon/verify-deployment.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lossless-deployment-report
+          path: lossless-deployment-report.json
+          if-no-files-found: ignore
