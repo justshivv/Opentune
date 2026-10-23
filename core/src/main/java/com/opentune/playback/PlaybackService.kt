@@ -1186,7 +1186,7 @@ class PlaybackService : MediaLibraryService() {
                 val candidates = ExternalStreams.alternatives(id).ifEmpty { listOf(lossless) }
                 val ok = swapToBestAnswering(player, id, candidates, existing)
                 if (!ok && player.currentMediaItem?.mediaId == id) {
-                    ExternalStreams.swapFailed(id)
+                    ExternalStreams.swapFailed(id, swapNotes.map { (provider, why) -> "$provider: $why" })
                     updateExternalStats()
                 }
                 swapped(ok)
@@ -1290,6 +1290,7 @@ class PlaybackService : MediaLibraryService() {
     ): Boolean {
         // A verified file whose stream didn't load in time often does a little later, once its
         // server has it ready: tried again a few times in the song rather than left till the next.
+        swapNotes.clear()
         repeat(SWAP_ROUNDS) { round ->
             if (round > 0) {
                 delay(SWAP_ROUND_GAP_MS)
@@ -1317,6 +1318,7 @@ class PlaybackService : MediaLibraryService() {
                 val alive = kotlinx.coroutines.withTimeoutOrNull(PING_LIMIT_MS) {
                     runCatching { com.opentune.data.addons.AddonHttp.bytes(r.url, PING_BYTES, true).isNotEmpty() }.getOrDefault(false)
                 } == true
+                if (!alive) swapNotes[r.provider] = "its server didn't answer"
                 answers.send(r.takeIf { alive })
             }
         }
@@ -1347,13 +1349,36 @@ class PlaybackService : MediaLibraryService() {
                     updateExternalStats()
                     pending.removeAll { score(it) <= playing }
                 } else {
-                    Log.w(TAG, "${best.provider}'s stream for $id didn't load; trying the next verified source")
+                    swapNotes[best.provider] = loadFailure ?: "its stream didn't load"
+                    Log.w(TAG, "${best.provider}'s stream for $id didn't load (${swapNotes[best.provider]}); trying the next verified source")
                 }
             }
         } finally {
             pings.forEach { it.cancel() }
         }
         moved
+    }
+
+    /** Why each verified source a switch tried didn't take, by provider, for the pipeline report. */
+    private val swapNotes = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** Why the last stream [prebuffer] or the bridge tried didn't load. */
+    private var loadFailure: String? = null
+
+    /** What went wrong on [p], which was asked to load from [from]: an error, or how little arrived in time. */
+    private fun whyNotLoaded(p: ExoPlayer, from: Long): String {
+        val error = p.playerError
+        if (error != null) {
+            var cause: Throwable? = error
+            while (cause != null) {
+                if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) return "its server answered HTTP ${cause.responseCode}"
+                cause = cause.cause
+            }
+            return "playback error (${error.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' ')})"
+        }
+        if (p.playbackState == Player.STATE_ENDED) return "its stream ended as soon as it started"
+        val got = (p.bufferedPosition - from).coerceAtLeast(0L) / 1000
+        return "only ${got}s of audio arrived in ${AUDITION_TIMEOUT_MS / 1000}s"
     }
 
     /** Builds the silent player [prebuffer] loads an upgrade with; set in [onCreate]. */
@@ -1368,11 +1393,13 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun prebuffer(main: ExoPlayer, item: MediaItem): Boolean {
         val make = auditionPlayer ?: return true
         val audition = make()
+        loadFailure = null
+        val from = main.currentPosition + AUDITION_LEAD_MS
         return try {
             audition.setMediaItem(item)
-            audition.seekTo(main.currentPosition + AUDITION_LEAD_MS)
+            audition.seekTo(from)
             audition.prepare()
-            kotlinx.coroutines.withTimeoutOrNull(AUDITION_TIMEOUT_MS) {
+            (kotlinx.coroutines.withTimeoutOrNull(AUDITION_TIMEOUT_MS) {
                 while (true) {
                     if (audition.playerError != null || audition.playbackState == Player.STATE_ENDED) return@withTimeoutOrNull false
                     if (main.currentMediaItem?.mediaId != item.mediaId) return@withTimeoutOrNull false
@@ -1382,7 +1409,7 @@ class PlaybackService : MediaLibraryService() {
                     delay(200)
                 }
                 @Suppress("UNREACHABLE_CODE") false
-            } ?: false
+            } ?: false).also { if (!it && main.currentMediaItem?.mediaId == item.mediaId) loadFailure = whyNotLoaded(audition, from) }
         } finally {
             audition.release()
             // Let the cache's lock on what it wrote go before the main player reads it.
@@ -1490,7 +1517,8 @@ class PlaybackService : MediaLibraryService() {
             if (player.audioSessionId != C.AUDIO_SESSION_ID_UNSET) bridge.setAudioSessionId(player.audioSessionId)
             bridge.playbackParameters = player.playbackParameters
             bridge.setMediaItem(next)
-            bridge.seekTo(player.currentPosition + AUDITION_LEAD_MS)
+            val from = player.currentPosition + AUDITION_LEAD_MS
+            bridge.seekTo(from)
             bridge.prepare()
             val loaded = kotlinx.coroutines.withTimeoutOrNull(AUDITION_TIMEOUT_MS) {
                 while (true) {
@@ -1504,7 +1532,8 @@ class PlaybackService : MediaLibraryService() {
                 @Suppress("UNREACHABLE_CODE") false
             } ?: false
             if (!loaded) {
-                Log.w(TAG, "The bridge couldn't load the better stream for $id; trying the plain swap")
+                if (player.currentMediaItem?.mediaId == id) loadFailure = whyNotLoaded(bridge, from)
+                Log.w(TAG, "The bridge couldn't load the better stream for $id ($loadFailure); trying the plain swap")
                 return null
             }
             // The queue may have moved on or a blend begun while it loaded.

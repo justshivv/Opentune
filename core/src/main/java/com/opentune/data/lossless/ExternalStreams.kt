@@ -88,10 +88,10 @@ object ExternalStreams {
      * The picked stream was found but playback couldn't switch to it: said so
      * under what was picked, so the pipeline doesn't read as if it's playing.
      */
-    fun swapFailed(videoId: String) {
-        val picked = reports[videoId] ?: return
-        if ("Couldn't switch" in picked) return
-        report(videoId, "$picked\nCouldn't switch to it: its stream didn't load after a few tries. The current stream keeps playing; Upgrade quality tries again.")
+    fun swapFailed(videoId: String, why: List<String> = emptyList()) {
+        val picked = reports[videoId]?.substringBefore("\nCouldn't switch") ?: return
+        val reasons = if (why.isEmpty()) "" else why.joinToString("\n", prefix = "\n")
+        report(videoId, "$picked\nCouldn't switch to it: its stream didn't load after a few tries.$reasons\nThe current stream keeps playing; Upgrade quality tries again.")
     }
 
     fun allowed(lossless: Boolean? = null): Boolean = AppSettings.playback.value.let {
