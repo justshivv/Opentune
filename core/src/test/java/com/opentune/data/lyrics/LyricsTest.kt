@@ -6,6 +6,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LrcParserTest {
+    @Test
+    fun aShortLineBeforeABreakIsSungThenTheBreakShows() {
+        // "Tum hi ho" at 10 s, the next line 30 s later: the words are sung in a few
+        // seconds and the rest is an instrumental break, not a slow crawl through it.
+        val lines = LrcParser.parse("[00:10.00]Tum hi ho\n[00:40.00]Ab tum hi ho", 0L)
+        val sung = lines.first().sungUntilMs()
+        assertTrue(sung - 10_000 in 1_000..4_000)
+        val gap = lines.instrumentalGaps().single()
+        assertEquals(0, gap.afterIndex)
+        assertTrue(gap.endMs - gap.startMs > 20_000)
+    }
+
+    @Test
+    fun aLineWithItsNextCloseByStillFillsMostOfIt() {
+        val lines = LrcParser.parse("[00:10.00]Tum hi ho\n[00:12.00]Ab tum hi ho", 0L)
+        assertTrue(lines.first().sungUntilMs() in 11_650L..11_700L)
+    }
+
 
     @Test
     fun parsesLinesInTimeOrderWithEnds() {

@@ -135,18 +135,40 @@ object LrcParser {
 
     /**
      * Estimate word timing for a line-synced lyric. Singers rarely use the
-     * full gap to the next line, so the sweep finishes a little early.
+     * full gap to the next line, so the sweep finishes a little early, and
+     * never takes much longer than the words take to sing: a short line
+     * before an instrumental break used to crawl on through the break, and
+     * the break only showed as one once the crawl was done.
      */
     fun spreadWords(text: String, start: Long, end: Long): List<LyricWord> {
         val tokens = Regex("""\S+\s*""").findAll(text).map { it.value }.toList()
         if (tokens.isEmpty()) return emptyList()
-        val span = ((end - start) * 0.85).toLong().coerceIn(300L, 8_000L)
+        val span = minOf(((end - start) * 0.85).toLong(), singingMs(text) * 3 / 2).coerceIn(300L, 8_000L)
         val totalChars = tokens.sumOf { it.trim().length.coerceAtLeast(1) }
         var cursor = start
         return tokens.map { token ->
             val share = span * token.trim().length.coerceAtLeast(1) / totalChars
             LyricWord(token, cursor, cursor + share).also { cursor += share }
         }
+    }
+
+    /**
+     * About how long [text] takes to sing at an ordinary pace: a syllable's worth
+     * of time for each Chinese, Japanese or Korean character, less for each letter
+     * of an alphabet, where several letters make a syllable.
+     */
+    internal fun singingMs(text: String): Long {
+        var ms = 400L
+        for (c in text) {
+            if (!Character.isLetterOrDigit(c)) continue
+            val script = Character.UnicodeScript.of(c.code)
+            ms += when (script) {
+                Character.UnicodeScript.HAN, Character.UnicodeScript.HANGUL,
+                Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA -> 330L
+                else -> 160L
+            }
+        }
+        return ms
     }
 
     private fun toMs(match: MatchResult): Long {
