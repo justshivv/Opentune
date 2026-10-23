@@ -11,6 +11,7 @@ import kotlin.coroutines.resumeWithException
 
 /** Bounded requests with cancellation and no ambient cookies or authentication. */
 object AddonHttp {
+    private const val USER_AGENT = "BitChord/v1.8.1"
     class Failure(val status: Int, val retryAfterSeconds: Long = 0) : IOException("Add-on returned HTTP $status")
     private val client by lazy { Http.client.newBuilder()
         .cookieJar(CookieJar.NO_COOKIES).authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE)
@@ -21,7 +22,7 @@ object AddonHttp {
     val mediaClient by lazy { client.newBuilder().callTimeout(0, TimeUnit.MILLISECONDS)
         .readTimeout(25, TimeUnit.SECONDS).followRedirects(true).addNetworkInterceptor { chain ->
             AddonProtocol.url(chain.request().url.toString())
-            chain.proceed(chain.request())
+            chain.proceed(chain.request().newBuilder().header("User-Agent", USER_AGENT).build())
         }.build() }
     private fun publicAddress(a: InetAddress): Boolean = !a.isAnyLocalAddress && !a.isLoopbackAddress && !a.isLinkLocalAddress && !a.isSiteLocalAddress && !a.isMulticastAddress &&
         !(a.address.size == 16 && (a.address[0].toInt() and 0xfe) == 0xfc) &&
@@ -31,7 +32,7 @@ object AddonHttp {
         var address = AddonProtocol.url(url)
         repeat(5) {
             val response = request(Request.Builder().url(address).header("Accept", if (prefix) "*/*" else "application/json")
-                .header("User-Agent", "BitChord/v1.8.1")
+                .header("User-Agent", USER_AGENT)
                 .apply { if (prefix) header("Range", "bytes=0-${limit - 1}") }.build(), limit, prefix)
             if (response.redirect != null) { address = AddonProtocol.url(address.resolve(response.redirect)?.toString() ?: error("Invalid redirect")) }
             else return response.bytes

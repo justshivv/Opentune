@@ -259,6 +259,7 @@ class PlaybackService : MediaLibraryService() {
                 .setLoadControl(
                     DefaultLoadControl.Builder()
                         .setBufferDurationsMsForStreaming((AUDITION_AHEAD_MS + 10_000).toInt(), (AUDITION_AHEAD_MS + 20_000).toInt(), 500, 1_000)
+                        .setPrioritizeTimeOverSizeThresholds(true)
                         .build(),
                 )
                 .build()
@@ -1519,15 +1520,26 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun switchStream(player: ExoPlayer, id: String, uri: android.net.Uri): Boolean {
         Log.d(TAG, "Switching $id to ${streamName(id, uri)}${if (player.isPlaying) "" else " (not playing yet, so without the bridge)"}")
         val index = player.currentMediaItemIndex
-        val item = player.getMediaItemAt(index)
+        val item = player.currentMediaItem?.takeIf { it.mediaId == id } ?: return false
         item.localConfiguration?.uri?.let(::selectedUri)?.let { beforeSwap = id to it }
         val next = item.buildUpon().setUri(uri).setMimeType(externalStreamKeyOf(uri)?.let { ExternalStreams.get(id, it)?.mimeType }).build()
-        // Playing out loud: a second player carries the song across the switch, so nothing is heard to stop.
-        if (player.isPlaying && !BitPerfectUsb.active) bridgedSwap(player, index, id, next)?.let { return it }
-        if (!prebuffer(player, next)) {
-            Log.w(TAG, "The better stream for $id didn't load in time; staying on this one")
-            return false
-        }
+        loadFailure = null
+        return performUpgradeHandoff(
+            bridge = {
+                if (player.isPlaying && !BitPerfectUsb.active) bridgedSwap(player, index, id, next)
+                else UpgradeBridgeResult.UNAVAILABLE
+            },
+            stillCurrent = {
+                player.currentMediaItemIndex == index && player.currentMediaItem?.mediaId == id &&
+                    player.currentMediaItem?.localConfiguration?.uri == item.localConfiguration?.uri && crossfade?.blending != true
+            },
+            prebuffer = { prebuffer(player, next) },
+            replace = { replaceUpgrade(player, index, id, next) },
+        )
+    }
+
+    private suspend fun replaceUpgrade(player: ExoPlayer, index: Int, id: String, next: MediaItem): Boolean {
+        val original = player.currentMediaItem ?: return false
         // The queue may have moved on, or a blend begun, while it loaded.
         if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id || crossfade?.blending == true) return false
         val smooth = player.isPlaying && !BitPerfectUsb.active
@@ -1548,15 +1560,15 @@ class PlaybackService : MediaLibraryService() {
             player.replaceMediaItem(index, next)
             applyLoudness()
             if (player.currentMediaItemIndex != index || player.currentPosition < position - 1_000) player.seekTo(index, position)
-            if (smooth) {
-                // Back up once the new stream is sounding.
-                kotlinx.coroutines.withTimeoutOrNull(3_000) { while (player.playbackState != Player.STATE_READY || !player.isPlaying) delay(30) }
-                PlaybackRequests.soundingPosition = null
-                rampVolume(player, level, SWAP_RISE_MS)
+            if (!awaitUpgradeReady(player, next)) {
+                restoreFailedUpgrade(player, index, original, next, position)
+                return false
             }
+            PlaybackRequests.soundingPosition = null
+            if (smooth) rampVolume(player, level, SWAP_RISE_MS)
             // Only now does the label say the better quality: it's what's heard.
             updateExternalStats()
-            Log.d(TAG, "Swapped $id to ${streamName(id, uri)} at ${position}ms")
+            Log.d(TAG, "Swapped $id to ${streamName(id, next.localConfiguration!!.uri)} at ${position}ms")
             return true
         } finally {
             PlaybackRequests.soundingPosition = null
@@ -1564,6 +1576,38 @@ class PlaybackService : MediaLibraryService() {
             // Cancelled or failed between the dip and the rise: never leave the music silent.
             if (smooth && crossfade?.blending != true && player.volume < level) player.volume = level
         }
+    }
+
+    /** Do not report a queue URI change as success before the new stream is decoding. */
+    private suspend fun awaitUpgradeReady(player: ExoPlayer, next: MediaItem): Boolean =
+        kotlinx.coroutines.withTimeoutOrNull(BRIDGE_CATCH_UP_MS) {
+            val uri = next.localConfiguration?.uri
+            val lossless = uri?.let(::externalStreamKeyOf)?.let { ExternalStreams.get(next.mediaId, it)?.lossless } == true
+            while (true) {
+                if (player.currentMediaItem?.mediaId != next.mediaId ||
+                    player.currentMediaItem?.localConfiguration?.uri != uri || player.playerError != null ||
+                    player.playbackState == Player.STATE_ENDED) return@withTimeoutOrNull false
+                if (player.playbackState == Player.STATE_READY) {
+                    val codec = player.audioFormat?.sampleMimeType
+                    if (upgradeFormatReady(lossless, codec)) return@withTimeoutOrNull true
+                }
+                delay(30)
+            }
+            @Suppress("UNREACHABLE_CODE") false
+        } == true
+
+    private fun restoreFailedUpgrade(player: ExoPlayer, index: Int, original: MediaItem, attempted: MediaItem, position: Long) {
+        loadFailure = "the main player did not start decoding the requested stream"
+        // Never overwrite a user skip or the error listener's newer fallback.
+        if (player.currentMediaItemIndex == index && player.currentMediaItem?.mediaId == original.mediaId &&
+            player.currentMediaItem?.localConfiguration?.uri == attempted.localConfiguration?.uri) {
+            swappingTo = original.mediaId
+            scope.launch { delay(2_000); if (swappingTo == original.mediaId) swappingTo = null }
+            player.replaceMediaItem(index, original)
+            player.seekTo(index, position)
+            if (player.playbackState == Player.STATE_IDLE) player.prepare()
+        }
+        updateExternalStats()
     }
 
     /** True while a swap has the volume dipped, so nothing else puts it back mid-ramp. */
@@ -1577,12 +1621,12 @@ class PlaybackService : MediaLibraryService() {
      * same way. Its rebuffering after the change happens while the bridge is
      * the one sounding, so no gap or dip reaches the ears.
      *
-     * Null when the bridge couldn't be set up (no factory, or the stream
-     * wouldn't load): the caller falls back to the plain swap. Otherwise
-     * whether it swapped.
+     * A loaded stream that cannot align is reused by the plain replacement.
+     * A stream that has not loaded still goes through the prebuffer fallback.
      */
-    private suspend fun bridgedSwap(player: ExoPlayer, index: Int, id: String, next: MediaItem): Boolean? {
-        val make = auditionPlayer ?: return null
+    private suspend fun bridgedSwap(player: ExoPlayer, index: Int, id: String, next: MediaItem): UpgradeBridgeResult {
+        val make = auditionPlayer ?: return UpgradeBridgeResult.UNAVAILABLE
+        val original = player.currentMediaItem?.takeIf { it.mediaId == id } ?: return UpgradeBridgeResult.ABORTED
         val bridge = make()
         swapRamping = true
         var handedOver = false
@@ -1607,19 +1651,19 @@ class PlaybackService : MediaLibraryService() {
             if (!loaded) {
                 if (player.currentMediaItem?.mediaId == id) loadFailure = whyNotLoaded(bridge, from)
                 Log.w(TAG, "The bridge couldn't load the better stream for $id ($loadFailure); trying the plain swap")
-                return null
+                return UpgradeBridgeResult.UNAVAILABLE
             }
             // The queue may have moved on or a blend begun while it loaded.
-            if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id || crossfade?.blending == true) return false
+            if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id || crossfade?.blending == true) return UpgradeBridgeResult.ABORTED
             // Paused while it loaded: the plain swap needs no bridge.
-            if (!player.isPlaying) return null
+            if (!player.isPlaying) return UpgradeBridgeResult.READY_FOR_REPLACEMENT
 
             // 1. The bridge plays, silent, in step with the song as it is heard now.
             bridge.volume = 0f
             bridge.playWhenReady = true
             if (!lineUp(follower = bridge, leader = player)) {
                 Log.w(TAG, "Couldn't line the better stream for $id up with the song; trying the plain swap")
-                return null
+                return UpgradeBridgeResult.READY_FOR_REPLACEMENT
             }
             // 2. The sound moves onto it. From here the bridge is what's heard, so it's
             // also where the lyrics and seek bar read the song's position.
@@ -1633,12 +1677,16 @@ class PlaybackService : MediaLibraryService() {
             player.replaceMediaItem(index, next)
             applyLoudness()
             player.seekTo(index, bridge.currentPosition + BRIDGE_SEEK_LEAD_MS)
-            val ready = kotlinx.coroutines.withTimeoutOrNull(BRIDGE_CATCH_UP_MS) {
-                while (player.playbackState != Player.STATE_READY || !player.isPlaying) delay(20)
-                true
-            } == true
+            if (!awaitUpgradeReady(player, next)) {
+                restoreFailedUpgrade(player, index, original, next, bridge.currentPosition)
+                return UpgradeBridgeResult.ABORTED
+            }
             // Lined up within a few milliseconds, or the two would be heard as an echo.
-            val aligned = ready && (lineUp(follower = player, leader = bridge) || lineUp(follower = player, leader = bridge))
+            val aligned = lineUp(follower = player, leader = bridge) || lineUp(follower = player, leader = bridge)
+            if (!awaitUpgradeReady(player, next)) {
+                restoreFailedUpgrade(player, index, original, next, bridge.currentPosition)
+                return UpgradeBridgeResult.ABORTED
+            }
 
             // 4. The sound comes back to the main player, now on the better stream: blended
             // when the two play the same moment, otherwise one out before the other comes
@@ -1653,7 +1701,7 @@ class PlaybackService : MediaLibraryService() {
             handedOver = false
             updateExternalStats()
             Log.d(TAG, "Swapped $id to ${next.localConfiguration?.uri?.let { streamName(id, it) }} at ${player.currentPosition}ms, bridged")
-            return true
+            return UpgradeBridgeResult.COMPLETED
         } finally {
             PlaybackRequests.soundingPosition = null
             swapRamping = false
