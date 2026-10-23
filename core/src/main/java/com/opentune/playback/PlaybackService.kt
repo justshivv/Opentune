@@ -563,6 +563,8 @@ class PlaybackService : MediaLibraryService() {
         castMirror = null
         closeEffectSession()
         finishListen()
+        // The listen just finished, and anything else not yet saved, before the process goes.
+        com.opentune.data.Core.flush()
         loudnessEnhancer?.release()
         loudnessEnhancer = null
         audioManager?.unregisterAudioDeviceCallback(deviceCallback)

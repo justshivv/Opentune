@@ -27,6 +27,7 @@ import com.opentune.data.settings.AppSettings
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -121,21 +122,23 @@ object Downloads {
     fun init(context: Context) {
         val d = File(context.filesDir, "downloads").apply { mkdirs() }
         dir = d
-        val f = File(d, "index.json")
-        _entries.value = runCatching { json.decodeFromString(serializer, f.readText()) }.getOrDefault(emptyMap())
+        val f = com.opentune.data.SavedFile(File(d, "index.json"), "Downloads").also { saved = it }
+        // An index that won't read is kept aside: saved over empty, every download would be forgotten.
+        _entries.value = f.read(emptyMap()) { json.decodeFromString(serializer, it) }
             // A download interrupted by the process dying is picked up again by
             // WorkManager; until then it is simply queued.
             .mapValues { (_, e) -> if (e.state == DownloadState.DOWNLOADING) e.copy(state = DownloadState.QUEUED) else e }
         scope.launch {
-            _entries.drop(1).debounce(500).collect { map ->
-                runCatching {
-                    val tmp = File(d, "index.json.tmp")
-                    tmp.writeText(json.encodeToString(serializer, map))
-                    tmp.renameTo(f)
-                }
+            _entries.drop(1).onEach { f.dirty = true }.debounce(500).collect { map ->
+                runCatching { f.write(json.encodeToString(serializer, map)) }
             }
         }
     }
+
+    private var saved: com.opentune.data.SavedFile? = null
+
+    /** Saves at once a change still waiting for its save. */
+    fun flush() { saved?.flushIfDirty { json.encodeToString(serializer, _entries.value) } }
 
     /** The finished file for [videoId], if it's been downloaded and is still there. */
     fun fileFor(videoId: String): File? {

@@ -33,6 +33,13 @@ import com.opentune.ui.theme.rememberArtworkSeed
 class MainActivity : ComponentActivity() {
     private var tv = false
 
+    override fun onStop() {
+        super.onStop()
+        // Off the screen, the app can be closed at any moment: a like or a playlist change made
+        // just before was still waiting for its save, and was lost.
+        Thread { com.opentune.data.Core.flush() }.start()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

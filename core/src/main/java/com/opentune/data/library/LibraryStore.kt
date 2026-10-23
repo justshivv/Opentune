@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -155,20 +156,23 @@ object LibraryStore {
         d.copy(savedLists = if (saved) listOf(list.copy(savedAt = System.currentTimeMillis())) + rest else rest)
     }
 
+    private var saved: com.opentune.data.SavedFile? = null
+
     @OptIn(FlowPreview::class)
     fun init(context: Context) {
-        val f = File(context.filesDir, "library.json")
-        publish(runCatching { json.decodeFromString(LibraryDocument.serializer(), f.readText()) }.getOrDefault(LibraryDocument()))
+        val f = com.opentune.data.SavedFile(File(context.filesDir, "library.json"), "LibraryStore").also { saved = it }
+        // A library that won't read is kept aside, never saved over with an empty one.
+        publish(f.read(LibraryDocument()) { json.decodeFromString(LibraryDocument.serializer(), it) })
         scope.launch {
-            doc.drop(1).debounce(800).collect { d ->
-                runCatching {
-                    val tmp = File(f.parentFile, "library.json.tmp")
-                    tmp.writeText(json.encodeToString(LibraryDocument.serializer(), d))
-                    tmp.renameTo(f)
-                }.onFailure { Log.w("LibraryStore", "Couldn't save the library", it) }
+            doc.drop(1).onEach { f.dirty = true }.debounce(800).collect { d ->
+                runCatching { f.write(json.encodeToString(LibraryDocument.serializer(), d)) }
+                    .onFailure { Log.w("LibraryStore", "Couldn't save the library", it) }
             }
         }
     }
+
+    /** Saves at once a change still waiting for its save: the app is leaving the screen or closing. */
+    fun flush() { saved?.flushIfDirty { json.encodeToString(LibraryDocument.serializer(), doc.value) } }
 
     private fun publish(d: LibraryDocument) {
         doc.value = d

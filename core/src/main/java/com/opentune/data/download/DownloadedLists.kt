@@ -27,15 +27,15 @@ object DownloadedLists {
 
     private val json = Json { ignoreUnknownKeys = true }
     private val serializer = ListSerializer(Saved.serializer())
-    private var file: File? = null
+    private var file: com.opentune.data.SavedFile? = null
     private val _lists = MutableStateFlow<List<Saved>>(emptyList())
     /** Newest first. */
     val lists: StateFlow<List<Saved>> = _lists.asStateFlow()
 
     fun init(context: Context) {
-        val f = File(File(context.filesDir, "downloads").apply { mkdirs() }, "lists.json")
+        val f = com.opentune.data.SavedFile(File(File(context.filesDir, "downloads").apply { mkdirs() }, "lists.json"), "DownloadedLists")
         file = f
-        _lists.value = runCatching { json.decodeFromString(serializer, f.readText()) }.getOrDefault(emptyList())
+        _lists.value = f.read(emptyList()) { json.decodeFromString(serializer, it) }
     }
 
     /** Keeps [id] as a downloaded list of [songIds]; downloading it again updates it and moves it to the top. */
@@ -50,6 +50,7 @@ object DownloadedLists {
 
     private fun publish(lists: List<Saved>) {
         _lists.value = lists
-        file?.let { f -> runCatching { f.writeText(json.encodeToString(serializer, lists)) } }
+        // Whole or not at all: it was written straight over, and a save cut short lost every list.
+        file?.let { f -> runCatching { f.write(json.encodeToString(serializer, lists)) } }
     }
 }
