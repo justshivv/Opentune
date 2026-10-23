@@ -363,6 +363,8 @@ class PlaybackService : MediaLibraryService() {
                 if (existing?.lossless == true && com.opentune.data.addons.AddonResolver.qualityScore(better.bits, better.sampleRate) <=
                     com.opentune.data.addons.AddonResolver.qualityScore(existing.bits, existing.sampleRate)) return@collect
                 if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS) return@collect
+                // Not asked for from the menu: "upgrading" goes once it's done, not left up from the last ask.
+                upgradeAsked = false
                 if (swapToUpgrade(player, id, externalStreamUri(id, better.key))) updateExternalStats()
             }
         }
@@ -1260,6 +1262,7 @@ class PlaybackService : MediaLibraryService() {
             lastAt = now
             Log.d(TAG, "Quality check for $id: ${if (better.isNotEmpty()) "a better verified stream is known" else "its search came to nothing"}; upgrading again (try $tries)")
             if (playing?.lossless == true) {
+                upgradeAsked = false
                 upgradeJob = scope.launch {
                     if (swapToBestAnswering(player, id, better, playing)) updateExternalStats()
                 }
