@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { generateKeyPairSync } from 'node:crypto';
 const base = new URL(process.env.ADDON_URL);
 assert.equal(base.protocol, 'https:');
@@ -13,6 +13,8 @@ const report = { checkedAt: new Date().toISOString(), base: base.origin, manifes
 const policy = await get('/auth/policy');
 assert.equal(policy.response.status, 200);
 assert.ok(['staged', 'strict'].includes(policy.body.mode));
+const configuration = await readFile(new URL('./wrangler.toml', import.meta.url), 'utf8');
+assert.equal(policy.body.mode, /^VERIFICATION_MODE\s*=\s*"([^"]+)"/m.exec(configuration)?.[1], 'Deployed verification policy must match the committed configuration');
 report.security = { mode: policy.body.mode };
 const rejected = await get('/auth/web/info?id=' + 'a'.repeat(43));
 assert.equal(rejected.response.status, 401);
@@ -47,6 +49,21 @@ for (const source of ['monochrome', 'archive', 'musopen']) {
   assert.deepEqual(body.resources, ['search', 'stream']); assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*');
   report.manifests.push({ source, status: response.status, url: `${base.origin}/${source}/manifest.json` });
 }
+if (policy.body.mode === 'strict') {
+  report.security.unsignedAccess = [];
+  for (const source of ['monochrome', 'archive', 'musopen']) {
+    for (const route of ['search?q=295&quality=best', 'stream/untrusted-id?quality=best']) {
+      for (const agent of ['BitChord/v1.8.1', 'OpenTune/verified-addon-v1']) {
+        const r = await fetch(new URL(`/${source}/${route}`, base), { signal: AbortSignal.timeout(20000), headers: {
+          'User-Agent': agent, Origin: 'https://justshivv.github.io', Authorization: 'Bearer ' + 'a'.repeat(43),
+        } });
+        assert.equal(r.status, 401, `${source}/${route}: app names and copied bearer values must not authorize access`);
+        await r.body?.cancel();
+        report.security.unsignedAccess.push({ source, route: route.split('?')[0], agent, status: r.status });
+      }
+    }
+  }
+}
 const search = await get('/monochrome/search?q=Wo%20Noor%20AP%20Dhillon&quality=best');
 if (policy.body.mode === 'strict') assert.equal(search.response.status, 401);
 const track = search.body.tracks?.find(t => t.title.toLowerCase() === 'wo noor' && t.artist.toLowerCase().includes('ap dhillon'));
@@ -73,4 +90,4 @@ if (classicalTrack) {
 } else report.musopen.error = classical.body.error || 'No matching recording';
 await writeFile('lossless-deployment-report.json', JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify(report, null, 2));
-if (!report.upstream.flacHeader) console.log('::warning::Worker manifests are live, but upstream playback is currently unavailable; see the deployment report.');
+if (policy.body.mode !== 'strict' && !report.upstream.flacHeader) console.log('::warning::Worker manifests are live, but upstream playback is currently unavailable; see the deployment report.');
