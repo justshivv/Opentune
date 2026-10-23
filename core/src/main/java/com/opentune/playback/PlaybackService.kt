@@ -2027,6 +2027,20 @@ class PlaybackService : MediaLibraryService() {
             player.prepare()
             return
         }
+        // A downloaded song that couldn't stream (no internet, or the connection dropped)
+        // plays on from its file.
+        val file = if (uri?.scheme != "file") com.opentune.data.download.Downloads.fileFor(mediaId) else null
+        if (file != null && (error.errorCode in IO_ERRORS || !AppSettings.isOnline())) {
+            Log.w(TAG, "Stream for $mediaId failed (${error.errorCodeName}); playing its download")
+            val index = player.currentMediaItemIndex
+            val position = player.currentPosition
+            player.replaceMediaItem(index, item.buildUpon().setUri(android.net.Uri.fromFile(file)).setMimeType(null).build())
+            updateExternalStats()
+            applyLoudness()
+            player.seekTo(index, position)
+            player.prepare()
+            return
+        }
         if (uri != null && (isUpgradedUri(uri) || externalStreamKeyOf(uri) != null)) {
             Log.w(TAG, "Upgraded stream for $mediaId failed (${error.errorCodeName}); back to the one it started on")
             StreamResolver.dropUpgrade(mediaId)
@@ -2165,6 +2179,8 @@ class PlaybackService : MediaLibraryService() {
         /** It starts loading a little ahead, for the time the loading itself takes. */
         const val AUDITION_LEAD_MS = 1_500L
         const val AUDITION_TIMEOUT_MS = 40_000L
+        /** Network and input errors (Media3's 2000s): what a lost connection fails with. */
+        val IO_ERRORS = 2000..2999
         /** Tries at switching to the verified files, this far apart, before giving up for the song. */
         const val SWAP_ROUNDS = 3
         const val SWAP_ROUND_GAP_MS = 10_000L
