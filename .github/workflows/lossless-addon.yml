@@ -27,7 +27,7 @@ jobs:
   probe:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,9 +37,12 @@ jobs:
         run: node services/lossless-addon/probe.mjs lossless-source-report.json
       - name: Probe additional public source candidates
         run: node services/lossless-addon/probe-candidates.mjs
+      - name: Investigate additional source APIs
+        run: node services/lossless-addon/probe-discovery.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: lossless-source-report
           path: |
             lossless-source-report.json
             lossless-candidate-report.json
+            lossless-discovery-report.json
