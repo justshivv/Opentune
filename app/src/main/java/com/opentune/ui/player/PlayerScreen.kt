@@ -509,6 +509,7 @@ fun PlayerLayout(
         if (flight.runs == 0) return@LaunchedEffect
         try {
             flight.t.snapTo(flight.startAt)
+            flight.primed = true
             flight.following = false
             var frames = 0
             while (flight.target(smallCover, bigCover()) == null && frames++ < 30) androidx.compose.runtime.withFrameNanos { }
@@ -1167,7 +1168,7 @@ fun PlayerLayout(
                         current.thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
                         current.thumbnailUrl.artworkAt(ROW_ART_PX),
                         from, to,
-                        p = { if (flight.following) flight.pull else flight.t.value },
+                        p = { flight.progress },
                         startCornerDp = if (flight.toSmall) (if (fullStyle) 0f else 28f) else 10f,
                         endCornerDp = if (flight.toSmall) 10f else (if (fullStyle) 0f else 28f),
                         origin = origin,
@@ -1180,7 +1181,7 @@ fun PlayerLayout(
                             current, isLiked, title,
                             big = if (flight.toSmall) from else to,
                             small = if (flight.toSmall) to else from,
-                            q = { (if (flight.following) flight.pull else flight.t.value).let { if (flight.toSmall) it else 1f - it }.coerceIn(0f, 1f) },
+                            q = { flight.progress.let { if (flight.toSmall) it else 1f - it }.coerceIn(0f, 1f) },
                             origin = origin,
                         )
                     } }
@@ -1590,8 +1591,21 @@ private class PaneFlight {
         private set
     val t = androidx.compose.animation.core.Animatable(0f)
     /** Where the runner picks up: 0 for a tap, wherever the finger let go for a swipe. */
-    var startAt = 0f
+    var startAt by androidx.compose.runtime.mutableFloatStateOf(0f)
         private set
+    /** Whether the runner has taken over this flight, [t] set to [startAt]. */
+    var primed by mutableStateOf(false)
+
+    /**
+     * How far the cover has flown: the finger's pull, the runner's once it has picked up,
+     * and until then where it starts. [t] still held the last flight's end, so a tap back
+     * to the cover drew it full size for the frames before the runner reset it.
+     */
+    val progress: Float get() = when {
+        following -> pull
+        primed -> t.value
+        else -> startAt
+    }
 
     /** Where the header's small cover sat when last shown, for a swipe up before it's back. */
     var lastSmall: androidx.compose.ui.geometry.Rect? = null
@@ -1606,6 +1620,7 @@ private class PaneFlight {
         this.from = from
         this.toSmall = toSmall
         startAt = 0f
+        primed = false
         following = false
         active = true
         com.opentune.ui.components.PlayerMorph.flying = true
@@ -1633,6 +1648,7 @@ private class PaneFlight {
     /** The swipe let go far enough: the flight finishes from where the finger left it. */
     fun finish() {
         startAt = pull
+        primed = false
         runs++
     }
 
@@ -1647,6 +1663,7 @@ private class PaneFlight {
 
     fun end() {
         active = false
+        primed = false
         following = false
         pull = 0f
         from = null
