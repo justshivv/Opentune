@@ -13,7 +13,9 @@ data class AddonManifest(val id: String, val name: String, val version: String,
 data class AddonTrack(val id: String, val title: String, val artist: String, val album: String?,
     val durationMs: Long, val artwork: String?, val streamUrl: String?, val format: String)
 data class AddonStream(val url: String, val codec: String, val transport: String?, val bits: Int?,
-    val sampleRate: Int?, val kbps: Int?, val addonId: String = "", val provider: String = "") {
+    val sampleRate: Int?, val kbps: Int?, val addonId: String = "", val provider: String = "",
+    /** The add-on's id for the track and the tier it was asked at: what a new link for the same file is asked with. */
+    val trackId: String = "", val tier: String = "") {
     val lossless get() = codec in setOf("flac", "alac", "pcm", "wav")
     val mimeType get() = when (transport) { "hls" -> "application/x-mpegURL"; "dash" -> "application/dash+xml"; else -> null }
     val extension get() = when (codec) { "flac" -> "flac"; "alac", "aac" -> "m4a"; "mp3" -> "mp3"; "opus" -> "ogg"; "pcm", "wav" -> "wav"; else -> null }

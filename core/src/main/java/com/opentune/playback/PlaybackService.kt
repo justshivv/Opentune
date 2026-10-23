@@ -151,9 +151,13 @@ class PlaybackService : MediaLibraryService() {
                 val addon = addonKey?.let { ExternalStreams.get(mediaItem.mediaId, it) }?.takeIf { it.addonId != null }
                 if (addon != null) {
                     val http = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(com.opentune.data.addons.AddonHttp.mediaClient)
-                    val resolving = androidx.media3.datasource.ResolvingDataSource.Factory(
-                        androidx.media3.datasource.DefaultDataSource.Factory(context, http)
-                    ) { spec ->
+                    val plain = androidx.media3.datasource.DefaultDataSource.Factory(context, http)
+                    // A link that won't open (expired, refused) is swapped for a new one from the same
+                    // add-on and opened again, so the song stays on its FLAC instead of falling back.
+                    val renewing = androidx.media3.datasource.DataSource.Factory {
+                        RenewingDataSource(plain.createDataSource()) { failed -> ExternalStreams.refreshLink(mediaItem.mediaId, addon.key, failed) }
+                    }
+                    val resolving = androidx.media3.datasource.ResolvingDataSource.Factory(renewing) { spec ->
                         // Re-check enablement/output before each manifest or segment request.
                         val resolved = ExternalStreams.resolve(mediaItem.mediaId, addon.key)
                         if (externalStreamKeyOf(spec.uri) != null) spec.withUri(android.net.Uri.parse(resolved)) else spec
@@ -1391,7 +1395,7 @@ class PlaybackService : MediaLibraryService() {
         attempt { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
         val files = ExternalStreams.alternatives(song.videoId)
         for (file in files) {
-            if (pingFailure(file.url) == null) {
+            if (pingFailure(ExternalStreams.urlOf(file)) == null) {
                 if (ExternalStreams.cached(song.videoId)?.key != file.key) ExternalStreams.remember(song.videoId, file)
                 return
             }
@@ -1447,7 +1451,7 @@ class PlaybackService : MediaLibraryService() {
         val pings = upgrades.map { r ->
             launch(Dispatchers.IO) {
                 // Verified moments ago, its server is known to answer: loaded at once, not read again first.
-                val failure = if (ExternalStreams.verifiedRecently(r)) null else pingFailure(r.url)
+                val failure = if (ExternalStreams.verifiedRecently(r)) null else pingFailure(ExternalStreams.urlOf(r))
                 if (failure != null) swapNotes[r.provider] = failure
                 answers.send(r.takeIf { failure == null })
             }

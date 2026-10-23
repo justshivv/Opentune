@@ -15,7 +15,9 @@ object ExternalStreams {
         val maximumSearch: Boolean = false, val sessionRevision: Long = 0,
         val addonId: String? = null, val mimeType: String? = null,
         /** Picked by hand in Search: played whatever the quality settings say. */
-        val picked: Boolean = false)
+        val picked: Boolean = false,
+        /** The add-on's track id and tier, to ask it for a new link to this same file (see [refreshLink]). */
+        val trackId: String? = null, val tier: String? = null)
     private val renditions = ConcurrentHashMap<String, Rendition>()
     private val pinned = ConcurrentHashMap<String, Pair<String, Rendition>>()
     /**
@@ -214,7 +216,8 @@ object ExternalStreams {
         }
         fun losslessRendition(track: LosslessSource.Track) = Rendition(java.util.UUID.randomUUID().toString(), track.url,
             "${track.provider} · lossless requested", true, now(), provider = track.provider, bits = track.bits, sampleRate = track.sampleRate,
-            maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType)
+            maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType,
+            trackId = track.trackId.ifEmpty { null }, tier = track.tier.ifEmpty { null })
         val tracks = if (allowed(true) && !losslessMissed) LosslessSource.resolveAll(song, duration,
             beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { detail.addIfAbsent(it) },
             skip = skip, settled = ::noteHeard,
@@ -271,7 +274,8 @@ object ExternalStreams {
         val rendition = Rendition(java.util.UUID.randomUUID().toString(), track?.url ?: saavn!!,
             track?.let { "${it.provider} · lossless requested" } ?: "JioSaavn · 320 kbps (lossy)", track != null, now(),
             provider = track?.provider ?: "JioSaavn", bits = track?.bits, sampleRate = track?.sampleRate,
-            kbps = if (track == null) 320 else null, maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track?.addonId, mimeType = track?.mimeType)
+            kbps = if (track == null) 320 else null, maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track?.addonId, mimeType = track?.mimeType,
+            trackId = track?.trackId?.ifEmpty { null }, tier = track?.tier?.ifEmpty { null })
         remember(videoId, rendition)
         // The other verified files of this recording, to fall back on if this one won't load.
         if (track != null) {
@@ -317,7 +321,8 @@ object ExternalStreams {
             "${stream.provider} · ${if (stream.lossless) "lossless requested" else stream.codec}", stream.lossless, now(),
             provider = stream.provider, bits = stream.bits, sampleRate = stream.sampleRate, kbps = stream.kbps,
             maximumSearch = true, sessionRevision = com.opentune.data.addons.AddonStore.revision.value,
-            addonId = stream.addonId, mimeType = stream.mimeType, picked = true)
+            addonId = stream.addonId, mimeType = stream.mimeType, picked = true,
+            trackId = stream.trackId.ifEmpty { null }, tier = stream.tier.ifEmpty { null })
         losslessMissUntil.remove(videoId)
         saavnMissUntil.remove(videoId)
         remember(videoId, rendition)
@@ -339,7 +344,43 @@ object ExternalStreams {
         if (rendition == null || !addonAllowed(rendition) || !(rendition.picked || allowed(rendition.lossless))) {
             throw IOException("External rendition expired; resume the original stream")
         }
-        return rendition.url
+        return links[key]?.current ?: rendition.url
+    }
+
+    /** The link a rendition plays from now: a newer one than it was found with, once [refreshLink] got one. */
+    fun urlOf(rendition: Rendition): String = links[rendition.key]?.current ?: rendition.url
+
+    /** Each rendition's links since it was found, newest last, and when it last asked for one. */
+    private class Links(val all: List<String>, val askedAt: Long, val asks: Int) { val current get() = all.last() }
+    private val links = ConcurrentHashMap<String, Links>()
+
+    /**
+     * After [failedUrl] wouldn't open (expired, refused): a new link to the same file,
+     * asked of the add-on that verified it, with no new search, so the song carries on
+     * in lossless instead of falling back. The newest link when another load already got
+     * one; null when there's none to be had. Blocks; called from the player's loader thread.
+     */
+    fun refreshLink(videoId: String, key: String, failedUrl: String): String? {
+        val rendition = get(videoId, key) ?: return null
+        val addon = rendition.addonId ?: return null
+        val track = rendition.trackId ?: return null
+        synchronized(rendition) {
+            val held = links[key] ?: Links(listOf(rendition.url), 0, 0)
+            // A segment of a manifest, or something else this rendition never handed out.
+            if (failedUrl !in held.all) return null
+            if (failedUrl != held.current) return held.current
+            val now = now()
+            if (held.asks >= LINK_ASKS || now - held.askedAt < LINK_ASK_GAP_MS) return null
+            val fresh = kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withTimeoutOrNull(LINK_ASK_LIMIT_MS) {
+                    com.opentune.data.addons.AddonResolver.freshLink(addon, track, rendition.tier.orEmpty(), videoId)
+                }
+            }
+            if (links.size > 256) links.clear()
+            links[key] = Links(if (fresh != null && fresh != held.current) held.all + fresh else held.all, now, held.asks + 1)
+            if (fresh != null && fresh != held.current) com.opentune.data.DebugLog.d("ExternalStreams", "$videoId: ${rendition.provider} gave a new link after the last one failed")
+            return fresh?.takeIf { it != failedUrl }
+        }
     }
 
     /** Verification/renewal should take effect immediately, including after a cached miss. */
@@ -399,6 +440,10 @@ object ExternalStreams {
 
     private const val MISS_MS = 60_000L
     private const val VERIFIED_FRESH_MS = 120_000L
+    /** New links asked for one file at most this many times, this far apart, each waited on this long. */
+    private const val LINK_ASKS = 4
+    private const val LINK_ASK_GAP_MS = 3_000L
+    private const val LINK_ASK_LIMIT_MS = 8_000L
     /** What the add-ons report when they erred rather than answered. */
     private val TRANSIENT = listOf("HTTP ", "unavailable", "no answer", "rate limited", "temporarily")
 }

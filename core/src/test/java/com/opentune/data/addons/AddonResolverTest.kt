@@ -156,6 +156,35 @@ class AddonResolverTest {
         assertEquals(true, heard[AddonStore.addons.value.first().key])
     }
 
+    @Test fun aBrokenLinkIsRenewedByTrackIdAndItsSourceIsAskedAgainNotWrittenOff() = runBlocking {
+        add("only")
+        var links = 0
+        val client = AddonClient("https://only.example/", { url ->
+            calls += url
+            when {
+                "manifest.json" in url -> """{"id":"only","name":"only","version":"1"}"""
+                "/search" in url -> """{"tracks":[{"id":"right","title":"Wo Noor","artist":"AP Dhillon","duration":180}]}"""
+                else -> """{"url":"https://cdn.example/${++links}","codec":"flac"}"""
+            }
+        })
+        val first = AddonResolver.resolveAll(song, 180000, clientFor = { client }, probe = { _, _, _ -> header(16, 44_100) }).single()
+        assertEquals("right", first.trackId)
+        val key = AddonStore.addons.value.single().key
+        // A new link is one stream request for the same track: no search, no new check.
+        calls.clear()
+        assertEquals("https://cdn.example/2", AddonResolver.freshLink(key, first.trackId, first.tier, song.videoId, clientFor = { client }))
+        assertTrue(calls.single().contains("/stream/right"))
+        // Its file failed in playback: held for this song a moment, as an error to come back to.
+        AddonResolver.failed(key, song.videoId)
+        val heard = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+        assertTrue(AddonResolver.resolveAll(song, 180000, clientFor = { client }, settled = { k, erred -> heard[k] = erred },
+            probe = { _, _, _ -> header(16, 44_100) }).isEmpty())
+        assertEquals(true, heard[key])
+        // Another song isn't held at all.
+        val other = song.copy(videoId = "other-song")
+        assertEquals("only", AddonResolver.resolve(other, 180000, clientFor = { client }, probe = { _, _, _ -> header(16, 44_100) })!!.provider)
+    }
+
     @Test fun bestAvailableComparesSourcesAndKeepsPriorityForTies() = runBlocking {
         add("first"); add("second")
         val result = AddonResolver.resolve(song, 180000, bestAvailable = true, clientFor = ::client,
