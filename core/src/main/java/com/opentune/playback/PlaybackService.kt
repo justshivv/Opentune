@@ -1159,6 +1159,10 @@ class PlaybackService : MediaLibraryService() {
                 saavnSearch.onAwait { false }
             }
             val saavn = if (flacFirst) { saavnSearch?.cancel(); null } else saavnSearch?.await()
+            // JioSaavn answered first: the FLAC search gets a moment more, and when a verified file
+            // comes in that moment the song goes straight to it. Switching to JioSaavn first meant
+            // two switches in a row, and the second, to FLAC, began only once the first was done.
+            if (saavn != null && flac != null && !flac.isCompleted) kotlinx.coroutines.withTimeoutOrNull(SAAVN_HOLD_MS) { flac.join() }
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             if (player.currentMediaItem?.localConfiguration?.uri != uri) { flac?.cancel(); return@launch }
             // JioSaavn plays unless a FLAC is already here to play instead; a FLAC search that
@@ -2276,10 +2280,12 @@ class PlaybackService : MediaLibraryService() {
         const val UPGRADE_START_WAIT_MS = 6_000L
         /** How many songs ahead the lossless source is looked up. */
         const val PREFETCH_AHEAD = 5
+        /** How long a JioSaavn answer waits for the FLAC search before it's switched to. */
+        const val SAAVN_HOLD_MS = 3_000L
         /** How often [guardQuality] looks, how far into a song it starts, how long between its tries, and how many a song gets. */
         const val GUARD_EVERY_MS = 4_000L
         const val GUARD_SETTLE_MS = 8_000L
-        const val GUARD_GAP_MS = 20_000L
+        const val GUARD_GAP_MS = 12_000L
         const val GUARD_TRIES = 4
         /** After a fallback, how long the song sounds before the upgrade runs again. */
         const val FALLBACK_RETRY_MS = 3_000L
