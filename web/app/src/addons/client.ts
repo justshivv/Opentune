@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { endpoint, flacInfo, manifestOf, matches, publicHttps, qualityParams, type Addon, type CatalogTrack, type Recording } from '@opentune/shared/addons';
+import { BridgeCallError } from '@opentune/shared/bridge';
 import { getBridge } from '@/extension/bridge';
 import { fetchPublished, mergeCatalog } from './catalog';
 const KEY = 'opentune:audio-addons';
@@ -11,8 +12,10 @@ export const useAddons = create<{
   sources: Addon[]; update: (sources: Addon[]) => void; status: string; checkingVideoId: string | null;
   /** JioSaavn's 320 kbps AAC, played while (or when no) FLAC is found. On by default, as on Android. */
   jioSaavn: boolean; setJioSaavn: (on: boolean) => void;
+  /** Sources whose host the extension hasn't been allowed to reach yet, by id. */
+  locked: string[];
 }>(set => ({
-  sources: read(), status: '', checkingVideoId: null,
+  sources: read(), status: '', checkingVideoId: null, locked: [],
   update: sources => { try { localStorage.setItem(KEY, JSON.stringify(sources)); } catch { /* Kept for this session. */ } set({ sources }); },
   jioSaavn: readSaavn(),
   setJioSaavn: jioSaavn => { try { localStorage.setItem(SAAVN_KEY, String(jioSaavn)); } catch { /* Kept for this session. */ } set({ jioSaavn }); },
@@ -79,6 +82,28 @@ export async function allowSource(raw: string): Promise<void> {
   const bridge = getBridge(); if (!bridge) throw new Error('Install the OpenTune extension first');
   await bridge.call('addon.requestPermission', { url: publicHttps(raw).href });
 }
+/** Asks for every one of these sources' hosts on one extension page (an older extension asks for the first). */
+export async function allowSources(sources: Addon[]): Promise<void> {
+  const bridge = getBridge(); if (!bridge) throw new Error('Install the OpenTune extension first');
+  const [first, ...rest] = sources.map(s => publicHttps(s.url).href);
+  if (first) await bridge.call('addon.requestPermission', { url: first, urls: rest });
+}
+const isPermission = (error: unknown) => error instanceof BridgeCallError && error.code === 'permission';
+function setLocked(id: string, locked: boolean) {
+  const now = useAddons.getState().locked;
+  if (locked !== now.includes(id)) useAddons.setState({ locked: locked ? [...now, id] : now.filter(x => x !== id) });
+}
+/**
+ * Reads each enabled source's manifest to learn which hosts still need the
+ * extension's permission, so Audio sources can offer to allow them before a
+ * song needs them. Cached manifests make this cheap.
+ */
+export async function checkAccess(): Promise<void> {
+  await Promise.all(useAddons.getState().sources.filter(s => s.enabled).map(async source => {
+    try { await fetchJson(source.url); setLocked(source.id, false); }
+    catch (error) { if (isPermission(error)) setLocked(source.id, true); }
+  }));
+}
 export type LosslessResult = { url: string; provider: string; bits: number; rate: number; duration: number; sourceId: string };
 /** Every verified file, best first, and why each other source had nothing. */
 export type LosslessSearch = { ranked: LosslessResult[]; notes: string[]; transient: boolean };
@@ -86,7 +111,13 @@ export type LosslessSearch = { ranked: LosslessResult[]; notes: string[]; transi
 const TRANSIENT = /HTTP (5\d\d|404|408|429)|rate limited|timed? ?out|abort|network|failed to fetch/i;
 class NoMatch extends Error {}
 async function checkSource(source: Addon, recording: Recording): Promise<LosslessResult> {
-  const manifest = manifestOf(await fetchJson(source.url));
+  let manifest;
+  try { manifest = manifestOf(await fetchJson(source.url)); setLocked(source.id, false); }
+  catch (error) {
+    if (!isPermission(error)) throw error;
+    setLocked(source.id, true);
+    throw new NoMatch('needs your OK: open Settings › Audio sources and press Allow');
+  }
   // Web cannot verify the physical output route. Respect this gate conservatively.
   if (manifest.checkValidLossless) throw new NoMatch("needs a verified lossless output, which a browser can't confirm");
   const params = qualityParams(manifest);

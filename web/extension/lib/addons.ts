@@ -1,8 +1,9 @@
 import { publicHttps } from '@opentune/shared/addons';
 import type { HttpRequest, HttpResponse } from '@opentune/shared/bridge';
-export async function requestAddonPermission(url: string): Promise<void> {
-  const origin = publicHttps(url).origin;
-  await browser.tabs.create({ url: browser.runtime.getURL(`/grant.html?origins=${encodeURIComponent(origin)}`) });
+/** One page that asks for all of these add-on hosts at once. */
+export async function requestAddonPermission(url: string, urls: string[] = []): Promise<void> {
+  const origins = [...new Set([url, ...urls].map(u => publicHttps(u).origin))].slice(0, 40);
+  await browser.tabs.create({ url: browser.runtime.getURL(`/grant.html?kind=addons&origins=${encodeURIComponent(origins.join(','))}`) });
 }
 export async function addonFetch(request: HttpRequest): Promise<HttpResponse> {
   const url = publicHttps(request.url);

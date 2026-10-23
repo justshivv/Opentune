@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/PageHeader';
-import { addSource, allowSource, syncPublished, useAddons } from '@/addons/client';
+import { addSource, allowSource, allowSources, checkAccess, syncPublished, useAddons } from '@/addons/client';
 import { JIOSAAVN_ORIGIN } from '@/addons/jiosaavn';
 import { SourceList } from './SourceList';
 import { settingsUi } from './settingsStyles';
@@ -9,12 +9,26 @@ export default function AudioAddonsPage() {
   const jioSaavn = useAddons(s => s.jioSaavn);
   const setJioSaavn = useAddons(s => s.setJioSaavn);
   const [url, setUrl] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false);
-  // The owner's published sources, looked at afresh each time this page opens.
-  useEffect(() => { void syncPublished(true); }, []);
+  const sources = useAddons(s => s.sources);
+  const locked = useAddons(s => s.locked);
+  const waiting = sources.filter(s => s.enabled && locked.includes(s.id));
+  // The owner's published sources, looked at afresh each time this page opens; then which hosts
+  // still need the extension's OK, again on coming back from the extension's tab.
+  useEffect(() => {
+    void syncPublished(true).then(() => checkAccess());
+    const again = () => { if (document.visibilityState === 'visible') void checkAccess(); };
+    document.addEventListener('visibilitychange', again);
+    return () => document.removeEventListener('visibilitychange', again);
+  }, []);
   const button = 'rounded-pill bg-quinary px-4 py-2 disabled:opacity-45';
 
   return <div className={settingsUi.centered}><PageHeader title="Audio sources" /><div className={settingsUi.body}>
     <p className="mx-4 mb-4 text-secondary">Your sources, in your order. OpenTune checks matching recordings and chooses the highest measured FLAC quality. Equal quality keeps your priority. Sources marked “Added by admin” are published by OpenTune; turn them off or reorder them as you like.</p>
+    {waiting.length > 0 && <div className="ot-access mx-4 mb-4" role="status">
+      <p><strong>{waiting.length === 1 ? `${waiting[0]!.name} needs your OK` : `${waiting.length} sources need your OK`}</strong>
+        {waiting.length === 1 ? ' It' : ' They'} don’t let web pages ask {waiting.length === 1 ? 'it' : 'them'} directly, so the web player goes through the extension, which asks you once per host.</p>
+      <button type="button" className="ot-allow" onClick={() => void allowSources(waiting).then(() => setNotice('Press Allow in the extension tab that opened, then come back here.')).catch(e => setNotice(e instanceof Error ? e.message : 'Permission unavailable'))}>{waiting.length === 1 ? 'Allow' : 'Allow all'}</button>
+    </div>}
     <section className={`${settingsUi.group} mb-4`} aria-label="JioSaavn">
       <div className="ot-source-row">
         <span /><span className="ot-saavn-mark" aria-hidden="true">J</span>

@@ -77,7 +77,7 @@ async function handle(request: BridgeRequest): Promise<BridgeResponse> {
       case 'addon.fetch':
         return okResponse<'addon.fetch'>(request.id, await addonFetch((request as BridgeRequest<'addon.fetch'>).params));
       case 'addon.requestPermission':
-        await requestAddonPermission((request as BridgeRequest<'addon.requestPermission'>).params.url);
+        await requestAddonPermission((request as BridgeRequest<'addon.requestPermission'>).params.url, (request as BridgeRequest<'addon.requestPermission'>).params.urls);
         return okResponse<'addon.requestPermission'>(request.id, {});
       case 'yt.fetch':
         return okResponse<'yt.fetch'>(request.id, await ytFetch((request as BridgeRequest<'yt.fetch'>).params));
