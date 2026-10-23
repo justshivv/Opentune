@@ -1169,6 +1169,9 @@ class PlaybackService : MediaLibraryService() {
                 saavnSearch.onAwait { false }
             }
             val saavn = if (flacFirst) { saavnSearch?.cancel(); null } else saavnSearch?.await()
+            // Give a near-ready FLAC the short grace period already used on main.
+            // YouTube continues playing; a later FLAC can still supersede silent JioSaavn preparation.
+            if (saavn != null && flac != null && !flac.isCompleted) kotlinx.coroutines.withTimeoutOrNull(SAAVN_HOLD_MS) { flac.join() }
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             if (player.currentMediaItem?.localConfiguration?.uri != uri) { flac?.cancel(); return@launch }
             // JioSaavn plays unless a FLAC is already here to play instead; a FLAC search that
@@ -1263,7 +1266,7 @@ class PlaybackService : MediaLibraryService() {
             fun score(r: ExternalStreams.Rendition) = com.opentune.data.addons.AddonResolver.qualityScore(r.bits, r.sampleRate)
             val better = ExternalStreams.alternatives(id).filter { playing?.lossless != true || score(it) > score(playing) }
             val known = better.isNotEmpty()
-            // A verified stream needs a handoff, not another catalog search or a 20-second wait.
+            // A verified stream needs a handoff, not another catalog search or its retry backoff.
             if (player.currentPosition < if (known) UPGRADE_SETTLE_MS else GUARD_SETTLE_MS) continue
             if (now - lastAt < if (known) VERIFIED_RETRY_GAP_MS else GUARD_GAP_MS) continue
             val wanted = when {
@@ -2306,11 +2309,13 @@ class PlaybackService : MediaLibraryService() {
         const val UPGRADE_START_WAIT_MS = 6_000L
         /** How many songs ahead the lossless source is looked up. */
         const val PREFETCH_AHEAD = 5
+        /** A near-ready verified FLAC gets priority before beginning an intermediate handoff. */
+        const val SAAVN_HOLD_MS = 3_000L
         /** How often [guardQuality] looks, how far into a song it starts, how long between its tries, and how many a song gets. */
         const val GUARD_EVERY_MS = 1_000L
         const val VERIFIED_RETRY_GAP_MS = 2_000L
         const val GUARD_SETTLE_MS = 8_000L
-        const val GUARD_GAP_MS = 20_000L
+        const val GUARD_GAP_MS = 12_000L
         const val GUARD_TRIES = 4
         /** After a fallback, how long the song sounds before the upgrade runs again. */
         const val FALLBACK_RETRY_MS = 3_000L
