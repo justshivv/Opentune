@@ -367,8 +367,10 @@ private const val SPEED_DIAL_MIN = 3
 internal fun arrangeHomeShelves(shelves: List<HomeShelf>): HomeSections {
     val all = shelves.filter { it.items.isNotEmpty() }
     // YouTube Music's Speed dial has its own place at the top, not among the cards.
-    val speedDial = all.firstOrNull { com.opentune.data.history.SpeedDial.isSpeedDial(it.title) }
-    val available = all.filterNot { com.opentune.data.history.SpeedDial.isSpeedDial(it.title) }
+    // Known by its title in English, or in any language by the account's photo by its heading.
+    fun isDial(shelf: HomeShelf) = com.opentune.data.history.SpeedDial.isSpeedDial(shelf.title) || shelf.personal
+    val speedDial = all.firstOrNull(::isDial)
+    val available = all.filterNot(::isDial)
     val pickIndex = listOf(com.opentune.data.reco.HomeSeed.TITLE_PREFIX, "Because you played").firstNotNullOfOrNull { prefix ->
         available.indexOfFirst { it.isQuickPicks() && it.title.startsWith(prefix, ignoreCase = true) }.takeIf { it >= 0 }
     } ?: available.indexOfFirst { it.isQuickPicks() }

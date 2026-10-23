@@ -132,6 +132,8 @@ object MusicRepository {
         }
         val response = Innertube.browse("FEmusic_home")
         val first = InnertubeParser.parseHome(response).filter { it.items.isNotEmpty() }
+        // In the exported log, so a Home that looks wrong can be compared with what YouTube sent.
+        DebugLog.d("Home", "first page: " + first.joinToString { "${it.title} (${it.items.size}${if (it.personal) ", for the account" else ""})" })
         homeMoreJob?.cancel()
         homeMoreJob = scope.launch { followHome(first, InnertubeParser.sectionListContinuation(response)) }
         first

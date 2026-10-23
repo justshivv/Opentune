@@ -64,4 +64,34 @@ class HomeContinuationTest {
         val page = parse("""{"continuationContents": {"sectionListContinuation": {"contents": [$shelf]}}}""")
         assertNull(InnertubeParser.sectionListContinuation(page))
     }
+
+    private fun carousel(title: String, avatar: Boolean, rows: Int) = """
+        {"musicCarouselShelfRenderer": {
+          "numItemsPerColumn": "$rows",
+          "header": {"musicCarouselShelfBasicHeaderRenderer": {
+            "title": {"runs": [{"text": "$title"}]},
+            "strapline": {"runs": [{"text": "SHIVAM"}]}
+            ${if (avatar) ""","thumbnail": {"musicThumbnailRenderer": {"thumbnail": {"thumbnails": [{"url": "https://yt3.ggpht.com/a"}]}}}""" else ""}
+          }},
+          "contents": [{"musicTwoRowItemRenderer": {
+            "title": {"runs": [{"text": "My Mix 1"}]},
+            "navigationEndpoint": {"browseEndpoint": {"browseId": "VLRDTMAK5uy_mix1"}}
+          }}]
+        }}
+    """
+
+    @Test
+    fun speedDialIsKnownByTheAccountPhotoInAnyLanguage() {
+        val page = parse(
+            """
+            {"continuationContents": {"sectionListContinuation": {"contents": [
+              ${carousel("स्पीड डायल", avatar = true, rows = 3)},
+              ${carousel("Similar to Arijit Singh", avatar = true, rows = 1)},
+              ${carousel("Mixed for you", avatar = false, rows = 1)}
+            ]}}}
+            """,
+        )
+        val shelves = InnertubeParser.parseHomeContinuation(page)
+        assertEquals(listOf(true, false, false), shelves.map { it.personal })
+    }
 }

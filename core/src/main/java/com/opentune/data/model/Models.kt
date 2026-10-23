@@ -308,6 +308,12 @@ data class HomeShelf(
     val subtitle: String = "",
     val moreBrowseId: String? = null,
     val moreParams: String? = null,
+    /**
+     * Picked for the account itself, with its photo by the heading: YouTube
+     * Music's Speed dial. Known by that rather than by its title, which comes
+     * in the phone's language.
+     */
+    val personal: Boolean = false,
 )
 
 /** A page of the Home feed, plus the token for the next one — null once exhausted. */

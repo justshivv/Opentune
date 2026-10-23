@@ -293,7 +293,11 @@ object InnertubeParser {
                 // (it demands a videoId) and used to drop the whole shelf.
                 ?: parseArtistRow(item.o("musicResponsiveListItemRenderer"))
         }
-        return if (items.isEmpty()) null else HomeShelf(title.ifBlank { "For you" }, items, strapline)
+        // The account's own shelf, Speed dial, has its photo by the heading and is a grid a few
+        // rows deep; an artist's "Similar to" shelf has a photo too, but runs in one row.
+        val rows = (carousel["numItemsPerColumn"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() ?: 1
+        val personal = header?.get("thumbnail") != null && rows >= 2
+        return if (items.isEmpty()) null else HomeShelf(title.ifBlank { "For you" }, items, strapline, personal = personal)
     }
 
     private fun plainShelf(shelf: JsonObject): HomeShelf? {
