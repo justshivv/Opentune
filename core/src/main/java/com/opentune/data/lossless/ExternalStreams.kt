@@ -97,6 +97,12 @@ object ExternalStreams {
         report(videoId, "$picked\nCouldn't switch to it: its stream didn't load after a few tries.$reasons\nThe current stream keeps playing; Upgrade quality tries again.")
     }
 
+    /** The switch went through after all (a later try, or a better file): the note that it hadn't is taken off. */
+    fun swapSucceeded(videoId: String) {
+        val detail = reports[videoId] ?: return
+        if ("\nCouldn't switch" in detail) report(videoId, detail.substringBefore("\nCouldn't switch"))
+    }
+
     fun allowed(lossless: Boolean? = null): Boolean = AppSettings.playback.value.let {
         val maximum = AppSettings.effectiveAudioQuality == AudioQuality.MAX
         val enabled = when (lossless) { true -> maximum || it.losslessStreaming; false -> it.jioSaavnQuality; null -> maximum || it.losslessStreaming || it.jioSaavnQuality }
