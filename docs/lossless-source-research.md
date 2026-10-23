@@ -20,7 +20,24 @@ These are CD-resolution lossless files, **not verified hi-res releases**. No acc
 
 Our probe checks Wo Noor by AP Dhillon and Old Skool by Prem Dhillon, then reads only a bounded FLAC header. The GitHub **Lossless add-on** workflow produces `lossless-source-report.json` with current results. See the PR for that run; a green probe job only means the report was generated, not that any provider worked. Actual provider success is recorded in each result's `streamStatus` and `flacHeader` fields.
 
-## Internet Archive
+## Additional probes at 21:15 UTC
+
+The additional [Actions probe](https://github.com/justshivv/Opentune/actions/runs/40025364162) tested public endpoints without accounts or forged client identities:
+
+| Candidate | Observed result | Use in OpenTune |
+| --- | --- | --- |
+| Monochrome Track Streamer — Blinding Lights / The Weeknd | Search and stream HTTP 200; native FLAC **24-bit / 44.1 kHz**, stereo | Existing adapter already returns this higher-bit-depth file without a new source |
+| Lossless Bridge | HTTP 429 | Rate limited; cannot claim current playback availability |
+| BluBit Station Hi-Fi | Manifest available, subsequent lookup HTTP 502 | Unavailable in this probe |
+| Juanjob hi-res add-on | Manifest and 21 catalogue matches, stream HTTP 404 | Catalogue works; selected audio unavailable |
+
+The exact candidate results are saved in `services/lossless-addon/reports/candidates-2026-10-23.json`. A later result can differ; these are bounded header checks from a GitHub runner, not full listening tests. **24-bit / 44.1 kHz is not evidence of a 96/192 kHz master**, nor can a FLAC header prove the source was never transcoded.
+
+The [Juanjob maintainer](https://github.com/juanjoblol/bitchord-hires-addon) documents a Qobuz proxy that can offer up to 24-bit/192 kHz when available, but currently reports its public proxy down with HTTP 402. Its Tidal route uses Lossless Bridge and its Archive route covers live/independent material. It is not an additional verified working default. Self-hosted Qobuz/Tidal integrations require an entitled account; those are not configuration-free free catalogues.
+
+The official [2L high-resolution test bench](https://www.2l.no/hires/) currently says its free service is unavailable during renovation. It should not be advertised as a working free source. An owner's FLAC library on Jellyfin/Navidrome is a practical separate adapter target, but it supplies music the owner already has rather than a free commercial catalogue.
+
+## Internet Archive catalogue
 
 The [metadata API](https://archive.org/developers/md-read.html) exposes item and file metadata; the [audio guide](https://archivesupport.zendesk.com/hc/en-us/articles/360016549992-Audio-and-Music-Items-A-Basic-Guide) documents FLAC among its lossless formats. The adapter searches audio items containing FLAC, retains their recording identity, and resolves the original download URL. Many recordings are live or independent; this is not the same coverage as a commercial studio catalogue. Permission and download restrictions vary by recording.
 

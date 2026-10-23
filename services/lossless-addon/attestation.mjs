@@ -100,8 +100,9 @@ export function verifyAttestation(input, { roots, revoked }, signerDigests, now 
   for (let i = 0; i < chain.length; i++) {
     const cert = chain[i];
     if (!(Date.parse(cert.validFrom) <= now && now <= Date.parse(cert.validTo))) fail();
-    const serial = cert.serialNumber.toLowerCase().replace(/^0+/, '') || '0';
-    if (revoked[serial] || revoked[BigInt('0x' + serial).toString()]) fail();
+    const encodedSerial = cert.serialNumber.toLowerCase();
+    const serial = encodedSerial.replace(/^0+/, '') || '0';
+    if (revoked[encodedSerial] || revoked[serial] || revoked[BigInt('0x' + serial).toString()]) fail();
     if (i > 0 && !cert.ca) fail();
     const parent = chain[Math.min(i + 1, chain.length - 1)];
     if (cert.issuer !== parent.subject || !cert.verify(parent.publicKey)) fail();

@@ -9,6 +9,25 @@ async function get(path) {
   return { response, body };
 }
 const report = { checkedAt: new Date().toISOString(), base: base.origin, manifests: [], upstream: null };
+const policy = await get('/auth/policy');
+assert.equal(policy.response.status, 200);
+assert.ok(['staged', 'strict'].includes(policy.body.mode));
+report.security = { mode: policy.body.mode };
+const rejected = await get('/auth/web/info?id=' + 'a'.repeat(43));
+assert.equal(rejected.response.status, 401);
+const challenge = await get('/auth/challenge');
+assert.equal(challenge.response.status, 200);
+assert.match(challenge.body.challenge, /^[A-Za-z0-9_-]{43}$/);
+const fake = await fetch(new URL('/auth/enroll', base), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ challenge: challenge.body.challenge, chain: [], proof: '' }), signal: AbortSignal.timeout(20000) });
+assert.equal(fake.status, 403); await fake.body?.cancel();
+const replay = await fetch(new URL('/auth/enroll', base), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ challenge: challenge.body.challenge, chain: [], proof: '' }), signal: AbortSignal.timeout(20000) });
+assert.equal(replay.status, 401); await replay.body?.cancel();
+report.security.unauthenticatedApproval = rejected.response.status;
+report.security.challengeIssued = true;
+report.security.fakeEnrollment = fake.status;
+report.security.challengeReplay = replay.status;
 for (const source of ['monochrome', 'archive']) {
   const { response, body } = await get(`/${source}/manifest.json`);
   assert.equal(response.status, 200); assert.equal(body.id, `org.opentune.${source}`);
@@ -16,6 +35,7 @@ for (const source of ['monochrome', 'archive']) {
   report.manifests.push({ source, status: response.status, url: `${base.origin}/${source}/manifest.json` });
 }
 const search = await get('/monochrome/search?q=Wo%20Noor%20AP%20Dhillon&quality=best');
+if (policy.body.mode === 'strict') assert.equal(search.response.status, 401);
 const track = search.body.tracks?.find(t => t.title.toLowerCase() === 'wo noor' && t.artist.toLowerCase().includes('ap dhillon'));
 report.upstream = { searchStatus: search.response.status, matchingRecording: Boolean(track) };
 if (track) {

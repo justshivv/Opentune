@@ -77,6 +77,7 @@ export function withAppVerification(handler, { trust = googleTrust, attest = ver
   return async (request, env) => {
     const url = new URL(request.url), path = url.pathname;
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    if (path === '/auth/policy' && request.method === 'GET') return reply({ mode: env.VERIFICATION_MODE === 'staged' ? 'staged' : 'strict', native: 'hardware-attestation', web: 'verified-app-approval' });
     // Public installation metadata is not a way to fetch the catalogue or audio.
     const publicRoute = request.method === 'GET' && (path.endsWith('/manifest.json') || path.endsWith('/health') || path === '/');
     if (publicRoute) return handler(request);
