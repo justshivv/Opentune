@@ -1504,7 +1504,7 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun swapToUpgrade(player: ExoPlayer, id: String, uri: android.net.Uri = youtubeFallbackUri(id, upgraded = true)): Boolean {
         NerdStats.onUpgrade(id)
         return try {
-            switchStream(player, id, uri)
+            switchStream(player, id, uri).also { if (it) ExternalStreams.swapSucceeded(id) }
         } finally {
             if (!upgradeAsked) NerdStats.onUpgrade(null)
         }
@@ -1661,14 +1661,23 @@ class PlaybackService : MediaLibraryService() {
             // 1. The bridge plays, silent, in step with the song as it is heard now.
             bridge.volume = 0f
             bridge.playWhenReady = true
-            if (!lineUp(follower = bridge, leader = player)) {
+            val alignment = lineUp(follower = bridge, leader = player)
+            if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id ||
+                player.currentMediaItem?.localConfiguration?.uri != original.localConfiguration?.uri || crossfade?.blending == true
+            ) return UpgradeBridgeResult.ABORTED
+            if (!player.isPlaying) return UpgradeBridgeResult.READY_FOR_REPLACEMENT
+            if (alignment == UpgradeAlignment.SEEK) {
                 Log.w(TAG, "Couldn't line the better stream for $id up with the song; trying the plain swap")
                 return UpgradeBridgeResult.READY_FOR_REPLACEMENT
             }
             // 2. The sound moves onto it. From here the bridge is what's heard, so it's
             // also where the lyrics and seek bar read the song's position.
             PlaybackRequests.soundingPosition = { bridge.currentPosition }
-            crossfadeVolumes(from = player, to = bridge, BRIDGE_FADE_MS)
+            if (alignment == UpgradeAlignment.BLEND) crossfadeVolumes(from = player, to = bridge, BRIDGE_FADE_MS)
+            else {
+                rampVolume(player, 0f, BRIDGE_CUT_MS)
+                rampVolume(bridge, 1f, BRIDGE_CUT_MS)
+            }
             handedOver = true
 
             // 3. Silent now, the main player changes streams and catches up with the bridge.
@@ -1682,7 +1691,7 @@ class PlaybackService : MediaLibraryService() {
                 return UpgradeBridgeResult.ABORTED
             }
             // Lined up within a few milliseconds, or the two would be heard as an echo.
-            val aligned = lineUp(follower = player, leader = bridge) || lineUp(follower = player, leader = bridge)
+            val aligned = lineUp(follower = player, leader = bridge) == UpgradeAlignment.BLEND
             if (!awaitUpgradeReady(player, next)) {
                 restoreFailedUpgrade(player, index, original, next, bridge.currentPosition)
                 return UpgradeBridgeResult.ABORTED
@@ -1712,21 +1721,19 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    /**
-     * Seeks [follower] (playing) until it plays where [leader] does, within
-     * [BRIDGE_ALIGN_MS]. Each seek lands a little ahead, by an amount learned
-     * from the last try, to cover the time the seek itself takes to sound.
-     */
-    private suspend fun lineUp(follower: ExoPlayer, leader: ExoPlayer): Boolean {
+    /** Small offsets take a short fade immediately; only a large offset needs another seek. */
+    private suspend fun lineUp(follower: ExoPlayer, leader: ExoPlayer): UpgradeAlignment {
         var lead = BRIDGE_SEEK_LEAD_MS
         repeat(BRIDGE_ALIGN_TRIES) {
-            if (!settledPlaying(follower)) return false
+            if (!settledPlaying(follower)) return UpgradeAlignment.SEEK
             val drift = follower.currentPosition - leader.currentPosition
-            if (kotlin.math.abs(drift) <= BRIDGE_ALIGN_MS) return true
+            val alignment = upgradeAlignment(drift)
+            if (alignment != UpgradeAlignment.SEEK) return alignment
             lead = (lead - drift).coerceIn(0L, 2_000L)
             follower.seekTo(leader.currentPosition + lead)
         }
-        return settledPlaying(follower) && kotlin.math.abs(follower.currentPosition - leader.currentPosition) <= BRIDGE_ALIGN_MS * 2
+        return if (settledPlaying(follower)) upgradeAlignment(follower.currentPosition - leader.currentPosition)
+        else UpgradeAlignment.SEEK
     }
 
     /** Waits for [p] to be playing from a buffer, then a moment more for its position to settle. */
@@ -2346,9 +2353,8 @@ class PlaybackService : MediaLibraryService() {
         const val BRIDGE_FADE_MS = 160L
         /** Each half of a hand-back without a blend: one player out, then the other in. */
         const val BRIDGE_CUT_MS = 70L
-        /** Two players this close play the same moment: their mix over a fade sounds as one. */
-        const val BRIDGE_ALIGN_MS = 20L
-        const val BRIDGE_ALIGN_TRIES = 5
+        /** Bound attempts before using the already buffered stream with a short fade. */
+        const val BRIDGE_ALIGN_TRIES = 2
         /** A first guess at how long a seek takes to sound, landed ahead by. */
         const val BRIDGE_SEEK_LEAD_MS = 120L
         const val BRIDGE_SETTLE_MS = 120L

@@ -6,6 +6,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UpgradeHandoffTest {
+    @Test fun smallTimingOffsetsUpgradeWithoutRepeatedSeekingOrOverlappingVocals() {
+        for (drift in listOf(-20L, 0L, 20L)) assertEquals(UpgradeAlignment.BLEND, upgradeAlignment(drift))
+        for (drift in listOf(-250L, -21L, 21L, 250L)) assertEquals(UpgradeAlignment.SHORT_FADE, upgradeAlignment(drift))
+        for (drift in listOf(-251L, 251L, Long.MIN_VALUE, Long.MAX_VALUE)) assertEquals(UpgradeAlignment.SEEK, upgradeAlignment(drift))
+    }
+
     @Test fun verifiedFlacDoesNotCountAsPlayingWhileDecoderStillHasYouTubeAudio() {
         assertFalse(upgradeFormatReady(true, "audio/mp4a-latm"))
         assertFalse(upgradeFormatReady(true, "audio/opus"))
