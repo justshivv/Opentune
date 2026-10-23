@@ -151,16 +151,21 @@ object ExternalStreams {
             maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType)
         val tracks = if (allowed(true) && !losslessMissed) LosslessSource.resolveAll(song, duration,
             beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { detail.addIfAbsent(it) },
-            late = { better ->
-                // A slower add-on came back with higher quality than the one already chosen: kept, and said, so playback can switch to it.
+            late = { later ->
+                // A slower add-on's verified file: kept to fall back on, and, when it's better than
+                // the one chosen (or nothing was), made the choice and said, so playback switches to it.
                 if (allowed(true)) {
-                    val r = losslessRendition(better)
-                    remember(videoId, r)
+                    val r = losslessRendition(later)
                     addAlternative(videoId, r)
                     losslessMissUntil.remove(videoId)
                     transientMiss.remove(videoId)
-                    report(videoId, (reports[videoId]?.let { "$it\n" } ?: "") + "${better.provider}: answered later with higher quality")
-                    _improved.tryEmit(videoId)
+                    val chosen = renditions[videoId]?.takeIf { it.lossless }
+                    fun score(x: Rendition) = com.opentune.data.addons.AddonResolver.qualityScore(x.bits, x.sampleRate)
+                    if (chosen == null || score(r) > score(chosen)) {
+                        remember(videoId, r)
+                        report(videoId, (reports[videoId]?.let { "$it\n" } ?: "") + "${later.provider}: answered later with higher quality")
+                        _improved.tryEmit(videoId)
+                    }
                 }
             }) else emptyList()
         val track = tracks.firstOrNull()

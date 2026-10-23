@@ -2215,7 +2215,7 @@ class PlaybackService : MediaLibraryService() {
         const val QUEUE_SAVE_MS = 5_000L
         /** A swap waits for the song to have played this much, with [UPGRADE_BUFFERED_MS] ahead of it... */
         const val UPGRADE_SETTLE_MS = 300L
-        const val UPGRADE_BUFFERED_MS = 4_000L
+        const val UPGRADE_BUFFERED_MS = 2_000L
         /** ...or for this long at most, when it's paused or slow to start. */
         const val UPGRADE_START_WAIT_MS = 6_000L
         /** How many songs ahead the lossless source is looked up. */
@@ -2284,7 +2284,7 @@ class PlaybackService : MediaLibraryService() {
         /** ...and counted as not answering after this long. */
         const val PING_LIMIT_MS = 20_000L
         /** An upgrade is fetched this far past the playing position before it's swapped in. */
-        const val AUDITION_AHEAD_MS = 6_000L
+        const val AUDITION_AHEAD_MS = 3_500L
         /** It starts loading a little ahead, for the time the loading itself takes. */
         const val AUDITION_LEAD_MS = 1_500L
         const val AUDITION_TIMEOUT_MS = 40_000L
