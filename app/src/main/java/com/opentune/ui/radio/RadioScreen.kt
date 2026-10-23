@@ -116,7 +116,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     var near by remember { mutableStateOf<Near>(Near.Locating) }
     var refused by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
-    val suggest = { context.startActivity(Intent(Intent.ACTION_VIEW, "https://www.radio-browser.info/add".toUri())) }
+    val suggest: () -> Unit = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://www.radio-browser.info/add".toUri())) } }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         refused = !ok
         attempt++
@@ -259,7 +259,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                         countryName = countryName,
                         onAllow = { askLocation.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION) },
                         onOpenSettings = {
-                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
+                            runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri())) }
                         },
                         onCountry = toCountry,
                     )
@@ -271,7 +271,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                         message = "Turn on location to find stations around you.",
                         action = {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }) { Text("Location settings") }
+                                Button(onClick = { runCatching { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) } }) { Text("Location settings") }
                                 OutlinedButton(onClick = { attempt++ }) { Text("Try again") }
                             }
                         },

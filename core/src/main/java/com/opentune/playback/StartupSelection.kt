@@ -16,8 +16,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Prefer a cached source or a quick JioSaavn match, tried before YouTube's own
- * stream is looked up; never wait for FLAC at startup.
+ * Prefer a cached source or a JioSaavn match, tried before YouTube's own
+ * stream is looked up; never wait for FLAC at startup. With JioSaavn on,
+ * YouTube is the last resort: the song waits a few seconds for JioSaavn's
+ * answer rather than starting on YouTube when it's a little slow.
  */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class StartupSelection(
@@ -30,7 +32,7 @@ internal class StartupSelection(
     private val picked: (String) -> ExternalStreams.Rendition? = { id -> ExternalStreams.cached(id)?.takeIf { it.picked } },
     /** Whether JioSaavn may be tried before YouTube's own stream: whenever external sources are allowed, not only at Max. */
     private val saavnWanted: () -> Boolean = { ExternalStreams.allowed(false) },
-    private val lookupBudgetMs: Long = 900L,
+    private val lookupBudgetMs: Long = 6_000L,
     private val findJioSaavn: suspend (Song, Long) -> ExternalStreams.Rendition? = ExternalStreams::findJioSaavn,
     private val cached: (String) -> ExternalStreams.Rendition? = ExternalStreams::cached,
 ) {
@@ -44,7 +46,7 @@ internal class StartupSelection(
             // A stream picked by hand in Search starts the song whatever the quality setting.
             val ready = picked(song.videoId)?.takeIf { it.mimeType == null }
                 ?: if (maximum() || losslessWanted()) cached(song.videoId)?.takeIf { it.mimeType == null && it.lossless } else null
-            // The song starts on YouTube if JioSaavn is slower than the budget, but the lookup itself
+            // The song starts on YouTube only if JioSaavn has no match or is slower than the budget; the lookup itself
             // carries on (see ExternalStreams.findJioSaavn) and the upgrade switches to it when it answers.
             val rendition = ready ?: if (maximum() || saavnWanted()) try {
                 val lookup = ExternalStreams.background.async { findJioSaavn(song, song.durationMillis()) }

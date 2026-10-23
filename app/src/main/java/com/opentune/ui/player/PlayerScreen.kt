@@ -312,6 +312,9 @@ fun PlayerLayout(
     var lastList by rememberSaveable { mutableStateOf(Pane.LYRICS.name) }
     LaunchedEffect(pane) { if (pane != Pane.COVER) lastList = pane.name }
     var smallCover by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    // Where the title row sits under the full cover, kept from when it was last at rest,
+    // so it can travel with the cover into the header and back.
+    var bigTitle by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val flight = remember { PaneFlight() }
     var showRemix by remember { mutableStateOf(false) }
     var showCast by remember { mutableStateOf(false) }
@@ -345,11 +348,17 @@ fun PlayerLayout(
     // synced lyrics play on the lyrics view, and come back at the next touch.
     var touchedAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var controlsAway by remember { mutableStateOf(false) }
+    var seenTouch by remember { mutableLongStateOf(touchedAt) }
     val focusable = state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
-        ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced) &&
-        !showMenu && !showRemix && !showSleep && !showCast && !showOffset && !showLyricsSource && !showDetails && !showSignal
-    LaunchedEffect(touchedAt, focusable) {
-        controlsAway = false
+        ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
+    val sheetOpen = showMenu || showRemix || showSleep || showCast || showOffset || showLyricsSource || showDetails || showSignal
+    LaunchedEffect(touchedAt, focusable, sheetOpen) {
+        // A sheet opening or closing leaves the controls as they are, the tap that opened
+        // it included: bringing them back resized the lyrics under the sheet as it slid
+        // up, and the sheet stuttered. The countdown starts again once it's gone.
+        if (sheetOpen) { seenTouch = touchedAt; return@LaunchedEffect }
+        if (!focusable || touchedAt != seenTouch) controlsAway = false
+        seenTouch = touchedAt
         if (!focusable) return@LaunchedEffect
         delay(LYRICS_FOCUS_MS)
         controlsAway = true
@@ -714,7 +723,11 @@ fun PlayerLayout(
                                 val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
                                 val now = System.currentTimeMillis()
                                 // A few times a second is plenty, and keeps a drag from recomposing the player each frame.
-                                if (e.changes.any { it.pressed } && (controlsAway || now - touchedAt > 250)) touchedAt = now
+                                // Controls that are away come back when the finger lifts, so a tap that opens a
+                                // sheet (seen in the same event) leaves them where they are.
+                                if (controlsAway) {
+                                    if (e.changes.any { it.previousPressed && !it.pressed }) touchedAt = now
+                                } else if (e.changes.any { it.pressed } && now - touchedAt > 250) touchedAt = now
                             }
                         }
                     },
@@ -871,7 +884,12 @@ fun PlayerLayout(
                                 }
                             }
                             Spacer(Modifier.height(16.dp))
-                            TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true })
+                            TitleRow(
+                                current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true },
+                                Modifier
+                                    .onGloballyPositioned { if (!flight.active && coverLift == 0f && dragOffset == 0f) bigTitle = it.boundsInRoot() }
+                                    .graphicsLayer { alpha = if (flight.active && bigTitle != null) 0f else 1f },
+                            )
                         } else {
                             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Artwork(
@@ -884,7 +902,9 @@ fun PlayerLayout(
                                     RoundedCornerShape(10.dp),
                                 )
                                 Spacer(Modifier.width(14.dp))
-                                TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true }, compact = true)
+                                Row(Modifier.weight(1f).graphicsLayer { alpha = if (flight.active && bigTitle != null) 0f else 1f }, verticalAlignment = Alignment.CenterVertically) {
+                                    TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true }, compact = true)
+                                }
                             }
                             // Between lyrics and queue the new list slides up from below on a soft
                             // spring while the old one lifts a little and fades, under a still header.
@@ -1075,6 +1095,15 @@ fun PlayerLayout(
                         endCornerDp = if (flight.toSmall) 10f else 28f,
                         origin = origin,
                     )
+                    bigTitle?.let { title ->
+                        TitleFlight(
+                            current, isLiked, title,
+                            big = if (flight.toSmall) from else to,
+                            small = if (flight.toSmall) to else from,
+                            q = { (if (flight.following) flight.pull else flight.t.value).let { if (flight.toSmall) it else 1f - it }.coerceIn(0f, 1f) },
+                            origin = origin,
+                        )
+                    }
                 }
             }
         }
@@ -1214,9 +1243,51 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
 }
 
 @Composable
-private fun TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+private fun TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         TitleRow(song, liked, onLike, onMore, compact = false)
+    }
+}
+
+/**
+ * The title row travelling with the cover between [big] and [small] (root bounds), [q]
+ * being how far toward the small one. It hangs under the cover as it shrinks, then
+ * comes round to its right as the cover reaches the header, shrinking to the header's size.
+ */
+@Composable
+private fun TitleFlight(
+    song: Song, liked: Boolean, bigTitle: androidx.compose.ui.geometry.Rect,
+    big: androidx.compose.ui.geometry.Rect, small: androidx.compose.ui.geometry.Rect,
+    q: () -> Float, origin: androidx.compose.ui.geometry.Offset,
+) {
+    val sideGap = with(LocalDensity.current) { 14.dp.toPx() }
+    val under = bigTitle.top - big.bottom
+    // How far round to the cover's side: none for the first half, eased in over the rest.
+    fun side(q: Float) = ((q - 0.5f) / 0.5f).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+    fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+    Box(
+        Modifier.layout { measurable, _ ->
+            val k = q()
+            val s = side(k)
+            val left = lerp(big.left, small.left, k)
+            val top = lerp(big.top, small.top, k)
+            val right = lerp(big.right, small.right, k)
+            val bottom = lerp(big.bottom, small.bottom, k)
+            val width = lerp(bigTitle.width, bigTitle.right - small.right - sideGap, s).coerceAtLeast(0f)
+            val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixedWidth(width.toInt()))
+            val x = lerp(lerp(bigTitle.left, small.left, k), right + sideGap, s)
+            val y = lerp(bottom + under, (top + bottom) / 2f - placeable.height / 2f, s)
+            layout(placeable.width, placeable.height) {
+                placeable.place((x - origin.x).toInt(), (y - origin.y).toInt())
+            }
+        },
+    ) {
+        Row(Modifier.fillMaxWidth().align(Alignment.CenterStart).graphicsLayer { alpha = 1f - side(q()) }, verticalAlignment = Alignment.CenterVertically) {
+            TitleRow(song, liked, onLike = {}, onMore = {}, compact = false)
+        }
+        Row(Modifier.fillMaxWidth().align(Alignment.CenterStart).graphicsLayer { alpha = side(q()) }, verticalAlignment = Alignment.CenterVertically) {
+            TitleRow(song, liked, onLike = {}, onMore = {}, compact = true)
+        }
     }
 }
 

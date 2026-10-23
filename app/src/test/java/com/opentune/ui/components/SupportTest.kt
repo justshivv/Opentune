@@ -25,6 +25,10 @@ class SupportTest {
         assertTrue(Support.shouldAsk(false, 40, days(100), days(130)))
         assertFalse(Support.shouldAsk(false, 40, days(100), days(99)))
     }
+    @Test fun discordInviteWaitsForTenDaysOfUse() {
+        assertFalse(Support.shouldAsk(false, 9, 0, days(100), Support.Invite.DISCORD.daysBefore))
+        assertTrue(Support.shouldAsk(false, 10, 0, days(100), Support.Invite.DISCORD.daysBefore))
+    }
     @Test fun optOutIsPermanent() {
         assertFalse(Support.shouldAsk(true, 400, days(100), days(500)))
     }

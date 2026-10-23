@@ -1,4 +1,4 @@
-import { findLossless, useAddons } from '@/addons/client';
+import { findLossless, reportLoadFailures, useAddons, type LosslessResult } from '@/addons/client';
 import { SabrStreamingAdapter } from 'googlevideo/sabr-streaming-adapter';
 import { buildSabrFormat } from 'googlevideo/utils';
 import shaka from 'shaka-player/dist/shaka-player.compiled';
@@ -18,6 +18,10 @@ import {
   type ResolvedPlayer,
 } from './resolver';
 import { ShakaPlayerAdapter } from './ShakaPlayerAdapter';
+
+/** How often, and how far apart, a search that only failed on server errors is asked again. */
+const LOSSLESS_RETRIES = 3;
+const LOSSLESS_RETRY_MS = 12_000;
 
 /** What the engine knows about the track it loaded. */
 export interface LoadedTrack {
@@ -199,25 +203,48 @@ export class YouTubeEngine {
     }
   }
 
-  /** Resolve in the background; normal playback starts immediately. */
+  /**
+   * Resolve in the background; normal playback starts immediately. The verified
+   * files are tried best first, and a file whose stream won't load gives way to the
+   * next; a search that came back empty only because servers erred is asked again
+   * a few times while the song plays.
+   */
   private async upgradeAddon(track: LoadedTrack, generation: number): Promise<void> {
-    const source = await findLossless({ title: track.title, artist: track.author, duration: track.durationSec }).catch(() => null);
-    if (!source || generation !== this.generation || !useAddons.getState().sources.some(s => s.id === source.sourceId && s.enabled)) return;
+    const recording = { title: track.title, artist: track.author, duration: track.durationSec };
+    let search = await findLossless(recording).catch(() => null);
+    for (let retry = 0; retry < LOSSLESS_RETRIES && search && !search.ranked.length && search.transient; retry++) {
+      await new Promise(resolve => setTimeout(resolve, LOSSLESS_RETRY_MS));
+      if (generation !== this.generation || track.durationSec - this.audio.currentTime < 20 + LOSSLESS_RETRY_MS / 1000) return;
+      search = await findLossless(recording).catch(() => null);
+    }
+    const enabled = (source: LosslessResult) => useAddons.getState().sources.some(s => s.id === source.sourceId && s.enabled);
+    const candidates = search?.ranked.filter(enabled) ?? [];
+    if (!candidates.length || generation !== this.generation) return;
     const at = this.audio.currentTime, playing = !this.audio.paused;
     if (track.durationSec - at < 20) return;
     this.loading = true;
+    const failures: string[] = [];
     try {
-      const player = await this.ensurePlayer(); this.checkCurrent(generation);
-      await player.unload(); this.checkCurrent(generation);
-      this.adapter?.dispose(); this.adapter = null; this.direct = null; this.current = null;
-      for (const scheme of ['http', 'https']) shaka.net.NetworkingEngine.registerScheme(scheme, shaka.net.HttpFetchPlugin.parse, shaka.net.NetworkingEngine.PluginPriority.FALLBACK);
-      await player.load(source.url, at, 'audio/flac'); this.checkCurrent(generation);
-      if (playing) await this.audio.play();
-      await this.firstAudio(generation); this.checkCurrent(generation);
-      this.addonTrack = { ...track, client: 'ADDON', format: `${source.provider} · FLAC ${source.bits}-bit ${(source.rate / 1000).toFixed(1)} kHz`, loudnessDb: null };
-      this.onRecovered(this.addonTrack);
-    } catch {
-      if (generation !== this.generation) return;
+      for (const source of candidates) {
+        const from = this.audio.currentTime || at;
+        try {
+          const player = await this.ensurePlayer(); this.checkCurrent(generation);
+          await player.unload(); this.checkCurrent(generation);
+          this.adapter?.dispose(); this.adapter = null; this.direct = null; this.current = null;
+          for (const scheme of ['http', 'https']) shaka.net.NetworkingEngine.registerScheme(scheme, shaka.net.HttpFetchPlugin.parse, shaka.net.NetworkingEngine.PluginPriority.FALLBACK);
+          await player.load(source.url, from, 'audio/flac'); this.checkCurrent(generation);
+          if (playing) await this.audio.play();
+          await this.firstAudio(generation); this.checkCurrent(generation);
+          this.addonTrack = { ...track, client: 'ADDON', format: `${source.provider} · FLAC ${source.bits}-bit ${(source.rate / 1000).toFixed(1)} kHz`, loudnessDb: null };
+          this.onRecovered(this.addonTrack);
+          return;
+        } catch (error) {
+          if (generation !== this.generation) return;
+          failures.push(`${source.provider}: ${describe(error)}`);
+          trackLog.w(`${source.provider}'s FLAC didn't load: ${describe(error)}`, track.videoId);
+        }
+      }
+      reportLoadFailures(failures);
       const recovered = await this.load(track.videoId, { startSec: at, autoplay: playing, tryAddons: false }).catch(() => null);
       if (recovered) this.onRecovered(recovered);
     } finally { if (generation === this.generation) this.loading = false; }

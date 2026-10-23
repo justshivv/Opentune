@@ -39,7 +39,7 @@ internal fun CommunityBanner(modifier: Modifier = Modifier) {
         modifier
             .fillMaxWidth()
             .background(DISCORD_BLURPLE)
-            .clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://discord.gg/6udrCVh5n".toUri())) } }
+            .clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, com.opentune.ui.components.Support.DISCORD.toUri())) } }
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -58,9 +58,9 @@ internal fun CommunityBanner(modifier: Modifier = Modifier) {
     }
 }
 
-private val DISCORD_BLURPLE = Color(0xFF5865F2)
+internal val DISCORD_BLURPLE = Color(0xFF5865F2)
 
-private val discordLogo: ImageVector by lazy {
+internal val discordLogo: ImageVector by lazy {
     ImageVector.Builder(name = "Discord", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
         .apply {
             addPath(
