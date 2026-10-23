@@ -17,10 +17,9 @@ class AddonClient(val base: String, private val fetch: suspend (String) -> Strin
     private suspend fun get(path: List<String>, params: Map<String, String>, ttl: Long, fresh: Boolean = false, validate: (String) -> Unit): String {
         val url = AddonProtocol.endpoint(base, path, params)
         if (locks.size > 512) locks.clear()
-        val started = now()
         return locks.computeIfAbsent(url) { Mutex() }.withLock {
-            // A fresh ask still takes an answer that came in while it waited: that one is new too.
-            cache[url]?.takeIf { now() - it.at < ttl && (!fresh || it.at >= started) }?.let { return@withLock it.text }
+            // A fresh ask always goes out: a cached answer, even one from this same moment, is the old link.
+            if (!fresh) cache[url]?.takeIf { now() - it.at < ttl }?.let { return@withLock it.text }
             val text = fetch(url)
             validate(text)
             if (cache.size > 128) cache.clear()
