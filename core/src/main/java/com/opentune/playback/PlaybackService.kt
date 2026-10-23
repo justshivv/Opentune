@@ -155,7 +155,7 @@ class PlaybackService : MediaLibraryService() {
                     // A link that won't open (expired, refused) is swapped for a new one from the same
                     // add-on and opened again, so the song stays on its FLAC instead of falling back.
                     val renewing = androidx.media3.datasource.DataSource.Factory {
-                        RenewingDataSource(plain.createDataSource()) { failed -> ExternalStreams.refreshLink(mediaItem.mediaId, addon.key, failed) }
+                        RenewingDataSource(plain.createDataSource(), renew = { failed -> ExternalStreams.refreshLink(mediaItem.mediaId, addon.key, failed) })
                     }
                     val resolving = androidx.media3.datasource.ResolvingDataSource.Factory(renewing) { spec ->
                         // Re-check enablement/output before each manifest or segment request.
@@ -1368,11 +1368,15 @@ class PlaybackService : MediaLibraryService() {
         aheadJobs.keys.filterNot { it in ids || it == current }.forEach { aheadJobs.remove(it)?.cancel() }
         val fresh = ahead.filter { aheadJobs[it.mediaId]?.isActive != true }.distinctBy { it.mediaId }
         if (fresh.isEmpty()) return
+        // The FLAC search for the nearest few only: each one asks every add-on and reads the
+        // start of each file it verifies, and five songs' worth at once had the file servers
+        // answering HTTP 429 by the time a song came to play.
+        val near = ahead.take(PREFETCH_LOSSLESS_AHEAD).map { it.mediaId }.toSet()
         fresh.forEach { item ->
             aheadJobs[item.mediaId] = scope.launch(Dispatchers.IO) {
                 // Skipping through: a song passed by within a moment is never looked up.
                 delay(PREFETCH_SETTLE_MS)
-                aheadSlots.withPermit { readyAhead(item.toSong(), saavn, lossless) }
+                aheadSlots.withPermit { readyAhead(item.toSong(), saavn, lossless && item.mediaId in near) }
             }
         }
     }
@@ -1383,27 +1387,14 @@ class PlaybackService : MediaLibraryService() {
 
     /**
      * Gets [song] ready to start in its best quality: JioSaavn first, quick to
-     * answer, then the verified lossless files. The start of the one it'll
-     * play is read now, which also wakes its server; if it doesn't answer,
-     * the next verified file is chosen instead, before the song ever starts.
+     * answer, then the verified lossless files. Their files aren't read again
+     * here: the search read each one's start to verify it, and reading it once
+     * more for every song ahead only used up the file servers' patience.
      */
     private suspend fun readyAhead(song: com.opentune.data.model.Song, saavn: Boolean, lossless: Boolean) {
         suspend fun attempt(block: suspend () -> Unit) = try { block() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
-        var jioSaavn: ExternalStreams.Rendition? = null
-        if (saavn) attempt { jioSaavn = ExternalStreams.findJioSaavn(song, song.durationMillis())?.takeIf { !it.lossless } }
-        if (!lossless) return
-        attempt { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
-        val files = ExternalStreams.alternatives(song.videoId)
-        for (file in files) {
-            if (pingFailure(ExternalStreams.urlOf(file)) == null) {
-                if (ExternalStreams.cached(song.videoId)?.key != file.key) ExternalStreams.remember(song.videoId, file)
-                return
-            }
-            Log.w(TAG, "${file.provider}'s file for ${song.videoId} didn't answer ahead of time; readying the next one")
-        }
-        // No lossless file answers: it starts on JioSaavn, and only on YouTube's stream when JioSaavn had nothing.
-        val fallback = jioSaavn
-        if (files.isNotEmpty() && fallback != null) ExternalStreams.remember(song.videoId, fallback)
+        if (saavn) attempt { ExternalStreams.findJioSaavn(song, song.durationMillis()) }
+        if (lossless) attempt { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
     }
 
     /**
@@ -2365,6 +2356,8 @@ class PlaybackService : MediaLibraryService() {
         const val UPGRADE_START_WAIT_MS = 6_000L
         /** How many songs ahead the lossless source is looked up. */
         const val PREFETCH_AHEAD = 5
+        /** How many of those also get the FLAC search ahead of time; the rest get JioSaavn and are searched as they start. */
+        const val PREFETCH_LOSSLESS_AHEAD = 2
         /** A near-ready verified FLAC gets priority before beginning an intermediate handoff. */
         const val SAAVN_HOLD_MS = 3_000L
         /** How often [guardQuality] looks, how far into a song it starts, how long between its tries, and how many a song gets. */

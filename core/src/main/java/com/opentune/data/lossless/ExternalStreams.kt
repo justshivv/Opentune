@@ -350,6 +350,16 @@ object ExternalStreams {
     /** The link a rendition plays from now: a newer one than it was found with, once [refreshLink] got one. */
     fun urlOf(rendition: Rendition): String = links[rendition.key]?.current ?: rendition.url
 
+    /** The add-on rendition [url] is a link of, as (video id, key). */
+    private fun ownerOf(url: String): Pair<String, Rendition>? =
+        pinned.values.firstOrNull { (_, r) -> r.addonId != null && (r.url == url || links[r.key]?.all?.contains(url) == true) }
+
+    /** Whether [url] is a link to an add-on's file, rather than YouTube's or JioSaavn's. */
+    fun isAddonLink(url: String): Boolean = ownerOf(url) != null
+
+    /** [refreshLink] for whichever add-on file [url] is a link of; null for anything else. */
+    fun refreshLinkFor(url: String): String? = ownerOf(url)?.let { (videoId, r) -> refreshLink(videoId, r.key, url) }
+
     /** Each rendition's links since it was found, newest last, and when it last asked for one. */
     private class Links(val all: List<String>, val askedAt: Long, val asks: Int) { val current get() = all.last() }
     private val links = ConcurrentHashMap<String, Links>()
