@@ -1,5 +1,6 @@
 package com.opentune.ui.home
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -85,6 +86,7 @@ internal fun SpeedDialSection(
     onOpenAll: () -> Unit,
 ) {
     val shown = items.take(SpeedDial.ON_HOME)
+    if (shown.isEmpty()) return
     val pageCount = (shown.size + PER_PAGE - 1) / PER_PAGE
     Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)) {
         Row(
@@ -104,15 +106,21 @@ internal fun SpeedDialSection(
         val pager = rememberPagerState(pageCount = { pageCount })
         BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 8.dp)) {
             val tile = (maxWidth - SIDE * 2 - GAP * 2) / 3
+            // Reserve only occupied rows. A short page must not leave two blank rows
+            // between Speed dial and Quick picks; ease the height when paging.
+            val visibleCount = (shown.size - pager.currentPage * PER_PAGE).coerceIn(1, PER_PAGE)
+            val rows = (visibleCount + 2) / 3
+            val pageHeight by animateDpAsState(tile * rows + GAP * (rows - 1), label = "speed-dial-height")
             HorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxWidth().height(tile * 3 + GAP * 2),
+                modifier = Modifier.fillMaxWidth().height(pageHeight),
                 contentPadding = PaddingValues(horizontal = SIDE),
                 pageSpacing = SIDE,
                 verticalAlignment = Alignment.Top,
             ) { page ->
                 Column(verticalArrangement = Arrangement.spacedBy(GAP)) {
-                    for (row in 0 until 3) {
+                    val pageItems = (shown.size - page * PER_PAGE).coerceIn(0, PER_PAGE)
+                    for (row in 0 until (pageItems + 2) / 3) {
                         Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
                             for (column in 0 until 3) {
                                 val item = shown.getOrNull(page * PER_PAGE + row * 3 + column)
