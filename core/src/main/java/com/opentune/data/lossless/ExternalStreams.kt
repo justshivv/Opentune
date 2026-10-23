@@ -91,7 +91,7 @@ object ExternalStreams {
     fun swapFailed(videoId: String) {
         val picked = reports[videoId] ?: return
         if ("Couldn't switch" in picked) return
-        report(videoId, "$picked\nCouldn't switch to it: the stream didn't load in time. YouTube keeps playing; it's tried again next song.")
+        report(videoId, "$picked\nCouldn't switch to it: its stream didn't load after a few tries. The current stream keeps playing; Upgrade quality tries again.")
     }
 
     fun allowed(lossless: Boolean? = null): Boolean = AppSettings.playback.value.let {
