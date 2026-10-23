@@ -1,5 +1,6 @@
 package com.opentune.ui.components
 
+import kotlinx.coroutines.flow.first
 import android.os.Build
 import android.view.WindowManager
 import androidx.compose.animation.core.Animatable
@@ -140,7 +141,6 @@ fun FloatingCard(
     // How far an expandable card has been pulled up past its half height, in px.
     var extra by remember { mutableFloatStateOf(0f) }
     var settling by remember { mutableStateOf<Job?>(null) }
-    LaunchedEffect(Unit) { open = true }
     val card = remember {
         FloatingCardScope { after ->
             if (!closing) {
@@ -184,6 +184,16 @@ fun FloatingCard(
         if (frost != Frost.FAILED) {
             val got = ScreenFrost(shown = { shown }, over = opener)
             LaunchedEffect(got) { frost = got }
+        }
+        // The card rises once the blur behind it is ready (or has failed), and the first frame
+        // is laid out: rising while the blur was still being made, its glass changed from nearly
+        // solid to clear partway up, and the first frames, busy building the menu, were dropped.
+        LaunchedEffect(Unit) {
+            androidx.compose.runtime.withFrameNanos { }
+            kotlinx.coroutines.withTimeoutOrNull(FROST_WAIT_MS) {
+                androidx.compose.runtime.snapshotFlow { frost }.first { it != Frost.PENDING }
+            }
+            open = true
         }
         // A dialog's content sits outside the app's Surface, so it needs its own text colour.
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface, LocalFloatingCard provides card) {
@@ -556,5 +566,7 @@ internal fun FrostBehind(
 
 private const val EXIT_MS = 200L
 private const val KEPT_MS = 120L
+/** The longest a card waits for the blur behind it before rising without it. */
+private const val FROST_WAIT_MS = 180L
 /** A release faster than this, in px/s, decides an expandable card's height on its own. */
 private const val FLING = 800f
