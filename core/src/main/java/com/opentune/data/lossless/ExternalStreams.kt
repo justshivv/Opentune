@@ -236,8 +236,11 @@ object ExternalStreams {
                 }
             }) else emptyList()
         fun score(x: Rendition) = com.opentune.data.addons.AddonResolver.qualityScore(x.bits, x.sampleRate)
-        // Files verified earlier in this song's search, from the add-ons not asked this time.
-        val known = if (prior != null) alternatives(videoId) else emptyList()
+        // Files verified earlier in this song's search, from the add-ons not asked this time; or,
+        // when everyone was asked again, the verified file already held for it, which an add-on
+        // erring or rate limiting this time says nothing against.
+        val held = renditions[videoId]?.takeIf { it.lossless && now() - it.at < TTL && allowed(true) && addonAllowed(it) }
+        val known = (if (prior != null) alternatives(videoId) else emptyList()).ifEmpty { listOfNotNull(held) }
         val fresh = tracks.firstOrNull()
         val earlier = known.firstOrNull()?.takeIf { e -> fresh == null || score(e) >= com.opentune.data.addons.AddonResolver.qualityScore(fresh.bits, fresh.sampleRate) }
         val track = fresh.takeIf { earlier == null }
@@ -245,6 +248,7 @@ object ExternalStreams {
             if (losslessSearched.size > 512) losslessSearched.clear()
             losslessSearched += videoId
         }
+        if (earlier != null && earlier === held && fresh == null) detail += "${earlier.provider}: verified FLAC, found earlier and still used"
         if (allowed(true)) detail += if (track == null && earlier == null) "FLAC: no verified matching stream available" else "Add-on audio selected; playback diagnostics show the decoded format"
         val askedSaavn = !losslessOnly && track == null && earlier == null && allowed(false) && !saavnMissed && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
         val saavn = if (askedSaavn) JioSaavnSource.resolve(song, duration, report = { detail += it }) else null

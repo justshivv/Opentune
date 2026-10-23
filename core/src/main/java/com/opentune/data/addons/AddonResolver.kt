@@ -16,6 +16,9 @@ object AddonResolver {
     fun failed(addon: String, song: String) { failures["$addon:$song"] = System.nanoTime() / 1_000_000 + 120_000 }
     fun retry() { failures.clear() }
 
+    /** Add-ons that answered HTTP 429, by key, with when they may be asked again: asking sooner only extends the limit. */
+    private val limitedUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     /**
      * Every usable add-on is asked at once; of the verified matches that come
      * back, the best quality wins, and between equals the one higher in the
@@ -58,6 +61,12 @@ object AddonResolver {
             if ((failures["${addon.key}:${song.videoId}"] ?: 0) > System.nanoTime() / 1_000_000) { report("${addon.manifest.name}: recent playback failure; skipped"); return null }
             if (!AddonStore.usable(addon)) { report("${addon.manifest.name}: only used with wired headphones, a USB DAC or HDMI, as its owner asks"); return null }
             if (download && !addon.manifest.downloads) { report("${addon.manifest.name}: streaming only"); return null }
+            val wait = (limitedUntil[addon.key] ?: 0) - System.nanoTime() / 1_000_000
+            if (wait > 0) {
+                // Still an error to come back to, but nothing is sent until the add-on said it may be.
+                outcome[0] = true; outcome[1] = true
+                report("${addon.manifest.name}: rate limited; asked again in ${(wait + 999) / 1_000} s"); return null
+            }
             val started = System.nanoTime()
             outcome[0] = true
             val answer = withTimeoutOrNull(ADDON_LIMIT_MS) {
@@ -120,7 +129,11 @@ object AddonResolver {
                     }
                     null
                 } catch (e: CancellationException) { throw e }
-                catch (e: AddonHttp.Failure) { outcome[1] = true; report("${addon.manifest.name}: HTTP ${e.status}${if (e.status == 429) " · rate limited" else ""}"); null }
+                catch (e: AddonHttp.Failure) {
+                    outcome[1] = true
+                    if (e.status == 429) limitedUntil[addon.key] = System.nanoTime() / 1_000_000 + maxOf(e.retryAfterSeconds * 1_000, RATE_LIMIT_MS)
+                    report("${addon.manifest.name}: HTTP ${e.status}${if (e.status == 429) " · rate limited" else ""}"); null
+                }
                 catch (_: Exception) { outcome[1] = true; report("${addon.manifest.name}: unavailable or invalid response"); null }
             }
             if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) { outcome[1] = true; report("${addon.manifest.name}: no answer in ${ADDON_LIMIT_MS / 1_000} s") }
@@ -194,6 +207,8 @@ object AddonResolver {
     private const val GRACE_MS = 2_500L
     /** The same for playing: only enough to take answers that came in together. */
     private const val FIRST_GRACE_MS = 250L
+    /** The least an add-on that answered HTTP 429 is left alone for, when it doesn't say. */
+    private const val RATE_LIMIT_MS = 30_000L
     /** Only a guard against a connection that never answers; a slow add-on is waited for. */
     private const val ADDON_LIMIT_MS = 45_000L
     /** Unknown quality never outranks measured CD quality; ties preserve source priority. */

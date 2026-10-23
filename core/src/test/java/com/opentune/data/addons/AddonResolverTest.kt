@@ -132,6 +132,30 @@ class AddonResolverTest {
         assertTrue(calls.isNotEmpty() && calls.all { "bad.example" in it })
     }
 
+    @Test fun aRateLimitedSourceIsNotAskedAgainUntilItsWaitIsOver() = runBlocking {
+        add("limited"); add("good")
+        fun named(base: String) = AddonClient(base, { url ->
+            calls += url
+            val name = AddonProtocol.url(base).host.substringBefore('.')
+            when {
+                "manifest.json" in url -> """{"id":"$name","name":"$name","version":"1"}"""
+                name == "limited" -> throw AddonHttp.Failure(429, 60)
+                "/search" in url -> """{"tracks":[{"id":"right","title":"Wo Noor","artist":"AP Dhillon","duration":180}]}"""
+                else -> """{"url":"https://cdn.example/$name","codec":"flac"}"""
+            }
+        })
+        val heard = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+        assertEquals("good", AddonResolver.resolve(song, 180000, clientFor = ::named, probe = { _, _, _ -> header(16, 44_100) })!!.provider)
+        calls.clear()
+        val lines = java.util.concurrent.CopyOnWriteArrayList<String>()
+        AddonResolver.resolveAll(song, 180000, clientFor = ::named, report = { lines += it }, settled = { key, erred -> heard[key] = erred },
+            probe = { _, _, _ -> header(16, 44_100) })
+        // Nothing went to it, yet it still counts as an error to come back to.
+        assertFalse(calls.any { "limited.example" in it })
+        assertTrue(lines.any { it.startsWith("limited: rate limited; asked again in") })
+        assertEquals(true, heard[AddonStore.addons.value.first().key])
+    }
+
     @Test fun bestAvailableComparesSourcesAndKeepsPriorityForTies() = runBlocking {
         add("first"); add("second")
         val result = AddonResolver.resolve(song, 180000, bestAvailable = true, clientFor = ::client,

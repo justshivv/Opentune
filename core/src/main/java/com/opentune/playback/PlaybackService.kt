@@ -332,7 +332,9 @@ class PlaybackService : MediaLibraryService() {
         scope.launch {
             com.opentune.data.addons.AddonStore.revision.collect { revision ->
                 // Searched again at once, the misses forgotten, but quietly: not as if asked from the menu.
-                if (revision > 0) scheduleUpgrade(force = true, asked = false)
+                // A song already on a verified FLAC from an add-on still allowed is left on it: asking
+                // every add-on again moments after they answered only got them rate limiting.
+                if (revision > 0 && !playingAllowedLossless()) scheduleUpgrade(force = true, asked = false, quiet = true)
             }
         }
         scope.launch { PlaybackRequests.upgrade.collect { scheduleUpgrade(force = true) } }
@@ -1298,6 +1300,14 @@ class PlaybackService : MediaLibraryService() {
                 job.invokeOnCompletion { if (upgradeJob === job) NerdStats.onUpgrade(null) }
             } else scheduleUpgrade(quiet = true)
         }
+    }
+
+    /** Whether the song playing is on a verified lossless file that may still be played. */
+    private fun playingAllowedLossless(): Boolean {
+        val item = mediaSession?.player?.currentMediaItem ?: return false
+        val key = item.localConfiguration?.uri?.let(::selectedUri)?.let(::externalStreamKeyOf) ?: return false
+        val rendition = ExternalStreams.get(item.mediaId, key) ?: return false
+        return rendition.lossless && ExternalStreams.allowed(true) && runCatching { ExternalStreams.resolve(item.mediaId, key) }.isSuccess
     }
 
     /** The background re-asking of add-ons that erred, for the song it's for; see [retryErredAddons]. */
@@ -2413,7 +2423,7 @@ class PlaybackService : MediaLibraryService() {
         /** A FLAC search that failed only on server errors: its erring add-ons are asked again after each of these waits. */
         val LOSSLESS_RETRY_MS = longArrayOf(3_000L, 6_000L, 12_000L)
         /** With a FLAC already found, the add-ons that erred are asked again after each of these waits. */
-        val ERRED_RETRY_MS = longArrayOf(4_000L, 10_000L, 20_000L)
+        val ERRED_RETRY_MS = longArrayOf(4_000L, 10_000L, 20_000L, 40_000L)
         /** A source's file is pinged with a read this size... */
         const val PING_BYTES = 65_536
         /** ...and counted as not answering after this long. */
