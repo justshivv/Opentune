@@ -45,7 +45,11 @@ object AddonStore {
         val old = state.value.firstOrNull { it.key == key } ?: return
         val visible = if (old.admin) manifest.copy(name = old.manifest.name) else manifest
         if (old.manifest == visible) return
-        save(state.value.map { if (it.key == key) it.copy(manifest = visible) else it })
+        // A new name, version or setting list changes nothing about what may be played: kept
+        // without a new revision. Each one used to throw away every verified file found so far
+        // and restart the song's upgrade, once per add-on after every launch.
+        val matters = old.manifest.outputRequired != visible.outputRequired || old.manifest.downloads != visible.downloads
+        save(state.value.map { if (it.key == key) it.copy(manifest = visible) else it }, bump = matters)
     }
     @Synchronized fun syncCommunity(incoming: List<AudioAddon>) {
         val incomingByKey = incoming.associateBy { it.key }
@@ -57,7 +61,7 @@ object AddonStore {
         if (next != state.value) save(next)
     }
     fun usable(addon: AudioAddon): Boolean = addon.enabled && (!addon.manifest.outputRequired || outputAllowed())
-    private fun save(value: List<AudioAddon>) {
+    private fun save(value: List<AudioAddon>, bump: Boolean = true) {
         val array = JSONArray()
         value.forEach { e ->
             val settings = JSONArray()
@@ -70,6 +74,7 @@ object AddonStore {
             array.put(JSONObject().put("key", e.key).put("base", e.base).put("enabled", e.enabled).put("admin", e.admin).put("manifest", manifest))
         }
         check(preferences?.edit()?.putString("items", array.toString())?.commit() == true) { "Could not save add-ons." }
-        state.value = value; revision.value++; onChanged()
+        state.value = value
+        if (bump) { revision.value++; onChanged() }
     }
 }

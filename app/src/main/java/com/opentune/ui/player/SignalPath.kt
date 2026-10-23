@@ -343,7 +343,7 @@ private class BeamPath(private val centres: List<Float>, private val cx: Float, 
 private fun DrawScope.drawRing(ink: Color, c: Offset, r: Float, act: Float) {
     if (act > 0f) {
         drawCircle(
-            Brush.radialGradient(listOf(ink.copy(alpha = 0.30f * act), Color.Transparent), center = c, radius = r + 10.dp.toPx()),
+            Brush.radialGradient(listOf(ink.copy(alpha = 0.30f * act), ink.copy(alpha = 0f)), center = c, radius = r + 10.dp.toPx()),
             radius = r + 10.dp.toPx(), center = c, blendMode = BlendMode.Plus,
         )
         drawCircle(ink.copy(alpha = 0.22f * act), r + 1.2.dp.toPx(), c, style = Stroke(2.dp.toPx()))
@@ -369,7 +369,7 @@ private fun DrawScope.drawBeam(path: BeamPath, head: Float, ink: Color, fade: Fl
         drawCircle(ink.copy(alpha = 0.95f * f * f * fade), 1.3.dp.toPx(), p)
     }
     val h = path.at(head)
-    drawCircle(Brush.radialGradient(listOf(ink.copy(alpha = 0.55f * fade), Color.Transparent), center = h, radius = 8.dp.toPx()), 8.dp.toPx(), h, blendMode = BlendMode.Plus)
+    drawCircle(Brush.radialGradient(listOf(ink.copy(alpha = 0.55f * fade), ink.copy(alpha = 0f)), center = h, radius = 8.dp.toPx()), 8.dp.toPx(), h, blendMode = BlendMode.Plus)
     drawCircle(Color.White.copy(alpha = fade), 2.dp.toPx(), h)
 }
 

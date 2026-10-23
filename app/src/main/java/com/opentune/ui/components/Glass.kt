@@ -301,7 +301,7 @@ fun TopEdgeFrost(modifier: Modifier = Modifier) {
                     progressive = HazeProgressive.verticalGradient(easing = EaseOutCubic, startIntensity = 1f, endIntensity = 0f)
                 },
             )
-            .background(Brush.verticalGradient(0f to page.copy(alpha = 0.6f), 0.55f to page.copy(alpha = 0.25f), 1f to Color.Transparent)),
+            .background(Brush.verticalGradient(0f to page.copy(alpha = 0.6f), 0.55f to page.copy(alpha = 0.25f), 1f to page.copy(alpha = 0f))),
     )
 }
 

@@ -714,7 +714,7 @@ private fun TabOrb(tab: ChromeTab, searchSelected: Boolean, modifier: Modifier, 
 @Composable
 internal fun Modifier.dockHighlight(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val light = Color.White.copy(alpha = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) 0.22f else 0.6f)
-    return this.border(1.dp, Brush.verticalGradient(listOf(light, Color.Transparent, Color.Transparent)), shape)
+    return this.border(1.dp, Brush.verticalGradient(listOf(light, light.copy(alpha = 0f), light.copy(alpha = 0f))), shape)
 }
 
 /**

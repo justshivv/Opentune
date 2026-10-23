@@ -32,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -197,7 +198,12 @@ private fun SpeedDialTile(item: ShelfItem, onClick: () -> Unit, modifier: Modifi
 /** Every Speed dial pick, four to a row, each with its kind and artist under it. */
 @Composable
 fun SpeedDialScreen(contentPadding: PaddingValues, onItemClick: (ShelfItem) -> Unit, onBack: () -> Unit) {
-    val items = SpeedDialItems.items
+    // Opened again after Android closed the app in the background, Home hasn't set them
+    // yet: then the picks made on the phone, rather than an empty page.
+    val records by com.opentune.data.history.History.records.collectAsState()
+    val plays by com.opentune.data.history.ListenedCollections.plays.collectAsState()
+    val local = remember(records, plays) { SpeedDial.fromHistory(records, collections = plays) }
+    val items = SpeedDialItems.items.ifEmpty { local }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = (maxWidth - 16.dp) / 4
         LazyVerticalGrid(GridCells.Fixed(4), contentPadding = contentPadding, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {

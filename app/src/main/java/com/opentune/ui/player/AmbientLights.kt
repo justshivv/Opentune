@@ -96,7 +96,7 @@ fun AmbientLights(
         val wash = lerp(shown[1], Color.White, 0.35f)
         if (!field) drawRect(
             Brush.verticalGradient(
-                0f to Color.Transparent,
+                0f to wash.copy(alpha = 0f),
                 0.55f to wash.copy(alpha = 0.10f * light * lift),
                 1f to wash.copy(alpha = 0.38f * light * lift),
             ),
@@ -118,7 +118,7 @@ fun AmbientLights(
                     0.4f to c.copy(alpha = a * 0.55f),
                     0.6f to c.copy(alpha = a * 0.26f),
                     0.8f to c.copy(alpha = a * 0.07f),
-                    1f to Color.Transparent,
+                    1f to c.copy(alpha = 0f),
                     center = Offset(x, y),
                     radius = r,
                 ),

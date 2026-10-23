@@ -69,6 +69,7 @@ import androidx.compose.material.icons.rounded.FormatAlignCenter
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Gradient
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.HighQuality
@@ -1034,6 +1035,9 @@ private fun settingsSections(
                 Entry("High performance mode", "120hz 90hz smooth fps refresh rate frame rate scrolling performance battery unrestricted lag") {
                     HighPerformanceRows(ui)
                 },
+                Entry("Speed dial", "home most played quick grid shortcuts favourites top") {
+                    ToggleRow("Speed dial", ui.speedDial, { v -> AppSettings.updateUi { it.copy(speedDial = v) } }, summary = "Your most-played songs, albums and artists at the top of Home", icon = Icons.Rounded.GridView)
+                },
                 Entry("Separate Explore tab", "explore tab dock search page navigation moods genres own") {
                     ToggleRow(
                         "Separate Explore tab",
@@ -1279,7 +1283,7 @@ private fun settingsSections(
                     NavRow("Import data", { importer.launch(arrayOf("application/json")) }, summary = "Replaces the settings, history, likes and playlists on this device", icon = Icons.Rounded.Download)
                 },
                 Entry("Clear listening history", "delete history") {
-                    NavRow("Clear listening history", { History.clear(); message = "Listening history cleared." }, summary = "Removes Recents and Replay data", icon = Icons.Rounded.DeleteSweep)
+                    NavRow("Clear listening history", { History.clear(); com.opentune.data.history.ListenedCollections.clear(); message = "Listening history cleared." }, summary = "Removes Recents and Replay data", icon = Icons.Rounded.DeleteSweep)
                 },
             ),
         ),

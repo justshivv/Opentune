@@ -167,7 +167,7 @@ private fun MarkIndicator(state: PullToRefreshState, refreshing: Boolean, still:
                     val x = MARK_LEFT - 20f + (mw + 40f) * t
                     drawPath(
                         mark,
-                        Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.75f), Color.Transparent), start = Offset(x - 12f, 40f), end = Offset(x + 12f, 68f)),
+                        Brush.linearGradient(listOf(Color.White.copy(alpha = 0f), Color.White.copy(alpha = 0.75f), Color.White.copy(alpha = 0f)), start = Offset(x - 12f, 40f), end = Offset(x + 12f, 68f)),
                     )
                 }
             }

@@ -565,7 +565,7 @@ fun Placeholder(modifier: Modifier = Modifier, shape: Shape = MaterialTheme.shap
                 val x = -band + phase * (screenPx + band * 2) - left
                 drawRect(
                     Brush.linearGradient(
-                        0f to Color.Transparent, 0.5f to sheen, 1f to Color.Transparent,
+                        0f to sheen.copy(alpha = 0f), 0.5f to sheen, 1f to sheen.copy(alpha = 0f),
                         start = androidx.compose.ui.geometry.Offset(x - band / 2, 0f),
                         end = androidx.compose.ui.geometry.Offset(x + band / 2, size.height * 0.35f),
                     ),

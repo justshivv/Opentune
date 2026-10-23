@@ -120,6 +120,11 @@ object MusicRepository {
 
     /** How many times Home has been refreshed: each refresh seeds its picks from a different recent song. */
     private val homeRefreshes = java.util.concurrent.atomic.AtomicInteger(0)
+    /**
+     * Mixed into the picks' shuffle, different each time the app starts: with the refresh
+     * count alone, every launch drew the same songs in the same order off the same last song.
+     */
+    private val launchShuffle = kotlin.random.Random.nextInt(1, Int.MAX_VALUE / 2)
     /** The songs the last picks shelf showed, so a refresh brings new ones forward. */
     @Volatile private var lastPicks: Set<String> = emptySet()
 
@@ -132,6 +137,8 @@ object MusicRepository {
         }
         val response = Innertube.browse("FEmusic_home")
         val first = InnertubeParser.parseHome(response).filter { it.items.isNotEmpty() }
+        // In the exported log, so a Home that looks wrong can be compared with what YouTube sent.
+        DebugLog.d("Home", "first page: " + first.joinToString { "${it.title} (${it.items.size}${if (it.personal) ", for the account" else ""})" })
         homeMoreJob?.cancel()
         homeMoreJob = scope.launch { followHome(first, InnertubeParser.sectionListContinuation(response)) }
         first
@@ -260,7 +267,7 @@ object MusicRepository {
             }
         }.awaitAll().filterNotNull()
         _seeds.value = seeds
-        val shelves = listOfNotNull(HomeSeed.quickPicks(seeds, homeRefreshes.get()))
+        val shelves = listOfNotNull(HomeSeed.quickPicks(seeds, launchShuffle + homeRefreshes.get()))
         seedCache = ids to Fetched(shelves, now)
         shelves
     }
@@ -287,7 +294,7 @@ object MusicRepository {
         val fresh = result.songs.filter { it.videoId != last.videoId && it.videoId !in heard }
         // What the last shelf showed goes to the back, and the order changes with each refresh.
         val (seen, unseen) = fresh.partition { it.videoId in lastPicks }
-        val songs = (unseen.shuffled(kotlin.random.Random(turn)) + seen).take(20)
+        val songs = (unseen.shuffled(kotlin.random.Random(launchShuffle + turn)) + seen).take(20)
         if (songs.size < 4) return emptyList()
         lastPicks = songs.mapTo(HashSet()) { it.videoId }
         val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }

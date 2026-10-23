@@ -71,13 +71,14 @@ internal fun EchoGlowBackground(running: Boolean, modifier: Modifier = Modifier)
         fun oscillate(min: Float, max: Float, offset: Float): Float =
             min + (max - min) * ((sin(2f * PI.toFloat() * (p + offset)) + 1f) / 2f)
         drawRect(scheme.surface)
+        // Soft falloffs in their own colour: a straight fade to transparent black left a dark rim.
         drawRect(Brush.radialGradient(
-            listOf(color(0).copy(alpha = strength), Color.Transparent),
+            *com.opentune.ui.components.glowStops(color(0), strength, shape = 1.6f),
             center = Offset(size.width * oscillate(0f, 1f, 0f), size.height * oscillate(0f, 0.5f, 0.1f)),
             radius = size.width.coerceAtLeast(1f) * 1.2f,
         ))
         drawRect(Brush.radialGradient(
-            listOf(color(1).copy(alpha = strength * 0.875f), Color.Transparent),
+            *com.opentune.ui.components.glowStops(color(1), strength * 0.875f, shape = 1.6f),
             center = Offset(size.width * oscillate(1f, 0f, 0.2f), size.height * oscillate(0.5f, 1f, 0.3f)),
             radius = size.width.coerceAtLeast(1f),
         ))

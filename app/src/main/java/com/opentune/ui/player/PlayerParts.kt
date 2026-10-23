@@ -286,11 +286,9 @@ private fun MeshGradient(artworkUrl: String?, animate: Boolean, modifier: Modifi
             val radius = maxOf(w, h) * (0.36f + 0.04f * sin(phase + i))
             val c = colors[i]
             drawCircle(
+                // Bright well out, then easing to nothing, so no patch shows a rim.
                 Brush.radialGradient(
-                    0f to c,
-                    0.4f to c.copy(alpha = 0.85f),
-                    0.7f to c.copy(alpha = 0.4f),
-                    1f to Color.Transparent,
+                    *com.opentune.ui.components.glowStops(c, 1f, shape = 2.5f),
                     center = Offset(cx, cy),
                     radius = radius,
                 ),
@@ -493,17 +491,10 @@ private fun CoverGlow(playing: Boolean, scale: Float, modifier: Modifier) {
         val w = size.width * scale
         val c = Offset(center.x, center.y + w * 0.12f)
         val r = w * (0.7f + 0.07f * s)
-        drawCircle(
-            Brush.radialGradient(
-                0f to a.copy(alpha = (0.7f + 0.25f * s).coerceAtMost(1f) * strength),
-                0.5f to b.copy(alpha = (0.35f + 0.15f * s) * strength),
-                1f to Color.Transparent,
-                center = c,
-                radius = r,
-            ),
-            r,
-            c,
-        )
+        val peak = (0.7f + 0.25f * s).coerceAtMost(1f) * strength
+        // A straight fade to transparent black showed its edge as a line across the player.
+        val stops = com.opentune.ui.components.glowStops(a, peak, b)
+        drawCircle(Brush.radialGradient(*stops, center = c, radius = r), r, c)
     }
 }
 
@@ -633,7 +624,7 @@ fun SeekBar(
                 val at = sweep.value * size.width
                 val band = size.width * 0.25f
                 drawRoundRect(
-                    Brush.horizontalGradient(0f to Color.Transparent, 0.5f to sheen, 1f to Color.Transparent, startX = at - band, endX = at + band),
+                    Brush.horizontalGradient(0f to sheen.copy(alpha = 0f), 0.5f to sheen, 1f to sheen.copy(alpha = 0f), startX = at - band, endX = at + band),
                     Offset(0f, y), Size(size.width, h), r,
                 )
                 return@Canvas

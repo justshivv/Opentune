@@ -84,7 +84,7 @@ fun OpeningReveal(onDive: (Float) -> Unit, onDone: () -> Unit) {
                     drawPath(
                         mark,
                         Brush.linearGradient(
-                            listOf(Color.Transparent, Color(0xFFDADADA).copy(alpha = 0.9f), Color.Transparent),
+                            listOf(Color(0x00DADADA), Color(0xFFDADADA).copy(alpha = 0.9f), Color(0x00DADADA)),
                             start = Offset(x - 18f, 30f),
                             end = Offset(x + 18f, 78f),
                         ),

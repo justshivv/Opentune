@@ -354,7 +354,7 @@ private fun BoxScope.WelcomeBottomBar(step: WelcomeStep, picks: List<ExploreFeed
     Column(
         Modifier.align(Alignment.BottomCenter).fillMaxWidth()
             // The step's content fades out under the buttons rather than stopping at a line.
-            .background(Brush.verticalGradient(0f to Color.Transparent, 0.35f to page.copy(alpha = 0.88f), 1f to page))
+            .background(Brush.verticalGradient(0f to page.copy(alpha = 0f), 0.35f to page.copy(alpha = 0.88f), 1f to page))
             .navigationBarsPadding()
             .padding(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

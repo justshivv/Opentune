@@ -49,8 +49,8 @@ fun PlaylistCover(name: String, covers: List<String?>, modifier: Modifier = Modi
             0 -> Canvas(Modifier.matchParentSize()) {
                 drawRect(Brush.linearGradient(listOf(from, to), start = Offset.Zero, end = Offset(size.width, size.height)))
                 // Two soft lights so it isn't flat.
-                drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.28f), Color.Transparent), Offset(size.width * 0.2f, size.height * 0.15f), size.minDimension * 0.7f), size.minDimension * 0.7f, Offset(size.width * 0.2f, size.height * 0.15f))
-                drawCircle(Brush.radialGradient(listOf(to.copy(alpha = 0.9f), Color.Transparent), Offset(size.width * 0.95f, size.height), size.minDimension * 0.8f), size.minDimension * 0.8f, Offset(size.width * 0.95f, size.height))
+                drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.28f), Color.White.copy(alpha = 0f)), Offset(size.width * 0.2f, size.height * 0.15f), size.minDimension * 0.7f), size.minDimension * 0.7f, Offset(size.width * 0.2f, size.height * 0.15f))
+                drawCircle(Brush.radialGradient(listOf(to.copy(alpha = 0.9f), to.copy(alpha = 0f)), Offset(size.width * 0.95f, size.height), size.minDimension * 0.8f), size.minDimension * 0.8f, Offset(size.width * 0.95f, size.height))
                 // The name's own sound wave across the middle: rounded bars, brightest in the centre.
                 val bars = wave.size
                 val gap = size.width / (bars * 2f + 1f)

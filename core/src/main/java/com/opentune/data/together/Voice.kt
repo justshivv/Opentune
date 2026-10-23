@@ -195,9 +195,11 @@ class VoiceRecorder(
         var spurt = false
         var spurtCfgSent = false
         var spurtFrames = 0
+        // The microphone erring (taken by a call) ends the clip, rather than feeding empty buffers until let go.
+        var micGone = false
         while (!done) {
             if (!eosQueued) {
-                val stopNow = !running || framesMs((samplesIn / FRAME_SAMPLES).toInt()) >= maxMs
+                val stopNow = !running || micGone || framesMs((samplesIn / FRAME_SAMPLES).toInt()) >= maxMs
                 val inIndex = codec.dequeueInputBuffer(10_000)
                 if (inIndex >= 0) {
                     val buf = codec.getInputBuffer(inIndex)!!
@@ -211,7 +213,10 @@ class VoiceRecorder(
                             codec.queueInputBuffer(inIndex, 0, n, samplesIn * 1_000_000 / RATE, 0)
                             samplesIn += n / 2
                             if (gate) voiced.addLast(speech.next(SpeechGate.rms(pcm, n)) && !muted)
-                        } else codec.queueInputBuffer(inIndex, 0, 0, samplesIn * 1_000_000 / RATE, 0)
+                        } else {
+                            if (n < 0) micGone = true
+                            codec.queueInputBuffer(inIndex, 0, 0, samplesIn * 1_000_000 / RATE, 0)
+                        }
                     }
                 }
             }

@@ -473,7 +473,7 @@ private fun Modifier.roomCard(inset: Dp = 16.dp): Modifier {
     val shape = RoundedCornerShape(26.dp)
     return this.fillMaxWidth().padding(horizontal = inset).clip(shape)
         .background(scheme.surfaceContainerHigh.copy(alpha = if (dark) 0.78f else 0.88f))
-        .background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.06f else 0.16f), 0.4f to Color.Transparent))
+        .background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.06f else 0.16f), 0.4f to Color.White.copy(alpha = 0f)))
         .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.16f else 0.5f), Color.White.copy(alpha = 0.03f))), shape)
 }
 

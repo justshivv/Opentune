@@ -26,6 +26,14 @@ class SpeedDialTest {
         assertEquals(listOf("kept"), SpeedDial.fromHistory(records, now).map { it.videoId })
     }
 
+    @Test fun albumsAndPlaylistsPlayedOftenJoinTheSongs() {
+        val records = listOf(play("a", 1.0), play("a", 2.0), play("b", 1.0))
+        val album = CollectionPlay("MPREb_album", "Album", "Artist", playedAt = listOf(now - day, now - 2 * day))
+        val items = SpeedDial.fromHistory(records, now, collections = listOf(album))
+        assertEquals("MPREb_album", items.first().browseId)
+        assertEquals(listOf("a", "b"), items.drop(1).map { it.videoId })
+    }
+
     @Test fun recognisesYouTubeMusicsShelf() {
         assertTrue(SpeedDial.isSpeedDial("Speed dial"))
         assertTrue(SpeedDial.isSpeedDial(" speed Dial "))

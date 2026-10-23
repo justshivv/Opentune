@@ -120,8 +120,10 @@ fun HomeScreen(
     val feed = remember(allShelves) { arrangeHomeShelves(allShelves) }
     // YouTube Music's own Speed dial when it sends one (signed in), else the songs
     // played most on this phone, with what's hidden or filtered left out.
-    val localDial = remember(records, hidden, hideExplicit) {
-        hidden.shelves(ContentFilter.shelves(listOf(HomeShelf(com.opentune.data.history.SpeedDial.TITLE, com.opentune.data.history.SpeedDial.fromHistory(records))), hideExplicit))
+    val collectionPlays by com.opentune.data.history.ListenedCollections.plays.collectAsState()
+    val localDial = remember(records, collectionPlays, hidden, hideExplicit) {
+        val picks = com.opentune.data.history.SpeedDial.fromHistory(records, collections = collectionPlays)
+        hidden.shelves(ContentFilter.shelves(listOf(HomeShelf(com.opentune.data.history.SpeedDial.TITLE, picks)), hideExplicit))
             .firstOrNull()?.items.orEmpty()
     }
     val speedDial = feed.speedDial?.items?.takeIf { it.size >= SPEED_DIAL_MIN } ?: localDial
@@ -198,7 +200,12 @@ fun HomeScreen(
             item(key = "top") {
                 // A greeting for the time of day, by name when signed in, with the
                 // account (and settings) one tap away on the right.
-                val hour = remember { java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) }
+                // Read again each time Home comes back into view: kept from the morning,
+                // it still said good morning at night.
+                val shownAt by page.currentStateFlow.collectAsState()
+                val hour = remember(shownAt.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+                    java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                }
                 val greeting = when (hour) {
                     in 5..11 -> "Good morning"
                     in 12..16 -> "Good afternoon"
@@ -244,7 +251,7 @@ fun HomeScreen(
                 }
             }
             item(key = "festival") { FestivalCard() }
-            if (speedDial.size >= SPEED_DIAL_MIN) {
+            if (ui.speedDial && speedDial.size >= SPEED_DIAL_MIN) {
                 item(key = "speed-dial") {
                     SpeedDialSection(
                         speedDial,
@@ -365,8 +372,10 @@ private const val SPEED_DIAL_MIN = 3
 internal fun arrangeHomeShelves(shelves: List<HomeShelf>): HomeSections {
     val all = shelves.filter { it.items.isNotEmpty() }
     // YouTube Music's Speed dial has its own place at the top, not among the cards.
-    val speedDial = all.firstOrNull { com.opentune.data.history.SpeedDial.isSpeedDial(it.title) }
-    val available = all.filterNot { com.opentune.data.history.SpeedDial.isSpeedDial(it.title) }
+    // Known by its title in English, or in any language by the account's photo by its heading.
+    fun isDial(shelf: HomeShelf) = com.opentune.data.history.SpeedDial.isSpeedDial(shelf.title) || shelf.personal
+    val speedDial = all.firstOrNull(::isDial)
+    val available = all.filterNot(::isDial)
     val pickIndex = listOf(com.opentune.data.reco.HomeSeed.TITLE_PREFIX, "Because you played").firstNotNullOfOrNull { prefix ->
         available.indexOfFirst { it.isQuickPicks() && it.title.startsWith(prefix, ignoreCase = true) }.takeIf { it >= 0 }
     } ?: available.indexOfFirst { it.isQuickPicks() }

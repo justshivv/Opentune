@@ -29,6 +29,8 @@ object ExternalStreams {
     private val saavnMissUntil = ConcurrentHashMap<String, Long>()
     private val transientMiss = ConcurrentHashMap.newKeySet<String>()
     private val reports = ConcurrentHashMap<String, String>()
+    /** Songs whose FLAC search ran to the end since the add-ons last changed, found or not. */
+    private val losslessSearched = ConcurrentHashMap.newKeySet<String>()
     private const val TTL = 5 * 60_000L
 
     fun selectionDetail(videoId: String): String? = reports[videoId]
@@ -102,7 +104,25 @@ object ExternalStreams {
             (!it.losslessUnmeteredOnly || !AppSettings.onMeteredNetwork())
     }
 
+    private val losslessInFlight = ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Rendition?>>()
+
+    /**
+     * The best external stream for [song]. A FLAC search already running for it (one readying
+     * the song ahead, say) is joined rather than started again, so a song is never searched
+     * twice at once and the add-ons aren't asked the same thing over and over.
+     */
     suspend fun find(song: Song, durationMs: Long, beforePlayback: Boolean = false, force: Boolean = false, losslessOnly: Boolean = false): Rendition? {
+        if (!losslessOnly || force) return findNow(song, durationMs, beforePlayback, force, losslessOnly)
+        val lookup = losslessInFlight.computeIfAbsent(song.videoId) {
+            background.async(start = kotlinx.coroutines.CoroutineStart.LAZY) { findNow(song, durationMs, beforePlayback, false, true) }
+                // Gone once it's answered, whoever was waiting: a finished search is never handed out again.
+                .also { d -> d.invokeOnCompletion { losslessInFlight.remove(song.videoId, d) } }
+        }
+        lookup.start()
+        return lookup.await()
+    }
+
+    private suspend fun findNow(song: Song, durationMs: Long, beforePlayback: Boolean, force: Boolean, losslessOnly: Boolean): Rendition? {
         val videoId = song.videoId
         if (!allowed()) {
             report(videoId, if (AppSettings.playback.value.losslessUnmeteredOnly && AppSettings.onMeteredNetwork())
@@ -144,6 +164,10 @@ object ExternalStreams {
                 }
             }) else emptyList()
         val track = tracks.firstOrNull()
+        if (allowed(true) && !losslessMissed) {
+            if (losslessSearched.size > 512) losslessSearched.clear()
+            losslessSearched += videoId
+        }
         if (allowed(true)) detail += if (track == null) "FLAC: no verified matching stream available" else "Add-on audio selected; playback diagnostics show the decoded format"
         val askedSaavn = !losslessOnly && track == null && allowed(false) && !saavnMissed && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
         val saavn = if (askedSaavn) JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
@@ -234,6 +258,7 @@ object ExternalStreams {
         losslessMissUntil.clear()
         saavnMissUntil.clear()
         transientMiss.clear()
+        losslessSearched.clear()
         com.opentune.data.addons.AddonResolver.retry()
         reports.clear()
         // Keep currently playing rendition keys valid until the player swaps sources.
@@ -247,6 +272,8 @@ object ExternalStreams {
         val addon = failed?.addonId
         if (addon != null) com.opentune.data.addons.AddonResolver.failed(addon, videoId)
         pinned.entries.removeIf { it.value.first == videoId && (key == null || it.key == key) }
+        // Not offered again as a fallback: the next try went straight back to the file that had just failed.
+        if (failed != null) alternatives.computeIfPresent(videoId) { _, list -> list.filterNot { it.key == failed.key || it.url == failed.url }.ifEmpty { null } }
         // A JioSaavn stream that broke while playing isn't offered again for a while.
         if (addon == null && renditions[videoId] == null) saavnMissUntil[videoId] = now() + TTL
         report(videoId, when {
@@ -274,6 +301,9 @@ object ExternalStreams {
 
     /** Whether [videoId]'s last FLAC search came back empty only because servers erred: worth asking again soon. */
     fun missWasTransient(videoId: String): Boolean = videoId in transientMiss
+
+    /** Whether a FLAC search for [videoId] has run to the end. */
+    fun losslessSearched(videoId: String): Boolean = videoId in losslessSearched
 
     private const val MISS_MS = 60_000L
     /** What the add-ons report when they erred rather than answered. */
