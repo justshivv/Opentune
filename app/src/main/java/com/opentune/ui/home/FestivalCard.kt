@@ -55,7 +55,14 @@ internal fun FestivalCard() {
     val scope = rememberCoroutineScope()
     var asking by remember { mutableStateOf(!Festivals.asked(context)) }
     var festival by remember { mutableStateOf<Festivals.Festival?>(null) }
-    LaunchedEffect(Unit) { festival = Festivals.today(context) }
+    LaunchedEffect(Unit) {
+        // Location allowed since (in the phone's settings, or for Radio): the country is read without asking.
+        if (Festivals.country(context) == null && ApproxLocation.granted(context)) {
+            asking = false
+            Festivals.answered(context, true)
+        }
+        festival = Festivals.today(context)
+    }
     fun answer(allowed: Boolean) {
         asking = false
         scope.launch {
@@ -63,20 +70,33 @@ internal fun FestivalCard() {
             festival = Festivals.today(context)
         }
     }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { answer(it) }
+    // Android answers at once, without asking, once location has been refused for good:
+    // then Allow opens the app's settings, where it can still be turned on.
+    var launchedAt by remember { mutableStateOf(0L) }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted && android.os.SystemClock.elapsedRealtime() - launchedAt < 400) {
+            runCatching {
+                context.startActivity(
+                    android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}")),
+                )
+            }
+        }
+        answer(granted)
+    }
 
     AnimatedVisibility(asking, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
         Banner {
             Column(Modifier.weight(1f)) {
                 Text("Festival wishes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "OpenTune can greet you on the festivals where you live. It uses your rough location once to know your country, and keeps only that.",
+                    "OpenTune can greet you on the festivals where you live. It uses your rough location once to know your country, and keeps only that. Not now asks again in about six weeks.",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 4.dp),
                 )
                 Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilledTonalButton(onClick = {
-                        if (ApproxLocation.granted(context)) answer(true) else permission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                        if (ApproxLocation.granted(context)) answer(true)
+                        else { launchedAt = android.os.SystemClock.elapsedRealtime(); permission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }
                     }) { Text("Allow") }
                     TextButton(onClick = { answer(false) }) { Text("Not now") }
                 }

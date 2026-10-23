@@ -50,6 +50,13 @@ class FestivalsTest {
         assertEquals("Ramzan Id", Festivals.festiveName("Ramzan Id (tentative)"))
     }
 
+    @Test fun asksAgainAMonthAndAHalfAfterBeingTurnedDown() {
+        val day = 86_400_000L
+        assertEquals(false, Festivals.shouldWait(0L, 100 * day))
+        assertEquals(true, Festivals.shouldWait(100 * day, 144 * day))
+        assertEquals(false, Festivals.shouldWait(100 * day, 145 * day))
+    }
+
     @Test fun namesEachCountrysCalendar() {
         assertEquals("indian", Festivals.calendarId("IN"))
         assertEquals("usa", Festivals.calendarId("us"))

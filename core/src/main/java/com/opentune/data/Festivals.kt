@@ -23,17 +23,28 @@ object Festivals {
 
     private const val PREFS = "festivals"
     private const val K_COUNTRY = "country"
-    private const val K_ASKED = "asked"
+    private const val K_ASKED = "askedAt"
     private const val K_DISMISSED = "dismissed"
     private const val K_CACHE = "cache"
     private const val K_CACHE_FOR = "cacheFor"
     private const val K_CACHE_AT = "cacheAt"
     private const val REFRESH_MS = 7 * 24 * 60 * 60 * 1000L
+    /** About a month and a half between asks while location is turned down. */
+    private const val ASK_AGAIN_MS = 45 * 24 * 60 * 60 * 1000L
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    /** Whether the one-time question about location has been answered, either way. */
-    fun asked(context: Context): Boolean = prefs(context).getBoolean(K_ASKED, false)
+    /**
+     * Whether the question about location needn't show now: the country is known, or it
+     * was turned down less than [ASK_AGAIN_MS] ago. Turned down, it comes back after that,
+     * until it's allowed.
+     */
+    fun asked(context: Context, now: Long = System.currentTimeMillis()): Boolean {
+        val p = prefs(context)
+        return p.getString(K_COUNTRY, null) != null || shouldWait(p.getLong(K_ASKED, 0L), now)
+    }
+
+    internal fun shouldWait(declinedAt: Long, now: Long): Boolean = declinedAt > 0 && now - declinedAt < ASK_AGAIN_MS
 
     fun country(context: Context): String? = prefs(context).getString(K_COUNTRY, null)
 
@@ -42,7 +53,8 @@ object Festivals {
      * now and kept. Without it, no banner.
      */
     suspend fun answered(context: Context, allowed: Boolean) {
-        prefs(context).edit { putBoolean(K_ASKED, true) }
+        // Kept as when it was asked: turned down, or a country that couldn't be read, it's asked again later.
+        prefs(context).edit { putLong(K_ASKED, System.currentTimeMillis()) }
         if (!allowed) return
         val location = ApproxLocation.get(context) ?: return
         val code = ApproxLocation.place(context, location.latitude, location.longitude)?.countryCode?.uppercase(Locale.ROOT) ?: return
