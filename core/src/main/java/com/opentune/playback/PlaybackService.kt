@@ -1250,19 +1250,22 @@ class PlaybackService : MediaLibraryService() {
             val item = player.currentMediaItem ?: continue
             val id = item.mediaId
             val now = SystemClock.elapsedRealtime()
-            if (id != song) { song = id; tries = 0; lastAt = now }
+            if (id != song) { song = id; tries = 0; lastAt = now - GUARD_GAP_MS }
             if (!player.isPlaying || upgradeJob?.isActive == true || swappingTo != null || swapRamping || crossfade?.blending == true) continue
             if (!isYouTubeId(id) || Podcasts.isEpisode(id)) continue
             val raw = item.localConfiguration?.uri ?: continue
             if (raw.scheme == "file") continue
             if (startupToken(raw) != null && startupToken(raw)?.let { startupSelections[it]?.selected } == null) continue
-            if (player.currentPosition < GUARD_SETTLE_MS) continue
             if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS + GUARD_EVERY_MS) continue
-            if (tries >= GUARD_TRIES || now - lastAt < GUARD_GAP_MS) continue
+            if (tries >= GUARD_TRIES) continue
             val uri = selectedUri(raw)
             val playing = externalStreamKeyOf(uri)?.let { ExternalStreams.get(id, it) }
             fun score(r: ExternalStreams.Rendition) = com.opentune.data.addons.AddonResolver.qualityScore(r.bits, r.sampleRate)
             val better = ExternalStreams.alternatives(id).filter { playing?.lossless != true || score(it) > score(playing) }
+            val known = better.isNotEmpty()
+            // A verified stream needs a handoff, not another catalog search or a 20-second wait.
+            if (player.currentPosition < if (known) UPGRADE_SETTLE_MS else GUARD_SETTLE_MS) continue
+            if (now - lastAt < if (known) VERIFIED_RETRY_GAP_MS else GUARD_GAP_MS) continue
             val wanted = when {
                 ExternalStreams.allowed(true) && playing?.lossless == true -> better.isNotEmpty()
                 ExternalStreams.allowed(true) -> better.isNotEmpty() || ExternalStreams.missWasTransient(id) || !ExternalStreams.losslessSearched(id)
@@ -1273,11 +1276,17 @@ class PlaybackService : MediaLibraryService() {
             tries++
             lastAt = now
             Log.d(TAG, "Quality check for $id: ${if (better.isNotEmpty()) "a better verified stream is known" else "its search came to nothing"}; upgrading again (try $tries)")
-            if (playing?.lossless == true) {
+            if (known) {
                 upgradeAsked = false
-                upgradeJob = scope.launch {
-                    if (swapToBestAnswering(player, id, better, playing)) updateExternalStats()
+                val job = scope.launch {
+                    val switched = swapToBestAnswering(player, id, better, playing)
+                    if (!switched && player.currentMediaItem?.mediaId == id) {
+                        ExternalStreams.swapFailed(id, swapNotes.map { (provider, why) -> "$provider: $why" })
+                    }
+                    updateExternalStats()
                 }
+                upgradeJob = job
+                job.invokeOnCompletion { if (upgradeJob === job) NerdStats.onUpgrade(null) }
             } else scheduleUpgrade()
         }
     }
@@ -2298,7 +2307,8 @@ class PlaybackService : MediaLibraryService() {
         /** How many songs ahead the lossless source is looked up. */
         const val PREFETCH_AHEAD = 5
         /** How often [guardQuality] looks, how far into a song it starts, how long between its tries, and how many a song gets. */
-        const val GUARD_EVERY_MS = 4_000L
+        const val GUARD_EVERY_MS = 1_000L
+        const val VERIFIED_RETRY_GAP_MS = 2_000L
         const val GUARD_SETTLE_MS = 8_000L
         const val GUARD_GAP_MS = 20_000L
         const val GUARD_TRIES = 4
