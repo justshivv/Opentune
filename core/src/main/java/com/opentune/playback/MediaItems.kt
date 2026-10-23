@@ -42,7 +42,11 @@ fun trackUri(videoId: String): Uri = when {
     Subsonic.isSubsonic(videoId) -> Subsonic.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
     // A station streams from its own server.
     Radio.isRadio(videoId) -> Radio.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
-    else -> Downloads.fileFor(videoId)?.let(Uri::fromFile)
+    // A download is played from its file offline; with internet it streams, so it starts
+    // in the best quality found (the file is YouTube's audio as saved), unless that's off.
+    else -> Downloads.fileFor(videoId)
+        ?.takeUnless { com.opentune.data.settings.AppSettings.playback.value.streamDownloadsOnline && com.opentune.data.settings.AppSettings.isOnline() }
+        ?.let(Uri::fromFile)
         ?: streamUri(videoId, upgraded = UpgradedTracks.contains(videoId))
 }
 

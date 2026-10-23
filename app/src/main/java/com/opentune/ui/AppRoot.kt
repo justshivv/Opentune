@@ -595,7 +595,11 @@ fun AppRoot(vm: PlayerViewModel) {
                             onOpenSettings = { nav.navigate("settings") },
                             onRecognize = { nav.navigate("recognize") },
                             covered = playerCovers,
+                            onOpenSpeedDial = { nav.navigate("speed-dial") },
                         )
+                    }
+                    composable("speed-dial") {
+                        com.opentune.ui.home.SpeedDialScreen(content, onItemClick = openItem, onBack = { nav.popBackStack() })
                     }
                     composable(Tab.EXPLORE.route) {
                         ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, onOpenSettings = { nav.navigate("settings") })

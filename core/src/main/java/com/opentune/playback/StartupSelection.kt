@@ -57,6 +57,11 @@ internal class StartupSelection(
                 null
             } else null
             selected = rendition?.let { externalStreamUri(song.videoId, it.key) } ?: original
+            com.opentune.data.DebugLog.d("StartupSelection", "${song.videoId} starts on " + when {
+                rendition != null -> rendition.label
+                maximum() || saavnWanted() -> "YouTube: JioSaavn had no match within ${lookupBudgetMs / 1000}s"
+                else -> "YouTube: external sources are off for this quality setting"
+            })
         }
         spec.withUri(selected!!)
     }

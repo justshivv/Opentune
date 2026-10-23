@@ -303,7 +303,6 @@ fun PlayerLayout(
 
     var paneName by rememberSaveable { mutableStateOf(if (initialLyrics) Pane.LYRICS.name else Pane.COVER.name) }
     val pane = Pane.valueOf(paneName)
-    fun toggle(p: Pane) { paneName = if (pane == p) Pane.COVER.name else p.name }
     // The cover between the lyrics or queue header and the full cover: tap the
     // small one and it grows into the big one (the lyrics make way); swipe up on
     // the big one and it goes back into the header of the view it came from.
@@ -449,6 +448,16 @@ fun PlayerLayout(
             coverLift = 0f
         }
     }
+    // Where the header's small cover will be, before the lists have ever been shown:
+    // the header row starts at the top left of the page, 8dp down, and its cover is 64dp.
+    var paneCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    val headerInset = with(LocalDensity.current) { 8.dp.toPx() }
+    val headerCover = with(LocalDensity.current) { 64.dp.toPx() }
+    fun headerHome(): androidx.compose.ui.geometry.Rect? {
+        flight.lastSmall?.let { return it }
+        val at = paneCoords?.takeIf { it.isAttached }?.positionInRoot() ?: return null
+        return androidx.compose.ui.geometry.Rect(at.x, at.y + headerInset, at.x + headerCover, at.y + headerInset + headerCover)
+    }
     fun expandCover() {
         liftSettle?.cancel()
         coverLift = 0f
@@ -457,15 +466,29 @@ fun PlayerLayout(
         if (flies && from != null) flight.start(from, toSmall = false)
         paneName = Pane.COVER.name
     }
+    // Before the lists have ever been shown, where the header's cover will be is worked out.
+    fun knowHeader() { if (flight.lastSmall == null) flight.lastSmall = headerHome() }
     fun collapseCover(fly: Boolean = true) {
         val back = returnPane?.let { runCatching { Pane.valueOf(it) }.getOrNull() }?.takeIf { it != Pane.COVER } ?: Pane.QUEUE
         val from = com.opentune.ui.components.PlayerMorph.playerCover?.let(com.opentune.ui.components.PlayerMorph::scaled)
         smallCover = null
+        knowHeader()
         // A swipe already carrying the cover: it goes on from where the finger let go.
         if (flight.following) flight.finish()
         else if (fly && flies && from != null) flight.start(from, toSmall = true)
         paneName = back.name
         returnPane = null
+    }
+    // The Lyrics and Queue buttons: from the full cover the cover flies into the list's
+    // header, as a swipe up takes it, and back out of it to the full cover.
+    fun toggle(p: Pane) {
+        val next = if (pane == p) Pane.COVER else p
+        when {
+            style == PlayerStyle.LYRICS_FIRST -> paneName = next.name
+            pane == Pane.COVER && next != Pane.COVER -> { returnPane = next.name; collapseCover() }
+            pane != Pane.COVER && next == Pane.COVER -> expandCover()
+            else -> paneName = next.name
+        }
     }
     // Flies the cover to wherever its new place turns out to be, once that's laid out.
     LaunchedEffect(flight.runs) {
@@ -489,16 +512,6 @@ fun PlayerLayout(
     // when it's known where that header's cover sits.
     val followsSwipe = flies && pane == Pane.COVER && style != PlayerStyle.LYRICS_FIRST
     val minFlightTravel = with(LocalDensity.current) { 120.dp.toPx() }
-    // Where the header's small cover will be, before the lists have ever been shown:
-    // the header row starts at the top left of the page, 8dp down, and its cover is 64dp.
-    var paneCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
-    val headerInset = with(LocalDensity.current) { 8.dp.toPx() }
-    val headerCover = with(LocalDensity.current) { 64.dp.toPx() }
-    fun headerHome(): androidx.compose.ui.geometry.Rect? {
-        flight.lastSmall?.let { return it }
-        val at = paneCoords?.takeIf { it.isAttached }?.positionInRoot() ?: return null
-        return androidx.compose.ui.geometry.Rect(at.x, at.y + headerInset, at.x + headerCover, at.y + headerInset + headerCover)
-    }
     fun followUp() {
         // Not over a tap's flight already on its way.
         if (!followsSwipe || (flight.active && !flight.following)) return
@@ -1082,7 +1095,7 @@ fun PlayerLayout(
             if (flight.active) {
                 val from = flight.from
                 // Before the header is back (a swipe still under the finger), where it was last.
-                val to = flight.target(smallCover) ?: (flight.home ?: flight.lastSmall).takeIf { flight.toSmall }
+                val to = flight.target(smallCover)
                 val origin = playerCoords?.takeIf { it.isAttached }?.positionInRoot() ?: androidx.compose.ui.geometry.Offset.Zero
                 if (from != null && to != null) {
                     // Progress is read in the layer only: the finger or the runner, frame by frame.
@@ -1547,8 +1560,15 @@ private class PaneFlight {
         runs++
     }
 
+    /**
+     * Where the cover lands. Going into the header: where it's laid out now, else where
+     * a swipe was taking it, else where it last sat. Waiting for a fresh layout alone
+     * held the cover still for half a second and then dropped it in place: a header
+     * that doesn't move reports no new position.
+     */
     fun target(small: androidx.compose.ui.geometry.Rect?): androidx.compose.ui.geometry.Rect? =
-        if (toSmall) small else com.opentune.ui.components.PlayerMorph.playerCover?.let(com.opentune.ui.components.PlayerMorph::scaled)
+        if (toSmall) small ?: home ?: lastSmall
+        else com.opentune.ui.components.PlayerMorph.playerCover?.let(com.opentune.ui.components.PlayerMorph::scaled)
 
     fun end() {
         active = false

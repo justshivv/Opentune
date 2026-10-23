@@ -1175,6 +1175,10 @@ private fun settingsSections(
                 Entry("Download on Wi-Fi only", "mobile data metered") {
                     ToggleRow("Download on Wi-Fi only", lib.downloadWifiOnly, { v -> AppSettings.updateLibrary { it.copy(downloadWifiOnly = v) } }, summary = "Waits for Wi-Fi before saving songs", icon = Icons.Rounded.Wifi)
                 },
+                Entry("Stream downloads when online", "offline file internet play quality") {
+                    val pbd by AppSettings.playback.collectAsState()
+                    ToggleRow("Stream downloads when online", pbd.streamDownloadsOnline, { v -> AppSettings.updatePlayback { it.copy(streamDownloadsOnline = v) } }, summary = "Downloaded songs stream in their best quality with internet and play from the file offline", icon = Icons.Rounded.Wifi)
+                },
                 Entry("Export compatible downloads", "music folder other apps files save export mp4 aac copy") {
                     ToggleRow(
                         "Export compatible downloads",

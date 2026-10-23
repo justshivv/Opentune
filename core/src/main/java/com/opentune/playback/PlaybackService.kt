@@ -1445,7 +1445,12 @@ class PlaybackService : MediaLibraryService() {
     /** Whether the running upgrade was asked for from the menu, so "upgrading" stays up through all of it. */
     private var upgradeAsked = false
 
+    /** What [uri] plays, for the log: the external source's label, or YouTube's better stream. */
+    private fun streamName(id: String, uri: android.net.Uri): String =
+        externalStreamKeyOf(uri)?.let { ExternalStreams.get(id, it)?.label } ?: "YouTube's better stream"
+
     private suspend fun switchStream(player: ExoPlayer, id: String, uri: android.net.Uri): Boolean {
+        Log.d(TAG, "Switching $id to ${streamName(id, uri)}${if (player.isPlaying) "" else " (not playing yet, so without the bridge)"}")
         val index = player.currentMediaItemIndex
         val item = player.getMediaItemAt(index)
         val next = item.buildUpon().setUri(uri).setMimeType(externalStreamKeyOf(uri)?.let { ExternalStreams.get(id, it)?.mimeType }).build()
@@ -1483,7 +1488,7 @@ class PlaybackService : MediaLibraryService() {
             }
             // Only now does the label say the better quality: it's what's heard.
             updateExternalStats()
-            Log.d(TAG, "Swapped $id to its upgraded stream at ${position}ms")
+            Log.d(TAG, "Swapped $id to ${streamName(id, uri)} at ${position}ms")
             return true
         } finally {
             PlaybackRequests.soundingPosition = null
@@ -1579,7 +1584,7 @@ class PlaybackService : MediaLibraryService() {
             PlaybackRequests.soundingPosition = null
             handedOver = false
             updateExternalStats()
-            Log.d(TAG, "Swapped $id to its upgraded stream at ${player.currentPosition}ms, bridged")
+            Log.d(TAG, "Swapped $id to ${next.localConfiguration?.uri?.let { streamName(id, it) }} at ${player.currentPosition}ms, bridged")
             return true
         } finally {
             PlaybackRequests.soundingPosition = null
@@ -2022,6 +2027,20 @@ class PlaybackService : MediaLibraryService() {
             player.prepare()
             return
         }
+        // A downloaded song that couldn't stream (no internet, or the connection dropped)
+        // plays on from its file.
+        val file = if (uri?.scheme != "file") com.opentune.data.download.Downloads.fileFor(mediaId) else null
+        if (file != null && (error.errorCode in IO_ERRORS || !AppSettings.isOnline())) {
+            Log.w(TAG, "Stream for $mediaId failed (${error.errorCodeName}); playing its download")
+            val index = player.currentMediaItemIndex
+            val position = player.currentPosition
+            player.replaceMediaItem(index, item.buildUpon().setUri(android.net.Uri.fromFile(file)).setMimeType(null).build())
+            updateExternalStats()
+            applyLoudness()
+            player.seekTo(index, position)
+            player.prepare()
+            return
+        }
         if (uri != null && (isUpgradedUri(uri) || externalStreamKeyOf(uri) != null)) {
             Log.w(TAG, "Upgraded stream for $mediaId failed (${error.errorCodeName}); back to the one it started on")
             StreamResolver.dropUpgrade(mediaId)
@@ -2160,6 +2179,8 @@ class PlaybackService : MediaLibraryService() {
         /** It starts loading a little ahead, for the time the loading itself takes. */
         const val AUDITION_LEAD_MS = 1_500L
         const val AUDITION_TIMEOUT_MS = 40_000L
+        /** Network and input errors (Media3's 2000s): what a lost connection fails with. */
+        val IO_ERRORS = 2000..2999
         /** Tries at switching to the verified files, this far apart, before giving up for the song. */
         const val SWAP_ROUNDS = 3
         const val SWAP_ROUND_GAP_MS = 10_000L

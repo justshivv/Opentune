@@ -21,6 +21,17 @@ class CatalogSourceTest {
         assertFalse(CatalogIdentity("", "", null, 217_000).matches("", listOf(""), null, 217_000))
     }
 
+    @Test fun passesOverInstrumentalVersionsFiledUnderTheSameTitle() {
+        val song = CatalogIdentity("Tum Hi Ho", "Arijit Singh", null, 262_000)
+        assertTrue(song.matches("Tum Hi Ho", listOf("Arijit Singh"), "Aashiqui 2", 262_000))
+        assertFalse(song.matches("Tum Hi Ho", listOf("Arijit Singh"), "Aashiqui 2 (Instrumental)", 262_000))
+        assertFalse(song.matches("Tum Hi Ho", listOf("Arijit Singh"), "Bollywood Karaoke Hits", 262_000))
+        assertFalse(song.matches("Tum Hi Ho", listOf("Arijit Singh"), "Slowed + Reverb", 262_000))
+        // Asked for by name, a version is still found.
+        val instrumental = CatalogIdentity("Tum Hi Ho", "Arijit Singh", "Aashiqui 2 (Instrumental)", 262_000)
+        assertTrue(instrumental.matches("Tum Hi Ho", listOf("Arijit Singh"), "Aashiqui 2 (Instrumental)", 262_000))
+    }
+
     @Test fun keepsNonLatinNamesDistinct() {
         assertNotEquals(CatalogIdentity.key("你好"), CatalogIdentity.key("再见"))
         assertNotEquals(CatalogIdentity.key("हुस्न"), "")

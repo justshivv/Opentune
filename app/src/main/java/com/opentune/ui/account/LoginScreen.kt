@@ -52,6 +52,7 @@ fun LoginScreen(onDone: () -> Unit) {
     // can't make a WebView: creating one throws. That's said here instead of closing the app.
     var unavailable by remember { mutableStateOf(false) }
     DisposableEffect(Unit) { onDispose { gone.set(true) } }
+    val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
 
     Box(Modifier.fillMaxSize()) {
         AndroidView(
@@ -83,7 +84,10 @@ fun LoginScreen(onDone: () -> Unit) {
                             finished = true
                             CookieManager.getInstance().flush()
                             AccountStore.signIn(cookie)
-                            onDone()
+                            // Closed once this callback has returned: leaving from inside it destroyed
+                            // the WebView while it was still running the callback, and on some WebView
+                            // versions that crashed the app outright, signed in or not.
+                            main.post { if (!gone.get()) onDone() }
                         }
                     }
                     loadUrl(SIGN_IN_URL)
@@ -97,7 +101,8 @@ fun LoginScreen(onDone: () -> Unit) {
                     stopLoading()
                     webViewClient = WebViewClient()
                     (parent as? android.view.ViewGroup)?.removeView(this)
-                    runCatching { destroy() }
+                    // On the next turn of the main thread, never inside one of its own callbacks.
+                    main.post { runCatching { destroy() } }
                 }
             },
         )

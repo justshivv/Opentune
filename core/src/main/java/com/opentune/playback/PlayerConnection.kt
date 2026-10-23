@@ -195,9 +195,15 @@ class PlayerConnection(private val context: Context) {
         _shuffleEnabled.value = player.shuffleModeEnabled
         publishShuffle(player)
         _repeatMode.value = player.repeatMode
-        val duration = player.duration.takeIf { it > 0 } ?: 0L
+        // The same song swapped onto another stream (a quality switch, a recovery) has no
+        // length until the new one loads; it keeps the one it had, so the seek bar and
+        // times don't empty to "--:--" while it plays on.
+        val id = player.currentMediaItem?.mediaId
+        val duration = player.duration.takeIf { it > 0 }
+            ?: _durationOf.value.takeIf { id != null && it.first == id }?.second
+            ?: 0L
         _durationMs.value = duration
-        _durationOf.value = player.currentMediaItem?.mediaId to duration
+        _durationOf.value = id to duration
         // Buffering on the way, with playback meant to go on (a quality switch
         // loading its stream, a stall), still counts as playing: the button
         // flipped to play and back for that moment at every upgrade.

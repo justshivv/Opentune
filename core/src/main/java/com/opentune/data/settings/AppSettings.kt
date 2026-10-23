@@ -286,6 +286,8 @@ data class PlaybackSettings(
     val swipeToQueue: Boolean = true,
     /** Buffer the next track and resolve its neighbours early, for instant skips. */
     val preloadUpcoming: Boolean = true,
+    /** A downloaded song streams in its best quality while there's internet; its file plays offline. */
+    val streamDownloadsOnline: Boolean = true,
     /** Swap to a clearly better stream mid-song when one turns up. */
     val qualityUpgrade: Boolean = true,
     /** Community FLAC lookup runs after playback starts. Downloads remain YouTube audio. */
@@ -683,6 +685,14 @@ object AppSettings {
     /** Read by StreamResolver on every resolve: the ceiling for the network in use. */
     val effectiveAudioQuality: AudioQuality
         get() = _playback.value.let { if (onMeteredNetwork()) it.mobileQuality else it.wifiQuality }
+
+    /** Whether the phone has a working internet connection right now. */
+    fun isOnline(): Boolean {
+        val cm = connectivity ?: return true
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
 
     fun onMeteredNetwork(): Boolean {
         val cm = connectivity ?: return false

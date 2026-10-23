@@ -63,7 +63,7 @@ object AddonResolver {
                     } == true
                     if (!permitted()) return@withTimeoutOrNull null
                     val candidates = client.search("${song.title} ${song.artist}", manifest, tier)
-                        .filter { identity.matches(it.title, listOf(it.artist), null, it.durationMs) }
+                        .filter { identity.matches(it.title, listOf(it.artist), it.album, it.durationMs) }
                     if (candidates.isEmpty()) { report("${manifest.name}: no matching recording"); return@withTimeoutOrNull null }
                     for (track in candidates.take(3)) {
                         if (!permitted()) return@withTimeoutOrNull null

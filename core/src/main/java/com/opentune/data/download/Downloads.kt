@@ -274,6 +274,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val jobDir = File(Downloads.directory(), "$id.${this.id}")
         publish { it.copy(state = DownloadState.DOWNLOADING, error = null) }
         var addon: com.opentune.data.addons.AddonStream? = null
+        var fromSaavn = false
         return try {
             val maxKbps = AppSettings.library.value.downloadQuality.maxKbps
             val exporting = AppSettings.library.value.exportDownloads && DownloadExport.supported
@@ -303,7 +304,34 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
                         }
                     }
                 }
-                // Exported copies have to be AAC in MP4: the Music folder refuses WebM.
+                // No lossless file: JioSaavn's 320 kbps next, before YouTube's own stream,
+                // when JioSaavn is on and the download quality reaches that far.
+                if (maxKbps >= SAAVN_KBPS && AppSettings.playback.value.jioSaavnQuality) {
+                    val song = entry.song.toSong()
+                    val duration = com.opentune.data.lossless.CatalogMetadata.duration(song, parseDuration(entry.song.durationText))
+                    val url = try {
+                        if (duration > 0) com.opentune.data.lossless.JioSaavnSource.resolve(song, duration) else null
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "JioSaavn lookup for $id failed (${e.javaClass.simpleName}: ${e.message}); using YouTube")
+                        null
+                    }
+                    if (url != null) {
+                        val file = File(dir, "$id.m4a")
+                        try {
+                            fetch(url, File(dir, "$id.part"), file, entry.song.title) { p -> publish { it.copy(progress = p) } }
+                            fromSaavn = true
+                            return@withPermit file
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w(TAG, "JioSaavn wouldn't hand over $id (${e.javaClass.simpleName}: ${e.message}); using YouTube")
+                            publish { it.copy(progress = 0f) }
+                        }
+                    }
+                }
+                // Last, YouTube's stream. Exported copies have to be AAC in MP4: the Music folder refuses WebM.
                 val stream = StreamResolver.resolveForDownload(id, maxKbps, requireM4a = exporting)
                 File(dir, "$id.${stream.downloadExtension}").also { target ->
                     fetch(stream.url, File(dir, "$id.part"), target, entry.song.title) { p ->
@@ -315,8 +343,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             publish {
                 it.copy(
                     state = DownloadState.DONE, progress = 1f, path = target.path, artPath = art?.path,
-                    bytes = target.length(), loudnessDb = if (addon == null) StreamResolver.loudnessDbFor(id) else null,
-                    source = addon?.provider, bits = addon?.bits, sampleRate = addon?.sampleRate,
+                    bytes = target.length(), loudnessDb = if (addon == null && !fromSaavn) StreamResolver.loudnessDbFor(id) else null,
+                    source = addon?.provider ?: if (fromSaavn) "JioSaavn · 320 kbps" else null, bits = addon?.bits, sampleRate = addon?.sampleRate,
                 )
             }
             // A copy in the Music folder for other apps, when asked for and the format allows.
@@ -408,6 +436,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         private const val CHANNEL = "downloads"
         private const val NOTIFICATION_ID = 4120
         private const val MAX_ATTEMPTS = 3
+        /** JioSaavn's quality: a download quality below it goes straight to YouTube. */
+        private const val SAAVN_KBPS = 320
         /** Songs downloading at once, across the whole queue. */
         private val songsAtOnce = Semaphore(3)
     }
