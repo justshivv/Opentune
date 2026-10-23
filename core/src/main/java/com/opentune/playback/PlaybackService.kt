@@ -1445,7 +1445,12 @@ class PlaybackService : MediaLibraryService() {
     /** Whether the running upgrade was asked for from the menu, so "upgrading" stays up through all of it. */
     private var upgradeAsked = false
 
+    /** What [uri] plays, for the log: the external source's label, or YouTube's better stream. */
+    private fun streamName(id: String, uri: android.net.Uri): String =
+        externalStreamKeyOf(uri)?.let { ExternalStreams.get(id, it)?.label } ?: "YouTube's better stream"
+
     private suspend fun switchStream(player: ExoPlayer, id: String, uri: android.net.Uri): Boolean {
+        Log.d(TAG, "Switching $id to ${streamName(id, uri)}${if (player.isPlaying) "" else " (not playing yet, so without the bridge)"}")
         val index = player.currentMediaItemIndex
         val item = player.getMediaItemAt(index)
         val next = item.buildUpon().setUri(uri).setMimeType(externalStreamKeyOf(uri)?.let { ExternalStreams.get(id, it)?.mimeType }).build()
@@ -1483,7 +1488,7 @@ class PlaybackService : MediaLibraryService() {
             }
             // Only now does the label say the better quality: it's what's heard.
             updateExternalStats()
-            Log.d(TAG, "Swapped $id to its upgraded stream at ${position}ms")
+            Log.d(TAG, "Swapped $id to ${streamName(id, uri)} at ${position}ms")
             return true
         } finally {
             PlaybackRequests.soundingPosition = null
@@ -1579,7 +1584,7 @@ class PlaybackService : MediaLibraryService() {
             PlaybackRequests.soundingPosition = null
             handedOver = false
             updateExternalStats()
-            Log.d(TAG, "Swapped $id to its upgraded stream at ${player.currentPosition}ms, bridged")
+            Log.d(TAG, "Swapped $id to ${next.localConfiguration?.uri?.let { streamName(id, it) }} at ${player.currentPosition}ms, bridged")
             return true
         } finally {
             PlaybackRequests.soundingPosition = null

@@ -81,7 +81,8 @@ object ExternalStreams {
 
     private fun report(videoId: String, detail: String) {
         if (reports.size > 256) reports.clear()
-        reports[videoId] = detail
+        // Into the exported log too, so a shared log says what each source answered.
+        if (reports.put(videoId, detail) != detail) com.opentune.data.DebugLog.d("ExternalStreams", "$videoId: ${detail.replace("\n", " | ")}")
     }
 
     /**
