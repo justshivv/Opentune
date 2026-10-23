@@ -810,42 +810,33 @@ fun PlayerLayout(
                 // the finger, so the lists come in as the cover shrinks rather than after
                 // letting go; let go, it plays on from there, or back if it's short.
                 val outerPane = if (pane == Pane.COVER) Pane.COVER else Pane.LYRICS
-                val paneState = remember { androidx.compose.animation.core.SeekableTransitionState(outerPane) }
+                // Like BitChord: the cover page and the lists are both kept built and only
+                // their layers move, on one value from 0 (the cover) to 1 (the lists) that the
+                // finger or a 420ms ease drives. Nothing is composed while it moves: the lists,
+                // the heaviest thing here, are built out of sight a moment after the player
+                // settles, and fade up behind the cover as it reaches the header.
+                val listsShown = remember { androidx.compose.animation.core.Animatable(if (outerPane == Pane.COVER) 0f else 1f) }
+                var listsBuilt by remember { mutableStateOf(outerPane != Pane.COVER) }
+                LaunchedEffect(Unit) { delay(LISTS_PREWARM_MS); listsBuilt = true }
                 LaunchedEffect(outerPane, flight.following) {
+                    val target = if (outerPane == Pane.COVER) 0f else 1f
                     if (flight.following && outerPane == Pane.COVER) {
-                        androidx.compose.runtime.snapshotFlow { flight.pull }.collect { paneState.seekTo(it.coerceIn(0f, 1f), Pane.LYRICS) }
-                    } else if (state.ui.reduceAnimation) paneState.snapTo(outerPane)
-                    else paneState.animateTo(outerPane)
+                        listsBuilt = true
+                        androidx.compose.runtime.snapshotFlow { flight.pull }.collect { listsShown.snapTo(it.coerceIn(0f, 1f)) }
+                    } else if (state.ui.reduceAnimation) {
+                        listsBuilt = listsBuilt || target == 1f
+                        listsShown.snapTo(target)
+                    } else {
+                        listsBuilt = listsBuilt || target == 1f
+                        val left = kotlin.math.abs(target - listsShown.value)
+                        listsShown.animateTo(target, tween((PANE_SWITCH_MS * left).toInt().coerceAtLeast(120), easing = FastOutSlowInEasing))
+                    }
                 }
-                androidx.compose.animation.core.rememberTransition(paneState, label = "pane").AnimatedContent(
-                    transitionSpec = {
-                        // Not clipped to the pane: a blurred lyric line spreads past the
-                        // page's side margin, and a clip there cut it off in a hard edge.
-                        when {
-                            state.ui.reduceAnimation -> fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-                            // Carried up by a swipe: the cover page is already moving with the finger
-                            // and keeps going on its own, so it only fades; the lyrics rise on the
-                            // same spring, from just below.
-                            targetState == Pane.LYRICS && coverLift > 0f ->
-                                (fadeIn(tween(240, delayMillis = 40)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 420f)) { it / 8 }) togetherWith
-                                    fadeOut(tween(200, easing = FastOutSlowInEasing))
-                            // Lyrics rise into place on a soft spring while the cover sinks back.
-                            targetState == Pane.LYRICS ->
-                                (fadeIn(tween(220)) + slideInVertically(spring(dampingRatio = 1f, stiffness = 650f)) { it / 5 }) togetherWith
-                                    (fadeOut(tween(220)) + scaleOut(tween(240, easing = FastOutSlowInEasing), 0.9f))
-                            // And going back, the cover comes forward as they drop away.
-                            initialState == Pane.LYRICS ->
-                                (fadeIn(tween(220)) + scaleIn(spring(dampingRatio = 1f, stiffness = 650f), 0.9f)) togetherWith
-                                    (fadeOut(tween(220)) + slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { it / 6 })
-                            else ->
-                                (fadeIn(tween(320)) + scaleIn(tween(240, easing = FastOutSlowInEasing), 0.94f)) togetherWith
-                                    (fadeOut(tween(180)) + scaleOut(tween(220), 0.98f))
-                        } using androidx.compose.animation.SizeTransform(clip = false)
-                    },
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                ) { p ->
+                val listsGone by remember { androidx.compose.runtime.derivedStateOf { listsShown.value <= 0.001f } }
+                val listsFull by remember { androidx.compose.runtime.derivedStateOf { listsShown.value >= 0.999f } }
+                val paneBody: @Composable (Pane, Boolean) -> Unit = { p, hidden ->
                     Column(
-                        Modifier.fillMaxSize().onGloballyPositioned { paneCoords = it }.graphicsLayer {
+                        Modifier.fillMaxSize().graphicsLayer {
                             // The cover page, carried up by a swipe that's still under the finger.
                             if (p == Pane.COVER) {
                                 val k = coverLift
@@ -926,7 +917,8 @@ fun PlayerLayout(
                                 Artwork(
                                     current.thumbnailUrl.artworkAt(ROW_ART_PX),
                                     Modifier.size(64.dp)
-                                        .onGloballyPositioned { smallCover = it.boundsInRoot(); flight.lastSmall = smallCover }
+                                        // Not while parked out of sight: that place isn't where it shows.
+                                        .onGloballyPositioned { if (!hidden) { smallCover = it.boundsInRoot(); flight.lastSmall = smallCover } }
                                         .graphicsLayer { alpha = if (flight.active) 0f else 1f }
                                         .clip(RoundedCornerShape(10.dp))
                                         .clickable(onClickLabel = "Show the cover") { expandCover() },
@@ -1009,6 +1001,38 @@ fun PlayerLayout(
                                 }
                             }
                         }
+                    }
+                }
+                // Not clipped: a blurred lyric line spreads past the page's side margin.
+                Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { paneCoords = it }) {
+                    val switchDp = with(LocalDensity.current) { 26.dp.toPx() }
+                    // The cover page: only while it's in sight, so its cover reports its own place.
+                    if (outerPane == Pane.COVER || !listsFull) {
+                        Box(
+                            Modifier.fillMaxSize().zIndex(if (outerPane == Pane.COVER) 1f else 0f).graphicsLayer {
+                                val v = listsShown.value
+                                alpha = (1f - v * 1.6f).coerceIn(0f, 1f)
+                                val sc = 1f - 0.06f * v
+                                scaleX = sc
+                                scaleY = sc
+                            },
+                        ) { paneBody(Pane.COVER, false) }
+                    }
+                    // The lists: built once, then parked far off to the side while the cover is up,
+                    // so they never take its touches or cost a frame when they come in.
+                    if (listsBuilt) {
+                        val parked = outerPane == Pane.COVER && !flight.following && listsGone
+                        Box(
+                            Modifier.fillMaxSize()
+                                .zIndex(if (outerPane == Pane.COVER) 0f else 1f)
+                                .offset { if (parked) androidx.compose.ui.unit.IntOffset(100_000, 0) else androidx.compose.ui.unit.IntOffset.Zero }
+                                .graphicsLayer {
+                                    val v = listsShown.value
+                                    alpha = ((v - 0.4f) / 0.6f).coerceIn(0f, 1f)
+                                    translationY = (1f - v) * switchDp
+                                    compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
+                                },
+                        ) { paneBody(Pane.LYRICS, parked) }
                     }
                 }
 
@@ -1520,6 +1544,10 @@ private fun Modifier.focusIn(animate: Boolean): Modifier {
 /** How far a swipe goes to carry the cover page all the way. */
 private val COVER_LIFT_TRAVEL = 300.dp
 /** How much the cover page rises, shrinks and fades at the end of that swipe. */
+/** How long the cover page and the lists take to trade places, BitChord's 420ms. */
+private const val PANE_SWITCH_MS = 420
+/** How long after the player settles the lists are built out of sight, ready for the first swipe. */
+private const val LISTS_PREWARM_MS = 900L
 private const val COVER_LIFT_RISE = 0.18f
 private const val COVER_LIFT_SHRINK = 0.1f
 private const val COVER_LIFT_FADE = 0.55f
