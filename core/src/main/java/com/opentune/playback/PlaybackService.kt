@@ -89,6 +89,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
@@ -781,7 +782,8 @@ class PlaybackService : MediaLibraryService() {
             // still running, waiting to bring the volume back up. A new upgrade
             // check here used to cancel it and leave every song after silent.
             val swap = mediaItem != null && mediaItem.mediaId == swappingTo
-            updateExternalStats()
+            // A quality switch says what's playing once the new stream really is (see swapToUpgrade).
+            if (!swap) updateExternalStats()
             applyLoudness()
             if (!swap) scheduleUpgrade()
             if (!swap) prefetchAhead()
@@ -1095,7 +1097,10 @@ class PlaybackService : MediaLibraryService() {
             return ExternalStreams.get(id, key)?.lossless != false
         }
         if (alreadyExternal() && !force) return
-        NerdStats.onUpgrade(id)
+        // "Upgrading" shows only when asked for from the menu, or while a switch is under way
+        // (see swapToUpgrade); a search in the background, finding nothing or not, says nothing.
+        upgradeAsked = force
+        if (force) NerdStats.onUpgrade(id)
         // Asked for from the menu: say how it went, whatever the outcome.
         fun tell(message: String) { if (force) PlaybackRequests.report(message) }
         fun swapped(ok: Boolean) = tell(
@@ -1233,8 +1238,9 @@ class PlaybackService : MediaLibraryService() {
         aheadJob?.cancel()
         if (ahead.isEmpty()) return
         aheadJob = scope.launch {
-            // Both at once, so the one after next isn't waiting on the next one's lookups.
-            ahead.map { item -> launch(Dispatchers.IO) { readyAhead(item.toSong(), saavn, lossless) } }.joinAll()
+            // A couple at a time, nearest first, so the next song isn't waiting behind the fifth.
+            val slots = kotlinx.coroutines.sync.Semaphore(PREFETCH_AT_ONCE)
+            ahead.map { item -> launch(Dispatchers.IO) { slots.withPermit { readyAhead(item.toSong(), saavn, lossless) } } }.joinAll()
         }
     }
 
@@ -1277,6 +1283,25 @@ class PlaybackService : MediaLibraryService() {
      * stream doesn't load is passed over for the next. True if it moved at all.
      */
     private suspend fun swapToBestAnswering(
+        player: ExoPlayer,
+        id: String,
+        candidates: List<ExternalStreams.Rendition>,
+        current: ExternalStreams.Rendition?,
+    ): Boolean {
+        // A verified file whose stream didn't load in time often does a little later, once its
+        // server has it ready: tried again a few times in the song rather than left till the next.
+        repeat(SWAP_ROUNDS) { round ->
+            if (round > 0) {
+                delay(SWAP_ROUND_GAP_MS)
+                if (player.currentMediaItem?.mediaId != id) return false
+                if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS) return false
+            }
+            if (swapRound(player, id, candidates, current)) return true
+        }
+        return false
+    }
+
+    private suspend fun swapRound(
         player: ExoPlayer,
         id: String,
         candidates: List<ExternalStreams.Rendition>,
@@ -1382,6 +1407,18 @@ class PlaybackService : MediaLibraryService() {
      * whether it swapped.
      */
     private suspend fun swapToUpgrade(player: ExoPlayer, id: String, uri: android.net.Uri = youtubeFallbackUri(id, upgraded = true)): Boolean {
+        NerdStats.onUpgrade(id)
+        return try {
+            switchStream(player, id, uri)
+        } finally {
+            if (!upgradeAsked) NerdStats.onUpgrade(null)
+        }
+    }
+
+    /** Whether the running upgrade was asked for from the menu, so "upgrading" stays up through all of it. */
+    private var upgradeAsked = false
+
+    private suspend fun switchStream(player: ExoPlayer, id: String, uri: android.net.Uri): Boolean {
         val index = player.currentMediaItemIndex
         val item = player.getMediaItemAt(index)
         val next = item.buildUpon().setUri(uri).setMimeType(externalStreamKeyOf(uri)?.let { ExternalStreams.get(id, it)?.mimeType }).build()
@@ -1409,7 +1446,6 @@ class PlaybackService : MediaLibraryService() {
             // If the player updates the item in place there's no transition to clear this.
             scope.launch { delay(2_000); if (swappingTo == id) swappingTo = null }
             player.replaceMediaItem(index, next)
-            updateExternalStats()
             applyLoudness()
             if (player.currentMediaItemIndex != index || player.currentPosition < position - 1_000) player.seekTo(index, position)
             if (smooth) {
@@ -1418,6 +1454,8 @@ class PlaybackService : MediaLibraryService() {
                 PlaybackRequests.soundingPosition = null
                 rampVolume(player, level, SWAP_RISE_MS)
             }
+            // Only now does the label say the better quality: it's what's heard.
+            updateExternalStats()
             Log.d(TAG, "Swapped $id to its upgraded stream at ${position}ms")
             return true
         } finally {
@@ -1491,7 +1529,6 @@ class PlaybackService : MediaLibraryService() {
             swappingTo = id
             scope.launch { delay(4_000); if (swappingTo == id) swappingTo = null }
             player.replaceMediaItem(index, next)
-            updateExternalStats()
             applyLoudness()
             player.seekTo(index, bridge.currentPosition + BRIDGE_SEEK_LEAD_MS)
             val ready = kotlinx.coroutines.withTimeoutOrNull(BRIDGE_CATCH_UP_MS) {
@@ -1512,6 +1549,7 @@ class PlaybackService : MediaLibraryService() {
             }
             PlaybackRequests.soundingPosition = null
             handedOver = false
+            updateExternalStats()
             Log.d(TAG, "Swapped $id to its upgraded stream at ${player.currentPosition}ms, bridged")
             return true
         } finally {
@@ -2031,7 +2069,9 @@ class PlaybackService : MediaLibraryService() {
         /** ...or for this long at most, when it's paused or slow to start. */
         const val UPGRADE_START_WAIT_MS = 6_000L
         /** How many songs ahead the lossless source is looked up. */
-        const val PREFETCH_AHEAD = 2
+        const val PREFETCH_AHEAD = 5
+        /** Songs ahead looked up at once; the nearest go first. */
+        const val PREFETCH_AT_ONCE = 2
         /** Songs a server queue carries on with when it runs out. */
         const val RADIO_FROM_SERVER = 25
         /** With "end of song", how long the song fades out before it stops. */
@@ -2085,10 +2125,13 @@ class PlaybackService : MediaLibraryService() {
         /** ...and counted as not answering after this long. */
         const val PING_LIMIT_MS = 20_000L
         /** An upgrade is fetched this far past the playing position before it's swapped in. */
-        const val AUDITION_AHEAD_MS = 12_000L
+        const val AUDITION_AHEAD_MS = 6_000L
         /** It starts loading a little ahead, for the time the loading itself takes. */
         const val AUDITION_LEAD_MS = 1_500L
-        const val AUDITION_TIMEOUT_MS = 25_000L
+        const val AUDITION_TIMEOUT_MS = 40_000L
+        /** Tries at switching to the verified files, this far apart, before giving up for the song. */
+        const val SWAP_ROUNDS = 3
+        const val SWAP_ROUND_GAP_MS = 10_000L
         /** The volume dip around a swap: quickly down, gently back. */
         /** Each crossfade between the main player and the bridge. */
         const val BRIDGE_FADE_MS = 160L

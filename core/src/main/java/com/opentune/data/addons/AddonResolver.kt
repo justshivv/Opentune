@@ -67,12 +67,18 @@ object AddonResolver {
                     if (candidates.isEmpty()) { report("${manifest.name}: no matching recording"); return@withTimeoutOrNull null }
                     for (track in candidates.take(3)) {
                         if (!permitted()) return@withTimeoutOrNull null
-                        val stream = try { client.stream(track.id, manifest, tier) }
+                        var stream = try { client.stream(track.id, manifest, tier) }
                         catch (e: AddonHttp.Failure) {
                             if (e.status != 404 || track.streamUrl == null) throw e
                             AddonProtocol.stream(org.json.JSONObject().put("url", track.streamUrl).put("format", track.format).toString())
                         }
-                        if (!stream.lossless) { report("${manifest.name}: returned compressed audio for a lossless request"); continue }
+                        // An add-on with no hi-res setting can take that ask as its first (lossy) quality:
+                        // asked once more for plain lossless before it's passed over.
+                        if (!stream.lossless && tier != "LOSSLESS") {
+                            val plain = try { client.stream(track.id, manifest, "LOSSLESS") } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                            if (plain?.lossless == true) stream = plain
+                        }
+                        if (!stream.lossless) { report("${manifest.name}: only compressed audio for this recording"); continue }
                         if (download && stream.transport != null) {
                             report("${manifest.name}: segmented stream; trying the next source for a downloadable file"); continue
                         }
