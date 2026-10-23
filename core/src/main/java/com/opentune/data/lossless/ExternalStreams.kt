@@ -248,8 +248,16 @@ object ExternalStreams {
         pinned.entries.removeIf { it.value.first == videoId && (key == null || it.key == key) }
         // A JioSaavn stream that broke while playing isn't offered again for a while.
         if (addon == null && renditions[videoId] == null) saavnMissUntil[videoId] = now() + TTL
-        report(videoId, if (addon != null) "The selected add-on failed during playback; using fallback audio and trying the next add-on." else "The selected external stream failed during playback; using YouTube temporarily.")
+        report(videoId, when {
+            addon != null && saavnFor(videoId) != null -> "The selected add-on failed during playback; using JioSaavn meanwhile and trying the next add-on."
+            addon != null -> "The selected add-on failed during playback; using fallback audio and trying the next add-on."
+            else -> "The selected external stream failed during playback; using YouTube temporarily."
+        })
     }
+
+    /** A JioSaavn stream still held for [videoId]: what a failed add-on stream falls back to before YouTube. */
+    fun saavnFor(videoId: String): Rendition? = if (!allowed(false)) null else
+        pinned.values.firstOrNull { (id, r) -> id == videoId && r.addonId == null && !r.lossless && r.provider == "JioSaavn" && now() - r.at < TTL }?.second
 
     private fun addonAllowed(rendition: Rendition): Boolean = rendition.addonId?.let { key ->
         com.opentune.data.addons.AddonStore.addons.value.firstOrNull { it.key == key }?.let(com.opentune.data.addons.AddonStore::usable) == true

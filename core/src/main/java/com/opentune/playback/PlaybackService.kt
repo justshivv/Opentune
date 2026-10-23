@@ -2026,10 +2026,12 @@ class PlaybackService : MediaLibraryService() {
             Log.w(TAG, "Upgraded stream for $mediaId failed (${error.errorCodeName}); back to the one it started on")
             StreamResolver.dropUpgrade(mediaId)
             externalStreamKeyOf(uri)?.let { ExternalStreams.failed(mediaId, it) }
+            // JioSaavn first when it has the song, YouTube last.
+            val saavn = ExternalStreams.saavnFor(mediaId)
             val index = player.currentMediaItemIndex
             val position = player.currentPosition
             swappingTo = mediaId
-            player.replaceMediaItem(index, item.buildUpon().setUri(youtubeFallbackUri(mediaId)).setMimeType(null).build())
+            player.replaceMediaItem(index, item.buildUpon().setUri(saavn?.let { externalStreamUri(mediaId, it.key) } ?: youtubeFallbackUri(mediaId)).setMimeType(null).build())
             updateExternalStats()
             applyLoudness()
             player.seekTo(index, position)
