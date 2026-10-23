@@ -459,7 +459,7 @@ async function startAt(at: number, { startSec = 0, auto = false, autoplay = true
     all[1 - active]!.engine.stop().catch(() => {});
     deck.gain = 1;
     applyVolumes();
-    const track = await deck.engine.load(entry.track.videoId, { startSec, autoplay });
+    const track = await deck.engine.load(entry.track.videoId, { startSec, autoplay, hint: searchHintOf(entry.track) });
     if (token !== loadToken) return;
     applyTrack(track, entry.track);
     if (!autoplay) usePlayer.setState({ status: 'paused' });
@@ -639,7 +639,7 @@ function maybeCrossfade() {
   trackLog.i(`crossfading into the next track over ${Math.round(remaining)}s`, entry.track.videoId);
 
   back.engine
-    .load(entry.track.videoId, { autoplay: true })
+    .load(entry.track.videoId, { autoplay: true, hint: searchHintOf(entry.track) })
     .then((track) => {
       if (!fade || fade.token !== token || !decks) return;
       fade.pending = false;
@@ -681,6 +681,11 @@ function maybeCrossfade() {
       // If the track in front already ended while this loaded, move on now.
       if (front.audio.ended) void advance(true);
     });
+}
+
+/** The YouTube Music names a track goes by, for searching other catalogs (add-ons, JioSaavn). */
+function searchHintOf(track: Track) {
+  return { title: track.title, artist: artistNames(track), album: track.album?.name ?? null };
 }
 
 function applyTrack(track: LoadedTrack, from?: Track) {

@@ -123,6 +123,7 @@ export function Lcd() {
         // A music video plays here in small, at 16:9.
         className={`group/art relative block h-[34px] overflow-hidden rounded-[6px] bg-joe p-0 transition-[filter,opacity] ${video ? 'w-[60px] bg-black' : 'w-[34px]'}`}
         aria-label="Open full screen player"
+        data-cover-origin
         onClick={() => openFullScreen(true)}
       >
         {nowPlaying.artworkUrl && (
@@ -148,7 +149,7 @@ export function Lcd() {
         </span>
       </button>
       {/* Over the seek line, the names soften into the background so the times can sit over them. */}
-      <div className="flex min-w-0 flex-col transition-[filter,opacity] group-has-[[data-scrubber]:hover]/lcd:opacity-30 group-has-[[data-scrubber]:hover]/lcd:blur-[3px] group-has-[[data-dragging]]/lcd:opacity-30 group-has-[[data-dragging]]/lcd:blur-[3px]">
+      <div key={videoId} className="ot-swap-in flex min-w-0 flex-col transition-[filter,opacity] group-has-[[data-scrubber]:hover]/lcd:opacity-30 group-has-[[data-scrubber]:hover]/lcd:blur-[3px] group-has-[[data-dragging]]/lcd:opacity-30 group-has-[[data-dragging]]/lcd:blur-[3px]">
         {title ? (
           // The song's name opens its album; an explicit song carries the E after it.
           <div className="flex min-w-0 items-center">

@@ -3,10 +3,11 @@ import { resumeSession } from '@/party/listenTogether';
 import { startPartySync } from '@/party/partySync';
 import { useDiscordPresence } from '@/playback/discordPresence';
 import { startHistoryReporting } from '@/playback/historyReporting';
-import { Outlet } from 'react-router';
+import { Outlet, useLocation } from 'react-router';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { config } from '@/config';
 import { useExtension } from '@/extension/useExtension';
+import { syncPublished } from '@/addons/client';
 import { isMobileBrowser } from '@/lib/platform';
 import { useUi } from '@/state/ui';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
@@ -38,10 +39,18 @@ export function AppShell() {
   }, []);
   // Plays into the account's YouTube Music history (Settings › Share Listening Activity).
   useEffect(() => startHistoryReporting(), []);
+  // The sources the owner publishes ("Added by admin"), folded into the listener's list.
+  useEffect(() => { void syncPublished(); }, []);
   const extension = useExtension();
   const bannerDismissed = useUi((s) => s.installBannerDismissed);
   const dismissBanner = useUi((s) => s.dismissInstallBanner);
   const fullScreen = useUi((s) => s.fullScreen);
+  // The full player stays up after it's asked to close, until it has folded back into the mini player.
+  const [playerUp, setPlayerUp] = useState(fullScreen);
+  useEffect(() => {
+    if (fullScreen) setPlayerUp(true);
+  }, [fullScreen]);
+  const { pathname } = useLocation();
   // Once a month each, after some days of use, a GitHub star or Discord invitation;
   // never over the install banners, and not straight after opening.
   const [invitation, setInvitation] = useState<Invitation | null>(null);
@@ -123,7 +132,10 @@ export function AppShell() {
         >
           {/* Clears the floating pill: its height, its offset, and some air. */}
           <div className="min-h-full pb-[calc(var(--player-pill-height)+var(--player-bottom-offset)+40px)]">
-            <Outlet />
+            {/* Each page rises in as it arrives. */}
+            <div key={pathname} className="ot-page">
+              <Outlet />
+            </div>
           </div>
         </main>
         <PlayerBar />
@@ -131,9 +143,9 @@ export function AppShell() {
         <SidePanel />
       </div>
       {banner}
-      {fullScreen && (
+      {(fullScreen || playerUp) && (
         <Suspense fallback={null}>
-          <FullScreenPlayer />
+          <FullScreenPlayer closing={!fullScreen} onClosed={() => setPlayerUp(false)} />
         </Suspense>
       )}
     </div>

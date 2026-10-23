@@ -1,41 +1,342 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Build audio add-ons · OpenTune</title><meta name="description" content="Build an OpenTune audio add-on: a small HTTPS API for catalog search, lossless playback and downloads. Protocol, examples and a working starter."><link rel="canonical" href="https://justshivv.github.io/Opentune/addons/"><link rel="icon" href="../favicon.svg" type="image/svg+xml"><meta name="theme-color" content="#111311"><style>
-:root{color-scheme:dark;--bg:#111311;--panel:#1c201c;--ink:#f1f4ec;--muted:#b1baa9;--lime:#d1edac}*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,sans-serif}a{color:var(--lime);text-underline-offset:4px}header,main,footer{width:min(1120px,100% - 40px);margin:auto}header{display:flex;align-items:center;justify-content:space-between;padding:24px 0;gap:20px;flex-wrap:wrap}.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-size:21px;font-weight:750}.brand img{width:36px;height:36px}nav{display:flex;gap:22px;flex-wrap:wrap}.hero{padding:64px 0 48px;max-width:850px}.eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:12px;color:var(--lime);font-weight:700}h1{font-size:clamp(40px,7vw,78px);letter-spacing:-.055em;line-height:1.03;margin:18px 0 24px}h2{font-size:29px;letter-spacing:-.025em;line-height:1.2}h3{font-size:20px;overflow-wrap:anywhere}article{min-width:0}.hero p{font-size:20px;color:var(--muted);max-width:660px}.button{display:inline-block;background:var(--lime);color:#192111;border-radius:99px;padding:12px 22px;font-weight:700;text-decoration:none;margin:12px 12px 0 0}.layout{display:grid;grid-template-columns:200px minmax(0,1fr);gap:48px}.toc{align-self:start;position:sticky;top:24px;display:grid;gap:10px;font-size:14px}.toc a{text-decoration:none;color:var(--muted)}section{margin-bottom:48px;min-width:0}article>section{border-top:1px solid #343b30;padding-top:20px}p,li{overflow-wrap:anywhere}pre{overflow:auto;max-width:100%;padding:22px;background:var(--panel);border:1px solid #343b30;border-radius:18px;font-size:13px;line-height:1.6}code{font-family:ui-monospace,monospace;color:#deefca}.note{padding:20px;border-left:3px solid var(--lime);background:var(--panel);border-radius:0 16px 16px 0;color:var(--muted)}.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:12px 0 32px}.step{border-radius:22px;background:var(--panel);padding:24px}.step strong{display:block;color:var(--lime);font-size:24px}.step p{color:var(--muted);font-size:14px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;vertical-align:top;border-bottom:1px solid #343b30;padding:12px 8px;overflow-wrap:anywhere}footer{border-top:1px solid #343b30;padding:32px 0;color:var(--muted)}a:focus-visible{outline:3px solid var(--lime);outline-offset:5px}@media(max-width:720px){.layout{grid-template-columns:minmax(0,1fr);gap:24px}.toc{position:static;display:flex;flex-wrap:wrap;gap:10px 20px}.steps{grid-template-columns:1fr}.hero{padding-top:32px}pre{padding:16px}header,main,footer{width:calc(100% - 32px)}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-.guide-icon{width:34px;height:34px;display:block;margin-bottom:16px;fill:none;stroke:var(--lime);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}h2 .guide-icon{display:inline-block;vertical-align:middle;margin:0 12px 4px 0;width:28px;height:28px}</style></head><body>
-<header><a class="brand" href="../"><img src="../img/opentune-logo.svg" alt="">OpenTune</a><nav aria-label="Community"><a href="https://github.com/justshivv/Opentune">GitHub</a><a href="https://discord.gg/6udrCVh5n">Discord</a></nav></header>
-<main><section class="hero"><div class="eyebrow">For the community · Audio add-ons</div><h1>Your catalog.<br>More ways to listen.</h1><p>Connect your audio service to OpenTune with three HTTPS endpoints. Search recordings, return the best available audio, and let listeners choose their source order.</p><a class="button" href="https://github.com/justshivv/Opentune/tree/main/examples/audio-addon">Get the starter ↗</a><a href="#contract">Read the protocol</a></section>
-<div class="steps"><div class="step"><svg class="guide-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h4"/></svg><strong>01 · Describe</strong><p>A manifest introduces your service and its capabilities.</p></div><div class="step"><svg class="guide-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5M8 10.5h5M10.5 8v5"/></svg><strong>02 · Match</strong><p>Search returns exact recordings with artists and durations.</p></div><div class="step"><svg class="guide-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M7 6v12M11 3v18M15 7v10M19 5v14M23 10v4"/></svg><strong>03 · Play</strong><p>A stream endpoint returns a playable URL and honest format metadata.</p></div></div>
-<div class="layout"><nav class="toc" aria-label="Guide contents"><a href="#start">Start building</a><a href="#contract">API contract</a><a href="#quality">Audio quality</a><a href="#delivery">Delivery &amp; errors</a><a href="#test">Test &amp; share</a></nav><article>
-<section id="start"><h2><svg class="guide-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>A small API. No extension runtime.</h2><p>OpenTune uses the <a href="https://bitchord.kushagrasingh.in/docs">BitChord HTTP add-on contract</a>. Users add your service root or <code>manifest.json</code> URL in Settings → Audio → Audio add-ons. No executable package is installed.</p><p>The starter is a Cloudflare Worker with a small configurable catalog, CORS support and tests. It starts with an empty catalog; add your own audio URLs and their measured metadata before deploying.</p><pre><code>cd examples/audio-addon
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Build audio add-ons · OpenTune</title>
+<meta name="description" content="Build an OpenTune audio add-on: a small HTTPS API for catalog search, lossless playback and downloads. Protocol, examples and a working starter.">
+<link rel="canonical" href="https://justshivv.github.io/Opentune/addons/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#1a1716">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap">
+<style>
+/* The main site's palette and type (site/index.html): warm night, the red tint, Archivo. */
+:root {
+  color-scheme: dark;
+  --tint: #E5483A;
+  --tint-soft: color-mix(in oklab, var(--tint) 55%, #ffe0d5);
+  --night: oklch(0.16 0.006 25);
+  --night-2: oklch(0.205 0.007 25);
+  --night-3: oklch(0.26 0.008 25);
+  --line: oklch(0.3 0.008 25);
+  --snow: oklch(0.972 0.002 25);
+  --muted: oklch(0.77 0.008 25);
+  --font: "Archivo", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --gutter: clamp(16px, 4.5vw, 56px);
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  --nav-h: 64px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; background: var(--night); overflow-x: clip; }
+body { margin: 0; background: var(--night); color: var(--snow); font: 400 17px/1.65 var(--font); -webkit-font-smoothing: antialiased; overflow-x: clip; }
+a { color: inherit; text-underline-offset: .2em; text-decoration-thickness: 1px; }
+p, li, td { overflow-wrap: anywhere; }
+[id] { scroll-margin-top: calc(var(--nav-h) + 20px); }
+:focus-visible { outline: 2px solid var(--tint-soft); outline-offset: 3px; border-radius: 8px; }
+.wrap { max-width: 1200px; margin-inline: auto; padding-inline: var(--gutter); }
+h1, h2, h3 { margin: 0; font-stretch: 72%; font-weight: 800; letter-spacing: -0.012em; text-wrap: balance; }
+h1 { font-size: clamp(52px, 10vw, 104px); line-height: .9; }
+h2 { font-size: clamp(34px, 4.6vw, 54px); line-height: .98; margin-bottom: 18px; }
+h3 { font-size: 22px; font-stretch: 85%; font-weight: 750; margin: 34px 0 12px; }
+p { margin: 0 0 16px; }
+code { font-family: var(--mono); font-size: .88em; }
+p code, li code, td code { background: var(--night-3); padding: .12em .4em; border-radius: 6px; color: var(--tint-soft); }
+
+/* Top bar: stays put and blurs what scrolls under it. */
+.nav { position: sticky; top: 0; z-index: 20; height: var(--nav-h); background: color-mix(in oklab, var(--night) 78%, transparent); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); border-bottom: 1px solid transparent; transition: border-color .3s; }
+.nav[data-scrolled] { border-color: var(--line); }
+.nav .wrap { height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; font-stretch: 80%; font-size: 21px; }
+.brand img { width: 30px; height: 30px; }
+.brand small { color: var(--muted); font-weight: 500; font-stretch: 100%; font-size: 14px; }
+.nav-links { display: flex; gap: 6px; }
+.nav-links a { text-decoration: none; color: var(--muted); padding: 8px 14px; border-radius: 99px; font-size: 15px; transition: background-color .2s, color .2s; }
+.nav-links a:hover { background: var(--night-3); color: var(--snow); }
+
+.btn { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 24px; border-radius: 999px; font: 650 16px/1 var(--font); text-decoration: none; white-space: nowrap; transition: transform .45s var(--ease), background-color .3s; }
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: scale(.97); transition-duration: .1s; }
+.btn-primary { background: var(--tint); color: #1b0b08; }
+.btn-ghost { border: 1.5px solid var(--line); }
+.btn-ghost:hover { background: var(--night-2); }
+
+/* Hero, with the three calls drawn as a route from OpenTune to the service. */
+.hero { padding: clamp(48px, 9vw, 112px) 0 clamp(40px, 6vw, 72px); display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 48px; align-items: center; }
+.eyebrow { display: inline-flex; gap: 8px; align-items: center; color: var(--tint-soft); font-weight: 650; font-size: 14px; margin-bottom: 22px; }
+.eyebrow::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--tint); box-shadow: 0 0 0 4px color-mix(in oklab, var(--tint) 25%, transparent); }
+.hero h1 mark { background: none; color: var(--tint); }
+.lede { font-size: clamp(18px, 1.6vw, 21px); color: var(--muted); max-width: 40ch; margin: 24px 0 30px; }
+.ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+.route { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; position: relative; }
+.route::before { content: ''; position: absolute; left: 27px; top: 28px; bottom: 28px; width: 2px; background: linear-gradient(var(--tint), color-mix(in oklab, var(--tint) 10%, transparent)); }
+.route li { position: relative; display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 14px; align-items: center; padding: 14px 18px 14px 0; }
+.route .dot { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; background: var(--night-2); border: 1px solid var(--line); z-index: 1; }
+.route svg { width: 24px; height: 24px; fill: none; stroke: var(--tint-soft); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.route strong { display: block; font-stretch: 85%; font-size: 19px; }
+.route code { color: var(--muted); font-size: 13px; }
+
+/* Body: contents on the left, the guide on the right. */
+.layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); padding-bottom: 80px; }
+.toc { position: sticky; top: calc(var(--nav-h) + 24px); align-self: start; display: grid; gap: 2px; }
+.toc p { font-size: 13px; color: var(--muted); margin: 0 0 8px 14px; }
+.toc a { position: relative; text-decoration: none; color: var(--muted); padding: 8px 14px; border-radius: 12px; font-size: 15px; transition: color .2s, background-color .2s; }
+.toc a:hover { color: var(--snow); background: var(--night-2); }
+.toc a[aria-current] { color: var(--snow); background: var(--night-2); }
+.toc a[aria-current]::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--tint); }
+article > section { padding: 40px 0 8px; border-top: 1px solid var(--line); }
+article > section:first-child { border-top: 0; padding-top: 0; }
+
+/* Endpoint cards: the method and path on top, the response under it, a copy button. */
+.endpoint { margin: 16px 0 18px; border: 1px solid var(--line); border-radius: 20px; background: var(--night-2); overflow: hidden; }
+.endpoint header { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 18px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 14px; min-width: 0; }
+.endpoint header span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.method { font-weight: 700; font-size: 12px; color: #1b0b08; background: var(--tint-soft); border-radius: 6px; padding: 3px 7px; }
+pre { margin: 0; padding: 20px; overflow: auto; font: 13.5px/1.65 var(--mono); color: #ead9d3; tab-size: 2; }
+.code { position: relative; margin: 16px 0 18px; border: 1px solid var(--line); border-radius: 20px; background: var(--night-2); }
+.code pre { padding-right: 84px; }
+.copy { font: 600 13px/1 var(--font); color: var(--muted); background: var(--night-3); border: 0; border-radius: 99px; padding: 8px 12px; cursor: pointer; transition: color .2s, background-color .2s; }
+.copy:hover { color: var(--snow); }
+.copy[data-done] { color: #1b0b08; background: var(--tint-soft); }
+.code .copy { position: absolute; top: 12px; right: 12px; }
+.k { color: var(--tint-soft); } .s { color: #c9e3b5; } .n { color: #f2c38d; }
+
+.fields { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+.fields li { font-size: 14px; background: var(--night-2); border: 1px solid var(--line); border-radius: 99px; padding: 6px 12px; color: var(--muted); }
+.fields b { color: var(--snow); font-weight: 650; }
+.note { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 14px; padding: 18px 20px; border-radius: 18px; background: color-mix(in oklab, var(--tint) 12%, var(--night-2)); border: 1px solid color-mix(in oklab, var(--tint) 30%, transparent); color: var(--snow); margin: 20px 0; }
+.note svg { width: 22px; height: 22px; fill: none; stroke: var(--tint-soft); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; margin-top: 2px; }
+.note p { margin: 0; }
+.rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
+.rule { background: var(--night-2); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; transition: border-color .3s, transform .45s var(--ease); }
+.rule:hover { border-color: color-mix(in oklab, var(--tint) 45%, var(--line)); transform: translateY(-2px); }
+.rule strong { display: block; font-stretch: 85%; font-size: 18px; margin-bottom: 6px; }
+.rule p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
+
+/* The test list: tick items off as you go; remembered in this browser only. */
+.checklist { list-style: none; margin: 16px 0 24px; padding: 0; display: grid; gap: 8px; counter-reset: step; }
+.checklist label { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 14px; align-items: start; padding: 14px 18px; border-radius: 16px; background: var(--night-2); border: 1px solid var(--line); cursor: pointer; transition: border-color .2s, opacity .3s; }
+.checklist input { appearance: none; margin: 1px 0 0; width: 24px; height: 24px; border-radius: 8px; border: 2px solid var(--line); display: grid; place-items: center; transition: background-color .2s, border-color .2s; cursor: pointer; }
+.checklist input:checked { background: var(--tint); border-color: var(--tint); }
+.checklist input:checked::after { content: ''; width: 6px; height: 11px; border: solid #1b0b08; border-width: 0 2.5px 2.5px 0; rotate: 45deg; translate: 0 -1px; }
+.checklist label:has(input:checked) { opacity: .6; }
+.checklist label:has(input:checked) span { text-decoration: line-through; text-decoration-color: var(--muted); }
+.progress { font-size: 14px; color: var(--muted); }
+
+.cta-band { margin: 32px 0 0; padding: clamp(28px, 5vw, 48px); border-radius: 28px; background: var(--tint); color: #1b0b08; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; }
+.cta-band h3 { margin: 0 0 6px; font-size: clamp(26px, 3vw, 36px); font-stretch: 72%; font-weight: 800; }
+.cta-band p { margin: 0; max-width: 52ch; }
+.cta-band .btn { background: #1b0b08; color: var(--snow); }
+footer { border-top: 1px solid var(--line); padding: 32px 0 calc(32px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 15px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+
+/* Things rise in as they scroll into view. */
+.reveal { opacity: 0; translate: 0 18px; transition: opacity .7s var(--ease), translate .7s var(--ease); }
+.reveal[data-in] { opacity: 1; translate: 0 0; }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  /* Contents become a row of chips under the bar. */
+  .toc { top: var(--nav-h); z-index: 10; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-inline: calc(var(--gutter) * -1); padding: 10px var(--gutter); background: color-mix(in oklab, var(--night) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  .toc::-webkit-scrollbar { display: none; }
+  .toc p { display: none; }
+  .toc a { white-space: nowrap; border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; font-size: 14px; }
+  .toc a[aria-current]::before { display: none; }
+  .toc a[aria-current] { background: var(--tint); color: #1b0b08; border-color: var(--tint); }
+  [id] { scroll-margin-top: calc(var(--nav-h) + 72px); }
+}
+@media (max-width: 600px) {
+  .rules { grid-template-columns: minmax(0, 1fr); }
+  .brand small, .nav-links a:first-child { display: none; }
+  pre { padding: 16px; font-size: 12.5px; }
+  .code pre { padding-right: 16px; padding-top: 52px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; translate: none; transition: none; }
+  .btn, .rule { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="nav" id="nav"><div class="wrap">
+  <a class="brand" href="../"><img src="../img/opentune-logo.svg" alt="">OpenTune <small>Add-ons</small></a>
+  <nav class="nav-links" aria-label="Community"><a href="https://github.com/justshivv/Opentune/tree/main/examples/audio-addon">Starter</a><a href="https://github.com/justshivv/Opentune">GitHub</a><a href="https://discord.gg/6udrCVh5n">Discord</a></nav>
+</div></div>
+
+<main class="wrap">
+<section class="hero">
+  <div>
+    <span class="eyebrow">For the community · Audio add-ons</span>
+    <h1>Your catalog.<br><mark>More ways to listen.</mark></h1>
+    <p class="lede">Connect your audio service to OpenTune with three HTTPS endpoints. Search recordings, return the best available audio, and let listeners choose their source order.</p>
+    <div class="ctas"><a class="btn btn-primary" href="https://github.com/justshivv/Opentune/tree/main/examples/audio-addon">Get the starter ↗</a><a class="btn btn-ghost" href="#contract">Read the protocol</a></div>
+  </div>
+  <ol class="route reveal" aria-label="How a song is found">
+    <li><span class="dot"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h4"/></svg></span><div><strong>Describe</strong><code>GET /manifest.json</code></div></li>
+    <li><span class="dot"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></span><div><strong>Match</strong><code>GET /search?q=…</code></div></li>
+    <li><span class="dot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M7 6v12M11 3v18M15 7v10M19 5v14"/></svg></span><div><strong>Play</strong><code>GET /stream/{id}</code></div></li>
+  </ol>
+</section>
+
+<div class="layout">
+<nav class="toc" aria-label="Guide contents"><p>On this page</p><a href="#start">Start building</a><a href="#contract">API contract</a><a href="#quality">Audio quality</a><a href="#delivery">Delivery &amp; errors</a><a href="#test">Test</a><a href="#share">Share &amp; get listed</a></nav>
+<article>
+
+<section id="start" class="reveal">
+  <h2>A small API. No extension runtime.</h2>
+  <p>OpenTune uses the <a href="https://bitchord.kushagrasingh.in/docs">BitChord HTTP add-on contract</a>. Listeners add your service root or <code>manifest.json</code> URL: in the Android app under Settings → Add-ons → Audio add-ons, and in the web player under Settings → Audio sources. No executable package is installed.</p>
+  <p>The starter is a Cloudflare Worker with a small configurable catalog, CORS support and tests. It starts with an empty catalog; add your own audio URLs and their measured metadata before deploying.</p>
+  <div class="code"><button class="copy" type="button">Copy</button><pre><code>cd examples/audio-addon
 node --test worker.test.mjs
-npx wrangler deploy</code></pre><p>Configure <code>CATALOG</code> in <code>wrangler.toml</code>. Keep signed audio URLs short-lived and generate them at stream resolution if your service needs that. The example catalog is intended for a small collection; use a database for a larger service.</p></section>
-<section id="contract"><h2><svg class="guide-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-6 7 6 7m8-14 6 7-6 7M14 3l-4 18"/></svg>The three endpoints</h2><h3>GET /manifest.json</h3><pre><code>{
-  "id": "org.example.catalog",
-  "name": "My audio catalog",
-  "version": "1.0.0",
-  "resources": ["search", "stream"],
-  "allowDownloads": true,
-  "checkValidLossless": false,
-  "settings": [{
-    "key": "quality", "default": "lossless",
-    "options": [{"label": "Best available FLAC", "value": "lossless"}]
+npx wrangler deploy</code></pre></div>
+  <p>Configure <code>CATALOG</code> in <code>wrangler.toml</code>. Keep signed audio URLs short-lived and generate them at stream resolution if your service needs that. The example catalog suits a small collection; use a database for a larger service.</p>
+</section>
+
+<section id="contract" class="reveal">
+  <h2>The three endpoints</h2>
+
+  <h3>Describe your service</h3>
+  <div class="endpoint"><header><span class="method">GET</span><span>/manifest.json</span><button class="copy" type="button">Copy</button></header><pre><code>{
+  <span class="k">"id"</span>: <span class="s">"org.example.catalog"</span>,
+  <span class="k">"name"</span>: <span class="s">"My audio catalog"</span>,
+  <span class="k">"version"</span>: <span class="s">"1.0.0"</span>,
+  <span class="k">"resources"</span>: [<span class="s">"search"</span>, <span class="s">"stream"</span>],
+  <span class="k">"allowDownloads"</span>: <span class="n">true</span>,
+  <span class="k">"checkValidLossless"</span>: <span class="n">false</span>,
+  <span class="k">"settings"</span>: [{
+    <span class="k">"key"</span>: <span class="s">"quality"</span>, <span class="k">"default"</span>: <span class="s">"lossless"</span>,
+    <span class="k">"options"</span>: [{<span class="k">"label"</span>: <span class="s">"Best available FLAC"</span>, <span class="k">"value"</span>: <span class="s">"lossless"</span>}]
   }]
-}</code></pre><p>Use a stable, unique ID. <code>allowDownloads: false</code> excludes your source from file downloads. <code>checkValidLossless: true</code> requires a supported wired, USB or HDMI output before OpenTune queries your service. Bluetooth and unknown outputs do not qualify.</p>
-<h3>GET /search?q=title%20artist&amp;quality=lossless</h3><pre><code>{"tracks": [{
-  "id": "recording-42", "title": "Example Song",
-  "artist": "Example Artist", "album": "Example Album",
-  "duration": 203, "format": "flac",
-  "artwork": "https://cdn.example.org/cover.jpg"
-}]}</code></pre><p>Duration is in <strong>seconds</strong>. Return the real title and credited performers, including version labels such as live or remix. OpenTune checks recording identity and duration; the first search result is not automatically accepted. No match should return <code>{"tracks":[]}</code>.</p>
-<h3>GET /stream/recording-42?quality=lossless</h3><pre><code>{
-  "url": "https://cdn.example.org/recording-42.flac",
-  "codec": "flac", "format": "flac", "manifest": "none",
-  "sampleRate": 96000, "bitDepth": 24,
-  "encrypted": false
-}</code></pre><p>IDs are opaque and URL-encoded as one path segment. <code>sampleRate</code> is in Hz; <code>bitrate</code>, if supplied, is in bits per second. For unencrypted segmented playback use <code>manifest: "hls"</code> or <code>"dash"</code>. File downloads currently require a direct audio file.</p></section>
-<section id="quality"><h2><svg class="guide-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M7 6v12M11 3v18M15 7v10M19 5v14M23 10v4"/></svg>Describe the audio you actually serve.</h2><p>Lossless describes the encoding, not a promise about the original master. Do not relabel AAC or MP3 as FLAC, upsample to claim higher resolution, or advertise 24-bit/192 kHz for every track.</p><pre><code>ffprobe -v error -select_streams a:0 \
+}</code></pre></div>
+  <p>Use a stable, unique ID. <code>allowDownloads: false</code> excludes your source from file downloads. <code>checkValidLossless: true</code> requires a supported wired, USB or HDMI output before OpenTune queries your service. Bluetooth and unknown outputs do not qualify.</p>
+
+  <h3>Find the recording</h3>
+  <div class="endpoint"><header><span class="method">GET</span><span>/search?q=title%20artist&amp;quality=lossless</span><button class="copy" type="button">Copy</button></header><pre><code>{<span class="k">"tracks"</span>: [{
+  <span class="k">"id"</span>: <span class="s">"recording-42"</span>, <span class="k">"title"</span>: <span class="s">"Example Song"</span>,
+  <span class="k">"artist"</span>: <span class="s">"Example Artist"</span>, <span class="k">"album"</span>: <span class="s">"Example Album"</span>,
+  <span class="k">"duration"</span>: <span class="n">203</span>, <span class="k">"format"</span>: <span class="s">"flac"</span>,
+  <span class="k">"artwork"</span>: <span class="s">"https://cdn.example.org/cover.jpg"</span>
+}]}</code></pre></div>
+  <ul class="fields" aria-label="Units"><li><b>duration</b> in seconds</li><li>no match → <b>{"tracks":[]}</b></li></ul>
+  <p>Return the real title and credited performers, including version labels such as live or remix. OpenTune checks recording identity and duration; the first search result is not automatically accepted.</p>
+
+  <h3>Hand over the audio</h3>
+  <div class="endpoint"><header><span class="method">GET</span><span>/stream/recording-42?quality=lossless</span><button class="copy" type="button">Copy</button></header><pre><code>{
+  <span class="k">"url"</span>: <span class="s">"https://cdn.example.org/recording-42.flac"</span>,
+  <span class="k">"codec"</span>: <span class="s">"flac"</span>, <span class="k">"format"</span>: <span class="s">"flac"</span>, <span class="k">"manifest"</span>: <span class="s">"none"</span>,
+  <span class="k">"sampleRate"</span>: <span class="n">96000</span>, <span class="k">"bitDepth"</span>: <span class="n">24</span>,
+  <span class="k">"encrypted"</span>: <span class="n">false</span>
+}</code></pre></div>
+  <ul class="fields" aria-label="Units"><li><b>sampleRate</b> in Hz</li><li><b>bitrate</b> in bits per second</li><li><b>manifest</b>: none, hls or dash</li></ul>
+  <p>IDs are opaque and URL-encoded as one path segment. For unencrypted segmented playback use <code>manifest: "hls"</code> or <code>"dash"</code>. File downloads currently require a direct audio file.</p>
+</section>
+
+<section id="quality" class="reveal">
+  <h2>Describe the audio you actually serve.</h2>
+  <p>Lossless describes the encoding, not a promise about the original master. Do not relabel AAC or MP3 as FLAC, upsample to claim higher resolution, or advertise 24-bit/192 kHz for every track.</p>
+  <div class="code"><button class="copy" type="button">Copy</button><pre><code>ffprobe -v error -select_streams a:0 \
   -show_entries stream=codec_name,sample_rate,bits_per_raw_sample \
-  -of json recording.flac</code></pre><p>OpenTune reads direct FLAC headers and uses the playback decoder's format for the quality display. HLS/DASH renditions must contain supported lossless audio; encrypted audio is unsupported. Browser codec support differs from Android.</p><div class="note">Source priority is intentional: Lossless quality checks eligible matching lossless results for the best available quality; equal quality keeps the listener’s source order. Normal playback can start while the higher-quality lookup runs.</div></section>
-<section id="delivery"><h2><svg class="guide-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6l8-4Z"/><path d="m8 12 3 3 5-6"/></svg>Make delivery reliable.</h2><table><thead><tr><th>Concern</th><th>Expected behavior</th></tr></thead><tbody><tr><td>Transport</td><td>Public HTTPS endpoints, including redirects and media URLs. Local/private destinations are rejected by the Android addon transport.</td></tr><tr><td>Browser access</td><td>Enable CORS on API responses, audio, manifests and every segment. Support OPTIONS. Public unauthenticated services can use Access-Control-Allow-Origin: *.</td></tr><tr><td>Seeking</td><td>Support Range requests and HTTP 206 with correct Content-Range and Content-Length for direct files.</td></tr><tr><td>Rate limits</td><td>Return HTTP 429 with Retry-After. OpenTune applies a bounded cooldown and tries another enabled source.</td></tr><tr><td>Failures</td><td>Use a suitable HTTP status and {"error":"A safe explanation"}. Never return an HTML error document as audio.</td></tr><tr><td>Response size</td><td>Keep JSON small; the Android client limits metadata responses to 2 MiB and downloads to 512 MiB.</td></tr><tr><td>Expiration</td><td>Stream responses may be cached for five minutes. Keep URLs valid for playback and seeking beyond that window, or return a renewable stable URL.</td></tr></tbody></table><p>Configured URL paths and query parameters are preserved locally. They are not safe places for credentials intended to stay secret from your users. OpenTune does not attach its Google session or other app cookies to addon requests.</p></section>
-<section id="test"><h2><svg class="guide-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6L4 19q-1 2 2 2h12q3 0 2-2L14 9V3M8 15h8"/></svg>Test it, then share the URL.</h2><ol><li>Run the starter tests and check all three endpoints.</li><li>Add your manifest in OpenTune and use Check to inspect its availability.</li><li>Select Lossless quality, play a known recording, and inspect Signal path. Check a non-match, a timeout and an expired URL too.</li><li>Test downloads, seeking and playback on the intended devices. Inspect the file with ffprobe instead of relying on its extension.</li><li>Share the manifest URL and source code with your community. Document region limits, costs, authentication and availability.</li></ol><p><a href="https://github.com/justshivv/Opentune/blob/main/docs/audio-addons.md">Read the client behavior and platform limits ↗</a></p><p><a class="button" href="https://discord.gg/6udrCVh5n">Build with the community ↗</a></p></section>
-</article></div></main><footer>OpenTune · Free and open source · <a href="../privacy/">Privacy</a> · <a href="https://github.com/justshivv/Opentune">Source code</a></footer></body></html>
+  -of json recording.flac</code></pre></div>
+  <p>OpenTune reads direct FLAC headers and uses the playback decoder's format for the quality display. HLS/DASH renditions must contain supported lossless audio; encrypted audio is unsupported. Browser codec support differs from Android.</p>
+  <div class="note"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><p>Source priority is intentional: OpenTune checks eligible matching lossless results for the best available quality, and equal quality keeps the listener’s source order. Playback starts right away while the higher-quality lookup runs, then switches over without a gap.</p></div>
+</section>
+
+<section id="delivery" class="reveal">
+  <h2>Make delivery reliable.</h2>
+  <div class="rules">
+    <div class="rule"><strong>Transport</strong><p>Public HTTPS endpoints, including redirects and media URLs. Local and private destinations are rejected by the Android add-on transport.</p></div>
+    <div class="rule"><strong>Browser access</strong><p>Enable CORS on API responses, audio, manifests and every segment, and answer OPTIONS. Public services without sign-in can send <code>Access-Control-Allow-Origin: *</code>.</p></div>
+    <div class="rule"><strong>Seeking</strong><p>Support Range requests and HTTP 206 with correct Content-Range and Content-Length for direct files.</p></div>
+    <div class="rule"><strong>Rate limits</strong><p>Return HTTP 429 with Retry-After. OpenTune waits that out for the current song and tries another enabled source meanwhile; the next song asks again.</p></div>
+    <div class="rule"><strong>Failures</strong><p>Use a suitable HTTP status and <code>{"error":"A safe explanation"}</code>. Never return an HTML error page as audio.</p></div>
+    <div class="rule"><strong>Response size</strong><p>Keep JSON small. The Android client limits metadata responses to 2 MiB and downloads to 512 MiB.</p></div>
+    <div class="rule"><strong>Expiration</strong><p>Stream responses may be cached for five minutes. Keep URLs valid for playback and seeking past that, or return a stable URL; OpenTune asks for a fresh link when one is refused.</p></div>
+    <div class="rule"><strong>Secrets</strong><p>Configured URL paths and query parameters are stored on the listener's device, so they can't hold credentials meant to stay secret. OpenTune sends no Google session or app cookies to add-ons.</p></div>
+  </div>
+</section>
+
+<section id="test" class="reveal">
+  <h2>Test it before you share it.</h2>
+  <p class="progress" id="progress" aria-live="polite"></p>
+  <ol class="checklist" id="checklist">
+    <li><label><input type="checkbox"><span>Run the starter tests and check all three endpoints.</span></label></li>
+    <li><label><input type="checkbox"><span>Add your manifest in OpenTune and use Check to inspect its availability.</span></label></li>
+    <li><label><input type="checkbox"><span>Select Lossless quality, play a known recording, and inspect Signal path. Check a non-match, a timeout and an expired URL too.</span></label></li>
+    <li><label><input type="checkbox"><span>Test downloads, seeking and playback on the devices you target. Inspect the file with ffprobe instead of trusting its extension.</span></label></li>
+    <li><label><input type="checkbox"><span>Document region limits, costs, authentication and availability.</span></label></li>
+  </ol>
+  <p><a href="https://github.com/justshivv/Opentune/blob/main/docs/audio-addons.md">Read the client behavior and platform limits ↗</a></p>
+</section>
+
+<section id="share" class="reveal">
+  <h2>Share the URL, get listed.</h2>
+  <p>Anyone can use your add-on as soon as they paste its manifest URL. To reach every listener, share the URL and source code in the Discord. The OpenTune owner keeps a published catalog that every app and the web player load on their own; sources from it appear as “Added by admin”, and listeners can turn them off or reorder them.</p>
+  <div class="cta-band"><div><h3>Build with the community</h3><p>Ask questions, share your manifest, and hear about protocol changes first.</p></div><a class="btn" href="https://discord.gg/6udrCVh5n">Join the Discord ↗</a></div>
+</section>
+
+</article>
+</div>
+</main>
+<footer><div class="wrap"><span>OpenTune · Free and open source</span><a href="../privacy/">Privacy</a><a href="https://github.com/justshivv/Opentune">Source code</a></div></footer>
+
+<script>
+(() => {
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.toggleAttribute('data-scrolled', scrollY > 8);
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  // Copy buttons: the code next to them, without the button's own label.
+  for (const button of document.querySelectorAll('.copy')) {
+    button.addEventListener('click', async () => {
+      const code = button.closest('.endpoint, .code').querySelector('pre').innerText;
+      try { await navigator.clipboard.writeText(code); } catch { return; }
+      button.textContent = 'Copied';
+      button.setAttribute('data-done', '');
+      setTimeout(() => { button.textContent = 'Copy'; button.removeAttribute('data-done'); }, 1600);
+    });
+  }
+
+  // The contents follow the section being read.
+  const links = new Map([...document.querySelectorAll('.toc a')].map((a) => [a.hash.slice(1), a]));
+  const spy = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      links.forEach((a) => a.removeAttribute('aria-current'));
+      const link = links.get(entry.target.id);
+      link?.setAttribute('aria-current', 'true');
+      if (matchMedia('(max-width: 900px)').matches) link?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  links.forEach((_, id) => { const s = document.getElementById(id); if (s) spy.observe(s); });
+
+  // Rise in on first sight.
+  const reveal = new IntersectionObserver((entries) => {
+    for (const entry of entries) if (entry.isIntersecting) { entry.target.setAttribute('data-in', ''); reveal.unobserve(entry.target); }
+  }, { rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('.reveal').forEach((el) => reveal.observe(el));
+
+  // The test list remembers its ticks in this browser; it works the same without storage.
+  const KEY = 'opentune-addon-checklist';
+  const boxes = [...document.querySelectorAll('#checklist input')];
+  const progress = document.getElementById('progress');
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch {}
+  boxes.forEach((box, i) => { box.checked = !!saved[i]; });
+  const count = () => {
+    const done = boxes.filter((b) => b.checked).length;
+    progress.textContent = done === boxes.length ? 'All checks done. Ready to share.' : `${done} of ${boxes.length} checks done`;
+  };
+  boxes.forEach((box) => box.addEventListener('change', () => {
+    count();
+    try { localStorage.setItem(KEY, JSON.stringify(boxes.map((b) => b.checked))); } catch {}
+  }));
+  count();
+})();
+</script>
+</body>
+</html>

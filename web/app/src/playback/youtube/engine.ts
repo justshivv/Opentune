@@ -1,4 +1,5 @@
-import { findLossless, reportLoadFailures, useAddons, type LosslessResult } from '@/addons/client';
+import { fetchJson, findLossless, reportLoadFailures, useAddons, type LosslessResult } from '@/addons/client';
+import { findJioSaavn, type SaavnStream } from '@/addons/jiosaavn';
 import { SabrStreamingAdapter } from 'googlevideo/sabr-streaming-adapter';
 import { buildSabrFormat } from 'googlevideo/utils';
 import shaka from 'shaka-player/dist/shaka-player.compiled';
@@ -31,7 +32,7 @@ export interface LoadedTrack {
   durationSec: number;
   /** Largest first. */
   thumbnails: { url: string; width: number; height: number }[];
-  client: PlayerClientName | 'ADDON';
+  client: PlayerClientName | 'ADDON' | 'JIOSAAVN';
   /** The audio format actually selected, e.g. "251 opus 140kbps". */
   format: string;
   loudnessDb: number | null;
@@ -146,7 +147,14 @@ export class YouTubeEngine {
    * actually flowing; rejects with [UnplayableError] for a settled "no",
    * [SupersededError] if another load replaced this one.
    */
-  async load(videoId: string, { startSec = 0, autoplay = true, tryAddons = true } = {}): Promise<LoadedTrack> {
+  async load(
+    videoId: string,
+    { startSec = 0, autoplay = true, tryAddons = true, hint }: {
+      startSec?: number; autoplay?: boolean; tryAddons?: boolean;
+      /** The YouTube Music names (the queue's): what other catalogs are searched by, not the video's channel. */
+      hint?: { title: string; artist: string; album?: string | null };
+    } = {},
+  ): Promise<LoadedTrack> {
     useAddons.setState({ checkingVideoId: null });
     const generation = ++this.generation;
     this.loading = true;
@@ -184,7 +192,8 @@ export class YouTubeEngine {
             `playing via ${track.client}, ${track.format}, first audio after ${Math.round(performance.now() - started)}ms`,
             videoId,
           );
-          if (tryAddons && useAddons.getState().sources.some(s => s.enabled)) void this.upgradeAddon(track, generation);
+          const addons = useAddons.getState();
+          if (tryAddons && (addons.jioSaavn || addons.sources.some(s => s.enabled))) void this.upgradeAddon(track, generation, hint);
           return track;
         } catch (error) {
           if (error instanceof SupersededError) throw error;
@@ -210,16 +219,66 @@ export class YouTubeEngine {
    * next; a search that came back empty only because servers erred is asked again
    * a few times while the song plays.
    */
-  private async upgradeAddon(track: LoadedTrack, generation: number): Promise<void> {
+  private async upgradeAddon(track: LoadedTrack, generation: number, hint?: { title: string; artist: string; album?: string | null }): Promise<void> {
     useAddons.setState({ checkingVideoId: track.videoId });
-    try { await this.findAndUpgradeAddon(track, generation); }
+    try { await this.findAndUpgradeAddon(track, generation, hint); }
     finally { if (generation === this.generation) useAddons.setState({ checkingVideoId: null }); }
   }
 
-  private async findAndUpgradeAddon(track: LoadedTrack, generation: number): Promise<void> {
-    const recording = { title: track.title, artist: track.author, duration: track.durationSec };
-    let search = await findLossless(recording).catch(() => null);
-    for (let retry = 0; retry < LOSSLESS_RETRIES && search && !search.ranked.length && search.transient; retry++) {
+  /**
+   * Moves the playing track onto [url] at the position it's at, the way the
+   * FLAC upgrade always has. True once its audio is flowing.
+   */
+  private async switchTo(track: LoadedTrack, generation: number, url: string, mime: string, client: 'ADDON' | 'JIOSAAVN', format: string): Promise<boolean> {
+    const at = this.audio.currentTime, playing = !this.audio.paused;
+    const player = await this.ensurePlayer(); this.checkCurrent(generation);
+    await player.unload(); this.checkCurrent(generation);
+    this.adapter?.dispose(); this.adapter = null; this.direct = null; this.current = null;
+    for (const scheme of ['http', 'https']) shaka.net.NetworkingEngine.registerScheme(scheme, shaka.net.HttpFetchPlugin.parse, shaka.net.NetworkingEngine.PluginPriority.FALLBACK);
+    await player.load(url, at, mime); this.checkCurrent(generation);
+    if (playing) await this.audio.play();
+    await this.firstAudio(generation); this.checkCurrent(generation);
+    this.addonTrack = { ...track, client, format, loudnessDb: null };
+    this.onRecovered(this.addonTrack);
+    return true;
+  }
+
+  /**
+   * JioSaavn and the FLAC search go out together, as on Android. Whichever
+   * answers first is acted on: JioSaavn's 320 kbps usually does and plays
+   * while the FLAC is still being verified; a verified FLAC then takes over.
+   * A FLAC whose stream won't load gives way to the next, then to JioSaavn,
+   * and only then back to YouTube.
+   */
+  private async findAndUpgradeAddon(track: LoadedTrack, generation: number, hint?: { title: string; artist: string; album?: string | null }): Promise<void> {
+    const recording = { title: hint?.title || track.title, artist: hint?.artist || track.author.replace(/ - Topic$/, ''), duration: track.durationSec };
+    const addons = useAddons.getState();
+    const anyFlac = addons.sources.some(s => s.enabled);
+    const flac = anyFlac ? findLossless(recording).catch(() => null) : Promise.resolve(null);
+    const saavnSearch: Promise<SaavnStream | null> = addons.jioSaavn
+      ? findJioSaavn({ ...recording, album: hint?.album }, fetchJson).then(({ stream, note }) => {
+          trackLog.i(note, track.videoId);
+          if (!anyFlac) useAddons.setState({ status: note });
+          return stream;
+        }).catch(() => null)
+      : Promise.resolve(null);
+    let saavn: SaavnStream | null = null;
+    const saavnFormat = 'JioSaavn · AAC 320 kbps';
+    const flacFirst = await Promise.race([flac.then((r) => !!r?.ranked.length), saavnSearch.then(() => false)]);
+    if (!flacFirst) {
+      saavn = await saavnSearch;
+      if (saavn && generation === this.generation && track.durationSec - this.audio.currentTime >= 20) {
+        this.loading = true;
+        try { await this.switchTo(track, generation, saavn.url, 'audio/mp4', 'JIOSAAVN', saavnFormat); }
+        catch (error) {
+          if (generation !== this.generation) return;
+          trackLog.w(`JioSaavn's stream didn't load: ${describe(error)}`, track.videoId);
+          saavn = null;
+        } finally { if (generation === this.generation) this.loading = false; }
+      }
+    }
+    let search = await flac;
+    for (let retry = 0; anyFlac && retry < LOSSLESS_RETRIES && search && !search.ranked.length && search.transient; retry++) {
       await new Promise(resolve => setTimeout(resolve, LOSSLESS_RETRY_MS));
       if (generation !== this.generation || track.durationSec - this.audio.currentTime < 20 + LOSSLESS_RETRY_MS / 1000) return;
       search = await findLossless(recording).catch(() => null);
@@ -227,23 +286,13 @@ export class YouTubeEngine {
     const enabled = (source: LosslessResult) => useAddons.getState().sources.some(s => s.id === source.sourceId && s.enabled);
     const candidates = search?.ranked.filter(enabled) ?? [];
     if (!candidates.length || generation !== this.generation) return;
-    const at = this.audio.currentTime, playing = !this.audio.paused;
-    if (track.durationSec - at < 20) return;
+    if (track.durationSec - this.audio.currentTime < 20) return;
     this.loading = true;
     const failures: string[] = [];
     try {
       for (const source of candidates) {
-        const from = this.audio.currentTime || at;
         try {
-          const player = await this.ensurePlayer(); this.checkCurrent(generation);
-          await player.unload(); this.checkCurrent(generation);
-          this.adapter?.dispose(); this.adapter = null; this.direct = null; this.current = null;
-          for (const scheme of ['http', 'https']) shaka.net.NetworkingEngine.registerScheme(scheme, shaka.net.HttpFetchPlugin.parse, shaka.net.NetworkingEngine.PluginPriority.FALLBACK);
-          await player.load(source.url, from, 'audio/flac'); this.checkCurrent(generation);
-          if (playing) await this.audio.play();
-          await this.firstAudio(generation); this.checkCurrent(generation);
-          this.addonTrack = { ...track, client: 'ADDON', format: `${source.provider} · FLAC ${source.bits}-bit ${(source.rate / 1000).toFixed(1)} kHz`, loudnessDb: null };
-          this.onRecovered(this.addonTrack);
+          await this.switchTo(track, generation, source.url, 'audio/flac', 'ADDON', `${source.provider} · FLAC ${source.bits}-bit ${(source.rate / 1000).toFixed(1)} kHz`);
           return;
         } catch (error) {
           if (generation !== this.generation) return;
@@ -252,7 +301,13 @@ export class YouTubeEngine {
         }
       }
       reportLoadFailures(failures);
-      const recovered = await this.load(track.videoId, { startSec: at, autoplay: playing, tryAddons: false }).catch(() => null);
+      // JioSaavn, when it was found, before YouTube.
+      saavn ??= await saavnSearch;
+      if (saavn) {
+        try { await this.switchTo(track, generation, saavn.url, 'audio/mp4', 'JIOSAAVN', saavnFormat); return; }
+        catch (error) { if (generation !== this.generation) return; trackLog.w(`JioSaavn's stream didn't load: ${describe(error)}`, track.videoId); }
+      }
+      const recovered = await this.load(track.videoId, { startSec: this.audio.currentTime, autoplay: !this.audio.paused, tryAddons: false }).catch(() => null);
       if (recovered) this.onRecovered(recovered);
     } finally { if (generation === this.generation) this.loading = false; }
   }

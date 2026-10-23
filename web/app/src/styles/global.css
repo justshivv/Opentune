@@ -12,6 +12,7 @@
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import './tokens.css' layer(base);
 @import './opentune.css';
+@import './motion.css';
 
 /* Tailwind's hover: is (hover: hover)-gated; the design's hovers aren't. */
 @custom-variant hover (&:hover);

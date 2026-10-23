@@ -66,7 +66,7 @@ export function ShelfScroller({ kind, children }: { kind: ShelfKind; children: R
       >
         <ChevronLeft size={20} strokeWidth={2.4} />
       </button>
-      <ul ref={list} className={`${shelfList} ${shelfKinds[kind]}`} onScroll={measure}>
+      <ul ref={list} className={`ot-shelf ${shelfList} ${shelfKinds[kind]}`} onScroll={measure}>
         {children}
       </ul>
       <button

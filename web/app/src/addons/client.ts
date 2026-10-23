@@ -1,15 +1,44 @@
 import { create } from 'zustand';
 import { endpoint, flacInfo, manifestOf, matches, publicHttps, qualityParams, type Addon, type CatalogTrack, type Recording } from '@opentune/shared/addons';
 import { getBridge } from '@/extension/bridge';
+import { fetchPublished, mergeCatalog } from './catalog';
 const KEY = 'opentune:audio-addons';
-function read(): Addon[] { try { const v = JSON.parse(localStorage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v.filter(x => typeof x?.url === 'string' && typeof x?.name === 'string').slice(0, 20) : []; } catch { return []; } }
-export const useAddons = create<{ sources: Addon[]; update: (sources: Addon[]) => void; status: string; checkingVideoId: string | null }>(set => ({
-  sources: read(), status: '', checkingVideoId: null, update: sources => { localStorage.setItem(KEY, JSON.stringify(sources)); set({ sources }); },
+const SAAVN_KEY = 'opentune:jiosaavn';
+/** Twenty of the listener's own and twenty published ones at most. */
+function read(): Addon[] { try { const v = JSON.parse(localStorage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v.filter(x => typeof x?.url === 'string' && typeof x?.name === 'string').slice(0, 40) : []; } catch { return []; } }
+function readSaavn(): boolean { try { return localStorage.getItem(SAAVN_KEY) !== 'false'; } catch { return true; } }
+export const useAddons = create<{
+  sources: Addon[]; update: (sources: Addon[]) => void; status: string; checkingVideoId: string | null;
+  /** JioSaavn's 320 kbps AAC, played while (or when no) FLAC is found. On by default, as on Android. */
+  jioSaavn: boolean; setJioSaavn: (on: boolean) => void;
+}>(set => ({
+  sources: read(), status: '', checkingVideoId: null,
+  update: sources => { try { localStorage.setItem(KEY, JSON.stringify(sources)); } catch { /* Kept for this session. */ } set({ sources }); },
+  jioSaavn: readSaavn(),
+  setJioSaavn: jioSaavn => { try { localStorage.setItem(SAAVN_KEY, String(jioSaavn)); } catch { /* Kept for this session. */ } set({ jioSaavn }); },
 }));
+
+/**
+ * Folds the sources published from the owner dashboard into the list ("Added by
+ * admin"), keeping the listener's order and on/off for them. Quiet on failure:
+ * the list as it was keeps working.
+ */
+export async function syncPublished(force = false): Promise<boolean> {
+  try {
+    const published = await fetchPublished(force);
+    if (!published) return true;
+    const { sources, update } = useAddons.getState();
+    const merged = mergeCatalog(sources, published);
+    if (JSON.stringify(merged) !== JSON.stringify(sources)) update(merged);
+    return true;
+  } catch { return false; }
+}
 const cache = new Map<string, { until: number; value: unknown }>();
 const pending = new Map<string, Promise<unknown>>();
 const cooldown = new Map<string, number>();
-async function fetchJson(url: string): Promise<unknown> {
+/** Servers a page can't read (no CORS): asked through the extension from then on, not tried directly every time. */
+const corsBlocked = new Set<string>();
+export async function fetchJson(url: string): Promise<unknown> {
   const origin = publicHttps(url).origin;
   if ((cooldown.get(origin) ?? 0) > Date.now()) throw new Error('Source rate limited; try later');
   const old = cache.get(url); if (old && old.until > Date.now()) return old.value;
@@ -17,13 +46,15 @@ async function fetchJson(url: string): Promise<unknown> {
   const job = (async () => {
     let status: number, text: string;
     try {
+      if (corsBlocked.has(origin)) throw new TypeError('Blocked by CORS');
       const r = await fetch(url, { credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(6000) });
       status = r.status;
       const reader = r.body?.getReader(); if (!reader) throw new Error('Empty response');
       const decoder = new TextDecoder(); text = ''; let size = 0;
       try { while (true) { const item = await reader.read(); if (item.done) break; size += item.value.length; if (size > 2097152) throw new Error('Response too large'); text += decoder.decode(item.value, { stream: true }); } text += decoder.decode(); }
       finally { await reader.cancel().catch(() => {}); }
-    } catch {
+    } catch (error) {
+      if (error instanceof TypeError) corsBlocked.add(origin);
       const bridge = getBridge(); if (!bridge) throw new Error('Source needs CORS support or extension host permission');
       const r = await bridge.call('addon.fetch', { url }); status = r.status; text = r.body;
     }
@@ -40,7 +71,7 @@ export async function addSource(raw: string): Promise<void> {
   const url = endpoint(raw, 'manifest.json');
   const manifest = manifestOf(await fetchJson(url));
   const { sources, update } = useAddons.getState();
-  if (sources.length >= 20) throw new Error('Up to 20 sources can be added');
+  if (sources.filter(s => !s.admin).length >= 20) throw new Error('Up to 20 sources can be added');
   if (sources.some(x => x.url === url)) throw new Error('This source is already added');
   update([...sources, { id: crypto.randomUUID(), name: manifest.name, url, enabled: true }]);
 }

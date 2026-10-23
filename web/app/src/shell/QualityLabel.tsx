@@ -1,4 +1,4 @@
-import { AudioLines, Headphones } from 'lucide-react';
+import { AudioLines } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAddons } from '@/addons/client';
 import { usePlayer } from '@/state/player';
@@ -7,7 +7,7 @@ export function QualityLabel() {
   const track = usePlayer(s => s.nowPlaying);
   const status = usePlayer(s => s.status);
   const search = useAddons(s => s.status);
-  const enabled = useAddons(s => s.sources.some(a => a.enabled));
+  const enabled = useAddons(s => s.jioSaavn || s.sources.some(a => a.enabled));
   const upgrading = useAddons(s => s.checkingVideoId === track?.videoId);
   const [details, setDetails] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -15,7 +15,7 @@ export function QualityLabel() {
   const quality = qualityLabel(track?.streamInfo ?? null, enabled && upgrading, status);
   return <>
     <button className="ot-quality" data-lossless={quality.lossless} onClick={() => setDetails(true)} aria-label={`Audio details: ${quality.text}`}>
-      {quality.lossless ? <AudioLines size={17} /> : <Headphones size={17} />}<span>{quality.text}</span>
+      {quality.lossless ? <AudioLines size={17} /> : <span className="ot-hq" aria-hidden="true">HQ</span>}<span>{quality.text}</span>
     </button>
     {details && <dialog ref={dialog} className="ot-audio-details" aria-label="Audio details" onCancel={e => { e.preventDefault(); dialog.current?.close(); setDetails(false); }} onKeyDown={e => e.stopPropagation()}>
       <h2>Audio pipeline</h2><p>{track?.streamInfo ?? 'Waiting for decoded audio'}</p>

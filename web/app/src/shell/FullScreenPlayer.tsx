@@ -1,13 +1,11 @@
 import { Maximize, Minimize, X } from 'lucide-react';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useLocation } from 'react-router';
 import {
   BackwardIcon,
   ForwardIcon,
   LyricsActiveIcon,
   LyricsIcon,
-  PauseIcon,
-  PlayIcon,
   RepeatIcon,
   RepeatOneIcon,
   ShuffleIcon,
@@ -33,6 +31,8 @@ import { useAppearance } from '@/state/appearance';
 import { useArtworkColor } from '@/lib/artworkColor';
 import { QualityLabel } from './QualityLabel';
 import { useScrubber } from './useScrubber';
+import { MorphPlayButton } from './MorphPlayButton';
+import { morphPlayer } from './playerMorph';
 
 function useBrowserFullScreen(): boolean {
   return useSyncExternalStore(
@@ -44,21 +44,22 @@ function useBrowserFullScreen(): boolean {
   );
 }
 
-/** The seek line under the track's names: thicker on hover, with the times beneath its ends. */
+/**
+ * The seek line under the track's names: thicker on hover, with the times
+ * beneath its ends. The played part waves and travels while music plays and
+ * lies flat again when it stops, as the app's seek bar does.
+ */
 function Scrubber() {
   const { bar, elapsed, remaining, dragging, handlers } = useScrubber();
+  const playing = usePlayer((s) => s.status === 'playing');
   return (
-    <div className="group/scrub mt-3.5" data-dragging={dragging || undefined}>
+    <div className="group/scrub mt-3.5" data-dragging={dragging || undefined} data-no-swipe data-morph-fade>
       {/* A taller hit area than the line it carries. */}
-      <div className="group/hit flex h-4 cursor-pointer touch-none items-center" {...handlers}>
-        <div
-          className="h-1 flex-1 overflow-hidden rounded-[999px] bg-quaternary transition-[height] duration-120 ease-in group-hover/hit:h-2 group-data-dragging/scrub:h-2"
-          aria-hidden="true"
-        >
-          <div
-            ref={bar}
-            className="size-full origin-left scale-x-(--progress) bg-secondary transition-[background-color] duration-120 ease-in [--progress:0] group-hover/hit:bg-primary group-data-dragging/scrub:bg-primary"
-          />
+      <div className="flex h-4 cursor-pointer touch-none items-center" {...handlers}>
+        <div ref={bar} className="ot-wave [--progress:0]" data-wavy={(playing && !dragging) || undefined} data-dragging={dragging || undefined} aria-hidden="true">
+          <span className="ot-wave-rest" />
+          <span className="ot-wave-flat" />
+          <span className="ot-wave-line" />
         </div>
       </div>
       <div className="ot-quality-row">
@@ -80,22 +81,21 @@ const skip = `${transportButton} size-12 text-primary`;
 function Transport() {
   const hasTrack = usePlayer((s) => s.nowPlaying !== null);
   const playing = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
+  const buffering = usePlayer((s) => s.status === 'buffering' || s.status === 'loading');
   const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0));
   const shuffle = usePlayer((s) => s.shuffle);
   const repeat = usePlayer((s) => s.repeat);
   const { togglePlay, next, previous, toggleShuffle, cycleRepeat } = usePlayer.getState();
 
   return (
-    <div className="mx-auto mt-[clamp(8px,1.6vh,16px)] mb-0 flex h-13 w-[min(100%,315px)] items-center justify-between">
+    <div className="mx-auto mt-[clamp(8px,1.6vh,16px)] mb-0 flex h-17 w-[min(100%,315px)] items-center justify-between" data-morph-fade>
       <button className={toggle} aria-label="Shuffle" aria-pressed={shuffle} onClick={toggleShuffle}>
         <ShuffleIcon size={30} />
       </button>
       <button className={skip} disabled={!hasTrack} aria-label="Previous" onClick={previous}>
         <BackwardIcon size={40} />
       </button>
-      <button className={`${transportButton} ot-play-button size-14 text-primary`} disabled={!hasTrack} aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay}>
-        {playing ? <PauseIcon size={48} /> : <PlayIcon size={48} />}
-      </button>
+      <MorphPlayButton playing={playing} buffering={buffering} disabled={!hasTrack} onClick={togglePlay} />
       <button className={skip} disabled={!hasTrack || !hasNext} aria-label="Next" onClick={next}>
         <ForwardIcon size={40} />
       </button>
@@ -130,7 +130,7 @@ const IDLE_MS = 3000;
  * the names and transport over its foot, fading out while the pointer rests;
  * beside the lyrics or Up Next, it takes the artwork's place at 16:9.
  */
-export function FullScreenPlayer() {
+export function FullScreenPlayer({ closing = false, onClosed }: { closing?: boolean; onClosed?: () => void }) {
   const nowPlaying = usePlayer((s) => s.nowPlaying);
   const appearance = useAppearance();
   const coverColor = useArtworkColor(nowPlaying?.artworkUrl);
@@ -160,6 +160,58 @@ export function FullScreenPlayer() {
   const close = useRef<HTMLButtonElement>(null);
   // Whether this player put the page in the browser's full screen, so closing it leaves it again.
   const enteredBrowserFullScreen = useRef(false);
+  const root = useRef<HTMLDivElement>(null);
+  const cover = useRef<HTMLDivElement>(null);
+  // A touch drag down on the sheet: where it started and how far it has gone.
+  const drag = useRef<{ id: number; y: number; dy: number } | null>(null);
+  const pulled = useRef(0);
+
+  // Opens out of the mini player, and folds back into it on close.
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) {
+      if (closing) onClosed?.();
+      return;
+    }
+    const done = morphPlayer(el, cover.current, !closing, pulled.current);
+    el.style.translate = '';
+    pulled.current = 0;
+    // A close cut short by opening again rejects, and leaves the player up.
+    done.then(() => closing && onClosed?.(), () => undefined);
+  }, [closing]);
+
+  const isPanel = (target: EventTarget) =>
+    !!(target as HTMLElement).closest('button, a, input, [data-no-swipe], [aria-label="Lyrics"], [aria-label="Up Next"]');
+  const dragStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    wake();
+    if (e.pointerType !== 'touch' || closing || isPanel(e.target)) return;
+    drag.current = { id: e.pointerId, y: e.clientY, dy: 0 };
+  };
+  const dragMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    wake();
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId || !root.current) return;
+    d.dy = Math.max(0, e.clientY - d.y);
+    if (d.dy > 8 && !root.current.hasPointerCapture(e.pointerId)) root.current.setPointerCapture(e.pointerId);
+    root.current.dataset.dragging = '';
+    root.current.style.translate = `0 ${d.dy}px`;
+  };
+  const dragEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    const el = root.current;
+    if (!d || d.id !== e.pointerId || !el) return;
+    drag.current = null;
+    delete el.dataset.dragging;
+    if (d.dy > Math.min(140, innerHeight * 0.18)) {
+      pulled.current = d.dy;
+      setFullScreen(false);
+      return;
+    }
+    // Not far enough: it springs back up.
+    el.dataset.settling = '';
+    el.style.translate = '';
+    setTimeout(() => delete el.dataset.settling, 340);
+  };
 
   // The lyrics column is there while lyrics are on and there are lyrics, or might be.
   const hasLyrics = !!lyrics.data || (lyrics.isPending && lyrics.fetchStatus !== 'idle');
@@ -232,33 +284,37 @@ export function FullScreenPlayer() {
     <div
       // Over everything but menus and dialogs, which portal above it. The on-dark colours come from tokens.css (data-full-screen).
       // --art, the artwork's side: Apple's 461px at 1440px wide, and never taller than the screen leaves room for.
-      className="fixed inset-0 z-[calc(var(--z-contextual-menus)-2)] isolate animate-enter overflow-hidden text-primary [--art:min(32vw,calc(100dvh-330px),720px)] motion-reduce:[animation-name:fade-in] max-md:[--art:min(84vw,calc(100dvh-330px),420px)]"
+      ref={root}
+      className={`fixed inset-0 z-[calc(var(--z-contextual-menus)-2)] isolate overflow-hidden text-primary [--art:min(32vw,calc(100dvh-330px),720px)] max-md:[--art:min(84vw,calc(100dvh-330px),420px)] ${closing ? 'pointer-events-none' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label="Now Playing"
       data-full-screen
       data-player-style={appearance.playerStyle}
       data-paused={!playing || undefined}
-      onPointerMove={wake}
-      onPointerDown={wake}
+      onPointerMove={dragMove}
+      onPointerDown={dragStart}
+      onPointerUp={dragEnd}
+      onPointerCancel={dragEnd}
       onKeyDown={wake}
       style={theater && playing && idle ? { cursor: 'none' } : undefined}
     >
       {appearance.playerBackground === 'mesh'
         ? <MeshBackdrop artworkUrl={nowPlaying.artworkUrl} playing={playing && appearance.motion} />
         : <div className={`ot-player-backdrop ot-${appearance.playerBackground}`} style={{ '--cover-color': coverColor?.background ?? '#463231' } as React.CSSProperties} aria-hidden="true" />}
-      <div className="ot-playing-from">Playing from<br /><strong>OpenTune</strong></div>
+      <div className="ot-playing-from" data-morph-fade>Playing from<br /><strong>OpenTune</strong></div>
       {theater && (
         <div className="absolute inset-0 animate-fade-in bg-black">
           <VideoSurface fit="contain" className="size-full" />
         </div>
       )}
 
-      <button ref={close} className={`${corner} top-4 left-5`} aria-label="Close" onClick={() => setFullScreen(false)}>
+      <button ref={close} data-morph-fade className={`${corner} top-4 left-5`} aria-label="Close" onClick={() => setFullScreen(false)}>
         <X size={20} />
       </button>
       {document.fullscreenEnabled && (
         <button
+          data-morph-fade
           className={`${corner} top-4 right-5`}
           aria-label={browserFullScreen ? 'Exit full screen' : 'Enter full screen'}
           onClick={toggleBrowserFullScreen}
@@ -288,6 +344,7 @@ export function FullScreenPlayer() {
         >
           {/* Shrinks a touch while paused, as Apple's does. Beside a column, a music video plays here at 16:9. */}
           <div
+            ref={cover}
             className={`ot-player-cover relative w-(--art) rounded-[28px] transition-[scale] duration-450 ease-[cubic-bezier(0.34,1.3,0.64,1)] motion-reduce:transition-none${
               video ? ' aspect-video overflow-hidden bg-black' : ' aspect-square'
             }${playing ? '' : ' scale-92'}${column ? ' max-md:hidden' : ''}${theater ? ' hidden' : ''}`}
@@ -327,7 +384,7 @@ export function FullScreenPlayer() {
             {video && !theater && <VideoSurface className="absolute inset-0" />}
           </div>
 
-          <div className={`flex items-center gap-3${theater ? '' : ' mt-[clamp(20px,3.2vh,32px)]'}${column ? ' max-md:mt-0' : ''}`}>
+          <div key={videoId} data-morph-fade className={`ot-swap-in flex items-center gap-3${theater ? '' : ' mt-[clamp(20px,3.2vh,32px)]'}${column ? ' max-md:mt-0' : ''}`}>
             {/* As the mini player's: the title opens the album, each credited name its artist. */}
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <div className="flex min-w-0 items-center">
@@ -366,7 +423,7 @@ export function FullScreenPlayer() {
         </section>
 
         {showLyrics && (
-          <section className="flex min-h-0 animate-fade-in self-stretch" aria-label="Lyrics">
+          <section className="flex min-h-0 animate-fade-in self-stretch" aria-label="Lyrics" data-morph-fade>
             <LyricsPanel variant="full" />
           </section>
         )}
@@ -375,6 +432,7 @@ export function FullScreenPlayer() {
           <section
             className="flex min-h-0 animate-fade-in flex-col self-stretch [mask-image:linear-gradient(180deg,#000_calc(100%-80px),transparent)]"
             aria-label="Up Next"
+            data-morph-fade
           >
             <UpNext />
           </section>
@@ -383,6 +441,7 @@ export function FullScreenPlayer() {
 
       {hasLyrics && (
         <button
+          data-morph-fade
           className={`${corner} bottom-5 left-5 aria-pressed:text-primary`}
           aria-label="Lyrics"
           aria-pressed={showLyrics}
@@ -392,6 +451,7 @@ export function FullScreenPlayer() {
         </button>
       )}
       <button
+        data-morph-fade
         className={`${corner} right-5 bottom-5 aria-pressed:text-primary`}
         aria-label="Up Next"
         aria-pressed={showQueue}

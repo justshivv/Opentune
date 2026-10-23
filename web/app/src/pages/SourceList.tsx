@@ -15,7 +15,7 @@ export function SourceList() {
   return <><p role="status" className="sr-only">{notice}</p><ol className="ot-source-list">{sources.map((s, i) =>
     <li key={s.id} ref={el => { if (el) rows.current.set(s.id, el); else rows.current.delete(s.id); }} className="ot-source-row" data-dragging={drag?.id === s.id}
       style={drag?.id === s.id ? { transform: `translateY(${drag.offset}px) scale(1.02)`, transition: 'background .18s, box-shadow .18s' } : undefined}>
-      <span className="text-secondary">{i + 1}</span><Puzzle size={24} /><div><strong>{s.name}</strong><small>{s.enabled ? 'Enabled · best available FLAC' : 'Disabled'}</small></div>
+      <span className="text-secondary">{i + 1}</span><Puzzle size={24} /><div><strong>{s.name}</strong><small>{s.admin ? 'Added by admin · ' : ''}{s.enabled ? 'best available FLAC' : 'Off'}</small></div>
       <input type="checkbox" role="switch" aria-label={`Enable ${s.name}`} checked={s.enabled} onChange={e => update(sources.map(x => x.id === s.id ? { ...x, enabled: e.target.checked } : x))} />
       <button className="ot-grab" aria-label={`Reorder ${s.name}`} title="Drag to reorder, or use arrow keys" onKeyDown={e => {
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); move(i, i + (e.key === 'ArrowUp' ? -1 : 1)); }
@@ -31,7 +31,7 @@ export function SourceList() {
         }, { index: i, distance: Math.abs(drag.offset) });
         move(i, target.index); setDrag(null);
       }} onPointerCancel={() => setDrag(null)} onLostPointerCapture={() => setDrag(null)}><GripVertical size={22} /></button>
-      <details><summary>Source options</summary><button disabled={i === 0} onClick={() => move(i, i - 1)}>Move up</button><button disabled={i === sources.length - 1} onClick={() => move(i, i + 1)}>Move down</button><button onClick={() => update(sources.filter(x => x.id !== s.id))}>Remove</button></details>
+      <details><summary>Source options</summary><button disabled={i === 0} onClick={() => move(i, i - 1)}>Move up</button><button disabled={i === sources.length - 1} onClick={() => move(i, i + 1)}>Move down</button>{!s.admin && <button onClick={() => update(sources.filter(x => x.id !== s.id))}>Remove</button>}</details>
     </li>
   )}</ol></>;
 }
