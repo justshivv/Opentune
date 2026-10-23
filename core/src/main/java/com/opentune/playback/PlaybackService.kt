@@ -1504,6 +1504,7 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun swapToUpgrade(player: ExoPlayer, id: String, uri: android.net.Uri = youtubeFallbackUri(id, upgraded = true)): Boolean {
         NerdStats.onUpgrade(id)
         return try {
+            // Done: a note from an earlier try that it couldn't be is no longer true.
             switchStream(player, id, uri).also { if (it) ExternalStreams.swapSucceeded(id) }
         } finally {
             if (!upgradeAsked) NerdStats.onUpgrade(null)
@@ -2392,5 +2393,3 @@ internal fun loudnessGainDb(loudnessDb: Double, level: com.opentune.data.setting
     val target = (-loudnessDb + level.offsetDb).coerceAtMost(level.maxGainDb.toDouble())
     return if (speakerHold) target.coerceAtLeast(0.0) else target
 }
-
-
