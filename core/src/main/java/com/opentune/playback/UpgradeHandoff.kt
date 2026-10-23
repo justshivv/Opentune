@@ -32,3 +32,20 @@ internal suspend fun performUpgradeHandoff(
 /** A verified catalog candidate is not proof that the player's current format is lossless. */
 internal fun upgradeFormatReady(lossless: Boolean, codec: String?): Boolean =
     codec != null && (!lossless || codec in setOf("audio/flac", "audio/alac", "audio/raw"))
+
+internal enum class UpgradeBufferResult { READY, SUPERSEDED, FAILED }
+
+/** A higher-quality answer can retire a silent intermediate load, never the audible stream. */
+internal suspend fun awaitUpgradeBuffer(
+    superseded: () -> Boolean,
+    invalid: () -> Boolean,
+    ready: () -> Boolean,
+    poll: suspend () -> Unit = { kotlinx.coroutines.delay(100) },
+): UpgradeBufferResult {
+    while (true) {
+        if (superseded()) return UpgradeBufferResult.SUPERSEDED
+        if (invalid()) return UpgradeBufferResult.FAILED
+        if (ready()) return UpgradeBufferResult.READY
+        poll()
+    }
+}
