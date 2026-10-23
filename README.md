@@ -608,7 +608,7 @@ Not built yet: lyric translation and an in-app language setting.
 
 ## Usage counts
 
-The new usage system uses a random installation ID, version, UTC activity dates and
+The new usage system uses a random installation ID, version, activity dates (India time) and
 daily play totals. IDs survive app updates and are excluded from backups and device
 transfers. Reinstalling or clearing app data creates a new ID. The server deduplicates
 installations and merges cumulative play totals, so upload retries do not inflate counts.

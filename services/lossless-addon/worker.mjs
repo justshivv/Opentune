@@ -1,4 +1,6 @@
 import { withAbuseProtection } from './security.mjs';
+import { withAppVerification } from './auth.mjs';
+export { AddonAuthState } from './auth.mjs';
 
 /** OpenTune lossless HTTP adapters. No media transcoding or audio proxying. */
 const MONO = 'https://tracks.monochrome.st';
@@ -219,4 +221,4 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
   };
 }
 const handler = createAddon();
-export default { fetch: withAbuseProtection(handler) };
+export default { fetch: withAbuseProtection(withAppVerification(handler)) };

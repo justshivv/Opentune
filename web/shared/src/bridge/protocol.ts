@@ -191,7 +191,8 @@ export interface BridgeMethods {
   'yt.authState': { params: { refresh?: boolean }; result: YtAuthState };
   'yt.selectChannel': { params: { channelId: string }; result: YtAuthState };
   'yt.setConnected': { params: { connected: boolean }; result: YtAuthState };
-  'addon.requestPermission': { params: { url: string }; result: Record<string, never> };
+  /** [urls]: every host to ask for on the one page; an older extension only reads [url]. */
+  'addon.requestPermission': { params: { url: string; urls?: string[] }; result: Record<string, never> };
   'addon.fetch': { params: HttpRequest; result: HttpResponse };
   /** A lyric provider the page can't reach itself; refused with `permission` until its host is granted. */
   'lyrics.fetch': { params: HttpRequest; result: HttpResponse };

@@ -24,6 +24,24 @@ jobs:
           node-version: '24'
       - name: Test adapters
         run: node --test services/lossless-addon/*.test.mjs
+      - name: Pin the official app signing certificate
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.OPENTUNE_KEYSTORE_BASE64 }}
+          OPENTUNE_KEYSTORE_PASSWORD: ${{ secrets.OPENTUNE_KEYSTORE_PASSWORD }}
+          OPENTUNE_KEY_ALIAS: ${{ secrets.OPENTUNE_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64" && test -n "$OPENTUNE_KEYSTORE_PASSWORD" && test -n "$OPENTUNE_KEY_ALIAS"
+          trap 'rm -f "$RUNNER_TEMP/attestation.keystore" "$RUNNER_TEMP/app-public.der"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/attestation.keystore"
+          keytool -exportcert -keystore "$RUNNER_TEMP/attestation.keystore" -storepass:env OPENTUNE_KEYSTORE_PASSWORD -alias "$OPENTUNE_KEY_ALIAS" -file "$RUNNER_TEMP/app-public.der"
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          const digest = createHash('sha256').update(readFileSync(`${process.env.RUNNER_TEMP}/app-public.der`)).digest('hex');
+          appendFileSync(process.env.GITHUB_ENV, `APP_CERT_SHA256=${digest}\n`);
+          JS
       - name: Deploy standalone Worker
         id: worker
         working-directory: services/lossless-addon
@@ -37,7 +55,7 @@ jobs:
             echo '::error::Cloudflare deployment credentials are not configured.'
             exit 1
           fi
-          npx --yes wrangler@4 deploy 2>&1 | tee "$RUNNER_TEMP/lossless-deploy.log"
+          npx --yes wrangler@4 deploy --var "APP_CERT_SHA256:$APP_CERT_SHA256" 2>&1 | tee "$RUNNER_TEMP/lossless-deploy.log"
           node --input-type=module <<'JS'
           import { readFileSync, appendFileSync } from 'node:fs';
           const log = readFileSync(`${process.env.RUNNER_TEMP}/lossless-deploy.log`, 'utf8');

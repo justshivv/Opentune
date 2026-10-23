@@ -46,9 +46,11 @@ object AddonHttp {
     private suspend fun fetch(url: String, limit: Int, prefix: Boolean, agent: String?): ByteArray {
         var address = AddonProtocol.url(url)
         repeat(5) {
-            val response = request(Request.Builder().url(address).header("Accept", if (prefix) "*/*" else "application/json")
+            var outgoing = Request.Builder().url(address).header("Accept", if (prefix) "*/*" else "application/json")
                 .apply { if (agent != null) header("User-Agent", agent) }
-                .apply { if (prefix) header("Range", "bytes=0-${limit - 1}") }.build(), limit, prefix)
+                .apply { if (prefix) header("Range", "bytes=0-${limit - 1}") }.build()
+            if (FirstPartyAddonAuth.protects(address)) outgoing = FirstPartyAddonAuth.authorize(outgoing)
+            val response = request(outgoing, limit, prefix)
             if (response.redirect != null) { address = AddonProtocol.url(address.resolve(response.redirect)?.toString() ?: error("Invalid redirect")) }
             else return response.bytes
         }

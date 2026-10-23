@@ -184,21 +184,24 @@ function hintOf(track: Track): NowPlaying {
   };
 }
 
-// ---- Listen Together's two doors (playback/PartySync.kt) ----------------------------
+// ---- Listen Together's two doors (together/room.ts) --------------------------------
 //
-// Every user action reports an intent through [partyHooks]; that is how the
-// party hears about it. What the party does to this player goes through
+// Every user action reports an intent through [partyHooks]; that is how a
+// room this device hosts hears about it. A guest's controls and picks are
+// offered to the room first. What the room does to this player goes through
 // [partyPlayer] instead, which reports nothing, so a correction can never
 // come back around as a control.
+
+export type PartyControl = { kind: 'toggle' } | { kind: 'next' } | { kind: 'previous' } | { kind: 'seek'; ms: number };
 
 export interface PartyHooks {
   /** The user did something to playback, or the queue moved on by itself. */
   onIntent(): void;
-  /** True when a resume must wait for the party's scheduled start (partySync starts it). */
-  shouldDeferPlay(): boolean;
-  /** A listener in a host-locked party: play/pause is theirs alone. True when handled. */
-  onLockedTransport(playing: boolean): boolean;
-  /** In a party, AutoPlay is the party's: one elected member tops up the shared queue. */
+  /** A guest's play/pause, skip or seek: true when the room took it, so nothing happens here. */
+  intercept(control: PartyControl): boolean;
+  /** A guest picking songs: true when they went to the room instead of this queue. */
+  suggest(tracks: Track[], now: boolean): boolean;
+  /** Following someone else's room: their queue is played, so AutoPlay stays out of it. */
   inParty(): boolean;
 }
 
@@ -226,6 +229,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
 
   playTracks(tracks, startIndex, source) {
     if (!tracks.length) return;
+    if (partyHooks?.suggest([tracks[startIndex] ?? tracks[0]!], true)) return;
     const { queue, index, shuffle } = get();
     const built = buildContextQueue(queue, index, tracks, startIndex, source);
     if (shuffle) {
@@ -241,6 +245,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   playTrack(track, source) {
+    if (partyHooks?.suggest([track], true)) return;
     const { queue, index } = get();
     canonical = null;
     set({ queue: buildOneOffQueue(queue, index, track, source) });
@@ -266,11 +271,13 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   playNext(tracks, source = null) {
+    if (partyHooks?.suggest(tracks, false)) return;
     insertUser(tracks, source, true);
     intent();
   },
 
   addToQueue(tracks, source = null) {
+    if (partyHooks?.suggest(tracks, false)) return;
     insertUser(tracks, source, false);
     intent();
   },
@@ -311,10 +318,12 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   next() {
+    if (partyHooks?.intercept({ kind: 'next' })) return;
     void advance(false).then(intent);
   },
 
   previous() {
+    if (partyHooks?.intercept({ kind: 'previous' })) return;
     const { index, queue, repeat } = get();
     const audio = getAudio();
     if (audio && audio.currentTime > BACK_RESTARTS_AFTER_SEC) return get().seek(0);
@@ -328,15 +337,12 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
     const audio = getAudio();
     const { nowPlaying, status, index } = get();
     if (!nowPlaying) return;
-    const resuming = !audio || audio.paused || status === 'error';
-    // A listener in a party the host has locked: the press moves this device alone.
-    if (partyHooks?.onLockedTransport(resuming)) return;
+    if (partyHooks?.intercept({ kind: 'toggle' })) return;
     if (!audio || status === 'error') {
       // A stopped or failed track starts again from where it was.
       void startAt(index, { startSec: audio?.currentTime ?? 0 });
     } else if (audio.paused) {
-      // In a party, a resume waits for the instant the server schedules for everyone.
-      if (!partyHooks?.shouldDeferPlay()) void audio.play().catch((e: unknown) => trackLog.w(`play() refused: ${String(e)}`));
+      void audio.play().catch((e: unknown) => trackLog.w(`play() refused: ${String(e)}`));
     } else {
       cancelCrossfade();
       audio.pause();
@@ -347,6 +353,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   seek(seconds) {
     const audio = getAudio();
     if (!audio) return;
+    if (partyHooks?.intercept({ kind: 'seek', ms: seconds * 1000 })) return;
     cancelCrossfade();
     audio.currentTime = Math.max(0, Math.min(seconds, audio.duration || seconds));
     updatePositionState();
@@ -552,7 +559,7 @@ const exhaustedSeeds = new Set<string>();
 function refillAutoplay(force = false): Promise<void> {
   const { autoplay, repeat, queue, index } = usePlayer.getState();
   if (!autoplay || repeat !== 'off' || index < 0) return Promise.resolve();
-  // A party's AutoPlay goes through the server (party/partySync.ts), never straight onto this queue.
+  // A guest plays the host's queue; the host's AutoPlay fills it for everyone.
   if (partyHooks?.inParty()) return Promise.resolve();
   const needed = MAX_QUEUED_AUTOPLAY - queue.slice(index + 1).filter((e) => e.tier === 'autoplay').length;
   if (needed <= 0) return Promise.resolve();
@@ -834,6 +841,11 @@ export const partyPlayer = {
     cancelCrossfade();
     audio.currentTime = Math.max(0, seconds);
     updatePositionState();
+  },
+  /** The playback speed, for nudging a guest back into step without a seek; 1 is normal. */
+  setRate(rate: number): void {
+    const audio = getAudio();
+    if (audio && Math.abs(audio.playbackRate - rate) > 0.001) audio.playbackRate = rate;
   },
   /** Replaces everything after the playing track; the playing track is left alone. */
   setUpcoming(tracks: Track[], tiers: ('user' | 'autoplay')[]): void {

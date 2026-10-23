@@ -260,6 +260,22 @@ test('public counts are aggregate only and match the dashboard figures',async()=
   assert.deepEqual(Object.keys(counts).sort(),['asOf','daily','installations','monthly','timeZone','weekly']);
 });
 
+test('public counts include current apps (India time) and older ones (UTC), each installation once',async()=>{
+  const db=database();
+  const ist=(n,plays=1)=>({installationId:id.replace(/1$/,String(n)),days:[{day:'2026-10-09',version:'1.0.1',plays,timeZone:'Asia/Kolkata'}]});
+  await ingest(db,body(1),now);                                   // 1: an old client, UTC only
+  await ingest(db,ist(2),now);                                    // 2: a current client, India time
+  await ingest(db,ist(3),now);
+  await ingest(db,{...ist(1),installationId:id},now);             // 1 again, after updating
+  const counts=await publicCounts(db,now);
+  assert.equal(counts.timeZone,'Asia/Kolkata');
+  assert.equal(counts.monthly,3);
+  assert.equal(counts.daily,3);
+  assert.equal(counts.installations,3);
+  const shield=await (await worker.fetch(new Request('https://example.test/v1/badge'),{DB:db})).json();
+  assert.equal(shield.message,'3');
+});
+
 test('the public count and badge endpoints need no sign-in',async()=>{
   const db=database(); await ingest(db,body(1),now);
   const env={DB:db};

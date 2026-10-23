@@ -37,3 +37,6 @@ website-reports/
 /web/app/public/downloads/
 /web/extension/public/icon/
 /web/fixtures/
+
+# Design-check hook cache
+.impeccable/

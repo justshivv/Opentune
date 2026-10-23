@@ -2,6 +2,21 @@ name = "opentune-lossless-addon"
 main = "worker.mjs"
 compatibility_date = "2026-10-23"
 workers_dev = true
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Keep existing clients working while the signed verification build is tested.
+# Strict mode is the default in code; this temporary window must be explicit.
+VERIFICATION_MODE = "staged"
+WEB_ORIGINS = "https://justshivv.github.io"
+
+[[durable_objects.bindings]]
+name = "AUTH"
+class_name = "AddonAuthState"
+
+[[migrations]]
+tag = "auth-v1"
+new_sqlite_classes = ["AddonAuthState"]
 
 # Approximate requests per address per Cloudflare location, not authentication.
 # A generous ceiling accommodates shared mobile/Wi-Fi networks.

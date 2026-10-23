@@ -7,8 +7,8 @@ const response = (error, status, retry = null) => new Response(JSON.stringify({ 
 export function withAbuseProtection(handler) {
   return async (request, env = {}) => {
     // OPTIONS does not touch an upstream; preserve browser preflight support.
-    if (request.method === 'OPTIONS') return handler(request);
-    if (request.method !== 'GET') return response('Method not allowed', 405);
+    if (request.method === 'OPTIONS') return handler(request, env);
+    if (request.method !== 'GET' && !(request.method === 'POST' && new URL(request.url).pathname.startsWith('/auth/'))) return response('Method not allowed', 405);
     if (request.url.length > 4096) return response('Request URL is too long', 414);
     if (typeof env.REQUEST_LIMITER?.limit !== 'function') return response('Request protection is unavailable', 503, 60);
     // Cloudflare supplies this header at its edge. Never trust caller-supplied
@@ -23,7 +23,7 @@ export function withAbuseProtection(handler) {
       const { success } = await env.REQUEST_LIMITER.limit({ key });
       if (!success) return response('Too many requests. Please try again shortly.', 429, 60);
     } catch { return response('Request protection is temporarily unavailable', 503, 60); }
-    const result = await handler(request);
+    const result = await handler(request, env);
     const headers = new Headers(result.headers); headers.set('X-Content-Type-Options', 'nosniff');
     return new Response(result.body, { status: result.status, headers });
   };
