@@ -200,7 +200,12 @@ fun HomeScreen(
             item(key = "top") {
                 // A greeting for the time of day, by name when signed in, with the
                 // account (and settings) one tap away on the right.
-                val hour = remember { java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) }
+                // Read again each time Home comes back into view: kept from the morning,
+                // it still said good morning at night.
+                val shownAt by page.currentStateFlow.collectAsState()
+                val hour = remember(shownAt.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+                    java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                }
                 val greeting = when (hour) {
                     in 5..11 -> "Good morning"
                     in 12..16 -> "Good afternoon"

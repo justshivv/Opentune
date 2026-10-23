@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
@@ -15,17 +16,20 @@ import okhttp3.Request
  * the word it's in (世界 is "sekai", 界 alone isn't), which takes a full
  * dictionary the phone doesn't have, so the lines are read by Google's
  * transliteration, a few dozen lines a request. The lines go together,
- * joined by a mark it leaves alone, and come back split on it; a batch
- * that comes back with a different number of lines is dropped, and its
- * lines keep the reading [Romanizer] gives offline.
+ * joined by a mark it leaves alone, and come back split on it. A batch
+ * that comes back with a different number of lines is asked for again a
+ * line at a time; a line that still can't be read keeps the reading
+ * [Romanizer] gives offline.
  *
- * Remembered for the songs played lately, so a song read once isn't asked
- * for again.
+ * Remembered for the songs played lately, once every line has had its
+ * answer, so a song read once isn't asked for again, and one read only in
+ * part is.
  */
 object JapaneseReadings {
     private const val URL = "https://translate.googleapis.com/translate_a/single"
     private const val SEPARATOR = " ◆ "
-    private const val BATCH_CHARS = 1_200
+    /** Short enough that a batch always goes through: it was sent in the address, and long ones were refused. */
+    private const val BATCH_CHARS = 500
     private const val REMEMBERED = 48
     private val json = Json { ignoreUnknownKeys = true }
     private val remembered = object : LinkedHashMap<Int, List<String?>>(REMEMBERED, 0.75f, true) {
@@ -44,15 +48,21 @@ object JapaneseReadings {
         synchronized(remembered) { remembered[key] }?.let { return@withContext it }
         val out = arrayOfNulls<String>(texts.size)
         var fetchedAny = false
+        var complete = true
         val wanted = texts.indices.filter { texts[it].any(::needsReading) }
         for (batch in batches(wanted.map { it to texts[it].trim() })) {
-            val read = runCatching { fetch(batch.map { it.second }) }.getOrNull() ?: continue
-            if (read.size != batch.size) continue
+            val read = runCatching { fetch(batch.map { it.second }) }.getOrNull()
+            if (read == null) { complete = false; continue }
+            // Lines merged or split on the way back: each one asked for on its own, rather
+            // than the whole batch left in kanji.
+            val readings = if (read.size == batch.size) read else batch.map { (_, line) ->
+                runCatching { fetch(listOf(line)) }.getOrNull()?.singleOrNull().also { if (it == null) complete = false }
+            }
             fetchedAny = true
-            batch.forEachIndexed { i, (index, original) -> out[index] = read[i].takeIf { it.isNotBlank() && it != original } }
+            batch.forEachIndexed { i, (index, original) -> out[index] = readings[i]?.takeIf { it.isNotBlank() && it != original } }
         }
         if (!fetchedAny) return@withContext null
-        out.toList().also { synchronized(remembered) { remembered[key] = it } }
+        out.toList().also { if (complete) synchronized(remembered) { remembered[key] = it } }
     }
 
     private fun batches(lines: List<Pair<Int, String>>): List<List<Pair<Int, String>>> {
@@ -78,9 +88,14 @@ object JapaneseReadings {
             .addQueryParameter("sl", "ja")
             .addQueryParameter("tl", "en")
             .addQueryParameter("dt", "rm")
-            .addQueryParameter("q", lines.joinToString(SEPARATOR) { it.replace("◆", " ") })
             .build()
-        val body = Http.client.newCall(Request.Builder().url(url).build()).execute().use { if (it.isSuccessful) it.body?.string() else null } ?: return null
+        val q = lines.joinToString(SEPARATOR) { it.replace("◆", " ") }
+        fun read(request: Request) = Http.client.newCall(request).execute().use { if (it.isSuccessful) it.body?.string() else null }
+        // The lines in the body: in the address, each kanji took nine characters. Refused
+        // that way, the address as before.
+        val body = read(Request.Builder().url(url).post(FormBody.Builder().add("q", q).build()).build())
+            ?: read(Request.Builder().url(url.newBuilder().addQueryParameter("q", q).build()).build())
+            ?: return null
         return parse(body)?.split("◆")?.map { it.trim() }
     }
 

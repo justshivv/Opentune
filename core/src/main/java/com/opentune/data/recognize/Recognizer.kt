@@ -82,7 +82,10 @@ object Recognizer {
                 record.startRecording()
                 while (isActive) {
                     val n = record.read(buffer, 0, buffer.size)
-                    if (n <= 0) continue
+                    // An error (the microphone taken by a call or another app) comes back at once,
+                    // every time: going round again spun the processor with "Listening" still up.
+                    if (n < 0) throw java.io.IOException("the microphone stopped answering (error $n)")
+                    if (n == 0) continue
                     signature.add(buffer, n)
                     var sum = 0.0
                     for (i in 0 until n) sum += buffer[i] * buffer[i].toDouble()

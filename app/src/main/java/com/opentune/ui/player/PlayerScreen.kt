@@ -972,7 +972,9 @@ fun PlayerLayout(
                                     if (shown == Pane.LYRICS) {
                                         LyricsView(
                                             state.lyrics,
-                                            lyricsPosition,
+                                            // Parked behind the cover, the lyrics follow once a second rather than
+                                            // drawing every frame; they stay on their line, so coming in needs no scroll.
+                                            if (hidden) ({ lyricsPosition() / HIDDEN_LYRICS_STEP_MS * HIDDEN_LYRICS_STEP_MS }) else lyricsPosition,
                                             onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
                                             modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(lyricsScroll).focusIn(!state.ui.reduceAnimation),
                                             synced = state.ui.syncedLyrics,
@@ -1551,6 +1553,8 @@ private val COVER_LIFT_TRAVEL = 300.dp
 private const val PANE_SWITCH_MS = 420
 /** How long after the player settles the lists are built out of sight, ready for the first swipe. */
 private const val LISTS_PREWARM_MS = 900L
+/** How often the lyrics, kept built behind the cover, catch up with the song. */
+private const val HIDDEN_LYRICS_STEP_MS = 1_000L
 private const val COVER_LIFT_RISE = 0.18f
 private const val COVER_LIFT_SHRINK = 0.1f
 private const val COVER_LIFT_FADE = 0.55f

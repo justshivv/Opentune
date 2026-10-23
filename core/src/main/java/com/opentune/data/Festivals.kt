@@ -6,6 +6,7 @@ import com.opentune.data.radio.ApproxLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
+import java.io.File
 import java.time.LocalDate
 import java.util.Locale
 
@@ -77,16 +78,19 @@ object Festivals {
 
     private suspend fun calendar(context: Context, country: String): List<Festival> = withContext(Dispatchers.IO) {
         val p = prefs(context)
-        val cached = p.getString(K_CACHE, null)?.takeIf {
-            p.getString(K_CACHE_FOR, null) == country && System.currentTimeMillis() - p.getLong(K_CACHE_AT, 0) < REFRESH_MS
-        }
+        // The feed runs to a hundred kilobytes or more: a file of its own, not a preference,
+        // which Android would read whole into memory and write back with every other change.
+        val file = File(context.cacheDir, "festivals-$country.ics")
+        p.getString(K_CACHE, null)?.let { p.edit { remove(K_CACHE); remove(K_CACHE_FOR); remove(K_CACHE_AT) } }
+        val cached = file.takeIf { it.exists() && System.currentTimeMillis() - it.lastModified() < REFRESH_MS }
+            ?.let { runCatching { it.readText() }.getOrNull() }
         val ics = cached ?: runCatching {
             val id = calendarId(country)
             val url = "https://calendar.google.com/calendar/ical/en.$id%23holiday%40group.v.calendar.google.com/public/basic.ics"
             Http.client.newCall(Request.Builder().url(url).build()).execute().use { if (it.isSuccessful) it.body?.string() else null }
-        }.getOrNull()?.also {
-            p.edit { putString(K_CACHE, it); putString(K_CACHE_FOR, country); putLong(K_CACHE_AT, System.currentTimeMillis()) }
-        } ?: p.getString(K_CACHE, null)?.takeIf { p.getString(K_CACHE_FOR, null) == country }
+        }.getOrNull()?.takeIf { "BEGIN:VCALENDAR" in it }?.also { runCatching { file.writeText(it) } }
+            // Offline or refused: last week's copy still has today in it.
+            ?: file.takeIf { it.exists() }?.let { runCatching { it.readText() }.getOrNull() }
         ics?.let(::parse).orEmpty()
     }
 
