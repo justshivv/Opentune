@@ -45,6 +45,7 @@ val sharedFromCore = listOf(
     "com/opentune/data/lyrics/LyricsPlus.kt",
     "com/opentune/data/lyrics/LrcRed.kt",
     "com/opentune/data/lyrics/Paxsenix.kt",
+    "com/opentune/data/metadata/Deezer.kt",
     "com/opentune/data/lyrics/NetEase.kt",
     "com/opentune/data/lyrics/SimpMusic.kt",
     "com/opentune/data/lyrics/YouTubeCaptions.kt",
