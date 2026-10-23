@@ -520,6 +520,9 @@ fun PlayerLayout(
         }
     }
     var upPull by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    // A swipe up opens the lyrics or queue only from the cover and its title, not from the
+    // seek bar, buttons and volume under them.
+    var upAllowed by remember { mutableStateOf(true) }
     val upPx = with(LocalDensity.current) { 64.dp.toPx() }
     var coverSettle by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     // The full cover follows a swipe up toward the header it goes back into,
@@ -581,7 +584,7 @@ fun PlayerLayout(
                             d -= back
                         }
                         // Upward, with the card at rest: a swipe up on the cover, counted on its own.
-                        if (d < 0f && dragOffset == 0f) { upPull += d; d = 0f }
+                        if (d < 0f && dragOffset == 0f) { if (upAllowed) upPull += d; d = 0f }
                         dragOffset = (dragOffset + d).coerceAtLeast(0f)
                         // The card shrinks toward the mini player under the finger.
                         if (com.opentune.ui.components.PlayerMorph.sheetMorph) com.opentune.ui.components.PlayerMorph.sheetDrag = dragOffset
@@ -593,7 +596,12 @@ fun PlayerLayout(
                         }
                     },
                     // A finger landing on the card mid-spring takes hold of it where it is.
-                    onDragStarted = {
+                    onDragStarted = { at ->
+                        // Started below the title (on the controls): no swipe up there. Wherever the
+                        // title is, measured on the cover; in other layouts it isn't, and any place does.
+                        val title = bigTitle
+                        val top = playerCoords?.takeIf { it.isAttached }?.positionInRoot()?.y
+                        upAllowed = pane != Pane.COVER || title == null || top == null || at.y <= title.bottom - top
                         settling?.cancel()
                         coverSettle?.cancel()
                         liftSettle?.cancel()
@@ -604,6 +612,15 @@ fun PlayerLayout(
                         }
                     },
                     onDragStopped = { velocity ->
+                        // Up a little, then down in the same swipe: the up part came undone on the way
+                        // down, so its cover is put back at once, and the card settles or closes below
+                        // as any pull down does. Settling only the cover had left the card shrunk, stuck.
+                        if (dragOffset > 0f && (flight.following || coverLift > 0f)) {
+                            if (flight.following) flight.end()
+                            liftSettle?.cancel()
+                            coverLift = 0f
+                            upPull = 0f
+                        }
                         if (pane == Pane.COVER && style != PlayerStyle.LYRICS_FIRST && dragOffset == 0f && (upPull < -upPx || velocity < -1_500f || flight.pull > 0.3f)) {
                             // Swiped up on the cover: it goes back up into the lyrics or queue header.
                             // A lifted cover page keeps rising at the finger's speed as it leaves,
@@ -616,7 +633,7 @@ fun PlayerLayout(
                                 }
                             }
                             upPull = 0f
-                        } else if (coverLift > 0f) {
+                        } else if (coverLift > 0f && dragOffset == 0f) {
                             // Short of it: the cover page settles back down.
                             liftSettle = scope.launch {
                                 androidx.compose.animation.core.animate(coverLift, 0f, -velocity / liftTravel, spring(dampingRatio = 0.85f, stiffness = 500f)) { v, _ ->
@@ -624,7 +641,7 @@ fun PlayerLayout(
                                 }
                             }
                             upPull = 0f
-                        } else if (flight.following) {
+                        } else if (flight.following && dragOffset == 0f) {
                             // Short of it: the cover settles back into its place.
                             coverSettle = scope.launch {
                                 androidx.compose.animation.core.animate(flight.pull, 0f, -velocity / flight.travel, spring(dampingRatio = 0.85f, stiffness = 500f)) { v, _ ->

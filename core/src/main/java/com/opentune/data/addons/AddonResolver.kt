@@ -133,9 +133,13 @@ object AddonResolver {
         val found = arrayOfNulls<AddonStream>(addons.size)
         var received = 0
         var firstMatch = 0L
+        // Playing: the first verified file is used at once and the rest follow through [late],
+        // so a song never waits on the slower add-ons to start sounding lossless. A download
+        // gives them a moment, as it keeps whichever file it takes.
+        val grace = if (download) GRACE_MS else FIRST_GRACE_MS
         try {
             while (received < addons.size) {
-                val wait = if (firstMatch == 0L) Long.MAX_VALUE else GRACE_MS - (System.nanoTime() - firstMatch) / 1_000_000
+                val wait = if (firstMatch == 0L) Long.MAX_VALUE else grace - (System.nanoTime() - firstMatch) / 1_000_000
                 if (wait <= 0) break
                 val (i, stream) = withTimeoutOrNull(wait) { answers.receive() } ?: break
                 received++
@@ -150,17 +154,12 @@ object AddonResolver {
         if (received == addons.size) {
             work.cancel()
         } else {
-            // The slower ones finish on their own; a better match among them is passed on.
+            // The slower ones finish on their own; every verified file among them is passed on,
+            // to switch to when it's better and to fall back on when it isn't.
             work.launch {
-                var top = best
                 repeat(addons.size - received) {
-                    val (i, stream) = answers.receive()
-                    found[i] = stream
-                    val now = pickBest(found.toList())
-                    if (stream != null && now === stream && (top == null || qualityScore(stream.bits, stream.sampleRate) > qualityScore(top!!.bits, top!!.sampleRate))) {
-                        top = stream
-                        late(stream)
-                    }
+                    val (_, stream) = answers.receive()
+                    if (stream != null) late(stream)
                 }
                 work.cancel()
             }
@@ -182,8 +181,10 @@ object AddonResolver {
         return best
     }
 
-    /** How long the other add-ons get once one has a verified match, before the best so far is used. */
+    /** How long the other add-ons get once one has a verified match, before the best so far is used, for a download. */
     private const val GRACE_MS = 2_500L
+    /** The same for playing: only enough to take answers that came in together. */
+    private const val FIRST_GRACE_MS = 250L
     /** Only a guard against a connection that never answers; a slow add-on is waited for. */
     private const val ADDON_LIMIT_MS = 45_000L
     /** Unknown quality never outranks measured CD quality; ties preserve source priority. */

@@ -94,6 +94,27 @@ class AddonResolverTest {
         assertEquals(24, better.bits); assertEquals(96000, better.sampleRate)
     }
 
+    @Test fun aSlowerWorseAnswerStillComesLateToFallBackOn() = runBlocking {
+        add("fast"); add("slow")
+        fun named(base: String) = AddonClient(base, { url ->
+            val name = AddonProtocol.url(base).host.substringBefore('.')
+            when {
+                "manifest.json" in url -> """{"id":"$name","name":"$name","version":"1"}"""
+                "/search" in url -> """{"tracks":[{"id":"right","title":"Wo Noor","artist":"AP Dhillon","duration":180}]}"""
+                else -> """{"url":"https://cdn.example/$name","codec":"flac"}"""
+            }
+        })
+        val late = kotlinx.coroutines.CompletableDeferred<AddonStream>()
+        val started = System.nanoTime()
+        val result = AddonResolver.resolve(song, 180000, clientFor = ::named, late = { late.complete(it) },
+            probe = { url, _, _ -> if ("slow" in url) { kotlinx.coroutines.delay(1_500); header(16, 44_100) } else header(24, 96_000) })!!
+        // The first verified file is handed over at once, not after the others had their say...
+        assertEquals("fast", result.provider)
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 1_200)
+        // ...and the slower one, though not better, still arrives as a fallback.
+        assertEquals("slow", kotlinx.coroutines.withTimeout(10_000) { late.await() }.provider)
+    }
+
     @Test fun bestAvailableComparesSourcesAndKeepsPriorityForTies() = runBlocking {
         add("first"); add("second")
         val result = AddonResolver.resolve(song, 180000, bestAvailable = true, clientFor = ::client,
