@@ -518,7 +518,8 @@ internal fun SourceBar(selected: SearchSource, onSelect: (SearchSource) -> Unit,
     ) {
         val segment = maxWidth / SearchSource.entries.size
         val at by androidx.compose.animation.core.animateDpAsState(segment * selected.ordinal, spring(dampingRatio = 0.85f, stiffness = 500f), label = "sourcePill")
-        Box(Modifier.offset(x = at).width(segment).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(colors.onSurface))
+        // Moved in the layout step: read here, it redrew the whole bar every frame of the slide.
+        Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(at.roundToPx(), 0) }.width(segment).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(colors.onSurface))
         Row(Modifier.fillMaxSize()) {
             SearchSource.entries.forEach { s ->
                 val on = s == selected

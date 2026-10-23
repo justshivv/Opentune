@@ -99,6 +99,11 @@ object Updater {
                 }
             }
         }
+        // Cut short, with no checksum to catch it, it went to the installer and failed there.
+        if (apk.bytes > 0 && part.length() != apk.bytes) {
+            part.delete()
+            throw IOException("The download stopped before the end; try again")
+        }
         val actual = digest.digest().hex()
         release.sums?.let { sums ->
             val listed = listedSum(sums, apk.name)
@@ -146,18 +151,24 @@ object Updater {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         }
         val id = installer.createSession(params)
-        installer.openSession(id).use { session ->
-            session.openWrite("base.apk", 0, apk.length()).use { out ->
-                apk.inputStream().use { it.copyTo(out) }
-                session.fsync(out)
+        try {
+            installer.openSession(id).use { session ->
+                session.openWrite("base.apk", 0, apk.length()).use { out ->
+                    apk.inputStream().use { it.copyTo(out) }
+                    session.fsync(out)
+                }
+                val status = PendingIntent.getBroadcast(
+                    context,
+                    id,
+                    Intent(context, StatusReceiver::class.java),
+                    PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                session.commit(status.intentSender)
             }
-            val status = PendingIntent.getBroadcast(
-                context,
-                id,
-                Intent(context, StatusReceiver::class.java),
-                PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            session.commit(status.intentSender)
+        } catch (e: Exception) {
+            // A session left open holds its copy of the APK until Android clears it, days later.
+            runCatching { installer.abandonSession(id) }
+            throw e
         }
     }
 
