@@ -10,6 +10,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@noble/curves": "2.3.0",
+    "@noble/hashes": "2.4.0",
     "@opentune/shared": "workspace:*",
     "@tanstack/react-query": "^5.104.3",
     "@tanstack/react-virtual": "^3.14.19",

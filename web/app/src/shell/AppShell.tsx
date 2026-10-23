@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { resumeSession } from '@/party/listenTogether';
-import { startPartySync } from '@/party/partySync';
+import '@/together/room';
 import { useDiscordPresence } from '@/playback/discordPresence';
 import { startHistoryReporting } from '@/playback/historyReporting';
 import { Outlet, useLocation } from 'react-router';
@@ -18,6 +17,7 @@ import { PlayerBar } from './PlayerBar';
 import { SidePanel } from './SidePanel';
 import { Appearance } from './Appearance';
 import { MobileDock } from './MobileDock';
+import { RoomNotice } from './RoomNotice';
 import { Sidebar } from './Sidebar';
 
 const mobile = isMobileBrowser();
@@ -32,11 +32,6 @@ const FullScreenPlayer = lazy(() => import('./FullScreenPlayer').then((m) => ({ 
 export function AppShell() {
   useKeyboardShortcuts();
   useDiscordPresence();
-  // Listen Together: pick a party back up after a reload, and keep the player in step with it.
-  useEffect(() => {
-    resumeSession();
-    return startPartySync();
-  }, []);
   // Plays into the account's YouTube Music history (Settings › Share Listening Activity).
   useEffect(() => startHistoryReporting(), []);
   // The sources the owner publishes ("Added by admin"), folded into the listener's list.
@@ -141,6 +136,7 @@ export function AppShell() {
         <PlayerBar />
         <MobileDock />
         <SidePanel />
+        <RoomNotice />
       </div>
       {banner}
       {(fullScreen || playerUp) && (
