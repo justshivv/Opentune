@@ -1,7 +1,10 @@
 import { X509Certificate, createHash, verify } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 
-const fail = () => { throw new Error('Official hardware-backed OpenTune verification failed'); };
+export class AttestationFailure extends Error {
+  constructor(code) { super('Official hardware-backed OpenTune verification failed'); this.code = code; }
+}
+const fail = (code = 'ATTESTATION_INVALID') => { throw new AttestationFailure(code); };
 const hex = bytes => Buffer.from(bytes).toString('hex');
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
 
@@ -50,12 +53,13 @@ export function attestationExtension(certificate) {
 }
 export function validateDescription(bytes, challenge, signerDigests) {
   const values = typed(der(bytes), 16).children;
-  if (values.length !== 8 || ![1, 2].includes(integer(values[1])) || ![1, 2].includes(integer(values[3]))) fail();
-  if (typed(values[4], 4).value.toString('base64url') !== challenge) fail();
+  if (values.length !== 8) fail();
+  if (![1, 2].includes(integer(values[1])) || ![1, 2].includes(integer(values[3]))) fail('HARDWARE_KEY_REQUIRED');
+  if (typed(values[4], 4).value.toString('base64url') !== challenge) fail('CHALLENGE_MISMATCH');
   const software = values[6], hardware = values[7];
   const root = typed(authorization(hardware, 704), 16).children;
   const locked = typed(root[1], 1).value;
-  if (locked.length !== 1 || locked[0] !== 255 || integer(root[2]) !== 0) fail();
+  if (locked.length !== 1 || locked[0] !== 255 || integer(root[2]) !== 0) fail('LOCKED_VERIFIED_BOOT_REQUIRED');
   // Origin GENERATED (0); the private key must be created inside the hardware.
   if (integer(authorization(hardware, 702)) !== 0) fail();
   const purposes = typed(authorization(hardware, 1), 17).children.map(integer);
@@ -65,9 +69,9 @@ export function validateDescription(bytes, challenge, signerDigests) {
   const packages = typed(app[0], 17).children, signers = typed(app[1], 17).children;
   if (packages.length !== 1 || signers.length !== 1) fail();
   const pkg = typed(packages[0], 16).children;
-  if (pkg.length !== 2 || typed(pkg[0], 4).value.toString('utf8') !== 'com.opentune') fail();
+  if (pkg.length !== 2 || typed(pkg[0], 4).value.toString('utf8') !== 'com.opentune') fail('APP_ID_MISMATCH');
   integer(pkg[1]);
-  if (!signerDigests.includes(hex(typed(signers[0], 4).value))) fail();
+  if (!signerDigests.includes(hex(typed(signers[0], 4).value))) fail('APP_SIGNER_MISMATCH');
 }
 let trustCache;
 async function boundedJson(url, fetcher) {
@@ -96,13 +100,13 @@ export function verifyAttestation(input, { roots, revoked }, signerDigests, now 
     return new X509Certificate(Buffer.from(value, 'base64'));
   });
   const anchor = chain.at(-1);
-  if (!roots.some(root => root.raw.equals(anchor.raw))) fail();
+  if (!roots.some(root => root.raw.equals(anchor.raw))) fail('UNTRUSTED_ATTESTATION_ROOT');
   for (let i = 0; i < chain.length; i++) {
     const cert = chain[i];
-    if (!(Date.parse(cert.validFrom) <= now && now <= Date.parse(cert.validTo))) fail();
+    if (!(Date.parse(cert.validFrom) <= now && now <= Date.parse(cert.validTo))) fail('ATTESTATION_CERTIFICATE_EXPIRED');
     const encodedSerial = cert.serialNumber.toLowerCase();
     const serial = encodedSerial.replace(/^0+/, '') || '0';
-    if (revoked[encodedSerial] || revoked[serial] || revoked[BigInt('0x' + serial).toString()]) fail();
+    if (revoked[encodedSerial] || revoked[serial] || revoked[BigInt('0x' + serial).toString()]) fail('ATTESTATION_CERTIFICATE_REVOKED');
     if (i > 0 && !cert.ca) fail();
     const parent = chain[Math.min(i + 1, chain.length - 1)];
     if (cert.issuer !== parent.subject || !cert.verify(parent.publicKey)) fail();

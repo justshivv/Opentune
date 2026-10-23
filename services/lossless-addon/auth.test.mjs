@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign, randomBytes } from 'node:crypto';
 import { Buffer } from 'node:buffer';
+import { AttestationFailure } from './attestation.mjs';
 import { AddonAuthState, canonical, withAppVerification } from './auth.mjs';
 import { sha256 } from './attestation.mjs';
 
@@ -88,6 +89,17 @@ test('challenge one-use, verifier failure denied; missing binding fails closed',
   const enroll = () => app(new Request(origin + '/auth/enroll', { method: 'POST', body: JSON.stringify({ challenge }) }), env);
   assert.equal((await enroll()).status, 200); assert.equal((await enroll()).status, 401); assert.equal(verified, 1);
   assert.equal((await app(new Request(origin + '/monochrome/search'), {})).status, 503);
+});
+test('trust outages and device-policy rejection have distinct safe diagnostics and remain closed', async () => {
+  for (const unavailable of [true, false]) {
+    const { app, env, count } = setup({ trust: async () => { if (unavailable) throw Error('private upstream details'); return {}; },
+      attest: () => { throw new AttestationFailure('APP_SIGNER_MISMATCH'); } });
+    const { challenge } = await (await app(new Request(origin + '/auth/challenge'), env)).json();
+    const r = await app(new Request(origin + '/auth/enroll', { method: 'POST', body: JSON.stringify({ challenge }) }), env);
+    assert.equal(r.status, unavailable ? 503 : 403);
+    const body = await r.json(); assert.equal(body.code, unavailable ? 'ATTESTATION_TRUST_UNAVAILABLE' : 'APP_SIGNER_MISMATCH');
+    assert.doesNotMatch(JSON.stringify(body), /private upstream/); assert.equal(count(), 0);
+  }
 });
 test('CORS allows signed browser headers; staged window is explicit only', async () => {
   const { app, env } = setup();

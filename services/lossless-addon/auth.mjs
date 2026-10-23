@@ -1,6 +1,6 @@
 import { createPublicKey, randomBytes, verify } from 'node:crypto';
 import { Buffer } from 'node:buffer';
-import { googleTrust, sha256, verifyAttestation } from './attestation.mjs';
+import { AttestationFailure, googleTrust, sha256, verifyAttestation } from './attestation.mjs';
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -96,7 +96,10 @@ export function withAppVerification(handler, { trust = googleTrust, attest = ver
         if (!TOKEN.test(input.challenge || '')) return denied();
         // Only genuine fresh challenges may trigger certificate/trust processing.
         const used = await state(env, 'challenge:' + input.challenge, 'consume'); if (!used.ok) return denied();
-        const key = attest(input, await trust(), signers), session = token(), expires = Date.now() + 7 * 86400_000;
+        let trusted;
+        try { trusted = await trust(); }
+        catch { return reply({ error: 'Attestation trust service is temporarily unavailable. Try again later.', code: 'ATTESTATION_TRUST_UNAVAILABLE' }, 503); }
+        const key = attest(input, trusted, signers), session = token(), expires = Date.now() + 7 * 86400_000;
         await state(env, 'session:' + sha256(session), 'create', { key, kind: 'native', expires });
         return reply({ session, expires, serverTime: Date.now() });
       }
@@ -144,6 +147,7 @@ export function withAppVerification(handler, { trust = googleTrust, attest = ver
       const result = await handler(request), headers = new Headers(result.headers);
       Object.entries(CORS).forEach(([k, v]) => headers.set(k, v));
       return new Response(result.body, { status: result.status, headers });
-    } catch { return reply({ error: 'Verification failed. Retry in the official OpenTune app on a supported, locked device.' }, 403); }
+    } catch (e) { return reply({ error: 'Verification failed. Retry in the official OpenTune app on a supported, locked device.',
+      ...(e instanceof AttestationFailure ? { code: e.code } : {}) }, 403); }
   };
 }

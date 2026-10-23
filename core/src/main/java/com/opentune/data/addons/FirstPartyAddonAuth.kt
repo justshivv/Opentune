@@ -35,6 +35,7 @@ object FirstPartyAddonAuth {
         .callTimeout(25, TimeUnit.SECONDS).build() }
     private val store get() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     private var blockedUntil = 0L
+    private var blockedReason = "OpenTune device verification failed"
     fun init(context: Context) { file = File(context.noBackupFilesDir, "addon-device-session.json") }
     fun protects(url: okhttp3.HttpUrl): Boolean = url.scheme == "https" && url.host == "opentune-lossless-addon.create-a-new-site-with-sites.workers.dev" && url.port == 443 &&
         !url.encodedPath.endsWith("/manifest.json") && !url.encodedPath.endsWith("/health") && url.encodedPath != "/"
@@ -47,7 +48,15 @@ object FirstPartyAddonAuth {
         val source = response.body?.source() ?: throw IOException("Empty verification response")
         source.request(80_001); if (source.buffer.size > 80_000) throw IOException("Invalid verification response")
         val data = runCatching { JSONObject(source.readUtf8()) }.getOrElse { throw IOException("Device verification is unavailable") }
-        if (!response.isSuccessful) throw IOException(data.optString("error", "Device verification failed"))
+        if (!response.isSuccessful) {
+            val stage = when (request.url.encodedPath) {
+                "/auth/challenge" -> "Verification challenge"
+                "/auth/enroll" -> "Device enrollment"
+                else -> "OpenTune verification"
+            }
+            val code = data.optString("code").takeIf { it.matches(Regex("[A-Z_]{3,40}")) }
+            throw VerificationFailure("$stage failed (HTTP ${response.code}${code?.let { "; $it" }.orEmpty()}); retry on a supported, locked device")
+        }
         data
     }
     private fun post(path: String, body: String) = Request.Builder().url(ORIGIN + path).post(body.toRequestBody("application/json".toMediaType())).build()
@@ -55,7 +64,7 @@ object FirstPartyAddonAuth {
         check(::file.isInitialized) { "OpenTune verification has not initialized" }
         val old = runCatching { JSONObject(file.readText()) }.getOrNull()
         if (old != null && old.optLong("expires") > System.currentTimeMillis() + old.optLong("offset") + 60_000 && store.containsAlias(ALIAS)) return old
-        if (System.currentTimeMillis() < blockedUntil) throw VerificationFailure("OpenTune device verification failed; retry in a minute on a supported, locked device")
+        if (System.currentTimeMillis() < blockedUntil) throw VerificationFailure("$blockedReason; retry in a minute")
         try {
             val challenge = call(Request.Builder().url("$ORIGIN/auth/challenge").build())
             val offset = challenge.getLong("serverTime") - System.currentTimeMillis()
@@ -77,12 +86,15 @@ object FirstPartyAddonAuth {
             return result
         } catch (e: Exception) {
             blockedUntil = System.currentTimeMillis() + 60_000
-            throw VerificationFailure(when (e) {
+            val reason = when (e) {
+                is VerificationFailure -> e.message.orEmpty()
                 is java.net.SocketTimeoutException -> "OpenTune verification timed out; retry on a working connection"
                 is java.net.UnknownHostException -> "Cannot reach OpenTune verification; check your connection or DNS"
                 is java.security.GeneralSecurityException -> "Android could not create the hardware verification key; a supported, locked device is required"
                 else -> "OpenTune device verification failed; use the official build on a supported, locked device"
-            }, e)
+            }
+            blockedReason = reason
+            throw VerificationFailure(reason, e)
         }
     }
     suspend fun authorize(request: Request, body: String = ""): Request = withContext(Dispatchers.IO) {
