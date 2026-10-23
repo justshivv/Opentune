@@ -7,6 +7,17 @@ A standalone Cloudflare Worker exposing two independently reorderable OpenTune H
 
 The root `/manifest.json` aliases Monochrome. This service is an independent adapter, not an official Monochrome service. It does not alter Android playback, install executable extensions, or require a new app version. No keys or sign-in are required by these adapter interfaces; upstream availability can change.
 
+## Live deployment
+
+Deployed on 23 October 2026:
+
+- [Monochrome manifest](https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/monochrome/manifest.json)
+- [Internet Archive manifest](https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/archive/manifest.json)
+
+Paste the Monochrome URL in OpenTune → Settings → Audio → Audio add-ons, or publish it using the existing admin dashboard. These URLs have not been automatically added to users' source lists.
+
+[Deployment verification](https://github.com/justshivv/Opentune/actions/runs/40022510722) confirmed both manifests returned HTTP 200 with browser CORS. The deployed Monochrome adapter resolved Wo Noor to native FLAC measured at 16-bit/44.1 kHz stereo. Internet Archive playback remains unverified. The report is in `reports/deployment-2026-10-23.json`; header verification does not establish audible playback or full-file integrity.
+
 ## Run and deploy
 
 ```sh
@@ -17,7 +28,7 @@ npx wrangler dev
 npx wrangler deploy
 ```
 
-After deployment, copy the **actual HTTPS Worker URL printed by Wrangler** and append either manifest path above. Add each URL in OpenTune → Settings → Audio → Audio add-ons, or distribute it through the existing admin add-on dashboard. Enable Lossless playback and set the order in Sources. There is no deployed add-on URL in this change.
+After deployment, copy the **actual HTTPS Worker URL printed by Wrangler** and append either manifest path above. Add each URL in OpenTune → Settings → Audio → Audio add-ons, or distribute it through the existing admin add-on dashboard. Enable Lossless playback and set the order in Sources. The production URLs below were deployed from the feature branch; the PR remains unmerged.
 
 The Worker has no paid library dependency, credentials, storage binding, or audio bandwidth proxy. Each lookup requests upstream metadata and at most 64 KiB of audio for a FLAC-header check. Playback and downloads go directly from the provider to the device. Cloudflare hosting limits and third-party service quotas still apply; this is not unlimited free hosting or a guaranteed free music catalogue.
 

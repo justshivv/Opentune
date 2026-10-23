@@ -35,6 +35,6 @@ Monochrome's [instance list](https://github.com/monochrome-music/monochrome/blob
 - Two add-on manifests, search/stream adapters, measured native-FLAC metadata, bounded requests and rate-limit diagnostics.
 - Twelve deterministic regression tests covering mapping, invalid media, malformed IDs, cache/coalescing, response limits and rate limits.
 - A reproducible live probe, separate from unit tests, with no full-song downloads or signed-URL logging.
-- Deployable source for the user's own Worker. No live endpoint, production deployment, guaranteed catalogue coverage, full-file integrity or device audibility is implied.
+- A standalone Worker was deployed on explicit user request on 23 October 2026. Its live manifests and Monochrome FLAC resolution passed verification; see the service README and deployment report. Catalogue coverage, full-file integrity and device audibility remain unverified.
 
 The initial local live check could not connect to the execution environment's network proxy. That is an environment failure, not evidence of a provider outage. Live verification is therefore delegated to the dedicated GitHub Actions probe report.
