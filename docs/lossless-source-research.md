@@ -8,6 +8,16 @@ The new OpenTune adapter implements that public Track Streamer interface indepen
 
 A [third-party Spotube adapter](https://github.com/kipavy/spotube-plugin-lossless-sources) reports successful Monochrome FLAC tests, but its [machine-readable status](https://github.com/kipavy/spotube-plugin-lossless-sources/blob/main/sources.json) was more recent than that prose during this investigation: the 2026-10-23T13:25:46Z snapshot had **zero playable sources**, with Monochrome search succeeding but audio returning **429**. This is third-party evidence, not our own playback verification. It is why we do not publish a blanket “working free lossless catalogue” claim.
 
+Our own [GitHub Actions probe](https://github.com/justshivv/Opentune/actions/runs/40010168839) at **2026-10-23T19:17:07Z** subsequently succeeded for both Monochrome samples:
+
+| Recording | Search | Audio/header | Measured format |
+| --- | --- | --- | --- |
+| Wo Noor — AP Dhillon | HTTP 200 | HTTP 200 | FLAC, 16-bit, 44,100 Hz, stereo; 199.420 seconds |
+| Old Skool — Prem Dhillon, Sidhu Moose Wala, Naseeb | HTTP 200 | HTTP 200 | FLAC, 16-bit, 44,100 Hz, stereo; 253.701 seconds |
+| Internet Archive — Grateful Dead search | HTTP 200 | Not attempted: no usable candidates | Unverified |
+
+These are CD-resolution lossless files, **not verified hi-res releases**. No account, key, copied browser session or impersonated Origin header was used. This establishes that the public Track Streamer served native FLAC headers for those recordings from that runner at that time; it does not negate earlier rate limiting or establish an unlimited service. The exact report is saved in `services/lossless-addon/reports/2026-10-23.json`.
+
 Our probe checks Wo Noor by AP Dhillon and Old Skool by Prem Dhillon, then reads only a bounded FLAC header. The GitHub **Lossless add-on** workflow produces `lossless-source-report.json` with current results. See the PR for that run; a green probe job only means the report was generated, not that any provider worked. Actual provider success is recorded in each result's `streamStatus` and `flacHeader` fields.
 
 ## Internet Archive
