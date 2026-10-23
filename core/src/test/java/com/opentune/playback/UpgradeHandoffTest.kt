@@ -6,6 +6,37 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UpgradeHandoffTest {
+    @Test fun flacArrivingDuringSaavnPreparationRetiresTheIntermediateLoad() = runBlocking {
+        var flacReady = false
+        var polls = 0
+        val result = awaitUpgradeBuffer(
+            superseded = { flacReady }, invalid = { false }, ready = { false },
+            poll = { polls++; flacReady = true },
+        )
+        assertEquals(UpgradeBufferResult.SUPERSEDED, result)
+        assertEquals(1, polls)
+        // Retiring a silent intermediate load leaves the upgrade coroutine alive for FLAC.
+        assertEquals(UpgradeBufferResult.READY, awaitUpgradeBuffer(
+            superseded = { false }, invalid = { false }, ready = { flacReady },
+            poll = { error("The preferred stream is already ready") },
+        ))
+    }
+
+    @Test fun simultaneousReadyCandidatesPreferFlacBeforeSaavnBecomesAudible() = runBlocking {
+        assertEquals(UpgradeBufferResult.SUPERSEDED, awaitUpgradeBuffer(
+            superseded = { true }, invalid = { false }, ready = { true },
+            poll = { error("No extra wait") },
+        ))
+    }
+
+    @Test fun changedSongOrFailedStreamNeverBecomesReady() = runBlocking {
+        assertEquals(UpgradeBufferResult.FAILED, awaitUpgradeBuffer(
+            superseded = { false }, invalid = { true }, ready = { true },
+            poll = { error("No extra wait") },
+        ))
+    }
+
+
     @Test fun smallTimingOffsetsUpgradeWithoutRepeatedSeekingOrOverlappingVocals() {
         for (drift in listOf(-20L, 0L, 20L)) assertEquals(UpgradeAlignment.BLEND, upgradeAlignment(drift))
         for (drift in listOf(-250L, -21L, 21L, 250L)) assertEquals(UpgradeAlignment.SHORT_FADE, upgradeAlignment(drift))
