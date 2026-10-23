@@ -64,12 +64,16 @@ try {
       key: keys.privateKey, dsaEncoding: kind === 'web' ? 'ieee-p1363' : 'der',
     }).toString('base64url');
     const headers = { Authorization: 'Bearer ' + session, 'X-OpenTune-Time': time, 'X-OpenTune-Nonce': nonce, 'X-OpenTune-Signature': signature };
+    // Reject tampering before consuming this nonce; the unchanged proof must
+    // still succeed afterwards. This isolates signature checking from replay.
+    const tampered = await worker.dispatchFetch('https://runtime-check.invalid' + path + '&changed=1', { headers });
+    assert.equal(tampered.status, 401);
+    const invalid = await worker.dispatchFetch('https://runtime-check.invalid' + path, { headers: { ...headers, 'X-OpenTune-Signature': 'A'.repeat(86) } });
+    assert.equal(invalid.status, 401);
     const accepted = await worker.dispatchFetch('https://runtime-check.invalid' + path, { headers });
     assert.equal(accepted.status, 200, `${kind} signed request: ${await accepted.text()}`);
     const replay = await worker.dispatchFetch('https://runtime-check.invalid' + path, { headers });
     assert.equal(replay.status, 401);
-    const tampered = await worker.dispatchFetch('https://runtime-check.invalid' + path + '&changed=1', { headers });
-    assert.equal(tampered.status, 401);
     console.log(`Cloudflare runtime: ${kind} signed request accepted; replay and tampering rejected through real Durable Objects.`);
   }
 } finally { await worker.dispose(); }

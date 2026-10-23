@@ -14,7 +14,7 @@ The [23 October client build](https://github.com/justshivv/Opentune/actions/runs
 
 The [live staged deployment check](https://github.com/justshivv/Opentune/actions/runs/40028054552) confirmed challenge issuance, invalid enrollment → HTTP 403, reused challenge → HTTP 401, and unauthenticated browser approval lookup → HTTP 401. Existing Monochrome resolution still returned measured FLAC 16-bit/44.1 kHz. This was historical staging evidence, not strict enforcement; Android playback was subsequently confirmed as described below.
 
-The [strict production check](https://github.com/justshivv/Opentune/actions/runs/40034330368) passed on 23 October at 22:34 UTC. All three public manifests returned 200. All twelve search/stream probes with BitChord or spoofed OpenTune User-Agent, an official Origin and a fake bearer returned 401. Invalid enrollment returned 403, challenge replay and unauthorized browser approval returned 401. The initial immediate post-deploy check still saw staging and failed; the rerun confirmed strict policy. Saved evidence: `services/lossless-addon/reports/strict-deployment-2026-10-23.json`. Post-cutover playback on the owner's signed device is awaiting confirmation.
+The [strict production check](https://github.com/justshivv/Opentune/actions/runs/40034330368) passed on 23 October at 22:34 UTC. All three public manifests returned 200. All twelve search/stream probes with BitChord or spoofed OpenTune User-Agent, an official Origin and a fake bearer returned 401. Invalid enrollment returned 403, challenge replay and unauthorized browser approval returned 401. The initial immediate post-deploy check still saw staging and failed; the rerun confirmed strict policy. Saved evidence: `services/lossless-addon/reports/strict-deployment-2026-10-23.json`. The owner subsequently reported 401 in the official preview too; the signed-request runtime failure and correction are documented below.
 
 ## Android and TV
 
@@ -52,6 +52,14 @@ There are no secrets in the deep link. The link's identifier does not grant acce
 Protocol version: `OpenTune-Addon-v1`. Enrollment proof: `OpenTune-Enrollment-v1\n<challenge>`. Request proof is the newline-separated protocol version, session, Unix milliseconds, base64url nonce, uppercase method, path plus original query, and SHA-256 hex of the exact UTF-8 body (empty for GET). Native signatures use ECDSA DER; browser signatures use 64-byte P1363. The stored session type determines the accepted encoding.
 
 ## Evidence and required device checks
+
+### Signed requests rejected after strict cutover
+
+The owner reported HTTP 401 for Monochrome and Musopen in the official preview after strict cutover. Enrollment succeeded, but Workers rejected a `PublicKeyObject` nested in `crypto.verify` options. Ordinary Node accepts that form, so the Node signature tests passed; staging had also concealed the failed request check by allowing unsigned catalogue access. The original runtime test exercised attestation only, and the live checks only demonstrated rejection of unauthorized requests.
+
+The verifier now validates the stored P-256 public key and passes its PEM string with the explicit DER (Android/TV) or P1363 (web) signature encoding. It does not remove proof validation, change trusted roots, clear sessions or enable staging. The existing signed preview and enrolled keys remain compatible.
+
+The isolated Workers test now uses actual SQLite Durable Objects to create test-only native/browser sessions, reject changed requests and invalid signatures, accept valid signed requests, and reject replay. The test failed with the old code ([reproduction](https://github.com/justshivv/Opentune/actions/runs/40035044715)) and passed with the PEM correction ([fixed runtime check](https://github.com/justshivv/Opentune/actions/runs/40035319775)). The test harness and session-creation route are never bundled into production. The deployment workflow now requires this runtime check before publishing. A fresh physical-device playback check is still needed after deployment.
 
 ### Verification-preview incident fixed on 23 October
 

@@ -24,6 +24,14 @@ jobs:
           node-version: '24'
       - name: Test adapters
         run: node --test services/lossless-addon/*.test.mjs
+      - name: Verify signed requests in Workers before deployment
+        env:
+          ATTESTATION_TEST_FIXTURE: ${{ runner.temp }}/attestation-test-fixture.json
+          RUNTIME_MODULES: ${{ runner.temp }}/worker-runtime/node_modules
+        run: |
+          node services/lossless-addon/attestation.test.mjs
+          npm install --prefix "$RUNNER_TEMP/worker-runtime" --no-save miniflare@4 esbuild
+          node services/lossless-addon/check-worker-runtime.mjs
       - name: Pin the official app signing certificate
         shell: bash
         env:
