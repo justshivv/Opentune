@@ -335,6 +335,8 @@ data class InterfaceSettings(
     val artistPageTint: Boolean = true,
     val statsForNerds: Boolean = false,
     val recentsAsGrid: Boolean = false,
+    /** Speed dial at the top of Home: the most-played songs, albums and artists. */
+    val speedDial: Boolean = true,
     /** Refracting Liquid Glass on Android 13+; frosted blur otherwise. */
     val liquidGlass: Boolean = true,
     /** Draw the played part of the seek bar as a moving wave. */

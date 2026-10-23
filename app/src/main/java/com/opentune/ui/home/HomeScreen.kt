@@ -244,7 +244,7 @@ fun HomeScreen(
                 }
             }
             item(key = "festival") { FestivalCard() }
-            if (speedDial.size >= SPEED_DIAL_MIN) {
+            if (ui.speedDial && speedDial.size >= SPEED_DIAL_MIN) {
                 item(key = "speed-dial") {
                     SpeedDialSection(
                         speedDial,
