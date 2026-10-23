@@ -6,6 +6,7 @@ const cases = [
   { source: 'monochrome', query: 'Wo Noor AP Dhillon', title: 'Wo Noor', artist: 'AP Dhillon' },
   { source: 'monochrome', query: 'Old Skool Prem Dhillon', title: 'Old Skool', artist: 'Prem Dhillon' },
   { source: 'archive', query: 'Grateful Dead' },
+  { source: 'musopen', query: 'Goldberg Variations Aria Da Capo' },
 ];
 const report = { checkedAt: new Date().toISOString(), scope: 'Catalogue and FLAC STREAMINFO only; full decoding, audible playback and CORS on the user device are not tested.', results: [] };
 const norm = s => String(s).normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();

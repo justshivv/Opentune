@@ -40,7 +40,7 @@ const pendingResponse = await fetch(new URL('/auth/web/status', base), { method:
 assert.equal(pendingResponse.status, 200);
 assert.equal((await pendingResponse.json()).session, null);
 report.security.browserWaitsForApproval = true;
-for (const source of ['monochrome', 'archive']) {
+for (const source of ['monochrome', 'archive', 'musopen']) {
   const { response, body } = await get(`/${source}/manifest.json`);
   assert.equal(response.status, 200); assert.equal(body.id, `org.opentune.${source}`);
   assert.deepEqual(body.resources, ['search', 'stream']); assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*');
@@ -58,6 +58,18 @@ if (track) {
     report.upstream.flacHeader = { bitDepth: stream.body.bitDepth, sampleRate: stream.body.sampleRate, channels: stream.body.channels, duration: stream.body.duration };
   } else report.upstream.error = stream.body.error || 'Source unavailable';
 } else report.upstream.error = search.body.error || 'No matching recording';
+const classical = await get('/musopen/search?q=Goldberg%20Variations%20Aria%20Da%20Capo');
+report.musopen = { searchStatus: classical.response.status, candidates: classical.body.tracks?.length || 0 };
+if (policy.body.mode === 'strict') assert.equal(classical.response.status, 401);
+const classicalTrack = classical.body.tracks?.[0];
+if (classicalTrack) {
+  const s = await get(`/musopen/stream/${encodeURIComponent(classicalTrack.id)}`);
+  report.musopen.streamStatus = s.response.status;
+  if (s.response.status === 200) {
+    assert.equal(s.body.codec, 'flac');
+    report.musopen.flacHeader = { bitDepth: s.body.bitDepth, sampleRate: s.body.sampleRate, channels: s.body.channels, duration: s.body.duration };
+  } else report.musopen.error = s.body.error;
+} else report.musopen.error = classical.body.error || 'No matching recording';
 await writeFile('lossless-deployment-report.json', JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify(report, null, 2));
 if (!report.upstream.flacHeader) console.log('::warning::Worker manifests are live, but upstream playback is currently unavailable; see the deployment report.');

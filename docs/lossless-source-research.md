@@ -49,9 +49,30 @@ Monochrome's [instance list](https://github.com/monochrome-music/monochrome/blob
 
 ## What this implementation establishes
 
-- Two add-on manifests, search/stream adapters, measured native-FLAC metadata, bounded requests and rate-limit diagnostics.
-- Twelve deterministic regression tests covering mapping, invalid media, malformed IDs, cache/coalescing, response limits and rate limits.
+- Three add-on manifests, search/stream adapters, measured native-FLAC metadata, bounded requests and rate-limit diagnostics.
+- Thirteen deterministic adapter regression tests covering mapping, invalid media, malformed IDs, cache/coalescing, response limits and rate limits.
 - A reproducible live probe, separate from unit tests, with no full-song downloads or signed-URL logging.
 - A standalone Worker was deployed on explicit user request on 23 October 2026. Its live manifests and Monochrome FLAC resolution passed verification; see the service README and deployment report. Catalogue coverage, full-file integrity and device audibility remain unverified.
 
 The initial local live check could not connect to the execution environment's network proxy. That is an environment failure, not evidence of a provider outage. Live verification is therefore delegated to the dedicated GitHub Actions probe report.
+
+## Expanded discovery at 21:49 UTC
+
+[Our source discovery run](https://github.com/justshivv/Opentune/actions/runs/40029489197) tested additional public endpoints. Exact results are in `services/lossless-addon/reports/discovery-2026-10-23.json`.
+
+| Source | Direct observation | Resulting integration |
+| --- | --- | --- |
+| [Acedreamer community add-on](https://github.com/acedreamer/bitchord-monochrome-addon) | Native FLAC, 24-bit/44.1 kHz stereo, HTTP 206 | Already a compatible public add-on: import `https://bitchord-monochrome-addon.onrender.com/manifest.json`; no OpenTune verification |
+| [Musopen Kickstarter collection](https://archive.org/details/musopen-dvd-in-lossless-flac-format) | 32 FLAC files; sampled Goldberg Variations — Aria Da Capo is 16-bit/44.1 kHz stereo, HTTP 206 | New `/musopen/manifest.json` adapter, same security policy as our other first-party sources |
+| DAB public endpoints | Main endpoint HTTP 403; alternate could not complete | Not integrated as a working source |
+| Squid Qobuz | Request could not complete | Not integrated as a working source |
+| Lucida | Anonymous search webpage HTTP 200; no audio verified | Not advertised as working audio |
+| [Free To Use API](https://freetouse.com/api) | Public track response advertised MP3 only | Not a verified lossless source |
+
+Acedreamer serves the same Monochrome/HiFi network, so it must not be counted as an independent catalogue. Its public add-on worked with our transparent OpenTune research User-Agent. No impersonated client headers were needed. We used its published HTTP interface and did not copy its implementation.
+
+The latest third-party [status snapshot](https://github.com/kipavy/spotube-plugin-lossless-sources/blob/main/sources.json), timestamp 18:20:41 UTC, lists Monochrome as its only playable source among 22 candidates. That improves on the earlier rate-limited snapshot but still does not verify another independent broad catalogue. The measured 24-bit/44.1 kHz result has greater bit depth than CD; we did not establish 96/192 kHz availability or prove original mastering provenance.
+
+Other projects investigated do not provide anonymous free catalogues: [divyanshxyz/bitchord-addon](https://github.com/divyanshxyz/bitchord-addon) primarily serves a user's existing FLAC/Navidrome library, while [R1Blmmakan/music_addon](https://github.com/R1Blmmakan/music_addon) requires provider account credentials. The [Lucida client](https://github.com/Jude-A/lucidadl) contains a separate job and browser-session workflow; a successful search page is insufficient evidence for an adapter. We did not bundle unverified backends or turn lossy audio into nominal FLAC.
+
+All measurements are bounded FLAC-header checks, not full decoding/listening tests. Public source availability, CORS and quotas can change. None of these third-party add-ons inherit OpenTune's first-party verification requirement.

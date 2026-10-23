@@ -15,9 +15,9 @@ async function firstTrack(handler, source = 'monochrome') {
   const response = await handler(req(`/${source}/search?q=Wo%20Noor`));
   assert.equal(response.status, 200); return (await response.json()).tracks[0];
 }
-test('both source manifests work with OpenTune; health does not claim upstream availability', async () => {
+test('all source manifests work with OpenTune; health does not claim upstream availability', async () => {
   const h = createAddon({ fetcher: () => { throw Error('No request expected'); } });
-  for (const source of ['monochrome', 'archive']) {
+  for (const source of ['monochrome', 'archive', 'musopen']) {
     const m = await (await h(req(`/${source}/manifest.json`))).json();
     assert.deepEqual(m.resources, ['search', 'stream']); assert.equal(m.settings[0].default, 'best');
     assert.equal((await (await h(req(`/${source}/health`))).json()).upstreamVerified, false);
@@ -25,6 +25,33 @@ test('both source manifests work with OpenTune; health does not claim upstream a
   assert.equal((await h(new Request('https://addon.example', { method: 'OPTIONS' }))).status, 204);
   assert.equal((await h(new Request('https://addon.example', { method: 'POST' }))).status, 405);
   assert.equal((await h(req('/search?quality=LOW&q=song'))).status, 400);
+});
+test('Musopen searches the curated collection, preserves credits, and measures original CD FLAC', async () => {
+  const item = 'musopen-dvd-in-lossless-flac-format';
+  const file = 'Goldberg Variations/Goldberg Variations, BWV 988 - Aria Da Capo.flac';
+  const calls = [];
+  const h = createAddon({ fetcher: async url => {
+    calls.push(url);
+    if (url === `https://archive.org/metadata/${item}`) return json({ metadata: { creator: 'www.musopen.org' }, files: [
+      { name: file, format: 'Flac', length: '339.97' },
+      { name: 'Other composition.flac', format: 'Flac', length: '190' },
+      { name: '../Goldberg.flac', format: 'Flac', length: '190' },
+      { name: 'Goldberg.mp3', format: 'VBR MP3', length: '190' },
+    ] });
+    assert.equal(url, `https://archive.org/download/${item}/Goldberg%20Variations/Goldberg%20Variations%2C%20BWV%20988%20-%20Aria%20Da%20Capo.flac`);
+    return new Response(flac({ rate: 44100, bits: 16, duration: 340 }));
+  } });
+  const tracks = (await (await h(req('/musopen/search?q=GOLDBERG%20aria'))).json()).tracks;
+  assert.equal(tracks.length, 1); assert.equal(tracks[0].artist, 'www.musopen.org');
+  assert.equal(tracks[0].album, 'Goldberg Variations'); assert.equal(tracks[0].duration, 339.97);
+  const r = await h(req(`/musopen/stream/${tracks[0].id}`));
+  assert.equal(r.status, 200); const stream = await r.json();
+  assert.equal(stream.bitDepth, 16); assert.equal(stream.sampleRate, 44100);
+  assert.deepEqual((await (await h(req('/musopen/search?q=unrelated%20pop%20song'))).json()).tracks, []);
+  const outside = btoa(JSON.stringify(['musopen', 'another-item', file])).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+  assert.equal((await h(req(`/musopen/stream/${outside}`))).status, 400);
+  assert.equal((await h(req(`/archive/stream/${tracks[0].id}`))).status, 400);
+  assert.equal(calls.length, 2);
 });
 test('Monochrome search maps identity, excludes unavailable tracks, resolves measured FLAC', async () => {
   const calls = [];

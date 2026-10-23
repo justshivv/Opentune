@@ -5,6 +5,7 @@ export { AddonAuthState } from './auth.mjs';
 /** OpenTune lossless HTTP adapters. No media transcoding or audio proxying. */
 const MONO = 'https://tracks.monochrome.st';
 const ARCHIVE = 'https://archive.org';
+const MUSOPEN_ITEM = 'musopen-dvd-in-lossless-flac-format';
 const UA = 'OpenTune-Lossless-Addon/0.1 (+https://github.com/justshivv/Opentune)';
 const MAX_JSON = 2 * 1024 * 1024;
 const MAX_HEADER = 65536;
@@ -23,6 +24,8 @@ const sources = {
     description: 'Independent adapter for Monochrome’s public Track Streamer. Availability and quotas depend on that service.' },
   archive: { id: 'org.opentune.archive', name: 'OpenTune · Internet Archive',
     description: 'FLAC recordings from Internet Archive. Catalogue includes live recordings and independent releases; it is not a substitute for a studio catalogue.' },
+  musopen: { id: 'org.opentune.musopen', name: 'OpenTune · Musopen Classical',
+    description: 'Musopen Kickstarter collection on Internet Archive. Original classical FLAC recordings; collection credits are preserved when performer metadata is absent. Not a popular-music catalogue or a guaranteed hi-res tier.' },
 };
 function manifest(source) {
   return { ...sources[source], version: '0.1.0', resources: ['search', 'stream'], allowDownloads: true,
@@ -146,6 +149,27 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
   async function archiveMetadata(id, signal) {
     return memo(`item:${id}`, 120000, () => request(`${ARCHIVE}/metadata/${encodeURIComponent(id)}`, { signal }));
   }
+  async function searchMusopen(q) {
+    const data = await archiveMetadata(MUSOPEN_ITEM);
+    if (!Array.isArray(data.files)) throw new SourceError('Musopen archive returned an invalid catalogue');
+    const normalize = value => String(value).normalize('NFKC').toLowerCase();
+    const terms = normalize(q).match(/[\p{L}\p{N}]+/gu) || [];
+    if (!terms.length) return [];
+    return data.files.flatMap(f => {
+      if (!/^flac$/i.test(f.format || '') || !safeFile(f.name)) return [];
+      // This curated collection uses descriptive filenames, unlike arbitrary Archive uploads.
+      const title = text(f.title) || f.name.split('/').at(-1).replace(/\.flac$/i, '');
+      const artist = names(f.creator || f.artist || data.metadata?.creator);
+      const duration = seconds(f.length);
+      if (!/[\p{L}]/u.test(title) || !artist || !(duration > 0 && duration <= 86400)) return [];
+      const album = f.name.includes('/') ? f.name.split('/').slice(0, -1).join(' / ') : text(data.metadata?.title);
+      const haystack = normalize(`${title} ${album} ${artist} Musopen`);
+      if (!terms.every(term => haystack.includes(term))) return [];
+      return [{ id: opaque(['musopen', MUSOPEN_ITEM, f.name]), title, artist, album, duration,
+        artworkURL: `${ARCHIVE}/services/img/${MUSOPEN_ITEM}`, format: 'flac',
+        sourcePage: `${ARCHIVE}/details/${MUSOPEN_ITEM}` }];
+    }).slice(0, 40);
+  }
   async function searchArchive(q) {
     // Treat user terms as literals; never accept a caller-provided Lucene expression.
     const terms = q.match(/[\p{L}\p{N}]+/gu) || [];
@@ -184,6 +208,7 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
       url = `${MONO}/track/${encodeURIComponent(id[1])}`;
     } else {
       if (id.length !== 3 || typeof id[1] !== 'string' || !/^[\w.-]{1,160}$/.test(id[1]) || ['.', '..'].includes(id[1]) || !safeFile(id[2])) throw new SourceError('Invalid recording ID', 400);
+      if (source === 'musopen' && id[1] !== MUSOPEN_ITEM) throw new SourceError('Invalid Musopen collection', 400);
       const data = await archiveMetadata(id[1]);
       if (!data.files?.some(f => f.name === id[2] && /^flac$/i.test(f.format || ''))) throw new SourceError('FLAC recording not found', 404);
       url = archiveMedia(id[1], id[2]);
@@ -206,7 +231,7 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
         const q = (url.searchParams.get('q') || '').trim();
         if (q.length > 200) return json({ error: 'Search is too long' }, 400);
         if (!q) return json({ tracks: [] });
-        const tracks = await memo(`${source}:search:${q}`, 60000, () => source === 'monochrome' ? searchMono(q) : searchArchive(q));
+        const tracks = await memo(`${source}:search:${q}`, 60000, () => source === 'monochrome' ? searchMono(q) : source === 'musopen' ? searchMusopen(q) : searchArchive(q));
         return json({ tracks });
       }
       if (parts.length === 2 && parts[0] === 'stream') {

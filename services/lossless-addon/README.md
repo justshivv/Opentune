@@ -1,11 +1,12 @@
 # OpenTune lossless add-on
 
-A standalone Cloudflare Worker exposing two independently reorderable OpenTune HTTP sources:
+A standalone Cloudflare Worker exposing three independently reorderable OpenTune HTTP sources:
 
 - `/monochrome/manifest.json` — Monochrome's current public Track Streamer interface.
 - `/archive/manifest.json` — Internet Archive FLAC recordings.
+- `/musopen/manifest.json` — curated Musopen classical collection hosted on Internet Archive.
 
-The root `/manifest.json` aliases Monochrome. This service is an independent adapter, not an official Monochrome service. It does not alter Android playback, install executable extensions, or require a new app version. No keys or sign-in are required by these adapter interfaces; upstream availability can change.
+The root `/manifest.json` aliases Monochrome. This service is an independent adapter, not an official Monochrome service. It does not alter Android playback, install executable extensions, or require a new app version. The upstream adapters use public interfaces without shared account credentials. OpenTune-owned manifests use the staged verification rollout described below; upstream availability can change.
 
 ## Live deployment
 
@@ -28,7 +29,7 @@ npx wrangler dev
 npx wrangler deploy
 ```
 
-After deployment, copy the **actual HTTPS Worker URL printed by Wrangler** and append either manifest path above. Add each URL in OpenTune → Settings → Audio → Audio add-ons, or distribute it through the existing admin add-on dashboard. Enable Lossless playback and set the order in Sources. The production URLs below were deployed from the feature branch; the PR remains unmerged.
+After deployment, copy the **actual HTTPS Worker URL printed by Wrangler** and append a manifest path above. Add each URL in OpenTune → Settings → Audio → Audio add-ons, or distribute it through the existing admin add-on dashboard. Enable Lossless playback and set the order in Sources. The production URLs below were deployed from the feature branch; the PR remains unmerged.
 
 The Worker has no paid audio-library dependency or upstream account credential. Device verification uses Cloudflare Durable Objects and a public app-signing certificate pin. Each lookup requests upstream metadata and at most 64 KiB of audio for a FLAC-header check. Playback and downloads go directly from the provider to the device. Cloudflare hosting limits and third-party service quotas still apply; this is not unlimited free hosting or a guaranteed free music catalogue.
 
@@ -57,3 +58,13 @@ See [source research](../../docs/lossless-source-research.md) for current limita
 The public Worker now has a Cloudflare rate-limit binding (240 requests per minute per address per Cloudflare location). It uses the edge-provided client address, hashed by day, instead of a caller-supplied device ID or User-Agent. Limits are approximate and local to each Cloudflare location; shared networks share the allowance. Missing/broken limiter bindings fail closed. Excess traffic receives HTTP 429 with Retry-After before any upstream work. This is abuse protection, **not proof that the caller uses OpenTune**.
 
 The owner selected strict hardware verification for Android/TV and verified-app approval for web. The implementation and compatible clients are on this branch. The deployed Worker temporarily uses explicit `VERIFICATION_MODE = "staged"` while the signed clients are built and verified on a real device: **unauthenticated catalogue access still works in this window**. Strict mode rejects unsupported devices and old clients. No embedded APK secret, spoofable User-Agent, browser Origin, public usage UUID or unverified key registration is treated as app identity. See [access security and rollout](../../docs/addon-access-security.md) for the protocol, build artifacts, cutover checks and limitations.
+
+## Additional sources and public add-on compatibility
+
+The Musopen adapter searches the fixed `musopen-dvd-in-lossless-flac-format` collection. It uses descriptive filenames when the collection lacks track titles, preserves supplied creator credits instead of inventing performers, filters search terms, and reads the original FLAC header. It does not match classical performances to unrelated studio recordings. This is a small classical collection (32 FLAC files in the probe), not another popular-music catalogue. Sample: Goldberg Variations, BWV 988 — Aria Da Capo, measured 16-bit/44.1 kHz stereo.
+
+Import `/musopen/manifest.json` on the deployed OpenTune service as a separate source. Like the other OpenTune-owned manifests, it follows the same first-party verification policy.
+
+[Acedreamer's public community add-on](https://github.com/acedreamer/bitchord-monochrome-addon) already implements the search/stream protocol. Import `https://bitchord-monochrome-addon.onrender.com/manifest.json` directly. Our anonymous probe returned native 24-bit/44.1 kHz FLAC for Blinding Lights / The Weeknd. It uses the Monochrome/HiFi network, so it is another public route, not independent catalogue coverage. We did not fork its server or add OpenTune verification to it.
+
+Verification is bound to the exact HTTPS origin of OpenTune's Worker, not to source names, codec, or whether an add-on was added by an admin. Public add-ons do not need an OpenTune hardware key, a paired browser, or verification storage. Their existing request and fallback behavior remains unchanged. The web verification panel appears only when an OpenTune-owned source is installed. Android/TV and web regression tests cover public hosts, other Workers, ports, HTTP, lookalike domains and URL substrings.

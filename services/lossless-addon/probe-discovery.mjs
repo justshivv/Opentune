@@ -41,7 +41,8 @@ await probe('Acedreamer public addon', async () => {
   const t = r.json?.tracks?.find(t => /blinding lights/i.test(t.title) && /weeknd/i.test(t.artist));
   if (!t) return { manifest: m.json?.name, candidates: r.json?.tracks?.length || 0 };
   const s = await read(base + '/stream/' + encodeURIComponent(t.id) + '?quality=HI_RES_LOSSLESS');
-  return { manifest: m.json?.name, ...(s.json?.url ? await read(s.json.url, true) : { error: 'No direct media URL' }) };
+  return { manifest: m.json?.name, recording: { title: t.title, artist: t.artist, duration: t.duration },
+    ...(s.json?.url ? await read(s.json.url, true) : { error: 'No direct media URL' }) };
 });
 await probe('Free To Use API', async () => {
   const r = await read('https://api.freetouse.com/v3/music/tracks/all?limit=1');
@@ -58,7 +59,7 @@ for (const q of ['mediatype:audio AND format:Flac AND collection:etree AND creat
     const m = (await read('https://archive.org/metadata/' + encodeURIComponent(d.identifier))).json;
     const files = m?.files?.filter(f => /^flac$/i.test(f.format || '')) || [];
     const f = files[0];
-    const item = { id: d.identifier, title: m?.metadata?.title, creator: m?.metadata?.creator, flacFiles: files.length, itemKeys: Object.keys(m?.metadata || {}), file: f ? { name: f.name, format: f.format, title: f.title, length: f.length, track: f.track, size: f.size } : null,
+    const item = { id: d.identifier, title: m?.metadata?.title, creator: m?.metadata?.creator, licenseURL: m?.metadata?.licenseurl, flacFiles: files.length, itemKeys: Object.keys(m?.metadata || {}), file: f ? { name: f.name, format: f.format, title: f.title, length: f.length, track: f.track, size: f.size } : null,
       derivative: f ? m.files.filter(x=>x.original===f.name).slice(0,2).map(x=>({format:x.format,title:x.title,length:x.length,original:x.original})) : [] };
     if (f) { try { Object.assign(item, await read('https://archive.org/download/' + encodeURIComponent(d.identifier) + '/' + f.name.split('/').map(encodeURIComponent).join('/'), true)); } catch(e) { item.error = /^HTTP \d+$/.test(e.message) ? e.message : 'FLAC header unavailable'; } }
     items.push(item);
