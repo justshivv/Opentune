@@ -10,7 +10,7 @@ const modules = process.env.RUNTIME_MODULES;
 const { build } = await import(pathToFileURL(join(modules, 'esbuild/lib/main.js')));
 const { Miniflare } = await import(pathToFileURL(join(modules, 'miniflare/dist/src/index.js')));
 const source = `
-import { X509Certificate, createPublicKey, verify } from 'node:crypto';
+import { X509Certificate } from 'node:crypto';
 import { googleTrust, verifyAttestation } from './attestation.mjs';
 import { AddonAuthState, withAppVerification } from './auth.mjs';
 import { sha256 } from './attestation.mjs';
@@ -18,14 +18,6 @@ export { AddonAuthState };
 const protectedHandler = withAppVerification(() => Response.json({ accepted: true }));
 export default { async fetch(request, env) {
   const path = new URL(request.url).pathname;
-  if (path === '/test/proof') {
-    const input = await request.json();
-    try {
-      const key = createPublicKey(input.key);
-      return Response.json({ type: key.asymmetricKeyType, curve: key.asymmetricKeyDetails?.namedCurve,
-        valid: verify('sha256', Buffer.from(input.message), { key, dsaEncoding: input.encoding }, Buffer.from(input.signature, 'base64url')) });
-    } catch(e) { return Response.json({ error: e.message }); }
-  }
   if (path === '/test/session') {
     const input = await request.json();
     const id = env.AUTH.idFromName('session:' + sha256(input.session));
@@ -72,11 +64,6 @@ try {
       key: keys.privateKey, dsaEncoding: kind === 'web' ? 'ieee-p1363' : 'der',
     }).toString('base64url');
     const headers = { Authorization: 'Bearer ' + session, 'X-OpenTune-Time': time, 'X-OpenTune-Nonce': nonce, 'X-OpenTune-Signature': signature };
-    const proof = await worker.dispatchFetch('https://runtime-check.invalid/test/proof', { method: 'POST', body: JSON.stringify({
-      key: keys.publicKey.export({ type: 'spki', format: 'pem' }).toString(), message: canonical(session, time, nonce, 'GET', path),
-      signature, encoding: kind === 'web' ? 'ieee-p1363' : 'der',
-    }) });
-    console.log('Test-only key import and proof:', await proof.json());
     const accepted = await worker.dispatchFetch('https://runtime-check.invalid' + path, { headers });
     assert.equal(accepted.status, 200, `${kind} signed request: ${await accepted.text()}`);
     const replay = await worker.dispatchFetch('https://runtime-check.invalid' + path, { headers });

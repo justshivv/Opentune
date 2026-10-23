@@ -41,8 +41,13 @@ export class AddonAuthState {
         const nonces = (item.nonces || []).filter(n => n.at > now - 120_000);
         if (nonces.some(n => n.value === nonce) || nonces.length >= 480) return reply({ ok: false });
         let valid = false;
-        try { valid = verify('sha256', Buffer.from(canonical(session, time, nonce, method, path, body)),
-          { key: publicKey(item.key), dsaEncoding: item.kind === 'web' ? 'ieee-p1363' : 'der' }, Buffer.from(signature, 'base64url')); } catch {}
+        try {
+          publicKey(item.key); // Validate the stored key's algorithm and curve.
+          // Workers rejects a PublicKeyObject nested in verify's options even
+          // though Node accepts it. Pass the validated PEM alongside encoding.
+          valid = verify('sha256', Buffer.from(canonical(session, time, nonce, method, path, body)),
+            { key: item.key, dsaEncoding: item.kind === 'web' ? 'ieee-p1363' : 'der' }, Buffer.from(signature, 'base64url'));
+        } catch {}
         if (!valid) return reply({ ok: false });
         item.nonces = [...nonces, { value: nonce, at: now }]; await store.put('item', item);
         return reply({ ok: true, kind: item.kind, expires: item.expires });
