@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -63,21 +64,25 @@ object History {
     /** Newest first. */
     val records: StateFlow<List<PlayRecord>> = _records.asStateFlow()
 
+    private var saved: com.opentune.data.SavedFile? = null
+
     @OptIn(FlowPreview::class)
     fun init(context: Context) {
         val f = File(context.filesDir, "history.json")
         file = f
-        _records.value = runCatching { json.decodeFromString(serializer, f.readText()) }.getOrDefault(emptyList())
+        val store = com.opentune.data.SavedFile(f, "History").also { saved = it }
+        // History that won't read is kept aside, never saved over with an empty list.
+        _records.value = store.read(emptyList()) { json.decodeFromString(serializer, it) }
         scope.launch {
-            _records.drop(1).debounce(1_500).collect { list ->
-                runCatching {
-                    val tmp = File(f.parentFile, "history.json.tmp")
-                    tmp.writeText(json.encodeToString(serializer, list))
-                    tmp.renameTo(f)
-                }.onFailure { Log.w("History", "Couldn't save history", it) }
+            _records.drop(1).onEach { store.dirty = true }.debounce(1_500).collect { list ->
+                runCatching { store.write(json.encodeToString(serializer, list)) }
+                    .onFailure { Log.w("History", "Couldn't save history", it) }
             }
         }
     }
+
+    /** Saves at once a change still waiting for its save: the app is leaving the screen or closing. */
+    fun flush() { saved?.flushIfDirty { json.encodeToString(serializer, _records.value) } }
 
     /** Records a listen and returns its key for [updateListened]. */
     fun record(song: Song, listenedMs: Long): Long {

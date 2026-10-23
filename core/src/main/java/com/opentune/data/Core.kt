@@ -75,4 +75,16 @@ object Core {
         com.opentune.data.library.PlaylistSync.init(app)
         InnerTubeXResolver.init(app)
     }
+
+    /**
+     * Saves at once what's still waiting for its save (each store waits a moment
+     * after a change, so a run of changes is written once): the app is leaving
+     * the screen or the player is closing, and the process may go any moment.
+     */
+    fun flush() {
+        LibraryStore.flush()
+        History.flush()
+        com.opentune.data.history.ListenedCollections.flush()
+        Downloads.flush()
+    }
 }

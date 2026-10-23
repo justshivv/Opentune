@@ -77,7 +77,8 @@ fun UpdateDialog(found: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: (U
             try {
                 release = UpdateCheck.newest(context, release)
                 val file = Updater.download(context, release) { p -> progress = p }
-                Updater.install(context, file)
+                // Off the main thread: it copies the whole APK into the installer, which froze the screen.
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Updater.install(context, file) }
                 onDismiss()
             } catch (e: CancellationException) {
                 throw e

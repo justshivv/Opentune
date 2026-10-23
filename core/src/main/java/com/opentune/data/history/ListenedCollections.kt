@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -44,20 +45,22 @@ object ListenedCollections {
     private val _plays = MutableStateFlow<List<CollectionPlay>>(emptyList())
     val plays: StateFlow<List<CollectionPlay>> = _plays.asStateFlow()
 
+    private var saved: com.opentune.data.SavedFile? = null
+
     @OptIn(FlowPreview::class)
     fun init(context: Context) {
-        val f = File(context.filesDir, "listened-collections.json")
-        _plays.value = runCatching { json.decodeFromString(serializer, f.readText()) }.getOrDefault(emptyList())
+        val f = com.opentune.data.SavedFile(File(context.filesDir, "listened-collections.json"), "ListenedCollections").also { saved = it }
+        _plays.value = f.read(emptyList()) { json.decodeFromString(serializer, it) }
         scope.launch {
-            _plays.drop(1).debounce(1_500).collect { list ->
-                runCatching {
-                    val tmp = File(f.parentFile, "listened-collections.json.tmp")
-                    tmp.writeText(json.encodeToString(serializer, list))
-                    tmp.renameTo(f)
-                }.onFailure { Log.w("ListenedCollections", "Couldn't save played albums and playlists: ${it.message}") }
+            _plays.drop(1).onEach { f.dirty = true }.debounce(1_500).collect { list ->
+                runCatching { f.write(json.encodeToString(serializer, list)) }
+                    .onFailure { Log.w("ListenedCollections", "Couldn't save played albums and playlists: ${it.message}") }
             }
         }
     }
+
+    /** Saves at once a change still waiting for its save. */
+    fun flush() { saved?.flushIfDirty { json.encodeToString(serializer, _plays.value) } }
 
     fun played(browseId: String, title: String, subtitle: String, thumbnailUrl: String?, now: Long = System.currentTimeMillis()) {
         if (browseId.isBlank() || title.isBlank()) return
