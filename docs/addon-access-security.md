@@ -10,6 +10,10 @@ Before changing `VERIFICATION_MODE` to `strict`, install the official-signed pre
 
 Builds are artifacts of the **Verified add-on clients** workflow. `OpenTune-verified-source-signed` contains the Android/TV APK; `OpenTune-verified-source-web` contains the web build. The web build is not automatically published over the existing site. Preview builds use the existing release signing identity and install over that identity's app. No GitHub release is created.
 
+The [23 October client build](https://github.com/justshivv/Opentune/actions/runs/40027490120) passed for both platforms: [signed Android/TV APK](https://github.com/justshivv/Opentune/actions/runs/40027490120/artifacts/12534225713) and [web build](https://github.com/justshivv/Opentune/actions/runs/40027490120/artifacts/12534075246). The app identifies itself as `1.0.1-verification-preview`, following current main's version. GitHub artifact downloads require a GitHub login and expire; these links are test distribution, not a permanent release channel.
+
+The [live staged deployment check](https://github.com/justshivv/Opentune/actions/runs/40028054552) confirmed challenge issuance, invalid enrollment → HTTP 403, reused challenge → HTTP 401, and unauthenticated browser approval lookup → HTTP 401. Existing Monochrome resolution still returned measured FLAC 16-bit/44.1 kHz. Genuine physical-device enrollment and browser approval remain pending; strict enforcement is not enabled.
+
 ## Android and TV
 
 1. The server creates a random, two-minute, one-use challenge.

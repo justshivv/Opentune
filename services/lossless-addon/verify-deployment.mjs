@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
+import { generateKeyPairSync } from 'node:crypto';
 const base = new URL(process.env.ADDON_URL);
 assert.equal(base.protocol, 'https:');
 assert.match(base.hostname, /^opentune-lossless-addon\.[a-z0-9-]+\.workers\.dev$/);
@@ -28,6 +29,17 @@ report.security.unauthenticatedApproval = rejected.response.status;
 report.security.challengeIssued = true;
 report.security.fakeEnrollment = fake.status;
 report.security.challengeReplay = replay.status;
+const browserKey = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).publicKey.export({ format: 'jwk' });
+const pairingResponse = await fetch(new URL('/auth/web/start', base), { method: 'POST',
+  headers: { 'Content-Type': 'application/json', Origin: 'https://justshivv.github.io' }, body: JSON.stringify({ key: browserKey }), signal: AbortSignal.timeout(20000) });
+assert.equal(pairingResponse.status, 200);
+const pairing = await pairingResponse.json();
+assert.match(pairing.id, /^[A-Za-z0-9_-]{43}$/);
+const pendingResponse = await fetch(new URL('/auth/web/status', base), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ id: pairing.id, poll: pairing.poll }), signal: AbortSignal.timeout(20000) });
+assert.equal(pendingResponse.status, 200);
+assert.equal((await pendingResponse.json()).session, null);
+report.security.browserWaitsForApproval = true;
 for (const source of ['monochrome', 'archive']) {
   const { response, body } = await get(`/${source}/manifest.json`);
   assert.equal(response.status, 200); assert.equal(body.id, `org.opentune.${source}`);

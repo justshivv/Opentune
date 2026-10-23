@@ -48,6 +48,7 @@ export class AddonAuthState {
         return reply({ ok: true, kind: item.kind, expires: item.expires });
       }
       if (op === 'info' && item.pollHash) return reply({ ok: true, origin: item.origin, code: item.code, expires: item.expires, approved: !!item.session });
+      if (op === 'prepare' && item.pollHash && !item.session) return reply({ ok: true, key: item.key });
       if (op === 'approve' && item.pollHash && !item.session) {
         item.session = input.session; item.sessionExpires = input.sessionExpires;
         await store.put('item', item); return reply({ ok: true, key: item.key });
@@ -102,7 +103,9 @@ export function withAppVerification(handler, { trust = googleTrust, attest = ver
       if (path === '/auth/web/start' && request.method === 'POST') {
         const origin = request.headers.get('Origin');
         if (!(env.WEB_ORIGINS || 'https://justshivv.github.io').split(',').includes(origin)) return denied();
-        const input = JSON.parse(body), key = publicKey({ key: input.key, format: 'jwk' }).export({ type: 'spki', format: 'pem' }).toString();
+        const input = JSON.parse(body), jwk = input.key;
+        if (!jwk || jwk.kty !== 'EC' || jwk.crv !== 'P-256' || !TOKEN.test(jwk.x || '') || !TOKEN.test(jwk.y || '') || 'd' in jwk) return denied();
+        const key = publicKey({ key: jwk, format: 'jwk' }).export({ type: 'spki', format: 'pem' }).toString();
         const id = token(), poll = token(), code = randomBytes(4).toString('hex').toUpperCase(), expires = Date.now() + 300_000;
         await state(env, 'pair:' + id, 'create', { key, pollHash: sha256(poll), origin, code, expires });
         return reply({ id, poll, code, expires, link: 'opentune://addon-approve?id=' + id });
@@ -126,9 +129,13 @@ export function withAppVerification(handler, { trust = googleTrust, attest = ver
         if (path === '/auth/web/info' && request.method === 'GET') return reply(await state(env, 'pair:' + id, 'info'));
         if (path === '/auth/web/approve' && request.method === 'POST') {
           const session = token(), expires = Math.min(auth.expires, Date.now() + 12 * 3600_000);
+          const pending = await state(env, 'pair:' + id, 'prepare');
+          if (!pending.ok) return denied();
+          // Make the key-bound session usable before polling can disclose its token.
+          // A concurrent losing approval only leaves an unexposed expiring session.
+          await state(env, 'session:' + sha256(session), 'create', { kind: 'web', key: pending.key, expires });
           const result = await state(env, 'pair:' + id, 'approve', { session, sessionExpires: expires });
           if (!result.ok) return denied();
-          await state(env, 'session:' + sha256(session), 'create', { kind: 'web', key: result.key, expires });
           return reply({ ok: true });
         }
         return denied();

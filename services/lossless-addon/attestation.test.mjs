@@ -38,7 +38,8 @@ test('real certificate chain/proof checks reject wrong roots, revocation, expire
     run(['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'root.key', '-out', 'root.pem', '-days', '2', '-subj', '/CN=Test only root', '-addext', 'basicConstraints=critical,CA:TRUE']);
     run(['req', '-new', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes', '-keyout', 'leaf.key', '-out', 'leaf.csr', '-subj', '/CN=Android Keystore Key']);
     writeFileSync(join(dir, 'extensions'), 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n1.3.6.1.4.1.11129.2.1.17=DER:' + description().toString('hex').match(/../g).join(':'));
-    run(['x509', '-req', '-in', 'leaf.csr', '-CA', 'root.pem', '-CAkey', 'root.key', '-CAcreateserial', '-out', 'leaf.pem', '-days', '1', '-extfile', 'extensions']);
+    // A short serial keeps the leading-zero revocation case deterministic.
+    run(['x509', '-req', '-in', 'leaf.csr', '-CA', 'root.pem', '-CAkey', 'root.key', '-set_serial', '0x0A', '-out', 'leaf.pem', '-days', '1', '-extfile', 'extensions']);
     const root = new X509Certificate(readFileSync(join(dir, 'root.pem'))), leaf = new X509Certificate(readFileSync(join(dir, 'leaf.pem')));
     const input = { challenge, chain: [leaf, root].map(c => c.raw.toString('base64')), proof: sign('sha256', bytes('OpenTune-Enrollment-v1\n' + challenge), createPrivateKey(readFileSync(join(dir, 'leaf.key')))).toString('base64url') };
     const trust = { roots: [root], revoked: {} };

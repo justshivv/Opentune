@@ -77,6 +77,9 @@ test('browser enrollment rejects unapproved origins and private/RSA keys', async
     const r = await app(new Request(origin + '/auth/web/start', { method: 'POST', headers, body: JSON.stringify({ key: { kty: 'RSA' } }) }), env);
     assert.ok([401, 403].includes(r.status));
   }
+  const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const r = await app(new Request(origin + '/auth/web/start', { method: 'POST', headers: { Origin: 'https://justshivv.github.io' }, body: JSON.stringify({ key: keys.privateKey.export({ format: 'jwk' }) }) }), env);
+  assert.equal(r.status, 401);
 });
 test('challenge one-use, verifier failure denied; missing binding fails closed', async () => {
   let verified = 0; const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
