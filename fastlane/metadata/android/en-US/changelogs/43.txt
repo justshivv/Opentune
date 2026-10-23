@@ -1,7 +1,7 @@
 • Add your own lossless audio sources and reorder them with animated drag handles
 • Community sources managed through the private dashboard
-• Compact, steady quality labels and restored mini-player glass
-• Improved FLAC playback and background quality upgrades
+• Steady quality labels (High Quality on JioSaavn, Good Quality on YouTube) and mini-player glass
+• Faster switch to verified FLAC, recovering from busy or expired source links
 • Fresh Home recommendations, community links and Web & TV guide
 • YouTube Music sign-in on TV using your phone
 • Browser player preview with companion extension

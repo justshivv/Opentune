@@ -93,20 +93,28 @@ internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onCli
 internal fun qualityStatusLabel(source: NerdStats.Source?, format: AudioFormatInfo?, upgrading: Boolean): String {
     if (source == null || source.provider.startsWith("Checking highest")) return if (upgrading) "Upgrading quality" else "Preparing audio"
     val lossless = isHighestQuality(source, format)
+    val kbps = format?.bitrateKbps ?: source.kbps ?: 0
+    // JioSaavn and YouTube Music streams are named by their tier alone, without the bitrate.
+    val saavn = source.provider.startsWith("JioSaavn")
+    val youTube = source.provider.startsWith("YouTube")
     val tier = when {
         lossless && ((format?.bitDepth ?: 0) > 16 || (format?.sampleRateHz ?: 0) > 48000) -> "Hi-Res Lossless"
         lossless -> "Lossless"
-        (format?.bitrateKbps ?: source.kbps ?: 0) >= 128 -> "High quality"
+        saavn -> "High Quality"
+        youTube && (kbps == 0 || kbps >= 128) -> "Good Quality"
+        kbps >= 128 -> "High quality"
         else -> "Standard quality"
     }
     // The concrete signal behind the tier: bit depth and rate for lossless,
     // the stream's bitrate otherwise. So "Lossless" reads "Lossless · 24-bit/96 kHz".
-    val detail = if (lossless) {
-        val bits = format?.bitDepth ?: source.bits
-        val rate = format?.sampleRateHz ?: source.sampleRate
-        listOfNotNull(bits?.let { "$it-bit" }, rate?.let { khzLabel(it) }).joinToString("/").ifEmpty { null }
-    } else {
-        (format?.bitrateKbps ?: source.kbps)?.takeIf { it > 0 }?.let { "$it kbps" }
+    val detail = when {
+        lossless -> {
+            val bits = format?.bitDepth ?: source.bits
+            val rate = format?.sampleRateHz ?: source.sampleRate
+            listOfNotNull(bits?.let { "$it-bit" }, rate?.let { khzLabel(it) }).joinToString("/").ifEmpty { null }
+        }
+        saavn || youTube -> null
+        else -> kbps.takeIf { it > 0 }?.let { "$it kbps" }
     }
     val label = listOfNotNull(tier, detail).joinToString(" · ")
     return if (upgrading) "$label · upgrading" else label

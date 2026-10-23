@@ -52,12 +52,17 @@ class AddonProtocolTest {
         try { invalid.manifest(); fail() } catch (_: IllegalArgumentException) { }
         invalid.manifest(); assertEquals(2, attempts)
     }
-    @Test fun failedRateLimitedCallIsNotRetriedUntilCooldownExpires() = runBlocking {
-        var calls = 0; var clock = 0L
-        val client = AddonClient("https://addon.example/", { calls++; if (calls == 1) throw AddonHttp.Failure(429, 10) else manifest }, { clock })
+    @Test fun aRateLimitIsNotHeldAgainstEverySongAndAFreshStreamIsAskedForAgain() = runBlocking {
+        var calls = 0
+        val stream = """{"url":"https://cdn.example/a.flac","codec":"flac"}"""
+        val client = AddonClient("https://addon.example/", { url -> calls++; if (calls == 1) throw AddonHttp.Failure(429, 10) else if ("stream" in url) stream else manifest })
         try { client.manifest() } catch (_: AddonHttp.Failure) { }
-        try { client.manifest() } catch (_: IllegalStateException) { }
-        assertEquals(1, calls)
-        clock = 10001; client.manifest(); assertEquals(2, calls)
+        // The client no longer refuses everything after one 429; that is decided per song.
+        client.manifest(); assertEquals(2, calls)
+        val parsed = AddonProtocol.manifest(manifest)
+        client.stream("t1", parsed, "LOSSLESS"); client.stream("t1", parsed, "LOSSLESS")
+        assertEquals(3, calls)
+        client.stream("t1", parsed, "LOSSLESS", fresh = true)
+        assertEquals(4, calls)
     }
 }

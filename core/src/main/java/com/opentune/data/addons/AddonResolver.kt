@@ -12,9 +12,43 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 object AddonResolver {
+    /**
+     * Holds on an add-on, each for one song only ("addon:song"): the next song asks it
+     * afresh. A file whose playback failed is left a short while, then asked for anew
+     * (its link, not the cached one); an add-on that answered HTTP 429 waits out the
+     * time it gave.
+     */
     private val failures = java.util.concurrent.ConcurrentHashMap<String, Long>()
-    fun failed(addon: String, song: String) { failures["$addon:$song"] = System.nanoTime() / 1_000_000 + 120_000 }
+    private val staleLinks = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val limitedUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private fun now() = System.nanoTime() / 1_000_000
+    fun failed(addon: String, song: String) {
+        if (failures.size > 256) failures.clear()
+        failures["$addon:$song"] = now() + FAILED_HOLD_MS
+        staleLinks += "$addon:$song"
+    }
     fun retry() { failures.clear() }
+    private fun limit(addon: String, song: String, e: AddonHttp.Failure) {
+        if (limitedUntil.size > 256) limitedUntil.clear()
+        limitedUntil["$addon:$song"] = now() + maxOf(e.retryAfterSeconds * 1_000, RATE_LIMIT_MS)
+    }
+
+    /**
+     * A new link to the file [addon] verified for [song]: its stream asked for again by
+     * [trackId], with no search and no new check of the recording. For a link that
+     * stopped working (expired, say) while the song played. Null when it has none.
+     */
+    suspend fun freshLink(addon: String, trackId: String, tier: String, song: String,
+        clientFor: (String) -> AddonClient = AddonClient::forBase): String? {
+        val source = AddonStore.addons.value.firstOrNull { it.key == addon && it.enabled && AddonStore.usable(it) } ?: return null
+        if ((limitedUntil["$addon:$song"] ?: 0) > now()) return null
+        return try {
+            clientFor(source.base).stream(trackId, source.manifest, tier.ifEmpty { "HI_RES_LOSSLESS" }, fresh = true)
+                .takeIf { it.lossless }?.url
+        } catch (e: CancellationException) { throw e }
+        catch (e: AddonHttp.Failure) { if (e.status == 429) limit(addon, song, e); null }
+        catch (_: Exception) { null }
+    }
 
     /**
      * Every usable add-on is asked at once; of the verified matches that come
@@ -25,13 +59,16 @@ object AddonResolver {
      * (up to [ADDON_LIMIT_MS], a guard against a hung connection). A later
      * answer of higher quality than the one returned goes to [late], so it
      * can still be switched to. With no match yet, it waits for them all.
+     * [skip] names add-ons already heard from for this song, left out; each one
+     * asked is told to [settled] once it's done, with whether it erred (an HTTP
+     * error, no answer, a broken reply) rather than answered.
      */
     suspend fun resolve(song: Song, durationMs: Long, download: Boolean = false, bestAvailable: Boolean = false,
         report: (String) -> Unit = {},
         late: (AddonStream) -> Unit = {},
         clientFor: (String) -> AddonClient = AddonClient::forBase,
         probe: suspend (String, Int, Boolean) -> ByteArray = AddonHttp::bytes): AddonStream? =
-        resolveAll(song, durationMs, download, bestAvailable, report, late, clientFor, probe).firstOrNull()
+        resolveAll(song, durationMs, download, bestAvailable, report, late, clientFor = clientFor, probe = probe).firstOrNull()
 
     /**
      * Every verified match [resolve] found, best first (ties in the
@@ -41,18 +78,32 @@ object AddonResolver {
     suspend fun resolveAll(song: Song, durationMs: Long, download: Boolean = false, bestAvailable: Boolean = false,
         report: (String) -> Unit = {},
         late: (AddonStream) -> Unit = {},
+        skip: Set<String> = emptySet(),
+        settled: (addon: String, erred: Boolean) -> Unit = { _, _ -> },
         clientFor: (String) -> AddonClient = AddonClient::forBase,
         probe: suspend (String, Int, Boolean) -> ByteArray = AddonHttp::bytes): List<AddonStream> = withContext(Dispatchers.IO) {
         if (durationMs <= 0) return@withContext emptyList()
         val identity = CatalogIdentity(song.title, song.artist, null, durationMs)
         // The best each add-on has: hi-res where it offers it, else lossless.
         val tier = "HI_RES_LOSSLESS"
-        suspend fun attempt(addon: AudioAddon): AddonStream? {
+        /** [outcome]: asked over the network at all, and erred rather than answered. */
+        suspend fun attempt(addon: AudioAddon, outcome: BooleanArray): AddonStream? {
             if (!addon.enabled) return null
-            if ((failures["${addon.key}:${song.videoId}"] ?: 0) > System.nanoTime() / 1_000_000) { report("${addon.manifest.name}: recent playback failure; skipped"); return null }
+            if ((failures["${addon.key}:${song.videoId}"] ?: 0) > now()) {
+                // Not a no: asked again once the hold is over.
+                outcome[0] = true; outcome[1] = true
+                report("${addon.manifest.name}: its file failed moments ago; asked again shortly"); return null
+            }
             if (!AddonStore.usable(addon)) { report("${addon.manifest.name}: only used with wired headphones, a USB DAC or HDMI, as its owner asks"); return null }
             if (download && !addon.manifest.downloads) { report("${addon.manifest.name}: streaming only"); return null }
+            val wait = (limitedUntil["${addon.key}:${song.videoId}"] ?: 0) - now()
+            if (wait > 0) {
+                // Still an error to come back to, but nothing is sent until the add-on said it may be.
+                outcome[0] = true; outcome[1] = true
+                report("${addon.manifest.name}: rate limited; asked again in ${(wait + 999) / 1_000} s"); return null
+            }
             val started = System.nanoTime()
+            outcome[0] = true
             val answer = withTimeoutOrNull(ADDON_LIMIT_MS) {
                 try {
                     val client = clientFor(addon.base)
@@ -65,9 +116,12 @@ object AddonResolver {
                     val candidates = client.search("${song.title} ${song.artist}", manifest, tier)
                         .filter { identity.matches(it.title, listOf(it.artist), it.album, it.durationMs) }
                     if (candidates.isEmpty()) { report("${manifest.name}: no matching recording"); return@withTimeoutOrNull null }
+                    // Its last link for this song broke: a new one, not the cached one.
+                    val fresh = staleLinks.remove("${addon.key}:${song.videoId}")
                     for (track in candidates.take(3)) {
                         if (!permitted()) return@withTimeoutOrNull null
-                        var stream = try { client.stream(track.id, manifest, tier) }
+                        var asked = tier
+                        var stream = try { client.stream(track.id, manifest, tier, fresh) }
                         catch (e: AddonHttp.Failure) {
                             if (e.status != 404 || track.streamUrl == null) throw e
                             AddonProtocol.stream(org.json.JSONObject().put("url", track.streamUrl).put("format", track.format).toString())
@@ -75,8 +129,8 @@ object AddonResolver {
                         // An add-on with no hi-res setting can take that ask as its first (lossy) quality:
                         // asked once more for plain lossless before it's passed over.
                         if (!stream.lossless && tier != "LOSSLESS") {
-                            val plain = try { client.stream(track.id, manifest, "LOSSLESS") } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
-                            if (plain?.lossless == true) stream = plain
+                            val plain = try { client.stream(track.id, manifest, "LOSSLESS", fresh) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                            if (plain?.lossless == true) { stream = plain; asked = "LOSSLESS" }
                         }
                         if (!stream.lossless) { report("${manifest.name}: has this song only in compressed quality, not lossless"); continue }
                         if (download && stream.transport != null) {
@@ -109,24 +163,31 @@ object AddonResolver {
                             } else stream
                         }
                         report("${manifest.name}: ${if (stream.transport == null && stream.codec == "flac") "verified FLAC" else "lossless requested; decoder confirms quality during playback"}")
-                        return@withTimeoutOrNull checked.copy(addonId = addon.key, provider = manifest.name)
+                        return@withTimeoutOrNull checked.copy(addonId = addon.key, provider = manifest.name,
+                            trackId = if (track.streamUrl != null && stream.url == track.streamUrl) "" else track.id, tier = asked)
                     }
                     null
                 } catch (e: CancellationException) { throw e }
-                catch (e: AddonHttp.Failure) { report("${addon.manifest.name}: HTTP ${e.status}${if (e.status == 429) " · rate limited" else ""}"); null }
-                catch (_: Exception) { report("${addon.manifest.name}: unavailable or invalid response"); null }
+                catch (e: AddonHttp.Failure) {
+                    outcome[1] = true
+                    if (e.status == 429) limit(addon.key, song.videoId, e)
+                    report("${addon.manifest.name}: HTTP ${e.status}${if (e.status == 429) " · rate limited" else ""}"); null
+                }
+                catch (_: Exception) { outcome[1] = true; report("${addon.manifest.name}: unavailable or invalid response"); null }
             }
-            if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) report("${addon.manifest.name}: no answer in ${ADDON_LIMIT_MS / 1_000} s")
+            if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) { outcome[1] = true; report("${addon.manifest.name}: no answer in ${ADDON_LIMIT_MS / 1_000} s") }
             return answer
         }
-        val addons = AddonStore.addons.value
+        val addons = AddonStore.addons.value.filterNot { it.key in skip }
         if (addons.isEmpty()) return@withContext emptyList()
         // The add-ons run here, apart from the caller, so returning early cancels none of them.
         val work = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
         val answers = kotlinx.coroutines.channels.Channel<Pair<Int, AddonStream?>>(kotlinx.coroutines.channels.Channel.UNLIMITED)
         addons.forEachIndexed { i, addon ->
             work.launch {
-                val stream = try { attempt(addon) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                val outcome = BooleanArray(2)
+                val stream = try { attempt(addon, outcome) } catch (e: CancellationException) { throw e } catch (_: Exception) { outcome[1] = outcome[0]; null }
+                if (outcome[0]) settled(addon.key, outcome[1])
                 answers.send(i to stream)
             }
         }
@@ -185,6 +246,10 @@ object AddonResolver {
     private const val GRACE_MS = 2_500L
     /** The same for playing: only enough to take answers that came in together. */
     private const val FIRST_GRACE_MS = 250L
+    /** The least an add-on that answered HTTP 429 is left alone for, when it doesn't say. */
+    private const val RATE_LIMIT_MS = 30_000L
+    /** How long an add-on whose file failed in playback is left for that song before it's asked again. */
+    private const val FAILED_HOLD_MS = 20_000L
     /** Only a guard against a connection that never answers; a slow add-on is waited for. */
     private const val ADDON_LIMIT_MS = 45_000L
     /** Unknown quality never outranks measured CD quality; ties preserve source priority. */

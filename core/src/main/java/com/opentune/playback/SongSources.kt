@@ -35,7 +35,12 @@ internal class SongSources(context: Context) {
     // stream URL is bound to the connection context of the request that
     // minted it, so a separate HTTP stack here risks a 403 on playback.
     // No fixed User-Agent: [resolveTrack] sends the minting client's own.
-    private val http = RefusalReportingDataSource.Factory(OkHttpDataSource.Factory(Http.client))
+    private val refusing = RefusalReportingDataSource.Factory(OkHttpDataSource.Factory(Http.client))
+    // An add-on's file that answers HTTP 429 is waited on and asked again, and one that
+    // refuses its link gets a new link from the add-on, rather than the song falling back.
+    private val http = DataSource.Factory {
+        RenewingDataSource(refusing.createDataSource(), renew = ExternalStreams::refreshLinkFor, patient = ExternalStreams::isAddonLink)
+    }
     private val resolving = ResolvingDataSource.Factory(http, ::resolveTrack)
 
     val cached: CacheDataSource.Factory = CacheDataSource.Factory()
