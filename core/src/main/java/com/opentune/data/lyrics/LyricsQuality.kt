@@ -186,7 +186,16 @@ internal object LyricsQuality {
         val mine = tokens(candidate.lyrics)
         if (mine.size < MIN_TOKENS) return false
         val latin = isLatin(mine)
-        val others = all.filter { it !== candidate }.map { tokens(it.lyrics) }.filter { it.size >= MIN_TOKENS && isLatin(it) == latin }
+        val rest = all.filter { it !== candidate }.map { tokens(it.lyrics) }.filter { it.size >= MIN_TOKENS }
+        val others = rest.filter { isLatin(it) == latin }
+        // English, where the song's words come from elsewhere in another script (Gurmukhi,
+        // Devanagari, Hangul…): a translation, not what's sung. Captions need only one such
+        // source to say so, others two that agree; English that a source in its own script
+        // shares stays, and so do romanized lyrics, which don't read as English.
+        val foreign = rest.filter { isLatin(it) != latin }
+        val foreignAgree = foreign.indices.any { i -> (i + 1 until foreign.size).any { j -> overlap(foreign[i], foreign[j]) >= 0.5 } }
+        if (latin && readsEnglish(mine) && others.none { overlap(mine, it) >= 0.25 } &&
+            (foreignAgree || (candidate.source == LyricsSource.YOUTUBE_CAPTIONS && foreign.isNotEmpty()))) return true
         if (others.isEmpty()) return false
         val fits = others.map { overlap(mine, it) }
         // A video's subtitles are often a translation, a skit or credits: they must agree with someone.
@@ -207,7 +216,9 @@ internal object LyricsQuality {
         for (c in text.lowercase(Locale.ROOT)) {
             when {
                 isCjk(c) -> { flush(); out += c.toString() }
-                c.isLetterOrDigit() || c == '\'' -> word.append(c)
+                // Vowel signs (ा, ੈ, ं…) are marks, not letters: counted as breaks, they cut every
+                // Hindi or Punjabi word into pieces and no two sources of a song looked alike.
+                c.isLetterOrDigit() || c == '\'' || isMark(c) -> word.append(c)
                 else -> flush()
             }
         }
@@ -223,6 +234,22 @@ internal object LyricsQuality {
     }
 
     private fun isLatin(tokens: Set<String>) = tokens.count { it.first().code < 0x250 } * 2 >= tokens.size
+
+    /** Whether [tokens] read as English: enough of English's commonest little words among them. */
+    internal fun readsEnglish(tokens: Set<String>): Boolean {
+        val common = tokens.count { it in ENGLISH }
+        return common >= 6 && common * 100 >= tokens.size * 12
+    }
+
+    private val ENGLISH = setOf(
+        "the", "you", "and", "to", "my", "me", "it", "that", "of", "in", "is", "on", "for", "be", "your",
+        "all", "can", "just", "what", "with", "this", "so", "but", "we", "they", "don't", "i'm", "it's",
+        "know", "like", "when", "never", "want", "love", "got", "are", "was", "how", "if", "now", "baby",
+    )
+
+    private fun isMark(c: Char): Boolean = Character.getType(c).let {
+        it == Character.NON_SPACING_MARK.toInt() || it == Character.COMBINING_SPACING_MARK.toInt() || it == Character.ENCLOSING_MARK.toInt()
+    }
 
     private fun isCjk(c: Char): Boolean = Character.isIdeographic(c.code) ||
         Character.UnicodeBlock.of(c).let { it == Character.UnicodeBlock.HIRAGANA || it == Character.UnicodeBlock.KATAKANA || it == Character.UnicodeBlock.HANGUL_SYLLABLES }

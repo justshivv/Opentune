@@ -133,6 +133,37 @@ class LyricsQualityTest {
         assertFalse(LyricsQuality.outlier(wrong, listOf(wrong)))
     }
 
+    @Test fun anEnglishTranslationOfLyricsInAnotherScriptIsLeftOut() {
+        fun lines(vararg t: String) = synced(*t.mapIndexed { i, s -> line(10_000L + i * 4_000L, s) }.toTypedArray())
+        val english = lines(
+            "I am tired of the same things every day", "you know that I am the one for you", "make it feel good like it is amazing",
+            "I don't really want the basics now", "tell me can you show me what you got", "if you can do that it's cool with me",
+            "all the lights are on for you tonight", "never let it go when it is love",
+        )
+        val gurmukhi = lines(
+            "ਮੈਂ ਥੱਕ ਗਿਆ ਹਾਂ ਹਰ ਰੋਜ਼ ਇੱਕੋ ਗੱਲ ਤੋਂ", "ਤੈਨੂੰ ਪਤਾ ਹੈ ਮੈਂ ਹੀ ਹਾਂ ਉਹ", "ਇਸ ਨੂੰ ਚੰਗਾ ਮਹਿਸੂਸ ਕਰਾ ਦੇ ਯਾਰਾ",
+            "ਮੈਨੂੰ ਸਧਾਰਨ ਗੱਲਾਂ ਨਹੀਂ ਚਾਹੀਦੀਆਂ", "ਦੱਸ ਤੂੰ ਕੀ ਕਰ ਸਕਦਾ ਹੈਂ", "ਜੇ ਤੂੰ ਇਹ ਕਰ ਸਕਦਾ ਤਾਂ ਠੀਕ ਹੈ",
+        )
+        val romanized = lines(
+            "main thakk gaya haan har roz ikko gall ton", "tainu pata hai main hi haan oh", "is nu changa mehsoos kara de yaara",
+            "mainu sadharan gallan nahin chahidiyan", "dass tu ki kar sakda hain", "je tu eh kar sakda taan theek hai",
+        )
+        val captions = candidate(9, english, LyricsSource.YOUTUBE_CAPTIONS)
+        val source = candidate(1, gurmukhi)
+        // Captions in English beside the song's own Gurmukhi words: a translation.
+        assertTrue(LyricsQuality.outlier(captions, listOf(captions, source)))
+        assertEquals(1, LyricsQuality.choose(listOf(captions, source), LyricsRepository.LINE_SYNCED)?.order)
+        // Any source: English where two others agree on the words in another script.
+        val lrclib = candidate(0, english)
+        assertTrue(LyricsQuality.outlier(lrclib, listOf(lrclib, source, candidate(2, gurmukhi))))
+        assertFalse(LyricsQuality.outlier(lrclib, listOf(lrclib, source)))
+        // Romanized lyrics are the song's words in Latin letters, not English: kept.
+        val latin = candidate(3, romanized, LyricsSource.YOUTUBE_CAPTIONS)
+        assertFalse(LyricsQuality.outlier(latin, listOf(latin, source)))
+        // English captions with nothing to compare against stay.
+        assertFalse(LyricsQuality.outlier(captions, listOf(captions)))
+    }
+
     // ---- Timing ----
 
     @Test fun aSteadyShiftBetweenTwoTimingsIsFound() {

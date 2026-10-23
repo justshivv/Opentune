@@ -300,7 +300,7 @@ class CarLibrary(private val context: Context) {
     }
 
     private fun ShelfItem.toSongOrNull(): Song? = videoId?.takeIf { browseId == null }?.let {
-        Song(videoId = it, title = title, artist = subtitle.substringBefore(" • "), thumbnailUrl = thumbnailUrl)
+        Song(videoId = it, title = title, artist = com.opentune.data.innertube.InnertubeParser.artistFromSubtitle(subtitle), thumbnailUrl = thumbnailUrl)
     }
 
     private fun songOf(result: SearchResult): Song? = when (result) {
