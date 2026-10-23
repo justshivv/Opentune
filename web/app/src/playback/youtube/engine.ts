@@ -229,10 +229,12 @@ export class YouTubeEngine {
    * Moves the playing track onto [url] at the position it's at, the way the
    * FLAC upgrade always has. True once its audio is flowing.
    */
-  private async switchTo(track: LoadedTrack, generation: number, url: string, mime: string, client: 'ADDON' | 'JIOSAAVN', format: string): Promise<boolean> {
+  private async switchTo(track: LoadedTrack, generation: number, url: string, mime: string, client: 'ADDON' | 'JIOSAAVN', format: string, cors = true): Promise<boolean> {
     const at = this.audio.currentTime, playing = !this.audio.paused;
     const player = await this.ensurePlayer(); this.checkCurrent(generation);
     await player.unload(); this.checkCurrent(generation);
+    // A file server without CORS still plays in an element that doesn't ask for CORS (nothing here routes audio through Web Audio).
+    this.audio.crossOrigin = cors ? 'anonymous' : null;
     this.adapter?.dispose(); this.adapter = null; this.direct = null; this.current = null;
     for (const scheme of ['http', 'https']) shaka.net.NetworkingEngine.registerScheme(scheme, shaka.net.HttpFetchPlugin.parse, shaka.net.NetworkingEngine.PluginPriority.FALLBACK);
     await player.load(url, at, mime); this.checkCurrent(generation);
@@ -292,7 +294,7 @@ export class YouTubeEngine {
     try {
       for (const source of candidates) {
         try {
-          await this.switchTo(track, generation, source.url, 'audio/flac', 'ADDON', `${source.provider} · FLAC ${source.bits}-bit ${(source.rate / 1000).toFixed(1)} kHz`);
+          await this.switchTo(track, generation, source.url, 'audio/flac', 'ADDON', `${source.provider} · FLAC ${source.bits}-bit ${(source.rate / 1000).toFixed(1)} kHz`, source.cors);
           return;
         } catch (error) {
           if (generation !== this.generation) return;
@@ -335,6 +337,7 @@ export class YouTubeEngine {
     this.checkCurrent(generation);
     const mode = direct ? 'direct' : 'SABR';
 
+    this.audio.crossOrigin = 'anonymous';
     await timed(`${client} ${mode} load`, videoId, () =>
       player.load(`data:application/dash+xml;base64,${btoa(manifest)}`, startSec, 'application/dash+xml'),
     );
