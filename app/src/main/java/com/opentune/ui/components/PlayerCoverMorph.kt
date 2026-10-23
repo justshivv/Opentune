@@ -1,5 +1,6 @@
 package com.opentune.ui.components
 
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
@@ -234,6 +235,12 @@ internal fun MorphBox(
     url: String?, smallUrl: String?, from: Rect, to: Rect, p: () -> Float, startCornerDp: Float, endCornerDp: Float,
     /** Where the box's parent sits in the root, [from] and [to] being root bounds. */
     origin: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset.Zero,
+    /**
+     * The full-screen cover's soft foot: at full size the art fades out at the bottom
+     * the way the player draws it edge to edge, and the fade goes as it shrinks. No
+     * shadow then, as the edge-to-edge art has none.
+     */
+    fullBleed: Boolean = false,
 ) {
     val big = if (from.width >= to.width) from else to
     val small = if (big === from) to else from
@@ -242,10 +249,17 @@ internal fun MorphBox(
     val shadowPx = with(density) { 28.dp.toPx() }
     val startCorner = with(density) { startCornerDp.dp.toPx() }
     val endCorner = with(density) { endCornerDp.dp.toPx() }
+    // Where the player's own fade to the page begins, as a share of the art's height.
+    val solid = if (fullBleed) (1f - with(density) { 210.dp.toPx() } / big.height).coerceIn(0.4f, 0.8f) else 1f
+    fun grownAt(t: Float): Float {
+        val w = from.width + (to.width - from.width) * t
+        return if (big.width > small.width) ((w - small.width) / (big.width - small.width)).coerceIn(0f, 1f) else 1f
+    }
     Box(
         Modifier
             .size(with(density) { big.width.toDp() }, with(density) { big.height.toDp() })
             .graphicsLayer {
+                if (fullBleed) compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
                 val t = p()
                 fun lerp(a: Float, b: Float) = a + (b - a) * t
                 val w = lerp(from.width, to.width)
@@ -258,9 +272,20 @@ internal fun MorphBox(
                 shape = RoundedCornerShape(lerp(startCorner, endCorner) / scaleX.coerceAtLeast(0.01f))
                 clip = true
                 // Deepest at full size, none on the small cover.
-                val grown = if (big.width > small.width) (w - small.width) / (big.width - small.width) else 1f
-                shadowElevation = shadowPx * grown.coerceIn(0f, 1f)
-            },
+                shadowElevation = if (fullBleed) 0f else shadowPx * grownAt(t)
+            }
+            .then(
+                if (!fullBleed) Modifier
+                else Modifier.drawWithContent {
+                    drawContent()
+                    // Full at full size, gone well before the cover is small.
+                    val fade = ((grownAt(p()) - 0.5f) * 2f).coerceIn(0f, 1f)
+                    drawRect(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(solid to androidx.compose.ui.graphics.Color.Black, 1f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 1f - fade)),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                    )
+                },
+            ),
     ) {
         // The mini player's own copy underneath, already loaded, so it never shows empty.
         if (smallUrl != null) Artwork(smallUrl, Modifier.matchParentSize(), RectangleShape)

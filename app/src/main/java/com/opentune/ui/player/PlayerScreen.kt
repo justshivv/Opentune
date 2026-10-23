@@ -425,11 +425,11 @@ fun PlayerLayout(
     var playerCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     var coverBottomPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
-    // Only the plain square cover flies; the vinyl, cassette and other designs just change view.
+    // The plain cover flies, square or edge to edge; the vinyl, cassette and other designs just change view.
+    val fullStyle = !landscape && state.ui.fullScreenCover && (style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     val flies = !state.ui.reduceAnimation && !docked && !landscape &&
         style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
-        style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST &&
-        !(state.ui.fullScreenCover && (style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL))
+        style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST
     // Where no cover flies (a full-screen cover, the other designs), the cover
     // page itself follows a swipe up: 0 at rest, 1 as far as it goes. Let go
     // past the mark, the lists come in from where it was left, not after.
@@ -458,6 +458,20 @@ fun PlayerLayout(
         val at = paneCoords?.takeIf { it.isAttached }?.positionInRoot() ?: return null
         return androidx.compose.ui.geometry.Rect(at.x, at.y + headerInset, at.x + headerCover, at.y + headerInset + headerCover)
     }
+    val bleedOverlap = with(LocalDensity.current) { 44.dp.toPx() }
+    /**
+     * The full cover, in the root. An edge-to-edge one is the player's backdrop art: a
+     * square as tall as the art, across the top and cut at the sides by the screen, which
+     * is how the backdrop crops it, so the flight starts and ends exactly over it.
+     */
+    fun bigCover(): androidx.compose.ui.geometry.Rect? {
+        if (!fullStyle) return com.opentune.ui.components.PlayerMorph.playerCover?.let(com.opentune.ui.components.PlayerMorph::scaled)
+        val c = playerCoords?.takeIf { it.isAttached } ?: return null
+        val at = c.positionInRoot()
+        val w = c.size.width.toFloat()
+        val h = maxOf(w / 0.9f, coverBottomPx + bleedOverlap)
+        return androidx.compose.ui.geometry.Rect(at.x + (w - h) / 2f, at.y, at.x + (w + h) / 2f, at.y + h)
+    }
     fun expandCover() {
         liftSettle?.cancel()
         coverLift = 0f
@@ -470,7 +484,7 @@ fun PlayerLayout(
     fun knowHeader() { if (flight.lastSmall == null) flight.lastSmall = headerHome() }
     fun collapseCover(fly: Boolean = true) {
         val back = returnPane?.let { runCatching { Pane.valueOf(it) }.getOrNull() }?.takeIf { it != Pane.COVER } ?: Pane.QUEUE
-        val from = com.opentune.ui.components.PlayerMorph.playerCover?.let(com.opentune.ui.components.PlayerMorph::scaled)
+        val from = bigCover()
         smallCover = null
         knowHeader()
         // A swipe already carrying the cover: it goes on from where the finger let go.
@@ -497,8 +511,8 @@ fun PlayerLayout(
             flight.t.snapTo(flight.startAt)
             flight.following = false
             var frames = 0
-            while (flight.target(smallCover) == null && frames++ < 30) androidx.compose.runtime.withFrameNanos { }
-            if (flight.target(smallCover) == null) return@LaunchedEffect
+            while (flight.target(smallCover, bigCover()) == null && frames++ < 30) androidx.compose.runtime.withFrameNanos { }
+            if (flight.target(smallCover, bigCover()) == null) return@LaunchedEffect
             val left = 1f - flight.t.value
             flight.t.animateTo(1f, tween((440 * left).toInt().coerceAtLeast(160), easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)))
         } finally {
@@ -511,11 +525,14 @@ fun PlayerLayout(
     // The full cover follows a swipe up toward the header it goes back into,
     // when it's known where that header's cover sits.
     val followsSwipe = flies && pane == Pane.COVER && style != PlayerStyle.LYRICS_FIRST
-    val minFlightTravel = with(LocalDensity.current) { 120.dp.toPx() }
+    // Only enough to know which way is up: at 120dp, on a dense screen the full cover sat
+    // just under it from the header, so the cover never followed the finger and the page
+    // was lifted and faded instead, then held there until the queue cut in.
+    val minFlightTravel = with(LocalDensity.current) { 32.dp.toPx() }
     fun followUp() {
         // Not over a tap's flight already on its way.
         if (!followsSwipe || (flight.active && !flight.following)) return
-        val big = com.opentune.ui.components.PlayerMorph.playerCover?.let(com.opentune.ui.components.PlayerMorph::scaled)
+        val big = bigCover()
         if (flight.following) {
             flight.pull = (-upPull / flight.travel).coerceIn(0f, 1f)
             return
@@ -648,7 +665,8 @@ fun PlayerLayout(
                     current.thumbnailUrl,
                     Modifier.fillMaxSize(),
                     animate = !state.ui.reduceAnimation,
-                    fullCover = fullCover,
+                    // While it flies the cover is drawn by the flight, not here as well.
+                    fullCover = fullCover && !flight.active,
                     fullCoverBottom = with(LocalDensity.current) { coverBottomPx.takeIf { it > 0f }?.toDp() },
                     movingCover = state.ui.movingCover && !state.ui.reduceAnimation,
                     playing = state.isPlaying,
@@ -1095,7 +1113,7 @@ fun PlayerLayout(
             if (flight.active) {
                 val from = flight.from
                 // Before the header is back (a swipe still under the finger), where it was last.
-                val to = flight.target(smallCover)
+                val to = flight.target(smallCover, bigCover())
                 val origin = playerCoords?.takeIf { it.isAttached }?.positionInRoot() ?: androidx.compose.ui.geometry.Offset.Zero
                 if (from != null && to != null) {
                     // Progress is read in the layer only: the finger or the runner, frame by frame.
@@ -1104,11 +1122,14 @@ fun PlayerLayout(
                         current.thumbnailUrl.artworkAt(ROW_ART_PX),
                         from, to,
                         p = { if (flight.following) flight.pull else flight.t.value },
-                        startCornerDp = if (flight.toSmall) 28f else 10f,
-                        endCornerDp = if (flight.toSmall) 10f else 28f,
+                        startCornerDp = if (flight.toSmall) (if (fullStyle) 0f else 28f) else 10f,
+                        endCornerDp = if (flight.toSmall) 10f else (if (fullStyle) 0f else 28f),
                         origin = origin,
+                        fullBleed = fullStyle,
                     )
-                    bigTitle?.let { title ->
+                    // Drawn outside the player's own colours, so given them here: the title and
+                    // its buttons changed colour as they flew.
+                    bigTitle?.let { title -> CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                         TitleFlight(
                             current, isLiked, title,
                             big = if (flight.toSmall) from else to,
@@ -1116,7 +1137,7 @@ fun PlayerLayout(
                             q = { (if (flight.following) flight.pull else flight.t.value).let { if (flight.toSmall) it else 1f - it }.coerceIn(0f, 1f) },
                             origin = origin,
                         )
-                    }
+                    } }
                 }
             }
         }
@@ -1289,7 +1310,10 @@ private fun TitleFlight(
             val width = lerp(bigTitle.width, bigTitle.right - small.right - sideGap, s).coerceAtLeast(0f)
             val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixedWidth(width.toInt()))
             val x = lerp(lerp(bigTitle.left, small.left, k), right + sideGap, s)
-            val y = lerp(bottom + under, (top + bottom) / 2f - placeable.height / 2f, s)
+            // An edge-to-edge cover runs on behind the title; shrinking, the title soon
+            // clears it rather than staying tucked under its foot.
+            val gap = lerp(under, maxOf(under, sideGap), (k * 3f).coerceAtMost(1f))
+            val y = lerp(bottom + gap, (top + bottom) / 2f - placeable.height / 2f, s)
             layout(placeable.width, placeable.height) {
                 placeable.place((x - origin.x).toInt(), (y - origin.y).toInt())
             }
@@ -1566,9 +1590,8 @@ private class PaneFlight {
      * held the cover still for half a second and then dropped it in place: a header
      * that doesn't move reports no new position.
      */
-    fun target(small: androidx.compose.ui.geometry.Rect?): androidx.compose.ui.geometry.Rect? =
-        if (toSmall) small ?: home ?: lastSmall
-        else com.opentune.ui.components.PlayerMorph.playerCover?.let(com.opentune.ui.components.PlayerMorph::scaled)
+    fun target(small: androidx.compose.ui.geometry.Rect?, big: androidx.compose.ui.geometry.Rect?): androidx.compose.ui.geometry.Rect? =
+        if (toSmall) small ?: home ?: lastSmall else big
 
     fun end() {
         active = false
