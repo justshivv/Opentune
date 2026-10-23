@@ -493,19 +493,19 @@ private fun CoverGlow(playing: Boolean, scale: Float, modifier: Modifier) {
         val w = size.width * scale
         val c = Offset(center.x, center.y + w * 0.12f)
         val r = w * (0.7f + 0.07f * s)
-        drawCircle(
-            Brush.radialGradient(
-                0f to a.copy(alpha = (0.7f + 0.25f * s).coerceAtMost(1f) * strength),
-                0.5f to b.copy(alpha = (0.35f + 0.15f * s) * strength),
-                1f to Color.Transparent,
-                center = c,
-                radius = r,
-            ),
-            r,
-            c,
-        )
+        val peak = (0.7f + 0.25f * s).coerceAtMost(1f) * strength
+        // Eases out to nothing with no kink at the rim, and in its own colour rather
+        // than toward transparent black: a straight fade showed its edge as a line.
+        val stops = Array(GLOW_STOPS + 1) { i ->
+            val t = i / GLOW_STOPS.toFloat()
+            val fall = (1f - t * t).let { it * it }
+            t to lerp(a, b, (t * 2f).coerceAtMost(1f)).copy(alpha = peak * fall)
+        }
+        drawCircle(Brush.radialGradient(*stops, center = c, radius = r), r, c)
     }
 }
+
+private const val GLOW_STOPS = 8
 
 /**
  * A slim seek bar that thickens while dragged. Position is read in the draw
