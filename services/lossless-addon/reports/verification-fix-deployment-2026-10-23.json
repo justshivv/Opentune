@@ -1,0 +1,45 @@
+{
+  "checkedAt": "2026-10-23T22:19:08.604Z",
+  "base": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev",
+  "manifests": [
+    {
+      "source": "monochrome",
+      "status": 200,
+      "url": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/monochrome/manifest.json"
+    },
+    {
+      "source": "archive",
+      "status": 200,
+      "url": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/archive/manifest.json"
+    },
+    {
+      "source": "musopen",
+      "status": 200,
+      "url": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/musopen/manifest.json"
+    }
+  ],
+  "upstream": {
+    "searchStatus": 503,
+    "matchingRecording": false,
+    "error": "Source request timed out"
+  },
+  "security": {
+    "mode": "staged",
+    "unauthenticatedApproval": 401,
+    "challengeIssued": true,
+    "fakeEnrollment": 403,
+    "challengeReplay": 401,
+    "browserWaitsForApproval": true
+  },
+  "musopen": {
+    "searchStatus": 200,
+    "candidates": 1,
+    "streamStatus": 200,
+    "flacHeader": {
+      "bitDepth": 16,
+      "sampleRate": 44100,
+      "channels": 2,
+      "duration": 339.97333333333336
+    }
+  }
+}

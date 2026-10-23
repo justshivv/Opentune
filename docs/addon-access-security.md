@@ -51,6 +51,18 @@ Protocol version: `OpenTune-Addon-v1`. Enrollment proof: `OpenTune-Enrollment-v1
 
 ## Evidence and required device checks
 
+### Verification-preview incident fixed on 23 October
+
+The first signed preview could show `OpenTune Monochrome: unavailable or invalid response` before searching. Google trust-data requests used `redirect: 'error'`, which the Workers fetch runtime rejects. The previous catch mapped that infrastructure failure to a device rejection, while Android's resolver hid the underlying verification exception. Node-only cryptography tests and a smoke test expecting any 403 did not detect this.
+
+Trust requests now use `redirect: 'manual'` and reject non-success statuses, including redirects. No redirected trust host is followed and no verification policy is relaxed. Trust-service failures return 503 with a fixed diagnostic code, separately from 403 device-policy rejection. The preview.2 client preserves that code and reports the source stage for DNS, timeout, HTTP and JSON failures without exposing private source URLs or credentials. It retains current main's concurrent resolution, late upgrades, fresh links and per-song rate-limit handling.
+
+The isolated Workers-runtime test reproduces trust fetching through a mocked fixed Google origin, verifies a generated test certificate fixture and rejects the wrong signer/proof. This failed before the redirect fix and passed afterwards. Test roots are never deployed or accepted by the production service. Thirty Node server tests and this runtime test passed in [run 40032775374](https://github.com/justshivv/Opentune/actions/runs/40032775374). The local workerd package currently supports compatibility dates through 2026-08-06; production remains configured separately.
+
+[Production verification checks](https://github.com/justshivv/Opentune/actions/runs/40032775446) passed after the fix, including trust loading, challenge/replay rejection and browser approval gating. The deployed catalogue/media probe returned 295 at 24-bit/44.1 kHz and So High at 16-bit/44.1 kHz; Same Beef had no exact match in that search. Wo Noor timed out during the separate deployment probe, so upstream availability is not guaranteed. Saved reports are `verification-fix-deployment-2026-10-23.json` and `sidhu-client-path-2026-10-23.json` in `services/lossless-addon/reports`.
+
+The existing verification-preview client can retry after the server fix without reinstalling; its one-minute failed-enrollment hold can be cleared by restarting the app. Physical-device enrollment is still a separate check. Strict mode remains staged pending that confirmation and compatible-client distribution.
+
 Automated tests cover certificate parsing, app/signature binding, hardware and boot-policy rejection, chain signatures, root trust, certificate revocation and expiry, possession proofs, nonce replay, request tampering, browser approval, privilege separation, and rate-limit failure behavior. Test roots are injected into the test verifier only; the deployed service obtains roots from Google.
 
 CI builds cannot prove enrollment on a physical supported Android/TV device, or prove audible playback on it. Before strict cutover, check a signed release build on a locked certified device, an unsupported/debug device's rejection, browser approval with a matching code, expiry/re-enrollment, and that signed searches work while unsigned searches return 401. A green build alone is not that evidence.

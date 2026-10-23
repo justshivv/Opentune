@@ -1,0 +1,81 @@
+{
+  "checkedAt": "2026-10-23T22:19:07.543Z",
+  "scope": "Unsigned staged-service path and bounded media headers, not genuine Android attestation",
+  "results": [
+    {
+      "title": "295",
+      "artist": "Sidhu Moose Wala",
+      "stages": [
+        {
+          "stage": "manifest",
+          "milliseconds": 44
+        },
+        {
+          "stage": "search",
+          "milliseconds": 816
+        },
+        {
+          "stage": "stream",
+          "milliseconds": 403
+        },
+        {
+          "stage": "device-style media probe",
+          "milliseconds": 508
+        }
+      ],
+      "measured": {
+        "sampleRate": 44100,
+        "bitDepth": 24,
+        "channels": 2,
+        "duration": 270.05387755102043
+      },
+      "totalMilliseconds": 1771
+    },
+    {
+      "title": "Same Beef",
+      "artist": "Sidhu Moose Wala",
+      "stages": [
+        {
+          "stage": "manifest",
+          "milliseconds": 47
+        },
+        {
+          "stage": "search",
+          "milliseconds": 966
+        }
+      ],
+      "error": "No matching recording",
+      "totalMilliseconds": 1013
+    },
+    {
+      "title": "So High",
+      "artist": "Sidhu Moose Wala",
+      "stages": [
+        {
+          "stage": "manifest",
+          "milliseconds": 39
+        },
+        {
+          "stage": "search",
+          "milliseconds": 903
+        },
+        {
+          "stage": "stream",
+          "milliseconds": 1978
+        },
+        {
+          "stage": "device-style media probe",
+          "milliseconds": 708
+        }
+      ],
+      "measured": {
+        "sampleRate": 44100,
+        "bitDepth": 16,
+        "channels": 2,
+        "duration": 233.76691609977325
+      },
+      "totalMilliseconds": 3628
+    }
+  ],
+  "policy": "staged"
+}
