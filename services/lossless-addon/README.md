@@ -14,10 +14,11 @@ Deployed on 23 October 2026:
 
 - [Monochrome manifest](https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/monochrome/manifest.json)
 - [Internet Archive manifest](https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/archive/manifest.json)
+- [Musopen Classical manifest](https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/musopen/manifest.json)
 
 Paste the Monochrome URL in OpenTune → Settings → Audio → Audio add-ons, or publish it using the existing admin dashboard. These URLs have not been automatically added to users' source lists.
 
-[Deployment verification](https://github.com/justshivv/Opentune/actions/runs/40022510722) confirmed both manifests returned HTTP 200 with browser CORS. The deployed Monochrome adapter resolved Wo Noor to native FLAC measured at 16-bit/44.1 kHz stereo. Internet Archive playback remains unverified. The report is in `reports/deployment-2026-10-23.json`; header verification does not establish audible playback or full-file integrity.
+[Latest deployment verification](https://github.com/justshivv/Opentune/actions/runs/40030304919) confirmed all three manifests returned HTTP 200 with browser CORS. The deployed Monochrome adapter resolved Wo Noor to FLAC 16-bit/44.1 kHz stereo, and Musopen resolved Goldberg Variations — Aria Da Capo to FLAC 16-bit/44.1 kHz. The report is in `reports/expanded-deployment-2026-10-23.json`; header verification does not establish audible playback or full-file integrity.
 
 ## Run and deploy
 

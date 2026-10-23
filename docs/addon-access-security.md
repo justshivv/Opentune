@@ -56,3 +56,11 @@ Automated tests cover certificate parsing, app/signature binding, hardware and b
 CI builds cannot prove enrollment on a physical supported Android/TV device, or prove audible playback on it. Before strict cutover, check a signed release build on a locked certified device, an unsupported/debug device's rejection, browser approval with a matching code, expiry/re-enrollment, and that signed searches work while unsigned searches return 401. A green build alone is not that evidence.
 
 References: [Android key attestation verification](https://developer.android.com/privacy-and-security/security-key-attestation), [Android attestation schema](https://source.android.com/docs/security/features/keystore/attestation), [Workers crypto support](https://developers.cloudflare.com/workers/runtime-apis/nodejs/crypto/).
+
+## Public add-on isolation regression checks
+
+Verification is scoped to the exact HTTPS origin `https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev` on port 443. It applies to all OpenTune-hosted adapters, including Musopen, not external Monochrome/HiFi add-ons or user/admin-added public sources. Similar names, other Workers and URLs containing that origin as a query parameter do not activate it. Manifests and health stay public.
+
+`FirstPartyAddonAuthTest` checks this without an Android Context, keystore or network. The HTTP client is lazy so public-origin checks do not initialize verification networking. The web regression test deliberately makes IndexedDB and fetch unavailable and confirms public-source requests still receive no verification headers. The browser pairing panel is hidden for lists containing only public sources. These tests passed in [the updated client workflow](https://github.com/justshivv/Opentune/actions/runs/40029960063).
+
+The [expanded Worker deployment](https://github.com/justshivv/Opentune/actions/runs/40030304919) preserved staged policy, rejected invalid/replayed enrollment and unauthenticated approval, and resolved both Monochrome and Musopen samples. Strict cutover still requires the genuine-device checks above.
