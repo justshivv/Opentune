@@ -63,6 +63,8 @@ object LyricsRepository {
     private const val BASE = "https://lrclib.net/api"
     private const val USER_AGENT = "OpenTune (https://github.com/justshivv/Opentune)"
     private const val TAG = "Lyrics"
+    /** A card's kind of item, once mistaken for the artist. */
+    private val NOT_AN_ARTIST = setOf("song", "video", "single", "ep", "album")
 
     /** A search hit further than this from the track's duration is a different recording. */
     private const val DURATION_TOLERANCE_S = 8.0
@@ -117,7 +119,10 @@ object LyricsRepository {
     /** What a search came to; [settled] when asking again can't do better. */
     private class Found(val lyrics: Lyrics?, val settled: Boolean)
 
-    private suspend fun find(videoId: String, title: String, artist: String, durationMs: Long): Found {
+    private suspend fun find(videoId: String, title: String, credited: String, durationMs: Long): Found {
+        // Songs saved before the fix carry a card's "Song" or "Video" as their artist: looked up
+        // under it, the lyrics found were another song's.
+        val artist = credited.takeUnless { it.trim().lowercase() in NOT_AN_ARTIST }.orEmpty()
         withContext(Dispatchers.IO) { readOffline(videoId, durationMs) }?.let { return Found(it, true) }
         val settings = AppSettings.lyrics.value
         val chosen = settings.chosen[videoId]
