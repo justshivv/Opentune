@@ -46,18 +46,12 @@ private const val SIGN_IN_URL =
 fun LoginScreen(onDone: () -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var finished by remember { mutableStateOf(false) }
-    var webView by remember { mutableStateOf<WebView?>(null) }
+    // Set once the screen has gone: a page that finishes loading after that is ignored.
+    val gone = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     // Some devices (most TVs, and phones with Android System WebView turned off or mid-update)
     // can't make a WebView: creating one throws. That's said here instead of closing the app.
     var unavailable by remember { mutableStateOf(false) }
-    DisposableEffect(Unit) {
-        onDispose {
-            webView?.run {
-                stopLoading()
-                destroy()
-            }
-        }
-    }
+    DisposableEffect(Unit) { onDispose { gone.set(true) } }
 
     Box(Modifier.fillMaxSize()) {
         AndroidView(
@@ -72,16 +66,16 @@ fun LoginScreen(onDone: () -> Unit) {
                     loading = false
                 }.getOrNull() ?: return@AndroidView android.view.View(context)
                 view.apply {
-                    webView = this
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                            loading = true
+                            if (!gone.get()) loading = true
                         }
 
                         override fun onPageFinished(view: WebView, url: String?) {
+                            if (gone.get()) return
                             loading = false
                             if (finished || url?.startsWith(MUSIC) != true) return
                             val cookie = CookieManager.getInstance().getCookie(MUSIC) ?: return
@@ -93,6 +87,17 @@ fun LoginScreen(onDone: () -> Unit) {
                         }
                     }
                     loadUrl(SIGN_IN_URL)
+                }
+            },
+            // Taken down only once it's off the screen: destroying it while still attached,
+            // as leaving the page did, crashed some WebView versions on the way back.
+            onRelease = { view ->
+                gone.set(true)
+                (view as? WebView)?.run {
+                    stopLoading()
+                    webViewClient = WebViewClient()
+                    (parent as? android.view.ViewGroup)?.removeView(this)
+                    runCatching { destroy() }
                 }
             },
         )
