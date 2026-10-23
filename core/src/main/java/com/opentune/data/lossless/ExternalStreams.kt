@@ -18,7 +18,16 @@ object ExternalStreams {
         val picked: Boolean = false)
     private val renditions = ConcurrentHashMap<String, Rendition>()
     private val pinned = ConcurrentHashMap<String, Pair<String, Rendition>>()
-    private val failedUntil = ConcurrentHashMap<String, Long>()
+    /**
+     * Songs the FLAC search, or JioSaavn, recently came back from with a
+     * definite no (no matching recording), each kept apart: a FLAC miss
+     * never stops JioSaavn being asked, nor the other way round. A search
+     * that missed only because servers erred (an HTTP 404 or 502, no answer)
+     * isn't remembered at all, and goes in [transientMiss] to be tried again.
+     */
+    private val losslessMissUntil = ConcurrentHashMap<String, Long>()
+    private val saavnMissUntil = ConcurrentHashMap<String, Long>()
+    private val transientMiss = ConcurrentHashMap.newKeySet<String>()
     private val reports = ConcurrentHashMap<String, String>()
     private const val TTL = 5 * 60_000L
 
@@ -27,7 +36,6 @@ object ExternalStreams {
     /** Instant startup lookup only; a miss must never start network work. */
     fun cached(videoId: String): Rendition? {
         val now = now()
-        if ((failedUntil[videoId] ?: 0) > now) return null
         return renditions[videoId]?.takeIf {
             now - it.at < TTL && (it.picked || allowed(it.lossless)) &&
                 (it.addonId == null || (it.sessionRevision == com.opentune.data.addons.AddonStore.revision.value && addonAllowed(it)))
@@ -50,7 +58,7 @@ object ExternalStreams {
      * at once instead of asking again.
      */
     suspend fun findJioSaavn(song: Song, durationMs: Long): Rendition? {
-        if (!allowed(false) || (failedUntil[song.videoId] ?: 0) > now()) return null
+        if (!allowed(false) || (saavnMissUntil[song.videoId] ?: 0) > now()) return null
         cached(song.videoId)?.takeIf { it.mimeType == null }?.let { return it }
         val lookup = saavnInFlight.computeIfAbsent(song.videoId) {
             background.async(start = kotlinx.coroutines.CoroutineStart.LAZY) { lookupJioSaavn(song, durationMs) }
@@ -102,8 +110,10 @@ object ExternalStreams {
             return null
         }
         val now = now()
-        if (force) failedUntil.remove(videoId)
-        if ((failedUntil[videoId] ?: 0) > now) return null
+        if (force) { losslessMissUntil.remove(videoId); saavnMissUntil.remove(videoId) }
+        val losslessMissed = (losslessMissUntil[videoId] ?: 0) > now
+        val saavnMissed = (saavnMissUntil[videoId] ?: 0) > now
+        if (losslessMissed && (losslessOnly || saavnMissed)) return null
         renditions[videoId]?.takeIf {
             !force && (!losslessOnly || it.lossless) && now - it.at < TTL && (it.picked || allowed(it.lossless)) &&
                 (it.addonId == null || (it.sessionRevision == com.opentune.data.addons.AddonStore.revision.value && addonAllowed(it))) && (!beforePlayback || it.maximumSearch) &&
@@ -118,7 +128,7 @@ object ExternalStreams {
         fun losslessRendition(track: LosslessSource.Track) = Rendition(java.util.UUID.randomUUID().toString(), track.url,
             "${track.provider} · lossless requested", true, now(), provider = track.provider, bits = track.bits, sampleRate = track.sampleRate,
             maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType)
-        val tracks = if (allowed(true)) LosslessSource.resolveAll(song, duration,
+        val tracks = if (allowed(true) && !losslessMissed) LosslessSource.resolveAll(song, duration,
             beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { detail.addIfAbsent(it) },
             late = { better ->
                 // A slower add-on came back with higher quality than the one already chosen: kept, and said, so playback can switch to it.
@@ -126,21 +136,25 @@ object ExternalStreams {
                     val r = losslessRendition(better)
                     remember(videoId, r)
                     addAlternative(videoId, r)
-                    failedUntil.remove(videoId)
+                    losslessMissUntil.remove(videoId)
+                    transientMiss.remove(videoId)
                     report(videoId, (reports[videoId]?.let { "$it\n" } ?: "") + "${better.provider}: answered later with higher quality")
                     _improved.tryEmit(videoId)
                 }
             }) else emptyList()
         val track = tracks.firstOrNull()
         if (allowed(true)) detail += if (track == null) "FLAC: no verified matching stream available" else "Add-on audio selected; playback diagnostics show the decoded format"
-        val saavn = if (!losslessOnly && track == null && allowed(false) && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320)))
-            JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
+        val askedSaavn = !losslessOnly && track == null && allowed(false) && !saavnMissed && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
+        val saavn = if (askedSaavn) JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
         report(videoId, detail.joinToString("\n").ifEmpty { "No external source eligible for this quality setting." })
-        if (track == null && saavn == null) {
-            if (failedUntil.size > 256) failedUntil.clear()
-            failedUntil[videoId] = now() + 60_000
-            return null
+        if (track == null && allowed(true) && !losslessMissed) {
+            // Servers that erred or didn't answer say nothing about whether the song is there.
+            val erred = detail.any { line -> TRANSIENT.any { it in line } }
+            if (erred) transientMiss += videoId
+            else { transientMiss.remove(videoId); remember(losslessMissUntil, videoId) }
         }
+        if (askedSaavn && saavn == null) remember(saavnMissUntil, videoId)
+        if (track == null && saavn == null) return null
         // Even two FLACs of the same recording can have different byte offsets.
         val rendition = Rendition(java.util.UUID.randomUUID().toString(), track?.url ?: saavn!!,
             track?.let { "${it.provider} · lossless requested" } ?: "JioSaavn · 320 kbps (lossy)", track != null, now(),
@@ -190,7 +204,8 @@ object ExternalStreams {
             provider = stream.provider, bits = stream.bits, sampleRate = stream.sampleRate, kbps = stream.kbps,
             maximumSearch = true, sessionRevision = com.opentune.data.addons.AddonStore.revision.value,
             addonId = stream.addonId, mimeType = stream.mimeType, picked = true)
-        failedUntil.remove(videoId)
+        losslessMissUntil.remove(videoId)
+        saavnMissUntil.remove(videoId)
         remember(videoId, rendition)
         report(videoId, "${stream.provider}: picked in Search")
         return rendition
@@ -215,7 +230,9 @@ object ExternalStreams {
 
     /** Verification/renewal should take effect immediately, including after a cached miss. */
     fun retryLookups() {
-        failedUntil.clear()
+        losslessMissUntil.clear()
+        saavnMissUntil.clear()
+        transientMiss.clear()
         com.opentune.data.addons.AddonResolver.retry()
         reports.clear()
         // Keep currently playing rendition keys valid until the player swaps sources.
@@ -229,7 +246,8 @@ object ExternalStreams {
         val addon = failed?.addonId
         if (addon != null) com.opentune.data.addons.AddonResolver.failed(addon, videoId)
         pinned.entries.removeIf { it.value.first == videoId && (key == null || it.key == key) }
-        if (addon == null && renditions[videoId] == null) failedUntil[videoId] = now() + TTL
+        // A JioSaavn stream that broke while playing isn't offered again for a while.
+        if (addon == null && renditions[videoId] == null) saavnMissUntil[videoId] = now() + TTL
         report(videoId, if (addon != null) "The selected add-on failed during playback; using fallback audio and trying the next add-on." else "The selected external stream failed during playback; using YouTube temporarily.")
     }
 
@@ -238,6 +256,19 @@ object ExternalStreams {
     } ?: true
 
     private fun now(): Long = System.nanoTime() / 1_000_000
+
+    /** A definite miss for [videoId] in [misses], for a minute. */
+    private fun remember(misses: ConcurrentHashMap<String, Long>, videoId: String) {
+        if (misses.size > 256) misses.clear()
+        misses[videoId] = now() + MISS_MS
+    }
+
+    /** Whether [videoId]'s last FLAC search came back empty only because servers erred: worth asking again soon. */
+    fun missWasTransient(videoId: String): Boolean = videoId in transientMiss
+
+    private const val MISS_MS = 60_000L
+    /** What the add-ons report when they erred rather than answered. */
+    private val TRANSIENT = listOf("HTTP ", "unavailable", "no answer", "rate limited", "temporarily")
 }
 
 

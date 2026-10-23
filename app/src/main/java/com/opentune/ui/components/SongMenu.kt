@@ -44,7 +44,6 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.ThumbDownOffAlt
-import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -91,8 +90,6 @@ class SongMenuActions(
     val openArtist: (String) -> Unit,
     /** Marks a song as disliked; the player skips it if it's playing, and drops its queued copies. */
     val dislike: (Song) -> Unit = LibraryStore::dislike,
-    /** Plays the music video's audio in place of the song. */
-    val playVideoVersion: ((Song) -> Unit)? = null,
     /** Opens the song's artist, finding the page when the row didn't say which. */
     val viewArtist: ((Song) -> Unit)? = null,
     /** Opens one of the song's artists by name, when it has several. */
@@ -224,11 +221,9 @@ fun SongMenuSheet(
                 }
                 song.albumId?.let { id -> MenuRow(Icons.Rounded.Album, "Open album") { close(); actions.openAlbum(id) } }
             }
-            val videoVersion = actions?.playVideoVersion?.takeIf { !local && !song.isVideo }
-            if (top != null || videoVersion != null || tools != null) {
+            if (top != null || tools != null) {
                 HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                 top?.invoke(this, close)
-                videoVersion?.let { play -> MenuRow(Icons.Rounded.Videocam, "Convert to video") { close(); play(song) } }
                 tools?.invoke(this, close)
             }
             if (download?.state == DownloadState.DONE || (local && Ringtones.canUse(song))) {

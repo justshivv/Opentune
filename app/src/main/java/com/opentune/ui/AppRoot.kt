@@ -335,20 +335,6 @@ fun AppRoot(vm: PlayerViewModel) {
                 }
             }
         },
-        playVideoVersion = { s ->
-            uiScope.launch {
-                val video = runCatching { MusicRepository.search("${s.title} ${s.artist}", SearchFilter.VIDEOS) }.getOrNull()
-                    ?.firstNotNullOfOrNull { (it as? SearchResult.Track)?.song?.takeIf { v -> v.videoId != s.videoId } }
-                when {
-                    video == null -> com.opentune.data.Pills.error("Couldn't find a music video for this song")
-                    s.videoId == song?.videoId -> {
-                        vm.playNext(video)
-                        vm.skipNext()
-                    }
-                    else -> vm.play(video, "Video version")
-                }
-            }
-        },
     ) }
     val libraryNav = remember(nav) { LibraryNav(
         downloads = { nav.navigate("downloads") },
@@ -506,7 +492,11 @@ fun AppRoot(vm: PlayerViewModel) {
             }
         }
     }
-    val openSearch = { if (route != SEARCH_ROUTE) nav.navigate(SEARCH_ROUTE) { launchSingleTop = true } }
+    // Tapped again on Search, the cursor goes straight into the search bar.
+    val openSearch = {
+        if (route != SEARCH_ROUTE) nav.navigate(SEARCH_ROUTE) { launchSingleTop = true }
+        else com.opentune.ui.search.SearchFocus.request()
+    }
     val openMood: (com.opentune.data.model.MoodGenre) -> Unit = { mood ->
         nav.navigate("mood/${Uri.encode(mood.browseId)}?params=${Uri.encode(mood.params.orEmpty())}&title=${Uri.encode(mood.title)}")
     }

@@ -15,8 +15,8 @@ import android.text.TextUtils
 /**
  * A picture of a playlist or album to send with its link: its covers blurred
  * into the background, and in the middle a framed collage of up to four of
- * them (or the one cover), with the name and a line under it. Nothing but
- * the music on it: no logo, no app name.
+ * them (or the one cover), with the name and a line under it, and the
+ * OpenTune mark and name at the foot, as on the other cards.
  */
 object PlaylistCard {
     const val SIZE = ShareCard.SIZE
@@ -95,6 +95,9 @@ object PlaylistCard {
             val line = TextUtils.ellipsize(it, subPaint, maxText, TextUtils.TruncateAt.END).toString()
             c.drawText(line, w / 2f, frame.bottom + w * 0.195f, subPaint)
         }
+        // The mark and name, small and centred at the foot.
+        val brandH = w * 0.034f
+        ShareCard.drawBrand(c, w / 2f + ShareCard.brandWidth(brandH) / 2f, w * 0.935f, brandH, Color.argb(225, 255, 255, 255))
         return out
     }
 }

@@ -56,6 +56,15 @@ object SleepTimer {
 
 /** Requests from the UI that the service carries out directly (same process). */
 object PlaybackRequests {
+    /**
+     * While a quality switch has another player sounding the song (or the song
+     * silent for a moment between streams), where the song really is; null
+     * otherwise. The main player's own position stalls and jumps through a
+     * switch, and the lyrics and seek bar read this instead so they carry on
+     * with what's heard. Same process as the service, read on the main thread.
+     */
+    @Volatile var soundingPosition: (() -> Long)? = null
+
     private val _upgrade = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val upgrade: kotlinx.coroutines.flow.SharedFlow<Unit> = _upgrade
 

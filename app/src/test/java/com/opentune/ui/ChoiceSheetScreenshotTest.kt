@@ -144,7 +144,7 @@ class ChoiceSheetScreenshotTest {
     @Test fun songMenuOpensFull() {
         com.opentune.data.library.LibraryStore.init(compose.activity)
         val song = com.opentune.data.model.Song("4NRXx6U8ABQ", "Blinding Lights", "The Weeknd", null, "3:20")
-        val menu = com.opentune.ui.components.SongMenuActions({}, {}, {}, {}, {}, dislike = {}, playVideoVersion = {})
+        val menu = com.opentune.ui.components.SongMenuActions({}, {}, {}, {}, {}, dislike = {})
         show {
             androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongMenu provides menu) {
                 com.opentune.ui.components.SongMenuSheet(song.copy(artistId = "UC1", albumId = "MPRE1"), onDismiss = {})
