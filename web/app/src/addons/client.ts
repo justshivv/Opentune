@@ -3,8 +3,8 @@ import { endpoint, flacInfo, manifestOf, matches, publicHttps, qualityParams, ty
 import { getBridge } from '@/extension/bridge';
 const KEY = 'opentune:audio-addons';
 function read(): Addon[] { try { const v = JSON.parse(localStorage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v.filter(x => typeof x?.url === 'string' && typeof x?.name === 'string').slice(0, 20) : []; } catch { return []; } }
-export const useAddons = create<{ sources: Addon[]; update: (sources: Addon[]) => void; status: string }>(set => ({
-  sources: read(), status: '', update: sources => { localStorage.setItem(KEY, JSON.stringify(sources)); set({ sources }); },
+export const useAddons = create<{ sources: Addon[]; update: (sources: Addon[]) => void; status: string; checkingVideoId: string | null }>(set => ({
+  sources: read(), status: '', checkingVideoId: null, update: sources => { localStorage.setItem(KEY, JSON.stringify(sources)); set({ sources }); },
 }));
 const cache = new Map<string, { until: number; value: unknown }>();
 const pending = new Map<string, Promise<unknown>>();

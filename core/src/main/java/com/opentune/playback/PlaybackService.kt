@@ -851,10 +851,20 @@ class PlaybackService : MediaLibraryService() {
                 ?.let { g -> (0 until g.length).firstOrNull(g::isTrackSelected)?.let(g::getTrackFormat) } ?: return
             val item = mediaSession?.player?.currentMediaItem
             val rendition = item?.localConfiguration?.uri?.let(::externalStreamKeyOf)?.let { ExternalStreams.get(item.mediaId, it) }
-            if (rendition?.addonId != null && format.sampleMimeType != null &&
+            // During a replacement the tracks callback can still describe the old AAC/Opus
+            // period. awaitUpgradeReady owns validation until the new decoder is ready.
+            if (!swapRamping && swappingTo != item?.mediaId && rendition?.addonId != null && format.sampleMimeType != null &&
                 format.sampleMimeType !in setOf("audio/flac", "audio/alac", "audio/raw")) {
-                scope.launch { recover(PlaybackException("Add-on returned a lossy track for a lossless request", null,
-                    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED)) }
+                val rejectedItem = item ?: return
+                val rejectedUri = rejectedItem.localConfiguration?.uri
+                scope.launch {
+                    val active = mediaSession?.player as? ExoPlayer ?: return@launch
+                    if (swapRamping || swappingTo == rejectedItem.mediaId || active.currentMediaItem?.localConfiguration?.uri != rejectedUri) return@launch
+                    val codec = active.audioFormat?.sampleMimeType ?: return@launch
+                    if (active.playbackState != Player.STATE_READY || upgradeFormatReady(true, codec)) return@launch
+                    recover(PlaybackException("Add-on returned a lossy track for a lossless request", null,
+                        PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED))
+                }
                 return
             }
             val rate = format.sampleRate.takeIf { it > 0 } ?: return
@@ -1110,10 +1120,10 @@ class PlaybackService : MediaLibraryService() {
             return ExternalStreams.get(id, key)?.lossless == true
         }
         if (alreadyExternal() && !force) return
-        // "Upgrading" shows only when asked for from the menu, or while a switch is under way
-        // (see swapToUpgrade); a search in the background, finding nothing or not, says nothing.
+        // The search and its handoff are one upgrade; don't hide the pending FLAC
+        // lookup merely because the intermediate JioSaavn handoff completed.
         upgradeAsked = asked
-        if (asked) NerdStats.onUpgrade(id)
+        if (asked || ExternalStreams.allowed(true)) NerdStats.onUpgrade(id)
         // Asked for from the menu: say how it went, whatever the outcome.
         fun tell(message: String) { if (asked) PlaybackRequests.report(message) }
         fun swapped(ok: Boolean) = tell(
@@ -1159,9 +1169,8 @@ class PlaybackService : MediaLibraryService() {
                 saavnSearch.onAwait { false }
             }
             val saavn = if (flacFirst) { saavnSearch?.cancel(); null } else saavnSearch?.await()
-            // JioSaavn answered first: the FLAC search gets a moment more, and when a verified file
-            // comes in that moment the song goes straight to it. Switching to JioSaavn first meant
-            // two switches in a row, and the second, to FLAC, began only once the first was done.
+            // Give a near-ready FLAC the short grace period already used on main.
+            // YouTube continues playing; a later FLAC can still supersede silent JioSaavn preparation.
             if (saavn != null && flac != null && !flac.isCompleted) kotlinx.coroutines.withTimeoutOrNull(SAAVN_HOLD_MS) { flac.join() }
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             if (player.currentMediaItem?.localConfiguration?.uri != uri) { flac?.cancel(); return@launch }
@@ -1172,7 +1181,8 @@ class PlaybackService : MediaLibraryService() {
                 started()
                 val left = player.duration - player.currentPosition
                 if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { flac?.cancel(); tell("Too close to the end of the song to switch"); return@launch }
-                if (player.currentMediaItem?.localConfiguration?.uri == uri) swapToUpgrade(player, id, externalStreamUri(id, saavn.key))
+                if (player.currentMediaItem?.localConfiguration?.uri == uri) swapToUpgrade(player, id, externalStreamUri(id, saavn.key),
+                    superseded = { flac != null && flac.isCompleted && !flac.isCancelled && flac.getCompleted() != null })
             }
             var lossless = flac?.await()
             // Came back empty only because add-ons erred (an HTTP 404 or 502, no answer):
@@ -1243,19 +1253,22 @@ class PlaybackService : MediaLibraryService() {
             val item = player.currentMediaItem ?: continue
             val id = item.mediaId
             val now = SystemClock.elapsedRealtime()
-            if (id != song) { song = id; tries = 0; lastAt = now }
+            if (id != song) { song = id; tries = 0; lastAt = now - GUARD_GAP_MS }
             if (!player.isPlaying || upgradeJob?.isActive == true || swappingTo != null || swapRamping || crossfade?.blending == true) continue
             if (!isYouTubeId(id) || Podcasts.isEpisode(id)) continue
             val raw = item.localConfiguration?.uri ?: continue
             if (raw.scheme == "file") continue
             if (startupToken(raw) != null && startupToken(raw)?.let { startupSelections[it]?.selected } == null) continue
-            if (player.currentPosition < GUARD_SETTLE_MS) continue
             if (player.duration > 0 && player.duration - player.currentPosition < UPGRADE_MIN_REMAINING_MS + GUARD_EVERY_MS) continue
-            if (tries >= GUARD_TRIES || now - lastAt < GUARD_GAP_MS) continue
+            if (tries >= GUARD_TRIES) continue
             val uri = selectedUri(raw)
             val playing = externalStreamKeyOf(uri)?.let { ExternalStreams.get(id, it) }
             fun score(r: ExternalStreams.Rendition) = com.opentune.data.addons.AddonResolver.qualityScore(r.bits, r.sampleRate)
             val better = ExternalStreams.alternatives(id).filter { playing?.lossless != true || score(it) > score(playing) }
+            val known = better.isNotEmpty()
+            // A verified stream needs a handoff, not another catalog search or its retry backoff.
+            if (player.currentPosition < if (known) UPGRADE_SETTLE_MS else GUARD_SETTLE_MS) continue
+            if (now - lastAt < if (known) VERIFIED_RETRY_GAP_MS else GUARD_GAP_MS) continue
             val wanted = when {
                 ExternalStreams.allowed(true) && playing?.lossless == true -> better.isNotEmpty()
                 ExternalStreams.allowed(true) -> better.isNotEmpty() || ExternalStreams.missWasTransient(id) || !ExternalStreams.losslessSearched(id)
@@ -1266,11 +1279,17 @@ class PlaybackService : MediaLibraryService() {
             tries++
             lastAt = now
             Log.d(TAG, "Quality check for $id: ${if (better.isNotEmpty()) "a better verified stream is known" else "its search came to nothing"}; upgrading again (try $tries)")
-            if (playing?.lossless == true) {
+            if (known) {
                 upgradeAsked = false
-                upgradeJob = scope.launch {
-                    if (swapToBestAnswering(player, id, better, playing)) updateExternalStats()
+                val job = scope.launch {
+                    val switched = swapToBestAnswering(player, id, better, playing)
+                    if (!switched && player.currentMediaItem?.mediaId == id) {
+                        ExternalStreams.swapFailed(id, swapNotes.map { (provider, why) -> "$provider: $why" })
+                    }
+                    updateExternalStats()
                 }
+                upgradeJob = job
+                job.invokeOnCompletion { if (upgradeJob === job) NerdStats.onUpgrade(null) }
             } else scheduleUpgrade()
         }
     }
@@ -1462,7 +1481,7 @@ class PlaybackService : MediaLibraryService() {
      * swapped-in stream plays from the cache rather than the network. False
      * when the stream fails, ends, or doesn't fill in time: then there's no swap.
      */
-    private suspend fun prebuffer(main: ExoPlayer, item: MediaItem): Boolean {
+    private suspend fun prebuffer(main: ExoPlayer, item: MediaItem, superseded: () -> Boolean): Boolean {
         val make = auditionPlayer ?: return true
         val audition = make()
         loadFailure = null
@@ -1471,17 +1490,20 @@ class PlaybackService : MediaLibraryService() {
             audition.setMediaItem(item)
             audition.seekTo(from)
             audition.prepare()
-            (kotlinx.coroutines.withTimeoutOrNull(AUDITION_TIMEOUT_MS) {
-                while (true) {
-                    if (audition.playerError != null || audition.playbackState == Player.STATE_ENDED) return@withTimeoutOrNull false
-                    if (main.currentMediaItem?.mediaId != item.mediaId) return@withTimeoutOrNull false
-                    val covered = audition.bufferedPosition >= main.currentPosition + AUDITION_AHEAD_MS ||
-                        (audition.duration > 0 && audition.bufferedPosition >= audition.duration - 500)
-                    if (audition.playbackState == Player.STATE_READY && covered) return@withTimeoutOrNull true
-                    delay(200)
-                }
-                @Suppress("UNREACHABLE_CODE") false
-            } ?: false).also { if (!it && main.currentMediaItem?.mediaId == item.mediaId) loadFailure = whyNotLoaded(audition, from) }
+            val result = kotlinx.coroutines.withTimeoutOrNull(AUDITION_TIMEOUT_MS) {
+                awaitUpgradeBuffer(
+                    superseded = superseded,
+                    invalid = { audition.playerError != null || audition.playbackState == Player.STATE_ENDED || main.currentMediaItem?.mediaId != item.mediaId },
+                    ready = {
+                        val covered = audition.bufferedPosition >= main.currentPosition + AUDITION_AHEAD_MS ||
+                            (audition.duration > 0 && audition.bufferedPosition >= audition.duration - 500)
+                        audition.playbackState == Player.STATE_READY && covered
+                    },
+                )
+            }
+            (result == UpgradeBufferResult.READY).also {
+                if (!it && result != UpgradeBufferResult.SUPERSEDED && main.currentMediaItem?.mediaId == item.mediaId) loadFailure = whyNotLoaded(audition, from)
+            }
         } finally {
             audition.release()
             // Let the cache's lock on what it wrote go before the main player reads it.
@@ -1505,13 +1527,17 @@ class PlaybackService : MediaLibraryService() {
      * hide the seam, and the song carries on from where it was. Returns
      * whether it swapped.
      */
-    private suspend fun swapToUpgrade(player: ExoPlayer, id: String, uri: android.net.Uri = youtubeFallbackUri(id, upgraded = true)): Boolean {
+    private suspend fun swapToUpgrade(
+        player: ExoPlayer, id: String, uri: android.net.Uri = youtubeFallbackUri(id, upgraded = true),
+        superseded: () -> Boolean = { false },
+    ): Boolean {
+        if (superseded()) return false
         NerdStats.onUpgrade(id)
         return try {
             // Done: a note from an earlier try that it couldn't be is no longer true.
-            switchStream(player, id, uri).also { if (it) ExternalStreams.swapSucceeded(id) }
+            switchStream(player, id, uri, superseded).also { if (it) ExternalStreams.swapSucceeded(id) }
         } finally {
-            if (!upgradeAsked) NerdStats.onUpgrade(null)
+            if (!upgradeAsked && upgradeJob?.isActive != true) NerdStats.onUpgrade(null)
         }
     }
 
@@ -1522,7 +1548,7 @@ class PlaybackService : MediaLibraryService() {
     private fun streamName(id: String, uri: android.net.Uri): String =
         externalStreamKeyOf(uri)?.let { ExternalStreams.get(id, it)?.label } ?: "YouTube's better stream"
 
-    private suspend fun switchStream(player: ExoPlayer, id: String, uri: android.net.Uri): Boolean {
+    private suspend fun switchStream(player: ExoPlayer, id: String, uri: android.net.Uri, superseded: () -> Boolean): Boolean {
         Log.d(TAG, "Switching $id to ${streamName(id, uri)}${if (player.isPlaying) "" else " (not playing yet, so without the bridge)"}")
         val index = player.currentMediaItemIndex
         val item = player.currentMediaItem?.takeIf { it.mediaId == id } ?: return false
@@ -1531,14 +1557,14 @@ class PlaybackService : MediaLibraryService() {
         loadFailure = null
         return performUpgradeHandoff(
             bridge = {
-                if (player.isPlaying && !BitPerfectUsb.active) bridgedSwap(player, index, id, next)
+                if (player.isPlaying && !BitPerfectUsb.active) bridgedSwap(player, index, id, next, superseded)
                 else UpgradeBridgeResult.UNAVAILABLE
             },
             stillCurrent = {
-                player.currentMediaItemIndex == index && player.currentMediaItem?.mediaId == id &&
+                !superseded() && player.currentMediaItemIndex == index && player.currentMediaItem?.mediaId == id &&
                     player.currentMediaItem?.localConfiguration?.uri == item.localConfiguration?.uri && crossfade?.blending != true
             },
-            prebuffer = { prebuffer(player, next) },
+            prebuffer = { prebuffer(player, next, superseded) },
             replace = { replaceUpgrade(player, index, id, next) },
         )
     }
@@ -1627,9 +1653,9 @@ class PlaybackService : MediaLibraryService() {
      * the one sounding, so no gap or dip reaches the ears.
      *
      * A loaded stream that cannot align is reused by the plain replacement.
-     * A stream that has not loaded still goes through the prebuffer fallback.
+     * A failed load moves to the next verified candidate instead of loading the same file twice.
      */
-    private suspend fun bridgedSwap(player: ExoPlayer, index: Int, id: String, next: MediaItem): UpgradeBridgeResult {
+    private suspend fun bridgedSwap(player: ExoPlayer, index: Int, id: String, next: MediaItem, superseded: () -> Boolean): UpgradeBridgeResult {
         val make = auditionPlayer ?: return UpgradeBridgeResult.UNAVAILABLE
         val original = player.currentMediaItem?.takeIf { it.mediaId == id } ?: return UpgradeBridgeResult.ABORTED
         val bridge = make()
@@ -1642,21 +1668,23 @@ class PlaybackService : MediaLibraryService() {
             val from = player.currentPosition + AUDITION_LEAD_MS
             bridge.seekTo(from)
             bridge.prepare()
-            val loaded = kotlinx.coroutines.withTimeoutOrNull(AUDITION_TIMEOUT_MS) {
-                while (true) {
-                    if (bridge.playerError != null || bridge.playbackState == Player.STATE_ENDED) return@withTimeoutOrNull false
-                    if (player.currentMediaItem?.mediaId != id) return@withTimeoutOrNull false
-                    val covered = bridge.bufferedPosition >= player.currentPosition + AUDITION_AHEAD_MS ||
-                        (bridge.duration > 0 && bridge.bufferedPosition >= bridge.duration - 500)
-                    if (bridge.playbackState == Player.STATE_READY && covered) return@withTimeoutOrNull true
-                    delay(200)
-                }
-                @Suppress("UNREACHABLE_CODE") false
-            } ?: false
+            val prepared = kotlinx.coroutines.withTimeoutOrNull(AUDITION_TIMEOUT_MS) {
+                awaitUpgradeBuffer(
+                    superseded = superseded,
+                    invalid = { bridge.playerError != null || bridge.playbackState == Player.STATE_ENDED || player.currentMediaItem?.mediaId != id },
+                    ready = {
+                        val covered = bridge.bufferedPosition >= player.currentPosition + AUDITION_AHEAD_MS ||
+                            (bridge.duration > 0 && bridge.bufferedPosition >= bridge.duration - 500)
+                        bridge.playbackState == Player.STATE_READY && covered
+                    },
+                )
+            }
+            if (prepared == UpgradeBufferResult.SUPERSEDED || superseded()) return UpgradeBridgeResult.ABORTED
+            val loaded = prepared == UpgradeBufferResult.READY
             if (!loaded) {
                 if (player.currentMediaItem?.mediaId == id) loadFailure = whyNotLoaded(bridge, from)
-                Log.w(TAG, "The bridge couldn't load the better stream for $id ($loadFailure); trying the plain swap")
-                return UpgradeBridgeResult.UNAVAILABLE
+                Log.w(TAG, "The better stream for $id didn't load ($loadFailure); trying another verified source")
+                return UpgradeBridgeResult.ABORTED
             }
             // The queue may have moved on or a blend begun while it loaded.
             if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id || crossfade?.blending == true) return UpgradeBridgeResult.ABORTED
@@ -1667,6 +1695,7 @@ class PlaybackService : MediaLibraryService() {
             bridge.volume = 0f
             bridge.playWhenReady = true
             val alignment = lineUp(follower = bridge, leader = player)
+            if (superseded()) return UpgradeBridgeResult.ABORTED
             if (player.currentMediaItemIndex != index || player.currentMediaItem?.mediaId != id ||
                 player.currentMediaItem?.localConfiguration?.uri != original.localConfiguration?.uri || crossfade?.blending == true
             ) return UpgradeBridgeResult.ABORTED
@@ -2280,10 +2309,11 @@ class PlaybackService : MediaLibraryService() {
         const val UPGRADE_START_WAIT_MS = 6_000L
         /** How many songs ahead the lossless source is looked up. */
         const val PREFETCH_AHEAD = 5
-        /** How long a JioSaavn answer waits for the FLAC search before it's switched to. */
+        /** A near-ready verified FLAC gets priority before beginning an intermediate handoff. */
         const val SAAVN_HOLD_MS = 3_000L
         /** How often [guardQuality] looks, how far into a song it starts, how long between its tries, and how many a song gets. */
-        const val GUARD_EVERY_MS = 4_000L
+        const val GUARD_EVERY_MS = 1_000L
+        const val VERIFIED_RETRY_GAP_MS = 2_000L
         const val GUARD_SETTLE_MS = 8_000L
         const val GUARD_GAP_MS = 12_000L
         const val GUARD_TRIES = 4
@@ -2346,10 +2376,10 @@ class PlaybackService : MediaLibraryService() {
         /** ...and counted as not answering after this long. */
         const val PING_LIMIT_MS = 20_000L
         /** An upgrade is fetched this far past the playing position before it's swapped in. */
-        const val AUDITION_AHEAD_MS = 3_500L
+        const val AUDITION_AHEAD_MS = 2_000L
         /** It starts loading a little ahead, for the time the loading itself takes. */
         const val AUDITION_LEAD_MS = 1_500L
-        const val AUDITION_TIMEOUT_MS = 40_000L
+        const val AUDITION_TIMEOUT_MS = 12_000L
         /** Network and input errors (Media3's 2000s): what a lost connection fails with. */
         val IO_ERRORS = 2000..2999
         /** Tries at switching to the verified files, this far apart, before giving up for the song. */
@@ -2399,3 +2429,5 @@ internal fun loudnessGainDb(loudnessDb: Double, level: com.opentune.data.setting
     val target = (-loudnessDb + level.offsetDb).coerceAtMost(level.maxGainDb.toDouble())
     return if (speakerHold) target.coerceAtLeast(0.0) else target
 }
+
+

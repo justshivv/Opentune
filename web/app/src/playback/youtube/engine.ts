@@ -147,6 +147,7 @@ export class YouTubeEngine {
    * [SupersededError] if another load replaced this one.
    */
   async load(videoId: string, { startSec = 0, autoplay = true, tryAddons = true } = {}): Promise<LoadedTrack> {
+    useAddons.setState({ checkingVideoId: null });
     const generation = ++this.generation;
     this.loading = true;
     this.addonTrack = null;
@@ -210,6 +211,12 @@ export class YouTubeEngine {
    * a few times while the song plays.
    */
   private async upgradeAddon(track: LoadedTrack, generation: number): Promise<void> {
+    useAddons.setState({ checkingVideoId: track.videoId });
+    try { await this.findAndUpgradeAddon(track, generation); }
+    finally { if (generation === this.generation) useAddons.setState({ checkingVideoId: null }); }
+  }
+
+  private async findAndUpgradeAddon(track: LoadedTrack, generation: number): Promise<void> {
     const recording = { title: track.title, artist: track.author, duration: track.durationSec };
     let search = await findLossless(recording).catch(() => null);
     for (let retry = 0; retry < LOSSLESS_RETRIES && search && !search.ranked.length && search.transient; retry++) {
