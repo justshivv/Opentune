@@ -1,0 +1,181 @@
+/* OpenTune's shared visual language: warm tonal surfaces, artwork accents,
+   generous rounded artwork, solid full-player controls and a glass mini-player. */
+@layer base {
+  :root {
+    --ot-seed: #e53935;
+    --ot-accent-choice: #e53935;
+    --radius-artwork-small: 12px;
+    --radius-artwork-medium: 20px;
+    --radius-artwork-large: 28px;
+    --radius-nav-item: 22px;
+    --radius-track-row: 14px;
+    --header-emphasized: 800 clamp(30px, 4vw, 44px) / 1.1 var(--font-family);
+    --title-2-emphasized: 700 22px / 28px var(--font-family);
+    --body-reduced: 400 15px / 22px var(--font-family);
+    --player-pill-height: 68px;
+  }
+  :root[data-appearance='light'] {
+    color-scheme: light;
+    --pageBG: color-mix(in srgb, var(--ot-seed) 3%, #fffaf6);
+    --pageBG-rgb: 255, 250, 246;
+    --systemPrimary: #201a19;
+    --systemSecondary: #655854;
+    --systemTertiary: #776764;
+    --systemQuaternary: #38241d24;
+    --systemQuinary: #38241d0b;
+    --keyColor: color-mix(in srgb, var(--ot-seed) 65%, #44211b);
+    --keyColor-rgb: 120, 57, 50;
+    --glassMaterialBackground: #fffaf6bf;
+    --glassMaterialShadowColor: #44211b20;
+    --glassMaterialInnerStroke: #fff;
+    --glassMaterialInnerStrokeAlpha: .5;
+    --systemStandardThinMaterialSover: #fffaf6bc;
+    --systemStandardThickMaterialSover: #fffaf6ed;
+    --systemHeaderMaterialSover: #fffaf6eb;
+    --navSidebarSelectedState: color-mix(in srgb, var(--ot-seed) 14%, transparent);
+    --tracklistHoverColor: #38241d0c;
+    --shelfBG: #38241d08;
+    --opaqueShelfBG: #f0e8e3;
+    --footerBg: #f0e8e3;
+    --genericJoeColor: #e8ded8;
+    --labelDivider: #38241d1f;
+    --vibrantDivider: #38241d30;
+    --searchBarBorderColor: #38241d28;
+    --segmentedControlBG: #38241d12;
+    --segmentedControlSelectedBG: #fffaf6;
+    --button-pill-color: #fffaf6;
+    --button-pill-background-color: #30201c;
+    --containerInnerStroke: #38241d;
+    --containerInnerStrokeAlpha: .12;
+    --skeleton-fill: #38241d10;
+    --skeleton-shimmer: #ffffff88;
+  }
+  :root[data-appearance='dark'] {
+    color-scheme: dark;
+    --pageBG: color-mix(in srgb, var(--ot-seed) 4%, #11100f);
+    --pageBG-rgb: 17, 16, 15;
+    --systemPrimary: #f6ede9;
+    --systemSecondary: #c9bdb7;
+    --systemTertiary: #a99891;
+    --systemQuaternary: #ffffff24;
+    --systemQuinary: #ffffff0d;
+    --keyColor: color-mix(in srgb, var(--ot-seed) 32%, #ffe0d5);
+    --keyColor-rgb: 255, 183, 165;
+    --glassMaterialBackground: #272322ae;
+    --glassMaterialShadowColor: #00000060;
+    --glassMaterialInnerStroke: #fff;
+    --glassMaterialInnerStrokeAlpha: .22;
+    --systemStandardThinMaterialSover: #201c1aaf;
+    --systemStandardThickMaterialSover: #201c1aed;
+    --systemHeaderMaterialSover: #171412eb;
+    --navSidebarSelectedState: color-mix(in srgb, var(--keyColor) 17%, transparent);
+    --tracklistHoverColor: #ffffff0f;
+    --shelfBG: #ffffff08;
+    --opaqueShelfBG: #211d1b;
+    --footerBg: #211d1b;
+    --genericJoeColor: #302927;
+    --labelDivider: #ffffff1c;
+    --vibrantDivider: #ffffff30;
+    --searchBarBorderColor: #ffffff28;
+    --segmentedControlBG: #ffffff16;
+    --segmentedControlSelectedBG: #51433d;
+    --button-pill-color: #211511;
+    --button-pill-background-color: #f6ede9;
+    --containerInnerStroke: #fff;
+    --containerInnerStrokeAlpha: .2;
+    --skeleton-fill: #ffffff12;
+    --skeleton-shimmer: #ffffff14;
+  }
+  :root[data-appearance='dark'][data-black='true'] { --pageBG: #000; --pageBG-rgb: 0,0,0; }
+  :root[data-appearance] {
+    --keyColorBG: var(--keyColor);
+    --selectionColor: var(--keyColor);
+    --keyColor-rollover: color-mix(in srgb, var(--keyColor) 85%, white);
+    --keyColor-pressed: color-mix(in srgb, var(--keyColor) 85%, black);
+    --keyColor-focus-color: var(--keyColor);
+  }
+  body { transition: background-color .35s, color .35s; }
+}
+.ot-accent-picker { border: 0; padding: 18px; }
+.ot-accent-picker legend { padding-top: 16px; font-weight: 600; }
+.ot-accent-picker > div { display: flex; flex-wrap: wrap; gap: 12px; }
+.ot-accent-picker button { width: 32px; height: 32px; border-radius: 50%; border: 3px solid transparent; outline-offset: 3px; }
+.ot-accent-picker button[aria-pressed='true'] { outline: 2px solid var(--systemPrimary); border-color: var(--pageBG); }
+.ot-home-heading { margin: 36px var(--body-gutter) 26px; display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.ot-home-heading p { color: var(--keyColor); font-weight: 650; margin-bottom: 9px; }
+.ot-home-heading h1 { font: var(--header-emphasized); letter-spacing: -.045em; }
+.ot-home-heading > div:last-child { display: flex; gap: 8px; flex-shrink: 0; }
+.ot-circle-button { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 50%; background: var(--systemQuinary); }
+.ot-quick-title { display: flex; align-items: center; justify-content: space-between; margin: 0 var(--body-gutter); }
+.ot-quick-title h2 { font: var(--title-2-emphasized); }
+.ot-quick-title + section { margin-top: 8px; }
+.ot-quick-title + section > div:first-child { display: none; }
+.ot-home-links { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px var(--body-gutter) 0; }
+.ot-home-links a { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: var(--systemQuinary); border-radius: 24px; font-weight: 600; }
+.ot-quality-row { display: grid; grid-template-columns: 42px minmax(0,1fr) 42px; align-items: center; gap: 6px; min-height: 30px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--systemSecondary); }
+.ot-quality-row > span:last-child { text-align: right; }
+.ot-quality { display: inline-grid; grid-template-columns: 17px minmax(0,1fr); width: min(210px,100%); text-align: left; align-items: center; gap: 6px; min-width: 0; max-width: 100%; justify-self: center; padding: 4px 0; font-size: clamp(10px, 1.2vw, 13px); font-weight: 650; white-space: nowrap; }
+.ot-quality svg { flex: 0 0 17px; }
+.ot-quality span { overflow: hidden; text-overflow: ellipsis; }
+.ot-quality[data-lossless='true'] { color: #fff3ed; }
+.ot-quality[data-lossless='true'] span { background: linear-gradient(110deg, #ffffff88 25%, #fff 45%, #ffffff88 65%); background-size: 250% 100%; background-clip: text; color: transparent; animation: ot-beam 5s linear infinite; }
+@keyframes ot-beam { to { background-position: -250% 0; } }
+.ot-audio-details { position: fixed; inset: auto max(20px, calc((100vw - 560px)/2)) 24px; z-index: 10005; background: #292321; color: #f6ede9; border: 1px solid #ffffff28; border-radius: 28px; padding: 28px; margin: 0; width: auto; max-height: 80dvh; overflow: auto; }
+.ot-audio-details h2 { font-size: 25px; font-weight: 700; margin-bottom: 18px; }
+.ot-audio-details p { margin: 14px 0; overflow-wrap: anywhere; }
+.ot-audio-details button { padding: 15px; border-radius: 30px; width: 100%; background: var(--keyColor); color: #26110d; font-weight: 700; }
+.ot-playing-from { position: absolute; top: 22px; left: 25%; right: 25%; text-align: center; text-transform: uppercase; font-size: 10px; letter-spacing: .14em; color: #ffffff99; }
+.ot-playing-from strong { display: inline-block; margin-top: 3px; text-transform: none; letter-spacing: 0; font-size: 13px; color: #ffffffdd; }
+.ot-play-button { background: var(--keyColor); color: #26110d; width: 68px; height: 68px; }
+.ot-play-button:hover { background: var(--keyColor-rollover); }
+.ot-player-backdrop { position: absolute; inset: 0; z-index: -1; background: linear-gradient(155deg, var(--cover-color), #100d0c 95%); }
+.ot-player-backdrop.ot-echo { background: radial-gradient(ellipse at 30% 30%, var(--cover-color), transparent 60%), radial-gradient(ellipse at 80% 80%, var(--ot-seed), #100d0c 75%); }
+[data-full-screen] .ot-player-cover { flex-shrink: 0; }
+[data-player-style='vinyl'] .ot-player-cover, [data-player-style='halo'] .ot-player-cover { border-radius: 50%; }
+[data-player-style='vinyl'] .ot-player-cover { animation: ot-record 22s linear infinite; border: 12px solid #161414; box-shadow: 0 0 0 1px #ffffff20; }
+[data-player-style='vinyl'] .ot-player-cover::after { content: ''; position: absolute; inset: 46%; border-radius: 50%; background: #171313; border: 3px solid #e9ded7; }
+[data-player-style='halo'] .ot-player-cover { outline: 3px dashed #ffffff66; outline-offset: 12px; box-shadow: 0 0 60px var(--ot-seed); }
+[data-player-style='polaroid'] .ot-player-cover { border: 10px solid #f4efe5; border-bottom-width: 36px; border-radius: 4px; transform: rotate(-3deg); }
+[data-player-style='cassette'] .ot-player-cover { border: 18px solid #242120; border-radius: 24px; }
+[data-player-style='cassette'] .ot-player-cover::after { content: ''; position: absolute; inset: 42% 12% 14%; border: 8px solid #302a28; border-radius: 80px; background: radial-gradient(circle at 23% 50%, #181616 10%, #ddd2c7 11% 20%, #292421 21% 28%, transparent 29%), radial-gradient(circle at 77% 50%, #181616 10%, #ddd2c7 11% 20%, #292421 21% 28%, transparent 29%), #161313; }
+[data-paused] .ot-player-cover { animation-play-state: paused; }
+@keyframes ot-record { to { rotate: 360deg; } }
+.ot-mobile-dock { display: none; }
+.ot-source-list { list-style: none; padding: 0; margin: 0; }
+.ot-source-row { position: relative; display: grid; grid-template-columns: 22px 28px minmax(0,1fr) 40px 40px; gap: 10px; align-items: center; padding: 20px 16px; border-bottom: 1px solid var(--labelDivider); transition: transform .18s, background .18s, box-shadow .18s; }
+.ot-source-row[data-dragging='true'] { z-index: 2; background: var(--opaqueShelfBG); box-shadow: 0 12px 30px #0005; border-radius: 20px; }
+.ot-source-row strong { display: block; overflow-wrap: anywhere; }
+.ot-source-row small { color: var(--systemSecondary); }
+.ot-source-row details { grid-column: 3 / -1; font-size: 12px; }
+.ot-source-row details button { margin: 12px 12px 0 0; }
+.ot-grab { width: 40px; height: 44px; display: grid; place-items: center; touch-action: none; cursor: grab; border-radius: 50%; }
+.ot-grab:active { cursor: grabbing; background: var(--systemQuaternary); }
+@media (max-width: 767px) {
+  .ot-home-heading { align-items: center; }
+  .ot-home-heading h1 { font-size: 31px; }
+}
+@media (max-width: 483px) {
+  :root { --body-gutter: 22px; --mobile-top-bar-height: 48px; }
+  .ot-mobile-dock { position: absolute; z-index: 9900; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; right: 12px; display: grid; gap: 10px; pointer-events: none; }
+  .ot-mobile-dock > * { pointer-events: auto; }
+  .ot-mini { display: flex; align-items: center; padding: 9px; gap: 4px; border-radius: 28px; }
+  .ot-mini > button:not(:first-child) { width: 42px; height: 44px; display: grid; place-items: center; }
+  .ot-mini-track { display: flex; flex: 1; min-width: 0; gap: 10px; align-items: center; text-align: left; }
+  .ot-mini-track img { width: 44px; height: 44px; border-radius: 16px; object-fit: cover; }
+  .ot-mini-track span { min-width: 0; }
+  .ot-mini-track strong, .ot-mini-track small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ot-mini-track small { color: var(--systemSecondary); margin-top: 3px; }
+  .ot-bottom-nav { display: flex; justify-content: space-around; border-radius: 36px; padding: 5px; }
+  .ot-bottom-nav a { min-height: 52px; display: flex; flex: 1; gap: 3px; align-items: center; justify-content: center; flex-direction: column; font-size: 10px; border-radius: 28px; }
+  .ot-bottom-nav a[aria-current='page'] { background: var(--navSidebarSelectedState); color: var(--keyColor); }
+  #scrollable-page > div { padding-bottom: 190px; }
+  .ot-quality { font-size: 11px; }
+}
+:root[data-motion='false'] *, :root[data-motion='false'] *::before, :root[data-motion='false'] *::after { animation: none !important; transition-duration: 0s !important; scroll-behavior: auto !important; }
+@media (prefers-reduced-motion: reduce) { .ot-quality span, .ot-player-cover { animation: none !important; } }
+@media (prefers-contrast: more) { :root[data-appearance] { --systemSecondary: var(--systemPrimary); --glassMaterialBackground: var(--pageBG); --glassMaterialBackdropFilter: none; } }
+
+.ot-audio-details::backdrop { background: #0009; }
+[data-player-style='minimal'][data-full-screen] .ot-player-cover { border-radius: 8px; box-shadow: none; }
+[data-player-style='minimal'][data-full-screen] .ot-player-cover img:first-child { visibility: hidden; }
+[data-player-style='minimal'][data-full-screen] .ot-playing-from { display: none; }

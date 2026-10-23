@@ -11,6 +11,7 @@ import { useParty } from '@/party/useParty';
 import { useHistorySettings } from '@/playback/historyReporting';
 import { CROSSFADE_CHOICES, usePlayer } from '@/state/player';
 import { AppleMusicIntegration, AppleMusicToggles, CanvasToggle, DiscordIntegration, LyricSourcesAccess, SpotifyIntegration, Toggle } from './IntegrationSettings';
+import { AppearanceSettings } from './AppearanceSettings';
 import { settingsUi } from './settingsStyles';
 
 const LyricsSettings = lazy(() => import('@/shell/LyricsSettings').then((m) => ({ default: m.LyricsSettings })));
@@ -76,6 +77,7 @@ export default function SettingsPage() {
     <div className={settingsUi.centered}>
       <PageHeader title="Settings" />
       <div className={settingsUi.body}>
+        <AppearanceSettings />
         <section className={settingsUi.group}><LinkRow to="/settings/addons" title="Audio sources" value="Lossless & priority" /></section>
         <div className="p-4 my-4 rounded-lg bg-quinary"><h2>Made together. Open to everyone.</h2><p>Shape OpenTune and share your audio add-ons.</p><p className="flex gap-4 mt-3"><a href="https://github.com/justshivv/Opentune">GitHub ↗</a><a href="https://discord.gg/6udrCVh5n">Discord ↗</a></p></div>
         <h2 className={settingsUi.sectionHeader}>Account & Integrations</h2>

@@ -15,6 +15,8 @@ import { answered, DISCORD_URL, due, GITHUB_URL, usedToday, type Invitation } fr
 import { MobileTopBar } from './MobileTopBar';
 import { PlayerBar } from './PlayerBar';
 import { SidePanel } from './SidePanel';
+import { Appearance } from './Appearance';
+import { MobileDock } from './MobileDock';
 import { Sidebar } from './Sidebar';
 
 const mobile = isMobileBrowser();
@@ -111,6 +113,7 @@ export function AppShell() {
     <div className="grid h-full grid-rows-[minmax(0,1fr)_auto]">
       {/* The side panel slides in from beyond the right edge; never let it scroll the page. */}
       <div className="relative min-h-0 overflow-hidden">
+        <Appearance />
         <Sidebar />
         <MobileTopBar />
         {/* The page scrolls under the fixed sidebar and the floating player. */}
@@ -124,6 +127,7 @@ export function AppShell() {
           </div>
         </main>
         <PlayerBar />
+        <MobileDock />
         <SidePanel />
       </div>
       {banner}

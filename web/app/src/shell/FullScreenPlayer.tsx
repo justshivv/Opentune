@@ -29,6 +29,9 @@ import { LyricsPanel } from './LyricsPanel';
 import { MeshBackdrop } from './MeshBackdrop';
 import { albumPageFor } from './nowPlayingLinks';
 import { UpNext } from './UpNext';
+import { useAppearance } from '@/state/appearance';
+import { useArtworkColor } from '@/lib/artworkColor';
+import { QualityLabel } from './QualityLabel';
 import { useScrubber } from './useScrubber';
 
 function useBrowserFullScreen(): boolean {
@@ -58,8 +61,9 @@ function Scrubber() {
           />
         </div>
       </div>
-      <div className="mt-0.5 flex justify-between type-[500_11px/14px] tabular-nums text-tertiary">
+      <div className="ot-quality-row">
         <span ref={elapsed} />
+        <QualityLabel />
         <span ref={remaining} />
       </div>
     </div>
@@ -89,7 +93,7 @@ function Transport() {
       <button className={skip} disabled={!hasTrack} aria-label="Previous" onClick={previous}>
         <BackwardIcon size={40} />
       </button>
-      <button className={`${transportButton} size-14 text-primary`} disabled={!hasTrack} aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay}>
+      <button className={`${transportButton} ot-play-button size-14 text-primary`} disabled={!hasTrack} aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay}>
         {playing ? <PauseIcon size={48} /> : <PlayIcon size={48} />}
       </button>
       <button className={skip} disabled={!hasTrack || !hasNext} aria-label="Next" onClick={next}>
@@ -128,6 +132,8 @@ const IDLE_MS = 3000;
  */
 export function FullScreenPlayer() {
   const nowPlaying = usePlayer((s) => s.nowPlaying);
+  const appearance = useAppearance();
+  const coverColor = useArtworkColor(nowPlaying?.artworkUrl);
   // The queue's row for what's playing: it carries the album and each artist's channel.
   const track = usePlayer((s) => {
     const entry = s.queue[s.index]?.track;
@@ -144,7 +150,7 @@ export function FullScreenPlayer() {
   // The right-hand column: the lyrics, Up Next, or nothing. Lyrics toggle bottom left, Up Next bottom right.
   // A music video opens on its own, without the lyrics.
   const [panel, setPanel] = useState<'lyrics' | 'queue' | null>(() =>
-    nowPlaying && useVideo.getState().videoId === nowPlaying.videoId ? null : 'lyrics',
+    appearance.playerStyle === 'lyrics-first' && !(nowPlaying && useVideo.getState().videoId === nowPlaying.videoId) ? 'lyrics' : null,
   );
   // Once the listener picks a column, a video arriving late doesn't take it away.
   const picked = useRef(false);
@@ -231,13 +237,17 @@ export function FullScreenPlayer() {
       aria-modal="true"
       aria-label="Now Playing"
       data-full-screen
+      data-player-style={appearance.playerStyle}
       data-paused={!playing || undefined}
       onPointerMove={wake}
       onPointerDown={wake}
       onKeyDown={wake}
       style={theater && playing && idle ? { cursor: 'none' } : undefined}
     >
-      <MeshBackdrop artworkUrl={nowPlaying.artworkUrl} playing={playing} />
+      {appearance.playerBackground === 'mesh'
+        ? <MeshBackdrop artworkUrl={nowPlaying.artworkUrl} playing={playing && appearance.motion} />
+        : <div className={`ot-player-backdrop ot-${appearance.playerBackground}`} style={{ '--cover-color': coverColor?.background ?? '#463231' } as React.CSSProperties} aria-hidden="true" />}
+      <div className="ot-playing-from">Playing from<br /><strong>OpenTune</strong></div>
       {theater && (
         <div className="absolute inset-0 animate-fade-in bg-black">
           <VideoSurface fit="contain" className="size-full" />
@@ -278,7 +288,7 @@ export function FullScreenPlayer() {
         >
           {/* Shrinks a touch while paused, as Apple's does. Beside a column, a music video plays here at 16:9. */}
           <div
-            className={`relative w-(--art) rounded-[10px] transition-[scale] duration-450 ease-[cubic-bezier(0.34,1.3,0.64,1)] motion-reduce:transition-none${
+            className={`ot-player-cover relative w-(--art) rounded-[28px] transition-[scale] duration-450 ease-[cubic-bezier(0.34,1.3,0.64,1)] motion-reduce:transition-none${
               video ? ' aspect-video overflow-hidden bg-black' : ' aspect-square'
             }${playing ? '' : ' scale-92'}${column ? ' max-md:hidden' : ''}${theater ? ' hidden' : ''}`}
           >
@@ -306,7 +316,7 @@ export function FullScreenPlayer() {
               </>
             )}
             {/* Apple's motion artwork, over the cover once it's playing. */}
-            {motion && (
+            {motion && appearance.motion && (
               <MotionArtwork
                 key={motion.url}
                 motion={motion}
