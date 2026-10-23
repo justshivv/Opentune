@@ -121,8 +121,13 @@ export async function analytics(db, range, now = new Date(), timeZone = 'UTC') {
 
 // Aggregate-only, no version breakdown or per-day series: safe to serve without
 // a sign-in, for the README badge and a public "active this month" count.
-export async function publicCounts(db, now = new Date(), timeZone = 'UTC') {
-  const table = activityTable(timeZone);
+// Counted across both tables: current apps report their days in India time
+// (activity_ist), older ones in UTC (activity), and an installation is
+// active if either has it. The windows follow [timeZone]'s calendar, the
+// app's own by default; an old client's UTC day is at most 5.5 hours off it.
+export async function publicCounts(db, now = new Date(), timeZone = 'Asia/Kolkata') {
+  reportZone(timeZone);
+  const table = allActivity;
   const day = calendarDay(now, timeZone);
   const week = new Date(day + 'T00:00:00Z');
   week.setUTCDate(week.getUTCDate() - ((week.getUTCDay() + 6) % 7));
@@ -210,11 +215,11 @@ export default {
         return json(await summary(env.DB,new Date(),zone));
       }
       if (request.method==='GET' && path==='/v1/public') {
-        let zone;try { zone=reportZone(url.searchParams.get('timeZone') || 'UTC'); } catch(e) {return json({error:e.message},400);}
+        let zone;try { zone=reportZone(url.searchParams.get('timeZone') || 'Asia/Kolkata'); } catch(e) {return json({error:e.message},400);}
         return json(await publicCounts(env.DB,new Date(),zone));
       }
       if (request.method==='GET' && path==='/v1/badge') {
-        return json(badge(await publicCounts(env.DB,new Date(),'UTC'),url.searchParams));
+        return json(badge(await publicCounts(env.DB,new Date()),url.searchParams));
       }
       if (request.method!=='POST' || !['/v1/activity','/v1/download'].includes(path)) return json({error:'Not found'},404);
       if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'JSON required'},415);
