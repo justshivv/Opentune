@@ -111,6 +111,15 @@ class SongActions(
     val smartShuffle: (List<Song>, String?) -> Unit = { songs, source -> playAll(songs, 0, true, source) },
 )
 
+/** The same actions, with [onPlay] told each time something on the page starts playing. */
+internal fun SongActions.alsoOnPlay(onPlay: () -> Unit): SongActions = SongActions(
+    currentVideoId, isPlaying,
+    playAll = { songs, index, shuffle, source -> onPlay(); playAll(songs, index, shuffle, source) },
+    playNext = playNext,
+    addToQueue = addToQueue,
+    smartShuffle = { songs, source -> onPlay(); smartShuffle(songs, source) },
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CollapsingBar(
@@ -407,7 +416,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
 fun CollectionScreen(
     browseId: String,
     contentPadding: PaddingValues,
-    actions: SongActions,
+    pageActions: SongActions,
     onBack: () -> Unit,
 ) {
     val owner = com.opentune.data.library.LibraryCache.owner()
@@ -427,6 +436,12 @@ fun CollectionScreen(
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     val loaded = (state as? UiState.Success)?.data
+    // Played from here: the album or playlist counts toward Speed dial.
+    val actions = remember(pageActions, loaded) {
+        loaded?.let { c ->
+            pageActions.alsoOnPlay { com.opentune.data.history.ListenedCollections.played(browseId, c.title, c.subtitle, c.thumbnailUrl) }
+        } ?: pageActions
+    }
     val shown = remember(loaded, query, order) {
         val songs = loaded?.songs.orEmpty()
         val q = query.trim()

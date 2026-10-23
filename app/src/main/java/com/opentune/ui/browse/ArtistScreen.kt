@@ -138,15 +138,24 @@ fun ArtistScreen(
                 Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
             }
         }
-        else -> ArtistPageView(
+        else -> {
+            val page = (s as? UiState.Success)?.data
+            // Played from here: the artist counts toward Speed dial.
+            val tracked = remember(actions, page) {
+                page?.name?.let { name ->
+                    actions.alsoOnPlay { com.opentune.data.history.ListenedCollections.played(browseId, name, "Artist", page.thumbnailUrl) }
+                } ?: actions
+            }
+            ArtistPageView(
             browseId = browseId,
-            page = (s as? UiState.Success)?.data,
+            page = page,
             contentPadding = contentPadding,
-            actions = actions,
+            actions = tracked,
             onBack = onBack,
             onItemClick = onItemClick,
             onShowAll = onShowAll,
         )
+        }
     }
 }
 

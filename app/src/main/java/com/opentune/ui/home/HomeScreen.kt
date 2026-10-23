@@ -120,8 +120,10 @@ fun HomeScreen(
     val feed = remember(allShelves) { arrangeHomeShelves(allShelves) }
     // YouTube Music's own Speed dial when it sends one (signed in), else the songs
     // played most on this phone, with what's hidden or filtered left out.
-    val localDial = remember(records, hidden, hideExplicit) {
-        hidden.shelves(ContentFilter.shelves(listOf(HomeShelf(com.opentune.data.history.SpeedDial.TITLE, com.opentune.data.history.SpeedDial.fromHistory(records))), hideExplicit))
+    val collectionPlays by com.opentune.data.history.ListenedCollections.plays.collectAsState()
+    val localDial = remember(records, collectionPlays, hidden, hideExplicit) {
+        val picks = com.opentune.data.history.SpeedDial.fromHistory(records, collections = collectionPlays)
+        hidden.shelves(ContentFilter.shelves(listOf(HomeShelf(com.opentune.data.history.SpeedDial.TITLE, picks)), hideExplicit))
             .firstOrNull()?.items.orEmpty()
     }
     val speedDial = feed.speedDial?.items?.takeIf { it.size >= SPEED_DIAL_MIN } ?: localDial

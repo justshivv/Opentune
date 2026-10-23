@@ -17,23 +17,42 @@ object SpeedDial {
     private const val SKIPPED_MS = 10_000L
     private const val DAY_MS = 86_400_000L
 
-    fun fromHistory(records: List<PlayRecord>, now: Long = System.currentTimeMillis(), limit: Int = 60): List<ShelfItem> {
-        class Tally(val record: PlayRecord, var score: Double, var last: Long)
+    fun fromHistory(
+        records: List<PlayRecord>,
+        now: Long = System.currentTimeMillis(),
+        limit: Int = 60,
+        /** Albums, playlists and artists played from their pages (see [ListenedCollections]). */
+        collections: List<CollectionPlay> = emptyList(),
+    ): List<ShelfItem> {
+        class Tally(val item: ShelfItem, var score: Double, var last: Long)
+        fun weight(at: Long) = exp(-((now - at).coerceAtLeast(0L).toDouble() / DAY_MS) * Math.log(2.0) / HALF_LIFE_DAYS)
         val tallies = LinkedHashMap<String, Tally>()
         for (r in records) {
             // An old record has no listened time; a short one was skipped.
             if (r.listenedMs in 1 until SKIPPED_MS) continue
-            val ageDays = (now - r.playedAt).coerceAtLeast(0L).toDouble() / DAY_MS
-            val weight = exp(-ageDays * Math.log(2.0) / HALF_LIFE_DAYS)
-            val t = tallies.getOrPut(r.videoId) { Tally(r, 0.0, r.playedAt) }
-            t.score += weight
+            val t = tallies.getOrPut(r.videoId) {
+                Tally(ShelfItem(r.title, r.artist, r.thumbnailUrl, r.videoId, null, explicit = r.explicit == true), 0.0, r.playedAt)
+            }
+            t.score += weight(r.playedAt)
             if (r.playedAt > t.last) t.last = r.playedAt
+        }
+        // A whole album or playlist put on counts as a few songs' worth: its songs are
+        // counted too, but one at a time, so a list played often still earns its place.
+        for (c in collections) {
+            if (c.playedAt.isEmpty()) continue
+            tallies[c.browseId] = Tally(
+                ShelfItem(c.title, c.subtitle, c.thumbnailUrl, null, c.browseId),
+                c.playedAt.sumOf { weight(it) } * COLLECTION_WEIGHT,
+                c.playedAt.max(),
+            )
         }
         return tallies.values
             .sortedWith(compareByDescending<Tally> { it.score }.thenByDescending { it.last })
             .take(limit)
-            .map { ShelfItem(it.record.title, it.record.artist, it.record.thumbnailUrl, it.record.videoId, null, explicit = it.record.explicit == true) }
+            .map { it.item }
     }
+
+    private const val COLLECTION_WEIGHT = 3.0
 
     /** YouTube Music's own Speed dial shelf among Home's, if it sent one. */
     fun isSpeedDial(title: String): Boolean = title.trim().equals(TITLE, ignoreCase = true)
