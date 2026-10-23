@@ -19,7 +19,9 @@ export default { async fetch(request) {
 } };`;
 const bundle = await build({ stdin: { contents: source, resolveDir: resolve('services/lossless-addon'), sourcefile: 'runtime-check-only.mjs' },
   bundle: true, write: false, format: 'esm', platform: 'neutral', external: ['node:*'] });
-const worker = new Miniflare({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-10-23', compatibilityFlags: ['nodejs_compat'] });
+// The published local workerd binary currently supports dates through 2026-08-06.
+// Production keeps its own compatibility date; this checks the Workers crypto APIs.
+const worker = new Miniflare({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-08-06', compatibilityFlags: ['nodejs_compat'] });
 try {
   const fixture = JSON.parse(await readFile(process.env.ATTESTATION_TEST_FIXTURE, 'utf8'));
   const send = data => worker.dispatchFetch('https://runtime-check.invalid/', { method: 'POST', body: JSON.stringify(data) });
