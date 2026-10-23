@@ -202,7 +202,9 @@ class PlayerConnection(private val context: Context) {
         // loading its stream, a stall), still counts as playing: the button
         // flipped to play and back for that moment at every upgrade.
         _isPlaying.value = player.isPlaying || (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING)
-        _isBuffering.value = player.playbackState == Player.STATE_BUFFERING
+        // A quality switch rebuffers the main player while the song plays on (another player
+        // sounding it, or a moment's silence between streams): no spinner on the button for that.
+        _isBuffering.value = player.playbackState == Player.STATE_BUFFERING && PlaybackRequests.soundingPosition == null
         _playWhenReady.value = player.playWhenReady
         // A track that started, or a recovery the service made on its own,
         // makes the last error stale.
