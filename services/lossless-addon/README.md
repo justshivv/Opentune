@@ -51,3 +51,9 @@ node services/lossless-addon/probe.mjs /tmp/lossless-source-report.json
 The probe checks Wo Noor, Old Skool and an Archive search, recording safe status and measured headers, without saving signed URLs or full recordings. It does not establish full-file integrity, audible quality, worldwide availability or continued playback after a quota changes. The dedicated GitHub workflow uploads this report separately from deterministic test results. A failed upstream probe is an availability report, not a passing playback test.
 
 See [source research](../../docs/lossless-source-research.md) for current limitations and upstream references.
+
+## Abuse protection and app authentication
+
+The public Worker now has a Cloudflare rate-limit binding (240 requests per minute per address per Cloudflare location). It uses the edge-provided client address, hashed by day, instead of a caller-supplied device ID or User-Agent. Limits are approximate and local to each Cloudflare location; shared networks share the allowance. Missing/broken limiter bindings fail closed. Excess traffic receives HTTP 429 with Retry-After before any upstream work. This is abuse protection, **not proof that the caller uses OpenTune**.
+
+Strict app authentication is pending a platform/compatibility decision. The existing app does not yet send authenticated installation proofs, so enforcing such a requirement immediately would break working installations. No embedded APK secret, spoofable User-Agent, browser Origin, public usage UUID or unverified key registration is treated as app identity. Browser clients and devices unable to provide hardware attestation require an explicit access policy.

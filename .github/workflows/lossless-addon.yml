@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test services/lossless-addon/worker.test.mjs
+      - run: node --test services/lossless-addon/*.test.mjs
   probe:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -35,7 +35,11 @@ jobs:
           node-version: '24'
       - name: Check upstream availability (not a playback test)
         run: node services/lossless-addon/probe.mjs lossless-source-report.json
+      - name: Probe additional public source candidates
+        run: node services/lossless-addon/probe-candidates.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: lossless-source-report
-          path: lossless-source-report.json
+          path: |
+            lossless-source-report.json
+            lossless-candidate-report.json

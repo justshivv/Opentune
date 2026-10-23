@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '24'
       - name: Test adapters
-        run: node --test services/lossless-addon/worker.test.mjs
+        run: node --test services/lossless-addon/*.test.mjs
       - name: Deploy standalone Worker
         id: worker
         working-directory: services/lossless-addon

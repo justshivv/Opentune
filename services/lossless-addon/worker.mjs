@@ -1,3 +1,5 @@
+import { withAbuseProtection } from './security.mjs';
+
 /** OpenTune lossless HTTP adapters. No media transcoding or audio proxying. */
 const MONO = 'https://tracks.monochrome.st';
 const ARCHIVE = 'https://archive.org';
@@ -217,4 +219,4 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
   };
 }
 const handler = createAddon();
-export default { fetch: handler };
+export default { fetch: withAbuseProtection(handler) };

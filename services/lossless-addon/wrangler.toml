@@ -2,3 +2,10 @@ name = "opentune-lossless-addon"
 main = "worker.mjs"
 compatibility_date = "2026-10-23"
 workers_dev = true
+
+# Approximate requests per address per Cloudflare location, not authentication.
+# A generous ceiling accommodates shared mobile/Wi-Fi networks.
+[[ratelimits]]
+name = "REQUEST_LIMITER"
+namespace_id = "4219101"
+simple = { limit = 240, period = 60 }
