@@ -1248,10 +1248,12 @@ class PlaybackService : MediaLibraryService() {
      */
     private suspend fun readyAhead(song: com.opentune.data.model.Song, saavn: Boolean, lossless: Boolean) {
         suspend fun attempt(block: suspend () -> Unit) = try { block() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
-        if (saavn) attempt { ExternalStreams.findJioSaavn(song, song.durationMillis()) }
+        var jioSaavn: ExternalStreams.Rendition? = null
+        if (saavn) attempt { jioSaavn = ExternalStreams.findJioSaavn(song, song.durationMillis())?.takeIf { !it.lossless } }
         if (!lossless) return
         attempt { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
-        for (file in ExternalStreams.alternatives(song.videoId)) {
+        val files = ExternalStreams.alternatives(song.videoId)
+        for (file in files) {
             val answers = kotlinx.coroutines.withTimeoutOrNull(PING_LIMIT_MS) {
                 runCatching { com.opentune.data.addons.AddonHttp.bytes(file.url, PING_BYTES, true).isNotEmpty() }.getOrDefault(false)
             } == true
@@ -1261,6 +1263,9 @@ class PlaybackService : MediaLibraryService() {
             }
             Log.w(TAG, "${file.provider}'s file for ${song.videoId} didn't answer ahead of time; readying the next one")
         }
+        // No lossless file answers: it starts on JioSaavn, and only on YouTube's stream when JioSaavn had nothing.
+        val fallback = jioSaavn
+        if (files.isNotEmpty() && fallback != null) ExternalStreams.remember(song.videoId, fallback)
     }
 
     /**
