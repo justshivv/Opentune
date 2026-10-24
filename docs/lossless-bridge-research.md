@@ -39,6 +39,10 @@ Direct measurements from bounded original-file headers:
 
 This establishes readable FLAC headers, not audible quality, original mastering provenance, full-file integrity, or 96/192 kHz availability. Signed media URLs are omitted from reports. The new adapter uses the same source API, not the Bridge service or an access-control bypass.
 
+## Adapter validation
+
+The completed OpenTune adapter returned HTTP 200 for search and stream resolution for both recordings, with the same measured formats, in [run 40048382526](https://github.com/justshivv/Opentune/actions/runs/40048382526). The same run passed all 33 server tests plus the actual Workers/SQLite signature checks for native and web clients. The NetEase tests cover redirect host validation, credentials/insecure URLs, format rejection, cross-source IDs and rate-limit cooldown. The access test ensures unsigned NetEase requests never reach upstreams. Evidence: `services/lossless-addon/reports/netease-adapter-2026-10-24.json`.
+
 ## Installation after deployment
 
 The manifest path is `/netease/manifest.json` on OpenTune's existing first-party Worker. It must be deployed before importing that path. The currently installed verification preview already signs requests for this exact origin; no app code change is needed for this adapter. Search and stream resolution remain unavailable to unverified clients. Public manifests remain importable, and returned public upstream media URLs are outside the API access lock.

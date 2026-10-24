@@ -1,0 +1,34 @@
+{
+  "checkedAt": "2026-10-24T01:08:15.826Z",
+  "workflow": "https://github.com/justshivv/Opentune/actions/runs/40048382526",
+  "commit": "637d57e609978c249b5b1b6c9bfef766d350ce7e",
+  "opentuneAdapter": [
+    {
+      "query": "295 Sidhu Moose Wala",
+      "searchStatus": 200,
+      "candidates": 20,
+      "streamStatus": 200,
+      "measured": {
+        "codec": "flac",
+        "bitDepth": 24,
+        "sampleRate": 44100,
+        "channels": 2,
+        "duration": 270
+      }
+    },
+    {
+      "query": "Blinding Lights The Weeknd",
+      "searchStatus": 200,
+      "candidates": 20,
+      "streamStatus": 200,
+      "measured": {
+        "codec": "flac",
+        "bitDepth": 16,
+        "sampleRate": 44100,
+        "channels": 2,
+        "duration": 200.0458276643991
+      }
+    }
+  ],
+  "note": "Adapter executed in CI against real upstreams, not deployed. Bounded native FLAC headers, not full-file or phone playback tests."
+}
