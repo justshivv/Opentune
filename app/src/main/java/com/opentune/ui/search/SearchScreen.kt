@@ -108,6 +108,8 @@ fun SearchScreen(
     onBrowse: (BrowseItem) -> Unit,
     /** Opens the page that names a song from what the microphone hears. */
     onRecognize: (() -> Unit)? = null,
+    /** Opens a playlist or saved album the library search found. */
+    onOpenList: (LibraryList) -> Unit = {},
     /**
      * Explore, when it has no tab of its own: it fills the page until the bar
      * is tapped or holds a search, and the bar's back arrow brings it back.
@@ -125,6 +127,7 @@ fun SearchScreen(
     val recentAddon by AppSettings.recentAddonSearches.collectAsState()
     val source by vm.source.collectAsState()
     val library by vm.library.collectAsState()
+    val libraryLists by vm.libraryLists.collectAsState()
     val addons by vm.addons.collectAsState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val focus = LocalFocusManager.current
@@ -205,7 +208,7 @@ fun SearchScreen(
 
         when {
             !searching -> explore?.invoke()
-            source == SearchSource.LIBRARY -> LibraryResults(query, library, contentPadding, currentVideoId, isPlaying, { focus.clearFocus(); onPlay(it) }, onPlayNext, onAddToQueue)
+            source == SearchSource.LIBRARY -> LibraryResults(query, library, libraryLists, contentPadding, currentVideoId, isPlaying, { focus.clearFocus(); onPlay(it) }, onPlayNext, onAddToQueue, { focus.clearFocus(); onOpenList(it) })
             source == SearchSource.ADDONS -> AddonResults(
                 query, addons, recentAddon, contentPadding,
                 onPick = { vm.onQueryChange(it) },
@@ -549,22 +552,33 @@ private fun SourceHint(text: String) {
     )
 }
 
-/** Your own songs that match: liked, in your playlists, downloaded, or in the Local Music folder. */
+/**
+ * What in your library matches: playlists and saved albums by name first,
+ * then songs that are liked, in your playlists, downloaded, or in the Local
+ * Music folder.
+ */
 @Composable
 private fun LibraryResults(
     query: String,
     found: List<Song>?,
+    lists: List<LibraryList>,
     contentPadding: PaddingValues,
     currentVideoId: String?,
     isPlaying: Boolean,
     onPlay: (Song) -> Unit,
     onPlayNext: (Song) -> Unit,
     onAddToQueue: (Song) -> Unit,
+    onOpenList: (LibraryList) -> Unit,
 ) {
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+        if (query.isNotBlank() && found != null && lists.isNotEmpty()) {
+            item(key = "lib:lists") { LibraryHeading("Playlists") }
+            items(lists, key = { "lib:${it.key}" }) { list -> LibraryListRow(list) { onOpenList(list) } }
+            if (found.isNotEmpty()) item(key = "lib:songs") { LibraryHeading("Songs") }
+        }
         when {
-            query.isBlank() || found == null -> item { SourceHint("Search your liked songs, playlists, downloads and the songs in your Local Music folder.") }
-            found.isEmpty() -> item { SourceHint("Nothing in your library matches \"${query.trim()}\".") }
+            query.isBlank() || found == null -> item { SourceHint("Search your playlists, liked songs, downloads and the songs in your Local Music folder.") }
+            found.isEmpty() && lists.isEmpty() -> item { SourceHint("Nothing in your library matches \"${query.trim()}\".") }
             else -> items(found, key = { "lib:${it.videoId}" }) { song ->
                 SongListItem(
                     song = song,
@@ -575,6 +589,29 @@ private fun LibraryResults(
                     onAddToQueue = { onAddToQueue(song) },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LibraryHeading(text: String) {
+    Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp))
+}
+
+@Composable
+private fun LibraryListRow(list: LibraryList, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (list.coverUrl != null || list.songCovers.isEmpty()) {
+            com.opentune.ui.components.Artwork(list.coverUrl, Modifier.size(56.dp), RoundedCornerShape(12.dp))
+        } else {
+            com.opentune.ui.components.PlaylistCover(list.title, list.songCovers, Modifier.size(56.dp))
+        }
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            Text(list.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(list.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

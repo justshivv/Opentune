@@ -250,6 +250,11 @@ fun SongListItem(
     swipeToQueue: Boolean = true,
     /** Inside one of your own playlists: the long-press menu can take the song out of it. */
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    /**
+     * Inside one of your own playlists: swiping toward the start of the line
+     * takes the song out, and toward the end adds it to the queue.
+     */
+    onSwipeRemove: (() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -270,8 +275,9 @@ fun SongListItem(
     SwipeToQueueRow(
         title = song.title,
         onPlayNext = onPlayNext.takeIf { swipes },
-        onAddToQueue = onAddToQueue.takeIf { swipes },
+        onAddToQueue = onAddToQueue.takeIf { swipes || onSwipeRemove != null },
         modifier = modifier.fillMaxWidth(),
+        onRemove = onSwipeRemove,
     ) { swipeActions ->
         Row(
             modifier = Modifier

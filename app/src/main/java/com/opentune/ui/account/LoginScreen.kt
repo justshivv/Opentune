@@ -29,7 +29,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.opentune.data.account.AccountStore
-import com.opentune.ui.components.GlassBackButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PlayCircle
 
 private const val MUSIC = "https://music.youtube.com"
 private const val SIGN_IN_URL =
@@ -54,9 +55,20 @@ fun LoginScreen(onDone: () -> Unit) {
     DisposableEffect(Unit) { onDispose { gone.set(true) } }
     val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
 
-    Box(Modifier.fillMaxSize()) {
+    SignInPage(
+        service = "YouTube Music",
+        brand = YouTubeMusicRed,
+        icon = Icons.Rounded.PlayCircle,
+        gives = "Your playlists, liked songs, history and recommendations",
+        loading = loading,
+        onBack = onDone,
+        unavailable = if (unavailable) {
+            "Sign-in needs Android System WebView, which isn't working on this device. Update or turn it on in the " +
+                "Play Store, or sign in on your phone and use Link a device to sign this one in."
+        } else null,
+    ) { webModifier ->
         AndroidView(
-            modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = 72.dp),
+            modifier = webModifier,
             factory = { context ->
                 val view = runCatching {
                     CookieManager.getInstance().setAcceptCookie(true)
@@ -106,27 +118,5 @@ fun LoginScreen(onDone: () -> Unit) {
                 }
             },
         )
-        if (unavailable) {
-            Text(
-                "Sign-in needs Android System WebView, which isn't working on this device. Update or turn it on in the " +
-                    "Play Store, or sign in on your phone and use Link a device to sign this one in.",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
-            )
-        }
-        Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 8.dp)) {
-            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                GlassBackButton(onDone)
-                Text(
-                    "Sign in to YouTube Music",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            }
-            AnimatedVisibility(loading) {
-                LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
-            }
-        }
     }
 }

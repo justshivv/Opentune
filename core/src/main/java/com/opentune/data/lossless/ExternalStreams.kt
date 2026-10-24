@@ -35,7 +35,17 @@ object ExternalStreams {
     private val losslessSearched = ConcurrentHashMap.newKeySet<String>()
     private const val TTL = 5 * 60_000L
 
-    fun selectionDetail(videoId: String): String? = reports[videoId]
+    /**
+     * JioSaavn's own answer from its quick lookup at song start, kept apart from
+     * [reports]: the FLAC search and that lookup run side by side, and one
+     * writing over the other left the pipeline showing only JioSaavn's line.
+     */
+    private val saavnReports = ConcurrentHashMap<String, String>()
+
+    /** What the add-ons and JioSaavn each said for [videoId], add-ons first, each line once. */
+    fun selectionDetail(videoId: String): String? =
+        ((reports[videoId]?.lines().orEmpty()) + (saavnReports[videoId]?.lines().orEmpty()))
+            .distinct().joinToString("\n").ifEmpty { null }
 
     /** Instant startup lookup only; a miss must never start network work. */
     fun cached(videoId: String): Rendition? {
@@ -74,7 +84,7 @@ object ExternalStreams {
     private suspend fun lookupJioSaavn(song: Song, durationMs: Long): Rendition? {
         val duration = CatalogMetadata.duration(song, durationMs)
         if (duration <= 0) return null
-        val url = JioSaavnSource.resolve(song, duration, report = { report(song.videoId, it) }) ?: return null
+        val url = JioSaavnSource.resolve(song, duration, report = { reportSaavn(song.videoId, it) }) ?: return null
         val rendition = Rendition(java.util.UUID.randomUUID().toString(), url, "JioSaavn · 320 kbps (lossy)", false, now(),
             provider = "JioSaavn", kbps = 320, sessionRevision = com.opentune.data.addons.AddonStore.revision.value)
         // A simultaneous FLAC result remains the preferred cached rendition.
@@ -83,7 +93,12 @@ object ExternalStreams {
         return rendition
     }
 
-    private fun report(videoId: String, detail: String) {
+    internal fun reportSaavn(videoId: String, detail: String) {
+        if (saavnReports.size > 256) saavnReports.clear()
+        if (saavnReports.put(videoId, detail) != detail) com.opentune.data.DebugLog.d("ExternalStreams", "$videoId: ${detail.replace("\n", " | ")}")
+    }
+
+    internal fun report(videoId: String, detail: String) {
         if (reports.size > 256) reports.clear()
         // Into the exported log too, so a shared log says what each source answered.
         if (reports.put(videoId, detail) != detail) com.opentune.data.DebugLog.d("ExternalStreams", "$videoId: ${detail.replace("\n", " | ")}")
@@ -325,6 +340,7 @@ object ExternalStreams {
             trackId = stream.trackId.ifEmpty { null }, tier = stream.tier.ifEmpty { null })
         losslessMissUntil.remove(videoId)
         saavnMissUntil.remove(videoId)
+        saavnReports.remove(videoId)
         remember(videoId, rendition)
         report(videoId, "${stream.provider}: picked in Search")
         return rendition

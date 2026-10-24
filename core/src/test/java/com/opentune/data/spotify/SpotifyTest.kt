@@ -64,4 +64,13 @@ class SpotifyTest {
         // Without it, the title and artist are enough, as for imports.
         assertEquals(live, PlaylistImport.best(want, listOf(live), exactLength = false))
     }
+
+    @Test fun aVariousArtistsUploadShowsWhoSings() {
+        val want = Spotify.Track("Mast Kalander", listOf("Yo Yo Honey Singh", "Mika Singh"), null, 270_000)
+        val upload = Song("vaupload001", "Mast Kalander", "Various Artist", null, durationText = "4:30")
+        assertEquals("Yo Yo Honey Singh, Mika Singh", PlaylistImport.best(want, listOf(upload))?.artist)
+        // Someone else's song of the same name and another length is not it.
+        val other = Song("other000002", "Mast Kalander", "Someone Else", null, durationText = "3:10")
+        assertNull(PlaylistImport.best(want, listOf(other)))
+    }
 }

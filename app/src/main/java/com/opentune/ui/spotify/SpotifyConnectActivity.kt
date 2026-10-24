@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Message
-import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -14,114 +12,96 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
-import android.widget.ImageButton
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updatePadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.viewinterop.AndroidView
+import com.opentune.data.settings.AppSettings
+import com.opentune.ui.account.SignInPage
+import com.opentune.ui.account.SpotifyGreen
+import com.opentune.ui.theme.OpenTuneTheme
 
 /**
- * Connect Spotify for Canvas: Spotify's own sign-in page in a screen of its
- * own. Once Spotify has set its sign-in cookie the screen closes; the cookie
- * stays in the app's WebView cookies, where [SpotifyConnection] reads it.
- * Nothing is typed into the app itself.
+ * Connect Spotify: Spotify's own sign-in page in a screen of its own, laid
+ * out like YouTube Music's (see [SignInPage]). Once Spotify has set its
+ * sign-in cookie the screen closes; the cookie stays in the app's WebView
+ * cookies, where [SpotifyConnection] reads it. Nothing is typed into the app
+ * itself.
  *
- * A plain Android screen rather than a Compose page, as with
- * [ExportifyActivity]: the app's glass effects can leave a WebView showing a
- * stale frame after it navigates.
+ * Its own screen rather than a page of the app, as with [ExportifyActivity]:
+ * the app's glass effects redraw what's behind them through graphics
+ * layers, which can leave a WebView showing a stale frame after it navigates.
  */
 class SpotifyConnectActivity : ComponentActivity() {
-    private lateinit var web: WebView
-    private lateinit var progress: ProgressBar
+    private var frame: FrameLayout? = null
+    private var web: WebView? = null
     private var popup: WebView? = null
     private var done = false
+    private var loading by mutableStateOf(true)
+    private var unavailable by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val dark = Color.rgb(0x12, 0x12, 0x12)
-        val close = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            setBackgroundColor(Color.TRANSPARENT)
-            contentDescription = "Close"
-            setOnClickListener { finish() }
+        val page = runCatching { newWebView() }.getOrNull()
+        if (page == null) {
+            unavailable = true
+        } else {
+            web = page
+            frame = FrameLayout(this).apply { addView(page, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
+            if (savedInstanceState == null) page.loadUrl(LOGIN) else page.restoreState(savedInstanceState)
         }
-        val title = TextView(this).apply {
-            text = "Connect Spotify"
-            setTextColor(Color.WHITE)
-            textSize = 18f
-        }
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(dark)
-            addView(close, LinearLayout.LayoutParams(dp(48), dp(48)))
-            addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        }
-        val hint = TextView(this).apply {
-            text = "Sign in on Spotify's page. OpenTune uses it to bring your playlists over and show each song's Canvas, and closes this when you're in. " +
-                "If Google sign-in won't work here, use your Spotify email or username."
-            setTextColor(Color.rgb(0xB3, 0xB3, 0xB3))
-            textSize = 12f
-            setBackgroundColor(dark)
-            setPadding(dp(16), 0, dp(16), dp(8))
-        }
-        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = true
-            visibility = View.GONE
-        }
-        web = runCatching { newWebView() }.getOrElse {
-            com.opentune.data.Pills.error("This phone's web view isn't available", this)
-            finish()
-            return
-        }
-        val frame = FrameLayout(this).apply { addView(web) }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(dark)
-            addView(bar)
-            addView(hint)
-            addView(progress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4)))
-            addView(frame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        }
-        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
-            v.updatePadding(top = bars.top, bottom = bars.bottom)
-            insets
-        }
-        setContentView(root)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                val w = web
                 when {
                     popup != null -> closePopup()
-                    web.canGoBack() -> web.goBack()
+                    w != null && w.canGoBack() -> w.goBack()
                     else -> finish()
                 }
             }
         })
-        if (savedInstanceState == null) web.loadUrl(LOGIN) else web.restoreState(savedInstanceState)
+        setContent {
+            val theme by AppSettings.theme.collectAsState()
+            OpenTuneTheme(theme) {
+                SignInPage(
+                    service = "Spotify",
+                    brand = SpotifyGreen,
+                    icon = Icons.Rounded.GraphicEq,
+                    gives = "Your playlists in Library, each song's Canvas, and suggestions made for you",
+                    loading = loading,
+                    onBack = { finish() },
+                    unavailable = if (unavailable) "This phone's web view isn't working, so Spotify's sign-in page can't open. Update Android System WebView in the Play Store and try again." else null,
+                    hint = "If Google sign-in won't open here, use your Spotify email or username, or a one-time code by email.",
+                ) { modifier ->
+                    frame?.let { f -> AndroidView(factory = { f }, modifier = modifier) }
+                }
+            }
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        if (::web.isInitialized) web.saveState(outState)
+        web?.saveState(outState)
     }
 
     override fun onDestroy() {
         popup?.destroy()
-        if (::web.isInitialized) web.destroy()
+        web?.destroy()
         SpotifyConnection.refresh()
         super.onDestroy()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun newWebView(): WebView = WebView(this).apply {
-        setBackgroundColor(Color.rgb(0x12, 0x12, 0x12))
+        setBackgroundColor(Color.WHITE)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.javaScriptCanOpenWindowsAutomatically = true
@@ -143,7 +123,7 @@ class SpotifyConnectActivity : ComponentActivity() {
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
-            progress.visibility = View.GONE
+            loading = false
             signedIn()
         }
     }
@@ -161,14 +141,15 @@ class SpotifyConnectActivity : ComponentActivity() {
 
     private inner class Chrome : WebChromeClient() {
         override fun onProgressChanged(view: WebView, newProgress: Int) {
-            progress.visibility = if (newProgress < 100) View.VISIBLE else View.GONE
+            loading = newProgress < 100
         }
 
         /** Facebook and Apple sign-in open a window; it gets its own WebView over the page until it closes. */
         override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
+            val container = frame ?: return false
             val child = newWebView()
             popup = child
-            (web.parent as FrameLayout).addView(child)
+            container.addView(child, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             (resultMsg.obj as WebView.WebViewTransport).webView = child
             resultMsg.sendToTarget()
             return true
@@ -186,8 +167,6 @@ class SpotifyConnectActivity : ComponentActivity() {
         child.destroy()
         signedIn()
     }
-
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     companion object {
         /** Spotify's sign-in, coming back to the web player, which is where the cookie is set. */

@@ -53,6 +53,8 @@ object AlbumCovers {
     private const val MAX_ENTRIES = 3_000
     private const val SPACING_MS = 1_100L
     private const val NONE = ""
+    /** Release kinds whose cover isn't the song's own album's. */
+    private val SKIPPED_TYPES = setOf("Compilation", "DJ-mix", "Live", "Remix", "Mixtape/Street", "Demo")
     private const val LOCAL_ART = "content://media/external/audio/albumart"
     private val USER_AGENT = "OpenTune/${BuildConfig.VERSION_NAME} ( https://github.com/justshivv/Opentune )"
 
@@ -67,9 +69,11 @@ object AlbumCovers {
 
     fun init(context: Context) {
         resolver = context.applicationContext.contentResolver
-        // The first file held Cover Art Archive answers only; its "none"s would hide Apple and Deezer covers.
+        // Earlier files held covers from compilations the song is also on (and "none"s that would
+        // hide Apple's and Deezer's); every answer is looked up again.
         File(context.filesDir, "album-covers.json").delete()
-        val f = File(context.filesDir, "album-covers-v2.json")
+        File(context.filesDir, "album-covers-v2.json").delete()
+        val f = File(context.filesDir, "album-covers-v3.json")
         file = f
         scope.launch {
             runCatching { json.decodeFromString(MapSerializer(String.serializer(), String.serializer()), f.readText()) }
@@ -116,7 +120,7 @@ object AlbumCovers {
             .getOrNull()
         val found = (if (durationMs > 0) ask("Apple") { apple(song, durationMs) } else null)
             ?: (if (durationMs > 0) ask("Deezer") { deezer(cleaned.title, artist, song.albumName, durationMs) } else null)
-            ?: ask("MusicBrainz") { lookup(cleaned.title, artist) }
+            ?: ask("MusicBrainz") { lookup(cleaned.title, artist, song.albumName, durationMs) }
         // A source that couldn't be reached isn't a "no": only a full set of answers is kept as "none".
         if (found == null && (unreachable || durationMs <= 0)) return null
         cache[key] = found ?: NONE
@@ -159,7 +163,7 @@ object AlbumCovers {
         return pick["album"].obj()["cover_xl"].string()?.takeIf { it.startsWith("https://") }
     }
 
-    private suspend fun lookup(title: String, artist: String): String? = withContext(Dispatchers.IO) {
+    private suspend fun lookup(title: String, artist: String, album: String?, durationMs: Long): String? = withContext(Dispatchers.IO) {
         val query = "recording:\"${escape(title)}\" AND artist:\"${escape(artist)}\""
         val url = "https://musicbrainz.org/ws/2/recording".toHttpUrl().newBuilder()
             .addQueryParameter("query", query)
@@ -170,7 +174,7 @@ object AlbumCovers {
             // "Busy" (503) and the like are no answer at all, so they throw and aren't cached.
             .use { r -> if (r.isSuccessful) r.body?.string() else throw java.io.IOException("MusicBrainz answered ${r.code}") }
             ?: return@withContext null
-        val groups = releaseGroups(json.parseToJsonElement(body).jsonObject, artist)
+        val groups = releaseGroups(json.parseToJsonElement(body).jsonObject, artist, album, durationMs)
         for (group in groups.take(3)) {
             // The archive answers 404 for an album it has no front cover for; older covers may lack the 1200px copy.
             for (size in listOf(1200, 500)) {
@@ -185,36 +189,46 @@ object AlbumCovers {
 
     /**
      * Release groups of confident matches, best first: recordings scoring
-     * [MIN_SCORE]+ whose credited artist matches, official albums and singles
-     * before compilations.
+     * [MIN_SCORE]+ whose credited artist matches and, when the length is
+     * known, within 3 s of it. Compilations, DJ mixes, live and remix
+     * releases are left out: a song's copy on "World Music Day" carries that
+     * compilation's cover, not its own. With an [album] named, only release
+     * groups of that name count. Official albums, singles and EPs lead.
      */
-    internal fun releaseGroups(response: JsonObject, artist: String): List<String> {
+    internal fun releaseGroups(response: JsonObject, artist: String, album: String? = null, durationMs: Long = 0): List<String> {
         val wanted = normalize(artist)
-        val out = LinkedHashSet<String>()
+        val wantAlbum = album?.let { normalize(TrackNameCleaner.clean(it, artist).title) }?.takeIf { it.isNotEmpty() }
+        val ranked = mutableListOf<Pair<Int, String>>()
         response["recordings"].array().map { it.obj() }
             .filter { ((it["score"] as? JsonPrimitive)?.intOrNull ?: 0) >= MIN_SCORE }
             .filter { rec ->
                 val credited = rec["artist-credit"].array().mapNotNull { it.obj()["name"].string() ?: it.obj()["artist"].obj()["name"].string() }
                 credited.any { normalize(it) == wanted || normalize(it).contains(wanted) || wanted.contains(normalize(it)) }
             }
-            .forEach { rec ->
-                rec["releases"].array().map { it.obj() }
-                    .sortedBy { rel ->
-                        val group = rel["release-group"].obj()
-                        val primary = group["primary-type"].string()
-                        val secondary = group["secondary-types"].array().isNotEmpty()
-                        val official = rel["status"].string() == "Official"
-                        when {
-                            official && !secondary && (primary == "Album" || primary == "Single" || primary == "EP") -> 0
-                            official && !secondary -> 1
-                            official -> 2
-                            else -> 3
-                        }
-                    }
-                    .mapNotNull { it["release-group"].obj()["id"].string() }
-                    .forEach(out::add)
+            .filter { rec ->
+                val length = (rec["length"] as? JsonPrimitive)?.intOrNull ?: return@filter true
+                durationMs <= 0 || kotlin.math.abs(length - durationMs) <= 3_000
             }
-        return out.toList()
+            .forEach { rec ->
+                rec["releases"].array().map { it.obj() }.forEach { rel ->
+                    val group = rel["release-group"].obj()
+                    val id = group["id"].string() ?: return@forEach
+                    val secondary = group["secondary-types"].array().mapNotNull { it.string() }
+                    if (secondary.any { it in SKIPPED_TYPES }) return@forEach
+                    val title = normalize(TrackNameCleaner.clean(group["title"].string() ?: rel["title"].string().orEmpty(), artist).title)
+                    if (wantAlbum != null && title != wantAlbum && !title.contains(wantAlbum) && !wantAlbum.contains(title)) return@forEach
+                    val primary = group["primary-type"].string()
+                    val official = rel["status"].string() == "Official"
+                    val rank = when {
+                        official && secondary.isEmpty() && (primary == "Album" || primary == "Single" || primary == "EP") -> 0
+                        official && secondary.isEmpty() -> 1
+                        official -> 2
+                        else -> 3
+                    }
+                    ranked += rank to id
+                }
+            }
+        return ranked.sortedBy { it.first }.map { it.second }.distinct()
     }
 
     /** MusicBrainz's one-request-a-second rule, across the app. */

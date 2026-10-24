@@ -629,6 +629,9 @@ fun AppRoot(vm: PlayerViewModel) {
                             onAddToQueue = vm::addToQueue,
                             onBrowse = { item: BrowseItem -> nav.openBrowse(item.browseId, item.type) },
                             onRecognize = { nav.navigate("recognize") },
+                            onOpenList = { list ->
+                                list.playlistId?.let { nav.navigate("playlist/${Uri.encode(it)}") } ?: list.browseId?.let { nav.openBrowse(it) }
+                            },
                             explore = if (separateExplore) null else ({
                                 ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, showHeader = false)
                             }),

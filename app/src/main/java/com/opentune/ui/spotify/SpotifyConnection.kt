@@ -55,6 +55,23 @@ object SpotifyConnection {
         _connected.value = false
     }
 
+    /**
+     * Runs [clear], which clears every cookie and calls back when done, then
+     * puts Spotify's sign-in back, so signing out of YouTube Music doesn't
+     * also disconnect Spotify.
+     */
+    fun keepingSpotify(clear: (android.webkit.ValueCallback<Boolean>) -> Unit) {
+        val kept = cookie()
+        clear { _ ->
+            if (kept != null) runCatching {
+                val cookies = CookieManager.getInstance()
+                cookies.setCookie(SITE, "sp_dc=$kept; Domain=.spotify.com; Path=/; Max-Age=31536000; Secure; HttpOnly")
+                cookies.flush()
+            }
+            refresh()
+        }
+    }
+
     private fun clearCookies() = runCatching {
         val cookies = CookieManager.getInstance()
         for (name in listOf("sp_dc", "sp_key", "sp_t", "sp_landing")) {

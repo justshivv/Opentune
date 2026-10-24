@@ -807,9 +807,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 onPlayNext = { actions.playNext(song) },
                 onAddToQueue = { actions.addToQueue(song) },
                 onRemoveFromPlaylist = { LibraryStore.removeFromPlaylist(id, i) },
-                trailing = {
-                    IconButton(onClick = { LibraryStore.removeFromPlaylist(id, i) }) { Icon(Icons.Rounded.Close, "Remove from playlist") }
-                },
+                // Swipe right to add to the queue, left to take it out of the playlist.
+                onSwipeRemove = { LibraryStore.removeFromPlaylist(id, i) },
             )
         }
     }

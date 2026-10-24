@@ -71,6 +71,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.Dp
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.animation.animateColorAsState
 import com.opentune.ui.theme.rememberArtworkSeed
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -160,6 +162,10 @@ fun PlayerBackdrop(
     songId: String? = null,
     /** Spotify's Canvas for the playing song, looped over the whole backdrop. */
     canvas: String? = null,
+    /** Where the title starts, from the top: over a Canvas, the frost begins a little above it. */
+    titleTop: Dp? = null,
+    /** Lyrics or the queue are open over the Canvas: it's frosted and darkened all the way up. */
+    canvasBehindText: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(modifier.background(scheme.surface)) {
@@ -196,21 +202,7 @@ fun PlayerBackdrop(
             }
         }
         if (canvas != null) {
-            // Keyed on the clip, so the next song's starts fresh and fades in over this one's backdrop.
-            androidx.compose.runtime.key(canvas) {
-                LoopingVideo(canvas, playing, Modifier.matchParentSize(), maxPx = 1920)
-            }
-            // Darker at the bottom, where the title and controls sit, so they stay readable.
-            Box(
-                Modifier.matchParentSize().background(
-                    Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = 0.35f),
-                        0.4f to Color.Black.copy(alpha = 0.12f),
-                        0.65f to Color.Black.copy(alpha = 0.5f),
-                        1f to Color.Black.copy(alpha = 0.85f),
-                    ),
-                ),
-            )
+            CanvasBackdrop(canvas, playing, titleTop, canvasBehindText, Modifier.matchParentSize())
         } else if (fullCover) {
             CoverSwap(CoverShown(artworkUrl, index, songId), change) { url, motion ->
                 // The cover runs from the top down to just behind the title and
@@ -247,6 +239,69 @@ fun PlayerBackdrop(
         }
     }
 }
+
+/**
+ * Spotify's Canvas filling the player, sharp at the top and turning to
+ * frosted glass from just above the title down to the bottom, where the
+ * title, seek bar and buttons sit, so they read over any clip. The blur
+ * comes in gradually over the first stretch rather than starting at a line.
+ * With blur reduced (or before Android 12) a darker wash does the same job.
+ * The frost can be turned off in Settings, leaving only a light darkening.
+ */
+@Composable
+private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behindText: Boolean, modifier: Modifier) {
+    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    val haze = dev.chrisbanes.haze.rememberHazeState()
+    val blur = ui.canvasFrost && !ui.reduceBlur
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        Box(Modifier.matchParentSize().then(if (blur) Modifier.hazeSource(haze) else Modifier)) {
+            // Keyed on the clip, so the next song's starts fresh and fades in over this one's backdrop.
+            androidx.compose.runtime.key(canvas) {
+                LoopingVideo(canvas, playing, Modifier.matchParentSize(), maxPx = 1920, maxBitrate = 8_000_000)
+            }
+        }
+        // A light scrim at the top so the status bar and "Playing from" stay readable.
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.18f to Color.Transparent)))
+        // Over lyrics and the queue the frost starts at the very top, moving up there as they open.
+        val to = if (behindText) 0.dp else ((titleTop ?: (maxHeight * 0.55f)) - CANVAS_FROST_LEAD).coerceIn(0.dp, maxHeight)
+        val from by androidx.compose.animation.core.animateDpAsState(to, androidx.compose.animation.core.tween(450), label = "canvasFrost")
+        val shade by androidx.compose.animation.core.animateFloatAsState(if (behindText) 1f else 0f, androidx.compose.animation.core.tween(450), label = "canvasShade")
+        val ramp = with(androidx.compose.ui.platform.LocalDensity.current) { (CANVAS_FROST_LEAD * 2).toPx() }
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(maxHeight - from)
+                .then(
+                    if (!blur) Modifier else Modifier.hazeEffect(haze) {
+                        blurRadius = 30.dp
+                        noiseFactor = 0.04f
+                        tints = listOf(dev.chrisbanes.haze.HazeTint(Color.Black.copy(alpha = 0.18f)))
+                        progressive = dev.chrisbanes.haze.HazeProgressive.verticalGradient(
+                            easing = androidx.compose.animation.core.EaseInOut,
+                            startY = 0f,
+                            startIntensity = 0f,
+                            endY = ramp,
+                            endIntensity = 1f,
+                        )
+                    },
+                )
+                // Darker toward the bottom too, with or without the blur.
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.25f to Color.Black.copy(alpha = if (blur) 0.15f else if (ui.canvasFrost) 0.45f else 0.25f),
+                        1f to Color.Black.copy(alpha = if (blur) 0.45f else if (ui.canvasFrost) 0.85f else 0.7f),
+                    ),
+                ),
+        )
+        // Behind lyrics, an even dimming over the whole clip so white lines read on any frame.
+        if (shade > 0f) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.42f * shade)))
+    }
+}
+
+/** How far above the title the Canvas frost starts, and half the stretch it takes to come in fully. */
+private val CANVAS_FROST_LEAD = 56.dp
 
 /**
  * A cover whose [url] may be swapped for a sharper copy while it's shown:
@@ -451,7 +506,11 @@ fun ArtworkPane(
             ) {
                 // Only on the playing song's cover, not on one leaving as the song changes.
                 if (video != null && url == song.thumbnailUrl) {
-                    LoopingVideo(video.url, isPlaying, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl)
+                    val quality = com.opentune.data.settings.AppSettings.ui.collectAsState().value.motionQuality
+                    // Keyed on the quality, so a new choice in Settings takes effect at once.
+                    androidx.compose.runtime.key(quality) {
+                        LoopingVideo(video.url, isPlaying, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl, maxPx = quality.maxPx, maxBitrate = quality.maxBitrate)
+                    }
                 }
             }
         }

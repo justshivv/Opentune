@@ -41,8 +41,10 @@ internal fun LoopingVideo(
     playing: Boolean,
     modifier: Modifier = Modifier,
     fallbackUrl: String? = null,
-    /** The largest picture worth fetching, in pixels each way. */
-    maxPx: Int = 1280,
+    /** The largest picture worth fetching, in pixels each way (see MotionQuality). */
+    maxPx: Int = 1080,
+    /** The most bits a second worth spending on a silent loop. */
+    maxBitrate: Int = 4_000_000,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -50,12 +52,19 @@ internal fun LoopingVideo(
     var size by remember(url) { mutableStateOf(VideoSize.UNKNOWN) }
     val fade by animateFloatAsState(if (drawn) 1f else 0f, tween(700), label = "loopingVideo")
     val player = remember(url) {
-        ExoPlayer.Builder(context).build().apply {
+        ExoPlayer.Builder(context)
+            // Kept on disk, so each turn of the loop plays from the phone rather than downloading again.
+            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(LoopCache.dataSource(context)))
+            .build().apply {
             volume = 0f
             repeatMode = Player.REPEAT_MODE_ONE
+            // The sharpest version that fits the screen and the bitrate cap, straight away. Left to adapt,
+            // the player opened on Apple's smallest (360 px) and a short loop seldom gave it time to step up.
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
                 .setMaxVideoSize(maxPx, maxPx)
+                .setMaxVideoBitrate(maxBitrate)
+                .setForceHighestSupportedBitrate(true)
                 .build()
             var retried = false
             addListener(object : Player.Listener {
@@ -109,4 +118,29 @@ private fun crop(view: TextureView, video: VideoSize) {
     // The view first stretches the picture to its own size; this undoes that and covers instead.
     val scale = maxOf(w / vw, h / vh)
     view.setTransform(Matrix().apply { setScale(vw * scale / w, vh * scale / h, w / 2f, h / 2f) })
+}
+
+/**
+ * Animated covers and Canvas clips kept on disk, apart from the music's own
+ * cache: a clip loops for the whole song, and a song comes round again.
+ */
+@OptIn(UnstableApi::class)
+internal object LoopCache {
+    private const val MAX_BYTES = 150L * 1024 * 1024
+    @Volatile private var cache: androidx.media3.datasource.cache.SimpleCache? = null
+
+    fun dataSource(context: android.content.Context): androidx.media3.datasource.DataSource.Factory {
+        val app = context.applicationContext
+        val c = cache ?: synchronized(this) {
+            cache ?: androidx.media3.datasource.cache.SimpleCache(
+                java.io.File(app.cacheDir, "video-loops"),
+                androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor(MAX_BYTES),
+                androidx.media3.database.StandaloneDatabaseProvider(app),
+            ).also { cache = it }
+        }
+        return androidx.media3.datasource.cache.CacheDataSource.Factory()
+            .setCache(c)
+            .setUpstreamDataSourceFactory(androidx.media3.datasource.DefaultDataSource.Factory(app))
+            .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    }
 }

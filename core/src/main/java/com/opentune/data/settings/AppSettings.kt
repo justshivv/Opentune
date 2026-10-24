@@ -363,10 +363,14 @@ data class InterfaceSettings(
     val albumCovers: Boolean = true,
     /** Apple Music's animated album covers loop, muted, in the player's cover. */
     val animatedCovers: Boolean = true,
+    /** How sharp Apple's animated covers play; sharper uses more data. */
+    val motionQuality: MotionQuality = MotionQuality.MEDIUM,
     /** Animated covers and Spotify Canvas only load on Wi-Fi or another unmetered network. */
     val animatedCoversWifiOnly: Boolean = true,
     /** With Spotify connected, its Canvas loops behind the player. */
     val spotifyCanvas: Boolean = true,
+    /** Over a Canvas, the player turns to frosted glass from the title down. */
+    val canvasFrost: Boolean = true,
     /** With Spotify connected, songs liked here are saved to Spotify's Liked Songs too. */
     val spotifySaveLikes: Boolean = true,
     /** With Spotify connected, Home shows Spotify's mixes made for the listener. */
@@ -547,6 +551,14 @@ enum class DockMotion(val label: String, val summary: String) {
     MINIMIZE("Minimize", "Like iOS 26: the tabs shrink to the open one, with the song in a slim bar beside it"),
     CAPSULE("Capsule", "The tabs and the song gather into one small capsule in the middle"),
     SINK("Sink", "The tabs sink away into a blur and the song settles into their place"),
+}
+
+/** How sharp an animated cover plays: the largest picture and the most data a second it may use. */
+@Serializable
+enum class MotionQuality(val label: String, val maxPx: Int, val maxBitrate: Int) {
+    LOW("Low", 768, 1_500_000),
+    MEDIUM("Medium", 1080, 4_000_000),
+    HIGH("High", 2160, 12_000_000),
 }
 
 /** How synced lyrics move as the song plays. */

@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -62,7 +63,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 
 /** What a sideways swipe on a song row asks for. */
-enum class SwipeAction { PLAY_NEXT, ADD_TO_QUEUE }
+enum class SwipeAction { PLAY_NEXT, ADD_TO_QUEUE, REMOVE }
 
 /**
  * The arithmetic of swiping a song row, apart from Compose so it can be
@@ -100,7 +101,8 @@ internal object SwipeQueue {
         when (actionFor(drag, rtl)) {
             SwipeAction.PLAY_NEXT -> if (canPlayNext) drag else 0f
             SwipeAction.ADD_TO_QUEUE -> if (canAddToQueue) drag else 0f
-            null -> 0f
+            // Never a side of its own: [actionFor] names only the two sides.
+            SwipeAction.REMOVE, null -> 0f
         }
 
     /**
@@ -159,6 +161,7 @@ object QueueNotices {
             when (action) {
                 SwipeAction.PLAY_NEXT -> "\"$title\" plays next"
                 SwipeAction.ADD_TO_QUEUE -> "Added \"$title\" to the queue"
+                SwipeAction.REMOVE -> "Removed \"$title\" from the playlist"
             },
         )
     }
@@ -185,8 +188,34 @@ internal fun SwipeToQueueRow(
     onPlayNext: (() -> Unit)?,
     onAddToQueue: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    /**
+     * In one of your own playlists: the row then swipes toward the end of the
+     * line to add to the queue and toward the start to take the song out of
+     * the playlist, in place of play next and add to queue.
+     */
+    onRemove: (() -> Unit)? = null,
     content: @Composable (actions: Modifier) -> Unit,
 ) {
+    if (onRemove != null) {
+        SwipeRow(title, onAddToQueue, onRemove, SwipeAction.ADD_TO_QUEUE, SwipeAction.REMOVE, modifier, content)
+        return
+    }
+    SwipeRow(title, onPlayNext, onAddToQueue, SwipeAction.PLAY_NEXT, SwipeAction.ADD_TO_QUEUE, modifier, content)
+}
+
+/** The swipe itself: [onForward] toward the end of the line, as [forward]; [onBackward] toward its start, as [backward]. */
+@Composable
+private fun SwipeRow(
+    title: String,
+    onPlayNext: (() -> Unit)?,
+    onAddToQueue: (() -> Unit)?,
+    forward: SwipeAction,
+    backward: SwipeAction,
+    modifier: Modifier,
+    content: @Composable (actions: Modifier) -> Unit,
+) {
+    // The arithmetic names the two sides PLAY_NEXT and ADD_TO_QUEUE; [shown] says what each does here.
+    fun shown(side: SwipeAction) = if (side == SwipeAction.PLAY_NEXT) forward else backward
     if (onPlayNext == null && onAddToQueue == null) {
         Box(modifier) { content(Modifier) }
         return
@@ -208,13 +237,10 @@ internal fun SwipeToQueueRow(
     val pop = remember { Animatable(1f) }
     var settling by remember { mutableStateOf<Job?>(null) }
 
-    fun run(action: SwipeAction) {
-        val act = when (action) {
-            SwipeAction.PLAY_NEXT -> playNext
-            SwipeAction.ADD_TO_QUEUE -> addToQueue
-        } ?: return
+    fun run(side: SwipeAction) {
+        val act = (if (side == SwipeAction.PLAY_NEXT) playNext else addToQueue) ?: return
         act()
-        QueueNotices.post(action, name)
+        QueueNotices.post(shown(side), name)
     }
 
     Box(
@@ -286,7 +312,7 @@ internal fun SwipeToQueueRow(
     ) {
         val action = SwipeQueue.actionFor(offset, rtl)
         if (action != null) {
-            SwipeReveal(action, SwipeQueue.progress(offset, width.toFloat()), towardRight = offset > 0f, armed = armed, calm = calm, pop = pop.value)
+            SwipeReveal(shown(action), SwipeQueue.progress(offset, width.toFloat()), towardRight = offset > 0f, armed = armed, calm = calm, pop = pop.value)
         }
         val moving = offset != 0f
         Box(
@@ -300,8 +326,8 @@ internal fun SwipeToQueueRow(
             content(
                 Modifier.semantics {
                     customActions = listOfNotNull(
-                        onPlayNext?.let { CustomAccessibilityAction("Play next") { run(SwipeAction.PLAY_NEXT); true } },
-                        onAddToQueue?.let { CustomAccessibilityAction("Add to queue") { run(SwipeAction.ADD_TO_QUEUE); true } },
+                        onPlayNext?.let { CustomAccessibilityAction(labelOf(forward)) { run(SwipeAction.PLAY_NEXT); true } },
+                        onAddToQueue?.let { CustomAccessibilityAction(labelOf(backward)) { run(SwipeAction.ADD_TO_QUEUE); true } },
                     )
                 },
             )
@@ -310,6 +336,12 @@ internal fun SwipeToQueueRow(
 }
 
 private val RowShape = RoundedCornerShape(18.dp)
+
+private fun labelOf(action: SwipeAction) = when (action) {
+    SwipeAction.PLAY_NEXT -> "Play next"
+    SwipeAction.ADD_TO_QUEUE -> "Add to queue"
+    SwipeAction.REMOVE -> "Remove"
+}
 
 /** The colour behind a swiped row, with the action's icon and name on the side the row has uncovered. */
 @Composable
@@ -325,15 +357,14 @@ private fun androidx.compose.foundation.layout.BoxScope.SwipeReveal(
     val (container, onContainer) = when (action) {
         SwipeAction.PLAY_NEXT -> colors.primaryContainer to colors.onPrimaryContainer
         SwipeAction.ADD_TO_QUEUE -> colors.tertiaryContainer to colors.onTertiaryContainer
+        SwipeAction.REMOVE -> colors.errorContainer to colors.onErrorContainer
     }
     val icon = when (action) {
         SwipeAction.PLAY_NEXT -> Icons.AutoMirrored.Rounded.PlaylistPlay
         SwipeAction.ADD_TO_QUEUE -> Icons.AutoMirrored.Rounded.QueueMusic
+        SwipeAction.REMOVE -> Icons.Rounded.Delete
     }
-    val label = when (action) {
-        SwipeAction.PLAY_NEXT -> "Play next"
-        SwipeAction.ADD_TO_QUEUE -> "Add to queue"
-    }
+    val label = labelOf(action)
     // The icon grows toward the threshold and pops on reaching it; held still with less motion.
     val scale = if (calm) 1f else (0.6f + 0.4f * progress) * pop
     Box(

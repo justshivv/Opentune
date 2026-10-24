@@ -113,16 +113,21 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
     val stages = listOf(
         Stage(
             Icons.Rounded.Description, "Track info",
-            listOfNotNull(
-                "Source" to (source?.provider?.removePrefix("YouTube · ") ?: "Waiting for the stream"),
-                codec?.let { "Format" to it },
-                if (isLossless) bits?.let { "Bit Depth" to "$it-bit" } else null,
-                rate?.let { "Sample Rate" to khz(it) },
-                kbps?.takeIf { it > 0 }?.let { "Bitrate" to "$it kbps" },
-                pcmKbps?.let { "PCM Data Rate" to "$it kbps" },
-                channels?.let { "Channels" to channelLabel(it) },
-                source?.selectionDetail?.let { "Picked" to it },
-            ),
+            emptyList(),
+            content = {
+                TrackInfo(
+                    source = source?.provider?.removePrefix("YouTube · ") ?: "Waiting for the stream",
+                    specs = listOfNotNull(
+                        codec,
+                        if (isLossless) bits?.let { "$it-bit" } else null,
+                        rate?.let(::khz),
+                        kbps?.takeIf { it > 0 }?.let { "$it kbps" },
+                        channels?.let(::channelLabel),
+                    ),
+                    pcmKbps = pcmKbps,
+                    picked = source?.selectionDetail,
+                )
+            },
         ),
         Stage(
             Icons.Rounded.Memory, "Decoder",
@@ -198,7 +203,105 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
 }
 
 /** One node on the pipeline: an icon, its name, and what the player says about it. */
-private data class Stage(val icon: ImageVector, val title: String, val rows: List<Pair<String, String>>)
+private data class Stage(
+    val icon: ImageVector,
+    val title: String,
+    val rows: List<Pair<String, String>>,
+    /** Drawn in place of [rows], for a stage laid out its own way. */
+    val content: (@Composable () -> Unit)? = null,
+)
+
+/** What one source said about the song: who, what, and how it went. */
+internal data class SourceAnswer(val who: String?, val said: String, val outcome: Outcome) {
+    enum class Outcome { CHOSEN, NONE, TROUBLE }
+}
+
+/**
+ * The lines of a "picked" report as answers: "Qobuz: no matching recording"
+ * is Qobuz saying no; a line with no name before a colon stands on its own.
+ * The add-ons' summary line is named as theirs.
+ */
+internal fun sourceAnswers(detail: String): List<SourceAnswer> = detail.lines().map { it.trim() }.filter { it.isNotEmpty() }.map { line ->
+    val m = Regex("""^([^:]{1,40}):\s+(.+)$""").find(line)
+    val who = m?.groupValues?.get(1)?.let { if (it == "FLAC") "Add-ons" else it }
+    val said = m?.groupValues?.get(2) ?: line
+    val lower = said.lowercase(Locale.ROOT)
+    val outcome = when {
+        listOf("verified", "selected", "picked", "higher quality", "switched").any { it in lower } && "no verified" !in lower -> SourceAnswer.Outcome.CHOSEN
+        listOf("rate limit", "http", "timed out", "time out", "error", "didn't answer", "did not answer", "couldn't", "failed", "unreachable", "refused")
+            .any { it in lower } -> SourceAnswer.Outcome.TROUBLE
+        else -> SourceAnswer.Outcome.NONE
+    }
+    SourceAnswer(who, said.replaceFirstChar { it.uppercase() }, outcome)
+}
+
+/**
+ * Track info, laid out to scan: the source large, the format as small chips,
+ * then what each source answered when the stream was picked, one per row with
+ * a dot for how it went.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun TrackInfo(source: String, specs: List<String>, pcmKbps: Long?, picked: String?) {
+    val colors = MaterialTheme.colorScheme
+    Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+        Text(source, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+        if (specs.isNotEmpty()) {
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+            ) {
+                specs.forEach { spec ->
+                    Text(
+                        spec,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.onSurface,
+                        modifier = Modifier
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                            .background(colors.onSurface.copy(alpha = 0.08f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
+        }
+        if (pcmKbps != null) {
+            Text("$pcmKbps kbps of PCM once decoded", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        }
+        val answers = picked?.let(::sourceAnswers).orEmpty()
+        if (answers.isNotEmpty()) {
+            Text(
+                "HOW IT WAS CHOSEN",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                    .background(colors.onSurface.copy(alpha = 0.05f))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+            ) {
+                answers.forEach { a ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        val dot = when (a.outcome) {
+                            SourceAnswer.Outcome.CHOSEN -> Color(0xFF4ADE80)
+                            SourceAnswer.Outcome.TROUBLE -> Color(0xFFFBBF24)
+                            SourceAnswer.Outcome.NONE -> colors.onSurfaceVariant.copy(alpha = 0.6f)
+                        }
+                        Box(Modifier.padding(top = 6.dp).size(8.dp).clip(CircleShape).background(dot))
+                        Column(Modifier.padding(start = 10.dp)) {
+                            if (a.who != null) Text(a.who, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+                            Text(a.said, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 private fun khz(hz: Int): String = "${String.format(Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0")} kHz"
 
@@ -400,6 +503,7 @@ private fun StageRow(stage: Stage, last: Boolean, reportNodeY: (LayoutCoordinate
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
+                stage.content?.invoke()
                 stage.rows.forEach { (label, value) ->
                     Text(
                         buildAnnotatedString {

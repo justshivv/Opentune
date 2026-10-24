@@ -45,7 +45,31 @@ object Romanizer {
             )
             i = j
         }
-        return out.toString().replace(Regex("\\s+"), " ").trim().takeIf { it.isNotEmpty() && it != text.trim() }
+        return plain(out.toString()).replace(Regex("\\s+"), " ").trim().takeIf { it.isNotEmpty() && it != text.trim() }
+    }
+
+    /**
+     * Plain letters only. ICU leaves some marks Latin-ASCII doesn't reach, most
+     * of all for Urdu and Arabic: a tilde for a nasal "ں" with no letter of its
+     * own to sit on, "ʰ" for an aspirate. Phones draw a mark without a letter as
+     * a dotted circle, so marks go, "ʰ" becomes "h" and other modifier letters
+     * ("ʾ", "ʿ") are dropped.
+     */
+    internal fun plain(s: String): String {
+        val out = StringBuilder(s.length)
+        for (c in java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)) {
+            when (Character.getType(c).toByte()) {
+                Character.NON_SPACING_MARK, Character.ENCLOSING_MARK, Character.COMBINING_SPACING_MARK -> Unit
+                Character.MODIFIER_LETTER -> when (c) {
+                    'ʰ' -> out.append('h')
+                    'ʷ' -> out.append('w')
+                    'ʸ' -> out.append('y')
+                    else -> Unit
+                }
+                else -> if (c != '\u25CC') out.append(c)
+            }
+        }
+        return java.text.Normalizer.normalize(out, java.text.Normalizer.Form.NFC)
     }
 
     private fun transliterate(t: Any?, s: String): String =

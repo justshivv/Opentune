@@ -637,7 +637,8 @@ private fun settingsSections(
                 SheetButton("Sign out", tone = SheetTone.Danger, onClick = {
                     confirmSignOut = false
                     AccountStore.signOut()
-                    android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                    // Every cookie goes, so Spotify's sign-in is put back afterwards.
+                    com.opentune.ui.spotify.SpotifyConnection.keepingSpotify { android.webkit.CookieManager.getInstance().removeAllCookies(it) }
                 })
             },
             dismissButton = { SheetButton("Cancel", onClick = { confirmSignOut = false }, closes = true) },
@@ -691,6 +692,35 @@ private fun settingsSections(
                         NavRow("Add another account", onSignIn, summary = "Sign in to a second YouTube Music account and switch between them", icon = Icons.Rounded.PersonAdd)
                     }
                 } else null,
+                Entry("Spotify account", "spotify connect sign in login account playlists library sync disconnect") {
+                    if (spotifyConnected) {
+                        Column {
+                            SettingRow(
+                                "Spotify",
+                                summary = when {
+                                    spotifySync.running && spotifySync.current != null -> "Connected · bringing over ${spotifySync.current} (${spotifySync.index} of ${spotifySync.count})"
+                                    spotifySync.running -> "Connected · reading your Spotify library…"
+                                    spotifySync.error != null -> "Connected · ${spotifySync.error}. Tap to try again"
+                                    spotifySync.lastSynced > 0 -> "Connected · playlists in Library, checked " +
+                                        android.text.format.DateUtils.getRelativeTimeSpanString(spotifySync.lastSynced) + ". Tap to check now"
+                                    else -> "Connected · tap to bring your playlists into Library"
+                                },
+                                leading = { SpotifyMark() },
+                                enabled = !spotifySync.running,
+                                onClick = { com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true) },
+                            )
+                            RowDivider()
+                            SettingRow("Disconnect Spotify", summary = "Signs out of Spotify inside OpenTune. Playlists already brought over stay in Library", icon = Icons.Rounded.Close, onClick = { com.opentune.ui.spotify.SpotifyConnection.disconnect() })
+                        }
+                    } else {
+                        NavRow(
+                            "Connect Spotify",
+                            { context.startActivity(android.content.Intent(context, com.opentune.ui.spotify.SpotifyConnectActivity::class.java)) },
+                            summary = spotifyProblem?.let { "$it. Sign in again" } ?: "Your playlists in Library, each song's Canvas, and suggestions made for you",
+                            leading = { SpotifyMark() },
+                        )
+                    }
+                },
                 Entry("Link a device", "tv television web browser computer cast speaker chromecast watch wear together qr pairing sign in with your phone platforms") {
                     NavRow("Link a device", onOpenDevices, summary = "Sign in your TV, the web player, speakers and more", icon = Icons.Rounded.Devices)
                 },
@@ -1018,39 +1048,27 @@ private fun settingsSections(
                 },
                 Entry("Animated covers", "apple music motion artwork video moving album cover animated") {
                     ToggleRow("Animated covers", ui.animatedCovers, { v -> AppSettings.updateUi { it.copy(animatedCovers = v) } }, summary = "When Apple Music has a moving cover for the album, it loops silently in the player's cover", icon = Icons.Rounded.Animation)
-                },
-                Entry("Spotify", "spotify canvas video loop background connect sign in playlists library sync") {
-                    if (spotifyConnected) {
-                        ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = "When a song has a Canvas on Spotify, it loops silently behind the player", icon = Icons.Rounded.Animation)
+                    if (ui.animatedCovers) {
                         RowDivider()
-                        ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = "A song you like here goes into your Spotify Liked Songs too, so Spotify's suggestions learn from it", icon = Icons.Rounded.Favorite)
-                        RowDivider()
-                        ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = Icons.Rounded.Album)
-                        RowDivider()
-                        SettingRow(
-                            "Spotify playlists",
-                            summary = when {
-                                spotifySync.running && spotifySync.current != null -> "Bringing over ${spotifySync.current} (${spotifySync.index} of ${spotifySync.count})"
-                                spotifySync.running -> "Reading your Spotify library…"
-                                spotifySync.error != null -> "${spotifySync.error}. Tap to try again"
-                                spotifySync.lastSynced > 0 -> "In Library, marked Spotify. Checked " +
-                                    android.text.format.DateUtils.getRelativeTimeSpanString(spotifySync.lastSynced) + ". Tap to check now"
-                                else -> "Tap to bring your Spotify playlists into Library"
-                            },
-                            icon = Icons.AutoMirrored.Rounded.QueueMusic,
-                            enabled = !spotifySync.running,
-                            onClick = { com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true) },
-                        )
-                        RowDivider()
-                        SettingRow("Disconnect Spotify", summary = "Signs out of Spotify inside OpenTune. Playlists already brought over stay in Library", icon = Icons.Rounded.Close, onClick = { com.opentune.ui.spotify.SpotifyConnection.disconnect() })
-                    } else {
-                        NavRow(
-                            "Connect Spotify",
-                            { context.startActivity(android.content.Intent(context, com.opentune.ui.spotify.SpotifyConnectActivity::class.java)) },
-                            summary = spotifyProblem?.let { "$it. Sign in again" } ?: "Sign in on Spotify's own page to bring your playlists into Library and show each song's Canvas behind the player",
-                            icon = Icons.Rounded.Animation,
-                        )
+                        SettingRow("Animated cover quality", summary = when (ui.motionQuality) {
+                            com.opentune.data.settings.MotionQuality.LOW -> "Up to 768 px, about 1.5 Mbps. Lightest on data"
+                            com.opentune.data.settings.MotionQuality.MEDIUM -> "Up to 1080 px, about 4 Mbps"
+                            com.opentune.data.settings.MotionQuality.HIGH -> "Up to 2160 px, about 12 Mbps. Sharpest, uses the most data"
+                        }, icon = Icons.Rounded.HighQuality, below = {
+                            PillSegmented(com.opentune.data.settings.MotionQuality.entries, ui.motionQuality, { it.label }, { v -> AppSettings.updateUi { it.copy(motionQuality = v) } })
+                        })
                     }
+                },
+                Entry("Spotify", "spotify canvas video loop background likes mixes home") {
+                    // Connecting is in Account; these only do something while Spotify is connected.
+                    val off = if (spotifyConnected) null else "Connect Spotify in Account first"
+                    ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = off ?: "When a song has a Canvas on Spotify, it loops silently behind the player", icon = Icons.Rounded.Animation, enabled = spotifyConnected)
+                    RowDivider()
+                    ToggleRow("Frosted glass over Canvas", ui.canvasFrost, { v -> AppSettings.updateUi { it.copy(canvasFrost = v) } }, summary = off ?: "From the song's title down, the Canvas blurs gradually into frosted glass so the controls stay readable", icon = Icons.Rounded.BlurOn, enabled = spotifyConnected && ui.spotifyCanvas)
+                    RowDivider()
+                    ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = off ?: "A song you like here goes into your Spotify Liked Songs too, so Spotify's suggestions learn from it", icon = Icons.Rounded.Favorite, enabled = spotifyConnected)
+                    RowDivider()
+                    ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = off ?: "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = Icons.Rounded.Album, enabled = spotifyConnected)
                 },
                 Entry("Animated covers on Wi-Fi only", "mobile data metered save data wifi animated covers canvas video") {
                     ToggleRow("Animated covers on Wi-Fi only", ui.animatedCoversWifiOnly, { v -> AppSettings.updateUi { it.copy(animatedCoversWifiOnly = v) } }, summary = "Animated covers and Canvas don't load on mobile data", icon = Icons.Rounded.Wifi, enabled = ui.animatedCovers || (spotifyConnected && ui.spotifyCanvas))
@@ -1490,3 +1508,10 @@ private fun outputSummary(context: Context, float: Boolean): String {
 
 private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 1024f) else "$mb MB"
 
+/** Spotify's green disc, for its rows in Account. */
+@Composable
+private fun SpotifyMark() {
+    Box(Modifier.size(40.dp).clip(CircleShape).background(com.opentune.ui.account.SpotifyGreen), contentAlignment = Alignment.Center) {
+        Icon(Icons.Rounded.GraphicEq, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(22.dp))
+    }
+}
