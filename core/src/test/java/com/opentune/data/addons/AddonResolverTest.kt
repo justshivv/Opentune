@@ -204,4 +204,12 @@ class AddonResolverTest {
         assertEquals("first", result.provider)
         assertTrue(calls.any { "second.example" in it })
     }
+
+    @Test fun aPausedAddonIsLeftAloneForEverySong() {
+        assertFalse(AddonResolver.notePaused("paused-test", AddonHttp.Failure(503)))
+        assertFalse(AddonResolver.paused("paused-test"))
+        assertTrue(AddonResolver.notePaused("paused-test", AddonHttp.Failure(503, 21_600, paused = true)))
+        assertTrue(AddonResolver.paused("paused-test"))
+        assertFalse(AddonResolver.paused("another"))
+    }
 }

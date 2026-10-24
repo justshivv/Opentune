@@ -215,7 +215,7 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
     /** Every usable add-on at once; one that fails or is slow is left out rather than holding the rest. */
     private suspend fun searchAddons(q: String): UiState<List<AddonHit>> {
         val store = com.opentune.data.addons.AddonStore
-        val usable = store.addons.value.filter(store::usable)
+        val usable = store.addons.value.filter { store.usable(it) && !com.opentune.data.addons.AddonResolver.paused(it.key) }
         if (usable.isEmpty()) return UiState.Error("Add an audio add-on in Settings › Add-ons to search it here.")
         val found = kotlinx.coroutines.coroutineScope {
             usable.map { addon ->
@@ -225,7 +225,7 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
                             val client = com.opentune.data.addons.AddonClient.forBase(addon.base)
                             val manifest = client.manifest().let { if (addon.admin) it.copy(name = addon.manifest.name) else it }
                             client.search(q, manifest, "LOSSLESS").map { AddonHit(it, addon, manifest) }
-                        }.getOrNull()
+                        }.onFailure { (it as? Exception)?.let { e -> com.opentune.data.addons.AddonResolver.notePaused(addon.key, e) } }.getOrNull()
                     }
                 }
             }.map { it.await() }

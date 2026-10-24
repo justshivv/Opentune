@@ -16,6 +16,8 @@ assert.ok(['staged', 'strict'].includes(policy.body.mode));
 const configuration = await readFile(new URL('./wrangler.toml', import.meta.url), 'utf8');
 assert.equal(policy.body.mode, /^VERIFICATION_MODE\s*=\s*"([^"]+)"/m.exec(configuration)?.[1], 'Deployed verification policy must match the committed configuration');
 report.security = { mode: policy.body.mode };
+const paused = /^PAUSED\s*=\s*"true"/m.test(configuration);
+report.paused = paused;
 const rejected = await get('/auth/web/info?id=' + 'a'.repeat(43));
 assert.equal(rejected.response.status, 401);
 const challenge = await get('/auth/challenge');
@@ -48,6 +50,20 @@ for (const source of ['monochrome', 'archive', 'musopen', 'netease']) {
   assert.equal(response.status, 200); assert.equal(body.id, `org.opentune.${source}`);
   assert.deepEqual(body.resources, ['search', 'stream']); assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*');
   report.manifests.push({ source, status: response.status, url: `${base.origin}/${source}/manifest.json` });
+}
+if (paused) {
+  // Paused: searches and streams are turned away before anything else, so there is no upstream to check.
+  for (const source of ['monochrome', 'archive', 'musopen', 'netease']) {
+    for (const route of ['search?q=295&quality=best', 'stream/untrusted-id?quality=best']) {
+      const r = await fetch(new URL(`/${source}/${route}`, base), { signal: AbortSignal.timeout(20000) });
+      assert.equal(r.status, 503, `${source}/${route}: a paused add-on must turn requests away`);
+      assert.equal(r.headers.get('X-OpenTune-Paused'), '1');
+      await r.body?.cancel();
+    }
+  }
+  await writeFile('lossless-deployment-report.json', JSON.stringify(report, null, 2) + '\n');
+  console.log(JSON.stringify(report, null, 2));
+  process.exit(0);
 }
 if (policy.body.mode === 'strict') {
   report.security.unsignedAccess = [];

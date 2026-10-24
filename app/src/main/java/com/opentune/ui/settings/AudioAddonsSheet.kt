@@ -97,7 +97,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(addon.manifest.name, style = MaterialTheme.typography.titleMedium)
                                     Text(if (addon.admin) "Added by admin" else "Your source", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                    Text(checks[addon.key] ?: if (addon.ownerOff) "Turned off by the admin for now" else if (blocked) "Needs a supported wired, USB or HDMI output" else if (!addon.enabled) "Disabled" else "Lossless · ${if (addon.manifest.downloads) "Streaming & downloads" else "Streaming only"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(checks[addon.key] ?: if (addon.ownerOff) "Turned off by the admin for now" else if (com.opentune.data.addons.AddonResolver.paused(addon.key)) "Paused by its owner for now" else if (blocked) "Needs a supported wired, USB or HDMI output" else if (!addon.enabled) "Disabled" else "Lossless · ${if (addon.manifest.downloads) "Streaming & downloads" else "Streaming only"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Switch(addon.enabled && !addon.ownerOff, { AddonStore.enable(addon.key, it) }, enabled = !addon.ownerOff)
                                 Icon(Icons.Rounded.DragHandle, null, Modifier.size(48.dp)
