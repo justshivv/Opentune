@@ -1,6 +1,6 @@
 # Lossless Bridge source investigation — 24 October 2026
 
-OpenTune can resolve the same NetEase/Meting source directly, without calling Lossless Bridge. The new `/netease` adapter is implemented on `feat/first-party-lossless-addon`; it has not been deployed. Monochrome and Archive were already implemented. The existing strict verification layer protects the new adapter on the first-party host, while public third-party add-ons remain unchanged.
+OpenTune can resolve the same NetEase/Meting source directly, without calling Lossless Bridge. The new `/netease` adapter is deployed from `feat/first-party-lossless-addon`; the branch remains unmerged. Monochrome and Archive were already implemented. The existing strict verification layer protects the new adapter on the first-party host, while public third-party add-ons remain unchanged.
 
 ## Live deployment evidence
 
@@ -43,6 +43,8 @@ This establishes readable FLAC headers, not audible quality, original mastering 
 
 The completed OpenTune adapter returned HTTP 200 for search and stream resolution for both recordings, with the same measured formats, in [run 40048382526](https://github.com/justshivv/Opentune/actions/runs/40048382526). The same run passed all 33 server tests plus the actual Workers/SQLite signature checks for native and web clients. The NetEase tests cover redirect host validation, credentials/insecure URLs, format rejection, cross-source IDs and rate-limit cooldown. The access test ensures unsigned NetEase requests never reach upstreams. Evidence: `services/lossless-addon/reports/netease-adapter-2026-10-24.json`.
 
-## Installation after deployment
+## Installation
 
-The manifest path is `/netease/manifest.json` on OpenTune's existing first-party Worker. It must be deployed before importing that path. The currently installed verification preview already signs requests for this exact origin; no app code change is needed for this adapter. Search and stream resolution remain unavailable to unverified clients. Public manifests remain importable, and returned public upstream media URLs are outside the API access lock.
+Import [the NetEase manifest](https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/netease/manifest.json) in Settings → Audio → Audio add-ons. This is a separate source; it is not automatically added to existing lists. The currently installed verification preview already signs requests for this exact origin; no app code change is needed for this adapter. Search and stream resolution remain unavailable to unverified clients. Public manifests remain importable, and returned public upstream media URLs are outside the API access lock.
+
+Deployment on 24 October at 01:12 UTC passed [production checks](https://github.com/justshivv/Opentune/actions/runs/40048690232): all four manifests returned 200, strict policy remained enabled, and all sixteen unsigned/forged-header search and stream requests returned 401. The workflow passed 33 server tests and native/browser signature checks in the Workers runtime before publishing. The saved report is `services/lossless-addon/reports/netease-deployment-2026-10-24.json`. Device playback of the newly deployed NetEase source remains to be checked; earlier live adapter probes verified its upstream FLAC headers.
