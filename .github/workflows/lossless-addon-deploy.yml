@@ -70,9 +70,11 @@ jobs:
           const url = log.match(/https:\/\/opentune-lossless-addon\.[a-z0-9-]+\.workers\.dev\b/i)?.[0];
           if (!url) throw new Error('Deployment did not report a workers.dev URL');
           appendFileSync(process.env.GITHUB_OUTPUT, `url=${url}\n`);
-          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Monochrome: ${url}/monochrome/manifest.json\n\nArchive: ${url}/archive/manifest.json\n`);
+          for (const source of ['monochrome', 'archive', 'musopen', 'netease']) {
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${source}: ${url}/${source}/manifest.json\n\n`);
+          }
           JS
-      - name: Verify deployed manifests and Monochrome resolution
+      - name: Verify deployed manifests and strict access controls
         env:
           ADDON_URL: ${{ steps.worker.outputs.url }}
         run: node services/lossless-addon/verify-deployment.mjs
