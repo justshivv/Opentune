@@ -15,7 +15,15 @@ jobs:
         with:
           node-version: '24'
       - run: node scripts/research-qobuz.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install playwright==1.58.0
+      - run: python -m playwright install --with-deps chromium
+      - run: python scripts/research-jumo-browser.py
       - uses: actions/upload-artifact@v4
         with:
           name: qobuz-source-check
-          path: qobuz-source-check.json
+          path: |
+            qobuz-source-check.json
+            jumo-browser-check.json
