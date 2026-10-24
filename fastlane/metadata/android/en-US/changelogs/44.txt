@@ -1,0 +1,5 @@
+• Verified access to OpenTune’s Monochrome, NetEase, Archive and Musopen sources
+• Fix official OpenTune requests being rejected after verification
+• Clearer source connection and verification errors
+• Browser verification through approval in the official Android app
+• Public community add-ons remain independent of OpenTune verification
