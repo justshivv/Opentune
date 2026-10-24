@@ -1,0 +1,21 @@
+name: Qobuz source research
+on:
+  push:
+    branches: ['research/qobuz-source-check-20261024']
+    paths: ['scripts/research-qobuz.mjs', '.github/workflows/qobuz-source-research.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node scripts/research-qobuz.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qobuz-source-check
+          path: qobuz-source-check.json
