@@ -434,7 +434,20 @@ fun PlayerLayout(
     val fullStyle = !landscape && state.ui.fullScreenCover && (style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     val flies = !state.ui.reduceAnimation && !docked && !landscape &&
         style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
-        style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST
+        style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST &&
+        // A Canvas fills the page where the full-screen cover would be: there's no cover to fly to.
+        !(fullStyle && state.canvasVideo != null)
+    // The playing cover, fetched at both sizes as soon as it's known: with a Canvas showing
+    // nothing else draws it, so the small cover in the lyrics and queue header and the cover
+    // flying to it showed an empty frame until it had loaded.
+    val prefetchContext = LocalContext.current
+    LaunchedEffect(current.thumbnailUrl) {
+        val loader = coil3.SingletonImageLoader.get(prefetchContext)
+        for (px in listOf(ROW_ART_PX, com.opentune.data.model.PLAYER_ART_PX)) {
+            val url = current.thumbnailUrl.artworkAt(px) ?: continue
+            loader.enqueue(coil3.request.ImageRequest.Builder(prefetchContext).data(url).build())
+        }
+    }
     // Where no cover flies (a full-screen cover, the other designs), the cover
     // page itself follows a swipe up: 0 at rest, 1 as far as it goes. Let go
     // past the mark, the lists come in from where it was left, not after.

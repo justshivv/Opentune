@@ -268,24 +268,29 @@ private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behi
         // read while drawing: resizing it every frame re-laid it out and made the blur start
         // over at a new size each time, which is what stuttered.
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val toPx = with(density) { (if (behindText) 0.dp else ((titleTop ?: (maxHeight * 0.55f)) - CANVAS_FROST_LEAD).coerceIn(0.dp, maxHeight)).toPx() }
+        val toPx = with(density) { ((titleTop ?: (maxHeight * 0.55f)) - CANVAS_FROST_LEAD).coerceIn(0.dp, maxHeight).toPx() }
         val from = androidx.compose.animation.core.animateFloatAsState(toPx, androidx.compose.animation.core.tween(450), label = "canvasFrost")
         val shade = androidx.compose.animation.core.animateFloatAsState(if (behindText) 1f else 0f, androidx.compose.animation.core.tween(450), label = "canvasShade")
         val ramp = with(density) { (CANVAS_FROST_LEAD * 2).toPx() }
+        // Behind lyrics and the queue there's no blur: the clip goes on under a wash of the
+        // song's own colour, deep enough for text to read over any frame. Blurring a moving
+        // video over the whole page cost a fresh blur on every frame, and stuttered.
+        val wash = lerp(MaterialTheme.colorScheme.surface, Color.Black, 0.35f)
+        // Changes once, as the wash settles or lifts, not on each frame of it.
+        val settled by remember(behindText) { androidx.compose.runtime.derivedStateOf { behindText && shade.value >= 0.999f } }
+        val frosted = blur && !settled
         Box(
             Modifier
                 .matchParentSize()
                 .then(
-                    if (!blur) Modifier else Modifier.hazeEffect(haze) {
+                    if (!frosted) Modifier else Modifier.hazeEffect(haze) {
                         blurRadius = 30.dp
                         noiseFactor = 0.04f
                         tints = listOf(dev.chrisbanes.haze.HazeTint(Color.Black.copy(alpha = 0.18f)))
                         // A blur this soft loses nothing worked out at half size, and costs a quarter.
                         inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(0.5f)
                         val start = from.value
-                        // Fully over the text, one even blur: a gradient there would start at the top
-                        // edge anyway, and the plain blur is the cheaper of the two.
-                        progressive = if (start <= 0.5f) null else dev.chrisbanes.haze.HazeProgressive.verticalGradient(
+                        progressive = dev.chrisbanes.haze.HazeProgressive.verticalGradient(
                             easing = androidx.compose.animation.core.EaseInOut,
                             startY = start,
                             startIntensity = 0f,
@@ -307,9 +312,15 @@ private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behi
                         ),
                         topLeft = androidx.compose.ui.geometry.Offset(0f, start),
                     )
-                    // Behind lyrics, an even dimming over the whole clip so white lines read on any frame.
-                    val dim = 0.42f * shade.value
-                    if (dim > 0f) drawRect(Color.Black.copy(alpha = dim))
+                    // Behind lyrics and the queue: the colour wash, a touch lighter at the top.
+                    val k = shade.value
+                    if (k > 0f) drawRect(
+                        Brush.verticalGradient(
+                            0f to wash.copy(alpha = 0.74f * k),
+                            0.5f to wash.copy(alpha = 0.82f * k),
+                            1f to wash.copy(alpha = 0.9f * k),
+                        ),
+                    )
                 },
         )
     }
