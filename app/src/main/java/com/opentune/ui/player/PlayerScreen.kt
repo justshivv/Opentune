@@ -17,7 +17,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.ui.draw.blur
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.scaleOut
@@ -1564,10 +1563,16 @@ private fun TogetherPill(room: Together.Room, onClick: () -> Unit) {
 private fun Modifier.focusIn(animate: Boolean): Modifier {
     val v = remember { androidx.compose.animation.core.Animatable(if (animate) 0f else 1f) }
     LaunchedEffect(Unit) { if (animate) v.animateTo(1f, tween(200, easing = FastOutSlowInEasing)) }
-    val blur = (1f - v.value) * 2f
-    return this
-        .graphicsLayer { val s = 0.96f + 0.04f * v.value; scaleX = s; scaleY = s }
-        .then(if (blur > 0.2f) Modifier.blur(blur.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded) else Modifier)
+    // Everything is read while drawing, so the page itself isn't recomposed on each frame.
+    return this.graphicsLayer {
+        val t = v.value
+        val s = 0.96f + 0.04f * t
+        scaleX = s; scaleY = s
+        val radius = (1f - t) * 2.dp.toPx()
+        renderEffect = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && radius > 0.5f)
+            androidx.compose.ui.graphics.BlurEffect(radius, radius, androidx.compose.ui.graphics.TileMode.Decal) else null
+        clip = false
+    }
 }
 
 

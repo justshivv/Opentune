@@ -101,6 +101,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
@@ -263,40 +264,54 @@ private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behi
         // A light scrim at the top so the status bar and "Playing from" stay readable.
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.18f to Color.Transparent)))
         // Over lyrics and the queue the frost starts at the very top, moving up there as they open.
-        val to = if (behindText) 0.dp else ((titleTop ?: (maxHeight * 0.55f)) - CANVAS_FROST_LEAD).coerceIn(0.dp, maxHeight)
-        val from by androidx.compose.animation.core.animateDpAsState(to, androidx.compose.animation.core.tween(450), label = "canvasFrost")
-        val shade by androidx.compose.animation.core.animateFloatAsState(if (behindText) 1f else 0f, androidx.compose.animation.core.tween(450), label = "canvasShade")
-        val ramp = with(androidx.compose.ui.platform.LocalDensity.current) { (CANVAS_FROST_LEAD * 2).toPx() }
+        // The frosted box keeps its full size throughout and only where the frost begins moves,
+        // read while drawing: resizing it every frame re-laid it out and made the blur start
+        // over at a new size each time, which is what stuttered.
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val toPx = with(density) { (if (behindText) 0.dp else ((titleTop ?: (maxHeight * 0.55f)) - CANVAS_FROST_LEAD).coerceIn(0.dp, maxHeight)).toPx() }
+        val from = androidx.compose.animation.core.animateFloatAsState(toPx, androidx.compose.animation.core.tween(450), label = "canvasFrost")
+        val shade = androidx.compose.animation.core.animateFloatAsState(if (behindText) 1f else 0f, androidx.compose.animation.core.tween(450), label = "canvasShade")
+        val ramp = with(density) { (CANVAS_FROST_LEAD * 2).toPx() }
         Box(
             Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(maxHeight - from)
+                .matchParentSize()
                 .then(
                     if (!blur) Modifier else Modifier.hazeEffect(haze) {
                         blurRadius = 30.dp
                         noiseFactor = 0.04f
                         tints = listOf(dev.chrisbanes.haze.HazeTint(Color.Black.copy(alpha = 0.18f)))
-                        progressive = dev.chrisbanes.haze.HazeProgressive.verticalGradient(
+                        // A blur this soft loses nothing worked out at half size, and costs a quarter.
+                        inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(0.5f)
+                        val start = from.value
+                        // Fully over the text, one even blur: a gradient there would start at the top
+                        // edge anyway, and the plain blur is the cheaper of the two.
+                        progressive = if (start <= 0.5f) null else dev.chrisbanes.haze.HazeProgressive.verticalGradient(
                             easing = androidx.compose.animation.core.EaseInOut,
-                            startY = 0f,
+                            startY = start,
                             startIntensity = 0f,
-                            endY = ramp,
+                            endY = start + ramp,
                             endIntensity = 1f,
                         )
                     },
                 )
-                // Darker toward the bottom too, with or without the blur.
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.25f to Color.Black.copy(alpha = if (blur) 0.15f else if (ui.canvasFrost) 0.45f else 0.25f),
-                        1f to Color.Black.copy(alpha = if (blur) 0.45f else if (ui.canvasFrost) 0.85f else 0.7f),
-                    ),
-                ),
+                // Darker toward the bottom too, with or without the blur, from where the frost starts.
+                .drawBehind {
+                    val start = from.value
+                    drawRect(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            0.25f to Color.Black.copy(alpha = if (blur) 0.15f else if (ui.canvasFrost) 0.45f else 0.25f),
+                            1f to Color.Black.copy(alpha = if (blur) 0.45f else if (ui.canvasFrost) 0.85f else 0.7f),
+                            startY = start,
+                            endY = size.height,
+                        ),
+                        topLeft = androidx.compose.ui.geometry.Offset(0f, start),
+                    )
+                    // Behind lyrics, an even dimming over the whole clip so white lines read on any frame.
+                    val dim = 0.42f * shade.value
+                    if (dim > 0f) drawRect(Color.Black.copy(alpha = dim))
+                },
         )
-        // Behind lyrics, an even dimming over the whole clip so white lines read on any frame.
-        if (shade > 0f) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.42f * shade)))
     }
 }
 
