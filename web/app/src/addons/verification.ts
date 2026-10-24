@@ -1,4 +1,4 @@
-export const OFFICIAL_ADDON = 'https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev';
+export const OFFICIAL_ADDON = 'https://addon-opentune.rethinknow.in';
 type Session = { key: CryptoKey; session: string; expires: number; offset: number };
 export type Pairing = { id: string; poll: string; code: string; link: string; expires: number; key: CryptoKey };
 const bytes = (s: string) => new TextEncoder().encode(s);

@@ -27,7 +27,9 @@ import java.util.concurrent.TimeUnit
 /** Only the first-party origin receives proofs. No APK-wide shared secret. */
 object FirstPartyAddonAuth {
     class VerificationFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
-    const val ORIGIN = "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev"
+    /** The add-on on OpenTune's own server (services/lossless-addon/vps); it was a Cloudflare Worker before. */
+    const val ORIGIN = "https://addon-opentune.rethinknow.in"
+    private const val HOST = "addon-opentune.rethinknow.in"
     private const val ALIAS = "opentune.addon.attestation.v1"
     private val mutex = Mutex()
     private lateinit var file: File
@@ -37,7 +39,7 @@ object FirstPartyAddonAuth {
     private var blockedUntil = 0L
     private var blockedReason = "OpenTune device verification failed"
     fun init(context: Context) { file = File(context.noBackupFilesDir, "addon-device-session.json") }
-    fun protects(url: okhttp3.HttpUrl): Boolean = url.scheme == "https" && url.host == "opentune-lossless-addon.create-a-new-site-with-sites.workers.dev" && url.port == 443 &&
+    fun protects(url: okhttp3.HttpUrl): Boolean = url.scheme == "https" && url.host == HOST && url.port == 443 &&
         !url.encodedPath.endsWith("/manifest.json") && !url.encodedPath.endsWith("/health") && url.encodedPath != "/"
     private fun b64(bytes: ByteArray) = Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
     private fun sha(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
