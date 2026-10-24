@@ -630,6 +630,16 @@ object Innertube {
         put("isAudioOnly", true)
     }
 
+    /**
+     * A mix's songs as YouTube Music's player has them: the watch queue for
+     * [playlistId]. Its own apps open a mix (a Supermix, "My Mix") this way,
+     * and the playlist page for one can be refused.
+     */
+    suspend fun mixQueue(playlistId: String): JsonObject = postMusic("next") {
+        put("playlistId", playlistId)
+        put("isAudioOnly", true)
+    }
+
     /** Timed caption transcript used as a last-resort lyrics source. */
     suspend fun transcript(videoId: String): JsonObject = postMusic("get_transcript") {
         // get_transcript expects a tiny protobuf: field 1, length, video id.

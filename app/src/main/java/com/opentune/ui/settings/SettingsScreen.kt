@@ -1111,7 +1111,7 @@ private fun settingsSections(
                         SettingRow("Animated cover quality", summary = when (ui.motionQuality) {
                             com.opentune.data.settings.MotionQuality.LOW -> "Up to 768 px, about 1.5 Mbps. Lightest on data"
                             com.opentune.data.settings.MotionQuality.MEDIUM -> "Up to 1080 px, about 4 Mbps"
-                            com.opentune.data.settings.MotionQuality.HIGH -> "Up to 2160 px, about 12 Mbps. Sharpest, uses the most data"
+                            com.opentune.data.settings.MotionQuality.HIGH -> "Up to 2160 px square, about 15 Mbps. Sharpest, uses the most data"
                         }, icon = Icons.Rounded.HighQuality, below = {
                             PillSegmented(com.opentune.data.settings.MotionQuality.entries, ui.motionQuality, { it.label }, { v -> AppSettings.updateUi { it.copy(motionQuality = v) } })
                         })
@@ -1122,7 +1122,9 @@ private fun settingsSections(
                     val off = if (spotifyConnected) null else "Connect Spotify in Account first"
                     ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = off ?: "When a song has a Canvas on Spotify, it loops silently behind the player", icon = Icons.Rounded.Animation, enabled = spotifyConnected)
                     RowDivider()
-                    ToggleRow("Frosted glass over Canvas", ui.canvasFrost, { v -> AppSettings.updateUi { it.copy(canvasFrost = v) } }, summary = off ?: "From the song's title down, the Canvas blurs gradually into frosted glass so the controls stay readable", icon = Icons.Rounded.BlurOn, enabled = spotifyConnected && ui.spotifyCanvas)
+                    SettingRow("Behind the title and controls", summary = off ?: ui.canvasLook.summary, icon = Icons.Rounded.BlurOn, below = {
+                        PillSegmented(com.opentune.data.settings.CanvasLook.entries, ui.canvasLook, { it.label }, { v -> AppSettings.updateUi { it.copy(canvasLook = v) } })
+                    })
                     RowDivider()
                     ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = off ?: "Likes are saved to Spotify. Listening here does not add plays to Spotify history", icon = Icons.Rounded.Favorite, enabled = spotifyConnected)
                     RowDivider()

@@ -261,7 +261,8 @@ fun PlayerBackdrop(
 private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behindText: Boolean, modifier: Modifier) {
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
     val haze = dev.chrisbanes.haze.rememberHazeState()
-    val blur = ui.canvasFrost && !ui.reduceBlur
+    val look = ui.canvasLook
+    val blur = look == com.opentune.data.settings.CanvasLook.FROST && !ui.reduceBlur
     androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
         Box(Modifier.matchParentSize().then(if (blur) Modifier.hazeSource(haze) else Modifier)) {
             // Keyed on the clip, so the next song's starts fresh and fades in over this one's backdrop.
@@ -307,14 +308,25 @@ private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behi
                         )
                     },
                 )
-                // Darker toward the bottom too, with or without the blur, from where the frost starts.
+                // From where the title begins down: the chosen look, coming in over the ramp.
+                // Tint and Dark are plain gradients, so they show the same on every phone
+                // and cost nothing per frame; a phone that can't blur video shows Frosted as
+                // its light darkening only.
                 .drawBehind {
                     val start = from.value
+                    val span = (size.height - start).coerceAtLeast(1f)
+                    val inAt = (ramp / span).coerceIn(0.05f, 0.9f)
+                    val (tone, mid, foot) = when (look) {
+                        com.opentune.data.settings.CanvasLook.TINT -> Triple(wash, 0.8f, 0.92f)
+                        com.opentune.data.settings.CanvasLook.SHADE -> Triple(Color.Black, 0.62f, 0.86f)
+                        com.opentune.data.settings.CanvasLook.FROST -> Triple(Color.Black, if (blur) 0.15f else 0.45f, if (blur) 0.45f else 0.8f)
+                        com.opentune.data.settings.CanvasLook.NONE -> Triple(Color.Black, 0.25f, 0.7f)
+                    }
                     drawRect(
                         Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            0.25f to Color.Black.copy(alpha = if (blur) 0.15f else if (ui.canvasFrost) 0.45f else 0.25f),
-                            1f to Color.Black.copy(alpha = if (blur) 0.45f else if (ui.canvasFrost) 0.85f else 0.7f),
+                            0f to tone.copy(alpha = 0f),
+                            inAt to tone.copy(alpha = mid),
+                            1f to tone.copy(alpha = foot),
                             startY = start,
                             endY = size.height,
                         ),
@@ -559,7 +571,16 @@ fun ArtworkPane(
  * says how far, adding up while the taps keep coming.
  */
 @Composable
-internal fun SeekTaps(onSeekBy: (Long) -> Unit, scale: Float, modifier: Modifier) {
+internal fun SeekTaps(
+    onSeekBy: (Long) -> Unit,
+    scale: Float,
+    modifier: Modifier,
+    /**
+     * What the taps go round. Wrapped, not covered: a layer laid over a cover took its
+     * touches, so the swipes under it (next song, up to lyrics and the queue) never saw them.
+     */
+    content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
+) {
     val haptics = com.opentune.ui.components.rememberHaptics()
     val ripple = remember { Animatable(1f) }
     var side by remember { mutableStateOf(0) }
@@ -584,7 +605,9 @@ internal fun SeekTaps(onSeekBy: (Long) -> Unit, scale: Float, modifier: Modifier
                 }
             })
         },
+        contentAlignment = Alignment.Center,
     ) {
+        content()
         val p = ripple.value
         if (p < 1f && side != 0) {
             val shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)

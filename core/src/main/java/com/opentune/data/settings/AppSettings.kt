@@ -394,8 +394,8 @@ data class InterfaceSettings(
     val animatedCoversWifiOnly: Boolean = true,
     /** With Spotify connected, its Canvas loops behind the player. */
     val spotifyCanvas: Boolean = true,
-    /** Over a Canvas, the player turns to frosted glass from the title down. */
-    val canvasFrost: Boolean = true,
+    /** How a Canvas turns from the title down, so the controls over it read. */
+    val canvasLook: CanvasLook = CanvasLook.TINT,
     /** With Spotify connected, songs liked here are saved to Spotify's Liked Songs too. */
     val spotifySaveLikes: Boolean = true,
     /** With Spotify connected, Home shows Spotify's mixes made for the listener. */
@@ -578,12 +578,22 @@ enum class DockMotion(val label: String, val summary: String) {
     SINK("Sink", "The tabs sink away into a blur and the song settles into their place"),
 }
 
+/** How a Canvas turns from the title down, so the title and controls over it read. */
+@Serializable
+enum class CanvasLook(val label: String, val summary: String) {
+    TINT("Tint", "From the title down the Canvas fades into the song's own colour"),
+    SHADE("Dark", "From the title down the Canvas fades to near black"),
+    FROST("Frosted", "From the title down the Canvas blurs into frosted glass, where the phone can blur video"),
+    NONE("Plain", "Only a light darkening behind the controls"),
+}
+
 /** How sharp an animated cover plays: the largest picture and the most data a second it may use. */
 @Serializable
 enum class MotionQuality(val label: String, val maxPx: Int, val maxBitrate: Int) {
     LOW("Low", 768, 1_500_000),
     MEDIUM("Medium", 1080, 4_000_000),
-    HIGH("High", 2160, 12_000_000),
+    // Apple's sharpest are 2160 px square (up to about 15 Mbps) and 2048 × 2732 tall.
+    HIGH("High", 2732, 16_000_000),
 }
 
 /** How synced lyrics move as the song plays. */

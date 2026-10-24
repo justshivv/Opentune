@@ -505,7 +505,7 @@ fun CollectionScreen(
 
     GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
         PlaylistSearchHeader(search) {
-        CollapsingBar(title, listState, onBack, forceCollapsed = searching) {
+        CollapsingBar(title, listState, onBack, forceCollapsed = searching, artworkBehind = loaded?.thumbnailUrl != null) {
             // Search, order and more in one glass pill.
             Row(
                 Modifier.height(48.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 4.dp),

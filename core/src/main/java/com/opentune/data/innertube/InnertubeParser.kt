@@ -1073,6 +1073,12 @@ object InnertubeParser {
             )
         }.distinctBy { it.key }
 
+    /** The name of the mix a watch queue (`next` response) plays, as its queue panel shows it. */
+    fun mixTitle(root: JsonElement): String? = collectRenderers(root, "playlistPanelRenderer").firstNotNullOfOrNull { panel ->
+        (panel["title"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+            ?: panel.o("title").runs().takeIf { it.isNotBlank() }
+    }
+
     /** Tracks of a watch queue (`next` response) — the AutoPlay radio mix. */
     fun parseWatchQueue(root: JsonElement): List<Song> {
         val out = LinkedHashMap<String, Song>()

@@ -102,12 +102,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val motion = moving && ui.animatedCovers
                 val cookie = if (moving && ui.spotifyCanvas) com.opentune.ui.spotify.SpotifyConnection.cookie() else null
                 if (!ui.albumCovers && !motion && cookie == null) return@collectLatest
+                // A sharper cover found for this song before: straight away once it's shown to load,
+                // rather than after waiting for the song's length.
+                if (ui.albumCovers) com.opentune.data.covers.AlbumCovers.cached(song)?.let {
+                    if (warmArtwork(it) && player.currentSong.value?.videoId == song.videoId) betterCover.value = song.videoId to it
+                }
                 // Apple, Deezer and Spotify are matched on the exact length, so wait for the player's.
                 val duration = withTimeoutOrNull(20_000) {
                     player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
                 } ?: 0L
                 kotlinx.coroutines.coroutineScope {
-                    if (ui.albumCovers) launch {
+                    if (ui.albumCovers && betterCover.value?.first != song.videoId) launch {
                         com.opentune.data.covers.AlbumCovers.coverFor(song, duration)?.let {
                             // Keep the visible cover until its replacement is decoded and cached.
                             if (warmArtwork(it)) betterCover.value = song.videoId to it

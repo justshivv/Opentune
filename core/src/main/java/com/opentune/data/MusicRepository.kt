@@ -486,7 +486,16 @@ object MusicRepository {
 
     suspend fun collection(browseId: String, onPage: ((Collection) -> Unit)? = null): Collection = io {
         val owner = com.opentune.data.library.LibraryCache.owner()
-        val response = Innertube.browse(browseId)
+        val mixId = browseId.removePrefix("VL").takeIf { it.startsWith("RD") }
+        val response = try {
+            Innertube.browse(browseId)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // A mix whose page is refused still plays: its songs come as the player's queue.
+            mixId?.let { id -> mixCollection(browseId, id)?.let { return@io it } }
+            throw e
+        }
         val header = InnertubeParser.parseBrowseHeader(response)
         val page = InnertubeParser.parsePlaylistShelf(response)
         // A song on two pages of the playlist, as on one, shows once.
@@ -520,6 +529,22 @@ object MusicRepository {
             token = next.continuation
         }
         snapshot().also { com.opentune.data.library.LibraryCache.save(it, owner) }
+    }
+
+    /** A mix read as the player's queue for it, or null when that has no songs either. */
+    private suspend fun mixCollection(browseId: String, playlistId: String): Collection? {
+        val response = Innertube.mixQueue(playlistId)
+        val songs = ContentFilter.songs(InnertubeParser.parseWatchQueue(response))
+        if (songs.isEmpty()) return null
+        val title = InnertubeParser.mixTitle(response)
+        return Collection(
+            browseId = browseId,
+            title = title.orEmpty().ifBlank { "Mix" },
+            subtitle = "Mix · YouTube Music",
+            thumbnailUrl = songs.first().thumbnailUrl,
+            songs = songs,
+            owned = false,
+        )
     }
 
     /** The rest of a playlist's songs, page by page after the first. */

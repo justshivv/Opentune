@@ -50,6 +50,10 @@ internal fun LoopingVideo(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var drawn by remember(url) { mutableStateOf(false) }
     var size by remember(url) { mutableStateOf(VideoSize.UNKNOWN) }
+    // Black bands some clips carry in the picture itself (a wide video padded to a tall
+    // frame): found from a few frames, then cropped away with the rest.
+    var bars by remember(url) { mutableStateOf(Bars.NONE) }
+    var view by remember { mutableStateOf<TextureView?>(null) }
     val fade by animateFloatAsState(if (drawn) 1f else 0f, tween(700), label = "loopingVideo")
     val player = remember(url) {
         ExoPlayer.Builder(context)
@@ -62,6 +66,9 @@ internal fun LoopingVideo(
             // the player opened on Apple's smallest (360 px) and a short loop seldom gave it time to step up.
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                // Left to itself the player also caps the picture at what fits the screen: a square
+                // clip on a 1080 px wide phone never went past 1080, whatever quality was chosen.
+                .clearViewportSizeConstraints()
                 .setMaxVideoSize(maxPx, maxPx)
                 .setMaxVideoBitrate(maxBitrate)
                 .setForceHighestSupportedBitrate(true)
@@ -82,6 +89,19 @@ internal fun LoopingVideo(
         }
     }
     LaunchedEffect(player, playing) { player.playWhenReady = playing && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) }
+    LaunchedEffect(url, drawn) {
+        if (!drawn) return@LaunchedEffect
+        // A band has to be there in every look, so a dark scene isn't taken for one.
+        var found: Bars? = null
+        for (wait in listOf(400L, 1_200L, 2_000L)) {
+            kotlinx.coroutines.delay(wait)
+            val frame = view?.takeIf { it.isAvailable }?.getBitmap(48, 96) ?: continue
+            val seen = Bars.of(frame)
+            frame.recycle()
+            found = found?.let { it.min(seen) } ?: seen
+            bars = found
+        }
+    }
     DisposableEffect(player, lifecycle) {
         val watch = LifecycleEventObserver { _, event ->
             when (event) {
@@ -98,26 +118,74 @@ internal fun LoopingVideo(
     }
     AndroidView(
         factory = { c ->
-            TextureView(c).also { view ->
-                player.setVideoTextureView(view)
-                view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> crop(v as TextureView, size) }
+            TextureView(c).also { v ->
+                player.setVideoTextureView(v)
+                v.addOnLayoutChangeListener { l, _, _, _, _, _, _, _, _ -> crop(l as TextureView, size, bars) }
+                view = v
             }
         },
-        update = { view -> crop(view, size) },
+        update = { v -> crop(v, size, bars) },
         modifier = modifier.graphicsLayer { alpha = fade },
     )
 }
 
-/** Scales the picture to cover the view, cropping what spills over, as ContentScale.Crop does for images. */
-private fun crop(view: TextureView, video: VideoSize) {
+/**
+ * Scales the picture to cover the view, cropping what spills over, as
+ * ContentScale.Crop does for images; the [bars] in the picture are left
+ * outside the view too.
+ */
+private fun crop(view: TextureView, video: VideoSize, bars: Bars) {
     val w = view.width.toFloat()
     val h = view.height.toFloat()
     val vw = video.width * video.pixelWidthHeightRatio
     val vh = video.height.toFloat()
     if (w <= 0f || h <= 0f || vw <= 0f || vh <= 0f) return
+    // What's left of the picture once its bands are taken off.
+    val cw = vw * (1f - bars.left - bars.right)
+    val ch = vh * (1f - bars.top - bars.bottom)
     // The view first stretches the picture to its own size; this undoes that and covers instead.
-    val scale = maxOf(w / vw, h / vh)
-    view.setTransform(Matrix().apply { setScale(vw * scale / w, vh * scale / h, w / 2f, h / 2f) })
+    val scale = maxOf(w / cw, h / ch)
+    // Centred on the picture, not on the frame round it, when the bands aren't even.
+    val dx = (bars.left - bars.right) / 2f * vw * scale
+    val dy = (bars.top - bars.bottom) / 2f * vh * scale
+    view.setTransform(Matrix().apply {
+        setScale(vw * scale / w, vh * scale / h, w / 2f, h / 2f)
+        postTranslate(-dx, -dy)
+    })
+}
+
+/** Shares of the picture taken by black bands on each side. */
+internal data class Bars(val top: Float, val bottom: Float, val left: Float, val right: Float) {
+    fun min(o: Bars) = Bars(minOf(top, o.top), minOf(bottom, o.bottom), minOf(left, o.left), minOf(right, o.right))
+
+    companion object {
+        val NONE = Bars(0f, 0f, 0f, 0f)
+        /** The most taken off a side: past this it's a dark picture, not a band. */
+        private const val MOST = 0.3f
+
+        /** The bands in one frame: rows (and columns) at the edges with nothing but near-black in them. */
+        fun of(frame: android.graphics.Bitmap): Bars {
+            val w = frame.width
+            val h = frame.height
+            val px = IntArray(w * h).also { frame.getPixels(it, 0, w, 0, 0, w, h) }
+            fun dark(c: Int): Boolean {
+                val r = (c shr 16) and 0xFF
+                val g = (c shr 8) and 0xFF
+                val b = c and 0xFF
+                return r < 24 && g < 24 && b < 24
+            }
+            fun rowDark(y: Int) = (0 until w).count { dark(px[y * w + it]) } >= w * 0.97f
+            fun colDark(x: Int) = (0 until h).count { dark(px[it * w + x]) } >= h * 0.97f
+            fun run(n: Int, darkAt: (Int) -> Boolean): Int { var i = 0; while (i < n && darkAt(i)) i++; return i }
+            fun share(count: Int, n: Int) = (count.toFloat() / n).let { if (it > MOST || count >= n) 0f else it }
+            return Bars(
+                top = share(run(h) { rowDark(it) }, h),
+                bottom = share(run(h) { rowDark(h - 1 - it) }, h),
+                left = share(run(w) { colDark(it) }, w),
+                right = share(run(w) { colDark(w - 1 - it) }, w),
+            )
+        }
+    }
 }
 
 /**

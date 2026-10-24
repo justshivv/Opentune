@@ -4,7 +4,6 @@ import com.opentune.data.download.Downloads
 import com.opentune.data.model.PLAYER_ART_PX
 import com.opentune.data.model.Song
 import com.opentune.data.model.artworkAt
-import com.opentune.data.settings.AppSettings
 
 /**
  * One high-resolution image per playing track, even if metadata arrives again
@@ -12,10 +11,9 @@ import com.opentune.data.settings.AppSettings
  * this very track while it plays, which replaces the first image once.
  */
 class PlaybackArtwork(
-    private val preferred: (Song) -> String? = { song ->
-        Downloads.artFor(song.videoId)?.toURI()?.toString()
-            ?: if (AppSettings.ui.value.albumCovers) AlbumCovers.cached(song) else null
-    },
+    // A catalogue cover found before isn't started with: it comes as [better] once it has
+    // loaded, as a link that no longer worked left the player with no cover at all.
+    private val preferred: (Song) -> String? = { song -> Downloads.artFor(song.videoId)?.toURI()?.toString() },
 ) {
     private var id: String? = null
     private var url: String? = null
