@@ -46,4 +46,18 @@ class AppleTrackMetadataTest {
         assertNull(match.releaseDate)
         assertNull(match.trackNumber)
     }
+    @Test fun cleanAndExplicitCopiesShareTheirAlbumForTheCover() {
+        val withArt = entry.replace("\"trackId\":123", "\"trackId\":123,\"collectionId\":122,\"artworkUrl100\":\"https://is1-ssl.mzstatic.com/image/thumb/a/100x100bb.jpg\"")
+        val clean = withArt.replace("\"trackId\":123", "\"trackId\":124").replace("\"collectionId\":122", "\"collectionId\":121")
+        val response = Json.parseToJsonElement("""{"results":[$withArt,$clean]}""").jsonObject
+        assertNull(AppleTrackMetadataRepository.select(response, song, 253000))
+        val release = AppleTrackMetadataRepository.selectRelease(response, song, 253000, "IN")!!
+        assertEquals(122L, release.albumId)
+        assertEquals("in", release.storefront)
+        assertEquals("https://is1-ssl.mzstatic.com/image/thumb/a/100x100bb.jpg", release.artworkUrl)
+        // Two different albums with the song on them: no guess.
+        val other = clean.replace("Azaad (Original Motion Picture Soundtrack) - EP", "Azaad Deluxe")
+        val noAlbum = song.copy(albumName = null)
+        assertNull(AppleTrackMetadataRepository.selectRelease(Json.parseToJsonElement("""{"results":[$withArt,$other]}""").jsonObject, noAlbum, 253000))
+    }
 }

@@ -450,6 +450,10 @@ private fun settingsSections(
     val ui by AppSettings.ui.collectAsState()
     val lib by AppSettings.library.collectAsState()
     val metered = remember { AppSettings.onMeteredNetwork() }
+    val spotifyConnected by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+    val spotifyProblem by com.opentune.ui.spotify.SpotifyConnection.problem.collectAsState()
+    val spotifySync by com.opentune.data.spotify.SpotifySync.status.collectAsState()
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { com.opentune.ui.spotify.SpotifyConnection.refresh() } }
     var qualityDialog by remember { mutableStateOf<Boolean?>(null) } // true = Wi-Fi, false = mobile
     var audioAddons by remember { mutableStateOf(false) }
     if (audioAddons) AudioAddonsSheet { audioAddons = false }
@@ -1010,7 +1014,42 @@ private fun settingsSections(
                     ToggleRow("Show the quality label", ui.sourcePill, { v -> AppSettings.updateUi { it.copy(sourcePill = v) } }, summary = "Shows quality and upgrade progress below the seek bar; tap for the full signal path", icon = Icons.Rounded.HighQuality)
                 },
                 Entry("Album covers", "artwork cover musicbrainz cover art archive video thumbnail") {
-                    ToggleRow("Album covers from MusicBrainz", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "Shows the album's cover in the player instead of a video frame, and for local files without one", icon = Icons.Rounded.Album)
+                    ToggleRow("Sharper album covers", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "The player shows the album's cover from Apple Music, Deezer or the Cover Art Archive, sharper than YouTube's and in place of a video frame", icon = Icons.Rounded.Album)
+                },
+                Entry("Animated covers", "apple music motion artwork video moving album cover animated") {
+                    ToggleRow("Animated covers", ui.animatedCovers, { v -> AppSettings.updateUi { it.copy(animatedCovers = v) } }, summary = "When Apple Music has a moving cover for the album, it loops silently in the player's cover", icon = Icons.Rounded.Animation)
+                },
+                Entry("Spotify", "spotify canvas video loop background connect sign in playlists library sync") {
+                    if (spotifyConnected) {
+                        ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = "When a song has a Canvas on Spotify, it loops silently behind the player", icon = Icons.Rounded.Animation)
+                        RowDivider()
+                        SettingRow(
+                            "Spotify playlists",
+                            summary = when {
+                                spotifySync.running && spotifySync.current != null -> "Bringing over ${spotifySync.current} (${spotifySync.index} of ${spotifySync.count})"
+                                spotifySync.running -> "Reading your Spotify library…"
+                                spotifySync.error != null -> "${spotifySync.error}. Tap to try again"
+                                spotifySync.lastSynced > 0 -> "In Library, marked Spotify. Checked " +
+                                    android.text.format.DateUtils.getRelativeTimeSpanString(spotifySync.lastSynced) + ". Tap to check now"
+                                else -> "Tap to bring your Spotify playlists into Library"
+                            },
+                            icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                            enabled = !spotifySync.running,
+                            onClick = { com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true) },
+                        )
+                        RowDivider()
+                        SettingRow("Disconnect Spotify", summary = "Signs out of Spotify inside OpenTune. Playlists already brought over stay in Library", icon = Icons.Rounded.Close, onClick = { com.opentune.ui.spotify.SpotifyConnection.disconnect() })
+                    } else {
+                        NavRow(
+                            "Connect Spotify",
+                            { context.startActivity(android.content.Intent(context, com.opentune.ui.spotify.SpotifyConnectActivity::class.java)) },
+                            summary = spotifyProblem?.let { "$it. Sign in again" } ?: "Sign in on Spotify's own page to bring your playlists into Library and show each song's Canvas behind the player",
+                            icon = Icons.Rounded.Animation,
+                        )
+                    }
+                },
+                Entry("Animated covers on Wi-Fi only", "mobile data metered save data wifi animated covers canvas video") {
+                    ToggleRow("Animated covers on Wi-Fi only", ui.animatedCoversWifiOnly, { v -> AppSettings.updateUi { it.copy(animatedCoversWifiOnly = v) } }, summary = "Animated covers and Canvas don't load on mobile data", icon = Icons.Rounded.Wifi, enabled = ui.animatedCovers || (spotifyConnected && ui.spotifyCanvas))
                 },
                 Entry("Reduce animation", "motion") {
                     ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes decorative motion and simplifies player and lyric transitions", icon = Icons.Rounded.Animation)

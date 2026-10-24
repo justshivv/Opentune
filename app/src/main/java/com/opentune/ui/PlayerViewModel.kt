@@ -34,8 +34,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val player = PlayerConnection(application)
 
     private val artwork = com.opentune.data.covers.PlaybackArtwork()
-    val currentSong = player.currentSong.map { song ->
-        song?.copy(thumbnailUrl = artwork.choose(song)) ?: run { artwork.clear(); null }
+    /** A sharper catalogue cover found for the playing track, by its id. */
+    private val betterCover = MutableStateFlow<Pair<String, String>?>(null)
+    val currentSong = combine(player.currentSong, betterCover) { song, better ->
+        song?.copy(thumbnailUrl = artwork.choose(song, better?.takeIf { it.first == song.videoId }?.second)) ?: run { artwork.clear(); null }
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+
+    /** Apple's animated cover and Spotify's Canvas found for the playing track, by its id. */
+    private val motionFound = MutableStateFlow<Pair<String, com.opentune.data.covers.AppleMotionArt.Motion>?>(null)
+    private val canvasFound = MutableStateFlow<Pair<String, String>?>(null)
+    /** The animated cover to loop in the player's cover; null when none, or turned off since. */
+    val coverVideo = combine(player.currentSong, motionFound, AppSettings.ui) { song, found, ui ->
+        found?.takeIf { song != null && it.first == song.videoId && ui.animatedCovers && !ui.reduceAnimation }?.second
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+    /** The Canvas to loop behind the player; null when none, or turned off or disconnected since. */
+    val canvasVideo = combine(player.currentSong, canvasFound, AppSettings.ui, com.opentune.ui.spotify.SpotifyConnection.connected) { song, found, ui, connected ->
+        found?.takeIf { song != null && it.first == song.videoId && ui.spotifyCanvas && connected && !ui.reduceAnimation }?.second
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
     val queue = player.queue
     val currentIndex = player.currentIndex
@@ -62,9 +76,38 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch { player.connect() }
         viewModelScope.launch { watchLyrics() }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            // Reading the cookie starts the WebView engine: off the main thread, and not at app start.
+            com.opentune.ui.spotify.SpotifyConnection.refresh()
+            com.opentune.ui.spotify.SpotifyConnection.syncPlaylists()
             player.currentSong.distinctUntilChangedBy { it?.videoId }.collectLatest { song ->
-                // Resolve missing covers for the next listen, without replacing one already shown.
-                if (song != null && AppSettings.ui.value.albumCovers) com.opentune.data.covers.AlbumCovers.coverFor(song)
+                if (song == null || !com.opentune.data.covers.AlbumCovers.wants(song)) return@collectLatest
+                val ui = AppSettings.ui.value
+                // Clips are only fetched where they may play: motion allowed, and off mobile data when asked.
+                val moving = !ui.reduceAnimation && !(ui.animatedCoversWifiOnly && AppSettings.onMeteredNetwork())
+                val motion = moving && ui.animatedCovers
+                val cookie = if (moving && ui.spotifyCanvas) com.opentune.ui.spotify.SpotifyConnection.cookie() else null
+                if (!ui.albumCovers && !motion && cookie == null) return@collectLatest
+                // Apple, Deezer and Spotify are matched on the exact length, so wait for the player's.
+                val duration = withTimeoutOrNull(20_000) {
+                    player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
+                } ?: 0L
+                kotlinx.coroutines.coroutineScope {
+                    if (ui.albumCovers) launch {
+                        com.opentune.data.covers.AlbumCovers.coverFor(song, duration)?.let { betterCover.value = song.videoId to it }
+                    }
+                    if (motion && duration > 0) launch {
+                        com.opentune.data.covers.AppleMotionArt.forSong(song, duration)?.let { motionFound.value = song.videoId to it }
+                    }
+                    if (cookie != null && duration > 0) launch {
+                        try {
+                            com.opentune.data.spotify.SpotifyWebPlayer.canvasFor(song, duration, cookie)?.let { canvasFound.value = song.videoId to it }
+                        } catch (e: com.opentune.data.spotify.SpotifyWebPlayer.SignedOut) {
+                            com.opentune.ui.spotify.SpotifyConnection.lost(e.message)
+                        } catch (e: java.io.IOException) {
+                            com.opentune.data.DebugLog.w("Canvas", "no canvas for ${song.videoId}", e)
+                        }
+                    }
+                }
             }
         }
     }

@@ -156,6 +156,10 @@ fun PlayerBackdrop(
     /** How the full-screen cover changes to the next song's, and where that song is in the queue. */
     change: com.opentune.data.settings.CoverChange = com.opentune.data.settings.CoverChange.FADE,
     index: Int = 0,
+    /** The playing song, so a sharper copy of its cover swaps in place rather than as a song change. */
+    songId: String? = null,
+    /** Spotify's Canvas for the playing song, looped over the whole backdrop. */
+    canvas: String? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(modifier.background(scheme.surface)) {
@@ -191,8 +195,24 @@ fun PlayerBackdrop(
                 }
             }
         }
-        if (fullCover) {
-            CoverSwap(CoverShown(artworkUrl, index), change) { url, motion ->
+        if (canvas != null) {
+            // Keyed on the clip, so the next song's starts fresh and fades in over this one's backdrop.
+            androidx.compose.runtime.key(canvas) {
+                LoopingVideo(canvas, playing, Modifier.matchParentSize(), maxPx = 1920)
+            }
+            // Darker at the bottom, where the title and controls sit, so they stay readable.
+            Box(
+                Modifier.matchParentSize().background(
+                    Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = 0.35f),
+                        0.4f to Color.Black.copy(alpha = 0.12f),
+                        0.65f to Color.Black.copy(alpha = 0.5f),
+                        1f to Color.Black.copy(alpha = 0.85f),
+                    ),
+                ),
+            )
+        } else if (fullCover) {
+            CoverSwap(CoverShown(artworkUrl, index, songId), change) { url, motion ->
                 // The cover runs from the top down to just behind the title and
                 // fades out there into whatever backdrop is below it, with a light
                 // scrim at the top so the status line stays readable. It's never
@@ -214,7 +234,7 @@ fun PlayerBackdrop(
                             )
                         },
                 ) {
-                    Artwork(
+                    UpgradingArtwork(
                         url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
                         Modifier.matchParentSize(),
                         shape = RectangleShape,
@@ -225,6 +245,35 @@ fun PlayerBackdrop(
                 }
             }
         }
+    }
+}
+
+/**
+ * A cover whose [url] may be swapped for a sharper copy while it's shown:
+ * the first stays drawn underneath until the new one has loaded and covers
+ * it, so there's no blank frame between them. [overlay] goes on top, inside
+ * the same frame.
+ */
+@Composable
+private fun UpgradingArtwork(
+    url: String?,
+    modifier: Modifier,
+    shape: androidx.compose.ui.graphics.Shape,
+    imageModifier: Modifier = Modifier,
+    overlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
+) {
+    val first = remember { url }
+    Box(modifier) {
+        Artwork(first, Modifier.matchParentSize(), shape = shape, imageModifier = imageModifier)
+        if (url != null && url != first) {
+            coil3.compose.AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.matchParentSize().clip(shape).then(imageModifier),
+            )
+        }
+        Box(Modifier.matchParentSize().clip(shape)) { overlay() }
     }
 }
 
@@ -339,6 +388,8 @@ fun ArtworkPane(
     onSeekBy: ((Long) -> Unit)? = null,
     /** A soft light in the cover's colour under it, swelling with the bass. */
     glow: Boolean = false,
+    /** Apple's animated cover for this song, looped over the still one. */
+    video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
 ) {
     val scale by animateFloatAsState(
         if (isPlaying) 1f else 0.86f,
@@ -374,8 +425,8 @@ fun ArtworkPane(
         contentAlignment = Alignment.Center,
     ) {
         if (glow) CoverGlow(isPlaying, scale, Modifier.matchParentSize())
-        CoverSwap(CoverShown(song.thumbnailUrl, index), change) { url, motion ->
-            Artwork(
+        CoverSwap(CoverShown(song.thumbnailUrl, index, song.videoId), change) { url, motion ->
+            UpgradingArtwork(
                 url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
                 // As wide as the pane, unless that's taller than the room it has: then as
                 // tall as the room. Forcing the full width made a square that spilled over
@@ -397,7 +448,12 @@ fun ArtworkPane(
                     },
                 shape = MaterialTheme.shapes.extraLarge,
                 imageModifier = Modifier.livingArt(isPlaying, moving),
-            )
+            ) {
+                // Only on the playing song's cover, not on one leaving as the song changes.
+                if (video != null && url == song.thumbnailUrl) {
+                    LoopingVideo(video.url, isPlaying, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl)
+                }
+            }
         }
         if (onSeekBy != null) SeekTaps(onSeekBy, scale, Modifier.matchParentSize())
     }

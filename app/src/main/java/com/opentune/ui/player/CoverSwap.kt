@@ -39,8 +39,12 @@ import com.opentune.data.settings.CoverChange
 import kotlin.math.hypot
 import kotlin.math.pow
 
-/** A cover on screen: which art, and where its song sits in the queue. */
-internal data class CoverShown(val url: String?, val index: Int)
+/**
+ * A cover on screen: which art, which song and where it sits in the queue.
+ * The cover changes with the song, so a sharper copy of the same song's art
+ * arriving later swaps in place rather than playing the change again.
+ */
+internal data class CoverShown(val url: String?, val index: Int, val id: String? = null)
 
 /**
  * One cover giving way to the next, in the [change] chosen in Settings,
@@ -63,7 +67,7 @@ internal fun CoverSwap(
     }
     AnimatedContent(
         targetState = shown,
-        contentKey = { it.url },
+        contentKey = { it.id ?: it.url },
         transitionSpec = { coverTransition(change, forward = targetState.index >= initialState.index) },
         label = "cover",
         modifier = modifier,

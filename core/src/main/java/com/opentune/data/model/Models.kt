@@ -170,10 +170,25 @@ fun String?.durationMillis(): Long {
     return (seconds * 1_000).coerceAtLeast(0L)
 }
 
-/** As [Song.artworkAt], for artwork that isn't a track's. */
-fun String?.artworkAt(px: Int): String? = this?.replace(SIZE_HINT, "w$px-h$px")
+/**
+ * As [Song.artworkAt], for artwork that isn't a track's. Each image host
+ * writes the size its own way: YouTube Music in a `w…-h…` suffix, Apple in
+ * the last path part (masters up to 3000px), Deezer as `…x…-` (up to 1200px),
+ * and the Cover Art Archive as a fixed 250, 500 or 1200.
+ */
+fun String?.artworkAt(px: Int): String? = this?.let { url ->
+    when {
+        ".mzstatic.com/" in url -> url.replace(APPLE_SIZE, "/${px.coerceAtMost(3000)}x${px.coerceAtMost(3000)}bb.jpg")
+        ".dzcdn.net/" in url -> url.replace(DEEZER_SIZE, "/${px.coerceAtMost(1200)}x${px.coerceAtMost(1200)}-")
+        "coverartarchive.org/" in url && !url.endsWith("-500") -> url.replace(CAA_SIZE, "/front-${if (px <= 250) 250 else if (px <= 500) 500 else 1200}")
+        else -> url.replace(SIZE_HINT, "w$px-h$px")
+    }
+}
 
 private val SIZE_HINT = Regex("""w\d+-h\d+""")
+private val APPLE_SIZE = Regex("""/\d+x\d+[a-z]*\.(?:jpg|jpeg|png|webp)$""")
+private val DEEZER_SIZE = Regex("""/\d+x\d+-""")
+private val CAA_SIZE = Regex("""/front-\d+$""")
 
 /**
  * Artwork for a list row — 52dp at most, so about 140px on a 3x screen.

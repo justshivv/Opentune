@@ -34,14 +34,18 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
 /**
- * Square album covers from MusicBrainz and the Cover Art Archive, for songs
- * whose own artwork is a video frame (a YouTube upload rather than a
- * catalogue track) or missing (a local file without embedded art).
+ * Sharp album covers for the playing song, from three free catalogues in
+ * turn: Apple's (masters up to 3000px), Deezer's (up to 1200px) and the
+ * Cover Art Archive through MusicBrainz. Video frames, missing art and
+ * YouTube Music's own covers are all replaced when one of them matches.
  *
- * A cover is only taken from a confident match: a MusicBrainz recording
- * scoring [MIN_SCORE] or more whose artist matches. Results, including "no
- * cover", are kept on disk. MusicBrainz asks for at most one request a
- * second and a User-Agent naming the app; both are kept.
+ * A cover is only taken from a confident match. Apple and Deezer need the
+ * same title, credited artist and length (within 3 s), and the same album
+ * when the song names one, so another edition's sleeve is never shown.
+ * MusicBrainz needs a recording scoring [MIN_SCORE] or more whose artist
+ * matches. Results, including "no cover", are kept on disk; a source that
+ * couldn't be reached isn't a "no". MusicBrainz asks for at most one request
+ * a second and a User-Agent naming the app; both are kept.
  */
 object AlbumCovers {
     private const val TAG = "AlbumCovers"
@@ -63,7 +67,9 @@ object AlbumCovers {
 
     fun init(context: Context) {
         resolver = context.applicationContext.contentResolver
-        val f = File(context.filesDir, "album-covers.json")
+        // The first file held Cover Art Archive answers only; its "none"s would hide Apple and Deezer covers.
+        File(context.filesDir, "album-covers.json").delete()
+        val f = File(context.filesDir, "album-covers-v2.json")
         file = f
         scope.launch {
             runCatching { json.decodeFromString(MapSerializer(String.serializer(), String.serializer()), f.readText()) }
@@ -72,22 +78,19 @@ object AlbumCovers {
     }
 
     /**
-     * Whether [song]'s own artwork could do with a proper cover: a video
-     * frame, none, or a local file's album-art address (MediaStore gives one
-     * even when the file has no art; [coverFor] checks).
+     * Whether [song] is a track a catalogue could have a cover for: anything
+     * but a radio station. A local file's album-art address is checked in
+     * [coverFor] (MediaStore gives one even when the file has no art).
      */
-    fun wants(song: Song): Boolean {
-        val art = song.thumbnailUrl ?: return true
-        return "ytimg.com" in art || art.startsWith(LOCAL_ART)
+    fun wants(song: Song): Boolean = !com.opentune.data.radio.Radio.isRadio(song.videoId)
+
+    private fun keyOf(song: Song): String {
+        val cleaned = TrackNameCleaner.clean(song.title, song.artist)
+        return listOf(primaryArtist(cleaned.artist), cleaned.title, song.albumName.orEmpty()).joinToString("|") { it.lowercase(Locale.ROOT) }
     }
 
     /** A previously resolved cover, ready before the player displays anything. */
-    fun cached(song: Song): String? {
-        if (!wants(song)) return null
-        val cleaned = TrackNameCleaner.clean(song.title, song.artist)
-        val key = "${primaryArtist(cleaned.artist).lowercase(Locale.ROOT)}|${cleaned.title.lowercase(Locale.ROOT)}"
-        return cache[key]?.ifEmpty { null }
-    }
+    fun cached(song: Song): String? = if (wants(song)) cache[keyOf(song)]?.ifEmpty { null } else null
 
     /** A local file's album art, if the phone actually has an image for it. */
     private suspend fun hasLocalArt(uri: String): Boolean = withContext(Dispatchers.IO) {
@@ -95,20 +98,65 @@ object AlbumCovers {
         runCatching { resolver.openInputStream(uri.toUri())?.use { it.read() >= 0 } ?: false }.getOrDefault(false)
     }
 
-    /** A Cover Art Archive image for [song], or null when there's no confident match. */
-    suspend fun coverFor(song: Song): String? {
+    /**
+     * The best cover for [song] (Apple, then Deezer, then the Cover Art
+     * Archive), or null when none matches confidently. [durationMs] is the
+     * player's exact length; Apple and Deezer are only asked with it.
+     */
+    suspend fun coverFor(song: Song, durationMs: Long = 0): String? {
         if (!wants(song) || song.artist.isBlank() || song.title.isBlank()) return null
         if (song.thumbnailUrl?.startsWith(LOCAL_ART) == true && hasLocalArt(song.thumbnailUrl)) return null
+        val key = keyOf(song)
+        cache[key]?.let { return it.ifEmpty { null } }
         val cleaned = TrackNameCleaner.clean(song.title, song.artist)
         val artist = primaryArtist(cleaned.artist)
-        val key = "${artist.lowercase(Locale.ROOT)}|${cleaned.title.lowercase(Locale.ROOT)}"
-        cache[key]?.let { return it.ifEmpty { null } }
-        val found = runCatching { lookup(cleaned.title, artist) }
-            .onFailure { Log.w(TAG, "lookup failed for $key", it) }
-            .getOrElse { return null } // a network failure isn't a "no", so it isn't cached
+        var unreachable = false
+        suspend fun ask(source: String, block: suspend () -> String?): String? = runCatching { block() }
+            .onFailure { unreachable = true; Log.w(TAG, "$source lookup failed for $key", it) }
+            .getOrNull()
+        val found = (if (durationMs > 0) ask("Apple") { apple(song, durationMs) } else null)
+            ?: (if (durationMs > 0) ask("Deezer") { deezer(cleaned.title, artist, song.albumName, durationMs) } else null)
+            ?: ask("MusicBrainz") { lookup(cleaned.title, artist) }
+        // A source that couldn't be reached isn't a "no": only a full set of answers is kept as "none".
+        if (found == null && (unreachable || durationMs <= 0)) return null
         cache[key] = found ?: NONE
         save()
         return found
+    }
+
+    /** Apple's cover for the exact recording, as its catalogue lookup matched it. */
+    private suspend fun apple(song: Song, durationMs: Long): String? =
+        com.opentune.data.metadata.AppleTrackMetadataRepository.release(song, durationMs)?.artworkUrl
+
+    /** Deezer's cover for the same title, artist and length (and album, when the song names one). */
+    private suspend fun deezer(title: String, artist: String, album: String?, durationMs: Long): String? = withContext(Dispatchers.IO) {
+        val url = "https://api.deezer.com/search".toHttpUrl().newBuilder()
+            // Plain words: the field syntax (artist:"…" track:"…") answered nothing when tested on 2026-10-24.
+            .addQueryParameter("q", "$title $artist")
+            .addQueryParameter("limit", "15")
+            .build()
+        val body = Http.client.newCall(Request.Builder().url(url).build()).execute()
+            .use { r -> if (r.isSuccessful) r.body?.string() else throw java.io.IOException("Deezer answered ${r.code}") }
+            ?: return@withContext null
+        deezerCover(json.parseToJsonElement(body).jsonObject, title, artist, album, durationMs)
+    }
+
+    internal fun deezerCover(response: JsonObject, title: String, artist: String, album: String?, durationMs: Long): String? {
+        // Over quota Deezer answers 200 with an error object: no answer, not a "no".
+        if (response["error"] != null) throw java.io.IOException("Deezer: ${response["error"]}")
+        val wanted = normalize(artist)
+        val matches = response["data"].array().map { it.obj() }.filter { row ->
+            val name = row["title_short"].string() ?: row["title"].string() ?: return@filter false
+            val credited = row["artist"].obj()["name"].string()?.let(::normalize) ?: return@filter false
+            val seconds = (row["duration"] as? JsonPrimitive)?.intOrNull ?: return@filter false
+            normalize(TrackNameCleaner.clean(name, artist).title) == normalize(title) &&
+                (credited == wanted || credited.contains(wanted) || wanted.contains(credited)) &&
+                kotlin.math.abs(seconds * 1000L - durationMs) <= 3_000
+        }
+        val sameAlbum = album?.takeIf { it.isNotBlank() }?.let { a -> matches.filter { normalize(it["album"].obj()["title"].string().orEmpty()) == normalize(a) } }
+        // With an album named, only that album's sleeve; without one, the top match's.
+        val pick = (if (album.isNullOrBlank()) matches else sameAlbum.orEmpty()).firstOrNull() ?: return null
+        return pick["album"].obj()["cover_xl"].string()?.takeIf { it.startsWith("https://") }
     }
 
     private suspend fun lookup(title: String, artist: String): String? = withContext(Dispatchers.IO) {
@@ -124,11 +172,13 @@ object AlbumCovers {
             ?: return@withContext null
         val groups = releaseGroups(json.parseToJsonElement(body).jsonObject, artist)
         for (group in groups.take(3)) {
-            val cover = "https://coverartarchive.org/release-group/$group/front-500"
-            // The archive answers 404 for an album it has no front cover for.
-            val exists = Http.client.newCall(Request.Builder().url(cover).head().header("User-Agent", USER_AGENT).build()).execute()
-                .use { it.isSuccessful }
-            if (exists) return@withContext cover
+            // The archive answers 404 for an album it has no front cover for; older covers may lack the 1200px copy.
+            for (size in listOf(1200, 500)) {
+                val cover = "https://coverartarchive.org/release-group/$group/front-$size"
+                val exists = Http.client.newCall(Request.Builder().url(cover).head().header("User-Agent", USER_AGENT).build()).execute()
+                    .use { it.isSuccessful }
+                if (exists) return@withContext cover
+            }
         }
         null
     }

@@ -359,8 +359,14 @@ data class InterfaceSettings(
     val coverGlow: Boolean = true,
     /** While the seek bar is dragged, the lyric line at that point shows above the finger. */
     val lyricScrubPreview: Boolean = true,
-    /** Proper album covers from MusicBrainz for music videos and local files without art. */
+    /** Sharp album covers from Apple Music, Deezer or the Cover Art Archive in the player. */
     val albumCovers: Boolean = true,
+    /** Apple Music's animated album covers loop, muted, in the player's cover. */
+    val animatedCovers: Boolean = true,
+    /** Animated covers and Spotify Canvas only load on Wi-Fi or another unmetered network. */
+    val animatedCoversWifiOnly: Boolean = true,
+    /** With Spotify connected, its Canvas loops behind the player. */
+    val spotifyCanvas: Boolean = true,
     val lyricsAnimation: LyricsAnimation = LyricsAnimation.FLUID,
     /** Lyrics text size, as a fraction of the standard size. */
     val lyricsTextScale: Float = 1f,

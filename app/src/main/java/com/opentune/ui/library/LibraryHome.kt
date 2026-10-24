@@ -265,12 +265,18 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
             val saved = p.songs.count { downloadEntries[it.videoId]?.state == com.opentune.data.download.DownloadState.DONE }
             val where = when {
                 saved > 0 -> "$saved downloaded"
+                p.spotifyId != null -> null
                 signedIn && p.synced -> "on YouTube Music"
                 else -> "on this phone"
             }
-            PlaylistRow(null, p.name, "${p.songs.size} songs · $where", { nav.playlist(p.id) }, Modifier.animateItem(), cover = {
-                com.opentune.ui.components.PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.size(56.dp))
-            })
+            val subtitle = listOfNotNull("${p.songs.size} songs", where).joinToString(" · ")
+            if (p.spotifyId != null && p.coverUrl != null) {
+                PlaylistRow(p.coverUrl, p.name, subtitle, { nav.playlist(p.id) }, Modifier.animateItem(), from = "Spotify")
+            } else {
+                PlaylistRow(null, p.name, subtitle, { nav.playlist(p.id) }, Modifier.animateItem(), cover = {
+                    com.opentune.ui.components.PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.size(56.dp))
+                }, from = if (p.spotifyId != null) "Spotify" else null)
+            }
         }
         // Albums and playlists saved with their heart; one downloaded too is listed once, above.
         items(hearted.filter { h -> savedLists.none { it.first.id == h.browseId } }, key = { "saved:${it.browseId}" }) { h ->
@@ -361,7 +367,16 @@ private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick
 }
 
 @Composable
-private fun PlaylistRow(art: String?, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier, cover: (@Composable () -> Unit)? = null) {
+private fun PlaylistRow(
+    art: String?,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    cover: (@Composable () -> Unit)? = null,
+    /** Where the playlist comes from, as a small tag before [subtitle]. */
+    from: String? = null,
+) {
     Row(
         modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -377,9 +392,30 @@ private fun PlaylistRow(art: String?, title: String, subtitle: String, onClick: 
         }
         Column(Modifier.padding(start = 14.dp).weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (from != null) SourceTag(from, Modifier.padding(end = 6.dp))
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
+}
+
+/** Spotify's green, for the tag on playlists brought over from it. */
+private val SpotifyGreen = androidx.compose.ui.graphics.Color(0xFF1DB954)
+
+/** A small tag naming where a playlist comes from: "Spotify" in Spotify's green. */
+@Composable
+internal fun SourceTag(name: String, modifier: Modifier = Modifier) {
+    Text(
+        name,
+        style = MaterialTheme.typography.labelMedium,
+        color = SpotifyGreen,
+        maxLines = 1,
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(SpotifyGreen.copy(alpha = 0.16f))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
 }
 
 @Composable
@@ -689,6 +725,17 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     }
     // Where the playlist stands with YouTube Music, under its cover.
     val status: (@Composable () -> Unit)? = when {
+        // A copy of a Spotify playlist: it follows Spotify, not YouTube Music.
+        playlist.spotifyId != null -> ({
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SourceTag("Spotify", Modifier.padding(end = 8.dp))
+                Text(
+                    "Kept in step with your Spotify library",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        })
         !signedIn -> null
         !playlist.synced -> ({
             TextButton(onClick = { savingOnline = true }) {

@@ -1,0 +1,111 @@
+{
+ "data": {
+  "playlistV2": {
+   "__typename": "Playlist",
+   "name": "Today’s Top Hits",
+   "revisionId": "AAAAAFzc9BSjq3wzNwVOBvuyCI01MnLO",
+   "uri": "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M",
+   "images": {
+    "items": [
+     {
+      "sources": [
+       {
+        "height": null,
+        "url": "https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b",
+        "width": null
+       }
+      ]
+     }
+    ]
+   },
+   "ownerV2": {
+    "data": {
+     "name": "Spotify"
+    }
+   },
+   "content": {
+    "totalCount": 50,
+    "items": [
+     {
+      "itemV2": {
+       "__typename": "TrackResponseWrapper",
+       "data": {
+        "__typename": "Track",
+        "uri": "spotify:track:2sFepQNyl1WjpROruP8bJ0",
+        "name": "Housewife",
+        "trackDuration": {
+         "totalMilliseconds": 208810
+        },
+        "artists": {
+         "items": [
+          {
+           "profile": {
+            "name": "Tate McRae"
+           }
+          }
+         ]
+        },
+        "albumOfTrack": {
+         "name": "Housewife",
+         "coverArt": {
+          "sources": [
+           {
+            "height": 300,
+            "url": "https://i.scdn.co/image/ab67616d00001e027c6236a76fbcee4f1b8ace08",
+            "width": 300
+           },
+           {
+            "height": 64,
+            "url": "https://i.scdn.co/image/ab67616d000048517c6236a76fbcee4f1b8ace08",
+            "width": 64
+           }
+          ]
+         }
+        }
+       }
+      }
+     },
+     {
+      "itemV2": {
+       "__typename": "TrackResponseWrapper",
+       "data": {
+        "__typename": "Track",
+        "uri": "spotify:track:70cHKK8bHAfJrOGVnfRG9J",
+        "name": "Nicole Kidman",
+        "trackDuration": {
+         "totalMilliseconds": 181270
+        },
+        "artists": {
+         "items": [
+          {
+           "profile": {
+            "name": "ADÉLA"
+           }
+          }
+         ]
+        },
+        "albumOfTrack": {
+         "name": "PRIMA",
+         "coverArt": {
+          "sources": [
+           {
+            "height": 300,
+            "url": "https://i.scdn.co/image/ab67616d00001e02ac9d5d5263e9f03802d6864c",
+            "width": 300
+           },
+           {
+            "height": 64,
+            "url": "https://i.scdn.co/image/ab67616d00004851ac9d5d5263e9f03802d6864c",
+            "width": 64
+           }
+          ]
+         }
+        }
+       }
+      }
+     }
+    ]
+   }
+  }
+ }
+}

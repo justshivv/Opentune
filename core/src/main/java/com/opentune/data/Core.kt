@@ -64,6 +64,8 @@ object Core {
         java.io.File(app.filesDir, "waveforms").takeIf { it.exists() }?.let { dir -> Thread { dir.deleteRecursively() }.start() }
         com.opentune.data.podcasts.Podcasts.init(app)
         AlbumCovers.init(app)
+        com.opentune.data.spotify.SpotifyWebPlayer.init(app)
+        com.opentune.data.spotify.SpotifySync.init(app)
         AutoEq.init(app)
         com.opentune.data.library.LibraryArtwork.init(app)
         LibraryStore.init(app)

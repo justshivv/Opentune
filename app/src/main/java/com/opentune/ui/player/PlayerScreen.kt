@@ -191,6 +191,10 @@ data class PlayerUiState(
     val shuffleMode: com.opentune.playback.ShuffleMode = if (shuffle) com.opentune.playback.ShuffleMode.ON else com.opentune.playback.ShuffleMode.OFF,
     /** The queue came from a playlist or album, so the shuffle button offers smart shuffle. */
     val smartShuffleAvailable: Boolean = false,
+    /** Apple's animated cover for the song, to loop in its cover. */
+    val coverVideo: com.opentune.data.covers.AppleMotionArt.Motion? = null,
+    /** Spotify's Canvas for the song, to loop behind the player. */
+    val canvasVideo: String? = null,
 )
 
 class PlayerActions(
@@ -239,6 +243,8 @@ fun PlayerScreen(
     val shown = current
     val source by vm.source.collectAsState()
     val audioFormat by vm.audioFormat.collectAsState()
+    val coverVideo by vm.coverVideo.collectAsState()
+    val canvasVideo by vm.canvasVideo.collectAsState()
     val actions = remember(vm, onCollapse) {
         PlayerActions(
             togglePlay = vm::togglePlayPause,
@@ -259,7 +265,7 @@ fun PlayerScreen(
         PlayerUiState(
             shown, isPlaying, isBuffering, hasNext, shuffle, repeat, duration,
             lyrics, queue, currentIndex, upNext, sound, theme, ui, source, audioFormat,
-            shuffleMode, smartShuffleAvailable,
+            shuffleMode, smartShuffleAvailable, coverVideo, canvasVideo,
         ),
         position = rememberPlaybackPosition(vm),
         buffered = vm::bufferedPositionMs,
@@ -690,6 +696,8 @@ fun PlayerLayout(
                     playing = state.isPlaying,
                     change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                     index = state.currentIndex,
+                    songId = current.videoId,
+                    canvas = state.canvasVideo,
                 )
             }
 
@@ -920,6 +928,7 @@ fun PlayerLayout(
                                             index = state.currentIndex,
                                             onSeekBy = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) },
                                             glow = state.ui.coverGlow && !state.ui.reduceAnimation,
+                                            video = state.coverVideo,
                                         )
                                 }
                             }
