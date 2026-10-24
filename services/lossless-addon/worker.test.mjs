@@ -17,7 +17,7 @@ async function firstTrack(handler, source = 'monochrome') {
 }
 test('all source manifests work with OpenTune; health does not claim upstream availability', async () => {
   const h = createAddon({ fetcher: () => { throw Error('No request expected'); } });
-  for (const source of ['monochrome', 'archive', 'musopen']) {
+  for (const source of ['monochrome', 'archive', 'musopen', 'netease']) {
     const m = await (await h(req(`/${source}/manifest.json`))).json();
     assert.deepEqual(m.resources, ['search', 'stream']); assert.equal(m.settings[0].default, 'best');
     assert.equal((await (await h(req(`/${source}/health`))).json()).upstreamVerified, false);
@@ -140,4 +140,57 @@ test('probe cancels the response stream when the server ignores Range', async ()
     cancel() { cancelled = true; },
   })) });
   const t = await firstTrack(h); assert.equal((await h(req(`/stream/${t.id}`))).status, 200); assert.equal(cancelled, true);
+});
+
+test('NetEase resolves catalogue identity through Meting and reports measured quality only', async () => {
+  const calls = [];
+  const h = createAddon({ fetcher: async (url, options) => {
+    calls.push({ url, options });
+    const u = new URL(url);
+    if (u.host === 'music.163.com') return json({ code: 200, result: { songs: [
+      { id: 2726173581, name: '295', ar: [{ name: 'Sidhu Moose Wala' }], dt: 270000, hr: { br: 999000 }, al: { name: 'Moosetape' } },
+      { id: '../bad', name: 'Invalid', ar: [{ name: 'Someone' }], dt: 1000 },
+    ] } });
+    if (u.host === 'api.qijieya.cn') {
+      assert.equal(u.searchParams.get('id'), '2726173581'); assert.equal(u.searchParams.get('br'), '999000');
+      assert.equal(options.redirect, 'manual');
+      return new Response(null, { status: 302, headers: { Location: 'https://m701.music.126.net/test.flac?signature=test-only' } });
+    }
+    assert.equal(u.host, 'm701.music.126.net'); assert.equal(options.redirect, 'manual');
+    assert.equal(options.headers.Range, 'bytes=0-65535'); assert.equal(options.headers.Authorization, undefined);
+    return new Response(flac({ rate: 44100, bits: 16, duration: 270 }));
+  } });
+  const data = await (await h(req('/netease/search?q=295'))).json(); assert.equal(data.tracks.length, 1);
+  const t = data.tracks[0]; assert.equal(t.artist, 'Sidhu Moose Wala'); assert.equal(t.duration, 270);
+  assert.equal(t.bitDepth, undefined); assert.equal(t.format, undefined);
+  const response = await h(req(`/netease/stream/${t.id}`)); assert.equal(response.status, 200);
+  const stream = await response.json(); assert.equal(stream.bitDepth, 16); assert.equal(stream.sampleRate, 44100);
+  assert.equal(stream.codec, 'flac'); assert.equal(stream.duration, 270); assert.equal(calls.length, 3);
+  assert.equal((await h(req(`/monochrome/stream/${t.id}`))).status, 400);
+});
+test('NetEase rejects unrelated hosts, insecure links, credentials and redirect escapes before fetching them', async () => {
+  const id = Buffer.from(JSON.stringify(['netease', '123'])).toString('base64url');
+  for (const target of ['http://m701.music.126.net/x', 'https://127.0.0.1/x', 'https://music.126.net.evil.test/x', 'https://u:p@m701.music.126.net/x', 'https://m701.music.126.net:444/x']) {
+    let calls = 0;
+    const h = createAddon({ fetcher: async () => { calls++; return new Response(null, { status: 302, headers: { Location: target } }); } });
+    assert.equal((await h(req(`/netease/stream/${id}`))).status, 502); assert.equal(calls, 1);
+  }
+  let calls = 0;
+  const h = createAddon({ fetcher: async () => { calls++; return new Response(null, { status: 302, headers: { Location: calls === 1 ? 'https://m701.music.126.net/file' : 'https://localhost/private' } }); } });
+  assert.equal((await h(req(`/netease/stream/${id}`))).status, 502); assert.equal(calls, 2);
+});
+test('NetEase does not label MP3/HTML as FLAC and preserves resolver refusal and cooldown', async () => {
+  const id = Buffer.from(JSON.stringify(['netease', '123'])).toString('base64url');
+  const h = createAddon({ fetcher: async url => url.includes('api.qijieya.cn')
+    ? new Response(null, { status: 302, headers: { Location: 'https://m701.music.126.net/file' } })
+    : new Response('ID3-not-lossless') });
+  const r = await h(req(`/netease/stream/${id}`)); assert.equal(r.status, 502); assert.match((await r.json()).error, /native FLAC/);
+  let calls = 0;
+  const limited = createAddon({ fetcher: async () => { calls++; return new Response('', { status: 429, headers: { 'Retry-After': '60' } }); } });
+  assert.equal((await limited(req(`/netease/stream/${id}`))).status, 429);
+  assert.equal((await limited(req(`/netease/stream/${id}`))).status, 429); assert.equal(calls, 1);
+  const denied = createAddon({ fetcher: async () => new Response('', { status: 403 }) });
+  assert.match((await (await denied(req(`/netease/stream/${id}`))).json()).error, /refused access/);
+  const empty = createAddon({ fetcher: async () => json({ code: 200, result: { songCount: 0 } }) });
+  assert.deepEqual((await (await empty(req('/netease/search?q=missing'))).json()).tracks, []);
 });

@@ -1,0 +1,469 @@
+{
+  "checkedAt": "2026-10-24T01:04:18.019Z",
+  "bridge": [
+    {
+      "path": "/manifest.json",
+      "status": 200,
+      "json": {
+        "id": "app.bitchord.lossless-bridge",
+        "name": "Lossless Bridge",
+        "version": "1.0.0",
+        "resources": [
+          "search",
+          "stream"
+        ],
+        "allowDownloads": 1,
+        "checkValidLossless": 0,
+        "settings": [
+          {
+            "key": "quality",
+            "type": "select",
+            "default": "lossless",
+            "options": [
+              {
+                "label": "Lossless",
+                "value": "lossless"
+              },
+              {
+                "label": "High",
+                "value": "high"
+              },
+              {
+                "label": "Low",
+                "value": "low"
+              }
+            ]
+          },
+          {
+            "key": "prefer",
+            "type": "select",
+            "default": "studio",
+            "options": [
+              {
+                "label": "Studio masters first",
+                "value": "studio"
+              },
+              {
+                "label": "Live and bootlegs first",
+                "value": "live"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": "/sources",
+      "status": 200,
+      "json": {
+        "monochrome": {
+          "preferred": "https://tracks.monochrome.st/",
+          "bases": [
+            {
+              "url": "https://tracks.monochrome.st/",
+              "state": "api",
+              "cooling": false,
+              "lastError": null,
+              "checkedAt": "2026-10-24T01:04:17.393Z"
+            },
+            {
+              "url": "https://monochrome.st/",
+              "state": "frontend",
+              "cooling": false,
+              "lastError": "serves text/html",
+              "checkedAt": "2026-10-21T23:46:39.493Z"
+            }
+          ]
+        },
+        "hifi": {
+          "enabled": false,
+          "discovery": {
+            "enabled": false,
+            "url": "https://raw.githubusercontent.com/kipavy/spotube-plugin-lossless-sources/main/sources.json",
+            "trackerUrl": "https://tidal-uptime.props-76styles.workers.dev/",
+            "checkedAt": null,
+            "lastError": null,
+            "discovered": 0,
+            "providers": [
+              {
+                "name": "spotube-sources",
+                "url": "https://raw.githubusercontent.com/kipavy/spotube-plugin-lossless-sources/main/sources.json",
+                "ok": null,
+                "candidates": 0,
+                "lastError": null
+              },
+              {
+                "name": "uptime-tracker",
+                "url": "https://tidal-uptime.props-76styles.workers.dev/",
+                "ok": null,
+                "candidates": 0,
+                "lastError": null
+              }
+            ]
+          },
+          "bases": []
+        },
+        "qobuz": {
+          "enabled": false,
+          "discovery": {
+            "enabled": false,
+            "url": "https://raw.githubusercontent.com/kipavy/spotube-plugin-lossless-sources/main/sources.json",
+            "checkedAt": null,
+            "lastError": null,
+            "discovered": 0
+          },
+          "bases": []
+        },
+        "gdstudio": {
+          "enabled": true,
+          "sources": [
+            "tidal",
+            "netease",
+            "kuwo"
+          ],
+          "signHost": null,
+          "version": {
+            "value": "2026.09.25",
+            "from": "https://music.gdstudio.xyz/",
+            "checkedAt": "2026-10-24T00:55:26.510Z",
+            "lastError": null
+          },
+          "clockOffsetMs": 0,
+          "bases": [
+            {
+              "url": "https://music.gdstudio.xyz/",
+              "routes": [
+                {
+                  "source": "tidal",
+                  "state": "blocked",
+                  "cooling": true,
+                  "lastError": "HTTP 403 (host refused by the site) — <!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/htm",
+                  "checkedAt": "2026-10-24T01:00:27.688Z"
+                },
+                {
+                  "source": "netease",
+                  "state": "blocked",
+                  "cooling": true,
+                  "lastError": "HTTP 403 (host refused by the site) — <!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/htm",
+                  "checkedAt": "2026-10-24T01:00:27.690Z"
+                },
+                {
+                  "source": "kuwo",
+                  "state": "blocked",
+                  "cooling": true,
+                  "lastError": "HTTP 403 (host refused by the site) — <!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/htm",
+                  "checkedAt": "2026-10-24T01:00:27.704Z"
+                }
+              ]
+            },
+            {
+              "url": "https://music.gdstudio.org/",
+              "routes": [
+                {
+                  "source": "tidal",
+                  "state": "blocked",
+                  "cooling": true,
+                  "lastError": "HTTP 403 (host refused by the site) — <!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/htm",
+                  "checkedAt": "2026-10-24T01:00:28.291Z"
+                },
+                {
+                  "source": "netease",
+                  "state": "blocked",
+                  "cooling": true,
+                  "lastError": "HTTP 403 (host refused by the site) — <!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/htm",
+                  "checkedAt": "2026-10-24T01:00:28.291Z"
+                },
+                {
+                  "source": "kuwo",
+                  "state": "blocked",
+                  "cooling": true,
+                  "lastError": "HTTP 403 (host refused by the site) — <!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/htm",
+                  "checkedAt": "2026-10-24T01:00:28.304Z"
+                }
+              ]
+            }
+          ]
+        },
+        "archive": {
+          "base": "https://archive.org/",
+          "state": "cooling",
+          "cooling": true,
+          "lastError": "timeout after 4500ms (ETIMEDOUT)",
+          "checkedAt": "2026-10-24T01:03:20.336Z",
+          "bases": [
+            {
+              "url": "https://archive.org/",
+              "state": "down",
+              "cooling": true,
+              "lastError": "timeout after 4500ms (ETIMEDOUT)",
+              "checkedAt": "2026-10-24T01:00:02.851Z"
+            },
+            {
+              "url": "http://archive.org/",
+              "state": "down",
+              "cooling": true,
+              "lastError": "timeout after 4500ms (ETIMEDOUT)",
+              "checkedAt": "2026-10-24T01:03:20.336Z"
+            }
+          ]
+        },
+        "jamendo": {
+          "enabled": false,
+          "base": "https://api.jamendo.com/v3.0",
+          "state": "disabled",
+          "lastError": null,
+          "checkedAt": null
+        },
+        "netease": {
+          "enabled": true,
+          "searchBase": "https://music.163.com/",
+          "br": 999000,
+          "bases": [
+            {
+              "url": "https://api.qijieya.cn/meting/",
+              "state": "down",
+              "cooling": true,
+              "lastError": "no fLaC signature",
+              "checkedAt": "2026-10-24T01:04:13.081Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "/health",
+      "status": 200,
+      "json": {
+        "ok": true,
+        "id": "app.bitchord.lossless-bridge",
+        "version": "1.0.0",
+        "degraded": [
+          "gdstudio",
+          "archive",
+          "netease"
+        ],
+        "sources": {
+          "monochrome": {
+            "state": "ok",
+            "lastError": null
+          },
+          "gdstudio": {
+            "state": "degraded",
+            "lastError": "tidal: HTTP 403 (host refused by the site) — <!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/htm"
+          },
+          "archive": {
+            "state": "degraded",
+            "detail": "cooling",
+            "lastError": "timeout after 4500ms (ETIMEDOUT)"
+          },
+          "jamendo": {
+            "state": "disabled",
+            "lastError": null
+          },
+          "netease": {
+            "state": "degraded",
+            "lastError": "no fLaC signature"
+          },
+          "hifi": {
+            "state": "disabled",
+            "lastError": null
+          },
+          "qobuz": {
+            "state": "disabled",
+            "lastError": null
+          }
+        }
+      }
+    },
+    {
+      "path": "/",
+      "status": 200,
+      "json": {
+        "id": "app.bitchord.lossless-bridge",
+        "name": "Lossless Bridge",
+        "version": "1.0.0",
+        "resources": [
+          "search",
+          "stream"
+        ],
+        "allowDownloads": 1,
+        "checkValidLossless": 0,
+        "settings": [
+          {
+            "key": "quality",
+            "type": "select",
+            "default": "lossless",
+            "options": [
+              {
+                "label": "Lossless",
+                "value": "lossless"
+              },
+              {
+                "label": "High",
+                "value": "high"
+              },
+              {
+                "label": "Low",
+                "value": "low"
+              }
+            ]
+          },
+          {
+            "key": "prefer",
+            "type": "select",
+            "default": "studio",
+            "options": [
+              {
+                "label": "Studio masters first",
+                "value": "studio"
+              },
+              {
+                "label": "Live and bootlegs first",
+                "value": "live"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "netease": [
+    {
+      "query": "295 Sidhu Moose Wala",
+      "searchStatus": 200,
+      "code": 200,
+      "tracks": [
+        {
+          "id": 2726173581,
+          "title": "295",
+          "artists": [
+            "Sidhu Moose Wala"
+          ],
+          "duration": 270,
+          "hires": false,
+          "sq": true
+        },
+        {
+          "id": 2026998623,
+          "title": "295",
+          "artists": [
+            "Sidhu Moose Wala"
+          ],
+          "duration": 270.053,
+          "hires": false,
+          "sq": true
+        },
+        {
+          "id": 1952436053,
+          "title": "295",
+          "artists": [
+            "Sidhu Moose Wala"
+          ],
+          "duration": 321.073,
+          "hires": false,
+          "sq": true
+        },
+        {
+          "id": 2046641303,
+          "title": "295 Sidhu Moose Wala (Desi Mix)",
+          "artists": [
+            "Legend Jxxt"
+          ],
+          "duration": 235.049,
+          "hires": false,
+          "sq": true
+        },
+        {
+          "id": 1923563535,
+          "title": "295 (Remix)",
+          "artists": [
+            "Sammohan",
+            "Sidhu Moose Wala"
+          ],
+          "duration": 91.097,
+          "hires": false,
+          "sq": true
+        }
+      ],
+      "linkStatus": 302,
+      "mediaHost": "m701.music.126.net",
+      "status": 206,
+      "host": "m701.music.126.net",
+      "measured": {
+        "sampleRate": 44100,
+        "bitDepth": 24,
+        "channels": 2,
+        "duration": 270
+      }
+    },
+    {
+      "query": "Blinding Lights The Weeknd",
+      "searchStatus": 200,
+      "code": 200,
+      "tracks": [
+        {
+          "id": 1406633327,
+          "title": "Blinding Lights",
+          "artists": [
+            "The Weeknd"
+          ],
+          "duration": 200.045,
+          "hires": false,
+          "sq": true
+        },
+        {
+          "id": 2027162148,
+          "title": "Blinding Lights (Live)",
+          "artists": [
+            "The Weeknd"
+          ],
+          "duration": 253.365,
+          "hires": true,
+          "sq": true
+        },
+        {
+          "id": 1433194293,
+          "title": "Blinding Lights",
+          "artists": [
+            "The Weeknd"
+          ],
+          "duration": 200.045,
+          "hires": false,
+          "sq": true
+        },
+        {
+          "id": 1440628215,
+          "title": "Blinding Lights (Major Lazer Remix)",
+          "artists": [
+            "The Weeknd",
+            "Major Lazer"
+          ],
+          "duration": 197.961,
+          "hires": false,
+          "sq": true
+        },
+        {
+          "id": 1500412585,
+          "title": "Blinding Lights (Remix)",
+          "artists": [
+            "The Weeknd",
+            "ROSALÍA"
+          ],
+          "duration": 216.123,
+          "hires": false,
+          "sq": true
+        }
+      ],
+      "linkStatus": 302,
+      "mediaHost": "m701.music.126.net",
+      "status": 206,
+      "host": "m701.music.126.net",
+      "measured": {
+        "sampleRate": 44100,
+        "bitDepth": 16,
+        "channels": 2,
+        "duration": 200.0458276643991
+      }
+    }
+  ]
+}

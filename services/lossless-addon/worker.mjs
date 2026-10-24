@@ -5,6 +5,8 @@ export { AddonAuthState } from './auth.mjs';
 /** OpenTune lossless HTTP adapters. No media transcoding or audio proxying. */
 const MONO = 'https://tracks.monochrome.st';
 const ARCHIVE = 'https://archive.org';
+const NETEASE = 'https://music.163.com';
+const METING = 'https://api.qijieya.cn/meting/';
 const MUSOPEN_ITEM = 'musopen-dvd-in-lossless-flac-format';
 const UA = 'OpenTune-Lossless-Addon/0.1 (+https://github.com/justshivv/Opentune)';
 const MAX_JSON = 2 * 1024 * 1024;
@@ -20,6 +22,8 @@ class SourceError extends Error {
   constructor(message, status = 502, retryAfter = null) { super(message); this.status = status; this.retryAfter = retryAfter; }
 }
 const sources = {
+  netease: { id: 'org.opentune.netease', name: 'OpenTune · NetEase',
+    description: 'NetEase catalogue with public Meting audio resolution. Native FLAC is checked before playback; availability and original resolution vary by recording.' },
   monochrome: { id: 'org.opentune.monochrome', name: 'OpenTune · Monochrome',
     description: 'Independent adapter for Monochrome’s public Track Streamer. Availability and quotas depend on that service.' },
   archive: { id: 'org.opentune.archive', name: 'OpenTune · Internet Archive',
@@ -49,6 +53,15 @@ function safeFile(value) {
 }
 function archiveMedia(item, file) {
   return `${ARCHIVE}/download/${encodeURIComponent(item)}/${file.split('/').map(encodeURIComponent).join('/')}`;
+}
+function neteaseMediaUrl(value, base) {
+  let url;
+  try { url = new URL(value, base); } catch { throw new SourceError('Invalid NetEase audio link'); }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port ||
+      !(url.hostname === 'music.126.net' || url.hostname.endsWith('.music.126.net'))) {
+    throw new SourceError('The source returned an unsupported audio host');
+  }
+  return url.toString();
 }
 function seconds(value) {
   if (typeof value === 'number') return value;
@@ -100,15 +113,24 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
     }).finally(() => pending.delete(key));
     pending.set(key, task); return task;
   }
-  async function request(url, { media = false, signal } = {}) {
+  async function request(url, { media = false, signal, neteaseLink = false, neteaseMedia = false } = {}) {
     const host = new URL(url).host;
     const wait = Math.ceil(((cooldown.get(host) || 0) - now()) / 1000);
     if (wait > 0) throw new SourceError('Source rate limit: please retry later', 429, wait);
     const deadline = AbortSignal.timeout(6000);
     try {
-      const r = await fetcher(url, { redirect: 'follow', signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+      const options = { redirect: neteaseLink || neteaseMedia ? 'manual' : 'follow', signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
         headers: { 'User-Agent': UA, Accept: media ? 'audio/flac, application/octet-stream' : 'application/json',
-          ...(media ? { Range: `bytes=0-${MAX_HEADER - 1}` } : {}) } });
+          ...(media ? { Range: `bytes=0-${MAX_HEADER - 1}` } : {}) } };
+      let address = neteaseMedia ? neteaseMediaUrl(url) : url;
+      let r = await fetcher(address, options);
+      // Only this source follows a discovered media location. Validate every
+      // redirect before sending a request, and never send app proofs upstream.
+      if (neteaseMedia) for (let hop = 0; r.status >= 300 && r.status < 400 && hop < 3; hop++) {
+        const location = r.headers.get('Location'); await r.body?.cancel();
+        if (!location) throw new SourceError('The source returned an empty audio redirect');
+        address = neteaseMediaUrl(location, address); r = await fetcher(address, options);
+      }
       if (r.status === 429) {
         const raw = r.headers.get('Retry-After');
         const numeric = raw && /^\d+$/.test(raw) ? Number(raw) : (Date.parse(raw || '') - now()) / 1000;
@@ -116,11 +138,17 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
         cooldown.set(host, now() + wait * 1000); await r.body?.cancel();
         throw new SourceError('Source rate limit: please retry later', 429, wait);
       }
+      if (neteaseLink && [301, 302, 303, 307, 308].includes(r.status)) {
+        const location = r.headers.get('Location'); await r.body?.cancel();
+        if (!location) throw new SourceError('The source returned an empty audio link');
+        return neteaseMediaUrl(location, url);
+      }
       if (![200, 206].includes(r.status)) {
         await r.body?.cancel();
         const message = r.status === 401 || r.status === 403 ? 'Source refused access' : 'Source request failed';
         throw new SourceError(`${message} (HTTP ${r.status})`, r.status === 404 ? 404 : 502);
       }
+      if (neteaseLink) { await r.body?.cancel(); throw new SourceError('Meting did not return an available audio link', 404); }
       if (media && r.status === 206 && !/^bytes 0-\d+\/\d+$/.test(r.headers.get('Content-Range') || '')) {
         await r.body?.cancel(); throw new SourceError('The source returned an invalid byte range');
       }
@@ -145,6 +173,22 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
         duration: duration > 1000 ? duration / 1000 : duration,
         artworkURL: text(t.artwork || t.cover), isrc: text(t.isrc), format: 'flac' }];
     }).slice(0, 20);
+  }
+  async function searchNetease(q) {
+    const params = new URLSearchParams({ s: q, type: '1', limit: '20' });
+    const data = await request(`${NETEASE}/api/cloudsearch/pc?${params}`);
+    if (data.code !== 200 || (!Array.isArray(data.result?.songs) && data.result?.songCount !== 0)) {
+      throw new SourceError('NetEase returned an unavailable catalogue');
+    }
+    return (data.result.songs || []).slice(0, 20).flatMap(t => {
+      if (!t) return [];
+      const id = String(t.id || ''), title = text(t.name), artist = names(t.ar || t.artists);
+      const duration = Number(t.dt || t.duration) / 1000;
+      if (!/^[1-9][0-9]{0,15}$/.test(id) || !title || !artist || !(duration > 0 && duration <= 86400)) return [];
+      return [{ id: opaque(['netease', id]), title, artist, duration,
+        album: text(t.al?.name || t.album?.name), artworkURL: text(t.al?.picUrl || t.album?.picUrl).replace(/^http:\/\//, 'https://'),
+        isrc: text(t.isrc), sourcePage: `${NETEASE}/song?id=${id}` }];
+    });
   }
   async function archiveMetadata(id, signal) {
     return memo(`item:${id}`, 120000, () => request(`${ARCHIVE}/metadata/${encodeURIComponent(id)}`, { signal }));
@@ -203,7 +247,11 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
     const id = unpack(token);
     if (!Array.isArray(id) || id[0] !== source) throw new SourceError('Invalid recording ID', 400);
     let url;
-    if (source === 'monochrome') {
+    if (source === 'netease') {
+      if (id.length !== 2 || typeof id[1] !== 'string' || !/^[1-9][0-9]{0,15}$/.test(id[1])) throw new SourceError('Invalid recording ID', 400);
+      const params = new URLSearchParams({ server: 'netease', type: 'url', id: id[1], br: '999000' });
+      url = await request(`${METING}?${params}`, { neteaseLink: true });
+    } else if (source === 'monochrome') {
       if (id.length !== 2 || typeof id[1] !== 'string' || !/^[\w-]{1,128}$/.test(id[1])) throw new SourceError('Invalid recording ID', 400);
       url = `${MONO}/track/${encodeURIComponent(id[1])}`;
     } else {
@@ -213,7 +261,7 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
       if (!data.files?.some(f => f.name === id[2] && /^flac$/i.test(f.format || ''))) throw new SourceError('FLAC recording not found', 404);
       url = archiveMedia(id[1], id[2]);
     }
-    const measured = await request(url, { media: true });
+    const measured = await request(url, { media: true, neteaseMedia: source === 'netease' });
     return { url, codec: 'flac', container: 'flac', format: 'flac', manifest: 'none', encrypted: false, ...measured };
   }
   return async req => {
@@ -231,7 +279,7 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
         const q = (url.searchParams.get('q') || '').trim();
         if (q.length > 200) return json({ error: 'Search is too long' }, 400);
         if (!q) return json({ tracks: [] });
-        const tracks = await memo(`${source}:search:${q}`, 60000, () => source === 'monochrome' ? searchMono(q) : source === 'musopen' ? searchMusopen(q) : searchArchive(q));
+        const tracks = await memo(`${source}:search:${q}`, 60000, () => source === 'monochrome' ? searchMono(q) : source === 'netease' ? searchNetease(q) : source === 'musopen' ? searchMusopen(q) : searchArchive(q));
         return json({ tracks });
       }
       if (parts.length === 2 && parts[0] === 'stream') {

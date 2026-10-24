@@ -41,6 +41,11 @@ test('strict default rejects fake User-Agent, Origin and copied bearer before up
   }
   assert.equal(count(), 0);
   assert.equal((await app(new Request(origin + '/monochrome/manifest.json'), env)).status, 200);
+  const afterManifest = count();
+  for (const path of ['/netease/search?q=295', '/netease/stream/untrusted-id']) {
+    assert.equal((await app(new Request(origin + path), env)).status, 401);
+  }
+  assert.equal(count(), afterManifest);
 });
 test('valid native proof accepted once; parallel replay rejected atomically', async () => {
   const { app, env, count } = setup(), s = await session(env), r = signed(s, '/monochrome/search?q=x');

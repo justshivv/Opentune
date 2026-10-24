@@ -43,7 +43,7 @@ const pendingResponse = await fetch(new URL('/auth/web/status', base), { method:
 assert.equal(pendingResponse.status, 200);
 assert.equal((await pendingResponse.json()).session, null);
 report.security.browserWaitsForApproval = true;
-for (const source of ['monochrome', 'archive', 'musopen']) {
+for (const source of ['monochrome', 'archive', 'musopen', 'netease']) {
   const { response, body } = await get(`/${source}/manifest.json`);
   assert.equal(response.status, 200); assert.equal(body.id, `org.opentune.${source}`);
   assert.deepEqual(body.resources, ['search', 'stream']); assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*');
@@ -51,7 +51,7 @@ for (const source of ['monochrome', 'archive', 'musopen']) {
 }
 if (policy.body.mode === 'strict') {
   report.security.unsignedAccess = [];
-  for (const source of ['monochrome', 'archive', 'musopen']) {
+  for (const source of ['monochrome', 'archive', 'musopen', 'netease']) {
     for (const route of ['search?q=295&quality=best', 'stream/untrusted-id?quality=best']) {
       for (const agent of ['BitChord/v1.8.1', 'OpenTune/verified-addon-v1']) {
         const r = await fetch(new URL(`/${source}/${route}`, base), { signal: AbortSignal.timeout(20000), headers: {

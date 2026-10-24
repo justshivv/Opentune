@@ -1,6 +1,6 @@
 /** Public interfaces only. No account credentials, full audio downloads or signed URLs in reports. */
 import { writeFile } from 'node:fs/promises';
-import { flacInfo } from './worker.mjs';
+import { flacInfo, createAddon } from './worker.mjs';
 const report = { checkedAt: new Date().toISOString(), bridge: [], netease: [] };
 const blocked = new Set();
 async function read(address, media = false, redirect = 'follow') {
@@ -49,6 +49,21 @@ for (const query of ['295 Sidhu Moose Wala','Blinding Lights The Weeknd']) {
     if(u.protocol!=='https:' || !(u.hostname==='music.126.net'||u.hostname.endsWith('.music.126.net'))) {result.note='Not an HTTPS NetEase media host';continue;}
     Object.assign(result,await read(u,true));
   } catch(e) {result.error=/^HTTP \d+$/.test(e.message)?e.message:'Network or non-FLAC response';}
+}
+const adapter = createAddon();
+report.opentuneAdapter = [];
+for (const query of ['295 Sidhu Moose Wala', 'Blinding Lights The Weeknd']) {
+  const r = await adapter(new Request('https://test.invalid/netease/search?q=' + encodeURIComponent(query)));
+  const data = await r.json();
+  const track = data.tracks?.find(t => query.startsWith('295') ? t.title === '295' && /sidhu/i.test(t.artist) : t.title === 'Blinding Lights' && /weeknd/i.test(t.artist));
+  const result = { query, searchStatus: r.status, candidates: data.tracks?.length || 0 };
+  if (track) {
+    const stream = await adapter(new Request('https://test.invalid/netease/stream/' + track.id)); const audio = await stream.json();
+    result.streamStatus = stream.status;
+    if (stream.ok) result.measured = { codec: audio.codec, bitDepth: audio.bitDepth, sampleRate: audio.sampleRate, channels: audio.channels, duration: audio.duration };
+    else result.error = audio.error;
+  } else result.error = data.error || 'No matching recording';
+  report.opentuneAdapter.push(result);
 }
 await writeFile('lossless-bridge-report.json',JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify(report,null,2));
