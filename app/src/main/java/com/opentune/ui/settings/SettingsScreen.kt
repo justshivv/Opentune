@@ -1023,6 +1023,10 @@ private fun settingsSections(
                     if (spotifyConnected) {
                         ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = "When a song has a Canvas on Spotify, it loops silently behind the player", icon = Icons.Rounded.Animation)
                         RowDivider()
+                        ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = "A song you like here goes into your Spotify Liked Songs too, so Spotify's suggestions learn from it", icon = Icons.Rounded.Favorite)
+                        RowDivider()
+                        ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = Icons.Rounded.Album)
+                        RowDivider()
                         SettingRow(
                             "Spotify playlists",
                             summary = when {

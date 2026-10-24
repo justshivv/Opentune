@@ -1,0 +1,162 @@
+{
+ "data": {
+  "home": {
+   "sectionContainer": {
+    "sections": {
+     "items": [
+      {
+       "data": {
+        "title": {
+         "transformedLabel": "Popular radio"
+        }
+       },
+       "sectionItems": {
+        "items": [
+         {
+          "content": {
+           "__typename": "PlaylistResponseWrapper",
+           "data": {
+            "__typename": "Playlist",
+            "name": "Morgan Wallen Radio",
+            "uri": "spotify:playlist:37i9dQZF1E4nRfrCEsvZkU",
+            "format": "inspiredby-mix",
+            "description": "With Luke Combs, Bailey Zimmerman, Tucker Wetmore and more",
+            "images": {
+             "items": [
+              {
+               "extractedColors": {
+                "colorDark": {
+                 "hex": "#6F74A4",
+                 "isFallback": false
+                }
+               },
+               "sources": [
+                {
+                 "height": null,
+                 "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/4oUHIQIBe0LHzYfvXNW4QM/en",
+                 "width": null
+                }
+               ]
+              }
+             ]
+            }
+           }
+          },
+          "uri": "spotify:playlist:37i9dQZF1E4nRfrCEsvZkU"
+         },
+         {
+          "content": {
+           "__typename": "PlaylistResponseWrapper",
+           "data": {
+            "__typename": "Playlist",
+            "name": "Zach Bryan Radio",
+            "uri": "spotify:playlist:37i9dQZF1E4sD262twcXeU",
+            "format": "inspiredby-mix",
+            "description": "With Tyler Childers, Dylan Gossett, The Red Clay Strays and more",
+            "images": {
+             "items": [
+              {
+               "extractedColors": {
+                "colorDark": {
+                 "hex": "#A16387",
+                 "isFallback": false
+                }
+               },
+               "sources": [
+                {
+                 "height": null,
+                 "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/40ZNYROS4zLfyyBSs2PGe2/en",
+                 "width": null
+                }
+               ]
+              }
+             ]
+            }
+           }
+          },
+          "uri": "spotify:playlist:37i9dQZF1E4sD262twcXeU"
+         }
+        ]
+       }
+      },
+      {
+       "data": {
+        "title": {
+         "transformedLabel": "Made For You"
+        }
+       },
+       "sectionItems": {
+        "items": [
+         {
+          "content": {
+           "__typename": "PlaylistResponseWrapper",
+           "data": {
+            "__typename": "Playlist",
+            "name": "Daily Mix 1",
+            "uri": "spotify:playlist:37i9dQZF1E39vTG3GurFPW",
+            "format": "daily-mix",
+            "description": "Arijit Singh, Pritam and more",
+            "images": {
+             "items": [
+              {
+               "extractedColors": {
+                "colorDark": {
+                 "hex": "#6F74A4",
+                 "isFallback": false
+                }
+               },
+               "sources": [
+                {
+                 "height": null,
+                 "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/4oUHIQIBe0LHzYfvXNW4QM/en",
+                 "width": null
+                }
+               ]
+              }
+             ]
+            }
+           }
+          },
+          "uri": "spotify:playlist:37i9dQZF1E39vTG3GurFPW"
+         },
+         {
+          "content": {
+           "__typename": "PlaylistResponseWrapper",
+           "data": {
+            "__typename": "Playlist",
+            "name": "Daily Mix 1",
+            "uri": "spotify:playlist:37i9dQZF1E39vTG3GurFPW",
+            "format": "daily-mix",
+            "description": "Arijit Singh, Pritam and more",
+            "images": {
+             "items": [
+              {
+               "extractedColors": {
+                "colorDark": {
+                 "hex": "#6F74A4",
+                 "isFallback": false
+                }
+               },
+               "sources": [
+                {
+                 "height": null,
+                 "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/4oUHIQIBe0LHzYfvXNW4QM/en",
+                 "width": null
+                }
+               ]
+              }
+             ]
+            }
+           }
+          },
+          "uri": "spotify:playlist:37i9dQZF1E39vTG3GurFPW"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}

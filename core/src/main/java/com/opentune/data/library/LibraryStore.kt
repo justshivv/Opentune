@@ -227,6 +227,8 @@ object LibraryStore {
                     .onFailure { Log.w("LibraryStore", "Couldn't rate ${song.videoId} on YouTube Music", it) }
             }
         }
+        // And in Spotify's Liked Songs, when Spotify is connected.
+        com.opentune.data.spotify.SpotifyLikes.liked(song, liked)
     }
 
     // Every change to a playlist below is made here at once and, for one kept

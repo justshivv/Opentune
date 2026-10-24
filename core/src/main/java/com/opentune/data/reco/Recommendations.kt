@@ -27,7 +27,13 @@ import kotlinx.coroutines.withContext
  *
  * Whatever the user hid ("Not interested", "Don't play [artist]") is left
  * out here, so every caller — autoplay, smart shuffle, Home's "Because you
- * played" — gets the same filtered picks.
+ * played" — gets the same filtered picks. So are songs played in the last
+ * few hours, as long as enough are left.
+ *
+ * With Spotify connected, Spotify's picks are its song radio for the
+ * listener ([SpotifyRadio.personal]), each matched on YouTube Music to the
+ * same length, and artists already in the listener's playlists and likes are
+ * moved a little nearer the front.
  */
 object Recommendations {
     private const val TAG = "Recommendations"
@@ -36,6 +42,10 @@ object Recommendations {
     private const val PARALLEL = 4
     /** Fewer found songs than this and YouTube Music's radio is used instead. */
     private const val ENOUGH = 3
+    /** Songs played this recently aren't suggested again. */
+    private const val RECENT_MS = 3 * 60 * 60_000L
+    /** How many places a pick by an artist the listener keeps moves up. */
+    private const val LEAN = 4
 
     data class Result(val songs: List<Song>, val engine: Recommender)
 
@@ -45,36 +55,80 @@ object Recommendations {
             val songs = try {
                 // A hidden artist's picks are dropped before the lookups, so they don't use up the batch.
                 val hidden = LibraryStore.hidden.value
-                matched(seed, picks(seed, engine).filterNot { hidden.hidesArtist(it.artists.joinToString(", ")) })
+                val picks = picks(seed, engine)
+                matched(seed, lean(picks.tracks.filterNot { hidden.hidesArtist(it.artists.joinToString(", ")) }), picks.exact)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "${engine.label} picks for ${seed.title} failed", e)
                 emptyList()
             }
-            if (songs.size >= ENOUGH) return Result(songs, engine)
+            if (songs.size >= ENOUGH) return Result(notRecent(songs), engine)
             Log.d(TAG, "${engine.label} found ${songs.size} for ${seed.title}; using YouTube Music")
         }
-        return Result(youtube(seed.videoId), Recommender.YOUTUBE)
+        return Result(notRecent(youtube(seed.videoId)), Recommender.YOUTUBE)
     }
+
+    /** [songs] without those played in the last few hours, unless that leaves too few. */
+    internal fun notRecent(
+        songs: List<Song>,
+        played: List<com.opentune.data.history.PlayRecord> = com.opentune.data.history.History.records.value,
+        now: Long = System.currentTimeMillis(),
+    ): List<Song> {
+        // Newest listen first.
+        val recent = played
+            .asSequence().takeWhile { now - it.playedAt < RECENT_MS }.mapTo(HashSet()) { it.videoId }
+        if (recent.isEmpty()) return songs
+        return songs.filterNot { it.videoId in recent }.takeIf { it.size >= ENOUGH } ?: songs
+    }
+
+    /**
+     * Picks by artists the listener keeps (in their playlists or likes)
+     * moved up to [LEAN] places, otherwise in the engine's order.
+     */
+    private fun lean(picks: List<Spotify.Track>): List<Spotify.Track> {
+        val kept = HashSet<String>()
+        LibraryStore.liked.value.forEach { kept += artistKey(it.artist) }
+        LibraryStore.playlists.value.forEach { p -> p.songs.forEach { kept += artistKey(it.artist) } }
+        return leanTowards(picks, kept)
+    }
+
+    internal fun leanTowards(picks: List<Spotify.Track>, kept: Set<String>): List<Spotify.Track> {
+        if (kept.isEmpty()) return picks
+        return picks.withIndex()
+            .sortedBy { (i, t) -> if (t.artists.any { artistKey(it) in kept }) i - LEAN - 0.5 else i.toDouble() }
+            .map { it.value }
+    }
+
+    private fun artistKey(artist: String) = mainArtist(artist).lowercase().filter { it.isLetterOrDigit() }
 
     suspend fun youtube(videoId: String): List<Song> = withContext(Dispatchers.IO) {
         LibraryStore.hidden.value.songs(ContentFilter.songs(InnertubeParser.parseWatchQueue(Innertube.next(videoId))))
     }
 
-    private suspend fun picks(seed: Song, engine: Recommender): List<Spotify.Track> {
+    /** An engine's picks; [exact] when each comes with its length, to match on YouTube Music. */
+    private class Picks(val tracks: List<Spotify.Track>, val exact: Boolean)
+
+    private suspend fun picks(seed: Song, engine: Recommender): Picks {
         val artist = mainArtist(seed.artist)
         return when (engine) {
-            Recommender.SPOTIFY -> SpotifyRadio.radio(seed.title, artist, seed.albumName)
-            Recommender.JIOSAAVN -> JioSaavnRadio.radio(seed.title, artist)
-            Recommender.YOUTUBE -> emptyList()
+            Recommender.SPOTIFY -> SpotifyRadio.personal(seed.title, artist, seed.albumName, durationMs(seed.durationText))
+                ?.let { Picks(it, exact = true) }
+                ?: Picks(SpotifyRadio.radio(seed.title, artist, seed.albumName), exact = false)
+            Recommender.JIOSAAVN -> Picks(JioSaavnRadio.radio(seed.title, artist), exact = false)
+            Recommender.YOUTUBE -> Picks(emptyList(), exact = false)
         }
     }
 
-    private suspend fun matched(seed: Song, picks: List<Spotify.Track>): List<Song> = coroutineScope {
+    /** "3:25" or "1:02:03" in milliseconds; 0 when unknown. */
+    internal fun durationMs(text: String?): Long =
+        text?.split(':')?.map { it.trim().toLongOrNull() ?: return 0L }?.fold(0L) { acc, n -> acc * 60 + n }?.times(1000) ?: 0L
+
+    private suspend fun matched(seed: Song, picks: List<Spotify.Track>, exact: Boolean): List<Song> = coroutineScope {
         val gate = Semaphore(PARALLEL)
-        picks.take(MATCHES).map { t ->
-            async { gate.withPermit { runCatching { PlaylistImport.match(t) }.getOrNull() } }
+        // Exact matching turns some down, so a few more are looked up.
+        picks.take(if (exact) MATCHES + 5 else MATCHES).map { t ->
+            async { gate.withPermit { runCatching { PlaylistImport.match(t, exactLength = exact) }.getOrNull() } }
         }.awaitAll()
             .filterNotNull()
             .filter { it.videoId != seed.videoId }

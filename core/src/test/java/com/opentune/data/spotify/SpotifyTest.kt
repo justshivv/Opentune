@@ -53,4 +53,15 @@ class SpotifyTest {
         assertEquals(PlaylistImport.key("Here Comes the Sun"), PlaylistImport.key("Here Comes The Sun - Remastered 2009"))
         assertEquals(PlaylistImport.key("Stay"), PlaylistImport.key("Stay (feat. Justin Bieber)"))
     }
+
+    @Test fun exactLengthTurnsDownAnotherVersion() {
+        val want = Spotify.Track("Blinding Lights", listOf("The Weeknd"), "After Hours", 200_040)
+        val live = Song("live0000001", "Blinding Lights", "The Weeknd", null, durationText = "3:31")
+        val studio = Song("real0000001", "Blinding Lights", "The Weeknd", null, durationText = "3:20")
+        val unknown = Song("unkn0000001", "Blinding Lights", "The Weeknd", null)
+        assertEquals(studio, PlaylistImport.best(want, listOf(live, studio), exactLength = true))
+        assertNull(PlaylistImport.best(want, listOf(live, unknown), exactLength = true))
+        // Without it, the title and artist are enough, as for imports.
+        assertEquals(live, PlaylistImport.best(want, listOf(live), exactLength = false))
+    }
 }

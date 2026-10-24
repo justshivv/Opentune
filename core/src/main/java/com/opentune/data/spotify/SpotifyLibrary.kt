@@ -23,6 +23,7 @@ object SpotifyLibrary {
     /** Enough for any real library; stops a runaway loop if Spotify's counts are off. */
     private const val MAX_ITEMS = 10_000
 
+    /** A playlist; for a mix, [owner] carries Spotify's description of it instead. */
     data class Playlist(val id: String, val name: String, val owner: String?, val imageUrl: String?)
 
     /** A song in a playlist, with Spotify's id for it. */
@@ -52,6 +53,45 @@ object SpotifyLibrary {
             if (page.raw == 0 || offset >= page.total) break
         }
         return all.distinctBy { it.id }
+    }
+
+    /**
+     * The kinds of playlist Spotify makes for one listener out of their own
+     * listening, as its `format` names them. Artist and song radios
+     * ("inspiredby-mix") and editorial playlists are the same for everyone,
+     * so they're left out.
+     */
+    internal val PERSONAL_FORMATS = setOf(
+        "daily-mix", "discover-weekly", "release-radar", "on-repeat", "repeat-rewind", "daylist", "artist-mix-reader", "topic-mix",
+    )
+
+    /** Spotify's mixes made for the listener, as its home page lists them, in its order. */
+    suspend fun madeForYou(cookie: String): List<Playlist> = mixesIn(
+        SpotifyWebPlayer.query("home", cookie, buildJsonObject {
+            put("homeEndUserIntegration", "INTEGRATION_WEB_PLAYER")
+            put("timeZone", java.util.TimeZone.getDefault().id)
+            put("sp_t", "")
+            put("facet", "")
+            put("sectionItemsLimit", 20)
+            put("includeHomeChapterVideoCards", false)
+            put("includeEpisodeContentRatingsV2", false)
+        }),
+    )
+
+    /** The personal mixes in a `home` answer, each once. */
+    internal fun mixesIn(root: JsonObject): List<Playlist> {
+        val sections = root.at("data", "home", "sectionContainer", "sections", "items") as? JsonArray ?: return emptyList()
+        return sections.flatMap { section -> (section.at("sectionItems", "items") as? JsonArray).orEmpty() }
+            .mapNotNull { item ->
+                val data = item.at("content", "data") as? JsonObject ?: return@mapNotNull null
+                if (data.text("__typename") != "Playlist" || data.text("format") !in PERSONAL_FORMATS) return@mapNotNull null
+                val uri = data.text("uri") ?: (item.at("uri") as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+                if (!uri.startsWith("spotify:playlist:")) return@mapNotNull null
+                val name = data.text("name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val images = (data.at("images", "items") as? JsonArray)?.firstOrNull()
+                Playlist(uri.substringAfterLast(':'), name, data.text("description")?.takeIf { it.isNotBlank() }, largest(images.at("sources")))
+            }
+            .distinctBy { it.id }
     }
 
     /**

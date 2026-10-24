@@ -139,6 +139,16 @@ fun HomeScreen(
         com.opentune.data.reco.HomeSeed.mixes(com.opentune.data.history.DailyMixes.build(records, hidden = hidden), seeds, records.size)
     }
     val ui by AppSettings.ui.collectAsState()
+    // Spotify's own mixes for the listener, when Spotify is connected (see SpotifySync).
+    val spotifyConnected by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+    val spotifyMixesAll by com.opentune.data.spotify.SpotifySync.mixes.collectAsState()
+    val spotifyMixes = remember(spotifyMixesAll, hidden, spotifyConnected, ui.spotifyMixes) {
+        if (!spotifyConnected || !ui.spotifyMixes) emptyList()
+        else spotifyMixesAll.mapNotNull { m ->
+            val songs = hidden.songs(m.songs.map { it.toSong() })
+            if (songs.size < 6) null else com.opentune.data.history.DailyMixes.Mix("spotify:${m.id}", m.name, m.description.orEmpty(), songs)
+        }
+    }
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     // Signing in or out changes what YouTube Music recommends; fetch again then.
@@ -278,6 +288,11 @@ fun HomeScreen(
                     // Before any listening, every mix comes from the followed artists.
                     val seededOnly = mixes.all { it.id.startsWith("seed:") }
                     MixesShelf(mixes, actions, if (seededOnly) "From the artists you follow, until you've played more" else MIXES_LINE)
+                }
+            }
+            if (spotifyMixes.isNotEmpty()) {
+                item(key = "spotifyMixes") {
+                    MixesShelf(spotifyMixes, actions, "Spotify's mixes for you, from your likes and listening there", title = "Made for you on Spotify")
                 }
             }
             when (val s = state) {
@@ -481,10 +496,15 @@ private const val MIXES_LINE = "Daily mixes from what you play, new each day"
 
 /** Today's mixes from this phone's listening, each a card of four covers. */
 @Composable
-internal fun MixesShelf(mixes: List<com.opentune.data.history.DailyMixes.Mix>, actions: SongActions, line: String = MIXES_LINE) {
+internal fun MixesShelf(
+    mixes: List<com.opentune.data.history.DailyMixes.Mix>,
+    actions: SongActions,
+    line: String = MIXES_LINE,
+    title: String = "Made for you today",
+) {
     Column(Modifier.padding(top = 18.dp)) {
         Text(
-            "Made for you today",
+            title,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 20.dp),

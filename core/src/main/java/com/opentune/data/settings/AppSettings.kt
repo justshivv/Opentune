@@ -367,6 +367,10 @@ data class InterfaceSettings(
     val animatedCoversWifiOnly: Boolean = true,
     /** With Spotify connected, its Canvas loops behind the player. */
     val spotifyCanvas: Boolean = true,
+    /** With Spotify connected, songs liked here are saved to Spotify's Liked Songs too. */
+    val spotifySaveLikes: Boolean = true,
+    /** With Spotify connected, Home shows Spotify's mixes made for the listener. */
+    val spotifyMixes: Boolean = true,
     val lyricsAnimation: LyricsAnimation = LyricsAnimation.FLUID,
     /** Lyrics text size, as a fraction of the standard size. */
     val lyricsTextScale: Float = 1f,
@@ -519,7 +523,7 @@ enum class VolumeLevel(val label: String, val summary: String, val offsetDb: Flo
 @Serializable
 enum class Recommender(val label: String, val summary: String) {
     YOUTUBE("YouTube Music", "YouTube Music's own radio for the last song"),
-    SPOTIFY("Spotify", "The songs Spotify recommends after the last one, found on YouTube Music"),
+    SPOTIFY("Spotify", "Spotify's song radio for the last song, made for you when Spotify is connected, found on YouTube Music at the same length"),
     JIOSAAVN("JioSaavn", "JioSaavn's picks after the last song, strong on Indian music, found on YouTube Music"),
 }
 

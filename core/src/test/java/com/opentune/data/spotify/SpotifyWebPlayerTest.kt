@@ -60,4 +60,18 @@ class SpotifyWebPlayerTest {
         assertNull(canvas("https://scdn.co.evil.example/a.mp4"))
         assertNull(canvas("https://canvaz.scdn.co/a.jpg"))
     }
+
+    @Test
+    fun theSongRadioIsAPlaylist() {
+        // As Spotify answered for "Blinding Lights" on 2026-10-24.
+        val answer = Json.parseToJsonElement("""{"total": 1,"mediaItems": [{"uri": "spotify:playlist:37i9dQZF1E8UXBoz02kGID"}]}""").jsonObject
+        assertEquals("37i9dQZF1E8UXBoz02kGID", SpotifyWebPlayer.radioPlaylistIn(answer))
+        assertNull(SpotifyWebPlayer.radioPlaylistIn(Json.parseToJsonElement("""{"total":0,"mediaItems":[]}""").jsonObject))
+    }
+
+    @Test
+    fun withoutALengthTitleAndArtistDecide() {
+        val hits = search(hit("Blinding Lights", "The Weeknd", "After Hours", 200_040, "single"))
+        assertEquals("spotify:track:single", SpotifyWebPlayer.pick(hits, "Blinding Lights", "The Weeknd", null, 0)?.uri)
+    }
 }

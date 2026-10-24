@@ -32,6 +32,10 @@ import kotlinx.serialization.json.Json
  * that changed only costs its new songs. A playlist whose Spotify version
  * hasn't changed isn't read again; one taken out of the Spotify library is
  * taken out here too.
+ *
+ * Spotify's mixes made for the listener (Daily Mixes, Discover Weekly,
+ * Release Radar and the like) are brought over the same way for Home, but
+ * kept apart from Library, since Spotify remakes them every day or week.
  */
 object SpotifySync {
     private const val TAG = "SpotifySync"
@@ -49,8 +53,23 @@ object SpotifySync {
         val error: String? = null,
     )
 
+    /** One of Spotify's mixes made for the listener, with its songs found on YouTube Music. */
     @Serializable
-    private data class Saved(val lastSynced: Long = 0, val found: Map<String, SongRef> = emptyMap())
+    data class Mix(
+        val id: String,
+        val name: String,
+        val description: String? = null,
+        val imageUrl: String? = null,
+        val revision: String? = null,
+        val songs: List<SongRef> = emptyList(),
+    )
+
+    @Serializable
+    private data class Saved(val lastSynced: Long = 0, val found: Map<String, SongRef> = emptyMap(), val mixes: List<Mix> = emptyList())
+
+    /** The fewest songs found for a mix to be worth showing. */
+    private const val MIX_MIN = 6
+    private const val MAX_MIXES = 12
 
     private val json = Json { ignoreUnknownKeys = true }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -60,6 +79,9 @@ object SpotifySync {
     private val found = ConcurrentHashMap<String, SongRef>()
     private val _status = MutableStateFlow(Status())
     val status: StateFlow<Status> = _status.asStateFlow()
+    private val _mixes = MutableStateFlow<List<Mix>>(emptyList())
+    /** Spotify's mixes for the listener, in Spotify's order, as last brought over. */
+    val mixes: StateFlow<List<Mix>> = _mixes.asStateFlow()
 
     fun init(context: Context) {
         val f = File(context.applicationContext.filesDir, "spotify-sync.json")
@@ -67,6 +89,7 @@ object SpotifySync {
         scope.launch {
             runCatching { json.decodeFromString(Saved.serializer(), f.readText()) }.getOrNull()?.let { saved ->
                 found.putAll(saved.found)
+                _mixes.value = saved.mixes
                 _status.update { it.copy(lastSynced = saved.lastSynced) }
             }
         }
@@ -103,6 +126,18 @@ object SpotifySync {
     fun cancel() = job?.cancel()
 
     private suspend fun run(cookie: String, force: Boolean) {
+        if (com.opentune.data.settings.AppSettings.ui.value.spotifyMixes) {
+            try {
+                syncMixes(cookie, force)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SpotifyWebPlayer.SignedOut) {
+                throw e
+            } catch (e: Exception) {
+                // The library still comes over without them.
+                Log.w(TAG, "mixes failed", e)
+            }
+        }
         val lists = SpotifyLibrary.playlists(cookie)
         val have = LibraryStore.playlists.value.filter { it.spotifyId != null }.associateBy { it.spotifyId }
         lists.forEachIndexed { i, list ->
@@ -126,6 +161,27 @@ object SpotifySync {
         LibraryStore.dropSpotifyPlaylists(lists.mapTo(HashSet()) { it.id })
     }
 
+    private suspend fun syncMixes(cookie: String, force: Boolean) {
+        val lists = SpotifyLibrary.madeForYou(cookie).take(MAX_MIXES)
+        val had = _mixes.value.associateBy { it.id }
+        val out = mutableListOf<Mix>()
+        lists.forEachIndexed { i, list ->
+            _status.update { it.copy(current = list.name, index = i + 1, count = lists.size) }
+            val mine = had[list.id]
+            if (mine != null && !force) {
+                val revision = SpotifyLibrary.revision(cookie, list.id)
+                if (revision != null && revision == mine.revision) {
+                    out += mine.copy(name = list.name, description = list.owner, imageUrl = list.imageUrl)
+                    return@forEachIndexed
+                }
+            }
+            val (items, read) = SpotifyLibrary.tracks(cookie, list.id)
+            out += Mix(list.id, list.name, list.owner, list.imageUrl, read, matchAll(items))
+        }
+        _mixes.value = out.filter { it.songs.size >= MIX_MIN }
+        save(_status.value.lastSynced)
+    }
+
     /** Each song found on YouTube Music, in order; ones not found are left out. */
     private suspend fun matchAll(items: List<SpotifyLibrary.Item>): List<SongRef> = coroutineScope {
         val gate = Semaphore(PARALLEL)
@@ -140,7 +196,7 @@ object SpotifySync {
 
     private fun save(lastSynced: Long) {
         val f = file ?: return
-        runCatching { f.writeText(json.encodeToString(Saved.serializer(), Saved(lastSynced, HashMap(found)))) }
+        runCatching { f.writeText(json.encodeToString(Saved.serializer(), Saved(lastSynced, HashMap(found), _mixes.value))) }
             .onFailure { Log.w(TAG, "couldn't save", it) }
     }
 }

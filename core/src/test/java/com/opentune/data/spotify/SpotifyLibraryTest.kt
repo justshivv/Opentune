@@ -43,4 +43,14 @@ class SpotifyLibraryTest {
         assertEquals(1, page.total)
         assertEquals(listOf(SpotifyLibrary.Item("spotify:track:x1", Spotify.Track("Song", listOf("A", "B"), "Album", 180_000))), page.items)
     }
+
+    @Test
+    fun homeGivesOnlyTheListenersOwnMixes() {
+        // Spotify's signed-out home on 2026-10-24 ("Popular radio", the same for everyone),
+        // with a Daily Mix added as a signed-in home lists it, twice.
+        val mixes = SpotifyLibrary.mixesIn(json(checkNotNull(javaClass.classLoader?.getResource("spotify-home.json")).readText()))
+        assertEquals(listOf("37i9dQZF1E39vTG3GurFPW"), mixes.map { it.id })
+        assertEquals("Daily Mix 1", mixes.single().name)
+        assertEquals("Arijit Singh, Pritam and more", mixes.single().owner)
+    }
 }

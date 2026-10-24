@@ -56,6 +56,7 @@ object SpotifyWebPlayer {
     private const val CDN = "https://open.spotifycdn.com/cdn/build/web-player/"
     private const val PATHFINDER = "https://api-partner.spotify.com/pathfinder/v2/query"
     private const val CLIENT_TOKEN = "https://clienttoken.spotify.com/v1/clienttoken"
+    private const val SPCLIENT = "https://spclient.wg.spotify.com"
     private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
     private const val FOUND_TTL_MS = 12 * 60 * 60_000L
     private const val MISSED_TTL_MS = 30 * 60_000L
@@ -69,6 +70,9 @@ object SpotifyWebPlayer {
         "libraryV3" to "390c78e5b951029bad359785e69b07b536a509c581cbcd0aded5e5067f187455",
         "fetchPlaylist" to "21ea11a6ac75a5f3e01fd365d29c18e0a4a8b7dc09f89bbb5d73910190c6acaf",
         "fetchLibraryTracks" to "087278b20b743578a6262c2b0b4bcd20d879c503cc359a2285baf083ef944240",
+        "home" to "5fb7da7a03ee2776c0670856609cb85a189a3cecc36cc160b91cde79063b9cf1",
+        "addToLibrary" to "896ebcb47815681340860d121cb5d494e157e2a78d3950385cd54e0393c67148",
+        "removeFromLibrary" to "896ebcb47815681340860d121cb5d494e157e2a78d3950385cd54e0393c67148",
     )
     /** The fallback secret, from the extension's table (DesktopSpotifyToken.TOTP_SECRETS). */
     private val KNOWN_SECRET = Secret(12, listOf(107, 81, 49, 57, 67, 93, 87, 81, 69, 67, 40, 93, 48, 50, 46, 91, 94, 113, 41, 47))
@@ -89,7 +93,7 @@ object SpotifyWebPlayer {
         val at: Long,
     )
 
-    internal data class Hit(val uri: String, val title: String, val artists: List<String>, val album: String?, val durationMs: Long)
+    data class Hit(val uri: String, val title: String, val artists: List<String>, val album: String?, val durationMs: Long)
 
     private class Access(val token: String, val expiresAt: Long, val clientId: String?, val cookie: String)
     private class ClientToken(val token: String, val expiresAt: Long)
@@ -128,10 +132,28 @@ object SpotifyWebPlayer {
         synchronized(found) { found[key] }?.let { f ->
             if (f.url != null || System.currentTimeMillis() - f.at < NO_CANVAS_TTL_MS) return f.url
         }
-        val cleaned = TrackNameCleaner.clean(song.title, song.artist)
-        val term = "${cleaned.title} ${cleaned.artist}"
+        val hit = findTrack(song.title, song.artist, song.albumName, durationMs, cookie)
+        val url = hit?.let { h ->
+            canvasIn(query("canvas", cookie, buildJsonObject { put("trackUri", h.uri) }))
+        }
+        synchronized(found) { found[key] = Found(url, System.currentTimeMillis()) }
+        return url
+    }
+
+    /**
+     * Supplies the sign-in cookie when Spotify is connected, null otherwise;
+     * set by the app, which keeps the cookie with its WebView.
+     */
+    @Volatile var account: () -> String? = { null }
+
+    /**
+     * The same recording on Spotify, found with the web player's own search
+     * (see [pick]); null when there's no confident match.
+     */
+    suspend fun findTrack(title: String, artist: String, album: String?, durationMs: Long, cookie: String): Hit? {
+        val cleaned = TrackNameCleaner.clean(title, artist)
         val search = query("searchTracks", cookie, buildJsonObject {
-            put("searchTerm", term)
+            put("searchTerm", "${cleaned.title} ${cleaned.artist}")
             put("offset", 0)
             put("limit", 10)
             put("numberOfTopResults", 5)
@@ -139,12 +161,49 @@ object SpotifyWebPlayer {
             put("includePreReleases", false)
             put("includeAuthors", false)
         })
-        val hit = pick(hitsIn(search), cleaned.title, cleaned.artist, song.albumName, durationMs)
-        val url = hit?.let { h ->
-            canvasIn(query("canvas", cookie, buildJsonObject { put("trackUri", h.uri) }))
+        return pick(hitsIn(search), cleaned.title, cleaned.artist, album, durationMs)
+    }
+
+    /**
+     * The id of the playlist Spotify makes as the radio for track [uri] (its
+     * "Go to song radio"): fifty songs, chosen for the signed-in listener.
+     */
+    suspend fun songRadio(uri: String, cookie: String): String? {
+        val root = get("$SPCLIENT/inspiredby-mix/v2/seed_to_playlist/$uri?response-format=json", cookie)
+        return radioPlaylistIn(root)
+    }
+
+    /** The playlist id in a `seed_to_playlist` answer. */
+    internal fun radioPlaylistIn(root: JsonObject): String? =
+        (root["mediaItems"] as? JsonArray).orEmpty()
+            .firstNotNullOfOrNull { (it as? JsonObject)?.text("uri")?.takeIf { u -> u.startsWith("spotify:playlist:") } }
+            ?.substringAfterLast(':')
+            ?.takeIf { Regex("[A-Za-z0-9]{22}").matches(it) }
+
+    /** A GET on Spotify's own API host, with the web player's tokens. */
+    private suspend fun get(url: String, cookie: String, retried: Boolean = false): JsonObject {
+        val bearer = accessToken(cookie)
+        val clientToken = clientToken(bearer, webPlayer())
+        val request = Request.Builder().url(url)
+            .header("Authorization", "Bearer ${bearer.token}")
+            .header("Accept", "application/json")
+            .header("App-Platform", "WebPlayer")
+            .header("Origin", WEB_PLAYER)
+            .header("Referer", "$WEB_PLAYER/")
+            .header("User-Agent", USER_AGENT)
+            .apply { if (clientToken != null) header("Client-Token", clientToken) }
+            .build()
+        val (code, text) = runInterruptible(Dispatchers.IO) {
+            Http.client.newCall(request).execute().use { it.code to it.body?.string() }
         }
-        synchronized(found) { found[key] = Found(url, System.currentTimeMillis()) }
-        return url
+        if (code == 401 && !retried) {
+            access = null
+            client = null
+            return get(url, cookie, true)
+        }
+        if (code !in 200..299) throw IOException("Spotify answered $code")
+        return text?.let { runCatching { json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+            ?: throw IOException("Spotify answered with something other than JSON")
     }
 
     // ---- Matching -------------------------------------------------------------------
@@ -166,7 +225,8 @@ object SpotifyWebPlayer {
 
     /**
      * The same recording: title and artist equal once cleaned and folded,
-     * length within 3 s. The same album wins when the song names one.
+     * length within 3 s (when [durationMs] is known). The same album wins
+     * when the song names one.
      */
     internal fun pick(hits: List<Hit>, title: String, artist: String, album: String?, durationMs: Long): Hit? {
         val wantTitle = fold(title)
@@ -175,7 +235,7 @@ object SpotifyWebPlayer {
         val same = hits.filter { h ->
             fold(TrackNameCleaner.clean(h.title, h.artists.firstOrNull().orEmpty()).title) == wantTitle &&
                 h.artists.any { fold(it) == wantArtist } &&
-                h.durationMs > 0 && kotlin.math.abs(h.durationMs - durationMs) <= 3_000
+                (durationMs <= 0 || (h.durationMs > 0 && kotlin.math.abs(h.durationMs - durationMs) <= 3_000))
         }
         val wantAlbum = album?.let(::fold)?.takeIf { it.isNotEmpty() }
         return same.firstOrNull { wantAlbum != null && fold(it.album.orEmpty()) == wantAlbum } ?: same.firstOrNull()
@@ -381,9 +441,9 @@ object SpotifyWebPlayer {
             .sortedByDescending { it.version }
             .toList()
 
-    /** `"canvas","query","<64 hex>"` in the script. */
+    /** `"canvas","query","<64 hex>"` (or `"mutation"`) in the script. */
     internal fun queryHashIn(script: String, operation: String): String? =
-        Regex("""["']$operation["']\s*,\s*["']query["']\s*,\s*["']([0-9a-f]{64})["']""").find(script)?.groupValues?.get(1)
+        Regex("""["']$operation["']\s*,\s*["'](?:query|mutation)["']\s*,\s*["']([0-9a-f]{64})["']""").find(script)?.groupValues?.get(1)
 
     /** A JavaScript string literal's body with its escapes read. */
     internal fun unescapeJs(body: String): String =

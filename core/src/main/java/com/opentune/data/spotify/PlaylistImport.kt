@@ -114,18 +114,22 @@ object PlaylistImport {
     }
 
     /** The YouTube Music song for [track], or null when nothing is close enough. */
-    suspend fun match(track: Spotify.Track): Song? {
+    suspend fun match(track: Spotify.Track, exactLength: Boolean = false): Song? {
         val artist = track.artists.firstOrNull().orEmpty()
         val rows = MusicRepository.search("${track.title} $artist".trim(), SearchFilter.SONGS)
         val candidates = rows.mapNotNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
-        return best(track, candidates)
+        return best(track, candidates, exactLength)
     }
 
     /**
      * The candidate whose title and artist match [track], preferring one
      * whose length is within a few seconds. Null when no title matches.
+     * With [exactLength] and the track's length known, only a candidate
+     * within 3 s of it counts, so a live, sped-up or cover version isn't
+     * taken for the studio one.
      */
-    internal fun best(track: Spotify.Track, candidates: List<Song>): Song? {
+    internal fun best(track: Spotify.Track, candidates: List<Song>, exactLength: Boolean = false): Song? {
+        val strict = exactLength && track.durationMs > 0
         val wantTitle = key(track.title)
         val wantArtists = track.artists.map(::key).filter { it.isNotEmpty() }
         return candidates
@@ -136,6 +140,8 @@ object PlaylistImport {
                 if (title == wantTitle) score += 4 else if (title.contains(wantTitle) || wantTitle.contains(title)) score += 2 else return@map song to -1
                 if (wantArtists.any { artist.contains(it) || it.contains(artist) }) score += 3
                 val seconds = durationSeconds(song.durationText)
+                // Whole seconds on YouTube Music, so half a second more for the rounding.
+                if (strict && (seconds == null || kotlin.math.abs(seconds * 1000 - track.durationMs) > 3_500)) return@map song to -1
                 if (seconds != null && track.durationMs > 0 && kotlin.math.abs(seconds * 1000 - track.durationMs) <= 7_000) score += 2
                 song to score
             }

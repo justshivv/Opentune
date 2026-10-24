@@ -396,6 +396,18 @@ on your own connection with no hosted proxy.
   playlist in your Spotify library (and Liked Songs) shows up in Library
   with a Spotify tag. Each song is found on YouTube Music, and the copies
   follow changes on Spotify every few hours or when you tap to check.
+- **Spotify suggestions made for you**: with Spotify as the recommender
+  and Spotify connected, autoplay uses Spotify's song radio for your
+  account. Each pick is matched on YouTube Music to the same length (within
+  3 s), songs played in the last three hours are skipped, and artists in
+  your playlists and likes move a little nearer the front.
+- **Your listening, where it counts**: signed in to YouTube Music, plays
+  go into your YouTube Music history; Last.fm and ListenBrainz (optional)
+  get them as scrobbles. With Spotify connected, songs you like are saved
+  to your Spotify Liked Songs too, and Home shows Spotify's mixes made for
+  you (Daily Mixes, Discover Weekly, Release Radar), found on YouTube
+  Music. Plays aren't sent to Spotify, since the music streams from
+  YouTube Music, not Spotify.
 - **Last.fm scrobbling** (optional), with your own free Last.fm API key.
   The password is only used once to get a session and isn't stored.
 - **Import playlists.** Settings › Import a playlist takes:
@@ -612,7 +624,8 @@ that the upstream master was never transcoded. See the
 OpenTune does not decrypt Deezer streams. Animated covers use the token
 Apple Music's web player ships in its own page, and Spotify Canvas uses the
 web player's token for your own Spotify sign-in, as do the Spotify
-playlists in Library; Spotify's terms don't allow that use, so it stays off
+playlists in Library and the personal Spotify suggestions; Spotify's
+terms don't allow that use, so it stays off
 until you connect Spotify yourself.
 
 Not built yet: lyric translation and an in-app language setting.

@@ -46,6 +46,10 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         com.opentune.data.AppHooks.onPlayerChanged = { context, player -> com.opentune.widget.NowPlayingWidget.refresh(context, player) }
         com.opentune.data.AppHooks.onPlayerStopped = { context -> com.opentune.widget.NowPlayingWidget.stopped(context) }
         com.opentune.data.Core.init(this)
+        // Spotify's personal song radio, when Spotify is connected; the cookie stays with the WebView.
+        com.opentune.data.spotify.SpotifyWebPlayer.account = {
+            if (com.opentune.ui.spotify.SpotifyConnection.connected.value) com.opentune.ui.spotify.SpotifyConnection.cookie() else null
+        }
         // Last session's Home, shown at once and refreshed in the background.
         MusicRepository.init(this)?.let { ScreenCache.put("home", it, at = 0L) }
         // After history, library, downloads and account: they tell an existing user from a new one.
