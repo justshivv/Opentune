@@ -91,3 +91,21 @@ class SwipeQueueTest {
         assertEquals(SwipeAction.PLAY_NEXT, SwipeQueue.onRelease(threshold + 5f, -fling / 4, width, fling, rtl = false, armed = true))
     }
 }
+
+class BubblePopTest {
+    @Test fun swellsThenShrinksAndFadesAway() {
+        assertEquals(1f, SwipeQueue.bubble(0f), 0.001f)
+        assertEquals(SwipeQueue.SWELL, SwipeQueue.bubble(SwipeQueue.SWELL_SHARE), 0.001f)
+        assertEquals(SwipeQueue.POPPED, SwipeQueue.bubble(1f), 0.001f)
+        assertEquals(1f, SwipeQueue.bubbleAlpha(SwipeQueue.SWELL_SHARE), 0.001f)
+        assertEquals(0f, SwipeQueue.bubbleAlpha(1f), 0.001f)
+    }
+
+    @Test fun eachCopyOfASongKeepsItsKeyWhenAnotherGoes() {
+        fun s(id: String) = com.opentune.data.model.Song(id, id, "", null)
+        val before = com.opentune.ui.library.songKeys(listOf(s("a"), s("b"), s("a"), s("c")))
+        val after = com.opentune.ui.library.songKeys(listOf(s("a"), s("a"), s("c")))
+        assertEquals(listOf("a#1", "b#1", "a#2", "c#1"), before)
+        assertEquals(listOf(before[0], before[2], before[3]), after)
+    }
+}

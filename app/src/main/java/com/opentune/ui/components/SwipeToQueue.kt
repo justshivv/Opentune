@@ -123,6 +123,34 @@ internal object SwipeQueue {
         return sign(drag) * shown
     }
 
+    /**
+     * The size of a removed row [t] of the way through its pop: it swells to
+     * [SWELL] over the first [SWELL_SHARE], then shrinks away fast, as a
+     * bubble does when it bursts.
+     */
+    fun bubble(t: Float): Float {
+        val x = t.coerceIn(0f, 1f)
+        if (x <= SWELL_SHARE) {
+            val k = x / SWELL_SHARE
+            return 1f + (SWELL - 1f) * (1f - (1f - k) * (1f - k))
+        }
+        val k = (x - SWELL_SHARE) / (1f - SWELL_SHARE)
+        return SWELL + (POPPED - SWELL) * k * k
+    }
+
+    /** Fully there while it swells, then fading out with the shrink. */
+    fun bubbleAlpha(t: Float): Float {
+        val x = t.coerceIn(0f, 1f)
+        if (x <= SWELL_SHARE) return 1f
+        val k = (x - SWELL_SHARE) / (1f - SWELL_SHARE)
+        return (1f - k).coerceIn(0f, 1f)
+    }
+
+    const val SWELL = 1.05f
+    const val SWELL_SHARE = 0.35f
+    /** How small the row is at the moment it's gone. */
+    const val POPPED = 0.4f
+
     /** 0 at rest to 1 at the threshold; the icon grows with it. */
     fun progress(offset: Float, width: Float): Float =
         if (width <= 0f) 0f else (abs(offset) / (width * THRESHOLD)).coerceIn(0f, 1f)
@@ -235,12 +263,15 @@ private fun SwipeRow(
     var width by remember { mutableIntStateOf(0) }
     var armed by remember { mutableStateOf(false) }
     val pop = remember { Animatable(1f) }
+    /** 0 to 1 as a removed row pops out of the list like a bubble: a small swell, then gone. */
+    val vanish = remember { Animatable(0f) }
     var settling by remember { mutableStateOf<Job?>(null) }
 
     fun run(side: SwipeAction) {
         val act = (if (side == SwipeAction.PLAY_NEXT) playNext else addToQueue) ?: return
         act()
-        QueueNotices.post(shown(side), name)
+        // A removal says so itself, with an Undo on it.
+        if (shown(side) != SwipeAction.REMOVE) QueueNotices.post(shown(side), name)
     }
 
     Box(
@@ -295,6 +326,20 @@ private fun SwipeRow(
                     if (action != null) {
                         // A flick that never reached the line gets its tick as it acts.
                         if (!armed) haptics.tick()
+                        if (shown(action) == SwipeAction.REMOVE && !calm) {
+                            // Held where it was let go, it swells a little and pops, and only then
+                            // leaves the list, whose rows below slide up into its place.
+                            armed = false
+                            settling = scope.launch {
+                                vanish.animateTo(1f, tween(VANISH_MS, easing = androidx.compose.animation.core.LinearEasing))
+                                haptics.press()
+                                run(action)
+                                // Still here (the playlist didn't change): back to how it was.
+                                vanish.snapTo(0f)
+                                offset = 0f
+                            }
+                            return@awaitEachGesture
+                        }
                         run(action)
                     }
                     armed = false
@@ -311,14 +356,25 @@ private fun SwipeRow(
             },
     ) {
         val action = SwipeQueue.actionFor(offset, rtl)
+        val gone = vanish.value
         if (action != null) {
-            SwipeReveal(shown(action), SwipeQueue.progress(offset, width.toFloat()), towardRight = offset > 0f, armed = armed, calm = calm, pop = pop.value)
+            Box(Modifier.matchParentSize().graphicsLayer { alpha = 1f - gone }) {
+                SwipeReveal(shown(action), SwipeQueue.progress(offset, width.toFloat()), towardRight = offset > 0f, armed = armed, calm = calm, pop = pop.value)
+            }
         }
         val moving = offset != 0f
         Box(
             Modifier
                 .fillMaxWidth()
-                .graphicsLayer { translationX = offset }
+                .graphicsLayer {
+                    translationX = offset
+                    if (gone > 0f) {
+                        val scale = SwipeQueue.bubble(gone)
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = SwipeQueue.bubbleAlpha(gone)
+                    }
+                }
                 // Lifted off the list, the row is a card over the colour.
                 .then(if (moving) Modifier.clip(RowShape).background(MaterialTheme.colorScheme.background) else Modifier),
         ) {
@@ -336,6 +392,9 @@ private fun SwipeRow(
 }
 
 private val RowShape = RoundedCornerShape(18.dp)
+
+/** How long a removed row takes to pop. */
+private const val VANISH_MS = 340
 
 private fun labelOf(action: SwipeAction) = when (action) {
     SwipeAction.PLAY_NEXT -> "Play next"

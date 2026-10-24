@@ -797,7 +797,10 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             return@LazyColumn
         }
         item { tools(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
-        itemsIndexed(songs, key = { i, s -> "$i:${s.videoId}" }) { i, song ->
+        // Keyed by the song (and which copy of it), not its place, so a row taken out pops
+        // alone and the rows below slide up rather than every row after it being redrawn.
+        val keys = songKeys(songs)
+        itemsIndexed(songs, key = { i, _ -> keys[i] }) { i, song ->
             SongListItem(
                 song = song,
                 onClick = { actions.playAll(songs, i, false, playlist.name) },
@@ -806,10 +809,25 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 isPlaying = actions.isPlaying,
                 onPlayNext = { actions.playNext(song) },
                 onAddToQueue = { actions.addToQueue(song) },
-                onRemoveFromPlaylist = { LibraryStore.removeFromPlaylist(id, i) },
+                onRemoveFromPlaylist = { removeWithUndo(id, i) },
                 // Swipe right to add to the queue, left to take it out of the playlist.
-                onSwipeRemove = { LibraryStore.removeFromPlaylist(id, i) },
+                onSwipeRemove = { removeWithUndo(id, i) },
             )
         }
     }
+}
+
+/** A key for each of [songs] that stays with the song when others are taken out or put back. */
+internal fun songKeys(songs: List<com.opentune.data.model.Song>): List<String> {
+    val seen = HashMap<String, Int>()
+    return songs.map { s ->
+        val copy = seen.merge(s.videoId, 1, Int::plus)!!
+        "${s.videoId}#$copy"
+    }
+}
+
+/** Takes the song at [index] out of playlist [id], with a few seconds to Undo it. */
+private fun removeWithUndo(id: String, index: Int) {
+    val removed = LibraryStore.removeUndoably(id, index) ?: return
+    com.opentune.data.Pills.withAction("Removed \"${removed.song.title}\"", "Undo") { LibraryStore.undoRemove(removed) }
 }

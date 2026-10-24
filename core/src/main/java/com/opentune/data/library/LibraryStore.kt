@@ -279,6 +279,51 @@ object LibraryStore {
         mirror(id) { remote -> PlaylistEdit(PlaylistEdit.Kind.REMOVE, id, remote, videoIds = listOf(gone.videoId), setVideoId = gone.setVideoId) }
     }
 
+    /** A song just taken out of a playlist, which [undoRemove] can put back where it was. */
+    class Removed internal constructor(val playlistId: String, val index: Int, val song: SongRef, internal val token: Long)
+
+    /** How long a removal waits before it reaches YouTube Music, so Undo can call it off there. */
+    const val UNDO_MS = 8_000L
+    private var removals = 0L
+    private val waiting = HashMap<Long, kotlinx.coroutines.Job>()
+
+    /**
+     * Takes the song at [index] out of playlist [id] here at once, and on
+     * YouTube Music only once [UNDO_MS] has passed without [undoRemove].
+     */
+    @Synchronized
+    fun removeUndoably(id: String, index: Int): Removed? {
+        val gone = playlist(id)?.songs?.getOrNull(index) ?: return null
+        editPlaylist(id) { p -> p.copy(songs = p.songs.filterIndexed { i, _ -> i != index }) }
+        val removed = Removed(id, index, gone, ++removals)
+        if (isYouTubeId(gone.videoId)) {
+            waiting[removed.token] = scope.launch {
+                kotlinx.coroutines.delay(UNDO_MS)
+                synchronized(this@LibraryStore) {
+                    if (waiting.remove(removed.token) == null) return@launch
+                    mirror(id) { remote -> PlaylistEdit(PlaylistEdit.Kind.REMOVE, id, remote, videoIds = listOf(gone.videoId), setVideoId = gone.setVideoId) }
+                }
+            }
+        }
+        return removed
+    }
+
+    /** Puts [removed] back at its place. Called late, the removal already reached YouTube Music, so it's added there again. */
+    @Synchronized
+    fun undoRemove(removed: Removed) {
+        val p = playlist(removed.playlistId) ?: return
+        val at = removed.index.coerceIn(0, p.songs.size)
+        val songs = p.songs.toMutableList().apply { add(at, removed.song) }
+        editPlaylist(removed.playlistId) { it.copy(songs = songs) }
+        val held = waiting.remove(removed.token)
+        held?.cancel()
+        if (held != null || !isYouTubeId(removed.song.videoId)) return
+        val id = removed.playlistId
+        mirror(id) { remote -> PlaylistEdit(PlaylistEdit.Kind.ADD, id, remote, videoIds = listOf(removed.song.videoId)) }
+        val before = songs.drop(at + 1).firstOrNull { isYouTubeId(it.videoId) }?.videoId ?: return
+        mirror(id) { remote -> PlaylistEdit(PlaylistEdit.Kind.MOVE, id, remote, videoIds = listOf(removed.song.videoId), before = before) }
+    }
+
     @Synchronized
     fun movePlaylistItem(id: String, from: Int, to: Int) {
         val p = playlist(id) ?: return

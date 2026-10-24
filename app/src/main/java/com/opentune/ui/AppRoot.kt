@@ -658,7 +658,10 @@ fun AppRoot(vm: PlayerViewModel) {
                             onTogether = { nav.navigate("together") },
                         )
                     }
-                    composable("login") { LoginScreen(onDone = { nav.popBackStack() }) }
+                    composable("login") { entry ->
+                        // Only while it's still the page in front: a late second call mustn't close the one under it.
+                        LoginScreen(onDone = { if (nav.currentBackStackEntry == entry) nav.popBackStack() })
+                    }
                     composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
