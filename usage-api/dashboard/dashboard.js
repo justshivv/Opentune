@@ -180,20 +180,33 @@ $('report-zone').addEventListener('change', () => {
 updateCalendar();
 const initial = presetRange(30, new Date(), reportZone()); $('from').value = initial.from; $('to').value = initial.to;
 document.querySelector('.about').addEventListener('toggle', event => { event.currentTarget.querySelector('summary span').textContent = event.currentTarget.open ? 'View less' : 'View more'; });
-start(loadAll);
-
 let addonDraft=null;
 const addonStatus=$('addon-status');
 function renderAddons(){
   const host=$('addon-editor');host.replaceChildren();
   if(!addonDraft)return;
   addonDraft.sources.forEach((source,index)=>{
-    const row=node('div',null,'addon-row');row.append(node('strong',source.name),node('p',source.url,'footnote'));
+    const on=source.enabled!==false;
+    const row=node('div',null,'addon-row'+(on?'':' addon-off'));
+    row.append(node('strong',source.name),node('p',on?'On · apps use it':'Off · apps send it nothing','addon-state'),node('p',source.url,'footnote'));
+    // Turning a source on or off publishes straight away, so it takes effect without a second step.
+    const toggle=node('button',on?'Turn off':'Turn on');toggle.type='button';toggle.setAttribute('aria-pressed',String(on));
+    toggle.onclick=()=>{source.enabled=!on;publishAddons(source.name+(on?' turned off':' turned on'));};row.append(toggle);
     for(const [label,delta] of [['Move up',-1],['Move down',1]]){const b=node('button',label);b.type='button';b.disabled=index+delta<0||index+delta>=addonDraft.sources.length;b.onclick=()=>{const s=addonDraft.sources.splice(index,1)[0];addonDraft.sources.splice(index+delta,0,s);renderAddons();};row.append(b);}
     const remove=node('button','Remove');remove.type='button';remove.onclick=()=>{addonDraft.sources.splice(index,1);renderAddons();};row.append(remove);host.append(row);
   });
   $('addon-publish').disabled=false;
 }
-$('addon-load').onclick=async()=>{try{addonDraft=await response(apiBase+'/v1/addons',new AbortController().signal);renderAddons();addonStatus.textContent='Published revision '+addonDraft.revision+' loaded. Changes stay in draft until you publish.';}catch{addonStatus.textContent='Could not load sources. Deploy the updated Worker and database schema first.';}};
-$('addon-form').onsubmit=event=>{event.preventDefault();if(!addonDraft){addonStatus.textContent='Load the catalog first.';return;}if(addonDraft.sources.length>=20){addonStatus.textContent='Up to 20 sources are allowed.';return;}addonDraft.sources.push({id:crypto.randomUUID(),name:$('addon-name').value.trim(),url:$('addon-url').value.trim()});event.currentTarget.reset();renderAddons();};
-$('addon-publish').onclick=async()=>{if(!addonDraft)return;$('addon-publish').disabled=true;try{addonDraft=await publishSources(addonDraft);addonStatus.textContent='Published revision '+addonDraft.revision+'. Supported apps refresh on launch and when Sources opens.';renderAddons();}catch(e){addonStatus.textContent=e.message;$('addon-publish').disabled=false;}};
+async function loadAddons(){
+  try{addonDraft=await response(apiBase+'/v1/addons',new AbortController().signal);renderAddons();addonStatus.textContent='Published revision '+addonDraft.revision+' loaded. Turning a source on or off publishes at once; other changes stay in draft until you publish.';}
+  catch{addonStatus.textContent='Could not load sources. Deploy the updated Worker and database schema first.';}
+}
+async function publishAddons(what){
+  if(!addonDraft)return;$('addon-publish').disabled=true;
+  try{addonDraft=await publishSources(addonDraft);addonStatus.textContent=(what?what+'. ':'')+'Published revision '+addonDraft.revision+'. Apps pick it up within a few minutes of being opened.';renderAddons();}
+  catch(e){addonStatus.textContent=e.message;$('addon-publish').disabled=false;if(what)loadAddons();}
+}
+$('addon-load').onclick=loadAddons;
+$('addon-form').onsubmit=event=>{event.preventDefault();if(!addonDraft){addonStatus.textContent='Load the catalog first.';return;}if(addonDraft.sources.length>=20){addonStatus.textContent='Up to 20 sources are allowed.';return;}addonDraft.sources.push({id:crypto.randomUUID(),name:$('addon-name').value.trim(),url:$('addon-url').value.trim(),enabled:true});event.currentTarget.reset();renderAddons();};
+$('addon-publish').onclick=()=>publishAddons();
+start(()=>{loadAll();loadAddons();});

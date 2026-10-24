@@ -12,7 +12,9 @@ export function validateCatalog(body) {
       const [a,b] = url.hostname.split('.').map(Number);
       if ([0,10,127].includes(a) || a>=224 || a===169&&b===254 || a===192&&b===168 || a===172&&b>=16&&b<=31 || a===100&&b>=64&&b<=127) throw new Error('Private addresses are unsupported');
     }
-    return {id:source.id,name:source.name.trim(),url:url.href};
+    if (source.enabled !== undefined && typeof source.enabled !== 'boolean') throw new Error('Turn a source on or off with true or false');
+    // Off: apps keep it listed as turned off by the owner and send it nothing.
+    return {id:source.id,name:source.name.trim(),url:url.href,enabled:source.enabled !== false};
   });
 }
 export async function catalog(db) {

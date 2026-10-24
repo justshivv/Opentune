@@ -89,6 +89,7 @@ object AddonResolver {
         /** [outcome]: asked over the network at all, and erred rather than answered. */
         suspend fun attempt(addon: AudioAddon, outcome: BooleanArray): AddonStream? {
             if (!addon.enabled) return null
+            if (addon.ownerOff) { report("${addon.manifest.name}: turned off by its owner"); return null }
             if ((failures["${addon.key}:${song.videoId}"] ?: 0) > now()) {
                 // Not a no: asked again once the hold is over.
                 outcome[0] = true; outcome[1] = true

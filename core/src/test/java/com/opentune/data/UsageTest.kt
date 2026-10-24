@@ -26,6 +26,17 @@ class UsageTest {
         assertEquals("20270101", Usage.istDay(java.time.Instant.parse("2026-12-31T18:30:00Z").toEpochMilli()))
     }
 
+    @Test fun totalsWaitHoursUnlessADayHasEnded() {
+        val now = utc(2026, 10, 9)
+        val today = setOf("20261009|1.0.0|IST")
+        assertEquals(true, Usage.due(0L, now, today, "20261009"))
+        assertEquals(false, Usage.due(now - 60_000, now, today, "20261009"))
+        assertEquals(true, Usage.due(now - Usage.REPORT_EVERY_MS, now, today, "20261009"))
+        assertEquals(true, Usage.due(now - 60_000, now, today + "20261008|1.0.0|IST", "20261009"))
+        // A clock set back doesn't hold the totals for good.
+        assertEquals(true, Usage.due(now + 60_000, now, today, "20261009"))
+    }
+
     @Test fun keepsOddVersionNamesToSafeCharacters() {
         assertEquals("ver-0.3.6-beta1x", Usage.periodKeys(0, "0.3.6-beta 1 (x)")[1])
     }

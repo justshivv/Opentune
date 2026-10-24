@@ -43,4 +43,18 @@ class AddonStoreTest {
         AddonStore.syncCommunity(emptyList())
         assertEquals("Mine", AddonStore.addons.value.single().manifest.name)
     }
+
+    @Test fun aSourceTheOwnerTurnedOffIsNeverUsableAndComesBackAsTheListenerLeftIt() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences("audio_addons",0).edit().clear().commit()
+        AddonStore.init(context)
+        AddonStore.outputAllowed = { true }
+        val admin = AudioAddon("admin:one", "https://community.example/", AddonManifest("remote", "Community source", "1"), admin = true)
+        AddonStore.syncCommunity(listOf(admin.copy(ownerOff = true)))
+        assertFalse(AddonStore.usable(AddonStore.addons.value.single()))
+        AddonStore.init(context)
+        assertTrue(AddonStore.addons.value.single().ownerOff)
+        AddonStore.syncCommunity(listOf(admin))
+        assertTrue(AddonStore.usable(AddonStore.addons.value.single()))
+    }
 }

@@ -6,14 +6,19 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-/** Public owner-curated catalog. URLs are hidden in UI, not confidential network credentials. */
+/**
+ * Public owner-curated catalog. URLs are hidden in UI, not confidential network credentials.
+ * Read each time the app comes to the front (at most every [EVERY_MS]), so a source the
+ * owner turns off stops being asked within minutes on every phone that's in use.
+ */
 object CommunityAddons {
     private const val CONFIG = "https://justshivv.github.io/Opentune/usage-config.json"
     private val mutex = Mutex()
     private var lastCheck = 0L
+    private const val EVERY_MS = 10 * 60_000L
     suspend fun refresh(force: Boolean = false): Boolean = mutex.withLock {
         val now = android.os.SystemClock.elapsedRealtime()
-        if (!force && now - lastCheck < 15 * 60_000 && lastCheck != 0L) return@withLock true
+        if (!force && now - lastCheck < EVERY_MS && lastCheck != 0L) return@withLock true
         withContext(Dispatchers.IO) {
             try {
                 val config = JSONObject(AddonHttp.bytes(CONFIG, 8192, false).toString(Charsets.UTF_8))
@@ -29,11 +34,14 @@ object CommunityAddons {
                     val id = item.getString("id"); require(id.matches(Regex("[A-Za-z0-9_-]{1,64}")))
                     val name = item.getString("name").take(80)
                     val url = AddonProtocol.normalize(item.getString("url"))
+                    // Missing on catalogs published before the switch existed: on.
+                    val off = !item.optBoolean("enabled", true)
                     val existing = AddonStore.addons.value.firstOrNull { it.key == "admin:$id" && it.base == url }
-                    val manifest = existing?.manifest ?: try { AddonClient.forBase(url).manifest() }
+                    // One the owner turned off isn't even asked for its manifest.
+                    val manifest = existing?.manifest ?: if (off) AddonManifest("admin:$id", name, "") else try { AddonClient.forBase(url).manifest() }
                         catch (e: kotlinx.coroutines.CancellationException) { throw e }
                         catch (_: Exception) { AddonManifest("admin:$id", name, "") }
-                    incoming += AudioAddon("admin:$id", url, manifest.copy(name = name), admin = true)
+                    incoming += AudioAddon("admin:$id", url, manifest.copy(name = name), admin = true, ownerOff = off)
                 }
                 require(incoming.map { it.key }.distinct().size == incoming.size)
                 AddonStore.syncCommunity(incoming)

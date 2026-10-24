@@ -23,3 +23,16 @@ test('catalog body is bounded even without content length',async()=>{
   const request=new Request('https://owner.example/v1/addons',{method:'POST',headers:{'Content-Type':'application/json'},body:'x'.repeat(60001)});
   await assert.rejects(readCatalogBody(request),/too large/);
 });
+test('a source can be turned off and stays listed',()=>{
+  const entry={id:'one',name:'Community source',url:'https://example.com/manifest.json'};
+  assert.equal(validateCatalog({sources:[entry]})[0].enabled,true);
+  assert.equal(validateCatalog({sources:[{...entry,enabled:false}]})[0].enabled,false);
+  assert.throws(()=>validateCatalog({sources:[{...entry,enabled:'no'}]}));
+});
+test('catalog reads are remembered briefly',async()=>{
+  let reads=0;const payload={revision:1,sources:[]};
+  const db={prepare(q){return{first:async()=>{reads++;return{payload:JSON.stringify(payload)};}};}};
+  await worker.fetch(new Request('https://owner.example/v1/addons'),{DB:db});
+  await worker.fetch(new Request('https://owner.example/v1/addons'),{DB:db});
+  assert.equal(reads,1);
+});

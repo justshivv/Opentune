@@ -54,10 +54,12 @@ object Usage {
             if (!enabled) return@withLock
             val p = prefs ?: return@withLock
             val (id, pending) = persistDaily(p, now, BuildConfig.VERSION_NAME, play) ?: return@withLock
-            // Activity can be called frequently; at most one request per 15 minutes,
-            // except a completed play also flushes the updated totals.
+            // The totals are cumulative and kept on the phone until they're taken, so they go
+            // out at most every few hours (sooner once a day has ended), not after every song:
+            // one report per play was most of the Worker's daily allowance.
             val monotonic = System.nanoTime() / 1_000_000
-            if (!play && lastAttempt != 0L && monotonic - lastAttempt < 900000) return@withLock
+            if (!due(p.getLong("last-report", 0L), now, pending, istDay(now))) return@withLock
+            if (lastAttempt != 0L && monotonic - lastAttempt < RETRY_MS) return@withLock
             lastAttempt = monotonic
             try {
                 val base = endpoint(monotonic) ?: return@withLock
@@ -82,13 +84,26 @@ object Usage {
                     .post(payload.toString().toRequestBody("application/json".toMediaType())).build()).execute().use { response ->
                     if (response.isSuccessful) {
                         pending.removeAll(batch.toSet())
-                        p.edit().putStringSet("pending", pending).commit()
+                        p.edit().putStringSet("pending", pending).putLong("last-report", now).commit()
                     }
                 }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { /* Retain the exact totals for the next foreground/play retry. */ }
         } }
     }
+
+    /** How long totals wait on the phone before they're sent. */
+    internal const val REPORT_EVERY_MS = 3 * 60 * 60_000L
+    /** The least time between two tries in one run, after one that failed. */
+    private const val RETRY_MS = 15 * 60_000L
+
+    /**
+     * Whether the totals are worth sending now: never sent, sent long enough
+     * ago, or holding a day other than [today] (finished, so its count is final).
+     */
+    internal fun due(lastReport: Long, now: Long, pending: Set<String>, today: String): Boolean =
+        lastReport <= 0L || now - lastReport >= REPORT_EVERY_MS || now < lastReport ||
+            pending.any { it.substringBefore('|') != today }
 
     internal fun persistDaily(p: SharedPreferences, now: Long, version: String, play: Boolean): Pair<String, MutableSet<String>>? {
             val id = p.getString("installation", null) ?: UUID.randomUUID().toString().also {

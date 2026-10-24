@@ -811,8 +811,8 @@ class PlaybackService : MediaLibraryService() {
                 }
             }
             watchSegments(mediaItem)
-            // A podcast episode picks up where it was left.
-            mediaItem?.mediaId?.let(Podcasts::resumeAt)?.let { at ->
+            // A podcast episode, or anything else much longer than a song, picks up where it was left.
+            mediaItem?.mediaId?.let { Podcasts.resumeAt(it) ?: com.opentune.data.library.ResumePoints.resumeAt(it) }?.let { at ->
                 mediaSession?.player?.takeIf { it.currentPosition < RESUME_SLACK_MS }?.seekTo(at)
             }
             // The same song on a better stream is not a new listen.
@@ -959,11 +959,12 @@ class PlaybackService : MediaLibraryService() {
         listenRecord = null
     }
 
-    /** Keeps a podcast episode's place, so it resumes there. */
+    /** Keeps a podcast episode's place, or that of anything as long as one, so it resumes there. */
     private fun saveEpisodePosition(player: Player) {
         val id = player.currentMediaItem?.mediaId ?: return
-        if (!Podcasts.isEpisode(id)) return
-        Podcasts.savePosition(id, player.currentPosition, player.duration.takeIf { it > 0 } ?: 0L)
+        val duration = player.duration.takeIf { it > 0 } ?: 0L
+        if (Podcasts.isEpisode(id)) Podcasts.savePosition(id, player.currentPosition, duration)
+        else com.opentune.data.library.ResumePoints.save(id, player.currentPosition, duration)
     }
 
     /** A track counts as played after 30 seconds, or half its length if shorter. */

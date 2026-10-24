@@ -4,7 +4,8 @@ const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{1
 const VERSION = /^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]{1,32})?$/;
 const DAY = 86400000;
 export const activitySql = `INSERT INTO activity(installation,day,version,plays,received_at) VALUES(?,?,?,?,?)
- ON CONFLICT(installation,day,version) DO UPDATE SET plays=MAX(activity.plays,excluded.plays),received_at=excluded.received_at`;
+ ON CONFLICT(installation,day,version) DO UPDATE SET plays=excluded.plays,received_at=excluded.received_at
+ WHERE excluded.plays > activity.plays`;
 const istActivitySql = activitySql.replaceAll('activity', 'activity_ist');
 const allActivity = '(SELECT * FROM activity UNION ALL SELECT * FROM activity_ist)';
 export function calendarDay(now, timeZone = 'UTC') {
@@ -162,6 +163,36 @@ export function badge(counts, params = new URLSearchParams()) {
   return { schemaVersion: 1, label, message: shortCount(value), color: '1db954', cacheSeconds: 300 };
 }
 
+// Kept in this isolate's memory (one copy per Cloudflare location, gone when it
+// restarts), keyed by the database binding. Public reads within [ttl] are
+// answered without touching D1: the README badge alone was asking for full
+// table counts every few minutes.
+const remembered = new WeakMap();
+export async function rememberFor(db, key, ttl, read, now = Date.now()) {
+  if (!remembered.has(db)) remembered.set(db, new Map());
+  const memo = remembered.get(db), hit = memo.get(key);
+  if (hit && now - hit.at < ttl) return hit.value;
+  const value = await read();
+  memo.set(key, {at: now, value});
+  return value;
+}
+export function forget(db, key) { remembered.get(db)?.delete(key); }
+
+// Apps before 1.0.x send their totals after every song. The totals are
+// cumulative, so a report that comes soon after the last one from the same
+// installation is turned away unwritten: the app keeps it and sends it, with
+// any newer plays, a little later. Each location remembers only its own.
+export const REPORT_GAP_MS = 20 * 60_000;
+const lastReport = new WeakMap();
+export function tooSoon(db, installation, now = Date.now()) {
+  if (!lastReport.has(db)) lastReport.set(db, new Map());
+  const seen = lastReport.get(db), at = seen.get(installation);
+  if (at !== undefined && now - at < REPORT_GAP_MS) return true;
+  if (seen.size > 20000) seen.clear();
+  seen.set(installation, now);
+  return false;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -182,7 +213,8 @@ export default {
     if(request.method==='OPTIONS' && ['/auth/login','/auth/logout','/v1/activity','/v1/download','/v1/summary','/v1/analytics','/v1/addons','/v1/public','/v1/badge'].includes(path)) return new Response(null,{status:204,headers});
     // Only this catalog is public. Usage analytics and catalog writes remain owner-only.
     if (request.method === 'GET' && path === '/v1/addons') {
-      try { const result = json(await catalog(env.DB)); result.headers.set('Cache-Control','public, max-age=300'); return result; }
+      // A minute at most, so an add-on the owner turns off stops being asked soon after.
+      try { const result = json(await rememberFor(env.DB, 'addons', 60_000, () => catalog(env.DB))); result.headers.set('Cache-Control','public, max-age=60'); return result; }
       catch { return json({error:'Catalog unavailable'},503); }
     }
     const authentication = await authRoute(request, env);
@@ -194,7 +226,7 @@ export default {
     if (!reporting && !publicRead && !(await authorized(request, env))) return cors(locked(request));
     try {
       if (request.method === 'POST' && path === '/v1/addons') {
-        try { return json(await publishCatalog(env.DB, await readCatalogBody(request))); }
+        try { const published = await publishCatalog(env.DB, await readCatalogBody(request)); forget(env.DB, 'addons'); return json(published); }
         catch (e) { return json({error:e.message},400); }
       }
       if (['GET', 'HEAD'].includes(request.method) && !path.startsWith('/v1/')) {
@@ -216,10 +248,10 @@ export default {
       }
       if (request.method==='GET' && path==='/v1/public') {
         let zone;try { zone=reportZone(url.searchParams.get('timeZone') || 'Asia/Kolkata'); } catch(e) {return json({error:e.message},400);}
-        return json(await publicCounts(env.DB,new Date(),zone));
+        return json(await rememberFor(env.DB, 'public:'+zone, 300_000, () => publicCounts(env.DB,new Date(),zone)));
       }
       if (request.method==='GET' && path==='/v1/badge') {
-        return json(badge(await publicCounts(env.DB,new Date()),url.searchParams));
+        return json(badge(await rememberFor(env.DB, 'public:Asia/Kolkata', 300_000, () => publicCounts(env.DB,new Date())),url.searchParams));
       }
       if (request.method!=='POST' || !['/v1/activity','/v1/download'].includes(path)) return json({error:'Not found'},404);
       if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'JSON required'},415);
@@ -235,6 +267,11 @@ export default {
       try { body=JSON.parse(new TextDecoder().decode(bytes)); } catch { return json({error:'Invalid JSON'},400); }
       if (path==='/v1/activity') {
         try { validateActivity(body); } catch(e) { return json({error:e.message},400); }
+        if (tooSoon(env.DB, body.installationId.toLowerCase())) {
+          const later = json({error:'Reported moments ago; send the totals later'},429);
+          later.headers.set('Retry-After', String(REPORT_GAP_MS / 1000));
+          return later;
+        }
         return json(await ingest(env.DB,body));
       }
       if(!UUID.test(body?.browserId) || !VERSION.test(body?.release)) return json({error:'Invalid browser or release'},400);
