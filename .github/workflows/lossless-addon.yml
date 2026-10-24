@@ -43,6 +43,8 @@ jobs:
           node-version: '24'
       - name: Check upstream availability (not a playback test)
         run: node services/lossless-addon/probe.mjs lossless-source-report.json
+      - name: Inspect Lossless Bridge public sources
+        run: node services/lossless-addon/probe-bridge.mjs
       - name: Check deployed source and media path for reported artist
         run: node services/lossless-addon/probe-client-path.mjs
       - name: Probe additional public source candidates
@@ -56,3 +58,4 @@ jobs:
             lossless-source-report.json
             lossless-candidate-report.json
             lossless-discovery-report.json
+            lossless-bridge-report.json
