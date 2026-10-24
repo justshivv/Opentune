@@ -527,7 +527,8 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
             SongListItem(
                 song = when (e.state) {
                     DownloadState.FAILED -> song.copy(durationText = "Failed · tap to retry")
-                    DownloadState.QUEUED, DownloadState.DOWNLOADING -> song.copy(durationText = "Downloading ${(e.progress * 100).toInt()}%")
+                    DownloadState.QUEUED -> song.copy(durationText = if (com.opentune.data.download.Downloads.waitingForWifi(context)) "Waiting for Wi-Fi" else "Waiting")
+                    DownloadState.DOWNLOADING -> song.copy(durationText = "Downloading ${(e.progress * 100).toInt()}%")
                     else -> song
                 },
                 onClick = {

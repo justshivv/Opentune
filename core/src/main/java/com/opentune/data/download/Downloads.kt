@@ -164,15 +164,38 @@ object Downloads {
         if (!com.opentune.data.isYouTubeId(song.videoId)) return
         val existing = _entries.value[song.videoId]
         if (existing?.state == DownloadState.DONE || existing?.state == DownloadState.DOWNLOADING || existing?.state == DownloadState.QUEUED) return
+        schedule(context, SongRef.of(song))
+    }
+
+    private fun schedule(context: Context, song: SongRef) {
         val wifiOnly = AppSettings.library.value.downloadWifiOnly
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()
             .setInputData(workDataOf(DownloadWorker.KEY_ID to song.videoId))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED).build())
+            // Started straight away rather than whenever Android next runs background work,
+            // which on a phone saving battery could be a long while; past the quota it's ordinary work.
+            .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 15, java.util.concurrent.TimeUnit.SECONDS)
             .addTag(TAG)
             .build()
-        put(song.videoId) { DownloadEntry(SongRef.of(song), workId = request.id.toString()) }
+        put(song.videoId) { DownloadEntry(song, workId = request.id.toString()) }
         WorkManager.getInstance(context).enqueueUniqueWork(workName(song.videoId), ExistingWorkPolicy.REPLACE, request)
+    }
+
+    /**
+     * Schedules every waiting download again under the current settings: a
+     * job keeps the network it was queued for, so turning "Wi-Fi only" off
+     * left the songs already waiting still waiting for Wi-Fi.
+     */
+    fun requeueWaiting(context: Context) {
+        _entries.value.values.filter { it.state == DownloadState.QUEUED }.forEach { schedule(context, it.song) }
+    }
+
+    /** Downloads wait because only Wi-Fi is allowed and the phone is on mobile data (or another metered network). */
+    fun waitingForWifi(context: Context): Boolean {
+        if (!AppSettings.library.value.downloadWifiOnly) return false
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return false
+        return cm.activeNetwork == null || cm.isActiveNetworkMetered
     }
 
     fun remove(context: Context, videoId: String) = remove(context, videoId, onlyActive = false)
@@ -265,6 +288,10 @@ object Downloads {
 
 /** Fetches one track's audio (and cover) into app storage, with progress. */
 class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+
+    /** Asked for by Android before an expedited job starts on versions before 12. */
+    override suspend fun getForegroundInfo(): ForegroundInfo =
+        foregroundInfo(Downloads.entries.value[inputData.getString(KEY_ID)]?.song?.title ?: "Song", 0f)
 
     override suspend fun doWork(): Result {
         val id = inputData.getString(KEY_ID) ?: return Result.failure()

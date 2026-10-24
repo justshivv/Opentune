@@ -167,7 +167,7 @@ fun SongMenuSheet(
                 if (!local) {
                     val (icon, label) = when (download?.state) {
                         DownloadState.DONE -> Icons.Rounded.DeleteOutline to "Remove"
-                        DownloadState.QUEUED -> Icons.Rounded.Close to "Waiting"
+                        DownloadState.QUEUED -> Icons.Rounded.Close to if (Downloads.waitingForWifi(context)) "Needs Wi-Fi" else "Waiting"
                         DownloadState.DOWNLOADING -> Icons.Rounded.Close to "${(download.progress * 100).toInt()}%"
                         DownloadState.FAILED -> Icons.Rounded.Download to "Retry"
                         null -> Icons.Rounded.Download to "Download"
