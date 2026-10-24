@@ -1,0 +1,119 @@
+{
+  "checkedAt": "2026-10-23T22:34:33.782Z",
+  "base": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev",
+  "manifests": [
+    {
+      "source": "monochrome",
+      "status": 200,
+      "url": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/monochrome/manifest.json"
+    },
+    {
+      "source": "archive",
+      "status": 200,
+      "url": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/archive/manifest.json"
+    },
+    {
+      "source": "musopen",
+      "status": 200,
+      "url": "https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/musopen/manifest.json"
+    }
+  ],
+  "upstream": {
+    "searchStatus": 401,
+    "matchingRecording": false,
+    "error": "Verify this device with the current official OpenTune app. Unsupported devices cannot use this source."
+  },
+  "security": {
+    "mode": "strict",
+    "unauthenticatedApproval": 401,
+    "challengeIssued": true,
+    "fakeEnrollment": 403,
+    "challengeReplay": 401,
+    "browserWaitsForApproval": true,
+    "unsignedAccess": [
+      {
+        "source": "monochrome",
+        "route": "search",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "monochrome",
+        "route": "search",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      },
+      {
+        "source": "monochrome",
+        "route": "stream/untrusted-id",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "monochrome",
+        "route": "stream/untrusted-id",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      },
+      {
+        "source": "archive",
+        "route": "search",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "archive",
+        "route": "search",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      },
+      {
+        "source": "archive",
+        "route": "stream/untrusted-id",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "archive",
+        "route": "stream/untrusted-id",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      },
+      {
+        "source": "musopen",
+        "route": "search",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "musopen",
+        "route": "search",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      },
+      {
+        "source": "musopen",
+        "route": "stream/untrusted-id",
+        "agent": "BitChord/v1.8.1",
+        "status": 401
+      },
+      {
+        "source": "musopen",
+        "route": "stream/untrusted-id",
+        "agent": "OpenTune/verified-addon-v1",
+        "status": 401
+      }
+    ]
+  },
+  "musopen": {
+    "searchStatus": 401,
+    "candidates": 0,
+    "error": "Verify this device with the current official OpenTune app. Unsupported devices cannot use this source."
+  },
+  "evidence": {
+    "workflow": "https://github.com/justshivv/Opentune/actions/runs/40034330368",
+    "attempt": 2,
+    "commit": "40552c1e1f3a10f10aaf0ddc1f61f7a5afe343c7",
+    "note": "Initial immediate post-deploy check still saw staged policy and failed; rerun confirmed strict mode. Public media URLs already issued remain outside API access control. Live signed-device playback after cutover awaits owner confirmation."
+  }
+}

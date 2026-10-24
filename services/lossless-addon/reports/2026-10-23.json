@@ -1,0 +1,51 @@
+{
+  "checkedAt": "2026-10-23T19:17:07.122Z",
+  "scope": "Catalogue and FLAC STREAMINFO only; full decoding, audible playback and CORS on the user device are not tested.",
+  "results": [
+    {
+      "source": "monochrome",
+      "query": "Wo Noor AP Dhillon",
+      "searchStatus": 200,
+      "candidates": 6,
+      "recording": {
+        "title": "Wo Noor",
+        "artist": "AP Dhillon",
+        "duration": 199.42
+      },
+      "streamStatus": 200,
+      "flacHeader": {
+        "codec": "flac",
+        "bitDepth": 16,
+        "sampleRate": 44100,
+        "channels": 2,
+        "duration": 199.42006802721087
+      }
+    },
+    {
+      "source": "monochrome",
+      "query": "Old Skool Prem Dhillon",
+      "searchStatus": 200,
+      "candidates": 5,
+      "recording": {
+        "title": "Old Skool",
+        "artist": "Prem Dhillon, Sidhu Moose Wala, Naseeb",
+        "duration": 253
+      },
+      "streamStatus": 200,
+      "flacHeader": {
+        "codec": "flac",
+        "bitDepth": 16,
+        "sampleRate": 44100,
+        "channels": 2,
+        "duration": 253.7012471655329
+      }
+    },
+    {
+      "source": "archive",
+      "query": "Grateful Dead",
+      "searchStatus": 200,
+      "candidates": 0,
+      "error": "No matching recording with usable metadata"
+    }
+  ]
+}

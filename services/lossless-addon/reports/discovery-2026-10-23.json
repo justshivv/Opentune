@@ -1,0 +1,192 @@
+{
+  "checkedAt": "2026-10-23T21:49:39.175Z",
+  "scope": "Public catalogue/API and native FLAC header checks only",
+  "results": [
+    {
+      "name": "https://dabmusic.xyz",
+      "error": "HTTP 403"
+    },
+    {
+      "name": "https://dab.yeet.su",
+      "error": "Network, timeout or unsupported media response"
+    },
+    {
+      "name": "Squid Qobuz",
+      "error": "Network, timeout or unsupported media response"
+    },
+    {
+      "name": "Lucida anonymous search",
+      "status": 200,
+      "html": true,
+      "challenge": false,
+      "note": "A webpage alone does not verify audio; no cookies or download jobs used."
+    },
+    {
+      "name": "Acedreamer public addon",
+      "manifest": "Monochrome Lossless Provider",
+      "status": 206,
+      "measured": {
+        "sampleRate": 44100,
+        "bitDepth": 24,
+        "channels": 2,
+        "duration": 200.0458276643991
+      }
+    },
+    {
+      "name": "Free To Use API",
+      "status": 200,
+      "keys": [
+        "ok",
+        "data",
+        "pagination"
+      ],
+      "track": {
+        "id": "163eaaee-4845-4702-9b3d-a95126dfda2a",
+        "title": "Slight Unease",
+        "duration": 146.03448
+      },
+      "trackKeys": [
+        "id",
+        "title",
+        "status",
+        "record_label",
+        "duration",
+        "release_date",
+        "waveform",
+        "views",
+        "plays",
+        "downloads",
+        "update_time",
+        "genre",
+        "lyrics",
+        "likes",
+        "is_premium",
+        "artists",
+        "categories",
+        "tags",
+        "staff_order",
+        "tags_categories",
+        "thumbnails",
+        "files"
+      ],
+      "mediaShapes": [
+        {
+          "key": "downloads",
+          "type": "number",
+          "keys": [],
+          "extension": null
+        },
+        {
+          "key": "files",
+          "type": "object",
+          "keys": [
+            "mp3"
+          ],
+          "extension": null
+        }
+      ]
+    },
+    {
+      "name": "Archive live recordings",
+      "status": 200,
+      "total": 0,
+      "items": []
+    },
+    {
+      "name": "Archive classical",
+      "status": 200,
+      "total": 14,
+      "items": [
+        {
+          "id": "TheEmeraldArtsEpisode2c",
+          "title": "The Emerald Arts",
+          "creator": "Gareth Stack",
+          "flacFiles": 6,
+          "itemKeys": [
+            "identifier",
+            "mediatype",
+            "collection",
+            "creator",
+            "date",
+            "description",
+            "licenseurl",
+            "scanner",
+            "subject",
+            "title",
+            "publicdate",
+            "uploader",
+            "addeddate",
+            "year",
+            "notes",
+            "curation",
+            "backup_location"
+          ],
+          "file": {
+            "name": "The Emerald Arts - Episode 2 (c).flac",
+            "format": "Flac",
+            "title": "The Liffey Mouth",
+            "length": "1607.19",
+            "track": "02",
+            "size": "112214634"
+          },
+          "derivative": [
+            {
+              "format": "VBR MP3",
+              "length": "26:47",
+              "original": "The Emerald Arts - Episode 2 (c).flac"
+            },
+            {
+              "format": "Ogg Vorbis",
+              "length": "1607.19",
+              "original": "The Emerald Arts - Episode 2 (c).flac"
+            }
+          ],
+          "status": 206,
+          "measured": {
+            "sampleRate": 44100,
+            "bitDepth": 16,
+            "channels": 2,
+            "duration": 1607.1866666666667
+          }
+        },
+        {
+          "id": "musopen-dvd-in-lossless-flac-format",
+          "title": "Musopen Kickstarter Music (Lossless DVD Compilation in FLAC format)",
+          "creator": "www.musopen.org",
+          "flacFiles": 32,
+          "itemKeys": [
+            "identifier",
+            "mediatype",
+            "collection",
+            "creator",
+            "date",
+            "description",
+            "licenseurl",
+            "scanner",
+            "subject",
+            "title",
+            "publicdate",
+            "uploader",
+            "addeddate",
+            "curation",
+            "backup_location"
+          ],
+          "file": {
+            "name": "Goldberg Variations/Goldberg Variations, BWV 988 - Aria Da Capo.flac",
+            "format": "Flac",
+            "length": "339.97",
+            "size": "13211150"
+          },
+          "derivative": [],
+          "status": 206,
+          "measured": {
+            "sampleRate": 44100,
+            "bitDepth": 16,
+            "channels": 2,
+            "duration": 339.97333333333336
+          }
+        }
+      ]
+    }
+  ]
+}

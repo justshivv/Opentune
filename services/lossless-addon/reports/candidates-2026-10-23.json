@@ -1,0 +1,43 @@
+{
+  "checkedAt": "2026-10-23T21:15:14.420Z",
+  "scope": "Independent public source checks; native FLAC headers only, no full-song downloads or device playback.",
+  "results": [
+    {
+      "name": "Lossless Bridge",
+      "query": "Blinding Lights The Weeknd",
+      "error": "HTTP 429"
+    },
+    {
+      "name": "BluBit Station",
+      "query": "Blinding Lights The Weeknd",
+      "manifest": {
+        "name": "BluBit Station Hi-Fi",
+        "version": "1.0.3"
+      },
+      "error": "HTTP 502"
+    },
+    {
+      "name": "Juanjob hi-res",
+      "query": "Blinding Lights The Weeknd",
+      "manifest": {
+        "name": "juanjob hi res",
+        "version": "1.0.0"
+      },
+      "candidates": 21,
+      "error": "HTTP 404"
+    },
+    {
+      "name": "Monochrome",
+      "query": "Blinding Lights The Weeknd",
+      "searchStatus": 200,
+      "streamStatus": 200,
+      "measured": {
+        "bitDepth": 24,
+        "sampleRate": 44100,
+        "channels": 2,
+        "duration": 200.0458276643991
+      }
+    }
+  ]
+}
+

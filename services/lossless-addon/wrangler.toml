@@ -1,0 +1,25 @@
+name = "opentune-lossless-addon"
+main = "worker.mjs"
+compatibility_date = "2026-10-23"
+workers_dev = true
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# First-party catalogue and stream resolution require verified request proofs.
+VERIFICATION_MODE = "strict"
+WEB_ORIGINS = "https://justshivv.github.io"
+
+[[durable_objects.bindings]]
+name = "AUTH"
+class_name = "AddonAuthState"
+
+[[migrations]]
+tag = "auth-v1"
+new_sqlite_classes = ["AddonAuthState"]
+
+# Approximate requests per address per Cloudflare location, not authentication.
+# A generous ceiling accommodates shared mobile/Wi-Fi networks.
+[[ratelimits]]
+name = "REQUEST_LIMITER"
+namespace_id = "4219101"
+simple = { limit = 240, period = 60 }

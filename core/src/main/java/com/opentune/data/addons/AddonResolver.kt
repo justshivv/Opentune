@@ -102,6 +102,7 @@ object AddonResolver {
                 outcome[0] = true; outcome[1] = true
                 report("${addon.manifest.name}: rate limited; asked again in ${(wait + 999) / 1_000} s"); return null
             }
+            var stage = "loading source manifest"
             val started = System.nanoTime()
             outcome[0] = true
             val answer = withTimeoutOrNull(ADDON_LIMIT_MS) {
@@ -113,6 +114,7 @@ object AddonResolver {
                         AddonStore.usable(it) && (!download || it.manifest.downloads)
                     } == true
                     if (!permitted()) return@withTimeoutOrNull null
+                    stage = "searching catalogue"
                     val candidates = client.search("${song.title} ${song.artist}", manifest, tier)
                         .filter { identity.matches(it.title, listOf(it.artist), it.album, it.durationMs) }
                     if (candidates.isEmpty()) { report("${manifest.name}: no matching recording"); return@withTimeoutOrNull null }
@@ -120,6 +122,7 @@ object AddonResolver {
                     val fresh = staleLinks.remove("${addon.key}:${song.videoId}")
                     for (track in candidates.take(3)) {
                         if (!permitted()) return@withTimeoutOrNull null
+                        stage = "resolving audio"
                         var asked = tier
                         var stream = try { client.stream(track.id, manifest, tier, fresh) }
                         catch (e: AddonHttp.Failure) {
@@ -137,6 +140,7 @@ object AddonResolver {
                             report("${manifest.name}: segmented stream; trying the next source for a downloadable file"); continue
                         }
                         if (!permitted()) return@withTimeoutOrNull null
+                        stage = "checking audio header"
                         val checked = if (stream.transport == null && stream.codec == "flac") {
                             val info = LosslessSource.flacInfo(probe(stream.url, 65536, true))
                             if (info == null || !LosslessSource.durationMatches(durationMs, info.durationMs)) {
@@ -171,11 +175,11 @@ object AddonResolver {
                 catch (e: AddonHttp.Failure) {
                     outcome[1] = true
                     if (e.status == 429) limit(addon.key, song.videoId, e)
-                    report("${addon.manifest.name}: HTTP ${e.status}${if (e.status == 429) " · rate limited" else ""}"); null
+                    report("${addon.manifest.name}: ${failureDescription(stage, e)}"); null
                 }
-                catch (_: Exception) { outcome[1] = true; report("${addon.manifest.name}: unavailable or invalid response"); null }
+                catch (e: Exception) { outcome[1] = true; report("${addon.manifest.name}: ${failureDescription(stage, e)}"); null }
             }
-            if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) { outcome[1] = true; report("${addon.manifest.name}: no answer in ${ADDON_LIMIT_MS / 1_000} s") }
+            if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) { outcome[1] = true; report("${addon.manifest.name}: timed out while $stage after ${ADDON_LIMIT_MS / 1_000} s") }
             return answer
         }
         val addons = AddonStore.addons.value.filterNot { it.key in skip }
@@ -254,4 +258,20 @@ object AddonResolver {
     private const val ADDON_LIMIT_MS = 45_000L
     /** Unknown quality never outranks measured CD quality; ties preserve source priority. */
     fun qualityScore(bits: Int?, rate: Int?): Long = (bits ?: 0).toLong() * (rate ?: 0)
+
+    /** Fixed diagnostics only: exceptions may contain private add-on URLs or tokens. */
+    internal fun failureDescription(stage: String, error: Exception): String = when (error) {
+        is FirstPartyAddonAuth.VerificationFailure -> error.message.orEmpty()
+        is AddonHttp.Failure -> "$stage: HTTP ${error.status}" + when (error.status) {
+            429 -> " · rate limited; retry in ${error.retryAfterSeconds.coerceAtLeast(1)}s"
+            401, 403 -> " · access refused"
+            else -> ""
+        }
+        is java.net.SocketTimeoutException -> "$stage: connection timed out"
+        is java.net.UnknownHostException -> "$stage: could not resolve server; check DNS or connection"
+        is javax.net.ssl.SSLException -> "$stage: secure connection failed"
+        is org.json.JSONException -> "$stage: invalid JSON response"
+        is java.io.IOException -> "$stage: network request failed"
+        else -> "$stage: invalid source response"
+    }
 }

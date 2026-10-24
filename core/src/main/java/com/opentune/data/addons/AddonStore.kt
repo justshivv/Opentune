@@ -17,6 +17,7 @@ object AddonStore {
     var outputAllowed: () -> Boolean = { false }
     var onChanged: () -> Unit = {}
     fun init(context: Context) {
+        FirstPartyAddonAuth.init(context)
         preferences = context.getSharedPreferences("audio_addons", Context.MODE_PRIVATE)
         state.value = runCatching {
             val a = JSONArray(preferences?.getString("items", "[]"))

@@ -3,6 +3,7 @@ import { endpoint, flacInfo, manifestOf, matches, publicHttps, qualityParams, ty
 import { BridgeCallError } from '@opentune/shared/bridge';
 import { getBridge } from '@/extension/bridge';
 import { fetchPublished, mergeCatalog } from './catalog';
+import { needsVerification, verificationHeaders } from './verification';
 const KEY = 'opentune:audio-addons';
 const SAAVN_KEY = 'opentune:jiosaavn';
 /** Twenty of the listener's own and twenty published ones at most. */
@@ -60,7 +61,8 @@ export async function fetchJson(url: string): Promise<unknown> {
     let status: number, text: string, retryAfter = '';
     try {
       if ((corsBlocked.get(origin) ?? 0) > Date.now()) throw new TypeError('Blocked by CORS');
-      const r = await fetch(url, { credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(10_000) });
+      const headers = await verificationHeaders(url);
+      const r = await fetch(url, { headers, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(10_000) });
       status = r.status;
       retryAfter = r.headers.get('retry-after') ?? '';
       const reader = r.body?.getReader(); if (!reader) throw new Error('Empty response');
@@ -69,6 +71,8 @@ export async function fetchJson(url: string): Promise<unknown> {
       finally { await reader.cancel().catch(() => {}); }
       corsOk.add(origin);
     } catch (error) {
+      // Proofs and enrollment errors must never be forwarded to extension/third-party requests.
+      if (needsVerification(url)) throw error;
       // Only a server that refuses pages (no CORS) is a reason to go through the extension.
       // A timeout is a slow server, and a failure from one that has answered here before is
       // the network or an error page: those are said as they are, not as a missing permission.
