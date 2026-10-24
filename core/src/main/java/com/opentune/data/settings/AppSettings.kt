@@ -357,6 +357,8 @@ data class InterfaceSettings(
     val sourcePill: Boolean = true,
     /** A soft light in the cover's colour under the player's cover. */
     val coverGlow: Boolean = true,
+    /** Double-tapping the cover's left or right side goes back or on ten seconds. */
+    val doubleTapSeek: Boolean = true,
     /** While the seek bar is dragged, the lyric line at that point shows above the finger. */
     val lyricScrubPreview: Boolean = true,
     /** Sharp album covers from Apple Music, Deezer or the Cover Art Archive in the player. */

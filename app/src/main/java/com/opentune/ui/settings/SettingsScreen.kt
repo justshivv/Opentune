@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -980,6 +981,9 @@ private fun settingsSections(
                 },
                 Entry("Page transitions", "navigation animation screen open back slide fade zoom rise") {
                     NavRow("Page transitions", { pageTransitionDialog = true }, summary = ui.pageTransition.summary, icon = Icons.Rounded.SwapHoriz, value = ui.pageTransition.label)
+                },
+                Entry("Double-tap to skip 10 seconds", "double tap cover seek forward back rewind ten seconds gesture") {
+                    ToggleRow("Double-tap to skip 10 seconds", ui.doubleTapSeek, { v -> AppSettings.updateUi { it.copy(doubleTapSeek = v) } }, summary = "Double-tap the left of the cover to go back 10 seconds, the right to go on", icon = Icons.Rounded.TouchApp)
                 },
                 Entry("Glow under the cover", "glow shadow light cover colour bass pulse") {
                     ToggleRow("Glow under the cover", ui.coverGlow, { v -> AppSettings.updateUi { it.copy(coverGlow = v) } }, summary = "A soft light in the cover's colours under it, swelling a little with the bass", icon = Icons.Rounded.AutoAwesome)

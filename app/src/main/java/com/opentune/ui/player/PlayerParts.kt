@@ -539,7 +539,7 @@ fun ArtworkPane(
  * says how far, adding up while the taps keep coming.
  */
 @Composable
-private fun SeekTaps(onSeekBy: (Long) -> Unit, scale: Float, modifier: Modifier) {
+internal fun SeekTaps(onSeekBy: (Long) -> Unit, scale: Float, modifier: Modifier) {
     val haptics = com.opentune.ui.components.rememberHaptics()
     val ripple = remember { Animatable(1f) }
     var side by remember { mutableStateOf(0) }

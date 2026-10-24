@@ -683,12 +683,12 @@ private fun LyricLineView(
         tween(if (animation == LyricsAnimation.MINIMAL) 200 else 400),
         label = "lineAlpha",
     )
-    // Read only while drawing (below): as a line moves its blur changes every frame, and
-    // reading it here recomposed every visible line, and rebuilt its blur, on each of them.
-    val blur = animateDpAsState(
+    // Set, not animated, and read only while drawing (below): an animated blur was worked
+    // out again on every frame for every visible line each time the song moved to the next
+    // one, which is what made the page stutter. Now each line's blur is redrawn once per
+    // line change, while its fade and size still animate, which are cheap.
+    val blur = androidx.compose.runtime.rememberUpdatedState(
         if (!blurEnabled || isActive || picking) 0.dp else (minOf(abs(distance), 6) * motion.blurPerLine).dp,
-        tween(500),
-        label = "lineBlur",
     )
     // Picking lines, each sits on its own card, the picked ones a shade lighter.
     val card by androidx.compose.animation.animateColorAsState(

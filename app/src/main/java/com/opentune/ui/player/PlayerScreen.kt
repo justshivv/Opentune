@@ -897,6 +897,7 @@ fun PlayerLayout(
                                 seeks = lyricsSeeks,
                             )
                         } else if (p == Pane.COVER) {
+                            val seekBy: (Long) -> Unit = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) }
                             Box(Modifier.weight(1f).fillMaxWidth().then(if (docked) Modifier.fitSquare() else Modifier), contentAlignment = Alignment.Center) {
                                 when {
                                     fullCover ->
@@ -928,11 +929,14 @@ fun PlayerLayout(
                                             moving = state.ui.movingCover && !state.ui.reduceAnimation,
                                             change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                                             index = state.currentIndex,
-                                            onSeekBy = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) },
+                                            onSeekBy = seekBy.takeIf { state.ui.doubleTapSeek },
                                             glow = state.ui.coverGlow && !state.ui.reduceAnimation,
                                             video = state.coverVideo,
                                         )
                                 }
+                                // The plain cover has the taps built in; every other design gets them over it here.
+                                val ownTaps = !fullCover && style !in listOf(PlayerStyle.VINYL, PlayerStyle.CASSETTE, PlayerStyle.HALO, PlayerStyle.POLAROID)
+                                if (state.ui.doubleTapSeek && !ownTaps) SeekTaps(seekBy, 1f, Modifier.matchParentSize())
                             }
                             Spacer(Modifier.height(16.dp))
                             TitleRow(
