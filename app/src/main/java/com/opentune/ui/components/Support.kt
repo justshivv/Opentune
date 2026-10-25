@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit
 
 /** Ways to back the project: a star on GitHub, or money over UPI. */
 object Support {
-    const val REPO = "https://github.com/justshivv/Opentune"
+    val REPO: String get() = com.opentune.data.config.RemoteConfig.current.github
     const val UPI_ID = "whoosthis@axl"
     private const val PAYEE = "OpenTune"
     private const val NOTE = "Support OpenTune"
@@ -61,7 +61,7 @@ object Support {
         }
     }
 
-    const val DISCORD = "https://discord.gg/6udrCVh5n"
+    val DISCORD: String get() = com.opentune.data.config.RemoteConfig.current.discord
 
     /**
      * The two monthly invitations: a GitHub star after five days of use, and the
@@ -85,6 +85,7 @@ object Support {
 
     /** The invitation that's due now, if any; the star first when both are. */
     fun due(context: Context, now: Long = System.currentTimeMillis()): Invite? {
+        if (!com.opentune.data.config.RemoteConfig.current.communityPrompts) return null
         val p = prefs(context)
         val other = Invite.entries.maxOf { p.getLong(it.askedKey, 0) }
         return Invite.entries.firstOrNull { invite ->

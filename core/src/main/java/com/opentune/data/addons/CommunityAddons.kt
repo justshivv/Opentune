@@ -21,11 +21,16 @@ object CommunityAddons {
         if (!force && now - lastCheck < EVERY_MS && lastCheck != 0L) return@withLock true
         withContext(Dispatchers.IO) {
             try {
-                val config = JSONObject(AddonHttp.bytes(CONFIG, 8192, false).toString(Charsets.UTF_8))
-                val base = AddonProtocol.url(config.getString("apiBase"))
-                // Only the configured OpenTune Worker supplies the catalog, never an arbitrary relay.
-                require(base.host == "opentune-usage.create-a-new-site-with-sites.workers.dev")
-                val document = JSONObject(AddonHttp.bytes(base.newBuilder().encodedPath("/v1/addons").build().toString(), 65536, false).toString(Charsets.UTF_8))
+                com.opentune.data.config.RemoteConfig.refresh(force)
+                val managed = com.opentune.data.config.RemoteConfig.current.sources
+                val document = if (managed != null) JSONObject().put("sources", org.json.JSONArray().apply {
+                    managed.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("url", it.url).put("enabled", it.enabled)) }
+                }) else {
+                    val config = JSONObject(AddonHttp.bytes(CONFIG, 8192, false).toString(Charsets.UTF_8))
+                    val base = AddonProtocol.url(config.getString("apiBase"))
+                    require(base.host == "opentune-usage.create-a-new-site-with-sites.workers.dev")
+                    JSONObject(AddonHttp.bytes(base.newBuilder().encodedPath("/v1/addons").build().toString(), 65536, false).toString(Charsets.UTF_8))
+                }
                 val sources = document.getJSONArray("sources")
                 require(sources.length() <= 20)
                 val incoming = mutableListOf<AudioAddon>()

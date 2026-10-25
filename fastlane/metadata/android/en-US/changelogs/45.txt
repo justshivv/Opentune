@@ -1,0 +1,5 @@
+• Fixes lossless add-ons with incomplete codec metadata.
+• Adds readable font defaults, font and weight choices, and TTF/OTF import.
+• Adds Apple Music inspired and true-black AMOLED player options.
+• Adds signed remote configuration for home content, links and admin sources (requires server deployment).
+• Preserves personal add-ons, source verification and mini-player glass.

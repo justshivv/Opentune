@@ -85,7 +85,7 @@ object AddonHttp {
         var attempt = 0
         while (true) {
             try { return ask() } catch (e: Failure) {
-                if (e.status != 429 || attempt >= RATE_RETRIES) throw e
+                if (e.status != 429 || attempt >= com.opentune.data.config.RemoteConfig.current.retries) throw e
                 val wait = if (e.retryAfterSeconds > 0) e.retryAfterSeconds * 1_000 else RATE_BACKOFF_MS shl attempt
                 if (wait > RATE_WAIT_CAP_MS) throw e
                 kotlinx.coroutines.delay(wait)
@@ -93,12 +93,13 @@ object AddonHttp {
             }
         }
     }
-    private const val RATE_RETRIES = 2
     private const val RATE_BACKOFF_MS = 500L
     private const val RATE_WAIT_CAP_MS = 8_000L
     private data class Reply(val bytes: ByteArray, val redirect: String? = null)
     private suspend fun request(request: Request, limit: Int, prefix: Boolean): Reply = suspendCancellableCoroutine { continuation ->
-        val call = client.newCall(request)
+        val call = client.newCall(request).apply {
+            timeout().timeout(com.opentune.data.config.RemoteConfig.current.timeoutMs, TimeUnit.MILLISECONDS)
+        }
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) { continuation.resumeWithException(e) }

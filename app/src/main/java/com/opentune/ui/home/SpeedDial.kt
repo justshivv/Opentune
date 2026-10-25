@@ -84,6 +84,7 @@ internal fun SpeedDialSection(
     avatarUrl: String?,
     onItemClick: (ShelfItem) -> Unit,
     onOpenAll: () -> Unit,
+    title: String = SpeedDial.TITLE,
 ) {
     val shown = items.take(SpeedDial.ON_HOME)
     if (shown.isEmpty()) return
@@ -99,7 +100,7 @@ internal fun SpeedDialSection(
                 if (strapline.isNotBlank()) {
                     Text(strapline.uppercase(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
-                Text(SpeedDial.TITLE, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1)
             }
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Show all", Modifier.size(28.dp))
         }

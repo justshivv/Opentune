@@ -26,6 +26,8 @@ jobs:
       - name: Usage deduplication and website scripts
         run: |
           node --test usage-api/worker.test.mjs usage-api/addons.test.mjs usage-api/dashboard/model.test.mjs examples/audio-addon/worker.test.mjs
+          node --test services/lossless-addon/control.test.mjs services/lossless-addon/server.test.mjs
+          node --check services/lossless-addon/control.js
           node --check usage-api/dashboard/dashboard.js
           node --check site/download-tracking.js
 
@@ -124,6 +126,7 @@ jobs:
       - run: python scripts/check-social-preview.py
       - run: node --test scripts/check-spotify-callback.cjs
       - run: python scripts/prepare-usage-assets.py
+      - run: python scripts/check-app-controls.py
       - run: python scripts/check-website.py
       - run: python scripts/check-room-invite.py
       - uses: actions/upload-artifact@v4

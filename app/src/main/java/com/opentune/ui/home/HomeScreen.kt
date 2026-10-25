@@ -101,6 +101,8 @@ fun HomeScreen(
     /** Opens every Speed dial pick on a page of its own. */
     onOpenSpeedDial: () -> Unit = {},
 ) {
+    val platform = if (com.opentune.ui.tv.LocalIsTv.current) "tv" else "android"
+    val runtime by com.opentune.data.config.RemoteConfig.state.collectAsState()
     val loader = rememberLoader("home") { MusicRepository.home() }
     val state by loader.state.collectAsState()
     val refreshing by loader.refreshing.collectAsState()
@@ -261,48 +263,53 @@ fun HomeScreen(
                 }
             }
             item(key = "festival") { FestivalCard() }
-            if (ui.speedDial && speedDial.size >= SPEED_DIAL_MIN) {
-                item(key = "speed-dial") {
-                    SpeedDialSection(
-                        speedDial,
-                        strapline = feed.speedDial?.subtitle?.takeIf { it.isNotBlank() }
-                            ?: account?.name?.substringBefore(' ').orEmpty(),
-                        avatarUrl = account?.thumbnailUrl,
-                        onItemClick = onItemClick,
-                        onOpenAll = onOpenSpeedDial,
-                    )
-                }
+            itemsIndexed(runtime.banners.filter { platform in it.platforms }, key = { _, banner -> "remote-banner:${banner.id}" }) { _, banner ->
+                RemoteBannerCard(banner)
             }
-            item(key = "quick-picks") {
-                val historyAction: @Composable () -> Unit = {
-                    IconButton(onClick = { historyOpen = true }, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.History, "Recently played", Modifier.size(22.dp))
+            for (section in runtime.sections.filter { it.enabled }) when (section.id) {
+                "speed-dial" -> if (ui.speedDial && speedDial.size >= SPEED_DIAL_MIN) item(key = "speed-dial") {
+                    SpeedDialSection(speedDial,
+                        strapline = feed.speedDial?.subtitle?.takeIf { it.isNotBlank() } ?: account?.name?.substringBefore(' ').orEmpty(),
+                        avatarUrl = account?.thumbnailUrl, onItemClick = onItemClick, onOpenAll = onOpenSpeedDial,
+                        title = runtime.title(section.id, "Speed dial"))
+                }
+                "quick-picks" -> item(key = "quick-picks") {
+                    val historyAction: @Composable () -> Unit = {
+                        IconButton(onClick = { historyOpen = true }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Rounded.History, "Recently played", Modifier.size(22.dp))
+                        }
                     }
+                    val title = runtime.title(section.id, "Quick picks")
+                    val picks = feed.quickPicks
+                    if (picks != null) QuickPicks(picks.copy(title = title, subtitle = ""), onItemClick, historyAction)
+                    else SectionHeader(title, action = historyAction)
                 }
-                val picks = feed.quickPicks
-                if (picks != null) QuickPicks(picks.copy(title = "Quick picks", subtitle = ""), onItemClick, historyAction)
-                else SectionHeader("Quick picks", action = historyAction)
-            }
-            if (mixes.isNotEmpty()) {
-                item(key = "mixes") {
-                    // Before any listening, every mix comes from the followed artists.
+                "mixes" -> if (mixes.isNotEmpty()) item(key = "mixes") {
                     val seededOnly = mixes.all { it.id.startsWith("seed:") }
-                    MixesShelf(mixes, actions, if (seededOnly) "From the artists you follow, until you've played more" else MIXES_LINE)
+                    MixesShelf(mixes, actions, if (seededOnly) "From the artists you follow, until you've played more" else MIXES_LINE,
+                        title = runtime.title(section.id, "Made for you today"))
                 }
-            }
-            if (spotifyMixes.isNotEmpty()) {
-                item(key = "spotifyMixes") {
-                    MixesShelf(spotifyMixes, actions, "Spotify's mixes for you, from your likes and listening there", title = "Made for you on Spotify")
+                "spotify-mixes" -> if (spotifyMixes.isNotEmpty()) item(key = "spotifyMixes") {
+                    MixesShelf(spotifyMixes, actions, "Spotify's mixes for you, from your likes and listening there",
+                        title = runtime.title(section.id, "Made for you on Spotify"))
                 }
-            }
-            when (val s = state) {
-                is UiState.Loading -> items(3) { ShelfPlaceholder() }
-                is UiState.Error -> item(key = "error") {
-                    ErrorState(s.message, onRetry = { loader.reload() }, modifier = Modifier.padding(top = 24.dp))
+                "featured-playlists" -> if (runtime.playlists.isNotEmpty()) item(key = "featured-playlists") {
+                    HomeShelfView(HomeShelf(runtime.title(section.id, "From the community"), runtime.playlists.map {
+                        ShelfItem(it.title, "OpenTune picks", it.artwork, null, it.browseId)
+                    }), onItemClick, songRows = false, covers = covers, coverKey = "featured-playlists")
                 }
-                is UiState.Success -> {
-                    itemsIndexed(feed.cards, key = { i, shelf -> "shelf:$i:${shelf.title}" }, contentType = { _, _ -> "cards" }) { i, shelf ->
-                        HomeShelfView(shelf, onItemClick, songRows = false, covers = covers, coverKey = "shelf:$i")
+                "recommendations" -> {
+                    when (val s = state) {
+                        is UiState.Loading -> items(3) { ShelfPlaceholder() }
+                        is UiState.Error -> item(key = "error") {
+                            ErrorState(s.message, onRetry = { loader.reload() }, modifier = Modifier.padding(top = 24.dp))
+                        }
+                        is UiState.Success -> {
+                            if (section.title.isNotBlank()) item(key = "recommendations-title") { SectionHeader(section.title) }
+                            itemsIndexed(feed.cards, key = { i, shelf -> "shelf:$i:${shelf.title}" }, contentType = { _, _ -> "cards" }) { i, shelf ->
+                                HomeShelfView(shelf, onItemClick, songRows = false, covers = covers, coverKey = "shelf:$i")
+                            }
+                        }
                     }
                 }
             }

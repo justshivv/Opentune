@@ -167,10 +167,16 @@ fun PlayerBackdrop(
     titleTop: Dp? = null,
     /** Lyrics or the queue are open over the Canvas: it's frosted and darkened all the way up. */
     canvasBehindText: Boolean = false,
+    cinematic: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
+    if (style == PlayerBackground.AMOLED) {
+        Box(modifier.background(Color.Black))
+        return
+    }
     Box(modifier.background(scheme.surface)) {
-        when (style) {
+        if (!cinematic) when (style) {
+            PlayerBackground.AMOLED -> Unit
             PlayerBackground.ECHO_GLOW -> EchoGlowBackground(animate && playing, Modifier.matchParentSize())
             PlayerBackground.MESH -> MeshGradient(artworkUrl, animate, Modifier.matchParentSize())
             PlayerBackground.GRADIENT -> {

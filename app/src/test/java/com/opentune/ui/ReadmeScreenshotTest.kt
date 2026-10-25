@@ -135,10 +135,11 @@ class ReadmeScreenshotTest {
         fullCover: Boolean = false,
         controls: com.opentune.data.settings.ControlStyle = com.opentune.data.settings.ControlStyle.BLOOM,
         playing: Boolean = true,
+        theme: ThemeSettings = ThemeSettings(),
     ) = PlayerUiState(
         song = song, isPlaying = playing, isBuffering = false, hasNext = true, shuffle = false, repeatMode = Player.REPEAT_MODE_OFF,
         durationMs = 200_000, lyrics = lyrics, queue = queue, currentIndex = 0, upNext = listOf(1, 2, 3),
-        sound = SoundSettings(), theme = ThemeSettings(), source = song.albumName,
+        sound = SoundSettings(), theme = theme, source = song.albumName,
         // Liquid Glass needs the GPU's shaders, which this software drawing can't run; the frosted look stands in.
         // The new designs move every frame while playing; a still needs that held, or the test never goes idle.
         ui = com.opentune.data.settings.InterfaceSettings(liquidGlass = false, playerStyle = style, reduceAnimation = style != com.opentune.data.settings.PlayerStyle.CLASSIC, fullScreenCover = fullCover, controlStyle = controls),
@@ -163,6 +164,9 @@ class ReadmeScreenshotTest {
             }
         }
     }
+
+    @Test fun appleInspired() = shoot("style-apple-inspired", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, com.opentune.data.settings.PlayerStyle.APPLE_MUSIC))
+    @Test fun amoledPlayer() = shoot("player-amoled", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, com.opentune.data.settings.PlayerStyle.APPLE_MUSIC, theme = ThemeSettings(playerBackground = com.opentune.data.settings.PlayerBackground.AMOLED)))
 
     @Test fun cassette() = shoot("style-cassette", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, com.opentune.data.settings.PlayerStyle.CASSETTE))
     @Test fun halo() = shoot("style-halo", content = player(blinding, com.opentune.ui.LyricsState.NotFound, false, 64_000, com.opentune.data.settings.PlayerStyle.HALO))

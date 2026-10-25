@@ -1006,6 +1006,7 @@ private fun lyricsStyle(): androidx.compose.ui.text.TextStyle {
     val ui = AppSettings.ui.collectAsState().value
     val scale = ui.lyricsTextScale
     return LyricsTextStyle.copy(
+        fontFamily = MaterialTheme.typography.bodyLarge.fontFamily,
         fontSize = LyricsTextStyle.fontSize * scale,
         lineHeight = LyricsTextStyle.lineHeight * scale,
         textAlign = if (ui.lyricsAlign == LyricsAlign.CENTER) TextAlign.Center else TextAlign.Start,

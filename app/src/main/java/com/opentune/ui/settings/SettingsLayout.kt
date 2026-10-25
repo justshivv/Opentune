@@ -70,7 +70,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         listOf(
             "Tabs" to listOf("Separate Explore tab"),
             "Home" to listOf("Speed dial"),
-            "Theme" to listOf("Theme", "Pure black"),
+            "Theme" to listOf("Theme", "Pure black", "Fonts & readability"),
             "Colour" to listOf("Color from artwork", "Mini player takes the cover's colour", "Artist pages take the photo's colour", "Material You", "Accent color", "Palette style"),
             "Glass" to listOf("Liquid Glass", "Glass style", "Frosted top edge", "Reduce dynamic blur"),
             "Feel" to listOf("Haptic feedback", "High refresh rate", "Wide-screen layout"),

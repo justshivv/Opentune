@@ -6,12 +6,13 @@ import { Outlet, useLocation } from 'react-router';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { config } from '@/config';
 import { useExtension } from '@/extension/useExtension';
+import { useRemoteConfig } from '@/config/remote';
 import { syncPublished } from '@/addons/client';
 import { isMobileBrowser } from '@/lib/platform';
 import { useUi } from '@/state/ui';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { Banner, bannerButtonClass } from './Banner';
-import { answered, DISCORD_URL, due, GITHUB_URL, usedToday, type Invitation } from './invitations';
+import { answered, due, usedToday, type Invitation } from './invitations';
 import { MobileTopBar } from './MobileTopBar';
 import { PlayerBar } from './PlayerBar';
 import { SidePanel } from './SidePanel';
@@ -30,12 +31,18 @@ const FullScreenPlayer = lazy(() => import('./FullScreenPlayer').then((m) => ({ 
  * player pill, the side panel, and the bottom band when there is one.
  */
 export function AppShell() {
+  const runtime = useRemoteConfig(s => s.config.data);
   useKeyboardShortcuts();
   useDiscordPresence();
   // Plays into the account's YouTube Music history (Settings › Share Listening Activity).
   useEffect(() => startHistoryReporting(), []);
   // The sources the owner publishes ("Added by admin"), folded into the listener's list.
-  useEffect(() => { void syncPublished(); }, []);
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') void syncPublished(); };
+    refresh(); const timer = setInterval(refresh, 300000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
+  }, []);
   const extension = useExtension();
   const bannerDismissed = useUi((s) => s.installBannerDismissed);
   const dismissBanner = useUi((s) => s.dismissInstallBanner);
@@ -87,7 +94,7 @@ export function AppShell() {
     );
   }
 
-  if (!banner && invitation) {
+  if (!banner && runtime.communityPrompts && invitation) {
     const discord = invitation === 'discord';
     const close = () => setInvitation(null);
     banner = (
@@ -103,7 +110,7 @@ export function AppShell() {
             <button className="type-body-emphasized text-white opacity-85 hover:opacity-100" onClick={() => { answered(invitation, true); close(); }}>
               Don’t show again
             </button>
-            <a className={bannerButtonClass} href={discord ? DISCORD_URL : GITHUB_URL} target="_blank" rel="noreferrer" onClick={close}>
+            <a className={bannerButtonClass} href={discord ? runtime.links.discord : runtime.links.github} target="_blank" rel="noreferrer" onClick={close}>
               {discord ? 'Join the Discord' : 'Star on GitHub'}
             </a>
           </span>
