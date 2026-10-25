@@ -26,7 +26,7 @@ class AddonClient(val base: String, private val fetch: suspend (String) -> Strin
             cache[url] = Cached(now(), text); text
         }
     }
-    suspend fun manifest(): AddonManifest = AddonProtocol.manifest(get(listOf("manifest.json"), emptyMap(), 600_000) { AddonProtocol.manifest(it) })
+    suspend fun manifest(fresh: Boolean = false): AddonManifest = AddonProtocol.manifest(get(listOf("manifest.json"), emptyMap(), 600_000, fresh) { AddonProtocol.manifest(it) })
     suspend fun search(query: String, manifest: AddonManifest, tier: String): List<AddonTrack> =
         AddonProtocol.search(get(listOf("search"), manifest.parameters(tier) + ("q" to query), 600_000) { AddonProtocol.search(it) })
     /** [fresh]: a new link, not the one handed out before (which may have expired). */

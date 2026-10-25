@@ -53,14 +53,14 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
     var notice by remember { mutableStateOf<String?>(null) }
     var expanded by remember { mutableStateOf<String?>(null) }
     var checks by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    LaunchedEffect(Unit) { CommunityAddons.refresh() }
+    LaunchedEffect(Unit) { AddonRefresh.refresh() }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
                     Text("Audio sources", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { scope.launch { notice = if (CommunityAddons.refresh(force = true)) "Community sources refreshed" else "Couldn't refresh. Your saved sources are still available." } }) { Icon(Icons.Rounded.Refresh, "Refresh community sources") }
+                    IconButton(onClick = { scope.launch { notice = if (AddonRefresh.refresh(force = true)) "Audio sources refreshed" else "Couldn't refresh. Your saved sources are still available." } }) { Icon(Icons.Rounded.Refresh, "Refresh audio sources") }
                 }
                 Text("YOUR SOUND, YOUR ORDER", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Text("OpenTune starts music quickly, then looks for better audio. Lossless quality checks your enabled sources for the best available lossless copy. Equal quality follows this order.", color = MaterialTheme.colorScheme.onSurfaceVariant)

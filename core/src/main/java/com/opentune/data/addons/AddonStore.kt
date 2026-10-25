@@ -44,8 +44,9 @@ object AddonStore {
         val target = (index + offset).coerceIn(0, list.lastIndex)
         list.add(target, list.removeAt(index)); save(list)
     }
-    @Synchronized fun refreshed(key: String, manifest: AddonManifest) {
+    @Synchronized fun refreshed(key: String, manifest: AddonManifest, expectedBase: String? = null) {
         val old = state.value.firstOrNull { it.key == key } ?: return
+        if (expectedBase != null && old.base != expectedBase) return
         val visible = if (old.admin) manifest.copy(name = old.manifest.name) else manifest
         if (old.manifest == visible) return
         // A new name, version or setting list changes nothing about what may be played: kept

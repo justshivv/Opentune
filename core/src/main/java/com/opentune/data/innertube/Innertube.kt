@@ -872,7 +872,7 @@ object Innertube {
      * the same thing, it is an ambiguous request whose resolution is Google's
      * to decide.
      */
-    suspend fun pingPlayback(baseUrl: String, cpn: String) = pingStats(baseUrl, cpn) {}
+    suspend fun pingPlayback(baseUrl: String, cpn: String, allowed: () -> Boolean = { true }) = pingStats(baseUrl, cpn, allowed) {}
 
     /**
      * The follow-up ping reporting how much of the track was actually heard.
@@ -883,8 +883,8 @@ object Innertube {
      * @param final whether this is the last report for the play, which is what
      *   lets Google close the play out rather than leave it looking abandoned.
      */
-    suspend fun pingWatchtime(baseUrl: String, cpn: String, seconds: Long, final: Boolean = false) =
-        pingStats(baseUrl, cpn) {
+    suspend fun pingWatchtime(baseUrl: String, cpn: String, seconds: Long, final: Boolean = false, allowed: () -> Boolean = { true }) =
+        pingStats(baseUrl, cpn, allowed) {
             parameter("st", "0")
             parameter("et", seconds.toString())
             // Where the playhead is, as distinct from how much was watched.
@@ -903,10 +903,12 @@ object Innertube {
      * play that started from a play that happened. Its base URL already carries
      * `ver`, `c` and `cver`, so unlike the others it is sent as-is.
      */
-    suspend fun pingAtr(baseUrl: String, cpn: String): Int {
+    suspend fun pingAtr(baseUrl: String, cpn: String, allowed: () -> Boolean = { true }): Int {
         // Playback can outlive the Activity that restored the session. Ensure
         // the selected profile's headers exist before this first history ping.
+        if (!allowed()) throw kotlinx.coroutines.CancellationException("History sync disabled")
         if (cookie != null) ensureSessionScope()
+        if (!allowed()) throw kotlinx.coroutines.CancellationException("History account changed")
         val session = scope
         return client.get(baseUrl) {
             parameter("cpn", cpn)
@@ -918,9 +920,12 @@ object Innertube {
     private suspend fun pingStats(
         baseUrl: String,
         cpn: String,
+        allowed: () -> Boolean,
         extras: HttpRequestBuilder.() -> Unit,
     ): Int {
+        if (!allowed()) throw kotlinx.coroutines.CancellationException("History sync disabled")
         if (cookie != null) ensureSessionScope()
+        if (!allowed()) throw kotlinx.coroutines.CancellationException("History account changed")
         val session = scope
         return client.get(baseUrl) {
             parameter("ver", "2")

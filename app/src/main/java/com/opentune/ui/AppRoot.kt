@@ -196,7 +196,7 @@ fun AppRoot(vm: PlayerViewModel) {
                     update = com.opentune.data.UpdateCheck.checkIfDue(appContext)
                 }
                 com.opentune.data.config.RemoteConfig.refresh()
-                com.opentune.data.addons.CommunityAddons.refresh()
+                com.opentune.data.addons.AddonRefresh.refresh()
                 kotlinx.coroutines.delay(5 * 60 * 1000L)
             }
         }

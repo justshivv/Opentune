@@ -292,6 +292,8 @@ data class PlaybackSettings(
     val noRepeatInSession: Boolean = false,
     /** Whose suggestions autoplay and Home's "Because you played" follow. */
     val recommender: Recommender = Recommender.YOUTUBE,
+    val listeningHistoryTarget: com.opentune.data.history.ListeningHistoryTarget = com.opentune.data.history.ListeningHistoryTarget.DEVICE_ONLY,
+    val pauseListeningHistory: Boolean = false,
     /**
      * Smart shuffle can be chosen: the player's shuffle button gets a third
      * state, and a long press on a playlist or album's Shuffle starts it.

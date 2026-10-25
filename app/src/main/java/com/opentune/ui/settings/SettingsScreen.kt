@@ -425,6 +425,7 @@ private fun settingsSections(
     var playerStyleDialog by remember { mutableStateOf(false) }
     var fontDialog by remember { mutableStateOf(false) }
     var recommenderDialog by remember { mutableStateOf(false) }
+    var historyTargetDialog by remember { mutableStateOf(false) }
     var followedDialog by remember { mutableStateOf(false) }
     var hiddenDialog by remember { mutableStateOf(false) }
     val hidden by LibraryStore.hidden.collectAsState()
@@ -529,6 +530,16 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v) } },
             onDismiss = { playerStyleDialog = false },
+        )
+    }
+    if (historyTargetDialog) {
+        ChoiceSheet(
+            title = "Sync listening history",
+            options = com.opentune.data.history.ListeningHistoryTarget.entries,
+            selected = pb.listeningHistoryTarget,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { target -> AppSettings.updatePlayback { it.copy(listeningHistoryTarget = target) } },
+            onDismiss = { historyTargetDialog = false },
         )
     }
     if (recommenderDialog) {
@@ -862,6 +873,17 @@ private fun settingsSections(
                         icon = Icons.Rounded.AutoAwesome,
                         value = pb.recommender.label,
                     )
+                },
+                Entry("Sync listening history", "youtube account privacy sync spotify history") {
+                    NavRow("Sync listening history", { historyTargetDialog = true },
+                        summary = "YouTube Music needs a signed-in account. Spotify does not accept plays from other services; likes can sync separately. Connected scrobblers keep their own settings.",
+                        icon = Icons.Rounded.History, value = pb.listeningHistoryTarget.label)
+                },
+                Entry("Pause listening history", "private pause scrobble history recommendations") {
+                    ToggleRow("Pause listening history", pb.pauseListeningHistory,
+                        { v -> AppSettings.updatePlayback { it.copy(pauseListeningHistory = v) } },
+                        summary = "Stop saving new song and collection history and reporting new listens to connected accounts. Paused listening is never sent later. Existing history and likes stay.",
+                        icon = Icons.Rounded.History)
                 },
                 Entry("Don't repeat songs in current session", "autoplay duplicates") {
                     ToggleRow("Don't repeat songs in current session", pb.noRepeatInSession, { v -> AppSettings.updatePlayback { it.copy(noRepeatInSession = v) } }, summary = "Autoplay won't add a song already played or queued this session", icon = Icons.Rounded.History)

@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
         // The process may have started in the background, offline (after an update, say).
         AccountStore.ensureProfile()
         lifecycleScope.launchWhenStarted {
-            com.opentune.data.addons.CommunityAddons.refresh()
+            com.opentune.data.addons.AddonRefresh.refresh()
         }
         // Playlist changes that couldn't reach YouTube Music last time try again.
         if (com.opentune.data.library.PlaylistSync.pending.value.isNotEmpty()) com.opentune.data.library.PlaylistSync.flush()

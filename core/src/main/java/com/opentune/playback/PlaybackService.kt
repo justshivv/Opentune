@@ -85,6 +85,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
@@ -296,6 +297,19 @@ class PlaybackService : MediaLibraryService() {
                 radioSeed = null
                 exhaustedSeeds.clear()
                 extendQueueIfNeeded()
+            }
+        }
+        scope.launch {
+            combine(
+                AppSettings.playback.map { it.pauseListeningHistory to it.listeningHistoryTarget }.distinctUntilChanged(),
+                com.opentune.data.account.AccountStore.accounts.map { list -> list.firstOrNull { it.active }?.id }.distinctUntilChanged(),
+            ) { policy, account -> policy to account }.distinctUntilChanged().drop(1).collect {
+                // Never backfill time heard while paused, or report it to a different account.
+                finishListen(report = false)
+                historyGeneration++
+                historyWork.cancel()
+                historyWork = SupervisorJob(scope.coroutineContext[Job])
+                startListen(player.currentMediaItem?.toSong(), player.isPlaying)
             }
         }
         scope.launch { trackListening(player) }
@@ -920,16 +934,25 @@ class PlaybackService : MediaLibraryService() {
     // ---- Listening history ---------------------------------------------------
 
     private var listenSong: Song? = null
+    @Volatile private var historyGeneration = 0L
+    private var historyWork = SupervisorJob(scope.coroutineContext[Job])
+    private var youtubeListen: com.opentune.data.history.YouTubeHistorySession? = null
+    private var youtubeReport: Job? = null
     private var listenedMs = 0L
     private var listenSince = -1L
     private var listenRecord: Long? = null
+    private var listenDuration: Long? = null
 
     private fun startListen(song: Song?, playing: Boolean) {
         // A radio station isn't a song: it stays out of history and scrobbles.
-        listenSong = song?.takeUnless { Radio.isRadio(it.videoId) }
+        listenSong = song?.takeUnless { Radio.isRadio(it.videoId) || AppSettings.playback.value.pauseListeningHistory }
+        val generation = historyGeneration
+        youtubeListen = listenSong?.let { com.opentune.data.history.YouTubeHistory.session(it.videoId) { historyGeneration == generation } }
+        youtubeReport = null
         listenedMs = 0
         listenSince = if (playing) SystemClock.elapsedRealtime() else -1
         listenRecord = null
+        listenDuration = mediaSession?.player?.duration?.takeIf { it > 0 }
         listenStartedAt = System.currentTimeMillis()
         scrobbled = false
         nowPlayingSent = false
@@ -943,7 +966,7 @@ class PlaybackService : MediaLibraryService() {
 
     private fun sendNowPlaying() {
         val song = listenSong ?: return
-        if (nowPlayingSent) return
+        if (nowPlayingSent || AppSettings.playback.value.pauseListeningHistory) return
         nowPlayingSent = true
         val duration = mediaSession?.player?.duration?.takeIf { it > 0 } ?: 0L
         LastFm.nowPlaying(song, duration)
@@ -959,9 +982,16 @@ class PlaybackService : MediaLibraryService() {
     private fun listenedSoFar(): Long =
         listenedMs + if (listenSince >= 0) SystemClock.elapsedRealtime() - listenSince else 0
 
-    private fun finishListen() {
-        listenRecord?.let { History.updateListened(it, listenedSoFar()) }
+    private fun finishListen(report: Boolean = true) {
+        val heard = listenedSoFar()
+        listenRecord?.let { History.updateListened(it, heard) }
         listenRecord = null
+        val session = youtubeListen
+        val duration = listenDuration
+        if (report && session != null && !AppSettings.playback.value.pauseListeningHistory) {
+            scope.launch(historyWork + Dispatchers.IO) { session.heard(heard, duration, final = true) }
+        }
+        youtubeListen = null
     }
 
     /** Keeps a podcast episode's place, or that of anything as long as one, so it resumes there. */
@@ -978,9 +1008,15 @@ class PlaybackService : MediaLibraryService() {
         while (scope.isActive) {
             delay(5_000)
             if (player.isPlaying && ++ticks % 3 == 0) saveEpisodePosition(player)
+            if (AppSettings.playback.value.pauseListeningHistory) continue
             val song = listenSong ?: continue
             val heard = listenedSoFar()
             val known = player.duration.takeIf { it > 0 }
+            listenDuration = known
+            val session = youtubeListen
+            if (session != null && youtubeReport?.isActive != true && player.isPlaying) {
+                youtubeReport = scope.launch(historyWork + Dispatchers.IO) { session.heard(heard, known) }
+            }
             // Last.fm's rule: a song over 30 s, heard for half its length or 4 minutes.
             if (!scrobbled && known != null && known > 30_000 && heard >= minOf(known / 2, 240_000L)) {
                 scrobbled = true
