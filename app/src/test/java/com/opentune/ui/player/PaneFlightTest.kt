@@ -41,4 +41,11 @@ class PaneFlightTest {
         flight.start(large, toSmall = true)
         assertEquals(small, flight.target(null, null))
     }
+
+    @Test fun aSlidingOrNotYetMeasuredHeaderDoesNotDelayOrMoveTheDestination() {
+        flight.start(large, toSmall = true, destination = small)
+        assertEquals(small, flight.target(null, null))
+        val stillSliding = Rect(small.left, small.top + 26f, small.right, small.bottom + 26f)
+        assertEquals(small, flight.target(stillSliding, null))
+    }
 }

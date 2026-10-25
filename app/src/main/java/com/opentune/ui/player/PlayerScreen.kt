@@ -106,6 +106,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -474,8 +475,9 @@ fun PlayerLayout(
     val headerInset = with(LocalDensity.current) { 8.dp.toPx() }
     val headerCover = with(LocalDensity.current) { 64.dp.toPx() }
     fun headerHome(): androidx.compose.ui.geometry.Rect? {
-        flight.lastSmall?.let { return it }
-        val at = paneCoords?.takeIf { it.isAttached }?.positionInRoot() ?: return null
+        // The list layer slides in, so its measured header can be temporarily offset.
+        // Its resting destination is known from the shared pane before that slide starts.
+        val at = paneCoords?.takeIf { it.isAttached }?.positionInRoot() ?: return flight.lastSmall
         return androidx.compose.ui.geometry.Rect(at.x, at.y + headerInset, at.x + headerCover, at.y + headerInset + headerCover)
     }
     val bleedOverlap = with(LocalDensity.current) { 44.dp.toPx() }
@@ -485,7 +487,8 @@ fun PlayerLayout(
      * is how the backdrop crops it, so the flight starts and ends exactly over it.
      */
     fun bigCover(): androidx.compose.ui.geometry.Rect? {
-        if (!fullStyle) return com.opentune.ui.components.PlayerMorph.playerCover?.let(com.opentune.ui.components.PlayerMorph::scaled)
+        if (!fullStyle) return (com.opentune.ui.components.PlayerMorph.playerCover
+            ?: com.opentune.ui.components.PlayerMorph.lastPlayerCover)?.let(com.opentune.ui.components.PlayerMorph::scaled)
         val c = playerCoords?.takeIf { it.isAttached } ?: return null
         val at = c.positionInRoot()
         val w = c.size.width.toFloat()
@@ -496,7 +499,7 @@ fun PlayerLayout(
         liftSettle?.cancel()
         coverLift = 0f
         returnPane = pane.name
-        val from = smallCover
+        val from = smallCover ?: headerHome()
         if (flies && from != null) flight.start(from, toSmall = false)
         paneName = Pane.COVER.name
     }
@@ -509,7 +512,7 @@ fun PlayerLayout(
         knowHeader()
         // A swipe already carrying the cover: it goes on from where the finger let go.
         if (flight.following) flight.finish()
-        else if (fly && flies && from != null) flight.start(from, toSmall = true)
+        else if (fly && flies && from != null) flight.start(from, toSmall = true, destination = headerHome())
         paneName = back.name
         returnPane = null
     }
@@ -1206,6 +1209,7 @@ fun PlayerLayout(
                         endCornerDp = if (flight.toSmall) 10f else (if (fullStyle) 0f else 28f),
                         origin = origin,
                         fullBleed = fullStyle,
+                        contentModifier = Modifier.testTag("pane-cover-flight"),
                     )
                     // Drawn outside the player's own colours, so given them here: the title and
                     // its buttons changed colour as they flew.
@@ -1655,9 +1659,10 @@ internal class PaneFlight {
     var travel = 1f
         private set
 
-    fun start(from: androidx.compose.ui.geometry.Rect, toSmall: Boolean) {
+    fun start(from: androidx.compose.ui.geometry.Rect, toSmall: Boolean, destination: androidx.compose.ui.geometry.Rect? = null) {
         this.from = from
         this.toSmall = toSmall
+        this.home = destination
         startAt = 0f
         primed = false
         following = false
@@ -1698,7 +1703,7 @@ internal class PaneFlight {
      * that doesn't move reports no new position.
      */
     fun target(small: androidx.compose.ui.geometry.Rect?, big: androidx.compose.ui.geometry.Rect?): androidx.compose.ui.geometry.Rect? =
-        if (toSmall) small ?: home ?: lastSmall else big
+        if (toSmall) home ?: small ?: lastSmall else big
 
     /** Cancellation of an old runner must not hide a newer transition. */
     fun endRun(run: Int) { if (run == runs) end() }

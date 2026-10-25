@@ -141,7 +141,7 @@ object PlayerMorph {
         val b = r.boundsInRoot()
         playerCover = b
         playerLaidOut = true
-        if (dragging == 0f && !collapsing) lastPlayerCover = b
+        if (dragging == 0f && !collapsing && !flying) lastPlayerCover = b
     }
 
     /** False from an open until the opening player reports its cover. */
@@ -242,6 +242,7 @@ internal fun MorphBox(
      * shadow then, as the edge-to-edge art has none.
      */
     fullBleed: Boolean = false,
+    contentModifier: Modifier = Modifier,
 ) {
     val big = if (from.width >= to.width) from else to
     val small = if (big === from) to else from
@@ -293,7 +294,7 @@ internal fun MorphBox(
                         blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
                     )
                 },
-            ),
+            ).then(contentModifier),
     ) {
         // The mini player's own copy underneath, already loaded, so it never shows empty.
         if (smallUrl != null) Artwork(smallUrl, Modifier.matchParentSize(), RectangleShape)
