@@ -20,7 +20,7 @@ class ImportedFontsTest {
     @Test fun copiesARealFontAndDoesNotDependOnTheOriginalDocument() {
         val source = File(context.cacheDir, "import-test.ttf")
         context.resources.openRawResource(R.font.outfit_variable).use { input -> source.outputStream().use { input.copyTo(it) } }
-        val (id, name) = ImportedFonts.import(context, Uri.fromFile(source))
+        val (id, name) = ImportedFonts.importFont(context, Uri.fromFile(source))
         assertEquals("import-test.ttf", name)
         source.delete()
         assertNotNull(ImportedFonts.file(context, id))
@@ -30,9 +30,9 @@ class ImportedFontsTest {
     @Test fun rejectsNonFontsOversizedFilesAndExternalPaths() {
         assertNull(ImportedFonts.file(context, "../../other-file"))
         val source = File(context.cacheDir, "bad.ttf").apply { writeText("not a font") }
-        assertThrows(Exception::class.java) { ImportedFonts.import(context, Uri.fromFile(source)) }
+        assertThrows(Exception::class.java) { ImportedFonts.importFont(context, Uri.fromFile(source)) }
         java.io.RandomAccessFile(source, "rw").use { it.setLength(ImportedFonts.MAX_BYTES.toLong() + 1) }
-        assertThrows(IllegalArgumentException::class.java) { ImportedFonts.import(context, Uri.fromFile(source)) }
+        assertThrows(IllegalArgumentException::class.java) { ImportedFonts.importFont(context, Uri.fromFile(source)) }
         source.delete()
     }
 }

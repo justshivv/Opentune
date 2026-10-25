@@ -14,7 +14,7 @@ internal object ImportedFonts {
     fun file(context: Context, id: String): File? = id.takeIf { idPattern.matches(it) }
         ?.let { File(context.filesDir, "fonts/$it.font") }?.takeIf { it.isFile }
 
-    fun import(context: Context, uri: Uri): Pair<String, String> {
+    fun importFont(context: Context, uri: Uri): Pair<String, String> {
         val resolver = context.contentResolver
         val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null

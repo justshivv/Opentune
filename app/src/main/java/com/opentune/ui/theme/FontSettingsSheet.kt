@@ -29,7 +29,7 @@ fun FontSettingsSheet(onDismiss: () -> Unit) {
         if (uri != null) scope.launch {
             importing = true; message = null
             try {
-                val (id, name) = withContext(Dispatchers.IO) { ImportedFonts.import(context, uri) }
+                val (id, name) = withContext(Dispatchers.IO) { ImportedFonts.importFont(context, uri) }
                 val previous = AppSettings.theme.value.customFontId
                 AppSettings.updateTheme { it.copy(font = AppFont.CUSTOM, customFontId = id, customFontName = name) }
                 withContext(Dispatchers.IO) { ImportedFonts.remove(context, previous) }
