@@ -199,7 +199,7 @@ object MusicRepository {
     /** Where Home's extra shelves come from, in the order they're shown. */
     private enum class HomeSource { SEED, RADIO, LISTENBRAINZ, ARTISTS, NEW_RELEASES, CHARTS, EXPLORE, MOODS }
 
-    private class Fetched(val shelves: List<HomeShelf>, val at: Long)
+    private class Fetched(val shelves: List<HomeShelf>, val at: Long, val engine: Recommender = AppSettings.playback.value.recommender)
     private val extrasCache = java.util.concurrent.ConcurrentHashMap<HomeSource, Fetched>()
 
     /**
@@ -208,12 +208,16 @@ object MusicRepository {
      */
     private suspend fun extraShelves(source: HomeSource): List<HomeShelf> {
         val now = System.currentTimeMillis()
+        val engine = AppSettings.playback.value.recommender
+        val cached = extrasCache[source]?.takeIf {
+            source != HomeSource.RADIO || it.engine == engine
+        }
         // The seed follows whoever is followed now, so it keeps its own cache.
-        if (source != HomeSource.SEED) extrasCache[source]?.takeIf { now - it.at < EXTRAS_FRESH_MS }?.let { return it.shelves }
+        if (source != HomeSource.SEED) cached?.takeIf { now - it.at < EXTRAS_FRESH_MS }?.let { return it.shelves }
         val shelves = try {
             when (source) {
                 HomeSource.SEED -> seedShelves()
-                HomeSource.RADIO -> radioShelf()
+                HomeSource.RADIO -> radioShelf(engine)
                 HomeSource.LISTENBRAINZ -> listenBrainzShelf()
                 HomeSource.ARTISTS -> artistShelves()
                 HomeSource.NEW_RELEASES -> shelvesOf("FEmusic_new_releases")
@@ -225,9 +229,9 @@ object MusicRepository {
             throw e
         } catch (e: Exception) {
             DebugLog.w("MusicRepository", "Home's ${source.name.lowercase()} shelves failed", e)
-            return extrasCache[source]?.shelves.orEmpty()
+            return cached?.shelves.orEmpty()
         }
-        extrasCache[source] = Fetched(shelves, now)
+        extrasCache[source] = Fetched(shelves, now, engine)
         return shelves
     }
 
@@ -276,7 +280,7 @@ object MusicRepository {
      * "Because you played …": what the chosen recommendation engine (YouTube
      * Music, Spotify or JioSaavn) suggests after the last song heard.
      */
-    private suspend fun radioShelf(): List<HomeShelf> {
+    private suspend fun radioShelf(engine: Recommender): List<HomeShelf> {
         // A hidden song or artist isn't a seed for more of the same.
         val hidden = com.opentune.data.library.LibraryStore.hidden.value
         // Each refresh turns to the next of the last few songs heard, so pulling
@@ -289,13 +293,14 @@ object MusicRepository {
         if (recent.isEmpty()) return emptyList()
         val turn = homeRefreshes.get()
         val last = recent[turn % recent.size]
-        val result = Recommendations.after(last.toSong(), AppSettings.playback.value.recommender)
+        val result = Recommendations.after(last.toSong(), engine)
         val heard = recent.mapTo(HashSet()) { it.videoId }
         val fresh = result.songs.filter { it.videoId != last.videoId && it.videoId !in heard }
         // What the last shelf showed goes to the back, and the order changes with each refresh.
         val (seen, unseen) = fresh.partition { it.videoId in lastPicks }
-        val songs = (unseen.shuffled(kotlin.random.Random(launchShuffle + turn)) + seen).take(20)
-        if (songs.size < 4) return emptyList()
+        val songs = if (engine == Recommender.SPOTIFY) fresh.take(20)
+            else (unseen.shuffled(kotlin.random.Random(launchShuffle + turn)) + seen).take(20)
+        if (songs.isEmpty() || (engine != Recommender.SPOTIFY && songs.size < 4)) return emptyList()
         lastPicks = songs.mapTo(HashSet()) { it.videoId }
         val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
         val by = if (result.engine == Recommender.YOUTUBE) "Picked for you" else "Picked by ${result.engine.label}"

@@ -77,6 +77,9 @@ internal object ScreenCache {
         entries[key] = Entry(value, at)
     }
 
+    @Synchronized
+    fun invalidate(key: String) { entries[key]?.let { entries[key] = Entry(it.value, 0L) } }
+
     const val FRESH_MS = 2 * 60 * 1000L
     private const val MAX_ENTRIES = 48
 }

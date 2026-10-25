@@ -547,7 +547,7 @@ enum class VolumeLevel(val label: String, val summary: String, val offsetDb: Flo
 @Serializable
 enum class Recommender(val label: String, val summary: String) {
     YOUTUBE("YouTube Music", "YouTube Music's own radio for the last song"),
-    SPOTIFY("Spotify", "Spotify's song radio for the last song, made for you when Spotify is connected, found on YouTube Music at the same length"),
+    SPOTIFY("Spotify", "Spotify's song radio, personalized when connected. Keeps Spotify's picks and order; no YouTube recommendation fallback"),
     JIOSAAVN("JioSaavn", "JioSaavn's picks after the last song, strong on Indian music, found on YouTube Music"),
 }
 

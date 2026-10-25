@@ -62,7 +62,9 @@ object SpotifyRadio {
      */
     suspend fun personal(title: String, artist: String, album: String?, durationMs: Long): List<Spotify.Track>? {
         val cookie = com.opentune.data.spotify.SpotifyWebPlayer.account() ?: return null
-        val key = "${title.lowercase()}|${artist.lowercase()}|${durationMs / 1000}"
+        val account = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(cookie.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        val key = "$account|${title.lowercase()}|${artist.lowercase()}|${album.orEmpty().lowercase()}|${durationMs / 1000}"
         mixes[key]?.takeIf { System.currentTimeMillis() - it.at < MIX_TTL_MS }?.let { return it.tracks }
         return try {
             val seed = com.opentune.data.spotify.SpotifyWebPlayer.findTrack(title, artist, album, durationMs, cookie) ?: return null
@@ -70,7 +72,10 @@ object SpotifyRadio {
             val (items, _) = com.opentune.data.spotify.SpotifyLibrary.tracks(cookie, playlist)
             // The radio opens with the seed itself.
             items.filter { it.uri != seed.uri }.map { it.track }
-                .also { mixes[key] = Mix(it, System.currentTimeMillis()) }
+                .also { tracks ->
+                    if (tracks.isNotEmpty()) mixes[key] = Mix(tracks, System.currentTimeMillis())
+                    mixes.entries.removeIf { System.currentTimeMillis() - it.value.at >= MIX_TTL_MS }
+                }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -78,6 +83,8 @@ object SpotifyRadio {
             null
         }
     }
+
+    fun clearPersonalCache() = mixes.clear()
 
     /** Spotify's picks after the song called [title] by [artist], or empty when Spotify doesn't know it. */
     suspend fun radio(title: String, artist: String, album: String?): List<Spotify.Track> = coroutineScope {

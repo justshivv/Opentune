@@ -527,6 +527,7 @@ fun PlayerLayout(
     // Flies the cover to wherever its new place turns out to be, once that's laid out.
     LaunchedEffect(flight.runs) {
         if (flight.runs == 0) return@LaunchedEffect
+        val run = flight.runs
         try {
             flight.t.snapTo(flight.startAt)
             flight.primed = true
@@ -537,7 +538,7 @@ fun PlayerLayout(
             val left = 1f - flight.t.value
             flight.t.animateTo(1f, tween((440 * left).toInt().coerceAtLeast(160), easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)))
         } finally {
-            flight.end()
+            flight.endRun(run)
         }
     }
     var upPull by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
@@ -916,7 +917,8 @@ fun PlayerLayout(
                             val seekBy: (Long) -> Unit = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) }
                             Box(Modifier.weight(1f).fillMaxWidth().then(if (docked) Modifier.fitSquare() else Modifier), contentAlignment = Alignment.Center) {
                                 when {
-                                    fullCover ->
+                                    // Keep the full-cover layout mounted while its exit animates.
+                                    fullStyle ->
                                         ArtworkSwipeArea(
                                             onSwipeNext = actions.next,
                                             onSwipePrevious = actions.previous,
@@ -1114,7 +1116,7 @@ fun PlayerLayout(
                     }
                 }
                 if (pane != Pane.LYRICS && state.ui.syncedLyrics && !minimal && !apple && roomy && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
-                    LyricPreview(state.lyrics, lyricsPosition, onOpen = { paneName = Pane.LYRICS.name }, Modifier.padding(top = 4.dp))
+                    LyricPreview(state.lyrics, lyricsPosition, onOpen = { toggle(Pane.LYRICS) }, Modifier.padding(top = 4.dp))
                 }
                 Spacer(Modifier.height(8.dp))
                 // The line at a point of the song, for the bubble shown while the bar is dragged.
@@ -1616,7 +1618,7 @@ private const val COVER_LIFT_FADE = 0.55f
 /** Long enough for the cover page's exit to finish before its lift is put back. */
 private const val COVER_LIFT_RESET_MS = 600L
 
-private class PaneFlight {
+internal class PaneFlight {
     var from by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
         private set
     var toSmall by mutableStateOf(false)
@@ -1697,6 +1699,9 @@ private class PaneFlight {
      */
     fun target(small: androidx.compose.ui.geometry.Rect?, big: androidx.compose.ui.geometry.Rect?): androidx.compose.ui.geometry.Rect? =
         if (toSmall) small ?: home ?: lastSmall else big
+
+    /** Cancellation of an old runner must not hide a newer transition. */
+    fun endRun(run: Int) { if (run == runs) end() }
 
     fun end() {
         active = false

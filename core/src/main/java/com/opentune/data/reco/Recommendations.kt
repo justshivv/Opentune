@@ -22,8 +22,8 @@ import kotlinx.coroutines.withContext
  * Songs to follow a song, from the chosen [Recommender]. Spotify's and
  * JioSaavn's picks are names, so each is found on YouTube Music the way an
  * imported playlist is; whatever can't be found is left out. When the
- * engine knows nothing about the song, YouTube Music's radio steps in, so
- * the music never stops for want of a match.
+ * engine knows nothing about the song, JioSaavn can fall back to YouTube
+ * Music. Selecting Spotify keeps recommendations on Spotify.
  *
  * Whatever the user hid ("Not interested", "Don't play [artist]") is left
  * out here, so every caller — autoplay, smart shuffle, Home's "Because you
@@ -32,8 +32,8 @@ import kotlinx.coroutines.withContext
  *
  * With Spotify connected, Spotify's picks are its song radio for the
  * listener ([SpotifyRadio.personal]), each matched on YouTube Music to the
- * same length, and artists already in the listener's playlists and likes are
- * moved a little nearer the front.
+ * same length, in Spotify's order. Likes can be synced to Spotify separately;
+ * external audio playback is not submitted as Spotify listening history.
  */
 object Recommendations {
     private const val TAG = "Recommendations"
@@ -49,24 +49,35 @@ object Recommendations {
 
     data class Result(val songs: List<Song>, val engine: Recommender)
 
-    /** Up next after [seed], from [engine], falling back to YouTube Music. */
+    /** Spotify stays the selected source even when it has no playable matches. */
     suspend fun after(seed: Song, engine: Recommender): Result {
+        val result = resolve(engine, preferred = {
+            val hidden = LibraryStore.hidden.value
+            val picks = picks(seed, engine)
+            val tracks = picks.tracks.filterNot { hidden.hidesArtist(it.artists.joinToString(", ")) }
+            // Preserve Spotify's ranking instead of moving local favourite artists ahead.
+            matched(seed, if (engine == Recommender.SPOTIFY) tracks else lean(tracks), picks.exact)
+        }, fallback = { youtube(seed.videoId) })
+        return result.copy(songs = notRecent(result.songs))
+    }
+
+    internal suspend fun resolve(
+        engine: Recommender,
+        preferred: suspend () -> List<Song>,
+        fallback: suspend () -> List<Song>,
+    ): Result {
         if (engine != Recommender.YOUTUBE) {
             val songs = try {
-                // A hidden artist's picks are dropped before the lookups, so they don't use up the batch.
-                val hidden = LibraryStore.hidden.value
-                val picks = picks(seed, engine)
-                matched(seed, lean(picks.tracks.filterNot { hidden.hidesArtist(it.artists.joinToString(", ")) }), picks.exact)
+                preferred()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "${engine.label} picks for ${seed.title} failed", e)
+                Log.w(TAG, "${engine.label} recommendations failed", e)
                 emptyList()
             }
-            if (songs.size >= ENOUGH) return Result(notRecent(songs), engine)
-            Log.d(TAG, "${engine.label} found ${songs.size} for ${seed.title}; using YouTube Music")
+            if (engine == Recommender.SPOTIFY || songs.size >= ENOUGH) return Result(songs, engine)
         }
-        return Result(notRecent(youtube(seed.videoId)), Recommender.YOUTUBE)
+        return Result(fallback(), Recommender.YOUTUBE)
     }
 
     /** [songs] without those played in the last few hours, unless that leaves too few. */
@@ -113,7 +124,7 @@ object Recommendations {
         val artist = mainArtist(seed.artist)
         return when (engine) {
             Recommender.SPOTIFY -> SpotifyRadio.personal(seed.title, artist, seed.albumName, durationMs(seed.durationText))
-                ?.let { Picks(it, exact = true) }
+                ?.takeIf { it.isNotEmpty() }?.let { Picks(it, exact = true) }
                 ?: Picks(SpotifyRadio.radio(seed.title, artist, seed.albumName), exact = false)
             Recommender.JIOSAAVN -> Picks(JioSaavnRadio.radio(seed.title, artist), exact = false)
             Recommender.YOUTUBE -> Picks(emptyList(), exact = false)
@@ -128,7 +139,11 @@ object Recommendations {
         val gate = Semaphore(PARALLEL)
         // Exact matching turns some down, so a few more are looked up.
         picks.take(if (exact) MATCHES + 5 else MATCHES).map { t ->
-            async { gate.withPermit { runCatching { PlaylistImport.match(t, exactLength = exact) }.getOrNull() } }
+            async { gate.withPermit {
+                try { PlaylistImport.match(t, exactLength = exact) }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) { null }
+            } }
         }.awaitAll()
             .filterNotNull()
             .filter { it.videoId != seed.videoId }

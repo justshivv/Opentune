@@ -291,7 +291,12 @@ class PlaybackService : MediaLibraryService() {
         // Turning autoplay back on near the end of the queue should fetch now,
         // not at the next track change.
         scope.launch {
-            AppSettings.playback.map { it.autoplay }.distinctUntilChanged().collect { extendQueueIfNeeded() }
+            AppSettings.playback.map { it.autoplay to it.recommender }.distinctUntilChanged().collect {
+                radioJob?.cancel()
+                radioSeed = null
+                exhaustedSeeds.clear()
+                extendQueueIfNeeded()
+            }
         }
         scope.launch { trackListening(player) }
         scope.launch {
@@ -2130,6 +2135,7 @@ class PlaybackService : MediaLibraryService() {
                 return@launch
             }
             val radio = Autoplay.blend(listOf(lead) + extra.awaitAll(), queue)
+            if (AppSettings.playback.value.recommender != engine) return@launch
             // The queue may have been replaced while the request was out; radio
             // for a track that's no longer last doesn't belong at the end.
             val count = player.mediaItemCount

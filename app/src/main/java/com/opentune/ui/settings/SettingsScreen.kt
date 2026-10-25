@@ -537,7 +537,11 @@ private fun settingsSections(
             options = Recommender.entries,
             selected = pb.recommender,
             label = { "${it.label} · ${it.summary}" },
-            onSelect = { r -> AppSettings.updatePlayback { it.copy(recommender = r) } },
+            onSelect = { r ->
+                com.opentune.data.MusicRepository.refreshHomeRecommendations()
+                com.opentune.ui.ScreenCache.invalidate("home:${r.name}")
+                AppSettings.updatePlayback { it.copy(recommender = r) }
+            },
             onDismiss = { recommenderDialog = false },
         )
     }
@@ -1075,7 +1079,7 @@ private fun settingsSections(
                     RowDivider()
                     ToggleRow("Frosted glass over Canvas", ui.canvasFrost, { v -> AppSettings.updateUi { it.copy(canvasFrost = v) } }, summary = off ?: "From the song's title down, the Canvas blurs gradually into frosted glass so the controls stay readable", icon = Icons.Rounded.BlurOn, enabled = spotifyConnected && ui.spotifyCanvas)
                     RowDivider()
-                    ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = off ?: "A song you like here goes into your Spotify Liked Songs too, so Spotify's suggestions learn from it", icon = Icons.Rounded.Favorite, enabled = spotifyConnected)
+                    ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = off ?: "Likes are saved to Spotify. Listening here does not add plays to Spotify history", icon = Icons.Rounded.Favorite, enabled = spotifyConnected)
                     RowDivider()
                     ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = off ?: "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = Icons.Rounded.Album, enabled = spotifyConnected)
                 },

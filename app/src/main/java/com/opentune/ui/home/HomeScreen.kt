@@ -103,7 +103,8 @@ fun HomeScreen(
 ) {
     val platform = if (com.opentune.ui.tv.LocalIsTv.current) "tv" else "android"
     val runtime by com.opentune.data.config.RemoteConfig.state.collectAsState()
-    val loader = rememberLoader("home") { MusicRepository.home() }
+    val playback by AppSettings.playback.collectAsState()
+    val loader = rememberLoader("home:${playback.recommender.name}") { MusicRepository.home() }
     val state by loader.state.collectAsState()
     val refreshing by loader.refreshing.collectAsState()
     val moreAll by MusicRepository.homeMore.collectAsState()
