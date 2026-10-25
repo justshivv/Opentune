@@ -35,6 +35,7 @@ val sharedFromCore = listOf(
     "com/opentune/data/AppLog.kt",
     "com/opentune/data/TrackIds.kt",
     "com/opentune/data/settings/AppSettings.kt",
+    "com/opentune/data/history/ListeningHistoryTarget.kt",
     // Lyrics from every source the phone asks, without the romanizer (Android's ICU).
     "com/opentune/data/lyrics/Lyrics.kt",
     "com/opentune/data/lyrics/LyricsRepository.kt",

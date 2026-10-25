@@ -29,22 +29,28 @@ internal object YouTubeHistory {
                 val timestamp = StreamResolver.signatureTimestamp(videoId)
                 if (!allowed()) return false
                 tracking = Innertube.playbackTracking(videoId, timestamp)
+                if (tracking == null && allowed()) com.opentune.data.DebugLog.w("ListeningHistory", "YouTube did not provide account history tracking; will retry after more listening")
                 return tracking != null && allowed()
             }
             override suspend fun playback(): Boolean {
                 val t = tracking ?: return false
-                val ok = Innertube.pingPlayback(t.playbackUrl, nonce, allowed) in 200..299
+                val ok = accepted(Innertube.pingPlayback(t.playbackUrl, nonce, allowed))
                 if (ok) com.opentune.data.MusicRepository.refreshHomeRecommendations()
                 return ok
             }
             override suspend fun atr(): Boolean {
                 val url = tracking?.atrUrl ?: return true
-                return Innertube.pingAtr(url, nonce, allowed) in 200..299
+                return accepted(Innertube.pingAtr(url, nonce, allowed))
             }
             override suspend fun watchtime(heardSeconds: Long, final: Boolean): Boolean {
                 val url = tracking?.watchtimeUrl ?: return true
-                return Innertube.pingWatchtime(url, nonce, heardSeconds, final, allowed) in 200..299
+                return accepted(Innertube.pingWatchtime(url, nonce, heardSeconds, final, allowed))
             }
         }, allowed)
+    }
+
+    private fun accepted(status: Int): Boolean {
+        if (status !in 200..299) com.opentune.data.DebugLog.w("ListeningHistory", "YouTube history request returned HTTP $status")
+        return status in 200..299
     }
 }

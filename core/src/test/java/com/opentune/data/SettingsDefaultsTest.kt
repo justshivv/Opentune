@@ -16,6 +16,8 @@ class SettingsDefaultsTest {
         for (body in listOf("{}", """{"playback":{},"lyrics":{}}""")) {
             val settings = json.decodeFromString<SettingsState>(body)
             assertTrue(settings.playback.stopOnTaskRemoved)
+            assertFalse(settings.playback.pauseListeningHistory)
+            assertEquals(com.opentune.data.history.ListeningHistoryTarget.DEVICE_ONLY, settings.playback.listeningHistoryTarget)
             assertFalse(settings.playback.losslessUnmeteredOnly)
             assertTrue(settings.lyrics.preferWordSynced)
             assertTrue(settings.lyrics.romanize)
@@ -48,13 +50,15 @@ class SettingsDefaultsTest {
 
     @Test fun anUpdateAndBackupKeepExplicitSavedChoices() {
         val body = """{
-            "playback":{"stopOnTaskRemoved":false,"losslessUnmeteredOnly":true},
+            "playback":{"stopOnTaskRemoved":false,"losslessUnmeteredOnly":true,"pauseListeningHistory":true,"listeningHistoryTarget":"YOUTUBE_MUSIC"},
             "lyrics":{"preferWordSynced":false,"romanize":false,
                 "sources":[{"source":"SIMPMUSIC","enabled":false}],
                 "offsets":{"4NRXx6U8ABQ":500},"chosen":{"4NRXx6U8ABQ":"SIMPMUSIC"}}
         }"""
         val settings = json.decodeFromString<SettingsState>(body)
         assertFalse(settings.playback.stopOnTaskRemoved)
+        assertTrue(settings.playback.pauseListeningHistory)
+        assertEquals(com.opentune.data.history.ListeningHistoryTarget.YOUTUBE_MUSIC, settings.playback.listeningHistoryTarget)
         assertTrue(settings.playback.losslessUnmeteredOnly)
         assertFalse(settings.lyrics.preferWordSynced)
         assertFalse(settings.lyrics.romanize)

@@ -154,11 +154,13 @@ fun HomeScreen(
     }
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
-    // Signing in or out changes what YouTube Music recommends; fetch again then.
-    var seenSignedIn by remember { mutableStateOf(signedIn) }
-    LaunchedEffect(signedIn) {
-        if (signedIn != seenSignedIn) {
-            seenSignedIn = signedIn
+    val savedAccounts by AccountStore.accounts.collectAsState()
+    val homeAccount = signedIn to savedAccounts.firstOrNull { it.active }?.id
+    // Switching between two signed-in accounts must refresh recommendations too.
+    var seenAccount by remember { mutableStateOf(homeAccount) }
+    LaunchedEffect(homeAccount) {
+        if (homeAccount != seenAccount) {
+            seenAccount = homeAccount
             MusicRepository.refreshHomeRecommendations()
             loader.reload(keepContent = true)
         }
