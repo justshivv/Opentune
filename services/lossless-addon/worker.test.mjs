@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAddon, flacInfo } from './worker.mjs';
+import { createAddon, flacInfo, withPause, PAUSED_RETRY_S } from './worker.mjs';
 const req = path => new Request(`https://addon.example${path}`);
 const json = (value, init) => new Response(JSON.stringify(value), init);
 function flac({ rate = 96000, bits = 24, channels = 2, duration = 180 } = {}) {
@@ -193,4 +193,22 @@ test('NetEase does not label MP3/HTML as FLAC and preserves resolver refusal and
   assert.match((await (await denied(req(`/netease/stream/${id}`))).json()).error, /refused access/);
   const empty = createAddon({ fetcher: async () => json({ code: 200, result: { songCount: 0 } }) });
   assert.deepEqual((await (await empty(req('/netease/search?q=missing'))).json()).tracks, []);
+});
+
+test('a paused add-on turns searches and streams away before anything else runs', async () => {
+  let reached = 0;
+  const inner = async () => { reached++; return json({ ok: true }); };
+  const paused = withPause(inner), env = { PAUSED: 'true' };
+  for (const path of ['/monochrome/search?q=x', '/netease/stream/abc', '/search?q=x']) {
+    const r = await paused(req(path), env);
+    assert.equal(r.status, 503);
+    assert.equal(r.headers.get('X-OpenTune-Paused'), '1');
+    assert.equal(r.headers.get('Retry-After'), String(PAUSED_RETRY_S));
+    assert.equal((await r.json()).paused, true);
+  }
+  assert.equal(reached, 0);
+  assert.equal((await paused(req('/monochrome/manifest.json'), env)).status, 200);
+  assert.equal((await paused(req('/auth/policy'), env)).status, 200);
+  assert.equal((await paused(req('/monochrome/search?q=x'), { PAUSED: 'false' })).status, 200);
+  assert.equal(reached, 3);
 });

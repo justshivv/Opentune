@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { currentConfig } from '@/config/remote';
 import { endpoint, flacInfo, manifestOf, matches, publicHttps, qualityParams, type Addon, type CatalogTrack, type Recording } from '@opentune/shared/addons';
 import { BridgeCallError } from '@opentune/shared/bridge';
 import { getBridge } from '@/extension/bridge';
@@ -62,7 +63,7 @@ export async function fetchJson(url: string): Promise<unknown> {
     try {
       if ((corsBlocked.get(origin) ?? 0) > Date.now()) throw new TypeError('Blocked by CORS');
       const headers = await verificationHeaders(url);
-      const r = await fetch(url, { headers, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(10_000) });
+      const r = await fetch(url, { headers, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(currentConfig().data.network.timeoutMs) });
       status = r.status;
       retryAfter = r.headers.get('retry-after') ?? '';
       const reader = r.body?.getReader(); if (!reader) throw new Error('Empty response');
@@ -138,7 +139,7 @@ function setLocked(id: string, locked: boolean) {
  * song needs them. Cached manifests make this cheap.
  */
 export async function checkAccess(): Promise<void> {
-  await Promise.all(useAddons.getState().sources.filter(s => s.enabled).map(async source => {
+  await Promise.all(useAddons.getState().sources.filter(s => s.enabled && !s.ownerOff).map(async source => {
     try { await fetchJson(source.url); setLocked(source.id, false); }
     catch (error) { if (isPermission(error)) setLocked(source.id, true); }
   }));
@@ -217,7 +218,7 @@ export async function findLossless(recording: Recording): Promise<LosslessSearch
   // A new song: rate limits from the last one are forgotten, and every source is asked again.
   const song = `${recording.title}\n${recording.artist}\n${recording.duration}`;
   if (song !== cooldownSong) { cooldownSong = song; cooldown.clear(); }
-  const sources = useAddons.getState().sources.filter(s => s.enabled);
+  const sources = useAddons.getState().sources.filter(s => s.enabled && !s.ownerOff);
   useAddons.setState({ status: `Checking ${sources.map(s => s.name).join(', ')}…` });
   const results = await Promise.allSettled(sources.map(source => checkSource(source, recording)));
   const ranked: LosslessResult[] = []; const notes: string[] = []; let transient = false;

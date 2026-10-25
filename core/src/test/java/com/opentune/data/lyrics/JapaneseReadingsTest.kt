@@ -24,4 +24,12 @@ class JapaneseReadingsTest {
         assertFalse(JapaneseReadings.wanted(listOf("我爱你")))
         assertFalse(JapaneseReadings.wanted(listOf("plain words")))
     }
+
+    @Test fun syllableSpacesAreJoinedBeforeReading() {
+        // As a syllable-timed source sends them; read apart, 別 was "betsu" and 的 "mato".
+        org.junit.Assert.assertEquals("繰り返す出会いと別れに", JapaneseReadings.joined("繰 り 返す 出会い と 別 れ に"))
+        org.junit.Assert.assertEquals("個人的な嵐は誰かの", JapaneseReadings.joined(" 個人 的 な 嵐 は 誰 か の "))
+        // Spaces beside Latin words stay.
+        org.junit.Assert.assertEquals("Baby 君が好き yeah", JapaneseReadings.joined("Baby 君 が 好き yeah"))
+    }
 }

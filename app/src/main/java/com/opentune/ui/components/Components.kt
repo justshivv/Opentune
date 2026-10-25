@@ -232,6 +232,35 @@ fun ArtistLinks(
 
 /** One track in a list. Shows animated bars instead of the art overlay while it plays. */
 @OptIn(ExperimentalFoundationApi::class)
+/**
+ * How far in a long track (a podcast episode, a mix, anything kept by
+ * [com.opentune.data.library.ResumePoints]) was left, as a thin bar along the
+ * bottom of its artwork. Nothing for a track that wasn't started or was finished.
+ */
+@Composable
+fun ListenedBar(videoId: String, modifier: Modifier = Modifier) {
+    val long by com.opentune.data.library.ResumePoints.points.collectAsState()
+    val episodes by com.opentune.data.podcasts.Podcasts.progress.collectAsState()
+    val fraction = remember(videoId, long, episodes) {
+        val episode = episodes[videoId]
+        when {
+            episode != null -> if (episode.finished || com.opentune.data.podcasts.Podcasts.resumeAt(videoId) == null) 0f else episode.fraction
+            else -> long[videoId]?.fraction ?: 0f
+        }
+    }
+    if (fraction <= 0.01f) return
+    Box(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 4.dp)
+            .height(3.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.45f)),
+    ) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).clip(CircleShape).background(Color.White))
+    }
+}
+
 @Composable
 fun SongListItem(
     song: Song,
@@ -250,6 +279,11 @@ fun SongListItem(
     swipeToQueue: Boolean = true,
     /** Inside one of your own playlists: the long-press menu can take the song out of it. */
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    /**
+     * Inside one of your own playlists: swiping toward the start of the line
+     * takes the song out, and toward the end adds it to the queue.
+     */
+    onSwipeRemove: (() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -270,8 +304,9 @@ fun SongListItem(
     SwipeToQueueRow(
         title = song.title,
         onPlayNext = onPlayNext.takeIf { swipes },
-        onAddToQueue = onAddToQueue.takeIf { swipes },
+        onAddToQueue = onAddToQueue.takeIf { swipes || onSwipeRemove != null },
         modifier = modifier.fillMaxWidth(),
+        onRemove = onSwipeRemove,
     ) { swipeActions ->
         Row(
             modifier = Modifier
@@ -293,6 +328,7 @@ fun SongListItem(
             } else {
                 Box(Modifier.size(52.dp)) {
                     Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.fillMaxSize())
+                    ListenedBar(song.videoId, Modifier.align(Alignment.BottomCenter))
                     if (isCurrent) {
                         Box(
                             Modifier.fillMaxSize().clip(MaterialTheme.shapes.small).background(Color.Black.copy(alpha = 0.45f)),

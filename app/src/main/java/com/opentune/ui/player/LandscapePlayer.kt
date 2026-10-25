@@ -231,7 +231,7 @@ private fun rememberLyricLines(lyrics: LyricsState, position: () -> Long): PeekL
 @Composable
 private fun LyricsPeek(lines: PeekLines, next: Boolean, animate: Boolean, onClick: () -> Unit) {
     val ink = MaterialTheme.colorScheme.onSurface
-    val now = com.opentune.ui.theme.LyricsTextStyle.copy(fontSize = 22.sp, lineHeight = 27.sp)
+    val now = com.opentune.ui.theme.LyricsTextStyle.copy(fontFamily = MaterialTheme.typography.bodyLarge.fontFamily, fontSize = 22.sp, lineHeight = 27.sp)
     val after = now.copy(fontSize = 17.sp, lineHeight = 22.sp)
     androidx.compose.animation.AnimatedContent(
         targetState = lines,

@@ -293,5 +293,24 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
     }
   };
 }
+/** How long a paused add-on tells apps to stay away, in seconds. */
+export const PAUSED_RETRY_S = 6 * 3600;
+/**
+ * With PAUSED = "true" in wrangler.toml, searches and streams are turned away
+ * at once, before the request limiter and device verification, so a paused
+ * add-on costs one cheap reply per request and calls no Durable Object.
+ * Manifests, health and sign-in still answer, so apps can still list it and
+ * the deployment check still runs.
+ */
+export function withPause(handler) {
+  return async (request, env = {}) => {
+    if (env.PAUSED !== 'true' || request.method === 'OPTIONS') return handler(request, env);
+    const parts = new URL(request.url).pathname.split('/').filter(Boolean);
+    if (Object.hasOwn(sources, parts[0])) parts.shift();
+    if (parts[0] !== 'search' && parts[0] !== 'stream') return handler(request, env);
+    return json({ error: 'Paused by its owner', paused: true }, 503,
+      { 'Retry-After': String(PAUSED_RETRY_S), 'X-OpenTune-Paused': '1', 'Access-Control-Expose-Headers': 'Retry-After, X-OpenTune-Paused' });
+  };
+}
 const handler = createAddon();
-export default { fetch: withAbuseProtection(withAppVerification(handler)) };
+export default { fetch: withPause(withAbuseProtection(withAppVerification(handler))) };

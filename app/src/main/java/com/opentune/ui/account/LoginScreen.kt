@@ -29,9 +29,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.opentune.data.account.AccountStore
-import com.opentune.ui.components.GlassBackButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PlayCircle
 
 private const val MUSIC = "https://music.youtube.com"
+private const val DESTROY_AFTER_MS = 1_500L
 private const val SIGN_IN_URL =
     "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=" +
         "https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F"
@@ -53,10 +55,31 @@ fun LoginScreen(onDone: () -> Unit) {
     var unavailable by remember { mutableStateOf(false) }
     DisposableEffect(Unit) { onDispose { gone.set(true) } }
     val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    // The page is left once, however many ways ask at the same moment (the back key, the
+    // back arrow, a sign-in finishing): a second leave popped the page under this one too.
+    val left = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val leave = { if (!gone.get() && left.compareAndSet(false, true)) onDone() }
+    val web = remember { java.util.concurrent.atomic.AtomicReference<WebView?>(null) }
+    // Back steps back through Google's pages first, and leaves only from the first one.
+    androidx.activity.compose.BackHandler {
+        val page = web.get()
+        if (page != null && !left.get() && page.canGoBack()) page.goBack() else leave()
+    }
 
-    Box(Modifier.fillMaxSize()) {
+    SignInPage(
+        service = "YouTube Music",
+        brand = YouTubeMusicRed,
+        icon = Icons.Rounded.PlayCircle,
+        gives = "Your playlists, liked songs, history and recommendations",
+        loading = loading,
+        onBack = leave,
+        unavailable = if (unavailable) {
+            "Sign-in needs Android System WebView, which isn't working on this device. Update or turn it on in the " +
+                "Play Store, or sign in on your phone and use Link a device to sign this one in."
+        } else null,
+    ) { webModifier ->
         AndroidView(
-            modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = 72.dp),
+            modifier = webModifier,
             factory = { context ->
                 val view = runCatching {
                     CookieManager.getInstance().setAcceptCookie(true)
@@ -87,46 +110,29 @@ fun LoginScreen(onDone: () -> Unit) {
                             // Closed once this callback has returned: leaving from inside it destroyed
                             // the WebView while it was still running the callback, and on some WebView
                             // versions that crashed the app outright, signed in or not.
-                            main.post { if (!gone.get()) onDone() }
+                            main.post { leave() }
                         }
                     }
                     loadUrl(SIGN_IN_URL)
+                    web.set(this)
                 }
             },
             // Taken down only once it's off the screen: destroying it while still attached,
             // as leaving the page did, crashed some WebView versions on the way back.
             onRelease = { view ->
                 gone.set(true)
+                web.set(null)
                 (view as? WebView)?.run {
                     stopLoading()
+                    onPause()
                     webViewClient = WebViewClient()
                     (parent as? android.view.ViewGroup)?.removeView(this)
-                    // On the next turn of the main thread, never inside one of its own callbacks.
-                    main.post { runCatching { destroy() } }
+                    // Well after the page has gone: the frosted bars draw a copy of what's under
+                    // them, and a frame still holding the page's last picture must never draw a
+                    // WebView already destroyed. Never inside one of its own callbacks either.
+                    main.postDelayed({ runCatching { destroy() } }, DESTROY_AFTER_MS)
                 }
             },
         )
-        if (unavailable) {
-            Text(
-                "Sign-in needs Android System WebView, which isn't working on this device. Update or turn it on in the " +
-                    "Play Store, or sign in on your phone and use Link a device to sign this one in.",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
-            )
-        }
-        Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 8.dp)) {
-            Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                GlassBackButton(onDone)
-                Text(
-                    "Sign in to YouTube Music",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            }
-            AnimatedVisibility(loading) {
-                LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
-            }
-        }
     }
 }

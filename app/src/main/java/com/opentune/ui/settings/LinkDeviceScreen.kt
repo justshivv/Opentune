@@ -253,6 +253,7 @@ private fun TvSteps(
                 Buttons({ SheetButton("Sign in", onClick = onSignIn, tone = SheetTone.Primary) })
             }
         }
+        Buttons({ SheetButton("TV information", onClick = { open(com.opentune.data.config.RemoteConfig.current.tv) }, icon = Icons.AutoMirrored.Rounded.OpenInNew) })
         Note(Icons.Rounded.Lock, "Both on the same Wi-Fi. The code lasts two minutes, and the session goes straight to the TV, encrypted. Each keeps its own library.")
     }
     DeviceCard("Is this the TV?", "Show a code here and scan it from a signed-in phone.", compact = true) {
@@ -366,6 +367,6 @@ private fun Note(icon: ImageVector, text: String) {
     }
 }
 
-private const val WEB_PLAYER = "https://justshivv.github.io/Opentune/player/"
+private val WEB_PLAYER get() = com.opentune.data.config.RemoteConfig.current.web
 private const val RELEASES = "https://github.com/justshivv/Opentune/releases/latest"
 private const val SOURCE = "https://github.com/justshivv/Opentune/tree/main/wear"

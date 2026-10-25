@@ -28,4 +28,12 @@ class RomanizerTest {
         assertEquals("sayonara", out[1])
         assertEquals(true, out[0]!!.startsWith("君"))
     }
+
+    @Test fun noMarkIsLeftWithoutALetter() {
+        // An Urdu Punjabi line (Noor Jehan, "Nahar Wale Pool") once came out as
+        // "sady akʰa◌ w̃chw◌ ñyndra◌ ãuda kai", the marks drawn on dotted circles.
+        val out = Romanizer.romanize("ساڈی اکھاں وچوں نیندراں اُڈا کے")!!
+        assertEquals(true, out.all { it.code < 0x80 })
+        assertEquals("sady akha wchw nyndra auda kai", Romanizer.plain("sady akʰa\u0303 w\u0303chw\u25CC ñyndra\u0303 ãuda kai"))
+    }
 }

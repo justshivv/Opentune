@@ -1,11 +1,10 @@
 package com.opentune.data.lyrics
 
 import com.opentune.data.Http
+import com.opentune.data.metadata.AppleWebToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -26,15 +25,9 @@ import okhttp3.Request
 internal object Paxsenix {
     private const val LYRICS = "https://lyrics.paxsenix.org/apple-music/lyrics"
     private const val APPLE_SEARCH = "https://amp-api.music.apple.com/v1/catalog/us/search"
-    private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
     /** Paxsenix says "busy, retry later" under load; one more try after this. */
     private const val BUSY_RETRY_MS = 1_500L
     private val json = Json { ignoreUnknownKeys = true }
-    private val INDEX_SCRIPT = Regex("""/assets/index~[^"]+\.js""")
-    private val TOKEN = Regex("""eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+""")
-
-    private val tokenLock = Mutex()
-    @Volatile private var token: String? = null
 
     suspend fun lookup(title: String, artist: String, durationMs: Long): Lyrics? {
         val cleaned = TrackNameCleaner.clean(title, artist)
@@ -61,7 +54,7 @@ internal object Paxsenix {
     private fun isBusy(body: String) = body.contains("\"error\":true") && body.contains("busy", ignoreCase = true)
 
     private suspend fun appleId(title: String, artist: String, durationMs: Long): String? {
-        val bearer = appleToken() ?: return null
+        val bearer = AppleWebToken.get() ?: return null
         val url = APPLE_SEARCH.toHttpUrl().newBuilder()
             .addQueryParameter("term", "$title $artist".trim())
             .addQueryParameter("types", "songs")
@@ -70,7 +63,7 @@ internal object Paxsenix {
         val body = get(url, bearer)
         if (body == null) {
             // A token Apple has since turned over: read a fresh one next time.
-            token = null
+            AppleWebToken.forget()
             return null
         }
         val songs = appleSongs(body)
@@ -96,24 +89,9 @@ internal object Paxsenix {
         }
     }
 
-    private suspend fun appleToken(): String? = token ?: tokenLock.withLock {
-        token ?: run {
-            val page = get("https://music.apple.com/us/new") ?: return@run null
-            val script = INDEX_SCRIPT.find(page)?.value ?: return@run null
-            get("https://music.apple.com$script")?.let { TOKEN.find(it)?.value }
-        }?.also { token = it }
-    }
-
     private suspend fun get(url: String, bearer: String? = null): String? = runInterruptible(Dispatchers.IO) {
-        val request = Request.Builder().url(url).header("User-Agent", USER_AGENT)
-            .apply {
-                if (bearer != null) {
-                    header("Authorization", "Bearer $bearer")
-                    header("Origin", "https://music.apple.com")
-                    header("Referer", "https://music.apple.com/")
-                }
-            }
-            .build()
+        val request = if (bearer != null) AppleWebToken.request(url, bearer)
+            else Request.Builder().url(url).header("User-Agent", AppleWebToken.USER_AGENT).build()
         Http.client.newCall(request).execute().use { if (it.isSuccessful || it.code == 503) it.body?.string() else null }
     }
 }

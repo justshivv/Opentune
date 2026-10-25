@@ -73,3 +73,7 @@ Verification is bound to the exact HTTPS origin of OpenTune's Worker, not to sou
 ## NetEase source from the Lossless Bridge investigation
 
 Deployed on 24 October 2026: [OpenTune NetEase manifest](https://opentune-lossless-addon.create-a-new-site-with-sites.workers.dev/netease/manifest.json). This independently queries NetEase's catalogue and the public Meting resolver used by Lossless Bridge, then validates the returned native FLAC. Measured source samples: 295 at 24-bit/44.1 kHz and Blinding Lights at 16-bit/44.1 kHz. It shares the existing strict first-party verification; it does not wrap Lossless Bridge or affect public add-ons. See [investigation and limitations](../../docs/lossless-bridge-research.md).
+
+## App content and configuration
+
+The VPS version also serves an authenticated owner dashboard and signed client configuration. See [remote configuration](../../docs/remote-configuration.md). This is a Node/VPS feature; the Cloudflare Worker deployment does not host this dashboard.

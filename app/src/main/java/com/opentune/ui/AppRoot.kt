@@ -181,7 +181,7 @@ fun AppRoot(vm: PlayerViewModel) {
     }
 
     // A newer release on GitHub, offered with an Update button. Checked each
-    // time the app comes to the front and hourly while it stays there (the
+    // time the app comes to the front and periodically while it stays there (the
     // check itself goes online at most every few hours), since a music app
     // is rarely started afresh.
     val appContext = androidx.compose.ui.platform.LocalContext.current
@@ -195,7 +195,9 @@ fun AppRoot(vm: PlayerViewModel) {
                 if (com.opentune.data.settings.AppSettings.ui.value.checkForUpdates && update == null) {
                     update = com.opentune.data.UpdateCheck.checkIfDue(appContext)
                 }
-                kotlinx.coroutines.delay(60 * 60 * 1000L)
+                com.opentune.data.config.RemoteConfig.refresh()
+                com.opentune.data.addons.CommunityAddons.refresh()
+                kotlinx.coroutines.delay(5 * 60 * 1000L)
             }
         }
     }
@@ -216,8 +218,9 @@ fun AppRoot(vm: PlayerViewModel) {
         askStar = invite != null
     }
     val starCard: @Composable () -> Unit = {
+        val runtime by com.opentune.data.config.RemoteConfig.state.collectAsState()
         androidx.compose.animation.AnimatedVisibility(
-            visible = askStar && !playerOpen && update == null && whatsNew.isEmpty(),
+            visible = askStar && runtime.communityPrompts && !playerOpen && update == null && whatsNew.isEmpty(),
             enter = androidx.compose.animation.slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { it } + fadeIn(),
             exit = androidx.compose.animation.slideOutVertically(tween(220)) { it } + fadeOut(tween(180)),
         ) {
@@ -629,6 +632,9 @@ fun AppRoot(vm: PlayerViewModel) {
                             onAddToQueue = vm::addToQueue,
                             onBrowse = { item: BrowseItem -> nav.openBrowse(item.browseId, item.type) },
                             onRecognize = { nav.navigate("recognize") },
+                            onOpenList = { list ->
+                                list.playlistId?.let { nav.navigate("playlist/${Uri.encode(it)}") } ?: list.browseId?.let { nav.openBrowse(it) }
+                            },
                             explore = if (separateExplore) null else ({
                                 ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, showHeader = false)
                             }),
@@ -655,7 +661,10 @@ fun AppRoot(vm: PlayerViewModel) {
                             onTogether = { nav.navigate("together") },
                         )
                     }
-                    composable("login") { LoginScreen(onDone = { nav.popBackStack() }) }
+                    composable("login") { entry ->
+                        // Only while it's still the page in front: a late second call mustn't close the one under it.
+                        LoginScreen(onDone = { if (nav.currentBackStackEntry == entry) nav.popBackStack() })
+                    }
                     composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })

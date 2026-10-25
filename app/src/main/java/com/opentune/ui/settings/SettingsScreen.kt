@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -422,6 +423,7 @@ private fun settingsSections(
     val pendingUpdate by UpdateCheck.pending.collectAsState()
     var updateBytes by remember { mutableStateOf(0L) }
     var playerStyleDialog by remember { mutableStateOf(false) }
+    var fontDialog by remember { mutableStateOf(false) }
     var recommenderDialog by remember { mutableStateOf(false) }
     var followedDialog by remember { mutableStateOf(false) }
     var hiddenDialog by remember { mutableStateOf(false) }
@@ -450,6 +452,10 @@ private fun settingsSections(
     val ui by AppSettings.ui.collectAsState()
     val lib by AppSettings.library.collectAsState()
     val metered = remember { AppSettings.onMeteredNetwork() }
+    val spotifyConnected by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+    val spotifyProblem by com.opentune.ui.spotify.SpotifyConnection.problem.collectAsState()
+    val spotifySync by com.opentune.data.spotify.SpotifySync.status.collectAsState()
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { com.opentune.ui.spotify.SpotifyConnection.refresh() } }
     var qualityDialog by remember { mutableStateOf<Boolean?>(null) } // true = Wi-Fi, false = mobile
     var audioAddons by remember { mutableStateOf(false) }
     if (audioAddons) AudioAddonsSheet { audioAddons = false }
@@ -514,6 +520,7 @@ private fun settingsSections(
     if (supportDialog) com.opentune.ui.components.SupportDialog(onDismiss = { supportDialog = false })
     if (followedDialog) FollowedArtistsDialog(onDismiss = { followedDialog = false })
     if (hiddenDialog) HiddenDialog(onDismiss = { hiddenDialog = false })
+    if (fontDialog) com.opentune.ui.theme.FontSettingsSheet { fontDialog = false }
     if (playerStyleDialog) {
         ChoiceSheet(
             title = "Player layout",
@@ -633,7 +640,8 @@ private fun settingsSections(
                 SheetButton("Sign out", tone = SheetTone.Danger, onClick = {
                     confirmSignOut = false
                     AccountStore.signOut()
-                    android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                    // Every cookie goes, so Spotify's sign-in is put back afterwards.
+                    com.opentune.ui.spotify.SpotifyConnection.keepingSpotify { android.webkit.CookieManager.getInstance().removeAllCookies(it) }
                 })
             },
             dismissButton = { SheetButton("Cancel", onClick = { confirmSignOut = false }, closes = true) },
@@ -687,6 +695,35 @@ private fun settingsSections(
                         NavRow("Add another account", onSignIn, summary = "Sign in to a second YouTube Music account and switch between them", icon = Icons.Rounded.PersonAdd)
                     }
                 } else null,
+                Entry("Spotify account", "spotify connect sign in login account playlists library sync disconnect") {
+                    if (spotifyConnected) {
+                        Column {
+                            SettingRow(
+                                "Spotify",
+                                summary = when {
+                                    spotifySync.running && spotifySync.current != null -> "Connected · bringing over ${spotifySync.current} (${spotifySync.index} of ${spotifySync.count})"
+                                    spotifySync.running -> "Connected · reading your Spotify library…"
+                                    spotifySync.error != null -> "Connected · ${spotifySync.error}. Tap to try again"
+                                    spotifySync.lastSynced > 0 -> "Connected · playlists in Library, checked " +
+                                        android.text.format.DateUtils.getRelativeTimeSpanString(spotifySync.lastSynced) + ". Tap to check now"
+                                    else -> "Connected · tap to bring your playlists into Library"
+                                },
+                                leading = { SpotifyMark() },
+                                enabled = !spotifySync.running,
+                                onClick = { com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true) },
+                            )
+                            RowDivider()
+                            SettingRow("Disconnect Spotify", summary = "Signs out of Spotify inside OpenTune. Playlists already brought over stay in Library", icon = Icons.Rounded.Close, onClick = { com.opentune.ui.spotify.SpotifyConnection.disconnect() })
+                        }
+                    } else {
+                        NavRow(
+                            "Connect Spotify",
+                            { context.startActivity(android.content.Intent(context, com.opentune.ui.spotify.SpotifyConnectActivity::class.java)) },
+                            summary = spotifyProblem?.let { "$it. Sign in again" } ?: "Your playlists in Library, each song's Canvas, and suggestions made for you",
+                            leading = { SpotifyMark() },
+                        )
+                    }
+                },
                 Entry("Link a device", "tv television web browser computer cast speaker chromecast watch wear together qr pairing sign in with your phone platforms") {
                     NavRow("Link a device", onOpenDevices, summary = "Sign in your TV, the web player, speakers and more", icon = Icons.Rounded.Devices)
                 },
@@ -910,6 +947,9 @@ private fun settingsSections(
                         }
                     })
                 },
+                Entry("Fonts & readability", "font typeface text weight bold thin ttf otf import custom") {
+                    NavRow("Fonts & readability", { fontDialog = true }, summary = "Built-in fonts, text weight and your own font file", icon = Icons.Rounded.TextFields, value = theme.font.label)
+                },
                 Entry("Pure black", "oled amoled") {
                     ToggleRow("Pure black", theme.pureBlack, { v -> AppSettings.updateTheme { it.copy(pureBlack = v) } }, summary = "Black backgrounds with neutral gray cards in dark theme", icon = Icons.Rounded.Wallpaper)
                 },
@@ -947,6 +987,9 @@ private fun settingsSections(
                 Entry("Page transitions", "navigation animation screen open back slide fade zoom rise") {
                     NavRow("Page transitions", { pageTransitionDialog = true }, summary = ui.pageTransition.summary, icon = Icons.Rounded.SwapHoriz, value = ui.pageTransition.label)
                 },
+                Entry("Double-tap to skip 10 seconds", "double tap cover seek forward back rewind ten seconds gesture") {
+                    ToggleRow("Double-tap to skip 10 seconds", ui.doubleTapSeek, { v -> AppSettings.updateUi { it.copy(doubleTapSeek = v) } }, summary = "Double-tap the left of the cover to go back 10 seconds, the right to go on", icon = Icons.Rounded.TouchApp)
+                },
                 Entry("Glow under the cover", "glow shadow light cover colour bass pulse") {
                     ToggleRow("Glow under the cover", ui.coverGlow, { v -> AppSettings.updateUi { it.copy(coverGlow = v) } }, summary = "A soft light in the cover's colours under it, swelling a little with the bass", icon = Icons.Rounded.AutoAwesome)
                 },
@@ -956,7 +999,7 @@ private fun settingsSections(
                 Entry("Player opening", "now playing sheet open close animation spring smooth bouncy snappy") {
                     NavRow("Player opening", { playerMotionDialog = true }, summary = ui.playerMotion.summary, icon = Icons.Rounded.UnfoldMore, value = ui.playerMotion.label)
                 },
-                Entry("Player background", "mesh gradient echo glow colours") {
+                Entry("Player background", "mesh gradient echo glow colours pure black oled amoled") {
                     SettingRow("Player background", icon = Icons.Rounded.Wallpaper, below = {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PlayerBackground.entries.forEach { b ->
@@ -1010,7 +1053,34 @@ private fun settingsSections(
                     ToggleRow("Show the quality label", ui.sourcePill, { v -> AppSettings.updateUi { it.copy(sourcePill = v) } }, summary = "Shows quality and upgrade progress below the seek bar; tap for the full signal path", icon = Icons.Rounded.HighQuality)
                 },
                 Entry("Album covers", "artwork cover musicbrainz cover art archive video thumbnail") {
-                    ToggleRow("Album covers from MusicBrainz", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "Shows the album's cover in the player instead of a video frame, and for local files without one", icon = Icons.Rounded.Album)
+                    ToggleRow("Sharper album covers", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "The player shows the album's cover from Apple Music, Deezer or the Cover Art Archive, sharper than YouTube's and in place of a video frame", icon = Icons.Rounded.Album)
+                },
+                Entry("Animated covers", "apple music motion artwork video moving album cover animated") {
+                    ToggleRow("Animated covers", ui.animatedCovers, { v -> AppSettings.updateUi { it.copy(animatedCovers = v) } }, summary = "When Apple Music has a moving cover for the album, it loops silently in the player's cover", icon = Icons.Rounded.Animation)
+                    if (ui.animatedCovers) {
+                        RowDivider()
+                        SettingRow("Animated cover quality", summary = when (ui.motionQuality) {
+                            com.opentune.data.settings.MotionQuality.LOW -> "Up to 768 px, about 1.5 Mbps. Lightest on data"
+                            com.opentune.data.settings.MotionQuality.MEDIUM -> "Up to 1080 px, about 4 Mbps"
+                            com.opentune.data.settings.MotionQuality.HIGH -> "Up to 2160 px, about 12 Mbps. Sharpest, uses the most data"
+                        }, icon = Icons.Rounded.HighQuality, below = {
+                            PillSegmented(com.opentune.data.settings.MotionQuality.entries, ui.motionQuality, { it.label }, { v -> AppSettings.updateUi { it.copy(motionQuality = v) } })
+                        })
+                    }
+                },
+                Entry("Spotify", "spotify canvas video loop background likes mixes home") {
+                    // Connecting is in Account; these only do something while Spotify is connected.
+                    val off = if (spotifyConnected) null else "Connect Spotify in Account first"
+                    ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = off ?: "When a song has a Canvas on Spotify, it loops silently behind the player", icon = Icons.Rounded.Animation, enabled = spotifyConnected)
+                    RowDivider()
+                    ToggleRow("Frosted glass over Canvas", ui.canvasFrost, { v -> AppSettings.updateUi { it.copy(canvasFrost = v) } }, summary = off ?: "From the song's title down, the Canvas blurs gradually into frosted glass so the controls stay readable", icon = Icons.Rounded.BlurOn, enabled = spotifyConnected && ui.spotifyCanvas)
+                    RowDivider()
+                    ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = off ?: "A song you like here goes into your Spotify Liked Songs too, so Spotify's suggestions learn from it", icon = Icons.Rounded.Favorite, enabled = spotifyConnected)
+                    RowDivider()
+                    ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = off ?: "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = Icons.Rounded.Album, enabled = spotifyConnected)
+                },
+                Entry("Animated covers on Wi-Fi only", "mobile data metered save data wifi animated covers canvas video") {
+                    ToggleRow("Animated covers on Wi-Fi only", ui.animatedCoversWifiOnly, { v -> AppSettings.updateUi { it.copy(animatedCoversWifiOnly = v) } }, summary = "Animated covers and Canvas don't load on mobile data", icon = Icons.Rounded.Wifi, enabled = ui.animatedCovers || (spotifyConnected && ui.spotifyCanvas))
                 },
                 Entry("Reduce animation", "motion") {
                     ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes decorative motion and simplifies player and lyric transitions", icon = Icons.Rounded.Animation)
@@ -1177,7 +1247,7 @@ private fun settingsSections(
                     NavRow("Download quality", { downloadQualityDialog = true }, icon = Icons.Rounded.Download, value = lib.downloadQuality.label)
                 },
                 Entry("Download on Wi-Fi only", "mobile data metered") {
-                    ToggleRow("Download on Wi-Fi only", lib.downloadWifiOnly, { v -> AppSettings.updateLibrary { it.copy(downloadWifiOnly = v) } }, summary = "Waits for Wi-Fi before saving songs", icon = Icons.Rounded.Wifi)
+                    ToggleRow("Download on Wi-Fi only", lib.downloadWifiOnly, { v -> AppSettings.updateLibrary { it.copy(downloadWifiOnly = v) }; com.opentune.data.download.Downloads.requeueWaiting(context) }, summary = "Waits for Wi-Fi before saving songs", icon = Icons.Rounded.Wifi)
                 },
                 Entry("Stream downloads when online", "offline file internet play quality") {
                     val pbd by AppSettings.playback.collectAsState()
@@ -1447,3 +1517,10 @@ private fun outputSummary(context: Context, float: Boolean): String {
 
 private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 1024f) else "$mb MB"
 
+/** Spotify's green disc, for its rows in Account. */
+@Composable
+private fun SpotifyMark() {
+    Box(Modifier.size(40.dp).clip(CircleShape).background(com.opentune.ui.account.SpotifyGreen), contentAlignment = Alignment.Center) {
+        Icon(Icons.Rounded.GraphicEq, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(22.dp))
+    }
+}

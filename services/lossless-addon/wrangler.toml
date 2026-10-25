@@ -7,6 +7,9 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 # First-party catalogue and stream resolution require verified request proofs.
 VERIFICATION_MODE = "strict"
+# "true" turns every search and stream away with HTTP 503 (Paused by its owner)
+# and tells apps to stay away for six hours. Set "false" and deploy to resume.
+PAUSED = "true"
 WEB_ORIGINS = "https://justshivv.github.io"
 
 [[durable_objects.bindings]]

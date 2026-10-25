@@ -13,7 +13,7 @@ export default function AudioAddonsPage() {
   const [url, setUrl] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false);
   const sources = useAddons(s => s.sources);
   const locked = useAddons(s => s.locked);
-  const waiting = sources.filter(s => s.enabled && locked.includes(s.id));
+  const waiting = sources.filter(s => s.enabled && !s.ownerOff && locked.includes(s.id));
   // The owner's published sources, looked at afresh each time this page opens; then which hosts
   // still need the extension's OK, again on coming back from the extension's tab.
   useEffect(() => {

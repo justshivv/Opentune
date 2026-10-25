@@ -39,6 +39,7 @@ object Core {
             }
         })
         AppSettings.init(app)
+        com.opentune.data.config.RemoteConfig.init(app)
         com.opentune.data.addons.AddonStore.init(app)
         com.opentune.data.addons.AddonOutput.init(app)
         com.opentune.data.addons.AddonStore.onChanged = com.opentune.data.lossless.ExternalStreams::retryLookups
@@ -63,7 +64,10 @@ object Core {
         // The waveform seek bar is gone; drop the waveforms an earlier version saved.
         java.io.File(app.filesDir, "waveforms").takeIf { it.exists() }?.let { dir -> Thread { dir.deleteRecursively() }.start() }
         com.opentune.data.podcasts.Podcasts.init(app)
+        com.opentune.data.library.ResumePoints.init(app)
         AlbumCovers.init(app)
+        com.opentune.data.spotify.SpotifyWebPlayer.init(app)
+        com.opentune.data.spotify.SpotifySync.init(app)
         AutoEq.init(app)
         com.opentune.data.library.LibraryArtwork.init(app)
         LibraryStore.init(app)

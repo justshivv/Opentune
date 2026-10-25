@@ -8,7 +8,9 @@ import org.json.JSONObject
 import java.util.UUID
 
 /** URL paths may contain private access tokens. Store locally and never include them in diagnostics. */
-data class AudioAddon(val key: String, val base: String, val manifest: AddonManifest, val enabled: Boolean = true, val admin: Boolean = false)
+data class AudioAddon(val key: String, val base: String, val manifest: AddonManifest, val enabled: Boolean = true, val admin: Boolean = false,
+    /** An admin source its owner turned off in the published list: nothing is sent to it, whatever the listener's switch says. */
+    val ownerOff: Boolean = false)
 object AddonStore {
     private var preferences: android.content.SharedPreferences? = null
     private val state = MutableStateFlow<List<AudioAddon>>(emptyList())
@@ -22,7 +24,7 @@ object AddonStore {
         state.value = runCatching {
             val a = JSONArray(preferences?.getString("items", "[]"))
             (0 until a.length()).map { i -> val e = a.getJSONObject(i)
-                AudioAddon(e.getString("key"), AddonProtocol.normalize(e.getString("base")), AddonProtocol.manifest(e.getJSONObject("manifest").toString()), e.optBoolean("enabled", true), e.optBoolean("admin", false)) }
+                AudioAddon(e.getString("key"), AddonProtocol.normalize(e.getString("base")), AddonProtocol.manifest(e.getJSONObject("manifest").toString()), e.optBoolean("enabled", true), e.optBoolean("admin", false), e.optBoolean("ownerOff", false)) }
         }.getOrDefault(emptyList())
         // Retire obsolete verification credentials without touching saved music.
         context.getSharedPreferences("spotiflac", Context.MODE_PRIVATE).edit().clear().apply()
@@ -61,7 +63,7 @@ object AddonStore {
         val next = retained + incoming.filter { it.key !in currentKeys }
         if (next != state.value) save(next)
     }
-    fun usable(addon: AudioAddon): Boolean = addon.enabled && (!addon.manifest.outputRequired || outputAllowed())
+    fun usable(addon: AudioAddon): Boolean = addon.enabled && !addon.ownerOff && (!addon.manifest.outputRequired || outputAllowed())
     private fun save(value: List<AudioAddon>, bump: Boolean = true) {
         val array = JSONArray()
         value.forEach { e ->
@@ -72,7 +74,7 @@ object AddonStore {
             if ("quality" !in e.manifest.defaults && e.manifest.qualities.isNotEmpty()) settings.put(JSONObject().put("key", "quality").put("options", JSONArray(e.manifest.qualities.map { JSONObject().put("value", it) })))
             val manifest = JSONObject().put("id", e.manifest.id).put("name", e.manifest.name).put("version", e.manifest.version)
                 .put("allowDownloads", e.manifest.downloads).put("checkValidLossless", e.manifest.outputRequired).put("settings", settings)
-            array.put(JSONObject().put("key", e.key).put("base", e.base).put("enabled", e.enabled).put("admin", e.admin).put("manifest", manifest))
+            array.put(JSONObject().put("key", e.key).put("base", e.base).put("enabled", e.enabled).put("admin", e.admin).put("ownerOff", e.ownerOff).put("manifest", manifest))
         }
         check(preferences?.edit()?.putString("items", array.toString())?.commit() == true) { "Could not save add-ons." }
         state.value = value

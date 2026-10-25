@@ -93,13 +93,13 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
                             val blocked = addon.manifest.outputRequired && !AddonStore.outputAllowed()
                             Row(Modifier.fillMaxWidth().clickable { expanded = if (expanded == addon.key) null else addon.key }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Text("${index + 1}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Icon(Icons.Rounded.Extension, null, tint = if (addon.enabled && !blocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(Icons.Rounded.Extension, null, tint = if (addon.enabled && !blocked && !addon.ownerOff) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(addon.manifest.name, style = MaterialTheme.typography.titleMedium)
                                     Text(if (addon.admin) "Added by admin" else "Your source", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                    Text(checks[addon.key] ?: if (blocked) "Needs a supported wired, USB or HDMI output" else if (!addon.enabled) "Disabled" else "Lossless · ${if (addon.manifest.downloads) "Streaming & downloads" else "Streaming only"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(checks[addon.key] ?: if (addon.ownerOff) "Turned off by the admin for now" else if (com.opentune.data.addons.AddonResolver.paused(addon.key)) "Paused by its owner for now" else if (blocked) "Needs a supported wired, USB or HDMI output" else if (!addon.enabled) "Disabled" else "Lossless · ${if (addon.manifest.downloads) "Streaming & downloads" else "Streaming only"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Switch(addon.enabled, { AddonStore.enable(addon.key, it) })
+                                Switch(addon.enabled && !addon.ownerOff, { AddonStore.enable(addon.key, it) }, enabled = !addon.ownerOff)
                                 Icon(Icons.Rounded.DragHandle, null, Modifier.size(48.dp)
                                     .semantics {
                                         contentDescription = "Reorder ${addon.manifest.name}"

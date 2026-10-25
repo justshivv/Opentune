@@ -266,4 +266,19 @@ class LyricsQualityTest {
         assertTrue(LyricsQuality.sameArtist("River Choir", "River Choir feat. Someone"))
         assertFalse(LyricsQuality.sameArtist("River Choir", "Copper Band"))
     }
+
+    @Test fun htmlEntitiesAreReadAsTheCharacters() {
+        // As some sources sent them (BABYMONSTER, Kobo Kanaeru, BLUE ENCOUNT).
+        assertEquals("No matter what I'm gonna", LyricsQuality.unescape("No matter what I&#x27;m gonna"))
+        assertEquals("Apa pantas 'tuk", LyricsQuality.unescape("Apa pantas &#x27;tuk"))
+        assertEquals("\"強さ\"は", LyricsQuality.unescape("&quot;強さ&quot;は"))
+        assertEquals("Rock & roll <3", LyricsQuality.unescape("Rock &amp; roll &lt;3"))
+        assertEquals("It's", LyricsQuality.unescape("It&#39;s"))
+        // Not an entity: left as written.
+        assertEquals("Tom & Jerry; &unknownthing;", LyricsQuality.unescape("Tom & Jerry; &unknownthing;"))
+        val line = LyricLine(0, 1000, "You&#x27;ll", listOf(LyricWord("You&#x27;ll", 0, 1000)), wordSynced = true)
+        val tidied = LyricsQuality.unescaped(Lyrics.Synced(listOf(line), "test")) as Lyrics.Synced
+        assertEquals("You'll", tidied.lines[0].text)
+        assertEquals("You'll", tidied.lines[0].words[0].text)
+    }
 }

@@ -17,7 +17,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.ui.draw.blur
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.scaleOut
@@ -191,6 +190,10 @@ data class PlayerUiState(
     val shuffleMode: com.opentune.playback.ShuffleMode = if (shuffle) com.opentune.playback.ShuffleMode.ON else com.opentune.playback.ShuffleMode.OFF,
     /** The queue came from a playlist or album, so the shuffle button offers smart shuffle. */
     val smartShuffleAvailable: Boolean = false,
+    /** Apple's animated cover for the song, to loop in its cover. */
+    val coverVideo: com.opentune.data.covers.AppleMotionArt.Motion? = null,
+    /** Spotify's Canvas for the song, to loop behind the player. */
+    val canvasVideo: String? = null,
 )
 
 class PlayerActions(
@@ -239,6 +242,8 @@ fun PlayerScreen(
     val shown = current
     val source by vm.source.collectAsState()
     val audioFormat by vm.audioFormat.collectAsState()
+    val coverVideo by vm.coverVideo.collectAsState()
+    val canvasVideo by vm.canvasVideo.collectAsState()
     val actions = remember(vm, onCollapse) {
         PlayerActions(
             togglePlay = vm::togglePlayPause,
@@ -259,7 +264,7 @@ fun PlayerScreen(
         PlayerUiState(
             shown, isPlaying, isBuffering, hasNext, shuffle, repeat, duration,
             lyrics, queue, currentIndex, upNext, sound, theme, ui, source, audioFormat,
-            shuffleMode, smartShuffleAvailable,
+            shuffleMode, smartShuffleAvailable, coverVideo, canvasVideo,
         ),
         position = rememberPlaybackPosition(vm),
         buffered = vm::bufferedPositionMs,
@@ -411,6 +416,8 @@ fun PlayerLayout(
     val cardCornerPx = with(LocalDensity.current) { 40.dp.toPx() }
     val backdrop = rememberLayerBackdrop()
     val style = state.ui.playerStyle
+    val apple = style == PlayerStyle.APPLE_MUSIC
+    val amoled = theme.playerBackground == com.opentune.data.settings.PlayerBackground.AMOLED
     val minimal = style == PlayerStyle.MINIMAL
     // Docked in a short window (an unfolded phone on its side), the extras
     // under the controls make way so the cover keeps some size.
@@ -419,17 +426,30 @@ fun PlayerLayout(
     // On its side the player has its own layout.
     val landscape = !docked && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Full-screen cover only fits the layouts built around a plain square cover.
-    val fullCover = !landscape && state.ui.fullScreenCover && pane == Pane.COVER && (style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    val fullCover = !landscape && !amoled && (apple || state.ui.fullScreenCover) && pane == Pane.COVER && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     // Where the cover area ends, measured from the top of the player, so a
     // full-screen cover can run down to the title on any screen height.
     var playerCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     var coverBottomPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     // The plain cover flies, square or edge to edge; the vinyl, cassette and other designs just change view.
-    val fullStyle = !landscape && state.ui.fullScreenCover && (style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    val fullStyle = !landscape && !amoled && (apple || state.ui.fullScreenCover) && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     val flies = !state.ui.reduceAnimation && !docked && !landscape &&
         style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
-        style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST
+        style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST &&
+        // A Canvas fills the page where the full-screen cover would be: there's no cover to fly to.
+        !(fullStyle && state.canvasVideo != null)
+    // The playing cover, fetched at both sizes as soon as it's known: with a Canvas showing
+    // nothing else draws it, so the small cover in the lyrics and queue header and the cover
+    // flying to it showed an empty frame until it had loaded.
+    val prefetchContext = LocalContext.current
+    LaunchedEffect(current.thumbnailUrl) {
+        val loader = coil3.SingletonImageLoader.get(prefetchContext)
+        for (px in listOf(ROW_ART_PX, com.opentune.data.model.PLAYER_ART_PX)) {
+            val url = current.thumbnailUrl.artworkAt(px) ?: continue
+            loader.enqueue(coil3.request.ImageRequest.Builder(prefetchContext).data(url).build())
+        }
+    }
     // Where no cover flies (a full-screen cover, the other designs), the cover
     // page itself follows a swipe up: 0 at rest, 1 as far as it goes. Let go
     // past the mark, the lists come in from where it was left, not after.
@@ -554,7 +574,7 @@ fun PlayerLayout(
         }
     }
 
-    PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme) {
+    PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme, neutral = apple) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -690,12 +710,18 @@ fun PlayerLayout(
                     playing = state.isPlaying,
                     change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                     index = state.currentIndex,
+                    songId = current.videoId,
+                    canvas = state.canvasVideo,
+                    titleTop = with(LocalDensity.current) { bigTitle?.top?.takeIf { it > 0f }?.toDp() },
+                    // Lyrics and the queue are read over the whole page, so the Canvas frosts top to bottom.
+                    canvasBehindText = pane != Pane.COVER,
+                    cinematic = apple,
                 )
             }
 
             // Behind the lyrics, the cover's colours drift slowly.
             androidx.compose.animation.AnimatedVisibility(
-                visible = pane == Pane.LYRICS && !landscape,
+                visible = pane == Pane.LYRICS && !landscape && !amoled && !apple,
                 enter = fadeIn(tween(220)),
                 exit = fadeOut(tween(180)),
                 modifier = Modifier.fillMaxSize(),
@@ -887,6 +913,7 @@ fun PlayerLayout(
                                 seeks = lyricsSeeks,
                             )
                         } else if (p == Pane.COVER) {
+                            val seekBy: (Long) -> Unit = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) }
                             Box(Modifier.weight(1f).fillMaxWidth().then(if (docked) Modifier.fitSquare() else Modifier), contentAlignment = Alignment.Center) {
                                 when {
                                     fullCover ->
@@ -918,10 +945,14 @@ fun PlayerLayout(
                                             moving = state.ui.movingCover && !state.ui.reduceAnimation,
                                             change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                                             index = state.currentIndex,
-                                            onSeekBy = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) },
-                                            glow = state.ui.coverGlow && !state.ui.reduceAnimation,
+                                            onSeekBy = seekBy.takeIf { state.ui.doubleTapSeek },
+                                            glow = state.ui.coverGlow && !state.ui.reduceAnimation && !amoled && !apple,
+                                            video = state.coverVideo,
                                         )
                                 }
+                                // The plain cover has the taps built in; every other design gets them over it here.
+                                val ownTaps = !fullCover && style !in listOf(PlayerStyle.VINYL, PlayerStyle.CASSETTE, PlayerStyle.HALO, PlayerStyle.POLAROID)
+                                if (state.ui.doubleTapSeek && !ownTaps) SeekTaps(seekBy, 1f, Modifier.matchParentSize())
                             }
                             Spacer(Modifier.height(16.dp))
                             TitleRow(
@@ -1082,7 +1113,7 @@ fun PlayerLayout(
                         SkipToChorus { nextChorus?.let { actions.seekTo((it - 250).coerceAtLeast(0)) } }
                     }
                 }
-                if (pane != Pane.LYRICS && state.ui.syncedLyrics && !minimal && roomy && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
+                if (pane != Pane.LYRICS && state.ui.syncedLyrics && !minimal && !apple && roomy && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
                     LyricPreview(state.lyrics, lyricsPosition, onOpen = { paneName = Pane.LYRICS.name }, Modifier.padding(top = 4.dp))
                 }
                 Spacer(Modifier.height(8.dp))
@@ -1552,10 +1583,16 @@ private fun TogetherPill(room: Together.Room, onClick: () -> Unit) {
 private fun Modifier.focusIn(animate: Boolean): Modifier {
     val v = remember { androidx.compose.animation.core.Animatable(if (animate) 0f else 1f) }
     LaunchedEffect(Unit) { if (animate) v.animateTo(1f, tween(200, easing = FastOutSlowInEasing)) }
-    val blur = (1f - v.value) * 2f
-    return this
-        .graphicsLayer { val s = 0.96f + 0.04f * v.value; scaleX = s; scaleY = s }
-        .then(if (blur > 0.2f) Modifier.blur(blur.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded) else Modifier)
+    // Everything is read while drawing, so the page itself isn't recomposed on each frame.
+    return this.graphicsLayer {
+        val t = v.value
+        val s = 0.96f + 0.04f * t
+        scaleX = s; scaleY = s
+        val radius = (1f - t) * 2.dp.toPx()
+        renderEffect = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && radius > 0.5f)
+            androidx.compose.ui.graphics.BlurEffect(radius, radius, androidx.compose.ui.graphics.TileMode.Decal) else null
+        clip = false
+    }
 }
 
 

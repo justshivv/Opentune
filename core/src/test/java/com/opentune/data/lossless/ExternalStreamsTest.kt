@@ -56,5 +56,18 @@ class ExternalStreamsTest {
         assertEquals(next, ExternalStreams.cached("race"))
         assertEquals(next.url, ExternalStreams.resolve("race", next.key))
     }
-}
 
+    @Test
+    fun theAddOnsAnswerIsKeptWhenJioSaavnAnswersLater() {
+        // The FLAC search and JioSaavn's quick lookup run side by side; the later one used to replace the other.
+        ExternalStreams.report("both-answer", "Qobuz: no matching recording\nFLAC: no verified matching stream available")
+        ExternalStreams.reportSaavn("both-answer", "JioSaavn: no matching 320 kbps recording (title, artists, album and duration)")
+        assertEquals(
+            "Qobuz: no matching recording\nFLAC: no verified matching stream available\nJioSaavn: no matching 320 kbps recording (title, artists, album and duration)",
+            ExternalStreams.selectionDetail("both-answer"),
+        )
+        // The same JioSaavn line from the FLAC search's own ask isn't shown twice.
+        ExternalStreams.report("both-answer", "FLAC: no verified matching stream available\nJioSaavn: no matching 320 kbps recording (title, artists, album and duration)")
+        assertEquals(2, ExternalStreams.selectionDetail("both-answer")!!.lines().size)
+    }
+}

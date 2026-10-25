@@ -25,7 +25,9 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
- * Spotify's own "Recommended" songs, with no account or key.
+ * Spotify's own recommendations. With Spotify connected, [personal] gives
+ * Spotify's song radio for the signed-in listener; otherwise [radio] gives
+ * the "Recommended" songs on public song pages, with no account or key.
  *
  * A song is first found on Spotify through ListenBrainz's public lookup,
  * which maps a title and artist to Spotify track ids. Every public song
@@ -46,6 +48,36 @@ object SpotifyRadio {
 
     /** A recommended song and its own Spotify id, for following on. */
     data class Pick(val id: String, val track: Spotify.Track)
+
+    private class Mix(val tracks: List<Spotify.Track>, val at: Long)
+    /** Radios already read, by seed, for a while: a queue that keeps extending asks once. */
+    private val mixes = ConcurrentHashMap<String, Mix>()
+    private const val MIX_TTL_MS = 30 * 60_000L
+
+    /**
+     * Spotify's song radio for the listener signed in to Spotify (fifty songs,
+     * each with its length), or null when Spotify isn't connected or the
+     * song can't be found there for certain. The seed is found with Spotify's
+     * own search on title, artist and, when known, length.
+     */
+    suspend fun personal(title: String, artist: String, album: String?, durationMs: Long): List<Spotify.Track>? {
+        val cookie = com.opentune.data.spotify.SpotifyWebPlayer.account() ?: return null
+        val key = "${title.lowercase()}|${artist.lowercase()}|${durationMs / 1000}"
+        mixes[key]?.takeIf { System.currentTimeMillis() - it.at < MIX_TTL_MS }?.let { return it.tracks }
+        return try {
+            val seed = com.opentune.data.spotify.SpotifyWebPlayer.findTrack(title, artist, album, durationMs, cookie) ?: return null
+            val playlist = com.opentune.data.spotify.SpotifyWebPlayer.songRadio(seed.uri, cookie) ?: return null
+            val (items, _) = com.opentune.data.spotify.SpotifyLibrary.tracks(cookie, playlist)
+            // The radio opens with the seed itself.
+            items.filter { it.uri != seed.uri }.map { it.track }
+                .also { mixes[key] = Mix(it, System.currentTimeMillis()) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "personal radio for $artist – $title failed", e)
+            null
+        }
+    }
 
     /** Spotify's picks after the song called [title] by [artist], or empty when Spotify doesn't know it. */
     suspend fun radio(title: String, artist: String, album: String?): List<Spotify.Track> = coroutineScope {

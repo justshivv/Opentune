@@ -67,6 +67,16 @@ data class LocalPlaylist(
     val privacy: PlaylistPrivacy? = null,
     /** The account (its email) the copy on YouTube Music was made in; null when not known. */
     val account: String? = null,
+    /**
+     * The Spotify playlist this one is a copy of (its id, or
+     * [com.opentune.data.spotify.SpotifyLibrary.LIKED_ID]); null for every
+     * other. Its songs are replaced when Spotify's change. See [com.opentune.data.spotify.SpotifySync].
+     */
+    val spotifyId: String? = null,
+    /** Spotify's version of it when last brought over, so an unchanged one isn't read again. */
+    val spotifyRevision: String? = null,
+    /** Spotify's cover for it. */
+    val coverUrl: String? = null,
 ) {
     /** Kept in step with YouTube Music, or waiting for its copy to be made there. */
     val synced: Boolean get() = remoteId != null || privacy != null
@@ -217,6 +227,8 @@ object LibraryStore {
                     .onFailure { Log.w("LibraryStore", "Couldn't rate ${song.videoId} on YouTube Music", it) }
             }
         }
+        // And in Spotify's Liked Songs, when Spotify is connected.
+        com.opentune.data.spotify.SpotifyLikes.liked(song, liked)
     }
 
     // Every change to a playlist below is made here at once and, for one kept
@@ -267,6 +279,51 @@ object LibraryStore {
         mirror(id) { remote -> PlaylistEdit(PlaylistEdit.Kind.REMOVE, id, remote, videoIds = listOf(gone.videoId), setVideoId = gone.setVideoId) }
     }
 
+    /** A song just taken out of a playlist, which [undoRemove] can put back where it was. */
+    class Removed internal constructor(val playlistId: String, val index: Int, val song: SongRef, internal val token: Long)
+
+    /** How long a removal waits before it reaches YouTube Music, so Undo can call it off there. */
+    const val UNDO_MS = 8_000L
+    private var removals = 0L
+    private val waiting = HashMap<Long, kotlinx.coroutines.Job>()
+
+    /**
+     * Takes the song at [index] out of playlist [id] here at once, and on
+     * YouTube Music only once [UNDO_MS] has passed without [undoRemove].
+     */
+    @Synchronized
+    fun removeUndoably(id: String, index: Int): Removed? {
+        val gone = playlist(id)?.songs?.getOrNull(index) ?: return null
+        editPlaylist(id) { p -> p.copy(songs = p.songs.filterIndexed { i, _ -> i != index }) }
+        val removed = Removed(id, index, gone, ++removals)
+        if (isYouTubeId(gone.videoId)) {
+            waiting[removed.token] = scope.launch {
+                kotlinx.coroutines.delay(UNDO_MS)
+                synchronized(this@LibraryStore) {
+                    if (waiting.remove(removed.token) == null) return@launch
+                    mirror(id) { remote -> PlaylistEdit(PlaylistEdit.Kind.REMOVE, id, remote, videoIds = listOf(gone.videoId), setVideoId = gone.setVideoId) }
+                }
+            }
+        }
+        return removed
+    }
+
+    /** Puts [removed] back at its place. Called late, the removal already reached YouTube Music, so it's added there again. */
+    @Synchronized
+    fun undoRemove(removed: Removed) {
+        val p = playlist(removed.playlistId) ?: return
+        val at = removed.index.coerceIn(0, p.songs.size)
+        val songs = p.songs.toMutableList().apply { add(at, removed.song) }
+        editPlaylist(removed.playlistId) { it.copy(songs = songs) }
+        val held = waiting.remove(removed.token)
+        held?.cancel()
+        if (held != null || !isYouTubeId(removed.song.videoId)) return
+        val id = removed.playlistId
+        mirror(id) { remote -> PlaylistEdit(PlaylistEdit.Kind.ADD, id, remote, videoIds = listOf(removed.song.videoId)) }
+        val before = songs.drop(at + 1).firstOrNull { isYouTubeId(it.videoId) }?.videoId ?: return
+        mirror(id) { remote -> PlaylistEdit(PlaylistEdit.Kind.MOVE, id, remote, videoIds = listOf(removed.song.videoId), before = before) }
+    }
+
     @Synchronized
     fun movePlaylistItem(id: String, from: Int, to: Int) {
         val p = playlist(id) ?: return
@@ -312,6 +369,30 @@ object LibraryStore {
     }
 
     fun playlist(id: String): LocalPlaylist? = _playlists.value.firstOrNull { it.id == id }
+
+    /**
+     * The copy of Spotify playlist [spotifyId]: made at the end of the list the
+     * first time, its name, cover and songs replaced after that.
+     */
+    fun putSpotifyPlaylist(spotifyId: String, name: String, songs: List<Song>, revision: String?, coverUrl: String?) {
+        val refs = songs.distinctBy { it.videoId }.map(SongRef::of)
+        update { d ->
+            val existing = d.playlists.firstOrNull { it.spotifyId == spotifyId }
+            if (existing == null) {
+                val p = LocalPlaylist(UUID.randomUUID().toString(), name, refs, spotifyId = spotifyId, spotifyRevision = revision, coverUrl = coverUrl)
+                d.copy(playlists = d.playlists + p)
+            } else {
+                d.copy(playlists = d.playlists.map {
+                    if (it.id == existing.id) it.copy(name = name, songs = refs, spotifyRevision = revision, coverUrl = coverUrl) else it
+                })
+            }
+        }
+    }
+
+    /** Takes away the copies of Spotify playlists no longer in the Spotify library. */
+    fun dropSpotifyPlaylists(keep: Set<String>) = update { d ->
+        d.copy(playlists = d.playlists.filter { it.spotifyId == null || it.spotifyId in keep })
+    }
 
     private fun editPlaylist(id: String, t: (LocalPlaylist) -> LocalPlaylist) = update { d ->
         d.copy(playlists = d.playlists.map { if (it.id == id) t(it) else it })

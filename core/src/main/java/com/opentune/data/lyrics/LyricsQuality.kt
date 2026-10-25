@@ -43,9 +43,47 @@ internal object LyricsQuality {
 
     // ---- Tidying ----
 
-    fun tidy(lyrics: Lyrics, durationMs: Long): Lyrics = when (lyrics) {
-        is Lyrics.Plain -> lyrics.copy(text = tidyPlain(lyrics.text))
-        is Lyrics.Synced -> lyrics.copy(lines = tidy(lyrics.lines, durationMs))
+    fun tidy(lyrics: Lyrics, durationMs: Long): Lyrics = when (val l = unescaped(lyrics)) {
+        is Lyrics.Plain -> l.copy(text = tidyPlain(l.text))
+        is Lyrics.Synced -> l.copy(lines = tidy(l.lines, durationMs))
+    }
+
+    /**
+     * [lyrics] with HTML entities read: some sources send lines escaped for a
+     * web page, so "You&#x27;ll" and "&quot;強さ&quot;" showed as written.
+     */
+    fun unescaped(lyrics: Lyrics): Lyrics = when (lyrics) {
+        is Lyrics.Plain -> if ('&' in lyrics.text) lyrics.copy(text = unescape(lyrics.text)) else lyrics
+        is Lyrics.Synced -> if (lyrics.lines.none { '&' in it.text || '&' in it.background.orEmpty() || it.words.any { w -> '&' in w.text } }) lyrics
+        else lyrics.copy(lines = lyrics.lines.map { line ->
+            line.copy(
+                text = unescape(line.text),
+                background = line.background?.let(::unescape),
+                words = line.words.map { if ('&' in it.text) it.copy(text = unescape(it.text)) else it },
+            )
+        })
+    }
+
+    private val ENTITY = Regex("""&(#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[a-zA-Z]{2,8});""")
+    private val NAMED = mapOf(
+        "quot" to "\"", "apos" to "'", "amp" to "&", "lt" to "<", "gt" to ">", "nbsp" to " ",
+        "lsquo" to "\u2018", "rsquo" to "\u2019", "ldquo" to "\u201C", "rdquo" to "\u201D",
+        "hellip" to "\u2026", "ndash" to "\u2013", "mdash" to "\u2014",
+    )
+
+    /** "&#x27;", "&#39;", "&quot;" and the other common entities as the characters they stand for; anything else left as it is. */
+    internal fun unescape(text: String): String = ENTITY.replace(text) { m ->
+        val name = m.groupValues[1]
+        val code = when {
+            name.startsWith("#x") || name.startsWith("#X") -> name.drop(2).toIntOrNull(16)
+            name.startsWith("#") -> name.drop(1).toIntOrNull()
+            else -> null
+        }
+        when {
+            code != null && Character.isValidCodePoint(code) && code != 0 -> String(Character.toChars(code))
+            code == null -> NAMED[name] ?: m.value
+            else -> m.value
+        }
     }
 
     /** Plain text without stray LRC timestamps (some sources leave them in) and with at most one blank line in a row. */

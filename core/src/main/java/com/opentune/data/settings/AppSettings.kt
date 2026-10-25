@@ -49,11 +49,13 @@ enum class PlayerBackground(val label: String) {
     /** The cover's main colour at the top, deepening to dark, with a faint glow under the controls. */
     GRADIENT("Gradient"),
     ECHO_GLOW("Echo glow"),
+    AMOLED("AMOLED black"),
 }
 
 /** How the full-screen player is laid out. */
 @Serializable
 enum class PlayerStyle(val label: String, val summary: String) {
+    APPLE_MUSIC("Apple Music inspired", "Edge-to-edge artwork, quiet surfaces and crisp white controls"),
     CLASSIC("Classic", "Big cover, title, lyric preview and every control"),
     VINYL("Vinyl", "The cover turns as a record while the song plays"),
     LYRICS_FIRST("Lyrics first", "A small cover on top and the lyrics taking the rest"),
@@ -61,6 +63,16 @@ enum class PlayerStyle(val label: String, val summary: String) {
     CASSETTE("Cassette", "A tape whose reels turn and wind on as the song plays"),
     HALO("Halo", "A round cover inside a ring of moving bars"),
     POLAROID("Polaroid", "The cover as an instant photo, swaying gently"),
+}
+
+@Serializable
+enum class AppFont(val label: String) {
+    SYSTEM("System sans"), OUTFIT("Outfit"), SERIF("Serif"), MONO("Monospace"), CUSTOM("Imported font"),
+}
+
+@Serializable
+enum class TextWeight(val label: String, val minimum: Int) {
+    REGULAR("Regular", 400), MEDIUM("Medium", 500), BOLD("Bold", 700),
 }
 
 @Serializable
@@ -76,6 +88,12 @@ data class ThemeSettings(
     /** Re-seed the whole app from the playing track's artwork. */
     val colorFromArtwork: Boolean = true,
     val playerBackground: PlayerBackground = PlayerBackground.MESH,
+    val font: AppFont = AppFont.SYSTEM,
+    val textWeight: TextWeight = TextWeight.MEDIUM,
+    /** Private copied file ID, never an external storage path or URI. */
+    val customFontId: String = "",
+    val customFontName: String = "",
+
 )
 
 /** Reverb presets map onto android.media.audiofx.PresetReverb's. */
@@ -357,10 +375,26 @@ data class InterfaceSettings(
     val sourcePill: Boolean = true,
     /** A soft light in the cover's colour under the player's cover. */
     val coverGlow: Boolean = true,
+    /** Double-tapping the cover's left or right side goes back or on ten seconds. */
+    val doubleTapSeek: Boolean = true,
     /** While the seek bar is dragged, the lyric line at that point shows above the finger. */
     val lyricScrubPreview: Boolean = true,
-    /** Proper album covers from MusicBrainz for music videos and local files without art. */
+    /** Sharp album covers from Apple Music, Deezer or the Cover Art Archive in the player. */
     val albumCovers: Boolean = true,
+    /** Apple Music's animated album covers loop, muted, in the player's cover. */
+    val animatedCovers: Boolean = true,
+    /** How sharp Apple's animated covers play; sharper uses more data. */
+    val motionQuality: MotionQuality = MotionQuality.MEDIUM,
+    /** Animated covers and Spotify Canvas only load on Wi-Fi or another unmetered network. */
+    val animatedCoversWifiOnly: Boolean = true,
+    /** With Spotify connected, its Canvas loops behind the player. */
+    val spotifyCanvas: Boolean = true,
+    /** Over a Canvas, the player turns to frosted glass from the title down. */
+    val canvasFrost: Boolean = true,
+    /** With Spotify connected, songs liked here are saved to Spotify's Liked Songs too. */
+    val spotifySaveLikes: Boolean = true,
+    /** With Spotify connected, Home shows Spotify's mixes made for the listener. */
+    val spotifyMixes: Boolean = true,
     val lyricsAnimation: LyricsAnimation = LyricsAnimation.FLUID,
     /** Lyrics text size, as a fraction of the standard size. */
     val lyricsTextScale: Float = 1f,
@@ -513,7 +547,7 @@ enum class VolumeLevel(val label: String, val summary: String, val offsetDb: Flo
 @Serializable
 enum class Recommender(val label: String, val summary: String) {
     YOUTUBE("YouTube Music", "YouTube Music's own radio for the last song"),
-    SPOTIFY("Spotify", "The songs Spotify recommends after the last one, found on YouTube Music"),
+    SPOTIFY("Spotify", "Spotify's song radio for the last song, made for you when Spotify is connected, found on YouTube Music at the same length"),
     JIOSAAVN("JioSaavn", "JioSaavn's picks after the last song, strong on Indian music, found on YouTube Music"),
 }
 
@@ -537,6 +571,14 @@ enum class DockMotion(val label: String, val summary: String) {
     MINIMIZE("Minimize", "Like iOS 26: the tabs shrink to the open one, with the song in a slim bar beside it"),
     CAPSULE("Capsule", "The tabs and the song gather into one small capsule in the middle"),
     SINK("Sink", "The tabs sink away into a blur and the song settles into their place"),
+}
+
+/** How sharp an animated cover plays: the largest picture and the most data a second it may use. */
+@Serializable
+enum class MotionQuality(val label: String, val maxPx: Int, val maxBitrate: Int) {
+    LOW("Low", 768, 1_500_000),
+    MEDIUM("Medium", 1080, 4_000_000),
+    HIGH("High", 2160, 12_000_000),
 }
 
 /** How synced lyrics move as the song plays. */

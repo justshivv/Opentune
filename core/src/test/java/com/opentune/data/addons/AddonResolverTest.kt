@@ -20,6 +20,11 @@ class AddonResolverTest {
         assertEquals("checking audio header: connection timed out", AddonResolver.failureDescription("checking audio header", java.net.SocketTimeoutException("https://private.example/token")))
         assertEquals("searching catalogue: HTTP 429 · rate limited; retry in 12s", AddonResolver.failureDescription("searching catalogue", AddonHttp.Failure(429, 12)))
         assertEquals("resolving audio: invalid JSON response", AddonResolver.failureDescription("resolving audio", org.json.JSONException("private query token")))
+        val badUrl = assertThrows(AddonStreamException::class.java) {
+            AddonProtocol.stream("""{"url":"https://user:secret@private.example/file?token=secret","quality":"LOSSLESS"}""")
+        }
+        assertEquals("resolving audio: missing or invalid HTTPS audio URL", AddonResolver.failureDescription("resolving audio", badUrl))
+        assertEquals("resolving audio: missing or unsupported audio codec", AddonResolver.failureDescription("resolving audio", AddonStreamException(AddonStreamError.UNSUPPORTED_CODEC)))
     }
 
     private val song = Song(videoId = "test-song", title = "Wo Noor", artist = "AP Dhillon", thumbnailUrl = null)
@@ -75,10 +80,37 @@ class AddonResolverTest {
     }
 
     /** A FLAC header for [bits]-bit, [rate] Hz stereo, three minutes long. */
-    private fun header(bits: Int, rate: Long) = ByteArray(42).apply {
+    private fun header(bits: Int, rate: Long, seconds: Int = 180) = ByteArray(42).apply {
         "fLaC".toByteArray().copyInto(this); this[4] = 0x80.toByte(); this[7] = 34
-        val packed = (rate shl 44) or (1L shl 41) or ((bits - 1).toLong() shl 36) or (rate * 180)
+        val packed = (rate shl 44) or (1L shl 41) or ((bits - 1).toLong() shl 36) or (rate * seconds)
         for (i in 0..7) this[18 + i] = (packed ushr (56 - i * 8)).toByte()
+    }
+
+    @Test fun qualityOnlyStreamIsMeasuredBeforeItCanUpgradePlayback() = runBlocking {
+        add("qobuz")
+        val client = AddonClient("https://qobuz.example/", { url ->
+            when {
+                "manifest.json" in url -> """{"id":"qobuz","name":"Qobuz","allowDownloads":0,"settings":[{"key":"quality","default":"lossless","options":[{"value":"lossless"},{"value":"high"}]}]}"""
+                "/search" in url -> """{"tracks":[{"id":"opaque-id","title":"Wo Noor","artist":"AP Dhillon","duration":180,"format":"flac","audioQuality":"LOSSLESS"}]}"""
+                else -> {
+                    assertTrue(url.contains("quality=lossless"))
+                    """{"url":"https://cdn.example/file","manifest":"none","encrypted":false,"quality":"LOSSLESS"}"""
+                }
+            }
+        })
+        val lines = mutableListOf<String>()
+        val result = AddonResolver.resolve(song, 180000, clientFor = { client }, report = { lines += it },
+            probe = { _, _, _ -> header(24, 44_100) })!!
+        assertEquals(24, result.bits); assertEquals(44100, result.sampleRate)
+        assertEquals("opaque-id", result.trackId)
+        assertTrue(lines.contains("Qobuz: verified FLAC"))
+        // A label cannot make HTML, lossy bytes, or the wrong recording eligible for an upgrade.
+        assertNull(AddonResolver.resolve(song, 180000, clientFor = { client },
+            probe = { _, _, _ -> "<html>not audio</html>".toByteArray() }))
+        assertNull(AddonResolver.resolve(song, 180000, clientFor = { client },
+            probe = { _, _, _ -> header(24, 44_100, seconds = 210) }))
+        // Refreshing the manifest must also preserve its streaming-only policy.
+        assertNull(AddonResolver.resolve(song, 180000, download = true, clientFor = { error("Streaming-only source must not be requested") }))
     }
 
     @Test fun aSlowerBetterAnswerIsNotCutOffButComesLate() = runBlocking {
@@ -203,5 +235,13 @@ class AddonResolverTest {
             } })!!
         assertEquals("first", result.provider)
         assertTrue(calls.any { "second.example" in it })
+    }
+
+    @Test fun aPausedAddonIsLeftAloneForEverySong() {
+        assertFalse(AddonResolver.notePaused("paused-test", AddonHttp.Failure(503)))
+        assertFalse(AddonResolver.paused("paused-test"))
+        assertTrue(AddonResolver.notePaused("paused-test", AddonHttp.Failure(503, 21_600, paused = true)))
+        assertTrue(AddonResolver.paused("paused-test"))
+        assertFalse(AddonResolver.paused("another"))
     }
 }

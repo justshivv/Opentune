@@ -41,6 +41,34 @@ class AddonProtocolTest {
         assertEquals(199400L, result.single().durationMs)
         assertThrows(IllegalStateException::class.java) { AddonProtocol.search("""{"results":[]}""") }
     }
+    @Test fun acceptsQobuzTvResponseWithoutExplicitCodec() {
+        // Captured response shape; the real signed CDN query is deliberately omitted.
+        val stream = AddonProtocol.stream("""{"url":"https://cdn.example/file?expires=123","manifest":"none","encrypted":false,"quality":"LOSSLESS"}""")
+        assertEquals("flac", stream.codec)
+        assertNull(stream.transport)
+        assertNull(stream.bits); assertNull(stream.sampleRate)
+        val m = AddonProtocol.manifest("""{"id":"com.bitchord.qobuz","allowDownloads":0,"settings":[{"key":"quality","default":"lossless","options":[{"value":"lossless"},{"value":"high"},{"value":"low"}]}]}""")
+        assertEquals("lossless", m.parameters("HI_RES_LOSSLESS")["quality"])
+        assertFalse(m.downloads)
+    }
+    @Test fun concreteCodecEvidenceOverridesLosslessLabels() {
+        for (field in listOf("codec", "fileCodec", "format", "mimeType")) {
+            val value = if (field == "mimeType") "audio/aac" else "aac"
+            assertFalse(AddonProtocol.stream("""{"url":"https://cdn.example/file","$field":"$value","quality":"LOSSLESS"}""").lossless)
+        }
+        assertEquals("mp3", AddonProtocol.stream("""{"url":"https://cdn.example/song.mp3?format=flac","quality":"LOSSLESS"}""").codec)
+        for (field in listOf("container", "mimeType")) {
+            val value = if (field == "mimeType") "audio/x-flac; charset=binary" else "flac"
+            assertEquals("flac", AddonProtocol.stream("""{"url":"https://cdn.example/file","$field":"$value"}""").codec)
+        }
+        for (quality in listOf("HI_RES_LOSSLESS", "Hi-Res Lossless", "Lossless · 24-bit / 96 kHz")) {
+            assertEquals("flac", AddonProtocol.stream("""{"url":"https://cdn.example/file","quality":"$quality"}""").codec)
+        }
+        for (quality in listOf("HIGH", "NOT_LOSSLESS", "Losslessish")) {
+            assertThrows(AddonStreamException::class.java) { AddonProtocol.stream("""{"url":"https://cdn.example/file","quality":"$quality"}""") }
+        }
+        assertThrows(AddonStreamException::class.java) { AddonProtocol.stream("""{"url":"https://cdn.example/file","codec":"unsupported","quality":"LOSSLESS"}""") }
+    }
     @Test fun concurrentCallsAreSharedAndMalformedResultsAreNotCached() = runBlocking {
         var calls = 0; var clock = 0L
         val client = AddonClient("https://addon.example/", { calls++; manifest }, { clock })

@@ -265,12 +265,18 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
             val saved = p.songs.count { downloadEntries[it.videoId]?.state == com.opentune.data.download.DownloadState.DONE }
             val where = when {
                 saved > 0 -> "$saved downloaded"
+                p.spotifyId != null -> null
                 signedIn && p.synced -> "on YouTube Music"
                 else -> "on this phone"
             }
-            PlaylistRow(null, p.name, "${p.songs.size} songs · $where", { nav.playlist(p.id) }, Modifier.animateItem(), cover = {
-                com.opentune.ui.components.PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.size(56.dp))
-            })
+            val subtitle = listOfNotNull("${p.songs.size} songs", where).joinToString(" · ")
+            if (p.spotifyId != null && p.coverUrl != null) {
+                PlaylistRow(p.coverUrl, p.name, subtitle, { nav.playlist(p.id) }, Modifier.animateItem(), from = "Spotify")
+            } else {
+                PlaylistRow(null, p.name, subtitle, { nav.playlist(p.id) }, Modifier.animateItem(), cover = {
+                    com.opentune.ui.components.PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.size(56.dp))
+                }, from = if (p.spotifyId != null) "Spotify" else null)
+            }
         }
         // Albums and playlists saved with their heart; one downloaded too is listed once, above.
         items(hearted.filter { h -> savedLists.none { it.first.id == h.browseId } }, key = { "saved:${it.browseId}" }) { h ->
@@ -361,7 +367,16 @@ private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick
 }
 
 @Composable
-private fun PlaylistRow(art: String?, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier, cover: (@Composable () -> Unit)? = null) {
+private fun PlaylistRow(
+    art: String?,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    cover: (@Composable () -> Unit)? = null,
+    /** Where the playlist comes from, as a small tag before [subtitle]. */
+    from: String? = null,
+) {
     Row(
         modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -377,9 +392,30 @@ private fun PlaylistRow(art: String?, title: String, subtitle: String, onClick: 
         }
         Column(Modifier.padding(start = 14.dp).weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (from != null) SourceTag(from, Modifier.padding(end = 6.dp))
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
+}
+
+/** Spotify's green, for the tag on playlists brought over from it. */
+private val SpotifyGreen = androidx.compose.ui.graphics.Color(0xFF1DB954)
+
+/** A small tag naming where a playlist comes from: "Spotify" in Spotify's green. */
+@Composable
+internal fun SourceTag(name: String, modifier: Modifier = Modifier) {
+    Text(
+        name,
+        style = MaterialTheme.typography.labelMedium,
+        color = SpotifyGreen,
+        maxLines = 1,
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(SpotifyGreen.copy(alpha = 0.16f))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
 }
 
 @Composable
@@ -491,7 +527,8 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
             SongListItem(
                 song = when (e.state) {
                     DownloadState.FAILED -> song.copy(durationText = "Failed · tap to retry")
-                    DownloadState.QUEUED, DownloadState.DOWNLOADING -> song.copy(durationText = "Downloading ${(e.progress * 100).toInt()}%")
+                    DownloadState.QUEUED -> song.copy(durationText = if (com.opentune.data.download.Downloads.waitingForWifi(context)) "Waiting for Wi-Fi" else "Waiting")
+                    DownloadState.DOWNLOADING -> song.copy(durationText = "Downloading ${(e.progress * 100).toInt()}%")
                     else -> song
                 },
                 onClick = {
@@ -689,6 +726,17 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     }
     // Where the playlist stands with YouTube Music, under its cover.
     val status: (@Composable () -> Unit)? = when {
+        // A copy of a Spotify playlist: it follows Spotify, not YouTube Music.
+        playlist.spotifyId != null -> ({
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SourceTag("Spotify", Modifier.padding(end = 8.dp))
+                Text(
+                    "Kept in step with your Spotify library",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        })
         !signedIn -> null
         !playlist.synced -> ({
             TextButton(onClick = { savingOnline = true }) {
@@ -750,7 +798,10 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             return@LazyColumn
         }
         item { tools(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
-        itemsIndexed(songs, key = { i, s -> "$i:${s.videoId}" }) { i, song ->
+        // Keyed by the song (and which copy of it), not its place, so a row taken out pops
+        // alone and the rows below slide up rather than every row after it being redrawn.
+        val keys = songKeys(songs)
+        itemsIndexed(songs, key = { i, _ -> keys[i] }) { i, song ->
             SongListItem(
                 song = song,
                 onClick = { actions.playAll(songs, i, false, playlist.name) },
@@ -759,11 +810,25 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 isPlaying = actions.isPlaying,
                 onPlayNext = { actions.playNext(song) },
                 onAddToQueue = { actions.addToQueue(song) },
-                onRemoveFromPlaylist = { LibraryStore.removeFromPlaylist(id, i) },
-                trailing = {
-                    IconButton(onClick = { LibraryStore.removeFromPlaylist(id, i) }) { Icon(Icons.Rounded.Close, "Remove from playlist") }
-                },
+                onRemoveFromPlaylist = { removeWithUndo(id, i) },
+                // Swipe right to add to the queue, left to take it out of the playlist.
+                onSwipeRemove = { removeWithUndo(id, i) },
             )
         }
     }
+}
+
+/** A key for each of [songs] that stays with the song when others are taken out or put back. */
+internal fun songKeys(songs: List<com.opentune.data.model.Song>): List<String> {
+    val seen = HashMap<String, Int>()
+    return songs.map { s ->
+        val copy = seen.merge(s.videoId, 1, Int::plus)!!
+        "${s.videoId}#$copy"
+    }
+}
+
+/** Takes the song at [index] out of playlist [id], with a few seconds to Undo it. */
+private fun removeWithUndo(id: String, index: Int) {
+    val removed = LibraryStore.removeUndoably(id, index) ?: return
+    com.opentune.data.Pills.withAction("Removed \"${removed.song.title}\"", "Undo") { LibraryStore.undoRemove(removed) }
 }

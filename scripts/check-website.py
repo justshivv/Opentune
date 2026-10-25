@@ -36,6 +36,8 @@ def route(request):
             return
         if url.path == '/usage/v1/summary':
             request.fulfill(json=summary, headers=cors)
+        elif url.path == '/usage/v1/addons':
+            request.fulfill(json={'revision': 1, 'sources': []}, headers=cors)
         elif mode == 'legacy':
             request.fulfill(status=404, json={}, headers=cors)
         elif mode == 'failed':

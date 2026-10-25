@@ -190,6 +190,13 @@
             android:theme="@style/Theme.OpenTune"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Spotify's sign-in in its own screen, for Canvas. -->
+        <activity
+            android:name=".ui.spotify.SpotifyConnectActivity"
+            android:exported="false"
+            android:theme="@style/Theme.OpenTune"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- The home-screen widget. -->
         <receiver
             android:name=".widget.NowPlayingWidget"

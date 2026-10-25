@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import worker, { ingest, summary, downloadSql, validateActivity, publicCounts, shortCount, badge } from './worker.mjs';
+import worker, { tooSoon, REPORT_GAP_MS, rememberFor, ingest, summary, downloadSql, validateActivity, publicCounts, shortCount, badge } from './worker.mjs';
 
 function database() {
   const sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));
@@ -320,4 +320,28 @@ test('badge counts are shortened for display',()=>{
   assert.equal(shortCount(1_200_000),'1.2M');
   assert.equal(badge({monthly:5300}).message,'5.3k');
   assert.equal(badge({installations:900},new URLSearchParams('metric=installations')).label,'installs');
+});
+
+test('reports right after the last one from the same installation are turned away unwritten',async()=>{
+  const env={DB:database()},day=new Date().toISOString().slice(0,10);
+  const post=plays=>worker.fetch(new Request('https://example.test/v1/activity',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({installationId:id.replace(/1$/,'9'),days:[{day,version:'0.4.13',plays}]})}),env);
+  assert.equal((await post(1)).status,200);
+  const again=await post(2);
+  assert.equal(again.status,429);assert.equal(again.headers.get('Retry-After'),String(REPORT_GAP_MS/1000));
+  const db={};
+  assert.equal(tooSoon(db,'a',0),false);assert.equal(tooSoon(db,'a',REPORT_GAP_MS-1),true);assert.equal(tooSoon(db,'a',REPORT_GAP_MS),false);
+  assert.equal(tooSoon(db,'b',1),false);
+});
+test('a report with no new plays writes nothing',async()=>{
+  const db=database();
+  await ingest(db,body(4),now);await ingest(db,body(4),now);await ingest(db,body(3),now);
+  assert.equal((await summary(db,now)).totals.plays,4);
+});
+test('public counts are read once in five minutes',async()=>{
+  let reads=0;const db={};
+  const read=async()=>++reads;
+  assert.equal(await rememberFor(db,'k',300000,read,0),1);
+  assert.equal(await rememberFor(db,'k',300000,read,299999),1);
+  assert.equal(await rememberFor(db,'k',300000,read,300000),2);
 });

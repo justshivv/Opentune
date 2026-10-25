@@ -276,7 +276,7 @@ object LyricsRepository {
             LyricsSource.UNISON -> if (!isYouTubeId(videoId)) null else runInterruptible { Unison.lookup(videoId, title, artist, durationMs) }
             LyricsSource.YOUTUBE_CAPTIONS -> if (!isYouTubeId(videoId)) null else YouTubeCaptions.lookup(videoId, durationMs)
             LyricsSource.YOUTUBE_MUSIC -> if (!isYouTubeId(videoId)) null else youTubeMusic(videoId)
-        }
+        }?.let(LyricsQuality::unescaped)
     }
 
     private suspend fun lookup(title: String, artist: String, durationMs: Long): Lyrics? = coroutineScope {

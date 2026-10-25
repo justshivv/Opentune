@@ -77,7 +77,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -684,10 +683,12 @@ private fun LyricLineView(
         tween(if (animation == LyricsAnimation.MINIMAL) 200 else 400),
         label = "lineAlpha",
     )
-    val blur by animateDpAsState(
+    // Set, not animated, and read only while drawing (below): an animated blur was worked
+    // out again on every frame for every visible line each time the song moved to the next
+    // one, which is what made the page stutter. Now each line's blur is redrawn once per
+    // line change, while its fade and size still animate, which are cheap.
+    val blur = androidx.compose.runtime.rememberUpdatedState(
         if (!blurEnabled || isActive || picking) 0.dp else (minOf(abs(distance), 6) * motion.blurPerLine).dp,
-        tween(500),
-        label = "lineBlur",
     )
     // Picking lines, each sits on its own card, the picked ones a shade lighter.
     val card by androidx.compose.animation.animateColorAsState(
@@ -741,7 +742,7 @@ private fun LyricLineView(
             // to nothing inside the buffer. Inside, the line's fade is applied to
             // each glyph drawn (ModulateAlpha), with no buffer of its own to clip.
             .then(
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blur > 0.dp) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurEnabled) {
                     Modifier
                         .layout { measurable, constraints ->
                             val bleed = BLUR_BLEED.roundToPx()
@@ -754,7 +755,13 @@ private fun LyricLineView(
                             val p = measurable.measure(grown)
                             layout((p.width - bleed * 2).coerceAtLeast(0), (p.height - bleed * 2).coerceAtLeast(0)) { p.place(-bleed, -bleed) }
                         }
-                        .blur(blur, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded)
+                        .graphicsLayer {
+                            // Whole pixels only: a radius that changes by a fraction each frame
+                            // makes the blur redraw for nothing a viewer could see.
+                            val radius = kotlin.math.round(blur.value.toPx())
+                            renderEffect = if (radius >= 1f) androidx.compose.ui.graphics.BlurEffect(radius, radius, androidx.compose.ui.graphics.TileMode.Decal) else null
+                            clip = false
+                        }
                         .padding(BLUR_BLEED)
                 } else Modifier,
             )
@@ -999,6 +1006,7 @@ private fun lyricsStyle(): androidx.compose.ui.text.TextStyle {
     val ui = AppSettings.ui.collectAsState().value
     val scale = ui.lyricsTextScale
     return LyricsTextStyle.copy(
+        fontFamily = MaterialTheme.typography.bodyLarge.fontFamily,
         fontSize = LyricsTextStyle.fontSize * scale,
         lineHeight = LyricsTextStyle.lineHeight * scale,
         textAlign = if (ui.lyricsAlign == LyricsAlign.CENTER) TextAlign.Center else TextAlign.Start,

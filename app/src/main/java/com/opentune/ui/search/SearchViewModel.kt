@@ -102,6 +102,10 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
     private val _library = MutableStateFlow<List<com.opentune.data.model.Song>?>(null)
     val library = _library.asStateFlow()
 
+    /** Playlists in the library whose name matches the text so far. */
+    private val _libraryLists = MutableStateFlow<List<LibraryList>>(emptyList())
+    val libraryLists = _libraryLists.asStateFlow()
+
     /** Add-on matches for the text so far; null while there's nothing to search for. */
     private val _addons = MutableStateFlow<UiState<List<AddonHit>>?>(null)
     val addons = _addons.asStateFlow()
@@ -147,7 +151,10 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
         kotlinx.coroutines.flow.combine(_query.map { it.trim() }.distinctUntilChanged().debounce(OTHER_DEBOUNCE_MS), _source) { q, src -> q to src }
             .distinctUntilChanged().collectLatest { (q, src) ->
                 when {
-                    src == SearchSource.LIBRARY -> _library.value = if (q.isEmpty()) null else searchLibrary(q)
+                    src == SearchSource.LIBRARY -> {
+                        _libraryLists.value = if (q.isEmpty()) emptyList() else searchLists(q)
+                        _library.value = if (q.isEmpty()) null else searchLibrary(q)
+                    }
                     src == SearchSource.ADDONS && q.isEmpty() -> _addons.value = null
                     src == SearchSource.ADDONS -> {
                         _addons.value = UiState.Loading
@@ -155,6 +162,29 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
                     }
                 }
             }
+    }
+
+    /**
+     * Your playlists (made here or brought over from Spotify) and the albums and
+     * playlists saved with their heart, every word of [q] in the name; names
+     * that start with it first.
+     */
+    private fun searchLists(q: String): List<LibraryList> {
+        val words = q.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        fun matches(name: String) = name.lowercase().let { n -> words.all { it in n } }
+        val store = com.opentune.data.library.LibraryStore
+        val own = store.playlists.value.filter { matches(it.name) }.map { p ->
+            LibraryList(
+                "pl:${p.id}", p.name,
+                listOfNotNull(if (p.spotifyId != null) "Spotify" else null, "${p.songs.size} songs").joinToString(" · "),
+                p.coverUrl, p.songs.map { it.thumbnailUrl }, playlistId = p.id,
+            )
+        }
+        val saved = store.savedLists.value.filter { matches(it.title) }.map { l ->
+            LibraryList("saved:${l.browseId}", l.title, l.subtitle.ifBlank { "Saved" }, l.thumbnailUrl, emptyList(), browseId = l.browseId)
+        }
+        val start = q.lowercase().trim()
+        return (own + saved).sortedBy { if (it.title.lowercase().startsWith(start)) 0 else 1 }.take(MAX_LIBRARY_LISTS)
     }
 
     /** Liked songs, your playlists, downloads and the Local Music folder, every word of [q] in the title, artist or album. */
@@ -185,7 +215,7 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
     /** Every usable add-on at once; one that fails or is slow is left out rather than holding the rest. */
     private suspend fun searchAddons(q: String): UiState<List<AddonHit>> {
         val store = com.opentune.data.addons.AddonStore
-        val usable = store.addons.value.filter(store::usable)
+        val usable = store.addons.value.filter { store.usable(it) && !com.opentune.data.addons.AddonResolver.paused(it.key) }
         if (usable.isEmpty()) return UiState.Error("Add an audio add-on in Settings › Add-ons to search it here.")
         val found = kotlinx.coroutines.coroutineScope {
             usable.map { addon ->
@@ -195,7 +225,7 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
                             val client = com.opentune.data.addons.AddonClient.forBase(addon.base)
                             val manifest = client.manifest().let { if (addon.admin) it.copy(name = addon.manifest.name) else it }
                             client.search(q, manifest, "LOSSLESS").map { AddonHit(it, addon, manifest) }
-                        }.getOrNull()
+                        }.onFailure { (it as? Exception)?.let { e -> com.opentune.data.addons.AddonResolver.notePaused(addon.key, e) } }.getOrNull()
                     }
                 }
             }.map { it.await() }
@@ -380,3 +410,17 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<SearchResult>>?) = size > 60
     }
 }
+
+/** A playlist or saved album in the library that a search found: one of yours ([playlistId]) or one saved from YouTube Music ([browseId]). */
+data class LibraryList(
+    val key: String,
+    val title: String,
+    val subtitle: String,
+    val coverUrl: String?,
+    /** The songs' covers, for a playlist with no cover of its own. */
+    val songCovers: List<String?>,
+    val playlistId: String? = null,
+    val browseId: String? = null,
+)
+
+private const val MAX_LIBRARY_LISTS = 8

@@ -12,7 +12,8 @@ import kotlin.coroutines.resumeWithException
 /** Bounded requests with cancellation and no ambient cookies or authentication. */
 object AddonHttp {
     private const val USER_AGENT = "BitChord/v1.8.1"
-    class Failure(val status: Int, val retryAfterSeconds: Long = 0) : IOException("Add-on returned HTTP $status")
+    /** [paused]: the add-on said its owner paused it ([retryAfterSeconds] is then how long, up to a day). */
+    class Failure(val status: Int, val retryAfterSeconds: Long = 0, val paused: Boolean = false) : IOException(if (paused) "Add-on paused by its owner" else "Add-on returned HTTP $status")
     private val client by lazy { Http.client.newBuilder()
         .cookieJar(CookieJar.NO_COOKIES).authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE)
         .followRedirects(false).followSslRedirects(false)
@@ -84,7 +85,7 @@ object AddonHttp {
         var attempt = 0
         while (true) {
             try { return ask() } catch (e: Failure) {
-                if (e.status != 429 || attempt >= RATE_RETRIES) throw e
+                if (e.status != 429 || attempt >= com.opentune.data.config.RemoteConfig.current.retries) throw e
                 val wait = if (e.retryAfterSeconds > 0) e.retryAfterSeconds * 1_000 else RATE_BACKOFF_MS shl attempt
                 if (wait > RATE_WAIT_CAP_MS) throw e
                 kotlinx.coroutines.delay(wait)
@@ -92,12 +93,13 @@ object AddonHttp {
             }
         }
     }
-    private const val RATE_RETRIES = 2
     private const val RATE_BACKOFF_MS = 500L
     private const val RATE_WAIT_CAP_MS = 8_000L
     private data class Reply(val bytes: ByteArray, val redirect: String? = null)
     private suspend fun request(request: Request, limit: Int, prefix: Boolean): Reply = suspendCancellableCoroutine { continuation ->
-        val call = client.newCall(request)
+        val call = client.newCall(request).apply {
+            timeout().timeout(com.opentune.data.config.RemoteConfig.current.timeoutMs, TimeUnit.MILLISECONDS)
+        }
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) { continuation.resumeWithException(e) }
@@ -106,7 +108,10 @@ object AddonHttp {
                     val result = response.use {
                         if (it.isRedirect) Reply(byteArrayOf(), it.header("Location") ?: throw IOException("Invalid redirect"))
                         else {
-                            if (!it.isSuccessful) throw Failure(it.code, it.header("Retry-After")?.toLongOrNull()?.coerceIn(0, 600) ?: 0)
+                            if (!it.isSuccessful) {
+                                val paused = it.header("X-OpenTune-Paused") == "1"
+                                throw Failure(it.code, it.header("Retry-After")?.toLongOrNull()?.coerceIn(0, if (paused) 86_400 else 600) ?: 0, paused)
+                            }
                             val source = it.body?.source() ?: throw IOException("Empty add-on response")
                             source.request(limit.toLong() + if (prefix) 0 else 1)
                             if (!prefix && source.buffer.size > limit) throw IOException("Add-on response too large")

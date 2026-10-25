@@ -22,6 +22,15 @@ object AddonResolver {
     private val staleLinks = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val limitedUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
     private fun now() = System.nanoTime() / 1_000_000
+    /** Add-ons whose owner paused them, each until it said to come back: left alone for every song. */
+    private val pausedUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    fun paused(addon: String): Boolean = (pausedUntil[addon] ?: 0) > now()
+    /** Notes a reply saying [addon] was paused; true when [e] was one. */
+    fun notePaused(addon: String, e: Exception): Boolean {
+        if (e !is AddonHttp.Failure || !e.paused) return false
+        pausedUntil[addon] = now() + maxOf(e.retryAfterSeconds * 1_000, PAUSED_MIN_MS)
+        return true
+    }
     fun failed(addon: String, song: String) {
         if (failures.size > 256) failures.clear()
         failures["$addon:$song"] = now() + FAILED_HOLD_MS
@@ -89,6 +98,8 @@ object AddonResolver {
         /** [outcome]: asked over the network at all, and erred rather than answered. */
         suspend fun attempt(addon: AudioAddon, outcome: BooleanArray): AddonStream? {
             if (!addon.enabled) return null
+            if (addon.ownerOff) { report("${addon.manifest.name}: turned off by its owner"); return null }
+            if (paused(addon.key)) { report("${addon.manifest.name}: paused by its owner for now"); return null }
             if ((failures["${addon.key}:${song.videoId}"] ?: 0) > now()) {
                 // Not a no: asked again once the hold is over.
                 outcome[0] = true; outcome[1] = true
@@ -173,6 +184,7 @@ object AddonResolver {
                     null
                 } catch (e: CancellationException) { throw e }
                 catch (e: AddonHttp.Failure) {
+                    if (notePaused(addon.key, e)) { report("${addon.manifest.name}: paused by its owner for now"); return@withTimeoutOrNull null }
                     outcome[1] = true
                     if (e.status == 429) limit(addon.key, song.videoId, e)
                     report("${addon.manifest.name}: ${failureDescription(stage, e)}"); null
@@ -252,6 +264,8 @@ object AddonResolver {
     private const val FIRST_GRACE_MS = 250L
     /** The least an add-on that answered HTTP 429 is left alone for, when it doesn't say. */
     private const val RATE_LIMIT_MS = 30_000L
+    /** The least a paused add-on is left alone, whatever it says. */
+    private const val PAUSED_MIN_MS = 30 * 60_000L
     /** How long an add-on whose file failed in playback is left for that song before it's asked again. */
     private const val FAILED_HOLD_MS = 20_000L
     /** Only a guard against a connection that never answers; a slow add-on is waited for. */
@@ -262,6 +276,7 @@ object AddonResolver {
     /** Fixed diagnostics only: exceptions may contain private add-on URLs or tokens. */
     internal fun failureDescription(stage: String, error: Exception): String = when (error) {
         is FirstPartyAddonAuth.VerificationFailure -> error.message.orEmpty()
+        is AddonStreamException -> "$stage: ${error.reason.description}"
         is AddonHttp.Failure -> "$stage: HTTP ${error.status}" + when (error.status) {
             429 -> " · rate limited; retry in ${error.retryAfterSeconds.coerceAtLeast(1)}s"
             401, 403 -> " · access refused"

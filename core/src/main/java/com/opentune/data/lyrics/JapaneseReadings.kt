@@ -50,7 +50,7 @@ object JapaneseReadings {
         var fetchedAny = false
         var complete = true
         val wanted = texts.indices.filter { texts[it].any(::needsReading) }
-        for (batch in batches(wanted.map { it to texts[it].trim() })) {
+        for (batch in batches(wanted.map { it to joined(texts[it]) })) {
             val read = runCatching { fetch(batch.map { it.second }) }.getOrNull()
             if (read == null) { complete = false; continue }
             // Lines merged or split on the way back: each one asked for on its own, rather
@@ -64,6 +64,18 @@ object JapaneseReadings {
         if (!fetchedAny) return@withContext null
         out.toList().also { if (complete) synchronized(remembered) { remembered[key] = it } }
     }
+
+    /**
+     * [line] with the spaces between Japanese characters taken out. Sources
+     * that time each syllable send "繰 り 返す 出会い と 別 れ に"; read like
+     * that, every piece was a word of its own (別 alone is "betsu", 的 alone
+     * "mato") instead of 別れ "wakare" and 個人的 "kojinteki". Japanese has
+     * no spaces between words, so none are lost; spaces next to Latin words
+     * stay.
+     */
+    internal fun joined(line: String): String = JAPANESE_GAP.replace(line.trim(), "")
+
+    private val JAPANESE_GAP = Regex("""(?<=[\p{IsHan}\p{IsHiragana}\p{IsKatakana}ー々〆])\s+(?=[\p{IsHan}\p{IsHiragana}\p{IsKatakana}ー々〆])""")
 
     private fun batches(lines: List<Pair<Int, String>>): List<List<Pair<Int, String>>> {
         val all = mutableListOf<List<Pair<Int, String>>>()
