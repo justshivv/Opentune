@@ -538,6 +538,9 @@ fun PlayerLayout(
             var frames = 0
             while (flight.target(smallCover, bigCover()) == null && frames++ < 30) androidx.compose.runtime.withFrameNanos { }
             if (flight.target(smallCover, bigCover()) == null) return@LaunchedEffect
+            // Let the destination list compose and lay out before starting the clock.
+            // Otherwise that expensive first frame can consume the entire flight.
+            repeat(2) { androidx.compose.runtime.withFrameNanos { } }
             val left = 1f - flight.t.value
             flight.t.animateTo(1f, tween((440 * left).toInt().coerceAtLeast(160), easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)))
         } finally {
@@ -880,8 +883,13 @@ fun PlayerLayout(
                         listsShown.animateTo(target, tween((PANE_SWITCH_MS * left).toInt().coerceAtLeast(120), easing = FastOutSlowInEasing))
                     }
                 }
-                val listsGone by remember { androidx.compose.runtime.derivedStateOf { listsShown.value <= 0.001f } }
-                val listsFull by remember { androidx.compose.runtime.derivedStateOf { listsShown.value >= 0.999f } }
+                // A flying cover and the page beneath it share a clock, including the
+                // first layout frames. The list must not finish fading in ahead of it.
+                fun paneProgress(): Float = if (flight.active) {
+                    if (flight.toSmall) flight.progress else 1f - flight.progress
+                } else listsShown.value
+                val listsGone by remember { androidx.compose.runtime.derivedStateOf { paneProgress() <= 0.001f } }
+                val listsFull by remember { androidx.compose.runtime.derivedStateOf { paneProgress() >= 0.999f } }
                 val paneBody: @Composable (Pane, Boolean) -> Unit = { p, hidden ->
                     Column(
                         Modifier.fillMaxSize().graphicsLayer {
@@ -1066,7 +1074,7 @@ fun PlayerLayout(
                     if (outerPane == Pane.COVER || !listsFull) {
                         Box(
                             Modifier.fillMaxSize().zIndex(if (outerPane == Pane.COVER) 1f else 0f).graphicsLayer {
-                                val v = listsShown.value
+                                val v = paneProgress()
                                 alpha = (1f - v * 1.6f).coerceIn(0f, 1f)
                                 val sc = 1f - 0.06f * v
                                 scaleX = sc
@@ -1086,7 +1094,7 @@ fun PlayerLayout(
                                 .zIndex(if (outerPane == Pane.COVER) 0f else 1f)
                                 .offset { if (parked) androidx.compose.ui.unit.IntOffset(100_000, 0) else androidx.compose.ui.unit.IntOffset.Zero }
                                 .graphicsLayer {
-                                    val v = listsShown.value
+                                    val v = paneProgress()
                                     alpha = ((v - 0.4f) / 0.6f).coerceIn(0f, 1f)
                                     translationY = (1f - v) * switchDp
                                     compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
