@@ -1,0 +1,16 @@
+name: Inspect public bppcaf site
+on:
+  push:
+    branches: [research/bppcaf-public-inspection]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fetch public HTML and linked scripts
+        run: python3 scripts/research-bppcaf.py
