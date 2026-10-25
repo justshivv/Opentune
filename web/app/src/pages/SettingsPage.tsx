@@ -5,6 +5,7 @@ import { SiApplemusic, SiDiscord, SiGithub, SiSpotify, SiYoutubemusic } from 're
 import { PageHeader } from '@/components/PageHeader';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { LogoMark } from '@/components/icons/LogoMark';
+import { useRemoteConfig } from '@/config/remote';
 import { useAddons } from '@/addons/client';
 import { useDiscord } from '@/extension/useDiscord';
 import { useExtension } from '@/extension/useExtension';
@@ -88,6 +89,7 @@ function youtubeText(auth: ReturnType<typeof useYtAuth>): string {
  * Listen Together, playback and lyrics, in the same grouped rows.
  */
 export default function SettingsPage() {
+  const links = useRemoteConfig(s => s.config.data.links);
   const extension = useExtension();
   const yt = useYtAuth();
   const discord = useDiscord();
@@ -98,7 +100,7 @@ export default function SettingsPage() {
   const setShareHistory = useHistorySettings((s) => s.setShare);
   const { setAutoplay, setCrossfade } = usePlayer.getState();
   const [lyrics, setLyrics] = useState(false);
-  const sources = useAddons((st) => st.sources.filter((a) => a.enabled).length);
+  const sources = useAddons((st) => st.sources.filter((a) => a.enabled && !a.ownerOff).length);
   const jioSaavn = useAddons((st) => st.jioSaavn);
   const sourcesText = [sources ? `${sources} add-on${sources === 1 ? '' : 's'}` : 'No add-ons', jioSaavn ? 'JioSaavn on' : null].filter(Boolean).join(' · ');
   const present = extension.state === 'present';
@@ -233,8 +235,10 @@ export default function SettingsPage() {
           <h2 id="community-title">Made together. Open to everyone.</h2>
           <p>OpenTune is free and open source. Report bugs, suggest features and share the audio add-ons you build.</p>
           <div>
-            <a href="https://github.com/justshivv/Opentune" target="_blank" rel="noreferrer"><SiGithub size={16} /> GitHub</a>
-            <a href="https://discord.gg/6udrCVh5n" target="_blank" rel="noreferrer"><SiDiscord size={16} /> Discord</a>
+            <a href={links.github} target="_blank" rel="noreferrer"><SiGithub size={16} /> GitHub</a>
+            <a href={links.discord} target="_blank" rel="noreferrer"><SiDiscord size={16} /> Discord</a>
+            <a href={links.web} target="_blank" rel="noreferrer">Web player ↗</a>
+            <a href={links.tv} target="_blank" rel="noreferrer">OpenTune on TV ↗</a>
             <a href="https://justshivv.github.io/Opentune/addons/" target="_blank" rel="noreferrer">Build an add-on ↗</a>
           </div>
         </section>

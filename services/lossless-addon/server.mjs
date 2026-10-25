@@ -8,6 +8,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import worker, { AddonAuthState } from './worker.mjs';
+import { ConfigStore, createControl } from './control.mjs';
 
 const env = {
   VERIFICATION_MODE: process.env.VERIFICATION_MODE || 'strict',
@@ -24,6 +25,8 @@ const MAX_BODY = 100_000;
 
 // ---- Device sessions, challenges and browser pairings (Durable Object stand-in) ----
 mkdirSync(DATA_DIR, { recursive: true });
+const configStore = new ConfigStore(DATA_DIR);
+const control = createControl(configStore);
 const db = new DatabaseSync(join(DATA_DIR, 'auth.sqlite'));
 db.exec(`PRAGMA journal_mode=WAL;
   CREATE TABLE IF NOT EXISTS state (name TEXT PRIMARY KEY, data TEXT NOT NULL, alarm INTEGER);
@@ -117,7 +120,7 @@ const server = http.createServer(async (req, res) => {
     const method = req.method || 'GET';
     const body = method === 'GET' || method === 'HEAD' ? undefined : await readBody(req);
     const request = new Request(`https://${PUBLIC_HOST}${req.url || '/'}`, { method, headers, body });
-    const response = await worker.fetch(request, env);
+    const response = await control(request) || await worker.fetch(request, env);
     const out = Buffer.from(await response.arrayBuffer());
     const outHeaders = {};
     response.headers.forEach((value, name) => { outHeaders[name] = value; });
@@ -138,4 +141,4 @@ server.listen(PORT, HOST, () => {
     ` (verification ${env.VERIFICATION_MODE}${env.PAUSED === 'true' ? ', paused' : ''})`);
   if (!/^[a-f0-9]{64}$/.test(env.APP_CERT_SHA256)) console.warn('APP_CERT_SHA256 is not set: no device can sign in.');
 });
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { server.close(); db.close(); process.exit(0); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { server.close(); configStore.close(); db.close(); process.exit(0); });

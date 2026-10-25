@@ -15,9 +15,9 @@ export function SourceList() {
   return <><p role="status" className="sr-only">{notice}</p><ol className="ot-source-list">{sources.map((s, i) =>
     <li key={s.id} ref={el => { if (el) rows.current.set(s.id, el); else rows.current.delete(s.id); }} className="ot-source-row" data-dragging={drag?.id === s.id}
       style={drag?.id === s.id ? { transform: `translateY(${drag.offset}px) scale(1.02)`, transition: 'background .18s, box-shadow .18s' } : undefined}>
-      <span className="text-secondary">{i + 1}</span><Puzzle size={24} /><div><strong>{s.name}</strong><small>{s.admin ? 'Added by admin · ' : ''}{!s.enabled ? 'Off' : locked.includes(s.id) ? 'Needs your OK in the extension' : 'best available FLAC'}</small>
-        {s.enabled && locked.includes(s.id) && <button type="button" className="ot-allow" onClick={() => void allowSource(s.url).then(() => setNotice(`Press Allow in the extension tab for ${s.name}`)).catch(e => setNotice(e instanceof Error ? e.message : 'Permission unavailable'))}>Allow</button>}</div>
-      <input type="checkbox" role="switch" aria-label={`Enable ${s.name}`} checked={s.enabled} onChange={e => update(sources.map(x => x.id === s.id ? { ...x, enabled: e.target.checked } : x))} />
+      <span className="text-secondary">{i + 1}</span><Puzzle size={24} /><div><strong>{s.name}</strong><small>{s.admin ? 'Added by admin · ' : ''}{s.ownerOff ? 'Paused by admin' : !s.enabled ? 'Off' : locked.includes(s.id) ? 'Needs your OK in the extension' : 'best available FLAC'}</small>
+        {s.enabled && !s.ownerOff && locked.includes(s.id) && <button type="button" className="ot-allow" onClick={() => void allowSource(s.url).then(() => setNotice(`Press Allow in the extension tab for ${s.name}`)).catch(e => setNotice(e instanceof Error ? e.message : 'Permission unavailable'))}>Allow</button>}</div>
+      <input type="checkbox" role="switch" aria-label={`Enable ${s.name}`} disabled={s.ownerOff} checked={s.enabled && !s.ownerOff} onChange={e => update(sources.map(x => x.id === s.id ? { ...x, enabled: e.target.checked } : x))} />
       <button className="ot-grab" aria-label={`Reorder ${s.name}`} title="Drag to reorder, or use arrow keys" onKeyDown={e => {
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); move(i, i + (e.key === 'ArrowUp' ? -1 : 1)); }
       }} onPointerDown={e => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); setDrag({ id: s.id, y: e.clientY, offset: 0 }); }}

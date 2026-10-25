@@ -1,3 +1,4 @@
+import { currentConfig, refreshConfig } from '@/config/remote';
 import { endpoint, type Addon } from '@opentune/shared/addons';
 
 /** Where the site says the OpenTune Worker is; the catalog is only ever read from that Worker. */
@@ -6,17 +7,17 @@ const WORKER_HOST = 'opentune-usage.create-a-new-site-with-sites.workers.dev';
 /** As on Android: looked at on start and when Audio sources opens, at most this often. */
 const REFRESH_MS = 15 * 60_000;
 
-export type Published = { id: string; name: string; url: string };
+export type Published = { id: string; name: string; url: string; enabled?: boolean };
 
 /** The published list, checked: at most 20 sources, each with a plain id, a name and a public HTTPS manifest. */
 export function publishedOf(value: unknown): Published[] {
   const list = (value as { sources?: unknown })?.sources;
   if (!Array.isArray(list) || list.length > 20) throw new Error('Invalid source catalog');
   return list.flatMap((item) => {
-    const { id, name, url } = (item ?? {}) as Record<string, unknown>;
+    const { id, name, url, enabled } = (item ?? {}) as Record<string, unknown>;
     if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(id) || typeof name !== 'string' || typeof url !== 'string') return [];
     try {
-      return [{ id, name: name.trim().slice(0, 80) || 'Source', url: endpoint(url, 'manifest.json') }];
+      return [{ id, name: name.trim().slice(0, 80) || 'Source', url: endpoint(url, 'manifest.json'), ...(typeof enabled === 'boolean' ? { enabled } : {}) }];
     } catch {
       return [];
     }
@@ -36,9 +37,9 @@ export function mergeCatalog(local: Addon[], published: Published[]): Addon[] {
     const update = incoming.get(source.id);
     if (!update) return [];
     incoming.delete(source.id);
-    return [{ ...source, name: update.name, url: update.url }];
+    return [{ ...source, name: update.name, url: update.url, ownerOff: update.enabled === false }];
   });
-  return [...kept, ...[...incoming.entries()].map(([id, p]) => ({ id, name: p.name, url: p.url, enabled: true, admin: true }))];
+  return [...kept, ...[...incoming.entries()].map(([id, p]) => ({ id, name: p.name, url: p.url, enabled: true, admin: true, ownerOff: p.enabled === false }))];
 }
 
 let lastCheck = 0;
@@ -46,6 +47,9 @@ let running: Promise<Published[]> | null = null;
 
 /** The published list, from the Worker the site's config names (and only that Worker). */
 export async function fetchPublished(force = false): Promise<Published[] | null> {
+  await refreshConfig(force);
+  const configured = currentConfig().data.sources;
+  if (configured !== null) return publishedOf({ sources: configured });
   if (!force && lastCheck && Date.now() - lastCheck < REFRESH_MS) return null;
   running ??= (async () => {
     const config = (await (await fetch(CONFIG_URL, { cache: 'no-store', credentials: 'omit', signal: AbortSignal.timeout(8000) })).json()) as { apiBase?: unknown };

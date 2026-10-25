@@ -26,6 +26,8 @@ jobs:
       - name: Usage deduplication and website scripts
         run: |
           node --test usage-api/worker.test.mjs usage-api/addons.test.mjs usage-api/dashboard/model.test.mjs examples/audio-addon/worker.test.mjs
+          node --test services/lossless-addon/control.test.mjs services/lossless-addon/server.test.mjs
+          node --check services/lossless-addon/control.js
           node --check usage-api/dashboard/dashboard.js
           node --check site/download-tracking.js
 

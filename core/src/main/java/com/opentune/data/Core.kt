@@ -39,6 +39,7 @@ object Core {
             }
         })
         AppSettings.init(app)
+        com.opentune.data.config.RemoteConfig.init(app)
         com.opentune.data.addons.AddonStore.init(app)
         com.opentune.data.addons.AddonOutput.init(app)
         com.opentune.data.addons.AddonStore.onChanged = com.opentune.data.lossless.ExternalStreams::retryLookups

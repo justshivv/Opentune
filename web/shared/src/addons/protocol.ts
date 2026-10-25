@@ -17,7 +17,7 @@ export function endpoint(raw: string, path: string, params: Record<string, strin
   return u.href;
 }
 /** [admin]: published by OpenTune's owner (the community catalog); its URL stays out of sight and it can't be removed, only turned off. */
-export type Addon = { id: string; name: string; url: string; enabled: boolean; admin?: boolean };
+export type Addon = { id: string; name: string; url: string; enabled: boolean; admin?: boolean; ownerOff?: boolean };
 export type Recording = { title: string; artist: string; duration: number };
 export type CatalogTrack = Recording & { id: string; album?: string };
 export type Manifest = { id: string; name: string; version?: string; allowDownloads?: boolean; checkValidLossless?: boolean; settings?: { key: string; default?: string; options?: { value: string; label?: string }[] }[] };

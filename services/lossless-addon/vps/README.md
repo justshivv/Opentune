@@ -63,3 +63,9 @@ owner dashboard, change the four add-on URLs to:
 - `https://addon-opentune.rethinknow.in/archive/manifest.json`
 - `https://addon-opentune.rethinknow.in/musopen/manifest.json`
 - `https://addon-opentune.rethinknow.in/netease/manifest.json`
+
+## Owner dashboard and remote configuration
+
+This package also includes `/control/`. Set `CONTROL_ADMIN_USERNAME` and `CONTROL_ADMIN_PASSWORD` (16+ characters) in `/etc/opentune-addon.env`, restart the service, and open `https://addon-opentune.rethinknow.in/control/`. Existing installations must add these two settings manually; the installer preserves the old environment file.
+
+Back up `control.sqlite` alongside `auth.sqlite`; the configuration signing key must survive server migrations. See [the complete configuration guide](../../../docs/remote-configuration.md) for supported controls, publication, rollback and client compatibility.

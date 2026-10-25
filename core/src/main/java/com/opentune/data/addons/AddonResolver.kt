@@ -276,6 +276,7 @@ object AddonResolver {
     /** Fixed diagnostics only: exceptions may contain private add-on URLs or tokens. */
     internal fun failureDescription(stage: String, error: Exception): String = when (error) {
         is FirstPartyAddonAuth.VerificationFailure -> error.message.orEmpty()
+        is AddonStreamException -> "$stage: ${error.reason.description}"
         is AddonHttp.Failure -> "$stage: HTTP ${error.status}" + when (error.status) {
             429 -> " · rate limited; retry in ${error.retryAfterSeconds.coerceAtLeast(1)}s"
             401, 403 -> " · access refused"
