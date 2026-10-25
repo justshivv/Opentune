@@ -100,7 +100,7 @@ fun OpenTuneTheme(
     val tv = remember { com.opentune.ui.tv.Tv.isTv(context) }
     MaterialTheme(
         colorScheme = scheme.animated(),
-        typography = AppTypography,
+        typography = rememberAppTypography(settings),
         shapes = AppShapes,
     ) {
         CompositionLocalProvider(
@@ -130,16 +130,23 @@ private fun TvRipples(content: @Composable () -> Unit) {
  * a dark, immersive surface whatever the app theme is.
  */
 @Composable
-fun PlayerTheme(seed: Color?, settings: ThemeSettings, content: @Composable () -> Unit) {
+fun PlayerTheme(seed: Color?, settings: ThemeSettings, neutral: Boolean = false, content: @Composable () -> Unit) {
     val scheme = rememberDynamicColorScheme(
         seedColor = seed ?: Color(settings.seedColor),
         isDark = true,
         isAmoled = settings.pureBlack,
         style = PaletteStyle.Vibrant,
     )
+    val amoled = settings.playerBackground == com.opentune.data.settings.PlayerBackground.AMOLED
+    val playerScheme = if (neutral) androidx.compose.material3.darkColorScheme(
+        primary = Color.White, onPrimary = Color.Black, secondary = Color.White, tertiary = Color.White,
+        background = Color(0xFF202023), surface = Color(0xFF202023), onSurface = Color.White,
+        onBackground = Color.White, onSurfaceVariant = Color(0xFFCACACE),
+        surfaceContainer = Color(0xFF2B2B2E), surfaceContainerHigh = Color(0xFF36363A),
+    ) else scheme
     MaterialTheme(
-        colorScheme = scheme.animated(),
-        typography = AppTypography,
+        colorScheme = if (amoled) playerScheme.toPureBlack() else playerScheme.animated(),
+        typography = rememberAppTypography(settings),
         shapes = AppShapes,
         content = content,
     )
@@ -253,3 +260,37 @@ val AppShapes = Shapes(
 
 @Composable
 fun rememberSeedSwatches(colors: List<Int>): List<Color> = remember(colors) { colors.map { Color(it) } }
+
+/** System sans avoids thin OEM/variable-font rendering; imported files fall back safely if removed. */
+@Composable
+internal fun rememberAppFont(settings: ThemeSettings): FontFamily {
+    val context = LocalContext.current
+    return remember(settings.font, settings.customFontId) {
+        when (settings.font) {
+            com.opentune.data.settings.AppFont.SYSTEM -> FontFamily.SansSerif
+            com.opentune.data.settings.AppFont.OUTFIT -> Outfit
+            com.opentune.data.settings.AppFont.SERIF -> FontFamily.Serif
+            com.opentune.data.settings.AppFont.MONO -> FontFamily.Monospace
+            com.opentune.data.settings.AppFont.CUSTOM -> runCatching {
+                val file = requireNotNull(ImportedFonts.file(context, settings.customFontId))
+                FontFamily(requireNotNull(android.graphics.Typeface.Builder(file).build()))
+            }.getOrDefault(FontFamily.SansSerif)
+        }
+    }
+}
+
+@Composable
+private fun rememberAppTypography(settings: ThemeSettings): Typography {
+    val family = rememberAppFont(settings)
+    return remember(family, settings.textWeight) {
+        fun TextStyle.readable() = copy(fontFamily = family,
+            fontWeight = FontWeight(maxOf(fontWeight?.weight ?: 400, settings.textWeight.minimum)))
+        AppTypography.run { copy(
+            displayLarge = displayLarge.readable(), displayMedium = displayMedium.readable(), displaySmall = displaySmall.readable(),
+            headlineLarge = headlineLarge.readable(), headlineMedium = headlineMedium.readable(), headlineSmall = headlineSmall.readable(),
+            titleLarge = titleLarge.readable(), titleMedium = titleMedium.readable(), titleSmall = titleSmall.readable(),
+            bodyLarge = bodyLarge.readable(), bodyMedium = bodyMedium.readable(), bodySmall = bodySmall.readable(),
+            labelLarge = labelLarge.readable(), labelMedium = labelMedium.readable(), labelSmall = labelSmall.readable(),
+        ) }
+    }
+}

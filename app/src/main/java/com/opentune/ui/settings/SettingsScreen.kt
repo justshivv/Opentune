@@ -423,6 +423,7 @@ private fun settingsSections(
     val pendingUpdate by UpdateCheck.pending.collectAsState()
     var updateBytes by remember { mutableStateOf(0L) }
     var playerStyleDialog by remember { mutableStateOf(false) }
+    var fontDialog by remember { mutableStateOf(false) }
     var recommenderDialog by remember { mutableStateOf(false) }
     var followedDialog by remember { mutableStateOf(false) }
     var hiddenDialog by remember { mutableStateOf(false) }
@@ -519,6 +520,7 @@ private fun settingsSections(
     if (supportDialog) com.opentune.ui.components.SupportDialog(onDismiss = { supportDialog = false })
     if (followedDialog) FollowedArtistsDialog(onDismiss = { followedDialog = false })
     if (hiddenDialog) HiddenDialog(onDismiss = { hiddenDialog = false })
+    if (fontDialog) com.opentune.ui.theme.FontSettingsSheet { fontDialog = false }
     if (playerStyleDialog) {
         ChoiceSheet(
             title = "Player layout",
@@ -945,6 +947,9 @@ private fun settingsSections(
                         }
                     })
                 },
+                Entry("Fonts & readability", "font typeface text weight bold thin ttf otf import custom") {
+                    NavRow("Fonts & readability", { fontDialog = true }, summary = "Built-in fonts, text weight and your own font file", icon = Icons.Rounded.TextFields, value = theme.font.label)
+                },
                 Entry("Pure black", "oled amoled") {
                     ToggleRow("Pure black", theme.pureBlack, { v -> AppSettings.updateTheme { it.copy(pureBlack = v) } }, summary = "Black backgrounds with neutral gray cards in dark theme", icon = Icons.Rounded.Wallpaper)
                 },
@@ -994,7 +999,7 @@ private fun settingsSections(
                 Entry("Player opening", "now playing sheet open close animation spring smooth bouncy snappy") {
                     NavRow("Player opening", { playerMotionDialog = true }, summary = ui.playerMotion.summary, icon = Icons.Rounded.UnfoldMore, value = ui.playerMotion.label)
                 },
-                Entry("Player background", "mesh gradient echo glow colours") {
+                Entry("Player background", "mesh gradient echo glow colours pure black oled amoled") {
                     SettingRow("Player background", icon = Icons.Rounded.Wallpaper, below = {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PlayerBackground.entries.forEach { b ->

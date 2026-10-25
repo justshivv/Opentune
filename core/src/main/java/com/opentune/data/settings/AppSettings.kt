@@ -49,11 +49,13 @@ enum class PlayerBackground(val label: String) {
     /** The cover's main colour at the top, deepening to dark, with a faint glow under the controls. */
     GRADIENT("Gradient"),
     ECHO_GLOW("Echo glow"),
+    AMOLED("AMOLED black"),
 }
 
 /** How the full-screen player is laid out. */
 @Serializable
 enum class PlayerStyle(val label: String, val summary: String) {
+    APPLE_MUSIC("Apple Music inspired", "Edge-to-edge artwork, quiet surfaces and crisp white controls"),
     CLASSIC("Classic", "Big cover, title, lyric preview and every control"),
     VINYL("Vinyl", "The cover turns as a record while the song plays"),
     LYRICS_FIRST("Lyrics first", "A small cover on top and the lyrics taking the rest"),
@@ -61,6 +63,16 @@ enum class PlayerStyle(val label: String, val summary: String) {
     CASSETTE("Cassette", "A tape whose reels turn and wind on as the song plays"),
     HALO("Halo", "A round cover inside a ring of moving bars"),
     POLAROID("Polaroid", "The cover as an instant photo, swaying gently"),
+}
+
+@Serializable
+enum class AppFont(val label: String) {
+    SYSTEM("System sans"), OUTFIT("Outfit"), SERIF("Serif"), MONO("Monospace"), CUSTOM("Imported font"),
+}
+
+@Serializable
+enum class TextWeight(val label: String, val minimum: Int) {
+    REGULAR("Regular", 400), MEDIUM("Medium", 500), BOLD("Bold", 700),
 }
 
 @Serializable
@@ -76,6 +88,12 @@ data class ThemeSettings(
     /** Re-seed the whole app from the playing track's artwork. */
     val colorFromArtwork: Boolean = true,
     val playerBackground: PlayerBackground = PlayerBackground.MESH,
+    val font: AppFont = AppFont.SYSTEM,
+    val textWeight: TextWeight = TextWeight.MEDIUM,
+    /** Private copied file ID, never an external storage path or URI. */
+    val customFontId: String = "",
+    val customFontName: String = "",
+
 )
 
 /** Reverb presets map onto android.media.audiofx.PresetReverb's. */
