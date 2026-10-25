@@ -10,7 +10,7 @@ def safe(v):
 def get(path):
     u=ROOT+path
     try:
-        with urllib.request.urlopen(urllib.request.Request(u,headers={"User-Agent":"Mozilla/5.0 (compatible; OpenTuneResearch/1.0)"}),timeout=25) as r:
+        with urllib.request.urlopen(urllib.request.Request(u,headers={"User-Agent":"BitChord/v1.8.1"}),timeout=25) as r:
             body=r.read(250000).decode("utf-8","replace")
             try: data=json.loads(body)
             except: data={"text":body[:500]}
@@ -19,12 +19,12 @@ def get(path):
     except Exception as e: return None,{"error":str(e)}
 st,m=get("/manifest.json")
 print("MANIFEST",st,json.dumps(safe(m),ensure_ascii=True))
-st,d=get("/search?"+urllib.parse.urlencode({"q":"295 Sidhu Moose Wala","quality":"LOSSLESS","atmos":"auto"}))
+st,d=get("/search?"+urllib.parse.urlencode({"q":"295 Sidhu Moose Wala","quality":"lossless"}))
 print("SEARCH",st,json.dumps(safe(d),ensure_ascii=True)[:12000])
 tracks=d.get("tracks",[]) if isinstance(d,dict) else []
 if tracks:
     t=tracks[0]
-    st,s=get("/stream/"+urllib.parse.quote(str(t["id"]),safe="")+"?quality=LOSSLESS&atmos=auto")
+    st,s=get("/stream/"+urllib.parse.quote(str(t["id"]),safe="")+"?quality=lossless")
     print("STREAM",st,json.dumps(safe(s),ensure_ascii=True)[:12000])
     u=s.get("url") if isinstance(s,dict) else None
     if u and urllib.parse.urlsplit(u).scheme=="https":
