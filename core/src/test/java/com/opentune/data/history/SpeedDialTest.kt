@@ -5,6 +5,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SpeedDialTest {
+    @Test fun localListeningRefreshesAccountSpeedDialWithoutDuplicateCards() {
+        val old = com.opentune.data.model.ShelfItem("Old", "Artist", null, "old", null)
+        val fresh = old.copy(title = "Fresh", videoId = "fresh")
+        assertEquals(listOf("fresh", "old"), SpeedDial.personalized(listOf(fresh), listOf(old, fresh)).map { it.videoId })
+    }
+
+    @Test fun artistAggregatesRetainARepresentativeSongAndItsBrowseId() {
+        val record = PlayRecord("song", "Track", "Artist", playedAt = 100, listenedMs = 30_000, artistId = "UC_personal")
+        val artist = History.replay(listOf(record), 0).topArtists.single()
+        assertEquals("UC_personal", artist.song?.artistId)
+    }
     private val day = 86_400_000L
     private val now = 1_000 * day
     private fun play(id: String, daysAgo: Double, listened: Long = 120_000) =

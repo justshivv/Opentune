@@ -423,6 +423,7 @@ fun AppRoot(vm: PlayerViewModel) {
     val layout = appLayout(window.width.value.toInt(), window.height.value.toInt(), song != null, paneCollapsed, chromeUi.wideLayout, chromeUi.sidePlayer)
     // Docked beside the page, the player is never also opened over it.
     val sheetOpen = playerOpen && !layout.sidePlayer
+    com.opentune.ui.theme.SystemBars(if (sheetOpen) androidx.compose.ui.graphics.Color.Black else MaterialTheme.colorScheme.background)
     val currentLayout by androidx.compose.runtime.rememberUpdatedState(layout)
     LaunchedEffect(playerOpen) {
         // Asked for the player (a shared song, say) while it's docked: unfold the pane.

@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.TouchApp
@@ -234,6 +235,7 @@ fun SettingsScreen(
     val open = SETTINGS_CATEGORIES.firstOrNull { it.key == openKey }
     androidx.activity.compose.BackHandler(enabled = open != null) { openKey = null }
     val q = query.trim()
+    val languageContext = LocalContext.current
     // Kept out here, so coming back from a page finds the main list where it was left.
     val mainList = androidx.compose.foundation.lazy.rememberLazyListState()
     // Which folded subsections have been opened with "See more".
@@ -281,7 +283,7 @@ fun SettingsScreen(
                         value = query,
                         onValueChange = { query = it },
                         singleLine = true,
-                        placeholder = { Text("Search settings") },
+                        placeholder = { Text(com.opentune.ui.theme.tr("Search settings")) },
                         leadingIcon = { Icon(Icons.Rounded.Search, null) },
                         trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
                         shape = RoundedCornerShape(20.dp),
@@ -296,7 +298,7 @@ fun SettingsScreen(
                 }
                 if (q.isNotEmpty()) {
                     val hits = placed.filter {
-                        it.entry.title.contains(q, true) || it.entry.summary.contains(q, true) ||
+                        it.entry.title.contains(q, true) || com.opentune.ui.theme.translated(languageContext, it.entry.title).contains(q, true) || it.entry.summary.contains(q, true) ||
                             it.group.contains(q, true) || it.category.title.contains(q, true)
                     }
                     if (hits.isEmpty()) {
@@ -424,6 +426,7 @@ private fun settingsSections(
     var updateBytes by remember { mutableStateOf(0L) }
     var playerStyleDialog by remember { mutableStateOf(false) }
     var fontDialog by remember { mutableStateOf(false) }
+    var languageDialog by remember { mutableStateOf(false) }
     var recommenderDialog by remember { mutableStateOf(false) }
     var historyTargetDialog by remember { mutableStateOf(false) }
     var followedDialog by remember { mutableStateOf(false) }
@@ -530,6 +533,16 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v) } },
             onDismiss = { playerStyleDialog = false },
+        )
+    }
+    if (languageDialog) {
+        ChoiceSheet(
+            title = com.opentune.ui.theme.tr("App language"),
+            options = com.opentune.ui.theme.AppLanguage.entries,
+            selected = com.opentune.ui.theme.AppLanguages.selected(context),
+            label = { it.label },
+            onSelect = { language -> languageDialog = false; com.opentune.ui.theme.AppLanguages.select(context, language) },
+            onDismiss = { languageDialog = false },
         )
     }
     if (historyTargetDialog) {
@@ -879,10 +892,10 @@ private fun settingsSections(
                         summary = "YouTube Music needs a signed-in account. Spotify does not accept plays from other services; likes can sync separately. Connected scrobblers keep their own settings.",
                         icon = Icons.Rounded.History, value = pb.listeningHistoryTarget.label)
                 },
-                Entry("Pause listening history", "private pause scrobble history recommendations") {
-                    ToggleRow("Pause listening history", pb.pauseListeningHistory,
+                Entry("Pause account sync", "private pause youtube spotify history recommendations") {
+                    ToggleRow("Pause account sync", pb.pauseListeningHistory,
                         { v -> AppSettings.updatePlayback { it.copy(pauseListeningHistory = v) } },
-                        summary = "Stop saving new song and collection history and reporting new listens to connected accounts. Paused listening is never sent later. Existing history and likes stay.",
+                        summary = "Pause sending new listens to YouTube Music. Your local history, listening stats and personal recommendations keep updating. Paused listens are never sent later; likes and connected scrobblers keep their own settings.",
                         icon = Icons.Rounded.History)
                 },
                 Entry("Don't repeat songs in current session", "autoplay duplicates") {
@@ -972,6 +985,10 @@ private fun settingsSections(
                             }
                         }
                     })
+                },
+                Entry("App language", "language locale hindi punjabi english भाषा ਭਾਸ਼ਾ") {
+                    NavRow("App language", { languageDialog = true }, icon = Icons.Rounded.Language,
+                        value = com.opentune.ui.theme.AppLanguages.selected(context).label)
                 },
                 Entry("Fonts & readability", "font typeface text weight bold thin ttf otf import custom") {
                     NavRow("Fonts & readability", { fontDialog = true }, summary = "Built-in fonts, text weight and your own font file", icon = Icons.Rounded.TextFields, value = theme.font.label)

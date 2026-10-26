@@ -77,3 +77,10 @@ Deployed on 24 October 2026: [OpenTune NetEase manifest](https://opentune-lossle
 ## App content and configuration
 
 The VPS version also serves an authenticated owner dashboard and signed client configuration. See [remote configuration](../../docs/remote-configuration.md). This is a Node/VPS feature; the Cloudflare Worker deployment does not host this dashboard.
+# Efficient operation on one deployment
+
+Successful searches share a 60-second Cloudflare edge cache; stream metadata shares a 20-second cache. Concurrent identical lookups are coalesced. Cache lookup is **inside device verification**: a warm cache never grants access without a valid proof. Errors, authentication and account data are not cached, and responses to clients remain `no-store`. The existing per-isolate upstream cache still works on a VPS. Audio continues directly from its media server; no audio proxying or transcoding is added.
+
+The Android client limits metadata work to six requests overall and two per host. Manifests are checked periodically rather than per screen recomposition. Dashboard availability checks also run through battery-aware Android background work. Turn off **Available to listeners** and publish to retain an entry as disabled; removing an entry removes it from the managed list.
+
+These changes reduce compute and upstream requests, **not Cloudflare's incoming invocation count**. One deployment has no alternate server for a load balancer to select. For larger traffic, run the supplied server on the existing Hostinger VPS and publish its source URLs in the dashboard. Keep strict verification enabled. Multiple independently deployed add-ons cannot share authenticated sessions merely by placing random routing in front of them; session/replay state must be shared or requests must stay with the authenticating server.

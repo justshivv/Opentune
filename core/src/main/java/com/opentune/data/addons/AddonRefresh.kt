@@ -13,6 +13,8 @@ import kotlinx.coroutines.withContext
 
 /** Refresh the catalog and installed manifests together, including personal sources. */
 object AddonRefresh {
+    private val reachability = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val availability: kotlinx.coroutines.flow.StateFlow<Map<String, Boolean>> = reachability
     private val mutex = Mutex()
     private var checkedAt: Long? = null
     private const val INTERVAL = 10 * 60_000L
@@ -40,11 +42,18 @@ object AddonRefresh {
                     try {
                         val manifest = fetch(addon, force)
                         AddonStore.refreshed(addon.key, manifest, expectedBase = addon.base)
+                        reachable(addon, true)
                         true
                     } catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { false } // Keep the last working manifest on every failure.
+                    catch (_: Exception) { reachable(addon, false); false } // Keep the last working manifest on every failure.
                 }
             }
         }.awaitAll().all { it }
+    }
+
+    @Synchronized private fun reachable(addon: AudioAddon, value: Boolean) {
+        val current = AddonStore.addons.value
+        if (current.none { it.key == addon.key && it.base == addon.base }) return
+        reachability.value = reachability.value.filterKeys { key -> current.any { it.key == key } } + (addon.key to value)
     }
 }

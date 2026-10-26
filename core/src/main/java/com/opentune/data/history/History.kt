@@ -32,8 +32,9 @@ data class PlayRecord(
     val playedAt: Long,
     val listenedMs: Long = 0,
     val explicit: Boolean? = null,
+    val artistId: String? = null,
 ) {
-    fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit)
+    fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit, artistId = artistId)
 }
 
 data class TopEntry(val key: String, val title: String, val subtitle: String, val thumbnailUrl: String?, val plays: Int, val listenedMs: Long, val song: Song?)
@@ -87,7 +88,7 @@ object History {
     /** Records a listen and returns its key for [updateListened]. */
     fun record(song: Song, listenedMs: Long): Long {
         val now = System.currentTimeMillis()
-        val r = PlayRecord(song.videoId, song.title, song.artist, song.thumbnailUrl, song.durationText, song.albumName, now, listenedMs, song.isExplicit)
+        val r = PlayRecord(song.videoId, song.title, song.artist, song.thumbnailUrl, song.durationText, song.albumName, now, listenedMs, song.isExplicit, song.artistId)
         _records.value = (listOf(r) + _records.value).take(MAX_RECORDS)
         return now
     }
@@ -121,7 +122,7 @@ object History {
             songCount = window.distinctBy { it.videoId }.size,
             artistCount = window.map { Wrapped.mainArtist(it.artist) }.filter { it.isNotBlank() }.distinct().size,
             topSongs = top({ it.videoId }, { p -> p.first().title to p.first().artist }, songOf = true),
-            topArtists = top({ Wrapped.mainArtist(it.artist) }, { p -> Wrapped.mainArtist(p.first().artist) to "" }, songOf = false),
+            topArtists = top({ Wrapped.mainArtist(it.artist) }, { p -> Wrapped.mainArtist(p.first().artist) to "" }, songOf = true),
             topAlbums = top({ it.albumName }, { p -> (p.first().albumName ?: "") to p.first().artist }, songOf = false),
         )
     }

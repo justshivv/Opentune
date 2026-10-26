@@ -54,6 +54,10 @@ object SpeedDial {
 
     private const val COLLECTION_WEIGHT = 3.0
 
+    /** Recent local listening takes effect immediately, while account picks fill unused places. */
+    fun personalized(local: List<ShelfItem>, account: List<ShelfItem>, limit: Int = 60): List<ShelfItem> =
+        (local + account).distinctBy { it.videoId ?: it.browseId ?: it.title }.take(limit)
+
     /** YouTube Music's own Speed dial shelf among Home's, if it sent one. */
     fun isSpeedDial(title: String): Boolean = title.trim().equals(TITLE, ignoreCase = true)
 }

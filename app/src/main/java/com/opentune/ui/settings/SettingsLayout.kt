@@ -60,6 +60,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "playback", "Playback", "Crossfade, autoplay, recommendations and devices", Icons.Rounded.PlayCircle,
         listOf(
             "Between songs" to listOf("Crossfade", "Skip silence", "Preload upcoming songs"),
+            "Account sync" to listOf("Sync listening history", "Pause account sync"),
             "Autoplay" to listOf("Autoplay", "Recommendations", "Don't repeat songs in current session", "Smart shuffle", "Hidden songs and artists"),
             "Headphones and devices" to listOf("Resume when headphones connect", "Pause at zero volume", "Background playback", "Stop music on close from recents"),
             "Music videos" to listOf("SponsorBlock", "SponsorBlock categories"),
@@ -70,6 +71,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         listOf(
             "Tabs" to listOf("Separate Explore tab"),
             "Home" to listOf("Speed dial"),
+            "Language" to listOf("App language"),
             "Theme" to listOf("Theme", "Pure black", "Fonts & readability"),
             "Colour" to listOf("Color from artwork", "Mini player takes the cover's colour", "Artist pages take the photo's colour", "Material You", "Accent color", "Palette style"),
             "Glass" to listOf("Liquid Glass", "Glass style", "Frosted top edge", "Reduce dynamic blur"),

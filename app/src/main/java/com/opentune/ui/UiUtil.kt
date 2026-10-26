@@ -63,6 +63,7 @@ fun ShelfItem.cardMenu(): com.opentune.ui.components.CardMenu? {
  * older than [FRESH_MS] is shown and then fetched again in the background.
  */
 internal object ScreenCache {
+    @Synchronized fun clear() { entries.clear() }
     private class Entry(val value: Any?, val at: Long)
 
     private val entries = object : LinkedHashMap<String, Entry>(64, 0.75f, true) {

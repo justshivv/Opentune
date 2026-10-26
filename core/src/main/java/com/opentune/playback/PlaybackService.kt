@@ -305,11 +305,10 @@ class PlaybackService : MediaLibraryService() {
                 com.opentune.data.account.AccountStore.accounts.map { list -> list.firstOrNull { it.active }?.id }.distinctUntilChanged(),
             ) { policy, account -> policy to account }.distinctUntilChanged().drop(1).collect {
                 // Never backfill time heard while paused, or report it to a different account.
-                finishListen(report = false)
                 historyGeneration++
                 historyWork.cancel()
                 historyWork = SupervisorJob(scope.coroutineContext[Job])
-                startListen(player.currentMediaItem?.toSong(), player.isPlaying)
+                resetAccountSync()
             }
         }
         scope.launch { trackListening(player) }
@@ -938,6 +937,14 @@ class PlaybackService : MediaLibraryService() {
     private var historyWork = SupervisorJob(scope.coroutineContext[Job])
     private var youtubeListen: com.opentune.data.history.YouTubeHistorySession? = null
     private var youtubeReport: Job? = null
+    private var youtubeSyncStartMs = 0L
+
+    private fun resetAccountSync() {
+        youtubeSyncStartMs = listenedSoFar()
+        val generation = historyGeneration
+        youtubeListen = listenSong?.let { com.opentune.data.history.YouTubeHistory.session(it.videoId) { historyGeneration == generation } }
+        youtubeReport = null
+    }
     private var listenedMs = 0L
     private var listenSince = -1L
     private var listenRecord: Long? = null
@@ -945,10 +952,11 @@ class PlaybackService : MediaLibraryService() {
 
     private fun startListen(song: Song?, playing: Boolean) {
         // A radio station isn't a song: it stays out of history and scrobbles.
-        listenSong = song?.takeUnless { Radio.isRadio(it.videoId) || AppSettings.playback.value.pauseListeningHistory }
+        listenSong = song?.takeUnless { Radio.isRadio(it.videoId) }
         val generation = historyGeneration
         youtubeListen = listenSong?.let { com.opentune.data.history.YouTubeHistory.session(it.videoId) { historyGeneration == generation } }
         youtubeReport = null
+        youtubeSyncStartMs = 0
         listenedMs = 0
         listenSince = if (playing) SystemClock.elapsedRealtime() else -1
         listenRecord = null
@@ -966,7 +974,7 @@ class PlaybackService : MediaLibraryService() {
 
     private fun sendNowPlaying() {
         val song = listenSong ?: return
-        if (nowPlayingSent || AppSettings.playback.value.pauseListeningHistory) return
+        if (nowPlayingSent) return
         nowPlayingSent = true
         val duration = mediaSession?.player?.duration?.takeIf { it > 0 } ?: 0L
         LastFm.nowPlaying(song, duration)
@@ -988,8 +996,9 @@ class PlaybackService : MediaLibraryService() {
         listenRecord = null
         val session = youtubeListen
         val duration = listenDuration
+        val syncHeard = (heard - youtubeSyncStartMs).coerceAtLeast(0)
         if (report && session != null && !AppSettings.playback.value.pauseListeningHistory) {
-            scope.launch(historyWork + Dispatchers.IO) { session.heard(heard, duration, final = true) }
+            scope.launch(historyWork + Dispatchers.IO) { session.heard(syncHeard, duration, final = true) }
         }
         youtubeListen = null
     }
@@ -1008,14 +1017,14 @@ class PlaybackService : MediaLibraryService() {
         while (scope.isActive) {
             delay(5_000)
             if (player.isPlaying && ++ticks % 3 == 0) saveEpisodePosition(player)
-            if (AppSettings.playback.value.pauseListeningHistory) continue
             val song = listenSong ?: continue
             val heard = listenedSoFar()
             val known = player.duration.takeIf { it > 0 }
             listenDuration = known
             val session = youtubeListen
             if (session != null && youtubeReport?.isActive != true && player.isPlaying) {
-                youtubeReport = scope.launch(historyWork + Dispatchers.IO) { session.heard(heard, known) }
+                val syncHeard = (heard - youtubeSyncStartMs).coerceAtLeast(0)
+                youtubeReport = scope.launch(historyWork + Dispatchers.IO) { session.heard(syncHeard, known) }
             }
             // Last.fm's rule: a song over 30 s, heard for half its length or 4 minutes.
             if (!scrobbled && known != null && known > 30_000 && heard >= minOf(known / 2, 240_000L)) {

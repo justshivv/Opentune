@@ -54,6 +54,7 @@ object Core {
         ListenBrainz.init(app)
         com.opentune.data.radio.Radio.init(app)
         if (phone) {
+            com.opentune.data.addons.AddonRefreshWorker.schedule(app)
             com.opentune.data.releases.NewReleases.init(app)
             com.opentune.data.UpdateCheck.init(app)
             com.opentune.data.UpdateCheck.schedule(app)

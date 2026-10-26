@@ -17,7 +17,7 @@ class SettingsDefaultsTest {
             val settings = json.decodeFromString<SettingsState>(body)
             assertTrue(settings.playback.stopOnTaskRemoved)
             assertFalse(settings.playback.pauseListeningHistory)
-            assertEquals(com.opentune.data.history.ListeningHistoryTarget.DEVICE_ONLY, settings.playback.listeningHistoryTarget)
+            assertEquals(com.opentune.data.history.ListeningHistoryTarget.YOUTUBE_MUSIC, settings.playback.listeningHistoryTarget)
             assertFalse(settings.playback.losslessUnmeteredOnly)
             assertTrue(settings.lyrics.preferWordSynced)
             assertTrue(settings.lyrics.romanize)

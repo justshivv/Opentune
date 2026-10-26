@@ -45,6 +45,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         // The home-screen widget follows the shared player service.
         com.opentune.data.AppHooks.onPlayerChanged = { context, player -> com.opentune.widget.NowPlayingWidget.refresh(context, player) }
         com.opentune.data.AppHooks.onPlayerStopped = { context -> com.opentune.widget.NowPlayingWidget.stopped(context) }
+        java.util.Locale.setDefault(com.opentune.ui.theme.AppLanguages.wrap(this).resources.configuration.locales[0])
         com.opentune.data.Core.init(this)
         // Spotify's personal song radio, when Spotify is connected; the cookie stays with the WebView.
         com.opentune.data.spotify.SpotifyWebPlayer.account = {

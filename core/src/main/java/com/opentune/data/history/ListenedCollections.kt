@@ -63,7 +63,7 @@ object ListenedCollections {
     fun flush() { saved?.flushIfDirty { json.encodeToString(serializer, _plays.value) } }
 
     fun played(browseId: String, title: String, subtitle: String, thumbnailUrl: String?, now: Long = System.currentTimeMillis()) {
-        if (com.opentune.data.settings.AppSettings.playback.value.pauseListeningHistory || browseId.isBlank() || title.isBlank()) return
+        if (browseId.isBlank() || title.isBlank()) return
         _plays.update { list ->
             val old = list.firstOrNull { it.browseId == browseId }
             val entry = CollectionPlay(browseId, title, subtitle, thumbnailUrl ?: old?.thumbnailUrl, (listOf(now) + old?.playedAt.orEmpty()).take(PLAYS_KEPT))

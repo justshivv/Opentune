@@ -45,6 +45,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
     val rowHeights = remember { mutableStateMapOf<String, Int>() }
     var draggingKey by remember { mutableStateOf<String?>(null) }
     var draggedTop by remember { mutableFloatStateOf(0f) }
+    val availability by AddonRefresh.availability.collectAsState()
     val scope = rememberCoroutineScope()
     val haptics = com.opentune.ui.components.rememberHaptics()
     var input by remember { mutableStateOf("") }
@@ -59,7 +60,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-                    Text("Audio sources", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
+                    Text(com.opentune.ui.theme.tr("Audio sources"), style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
                     IconButton(onClick = { scope.launch { notice = if (AddonRefresh.refresh(force = true)) "Audio sources refreshed" else "Couldn't refresh. Your saved sources are still available." } }) { Icon(Icons.Rounded.Refresh, "Refresh audio sources") }
                 }
                 Text("YOUR SOUND, YOUR ORDER", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -97,7 +98,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(addon.manifest.name, style = MaterialTheme.typography.titleMedium)
                                     Text(if (addon.admin) "Added by admin" else "Your source", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                    Text(checks[addon.key] ?: if (addon.ownerOff) "Turned off by the admin for now" else if (com.opentune.data.addons.AddonResolver.paused(addon.key)) "Paused by its owner for now" else if (blocked) "Needs a supported wired, USB or HDMI output" else if (!addon.enabled) "Disabled" else "Lossless · ${if (addon.manifest.downloads) "Streaming & downloads" else "Streaming only"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(if (addon.ownerOff) "Turned off by the admin for now" else if (availability[addon.key] == false) "Service unavailable" else checks[addon.key] ?: if (com.opentune.data.addons.AddonResolver.paused(addon.key)) "Paused by its owner for now" else if (blocked) "Needs a supported wired, USB or HDMI output" else if (!addon.enabled) "Disabled" else "Lossless · ${if (addon.manifest.downloads) "Streaming & downloads" else "Streaming only"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Switch(addon.enabled && !addon.ownerOff, { AddonStore.enable(addon.key, it) }, enabled = !addon.ownerOff)
                                 Icon(Icons.Rounded.DragHandle, null, Modifier.size(48.dp)
@@ -151,7 +152,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
                                         catch (e: AddonHttp.Failure) { checks = checks + (addon.key to "HTTP ${e.status}") }
                                         catch (_: Exception) { checks = checks + (addon.key to "Service unavailable") }
                                     } }) { Text("Check") }
-                                    if (!addon.admin) TextButton(onClick = { AddonStore.remove(addon.key) }) { Text("Remove") }
+                                    if (!addon.admin) TextButton(onClick = { AddonStore.remove(addon.key) }) { Text(com.opentune.ui.theme.tr("Remove")) }
                                 }
                             }
                             HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .4f))
@@ -190,5 +191,5 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
         catch (e: AddonHttp.Failure) { notice = "Service returned HTTP ${e.status}" }
         catch (_: Exception) { notice = "Could not load this manifest. Check the URL and connection." }
         finally { working = false }
-    } }) { Text("Add source") } }, dismissButton = { TextButton(enabled = !working, onClick = { adding = false }) { Text("Cancel") } })
+    } }) { Text(com.opentune.ui.theme.tr("Add source")) } }, dismissButton = { TextButton(enabled = !working, onClick = { adding = false }) { Text(com.opentune.ui.theme.tr("Cancel")) } })
 }

@@ -322,7 +322,7 @@ private fun QuickAction(icon: ImageVector, label: String, active: Boolean, progr
         ) {
             Icon(icon, null, tint = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
         }
-        Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp), maxLines = 1)
+        Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp), maxLines = 1)
     }
 }
 
@@ -334,7 +334,7 @@ fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         Icon(icon, null, Modifier.size(24.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -357,7 +357,7 @@ private fun PlaylistPickRow(
     ) {
         Box(Modifier.size(52.dp).clip(RoundedCornerShape(12.dp))) { art() }
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(com.opentune.ui.theme.tr(title), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (added) Icon(Icons.Rounded.CheckCircle, "Already in this playlist", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))

@@ -207,7 +207,7 @@ private fun PlayShuffleButtons(enabled: Boolean, onPlay: () -> Unit, onShuffle: 
         Button(onClick = onPlay, enabled = enabled, modifier = Modifier.weight(1f).height(52.dp)) {
             Icon(Icons.Filled.PlayArrow, null)
             Spacer(Modifier.width(8.dp))
-            Text("Play")
+            Text(com.opentune.ui.theme.tr("Play"))
         }
         ShuffleButton(onShuffle, onSmartShuffle, Modifier.weight(1f), enabled = enabled)
     }
@@ -254,7 +254,7 @@ internal fun ShuffleButton(onShuffle: () -> Unit, onSmartShuffle: (() -> Unit)?,
             Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Shuffle, null)
                 Spacer(Modifier.width(8.dp))
-                Text("Shuffle", style = MaterialTheme.typography.labelLarge)
+                Text(com.opentune.ui.theme.tr("Shuffle"), style = MaterialTheme.typography.labelLarge)
             }
         }
     }
@@ -332,7 +332,7 @@ private fun ListPlayRow(
         ) {
             Icon(Icons.Filled.PlayArrow, null)
             Spacer(Modifier.width(8.dp))
-            Text("Play", style = MaterialTheme.typography.titleMedium)
+            Text(com.opentune.ui.theme.tr("Play"), style = MaterialTheme.typography.titleMedium)
         }
         Box(
             Modifier.size(56.dp).glass(androidx.compose.foundation.shape.CircleShape).clip(androidx.compose.foundation.shape.CircleShape).clickable(enabled = enabled, onClick = onSave),

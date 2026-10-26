@@ -114,6 +114,19 @@ fun HomeScreen(
     val hidden by com.opentune.data.library.LibraryStore.hidden.collectAsState()
     val more = remember(moreAll, hideExplicit, hidden) { hidden.shelves(ContentFilter.shelves(moreAll, hideExplicit)) }
     val records by History.records.collectAsState()
+    val newestListen = records.firstOrNull()?.playedAt
+    var shownListen by remember { mutableStateOf(newestListen) }
+    var lastListeningRefresh by remember { mutableStateOf(0L) }
+    LaunchedEffect(newestListen, covered) {
+        if (!covered && newestListen != shownListen) {
+            val wait = (60_000L - (android.os.SystemClock.elapsedRealtime() - lastListeningRefresh)).coerceAtLeast(0)
+            kotlinx.coroutines.delay(wait)
+            shownListen = newestListen
+            lastListeningRefresh = android.os.SystemClock.elapsedRealtime()
+            MusicRepository.refreshHomeRecommendations()
+            loader.reload(keepContent = true)
+        }
+    }
     val recents = remember(records, hideExplicit) { ContentFilter.songs(History.recents(records, 100), hideExplicit) }
     // Not saved with the page: a page opened from inside it (an artist, from a
     // song's menu) is left with one back press, not one that brings the list up again.
@@ -129,7 +142,7 @@ fun HomeScreen(
         hidden.shelves(ContentFilter.shelves(listOf(HomeShelf(com.opentune.data.history.SpeedDial.TITLE, picks)), hideExplicit))
             .firstOrNull()?.items.orEmpty()
     }
-    val speedDial = feed.speedDial?.items?.takeIf { it.size >= SPEED_DIAL_MIN } ?: localDial
+    val speedDial = com.opentune.data.history.SpeedDial.personalized(localDial, feed.speedDial?.items.orEmpty())
     androidx.compose.runtime.SideEffect { SpeedDialItems.items = speedDial }
     // With little history, mixes from the followed artists fill in (see HomeSeed);
     // what the user hid stays out of both.
@@ -181,7 +194,7 @@ fun HomeScreen(
         androidx.compose.material3.ModalBottomSheet(onDismissRequest = { historyOpen = false }) {
             // Frosted behind, like the long-press menus and the other sheets.
             com.opentune.ui.components.FrostBehind(enabled = !com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceBlur)
-            if (recents.isEmpty()) Text("Your recently played songs will appear here", Modifier.padding(24.dp))
+            if (recents.isEmpty()) Text(com.opentune.ui.theme.tr("Your recently played songs will appear here"), Modifier.padding(24.dp))
             else Recents(recents, ui.recentsAsGrid, actions) {
                 AppSettings.updateUi { it.copy(recentsAsGrid = !it.recentsAsGrid) }
             }
@@ -240,7 +253,7 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column(Modifier.weight(1f)) {
                             if (firstName != null) {
-                                Text(greeting, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                Text(com.opentune.ui.theme.tr(greeting), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                                 Text(
                                     firstName,
                                     style = MaterialTheme.typography.displaySmall,
@@ -249,7 +262,7 @@ fun HomeScreen(
                                     modifier = Modifier.padding(top = 2.dp),
                                 )
                             } else {
-                                Text(greeting, style = MaterialTheme.typography.displaySmall, maxLines = 2)
+                                Text(com.opentune.ui.theme.tr(greeting), style = MaterialTheme.typography.displaySmall, maxLines = 2)
                             }
                         }
                         if (onRecognize != null) {

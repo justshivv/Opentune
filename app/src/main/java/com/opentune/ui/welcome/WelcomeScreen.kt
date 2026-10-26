@@ -771,7 +771,7 @@ internal fun LookPreview(picks: List<ExploreFeed.Artist>, modifier: Modifier = M
             ),
         )
         Column(Modifier.fillMaxSize().padding(20.dp)) {
-            Text("Home", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            Text(com.opentune.ui.theme.tr("Home"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 val faces = picks.take(4)
                 if (faces.isEmpty()) {

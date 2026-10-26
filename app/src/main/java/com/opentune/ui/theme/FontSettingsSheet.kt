@@ -41,7 +41,7 @@ fun FontSettingsSheet(onDismiss: () -> Unit) {
     }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
-            Text("Fonts & readability", style = MaterialTheme.typography.headlineSmall)
+            Text(com.opentune.ui.theme.tr("Fonts & readability"), style = MaterialTheme.typography.headlineSmall)
             Text("Choose your typeface and text weight. Lyrics follow the same font.", Modifier.padding(vertical = 12.dp))
             for (font in AppFont.entries.filter { it != AppFont.CUSTOM || theme.customFontId.isNotEmpty() }) {
                 val available = font != AppFont.CUSTOM || ImportedFonts.file(context, theme.customFontId) != null

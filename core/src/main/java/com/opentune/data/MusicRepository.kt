@@ -38,6 +38,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withLock
 
 /** An album or playlist page, ready to show. */
 @Serializable
@@ -207,6 +208,11 @@ object MusicRepository {
      * again doesn't fetch twenty pages. A source that fails just adds nothing.
      */
     private suspend fun extraShelves(source: HomeSource): List<HomeShelf> {
+        // Signed-in Home already supplies the account's interests. Do not bury them
+        // under generic charts and rotating moods from the guest feed.
+        if (com.opentune.data.account.AccountStore.signedIn.value &&
+            source in setOf(HomeSource.CHARTS, HomeSource.EXPLORE, HomeSource.MOODS, HomeSource.NEW_RELEASES)) return emptyList()
+        if (History.records.value.isNotEmpty() && source in setOf(HomeSource.CHARTS, HomeSource.EXPLORE)) return emptyList()
         val now = System.currentTimeMillis()
         val engine = AppSettings.playback.value.recommender
         val cached = extrasCache[source]?.takeIf {
@@ -342,11 +348,15 @@ object MusicRepository {
         // A hidden artist gets no shelves of their own.
         val hidden = com.opentune.data.library.LibraryStore.hidden.value
         val top = History.replay(History.records.value, since).topArtists.filterNot { hidden.hidesArtist(it.title) }.take(2)
-        top.map { entry ->
+        val personal = personalArtists()
+        val topShelf = if (personal.isEmpty()) emptyList() else listOf(HomeShelf("Your top artists", personal.map {
+            ShelfItem(it.name, "From your listening", it.thumbnailUrl, null, it.browseId)
+        }))
+        topShelf + top.map { entry ->
             async {
                 val song = entry.song ?: return@async emptyList()
                 val id = artistIdFor(song) ?: return@async emptyList()
-                val page = InnertubeParser.parseArtistPage(Innertube.browse(id))
+                val page = personalArtistPage(id)
                 val name = page.name ?: entry.title
                 page.sections
                     // Cards that open a page: albums, singles, playlists, artists.
@@ -355,6 +365,44 @@ object MusicRepository {
                     .map { it.copy(subtitle = "Because you like $name") }
             }
         }.awaitAll().flatten()
+    }
+
+    private val personalArtistPages = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, ArtistPage>>()
+    private val personalArtistLocks = Array(8) { kotlinx.coroutines.sync.Mutex() }
+    private suspend fun personalArtistPage(id: String): ArtistPage {
+        val key = id + ":" + java.util.Locale.getDefault().language
+        return personalArtistLocks[key.hashCode().ushr(1) % personalArtistLocks.size].withLock {
+            val now = System.currentTimeMillis()
+            personalArtistPages[key]?.takeIf { now - it.first < 6 * 60 * 60_000L }?.let { return@withLock it.second }
+            val page = InnertubeParser.parseArtistPage(Innertube.browse(id))
+            if (personalArtistPages.size >= 64) personalArtistPages.clear()
+            personalArtistPages[key] = now to page
+            page
+        }
+    }
+
+    private val personalArtistIds = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** A representative song is retained even in artist aggregates and old history is resolved lazily. */
+    suspend fun personalArtists(): List<ExploreFeed.Artist> = coroutineScope {
+        val hidden = com.opentune.data.library.LibraryStore.hidden.value
+        val since = System.currentTimeMillis() - 90L * 86_400_000
+        val slots = kotlinx.coroutines.sync.Semaphore(3)
+        History.replay(History.records.value, since).topArtists
+            .filterNot { hidden.hidesArtist(it.title) }.take(12).map { entry -> async {
+                slots.acquire()
+                try {
+                    val song = entry.song ?: return@async null
+                    val id = personalArtistIds[entry.key] ?: artistIdFor(song)?.also {
+                        if (personalArtistIds.size > 100) personalArtistIds.clear()
+                        personalArtistIds[entry.key] = it
+                    } ?: return@async null
+                    val portrait = try { personalArtistPage(id).thumbnailUrl } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                    ExploreFeed.Artist(id, entry.title, portrait)
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) { null }
+                finally { slots.release() }
+            } }.awaitAll().filterNotNull().distinctBy { it.browseId }
     }
 
     /** Playlists for two moods or genres, a different pair each day. */

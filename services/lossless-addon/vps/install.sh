@@ -14,7 +14,7 @@ PORT=8787
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ "$(id -u)" -ne 0 ]; then echo "Run it as root: sudo bash install.sh"; exit 1; fi
-for f in server.mjs worker.mjs auth.mjs security.mjs attestation.mjs control.mjs control.html control.js control.css; do
+for f in server.mjs worker.mjs cache.mjs auth.mjs security.mjs attestation.mjs control.mjs control.html control.js control.css; do
   [ -f "$HERE/$f" ] || { echo "Missing $f next to install.sh"; exit 1; }
 done
 
@@ -47,7 +47,7 @@ fi
 echo "==> App"
 id -u opentune >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell /usr/sbin/nologin opentune
 mkdir -p "$APP_DIR" "$DATA_DIR"
-install -m 0644 "$HERE"/server.mjs "$HERE"/worker.mjs "$HERE"/auth.mjs "$HERE"/security.mjs "$HERE"/attestation.mjs "$HERE"/control.mjs "$HERE"/control.html "$HERE"/control.js "$HERE"/control.css "$APP_DIR"/
+install -m 0644 "$HERE"/server.mjs "$HERE"/worker.mjs "$HERE"/cache.mjs "$HERE"/auth.mjs "$HERE"/security.mjs "$HERE"/attestation.mjs "$HERE"/control.mjs "$HERE"/control.html "$HERE"/control.js "$HERE"/control.css "$APP_DIR"/
 printf '{ "type": "module", "private": true }\n' > "$APP_DIR/package.json"
 chown -R opentune:opentune "$DATA_DIR"
 

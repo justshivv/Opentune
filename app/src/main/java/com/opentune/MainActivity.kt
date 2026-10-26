@@ -31,6 +31,9 @@ import com.opentune.ui.theme.OpenTuneTheme
 import com.opentune.ui.theme.rememberArtworkSeed
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(com.opentune.ui.theme.AppLanguages.wrap(newBase))
+    }
     private var tv = false
 
     override fun onStop() {
@@ -42,6 +45,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        java.util.Locale.setDefault(resources.configuration.locales[0])
         enableEdgeToEdge()
         if (savedInstanceState == null) receive(intent)
         tv = com.opentune.ui.tv.Tv.isTv(this)

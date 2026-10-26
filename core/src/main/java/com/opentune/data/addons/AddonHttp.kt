@@ -2,6 +2,8 @@ package com.opentune.data.addons
 
 import com.opentune.data.Http
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import okhttp3.*
 import java.io.IOException
 import java.net.InetAddress
@@ -11,6 +13,8 @@ import kotlin.coroutines.resumeWithException
 
 /** Bounded requests with cancellation and no ambient cookies or authentication. */
 object AddonHttp {
+    private val requestSlots = Semaphore(6)
+    private val hostSlots = java.util.concurrent.ConcurrentHashMap<String, Semaphore>()
     private const val USER_AGENT = "BitChord/v1.8.1"
     /** [paused]: the add-on said its owner paused it ([retryAfterSeconds] is then how long, up to a day). */
     class Failure(val status: Int, val retryAfterSeconds: Long = 0, val paused: Boolean = false) : IOException(if (paused) "Add-on paused by its owner" else "Add-on returned HTTP $status")
@@ -41,8 +45,13 @@ object AddonHttp {
         !(a.address.size == 16 && (a.address[0].toInt() and 0xfe) == 0xfc) &&
         !(a.address.size == 4 && (a.address[0].toInt() and 255) == 100 && (a.address[1].toInt() and 255) in 64..127)
     suspend fun text(url: String): String = bytes(url, 2_097_152).toString(Charsets.UTF_8)
-    suspend fun bytes(url: String, limit: Int, prefix: Boolean = false): ByteArray =
-        waitingOutRateLimits { withAgentFallback(AddonProtocol.url(url).host) { agent -> fetch(url, limit, prefix, agent) } }
+    suspend fun bytes(url: String, limit: Int, prefix: Boolean = false): ByteArray {
+        val host = AddonProtocol.url(url).host
+        val hostGate = hostSlots[host] ?: if (hostSlots.size < 128) hostSlots.computeIfAbsent(host) { Semaphore(2) } else Semaphore(2)
+        return hostGate.withPermit { requestSlots.withPermit {
+            waitingOutRateLimits { withAgentFallback(host) { agent -> fetch(url, limit, prefix, agent) } }
+        } }
+    }
 
     private suspend fun fetch(url: String, limit: Int, prefix: Boolean, agent: String?): ByteArray {
         var address = AddonProtocol.url(url)

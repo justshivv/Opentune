@@ -635,7 +635,7 @@ internal fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, col
             )
         }
         Text(
-            tab.label,
+            com.opentune.ui.theme.tr(tab.label),
             style = (if (roomy) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall).let { if (ink.shade != null) it.copy(shadow = ink.shade) else it },
             // One weight either way, so the name doesn't change width as it's picked.
             fontWeight = FontWeight.SemiBold,
@@ -703,7 +703,7 @@ private fun TabOrb(tab: ChromeTab, searchSelected: Boolean, modifier: Modifier, 
     ) {
         Icon(
             if (searchSelected) tab.icon else tab.selectedIcon,
-            tab.label,
+            com.opentune.ui.theme.tr(tab.label),
             tint = if (searchSelected) ink.off else ink.on,
             modifier = Modifier.size(26.dp),
         )

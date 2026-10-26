@@ -1,9 +1,44 @@
+const SESSION_KEY = 'opentune.control.session';
 let token = '', revision = 0, data, history = [];
+try { token = sessionStorage.getItem(SESSION_KEY) || ''; } catch { /* Storage may be disabled. */ }
 const $ = id => document.getElementById(id);
 const status = (message, error = false) => { $('status').textContent = message; $('status').className = error ? 'error' : ''; };
+function saveSession(value) {
+  token = value;
+  try { if (value) sessionStorage.setItem(SESSION_KEY, value); else sessionStorage.removeItem(SESSION_KEY); } catch { /* Keep this page usable without storage. */ }
+}
+function endSession() {
+  saveSession(''); $('editor').hidden = true; $('login').hidden = false;
+}
 async function api(path, body) {
   const r = await fetch('/control/' + path, { method: body === undefined ? 'GET' : 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-  const result = await r.json(); if (!r.ok) throw new Error(result.error || 'Request failed'); return result;
+  if (r.status === 401 && path !== 'login') {
+    endSession();
+    throw new Error('Session expired or no longer valid. Sign in again.');
+  }
+  const raw = await r.text();
+  let result;
+  try { result = JSON.parse(raw); } catch {
+    throw new Error(`Dashboard ${path} request returned ${raw.trim() ? 'an invalid' : 'an empty'} response (HTTP ${r.status}). Try again; if it continues, check the server logs.`);
+  }
+  if (!r.ok) throw new Error(result?.error || `Dashboard ${path} request failed (HTTP ${r.status}).`);
+  if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error(`Dashboard ${path} request returned an invalid response (HTTP ${r.status}).`);
+  return result;
+}
+function readList(key) {
+  const field = $(key), raw = field.value.trim();
+  // Empty optional lists mean no announcements/playlists, just like [].
+  if (!raw) return [];
+  let result;
+  try { result = JSON.parse(raw); } catch {
+    field.focus();
+    throw new Error(`${key === 'banners' ? 'Announcements' : 'Featured playlists'}: invalid JSON. Use a JSON array, or leave this field empty for none.`);
+  }
+  if (!Array.isArray(result)) {
+    field.focus();
+    throw new Error(`${key === 'banners' ? 'Announcements' : 'Featured playlists'} must be a JSON array. Use [] or leave this field empty for none.`);
+  }
+  return result;
 }
 function node(tag, text) { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; return n; }
 function renderSections() {
@@ -37,6 +72,7 @@ function renderSources() {
     const label = node('label'); label.className = 'check';
     const check = node('input'); check.type = 'checkbox'; check.checked = source.enabled; check.onchange = () => source.enabled = check.checked;
     label.append(check, node('span', 'Available to listeners')); card.append(label);
+    card.append(node('small', 'Turning this off keeps the source visible as disabled. Listeners cannot re-enable it until you publish it as available again.'));
     const actions = node('div'); actions.className = 'source-actions';
     for (const [offset, name] of [[-1, 'Move up'], [1, 'Move down']]) {
       const button = node('button', name); button.className = 'quiet'; button.disabled = index + offset < 0 || index + offset >= data.sources.length;
@@ -65,21 +101,37 @@ function render() {
   }
 }
 function draft() {
-  return { ...data, ...Object.fromEntries(['banners', 'playlists'].map(k => [k, JSON.parse($(k).value)])), communityPrompts: $('prompts').checked, network: { timeoutMs: Number($('timeout').value), retries: Number($('retries').value) } };
+  return { ...data, ...Object.fromEntries(['banners', 'playlists'].map(k => [k, readList(k)])), communityPrompts: $('prompts').checked, network: { timeoutMs: Number($('timeout').value), retries: Number($('retries').value) } };
 }
 async function load() { const current = await api('config'); revision = current.revision; data = current.data; history = current.history; render(); }
 async function action(fn) { $('publish').disabled = true; try { await fn(); } catch (e) { status(e.message, true); } finally { $('publish').disabled = false; } }
-$('login').onsubmit = event => { event.preventDefault(); void action(async () => { const form = new FormData(event.target); const result = await api('login', Object.fromEntries(form)); token = result.token; event.target.reset(); await load(); $('login').hidden = true; $('editor').hidden = false; status('Connected. Changes stay in this draft until you publish.'); }); };
+$('login').onsubmit = event => { event.preventDefault(); void action(async () => { const form = new FormData(event.target); const result = await api('login', Object.fromEntries(form)); saveSession(result.token); event.target.reset(); await load(); $('login').hidden = true; $('editor').hidden = false; status('Connected. Changes stay in this draft until you publish.'); }); };
 $('reload').onclick = () => void action(async () => { await load(); status('Loaded the latest published configuration.'); });
-$('logout').onclick = () => { token = ''; $('editor').hidden = true; $('login').hidden = false; status('Signed out.'); };
+$('logout').onclick = () => { endSession(); status('Signed out.'); };
 $('publish').onclick = () => void action(async () => { await api('config', { expectedRevision: revision, data: draft() }); await load(); status('Published. Compatible apps receive this on their next refresh.'); });
 $('previewButton').onclick = () => void action(async () => {
   const value = draft(); $('preview').replaceChildren();
   for (const banner of value.banners.filter(x => x.enabled)) { const card = node('article'); card.append(node('h3', banner.title), node('p', banner.body), node('small', banner.action + ' → ' + banner.url)); $('preview').append(card); }
   const list = node('ol'); value.sections.filter(x => x.enabled).forEach(x => list.append(node('li', x.title || x.id))); $('preview').append(list);
+  status('Preview updated. Changes have not been published.');
 });
-$('exampleBanner').onclick = () => void action(async () => { const values = JSON.parse($('banners').value); values.push({ id: 'community-' + Date.now(), enabled: true, title: 'Made for music. Built together.', body: 'Join the OpenTune community.', action: 'Join Discord', url: data.links.discord, platforms: ['android', 'tv', 'web'] }); $('banners').value = JSON.stringify(values, null, 2); });
-$('examplePlaylist').onclick = () => void action(async () => { const values = JSON.parse($('playlists').value); values.push({ id: 'playlist-' + Date.now(), title: 'Your playlist title', browseId: 'VL_REPLACE_WITH_PLAYLIST_ID', artwork: '' }); $('playlists').value = JSON.stringify(values, null, 2); });
+$('exampleBanner').onclick = () => void action(async () => { const values = readList('banners'); values.push({ id: 'community-' + Date.now(), enabled: true, title: 'Made for music. Built together.', body: 'Join the OpenTune community.', action: 'Join Discord', url: data.links.discord, platforms: ['android', 'tv', 'web'] }); $('banners').value = JSON.stringify(values, null, 2); });
+$('examplePlaylist').onclick = () => void action(async () => { const values = readList('playlists'); values.push({ id: 'playlist-' + Date.now(), title: 'Your playlist title', browseId: 'VL_REPLACE_WITH_PLAYLIST_ID', artwork: '' }); $('playlists').value = JSON.stringify(values, null, 2); });
 
 $('manageSources').onchange = () => { if (!$('manageSources').checked && !confirm('Return to the legacy catalog? This discards the catalog in this draft.')) { $('manageSources').checked = true; return; } data.sources = $('manageSources').checked ? [] : null; renderSources(); };
 $('addSource').onclick = () => { if (data.sources === null || data.sources.length >= 20) return; data.sources.push({ id: 'source-' + crypto.randomUUID(), name: '', url: '', enabled: true }); renderSources(); };
+
+async function restoreSession() {
+  if (!token) return;
+  $('login').hidden = true;
+  status('Restoring your session…');
+  try {
+    await load();
+    $('editor').hidden = false;
+    status('Connected. Loaded the latest published configuration.');
+  } catch (e) {
+    $('login').hidden = false;
+    status(e.message, true);
+  }
+}
+void restoreSession();

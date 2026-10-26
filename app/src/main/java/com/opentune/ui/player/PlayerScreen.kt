@@ -34,6 +34,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -726,6 +728,10 @@ fun PlayerLayout(
                 )
             }
 
+            if (!docked) Box(Modifier.fillMaxWidth()
+                .windowInsetsTopHeight(WindowInsets.statusBars)
+                .background(Color.Black.copy(alpha = 0.58f)))
+
             // Behind the lyrics, the cover's colours drift slowly.
             androidx.compose.animation.AnimatedVisibility(
                 visible = pane == Pane.LYRICS && !landscape && !amoled && !apple,
@@ -1047,7 +1053,7 @@ fun PlayerLayout(
                                             seeks = lyricsSeeks,
                                         )
                                     } else {
-                                        Text("Queue", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+                                        Text(com.opentune.ui.theme.tr("Queue"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
                                         QueuePane(
                                             queue = state.queue,
                                             currentIndex = state.currentIndex,
@@ -1301,7 +1307,7 @@ private fun LyricsOffsetDialog(videoId: String, autoMs: Long, onDismiss: () -> U
     fun set(v: Long) = AppSettings.setLyricsOffset(videoId, v.coerceIn(-10_000, 10_000), keepZero = autoMs != 0L)
     FloatingDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Lyrics offset") },
+        title = { Text(com.opentune.ui.theme.tr("Lyrics offset")) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text(

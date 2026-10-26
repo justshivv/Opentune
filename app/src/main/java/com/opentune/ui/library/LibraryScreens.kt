@@ -78,7 +78,7 @@ internal fun PlayButtons(onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Mo
             GlassIconButton(Icons.Rounded.PlayArrow, "Play", onPlay, size = 44.dp)
         } else {
             Button(onClick = onPlay, modifier = Modifier.weight(1f).height(52.dp)) {
-                Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text("Play")
+                Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text(com.opentune.ui.theme.tr("Play"))
             }
             ShuffleButton(onShuffle, onSmartShuffle, Modifier.weight(1f))
         }

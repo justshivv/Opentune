@@ -350,7 +350,7 @@ fun PageHeader(title: String, onBack: (() -> Unit)? = null, actions: (@Composabl
             actions?.invoke()
         }
         Text(
-            title,
+            com.opentune.ui.theme.tr(title),
             style = MaterialTheme.typography.displaySmall,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
         )

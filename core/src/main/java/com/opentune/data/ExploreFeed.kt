@@ -38,14 +38,8 @@ object ExploreFeed {
 
         val chartShelves = charts.await()
         val chartArtists = artistsOf(chartShelves)
-        val mine = run {
-            val since = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
-            History.replay(History.records.value, since).topArtists.take(8).mapNotNull { e ->
-                val id = e.song?.artistId?.takeIf { it.startsWith("UC") } ?: return@mapNotNull null
-                Artist(id, e.title, chartArtists.firstOrNull { it.browseId == id }?.thumbnailUrl)
-            }
-        }
-        val artists = (mine + chartArtists).distinctBy { it.browseId }.take(24)
+        val mine = MusicRepository.personalArtists()
+        val artists = mine.ifEmpty { chartArtists }.distinctBy { it.browseId }.take(24)
 
         val moodTiles = moods.await().flatMap { section ->
             val kind = if (section.title.contains("genre", ignoreCase = true)) Kind.GENRE else Kind.MOOD

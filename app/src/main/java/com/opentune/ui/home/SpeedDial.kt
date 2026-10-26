@@ -212,7 +212,7 @@ fun SpeedDialScreen(contentPadding: PaddingValues, onItemClick: (ShelfItem) -> U
     val records by com.opentune.data.history.History.records.collectAsState()
     val plays by com.opentune.data.history.ListenedCollections.plays.collectAsState()
     val local = remember(records, plays) { SpeedDial.fromHistory(records, collections = plays) }
-    val items = SpeedDialItems.items.ifEmpty { local }
+    val items = SpeedDial.personalized(local, SpeedDialItems.items)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = (maxWidth - 16.dp) / 4
         LazyVerticalGrid(GridCells.Fixed(4), contentPadding = contentPadding, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {

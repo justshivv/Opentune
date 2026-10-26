@@ -1,3 +1,4 @@
+import { withMetadataCache } from './cache.mjs';
 import { withAbuseProtection } from './security.mjs';
 import { withAppVerification } from './auth.mjs';
 export { AddonAuthState } from './auth.mjs';
@@ -313,4 +314,4 @@ export function withPause(handler) {
   };
 }
 const handler = createAddon();
-export default { fetch: withPause(withAbuseProtection(withAppVerification(handler))) };
+export default { fetch: withPause(withAbuseProtection(withAppVerification(withMetadataCache(handler)))) };

@@ -297,7 +297,7 @@ fun ImportScreen(
                             ) { Text(if (playing) "Finding it…" else "Play") }
                             f is Found.FromYouTube -> {
                                 Button(onClick = { PlaylistImport.saveSongs(f.p.name, f.p.songs) }, enabled = !PlaylistImport.running, modifier = Modifier.weight(1f)) { Text("Save as playlist") }
-                                FilledTonalButton(onClick = { actions.playAll(f.p.songs, 0, false, f.p.name) }, modifier = Modifier.weight(1f)) { Text("Play") }
+                                FilledTonalButton(onClick = { actions.playAll(f.p.songs, 0, false, f.p.name) }, modifier = Modifier.weight(1f)) { Text(com.opentune.ui.theme.tr("Play")) }
                             }
                             f is Found.FromSpotify -> Button(
                                 enabled = !PlaylistImport.running && f.count > 0,
@@ -398,16 +398,16 @@ private fun ProgressCard(p: PlaylistImport.Progress, actions: SongActions, onOpe
                 else -> Text("Found ${p.matched} of ${p.total} songs. Saved as a playlist in Library.")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!p.finished) TextButton(onClick = PlaylistImport::cancel) { Text("Cancel") }
+                if (!p.finished) TextButton(onClick = PlaylistImport::cancel) { Text(com.opentune.ui.theme.tr("Cancel")) }
                 p.playlistId?.let { id ->
                     TextButton(onClick = {
                         playlists.firstOrNull { it.id == id }?.songs?.map { it.toSong() }?.takeIf { it.isNotEmpty() }
                             ?.let { actions.playAll(it, 0, false, p.name) }
-                    }) { Text("Play") }
+                    }) { Text(com.opentune.ui.theme.tr("Play")) }
                     TextButton(onClick = { onOpenPlaylist(id) }) { Text("Open") }
                 }
                 if (p.missed.isNotEmpty()) TextButton(onClick = { showMissed = !showMissed }) { Text(if (showMissed) "Hide missed" else "${p.missed.size} not found") }
-                if (p.finished) TextButton(onClick = PlaylistImport::dismiss) { Text("Close") }
+                if (p.finished) TextButton(onClick = PlaylistImport::dismiss) { Text(com.opentune.ui.theme.tr("Close")) }
             }
             if (showMissed) {
                 p.missed.take(200).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
