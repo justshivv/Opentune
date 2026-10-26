@@ -152,13 +152,12 @@ const server = http.createServer(async (req, res) => {
 server.requestTimeout = 60_000;
 server.headersTimeout = 15_000;
 server.listen(PORT, HOST, () => {
-  console.log(`OpenTune add-on on http://${HOST}:${PORT} for https://${PUBLIC_HOST}` +
+  console.log(`OpenTune add-on on http://${HOST}:${server.address().port} for https://${PUBLIC_HOST}` +
     ` (verification ${env.VERIFICATION_MODE}${env.PAUSED === 'true' ? ', paused' : ''})`);
   if (!/^[a-f0-9]{64}$/.test(env.APP_CERT_SHA256)) console.warn('APP_CERT_SHA256 is not set: no device can sign in.');
 });
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { server.close(); configStore.close(); db.close(); process.exit(0); });
 
 for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => {
   server.close();
-  pool.close().finally(() => process.exit(0));
+  pool.close().finally(() => { configStore.close(); db.close(); process.exit(0); });
 });
