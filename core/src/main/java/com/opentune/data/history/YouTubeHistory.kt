@@ -6,7 +6,7 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.data.innertube.StreamResolver
 import java.security.SecureRandom
 
-/** Account writes are opt-in; public/add-on audio uses the song's original YouTube identity. */
+/** Account writes follow the sync preference; add-on audio uses the original YouTube identity. */
 internal object YouTubeHistory {
     fun session(videoId: String, active: () -> Boolean): YouTubeHistorySession? {
         if (!videoId.matches(Regex("[A-Za-z0-9_-]{11}"))) return null

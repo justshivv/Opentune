@@ -1,0 +1,13 @@
+<resources>
+    <string name="widget_description">चल रहे गाने को चलाएँ, छोड़ें या पसंद करें</string>
+    <string name="widget_nothing_playing">कुछ नहीं चल रहा</string>
+    <string name="widget_open">OpenTune खोलने के लिए टैप करें</string>
+    <string name="widget_like">पसंद करें</string>
+    <string name="widget_unlike">पसंदीदा गानों से हटाएँ</string>
+    <string name="widget_previous">पिछला</string>
+    <string name="widget_play">चलाएँ</string>
+    <string name="widget_pause">रोकें</string>
+    <string name="widget_next">अगला</string>
+    <string name="recognize_label">गाना पहचानें</string>
+    <string name="recognize_widget_description">एक टैप में आसपास बज रहे गाने को पहचानें और अपनी लाइब्रेरी में जोड़ें</string>
+</resources>

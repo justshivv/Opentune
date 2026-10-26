@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">OpenTune</string>
+    <string name="app_name" translatable="false">OpenTune</string>
     <string name="widget_description">What\'s playing, with play, skip and like</string>
     <string name="widget_nothing_playing">Nothing playing</string>
     <string name="widget_open">Tap to open OpenTune</string>
