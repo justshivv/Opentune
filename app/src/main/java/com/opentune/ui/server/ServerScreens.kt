@@ -228,6 +228,7 @@ fun ServerAlbumScreen(id: String, contentPadding: PaddingValues, actions: SongAc
 fun ServerPlaylistScreen(id: String, contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
     val loader = rememberLoader("server:playlist:$id") { Subsonic.playlist(id) }
     val state by loader.state.collectAsState()
+    var query by rememberSaveable(id) { mutableStateOf("") }
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         when (val s = state) {
             is UiState.Loading -> item { PageHeader("", onBack = onBack) }
@@ -245,7 +246,8 @@ fun ServerPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Son
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 }
-                songRows(songs, actions, playlist.name)
+                item { com.opentune.ui.browse.ListSearchField(query, { query = it }, { query = "" }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+                songRows(songs.filter { it.title.contains(query.trim(), true) || it.artist.contains(query.trim(), true) }, actions, playlist.name)
             }
         }
     }

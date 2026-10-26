@@ -163,11 +163,11 @@ private fun Modifier.button(interaction: MutableInteractionSource, enabled: Bool
 private fun EchoPlay(playing: Boolean, buffering: Boolean, animate: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val press = pressAmount(interaction.collectIsPressedAsState().value, animate)
-    val phase = rememberEchoPhase(playing && animate, 8_000)
+    val phase = rememberEchoPhase((playing || buffering) && animate, if (buffering) 900 else 14_000)
     // Its own, quicker clock: the lobes stand still while paused, and a
     // loading arc that only turned with them looked frozen.
     val spin = rememberEchoPhase(buffering && animate, 1_100)
-    val depth by animateFloatAsState(if (playing) 0.08f else 0f, if (animate) tween(300, easing = LinearEasing) else snap(), label = "echoIndent")
+    val depth by animateFloatAsState(if (playing || buffering) 0.08f else 0f, if (animate) tween(300, easing = LinearEasing) else snap(), label = "echoIndent")
     val fill = MaterialTheme.colorScheme.primary
     val ink = MaterialTheme.colorScheme.onPrimary
     val path = remember { Path() }
@@ -196,9 +196,15 @@ private fun BloomPlay(isPlaying: Boolean, isBuffering: Boolean, animate: Boolean
     val interaction = remember { MutableInteractionSource() }
     val press = pressAmount(interaction.collectIsPressedAsState().value, animate)
     val ink = MaterialTheme.colorScheme.onSurface
-    val pulse = loadingPulse(isBuffering && animate)
+    val turn = rememberEchoPhase(isBuffering && animate, 1_100)
     Box(
-        Modifier.size(82.dp).drawBloom(press, ink, pulse).button(interaction, true, if (isPlaying) "Pause" else "Play", onClick),
+        Modifier.size(82.dp).drawBloom(press, ink, 0f).drawBehind {
+            if (isBuffering) drawArc(ink.copy(alpha = 0.8f), turn.value * 360f - 90f, 100f, false,
+                topLeft = Offset(2.dp.toPx(), 2.dp.toPx()),
+                size = Size(size.width - 4.dp.toPx(), size.height - 4.dp.toPx()),
+                style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+        }.button(interaction, true, if (isPlaying) "Pause" else "Play", onClick)
+            .semantics { if (isBuffering) stateDescription = "Buffering" },
         contentAlignment = Alignment.Center,
     ) {
         PlayPauseGlyph(isPlaying, ink, animate, Modifier.size(57.dp).graphicsLayer { val s = 1f - 0.16f * press; scaleX = s; scaleY = s })
@@ -407,13 +413,12 @@ private fun MorphPlay(isPlaying: Boolean, isBuffering: Boolean, animate: Boolean
     // 0 is the round disc (paused), 1 the wavy shape (playing). The spring
     // carries the ripple a little past and lets it settle, like something soft.
     val wave by animateFloatAsState(
-        if (isPlaying) 1f else 0f,
+        if (isPlaying || isBuffering) 1f else 0f,
         if (animate) spring(dampingRatio = 0.5f, stiffness = 170f) else snap(),
         label = "wave",
     )
     // The waves turn slowly while music plays, and quicker while it loads.
-    val turn = looping(animate && (isPlaying || isBuffering), 0f, 360f, if (isBuffering) 2_400 else 14_000, reverse = false)
-    val pulse = loadingPulse(isBuffering && animate)
+    val turn = rememberEchoPhase(animate && (isPlaying || isBuffering), if (isBuffering) 900 else 14_000)
     val fill = scheme.onSurface
     val path = remember { Path() }
     Box(
@@ -421,8 +426,8 @@ private fun MorphPlay(isPlaying: Boolean, isBuffering: Boolean, animate: Boolean
             .size(82.dp)
             .graphicsLayer { val s = 1f - 0.08f * press; scaleX = s; scaleY = s }
             .drawBehindCompat { size ->
-                val depth = MORPH_DEPTH * (wave.coerceAtLeast(-0.2f) + 0.35f * pulse)
-                wavyCircle(path, size, size.minDimension / 2f, depth, turn)
+                val depth = MORPH_DEPTH * wave.coerceAtLeast(-0.2f)
+                wavyCircle(path, size, size.minDimension / 2f, depth, turn.value * 360f)
                 drawPath(path, fill)
             }
             .button(interaction, true, if (isPlaying) "Pause" else "Play", onClick),

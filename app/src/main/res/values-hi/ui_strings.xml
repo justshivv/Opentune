@@ -154,4 +154,10 @@
     <string name="ui_16b736d0bb81">स्टोरेज और डेटा</string>
     <string name="ui_1ef943e86ccb">ऑडियो तैयार हो रहा है</string>
     <string name="ui_9b492f471393">अच्छी गुणवत्ता</string>
+    <string name="ui_c08626d0a514">Buffering</string>
+    <string name="ui_079dd748ac12">Search this list</string>
+    <string name="ui_fb8369faa132">No matching songs</string>
+    <string name="ui_bae7366a908e">Offline · waiting for connection</string>
+    <string name="ui_911bc41787b4">Taking longer than usual · tap Pause to stop</string>
+    <string name="ui_3dea15e6341e">Playback stopped · tap Play to retry</string>
 </resources>

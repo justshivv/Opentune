@@ -10,4 +10,6 @@
     <string name="widget_next">अगला</string>
     <string name="recognize_label">गाना पहचानें</string>
     <string name="recognize_widget_description">एक टैप में आसपास बज रहे गाने को पहचानें और अपनी लाइब्रेरी में जोड़ें</string>
+    <string name="widget_album_art_label">एल्बम कलाकृति</string>
+    <string name="widget_studio_label">स्टूडियो कंट्रोल</string>
 </resources>

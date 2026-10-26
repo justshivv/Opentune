@@ -65,6 +65,25 @@ export async function ingest(db, body, now = new Date()) {
   return { accepted: rows.length };
 }
 
+/** First observed activity, not APK downloads or unverifiable unique people. */
+export async function cohorts(db, from, to, timeZone = 'UTC') {
+  const table = activityTable(timeZone);
+  const [result] = await db.batch([db.prepare(`WITH first_seen AS (
+    SELECT installation, MIN(day) AS first_day FROM ${allActivity} GROUP BY installation
+  ), daily_install AS (
+    SELECT installation, day, SUM(plays) AS plays FROM ${table}
+    WHERE day BETWEEN ? AND ? GROUP BY installation, day
+  ) SELECT d.day,
+    SUM(CASE WHEN f.first_day=d.day THEN 1 ELSE 0 END) AS newInstallations,
+    SUM(CASE WHEN f.first_day<d.day THEN 1 ELSE 0 END) AS returningInstallations,
+    SUM(CASE WHEN f.first_day=d.day THEN d.plays ELSE 0 END) AS newPlays,
+    SUM(CASE WHEN f.first_day<d.day THEN d.plays ELSE 0 END) AS returningPlays,
+    SUM(CASE WHEN d.plays>0 THEN 1 ELSE 0 END) AS listeners
+    FROM daily_install d JOIN first_seen f USING(installation)
+    GROUP BY d.day ORDER BY d.day`).bind(from, to)]);
+  return result.results;
+}
+
 export async function summary(db, now = new Date(), timeZone = 'UTC') {
   const table = activityTable(timeZone);
   const day = calendarDay(now,timeZone);
@@ -87,7 +106,7 @@ export async function summary(db, now = new Date(), timeZone = 'UTC') {
   ]);
   return { asOf: now.toISOString(), timeZone, totals: results[0].results[0], today: results[1].results[0],
     week: results[2].results[0].active, month: results[3].results[0].active,
-    daily: results[4].results, versions: results[5].results, downloads: results[6].results,
+    daily: results[4].results, cohorts: await cohorts(db, from, day, timeZone), versions: results[5].results, downloads: results[6].results,
     downloadBrowsers: results[7].results[0].browsers, currentVersions: results[8].results,
     // Version moves (updates, and the occasional downgrade): counted, not mistaken for new installs.
     updates: { total: results[9].results[0].n, byVersion: results[10].results } };
@@ -116,7 +135,7 @@ export async function analytics(db, range, now = new Date(), timeZone = 'UTC') {
     db.prepare(`SELECT MIN(day) AS since FROM ${table}`),
   ]);
   return { asOf: now.toISOString(), range, timeZone, totals: results[0].results[0],
-    daily: results[1].results, versions: results[2].results,
+    daily: results[1].results, cohorts: await cohorts(db, from, to, timeZone), versions: results[2].results,
     coverageSince: results[3].results[0].since };
 }
 

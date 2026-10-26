@@ -188,6 +188,10 @@ object ExternalStreams {
     private suspend fun findNow(song: Song, durationMs: Long, beforePlayback: Boolean, force: Boolean, losslessOnly: Boolean,
         erredOnly: Boolean = false): Rendition? {
         val videoId = song.videoId
+        if (!AppSettings.isOnline()) {
+            report(videoId, "Offline: source lookup resumes when a connection is available.")
+            return null
+        }
         if (!allowed()) {
             report(videoId, if (AppSettings.playback.value.losslessUnmeteredOnly && AppSettings.onMeteredNetwork())
                 "External sources skipped: Unmetered networks only is on. Turn it off in Settings to try FLAC and JioSaavn on mobile data."
@@ -234,7 +238,14 @@ object ExternalStreams {
             maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType,
             trackId = track.trackId.ifEmpty { null }, tier = track.tier.ifEmpty { null })
         val tracks = if (allowed(true) && !losslessMissed) LosslessSource.resolveAll(song, duration,
-            beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { detail.addIfAbsent(it) },
+            beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { line ->
+                synchronized(detail) {
+                    val prefix = line.substringBefore(":", "")
+                    if (prefix.isNotEmpty()) detail.removeAll { it.startsWith("$prefix:") }
+                    detail.addIfAbsent(line)
+                    report(videoId, detail.joinToString("\n"))
+                }
+            },
             skip = skip, settled = ::noteHeard,
             late = { later ->
                 // A slower add-on's verified file: kept to fall back on, and, when it's better than

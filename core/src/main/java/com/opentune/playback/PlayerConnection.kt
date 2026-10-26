@@ -90,6 +90,28 @@ class PlayerConnection(private val context: Context) {
 
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering = _isBuffering.asStateFlow()
+    private val _loadingMessage = MutableStateFlow<String?>(null)
+    val loadingMessage = _loadingMessage.asStateFlow()
+    private var bufferingSince = 0L
+    private var connectionWatch: Job? = null
+
+    private fun refreshLoading(player: Player) {
+        val buffering = player.playbackState == Player.STATE_BUFFERING && PlaybackRequests.soundingPosition == null
+        val waiting = player.playWhenReady && (buffering || player.playerError != null)
+        val online = AppSettings.isOnline()
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (buffering && player.playWhenReady && online) {
+            if (bufferingSince == 0L) bufferingSince = now
+        } else bufferingSince = 0L
+        _isBuffering.value = waiting && buffering && online
+        _loadingMessage.value = when {
+            waiting && !online -> "Offline · waiting for connection"
+            bufferingSince != 0L && now - bufferingSince >= 20_000 -> "Taking longer than usual · tap Pause to stop"
+            _isBuffering.value -> "Buffering"
+            player.playerError != null -> "Playback stopped · tap Play to retry"
+            else -> null
+        }
+    }
 
     /** Whether playback is meant to be running, buffering or not. */
     private val _playWhenReady = MutableStateFlow(false)
@@ -176,6 +198,13 @@ class PlayerConnection(private val context: Context) {
         refresh(newController)
         listener.onTracksChanged(newController.currentTracks)
         _connected.value = true
+        connectionWatch?.cancel()
+        connectionWatch = scope.launch {
+            while (controller === newController) {
+                refreshLoading(newController)
+                kotlinx.coroutines.delay(1_000)
+            }
+        }
     }
 
     fun disconnect() {
@@ -210,7 +239,7 @@ class PlayerConnection(private val context: Context) {
         _isPlaying.value = player.isPlaying || (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING)
         // A quality switch rebuffers the main player while the song plays on (another player
         // sounding it, or a moment's silence between streams): no spinner on the button for that.
-        _isBuffering.value = player.playbackState == Player.STATE_BUFFERING && PlaybackRequests.soundingPosition == null
+        refreshLoading(player)
         _playWhenReady.value = player.playWhenReady
         // A track that started, or a recovery the service made on its own,
         // makes the last error stale.
@@ -443,7 +472,7 @@ class PlayerConnection(private val context: Context) {
 
     fun togglePlayPause() {
         val controller = controller ?: return
-        if (controller.isPlaying) {
+        if (controller.playWhenReady && (controller.playerError == null || !AppSettings.isOnline())) {
             controller.pause()
         } else {
             // After an error the player sits idle; play() alone won't restart it.

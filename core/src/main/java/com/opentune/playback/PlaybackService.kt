@@ -2286,6 +2286,8 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    private var offlineRecovery: Job? = null
+
     private fun recover(error: PlaybackException) {
         val player = mediaSession?.player as? ExoPlayer ?: return
         val item = player.currentMediaItem ?: return
@@ -2328,6 +2330,21 @@ class PlaybackService : MediaLibraryService() {
             applyLoudness()
             player.seekTo(index, position)
             player.prepare()
+            return
+        }
+        // Loss of connectivity is not evidence that this recording or source is bad.
+        // Keep the queue, source and position; resume only if the listener still wants play.
+        if (!AppSettings.isOnline() && error.errorCode in IO_ERRORS) {
+            offlineRecovery?.cancel()
+            offlineRecovery = scope.launch {
+                while (player.currentMediaItem?.mediaId == mediaId && player.playWhenReady) {
+                    delay(2_000)
+                    if (AppSettings.isOnline()) {
+                        if (player.currentMediaItem?.mediaId == mediaId && player.playWhenReady && player.playerError != null) player.prepare()
+                        break
+                    }
+                }
+            }
             return
         }
         if (uri != null && (isUpgradedUri(uri) || externalStreamKeyOf(uri) != null)) {

@@ -120,3 +120,11 @@ Apps read the list each time they come to the front (at most every 10 minutes) a
 ## Keeping within the free plan
 
 Apps send their cumulative totals at most every three hours, or sooner once a day has ended, rather than after every song. Apps from before this change still send after every song; the Worker answers a report that comes within 20 minutes of the last one from the same installation with `429` and writes nothing, and those apps keep the totals and send them later. A report whose play count hasn't grown writes no rows. The public count, the badge and the add-on list are kept in the Worker's memory for a few minutes (a minute for the add-on list), so they don't read D1 each time.
+
+### Four-hour batches and listener cohorts
+
+Updated Android clients durably retain cumulative daily counts and upload at most once every four hours (including across midnight and restarts), with Android background scheduling when connected. The initial installation report can be immediate. Failures retain totals for a later batch; offline history is bounded to 30 days. Sync-history pause does not stop consented usage counting.
+
+Daily cohort rows separate first-observed installations and their plays from returning installations and their plays. Multiple app versions on the same day count one installation. These are reporting identities, not verified unique humans or APK downloads; a reinstall/data clear creates a new identity. Recent days can lag by at least four hours and are not final while offline reports remain outstanding.
+
+The Hostinger package can serve this same API with SQLite; see `services/lossless-addon/vps/README.md` for D1 export, migration and the website configuration cutover.

@@ -10,4 +10,6 @@
     <string name="widget_next">ਅਗਲਾ</string>
     <string name="recognize_label">ਗਾਣਾ ਪਛਾਣੋ</string>
     <string name="recognize_widget_description">ਇੱਕ ਟੈਪ ਨਾਲ ਨੇੜੇ ਚੱਲ ਰਹੇ ਗਾਣੇ ਨੂੰ ਪਛਾਣੋ ਅਤੇ ਆਪਣੀ ਲਾਇਬ੍ਰੇਰੀ ਵਿੱਚ ਜੋੜੋ</string>
+    <string name="widget_album_art_label">ਐਲਬਮ ਕਵਰ</string>
+    <string name="widget_studio_label">ਸਟੂਡੀਓ ਕੰਟਰੋਲ</string>
 </resources>

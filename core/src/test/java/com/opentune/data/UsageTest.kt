@@ -26,13 +26,14 @@ class UsageTest {
         assertEquals("20270101", Usage.istDay(java.time.Instant.parse("2026-12-31T18:30:00Z").toEpochMilli()))
     }
 
-    @Test fun totalsWaitHoursUnlessADayHasEnded() {
+    @Test fun totalsWaitFourHoursAcrossMidnightAndAppRestarts() {
         val now = utc(2026, 10, 9)
+        assertEquals(4 * 60 * 60_000L, Usage.REPORT_EVERY_MS)
         val today = setOf("20261009|1.0.0|IST")
         assertEquals(true, Usage.due(0L, now, today, "20261009"))
         assertEquals(false, Usage.due(now - 60_000, now, today, "20261009"))
         assertEquals(true, Usage.due(now - Usage.REPORT_EVERY_MS, now, today, "20261009"))
-        assertEquals(true, Usage.due(now - 60_000, now, today + "20261008|1.0.0|IST", "20261009"))
+        assertEquals(false, Usage.due(now - 60_000, now, today + "20261008|1.0.0|IST", "20261009"))
         // A clock set back doesn't hold the totals for good.
         assertEquals(true, Usage.due(now + 60_000, now, today, "20261009"))
     }

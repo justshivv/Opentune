@@ -37,6 +37,19 @@ class NowPlayingWidgetTest {
         assertEquals("Play", view.findViewById<ImageButton>(R.id.widget_play).contentDescription)
     }
 
+    @Test fun additionalWidgetsKeepTheSameSongAndAccessibleControls() {
+        context.getSharedPreferences("widget", 0).edit().putString("id", "aaaaaaaaaa1")
+            .putString("title", "A saved song").putString("artist", "An artist").commit()
+        val album = manager.createWidget(AlbumArtWidget::class.java, R.layout.widget_album_art)
+        val studio = manager.createWidget(StudioWidget::class.java, R.layout.widget_studio)
+        AlbumArtWidget().onUpdate(context, AppWidgetManager.getInstance(context), intArrayOf(album))
+        for (id in listOf(album, studio)) {
+            val view = manager.getViewFor(id)
+            assertEquals("A saved song", view.findViewById<TextView>(R.id.widget_title).text.toString())
+            assertEquals("Play", view.findViewById<ImageButton>(R.id.widget_play).contentDescription)
+        }
+    }
+
     @Test
     fun stoppedPlayerStillShowsTheLastSong() {
         context.getSharedPreferences("widget", 0).edit()

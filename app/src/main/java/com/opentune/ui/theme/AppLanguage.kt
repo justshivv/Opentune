@@ -10,7 +10,16 @@ import android.os.LocaleList
 import java.util.Locale
 
 enum class AppLanguage(val tag: String, val label: String) {
-    SYSTEM("", "System language"), ENGLISH("en", "English"), HINDI("hi", "हिन्दी"), PUNJABI("pa", "ਪੰਜਾਬੀ"),
+    SYSTEM("", "System language"),
+    SPANISH("es", "Español"),
+    FRENCH("fr", "Français"),
+    GERMAN("de", "Deutsch"),
+    PORTUGUESE("pt", "Português"),
+    INDONESIAN("id", "Bahasa Indonesia"),
+    ARABIC("ar", "العربية"),
+    BENGALI("bn", "বাংলা"),
+    TAMIL("ta", "தமிழ்"),
+ ENGLISH("en", "English"), HINDI("hi", "हिन्दी"), PUNJABI("pa", "ਪੰਜਾਬੀ"),
 }
 
 object AppLanguages {

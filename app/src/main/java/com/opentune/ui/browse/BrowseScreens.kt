@@ -345,10 +345,10 @@ private fun ListPlayRow(
 
 /** "Search this list", in a rounded field under the buttons. */
 @Composable
-private fun ListSearchField(query: String, onQuery: (String) -> Unit, onClear: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ListSearchField(query: String, onQuery: (String) -> Unit, onClear: () -> Unit, modifier: Modifier = Modifier, autoFocus: Boolean = false) {
     val colors = MaterialTheme.colorScheme
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(autoFocus) { if (autoFocus) runCatching { focus.requestFocus() } }
     Row(
         modifier.fillMaxWidth().height(56.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
             .background(colors.surfaceContainerHigh.copy(alpha = 0.85f)).padding(horizontal = 16.dp),
@@ -357,7 +357,7 @@ private fun ListSearchField(query: String, onQuery: (String) -> Unit, onClear: (
         Icon(Icons.Filled.Search, null, tint = colors.onSurfaceVariant)
         Spacer(Modifier.width(12.dp))
         Box(Modifier.weight(1f)) {
-            if (query.isEmpty()) Text("Search this list", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+            if (query.isEmpty()) Text(com.opentune.ui.theme.tr("Search this list"), style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
             androidx.compose.foundation.text.BasicTextField(
                 query, onQuery,
                 singleLine = true,
@@ -560,20 +560,21 @@ fun CollectionScreen(
                                         onPrivacy = { own.choose() },
                                     )
                                 }
-                                androidx.compose.animation.AnimatedVisibility(searching) {
+                                Column {
                                     // Opened, the field rises to just under the bar, clear of the
                                     // keyboard that comes up with it, instead of staying down under the cover.
                                     val density = androidx.compose.ui.platform.LocalDensity.current
                                     val topInset = WindowInsets.statusBars.getTop(density)
                                     var fieldY by remember { mutableStateOf<Float?>(null) }
-                                    LaunchedEffect(fieldY != null) {
+                                    LaunchedEffect(fieldY != null, searching) {
+                                        if (!searching) return@LaunchedEffect
                                         val y = fieldY ?: return@LaunchedEffect
                                         val below = topInset + with(density) { SEARCH_FIELD_TOP.toPx() }
                                         listState.animateScrollBy(y - below)
                                     }
                                     ListSearchField(
                                         query, { query = it }, onClear = { query = ""; searching = false },
-                                        Modifier.padding(bottom = 12.dp).onGloballyPositioned { if (fieldY == null) fieldY = it.positionInRoot().y },
+                                        Modifier.padding(bottom = 12.dp).onGloballyPositioned { if (fieldY == null) fieldY = it.positionInRoot().y }, autoFocus = searching,
                                     )
                                 }
                             }

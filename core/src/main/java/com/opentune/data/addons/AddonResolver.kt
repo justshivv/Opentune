@@ -126,6 +126,7 @@ object AddonResolver {
                     } == true
                     if (!permitted()) return@withTimeoutOrNull null
                     stage = "searching catalogue"
+                    report("${addon.manifest.name}: $stage")
                     val candidates = client.search("${song.title} ${song.artist}", manifest, tier)
                         .filter { identity.matches(it.title, listOf(it.artist), it.album, it.durationMs) }
                     if (candidates.isEmpty()) { report("${manifest.name}: no matching recording"); return@withTimeoutOrNull null }
@@ -134,6 +135,7 @@ object AddonResolver {
                     for (track in candidates.take(3)) {
                         if (!permitted()) return@withTimeoutOrNull null
                         stage = "resolving audio"
+                        report("${addon.manifest.name}: $stage")
                         var asked = tier
                         var stream = try { client.stream(track.id, manifest, tier, fresh) }
                         catch (e: AddonHttp.Failure) {
@@ -152,6 +154,7 @@ object AddonResolver {
                         }
                         if (!permitted()) return@withTimeoutOrNull null
                         stage = "checking audio header"
+                        report("${addon.manifest.name}: $stage")
                         val checked = if (stream.transport == null && stream.codec == "flac") {
                             val info = LosslessSource.flacInfo(probe(stream.url, 65536, true))
                             if (info == null || !LosslessSource.durationMatches(durationMs, info.durationMs)) {

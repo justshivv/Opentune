@@ -7,7 +7,11 @@ import http from 'node:http';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import worker, { AddonAuthState } from './worker.mjs';
+import { AddonAuthState, withPause } from './worker.mjs';
+import { withAppVerification } from './auth.mjs';
+import { withAbuseProtection } from './security.mjs';
+import { withMetadataCache } from './cache.mjs';
+import { createPool, memoryCache } from './pool.mjs';
 import { ConfigStore, createControl } from './control.mjs';
 
 const env = {
@@ -27,6 +31,14 @@ const MAX_BODY = 100_000;
 mkdirSync(DATA_DIR, { recursive: true });
 const configStore = new ConfigStore(DATA_DIR);
 const control = createControl(configStore);
+const pool = createPool(Number(process.env.ADDON_WORKERS || 1));
+const sharedCache = memoryCache();
+const handleAddon = withPause(withAbuseProtection(withAppVerification(withMetadataCache(
+  request => pool.fetch(request), {cache: () => sharedCache},
+))));
+// Usage is optional for older installs; the complete Hostinger package includes it.
+const usage = process.env.USAGE_ENABLED === 'true'
+  ? (await import('./usage-server.mjs')).createUsageServer(DATA_DIR) : null;
 const db = new DatabaseSync(join(DATA_DIR, 'auth.sqlite'));
 db.exec(`PRAGMA journal_mode=WAL;
   CREATE TABLE IF NOT EXISTS state (name TEXT PRIMARY KEY, data TEXT NOT NULL, alarm INTEGER);
@@ -120,7 +132,10 @@ const server = http.createServer(async (req, res) => {
     const method = req.method || 'GET';
     const body = method === 'GET' || method === 'HEAD' ? undefined : await readBody(req);
     const request = new Request(`https://${PUBLIC_HOST}${req.url || '/'}`, { method, headers, body });
-    const response = await control(request) || await worker.fetch(request, env);
+    const path = new URL(request.url).pathname;
+    const usageRoute = path === '/usage' || path.startsWith('/usage/') || path.startsWith('/v1/') || ['/login','/auth/login','/auth/logout'].includes(path);
+    const response = usage && usageRoute ? await usage(request)
+      : await control(request) || await handleAddon(request, env);
     const out = Buffer.from(await response.arrayBuffer());
     const outHeaders = {};
     response.headers.forEach((value, name) => { outHeaders[name] = value; });
@@ -142,3 +157,8 @@ server.listen(PORT, HOST, () => {
   if (!/^[a-f0-9]{64}$/.test(env.APP_CERT_SHA256)) console.warn('APP_CERT_SHA256 is not set: no device can sign in.');
 });
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { server.close(); configStore.close(); db.close(); process.exit(0); });
+
+for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => {
+  server.close();
+  pool.close().finally(() => process.exit(0));
+});

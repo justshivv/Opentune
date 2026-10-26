@@ -892,6 +892,11 @@ private fun settingsSections(
                         summary = "YouTube Music needs a signed-in account. Spotify does not accept plays from other services; likes can sync separately. Connected scrobblers keep their own settings.",
                         icon = Icons.Rounded.History, value = pb.listeningHistoryTarget.label)
                 },
+                Entry("Spotify listening sync", "spotify account listening history sync") {
+                    NavRow("Spotify listening sync", { com.opentune.data.Pills.info("Spotify does not accept external listening history through its API. Recommendations and library sync are available separately.", context) },
+                        "Unavailable in Spotify’s API · recommendations and library sync remain available")
+                },
+
                 Entry("Pause account sync", "private pause youtube spotify history recommendations") {
                     ToggleRow("Pause account sync", pb.pauseListeningHistory,
                         { v -> AppSettings.updatePlayback { it.copy(pauseListeningHistory = v) } },

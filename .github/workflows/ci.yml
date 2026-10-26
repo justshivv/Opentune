@@ -26,10 +26,17 @@ jobs:
       - name: Usage deduplication and website scripts
         run: |
           node --test usage-api/worker.test.mjs usage-api/addons.test.mjs usage-api/dashboard/model.test.mjs examples/audio-addon/worker.test.mjs
-          node --test services/lossless-addon/control.test.mjs services/lossless-addon/server.test.mjs services/lossless-addon/cache.test.mjs services/lossless-addon/worker.test.mjs services/lossless-addon/control-ui.test.mjs
+          node --test services/lossless-addon/control.test.mjs services/lossless-addon/server.test.mjs services/lossless-addon/cache.test.mjs services/lossless-addon/pool.test.mjs services/lossless-addon/usage-server.test.mjs services/lossless-addon/worker.test.mjs services/lossless-addon/control-ui.test.mjs
           node --check services/lossless-addon/control.js
           node --check usage-api/dashboard/dashboard.js
           node --check site/download-tracking.js
+
+      - name: Package Hostinger backend
+        run: bash services/lossless-addon/vps/pack.sh hostinger-package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opentune-hostinger
+          path: hostinger-package/
 
       - uses: actions/setup-java@v4
         with:

@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">What\'s playing, with play, skip and like</string>
+    <string name="widget_nothing_playing">কিছু চলছে না</string>
+    <string name="widget_open">Tap to open OpenTune</string>
+    <string name="widget_like">পছন্দ</string>
+    <string name="widget_unlike">Remove from Liked</string>
+    <string name="widget_previous">আগের</string>
+    <string name="widget_play">চালান</string>
+    <string name="widget_pause">বিরতি</string>
+    <string name="widget_next">পরের</string>
+    <string name="recognize_label">Name that song</string>
+    <string name="recognize_widget_description">One tap listens for the song playing nearby and adds it to your library</string>
+    <string name="widget_album_art_label">Album artwork</string>
+    <string name="widget_studio_label">Studio controls</string>
+</resources>

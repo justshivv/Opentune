@@ -197,6 +197,7 @@ data class PlayerUiState(
     val coverVideo: com.opentune.data.covers.AppleMotionArt.Motion? = null,
     /** Spotify's Canvas for the song, to loop behind the player. */
     val canvasVideo: String? = null,
+    val loadingMessage: String? = null,
 )
 
 class PlayerActions(
@@ -231,6 +232,7 @@ fun PlayerScreen(
     val sound by AppSettings.sound.collectAsState()
     val isPlaying by vm.isPlaying.collectAsState()
     val isBuffering by vm.isBuffering.collectAsState()
+    val loadingMessage by vm.loadingMessage.collectAsState()
     val hasNext by vm.hasNext.collectAsState()
     val shuffle by vm.shuffleEnabled.collectAsState()
     val shuffleMode by vm.shuffleMode.collectAsState()
@@ -267,7 +269,7 @@ fun PlayerScreen(
         PlayerUiState(
             shown, isPlaying, isBuffering, hasNext, shuffle, repeat, duration,
             lyrics, queue, currentIndex, upNext, sound, theme, ui, source, audioFormat,
-            shuffleMode, smartShuffleAvailable, coverVideo, canvasVideo,
+            shuffleMode, smartShuffleAvailable, coverVideo, canvasVideo, loadingMessage,
         ),
         position = rememberPlaybackPosition(vm),
         buffered = vm::bufferedPositionMs,
@@ -1144,6 +1146,11 @@ fun PlayerLayout(
                 if (state.ui.statsForNerds) {
                     Box(Modifier.clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
                 }
+                if (state.loadingMessage != null) Text(
+                    com.opentune.ui.theme.tr(state.loadingMessage),
+                    modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 PlayerControls(
                     isPlaying = state.isPlaying,
                     isBuffering = state.isBuffering,
@@ -1152,7 +1159,7 @@ fun PlayerLayout(
                     onNext = actions.next,
                     onPrevious = actions.previous,
                     style = state.ui.controlStyle,
-                    animate = !state.ui.reduceAnimation,
+                    animate = !state.ui.reduceAnimation && state.loadingMessage?.startsWith("Offline") != true,
                     progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
                 )
                 if (!state.ui.hideVolumeBar && !minimal && roomy) VolumeBar(Modifier.padding(vertical = 4.dp))

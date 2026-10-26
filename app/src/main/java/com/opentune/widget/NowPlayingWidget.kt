@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
  * is kept, cover included, so the widget isn't blank after a restart.
  */
 @OptIn(UnstableApi::class)
-class NowPlayingWidget : AppWidgetProvider() {
+open class NowPlayingWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         render(context, load(context))
     }
@@ -127,9 +127,15 @@ class NowPlayingWidget : AppWidgetProvider() {
 
         private fun render(context: Context, state: State) {
             val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(ComponentName(context, NowPlayingWidget::class.java))
-            if (ids.isEmpty()) return
-            val views = RemoteViews(context.packageName, R.layout.widget_now_playing)
+            val designs = listOf(
+                NowPlayingWidget::class.java to R.layout.widget_now_playing,
+                AlbumArtWidget::class.java to R.layout.widget_album_art,
+                StudioWidget::class.java to R.layout.widget_studio,
+            )
+            for ((provider, layout) in designs) {
+            val ids = manager.getAppWidgetIds(ComponentName(context, provider))
+            if (ids.isEmpty()) continue
+            val views = RemoteViews(context.packageName, layout)
             val empty = state.videoId == null
             views.setTextViewText(R.id.widget_title, if (empty) context.getString(R.string.widget_nothing_playing) else state.title)
             views.setTextViewText(R.id.widget_artist, if (empty) context.getString(R.string.widget_open) else state.artist)
@@ -152,6 +158,7 @@ class NowPlayingWidget : AppWidgetProvider() {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             ))
             manager.updateAppWidget(ids, views)
+            }
         }
 
         private fun mediaKey(context: Context, keyCode: Int): PendingIntent {
@@ -178,6 +185,10 @@ class NowPlayingWidget : AppWidgetProvider() {
                 playing = last?.playing == true, liked = id?.let(LibraryStore::isLiked) == true)
         }
 
-        private const val COVER_PX = 256
+        private const val COVER_PX = 384
     }
 }
+
+/** Artwork-first and spacious transport variants, sharing playback and durable state. */
+class AlbumArtWidget : NowPlayingWidget()
+class StudioWidget : NowPlayingWidget()

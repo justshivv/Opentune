@@ -485,6 +485,7 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
     val saved = lists.firstOrNull { it.id == id }
     val inList = remember(saved, entries) { saved?.songIds.orEmpty().mapNotNull { entries[it] } }
     val ready = remember(inList) { inList.filter { it.state == DownloadState.DONE }.map { it.song.toSong() } }
+    var query by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableStateOf("") }
     var confirmRemove by remember { mutableStateOf(false) }
     if (confirmRemove && saved != null) com.opentune.ui.components.FloatingDialog(
         onDismissRequest = { confirmRemove = false },
@@ -522,7 +523,8 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             )
         }
-        items(inList, key = { it.song.videoId }) { e ->
+        item { com.opentune.ui.browse.ListSearchField(query, { query = it }, { query = "" }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+        items(inList.filter { it.song.title.contains(query.trim(), true) || it.song.artist.contains(query.trim(), true) }, key = { it.song.videoId }) { e ->
             val song = e.song.toSong()
             SongListItem(
                 song = when (e.state) {
@@ -662,6 +664,9 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     }
     // Tagged with the playlist, so smart shuffle can offer to keep a song it mixed in.
     val songs = remember(playlist) { playlist.songs.map { it.toSong().copy(playbackSourceId = playlist.id) } }
+    var query by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableStateOf("") }
+    val matching = remember(songs, query) { songs.indices.filter { songs[it].title.contains(query.trim(), true) || songs[it].artist.contains(query.trim(), true) } }
+    val shown = matching.map(songs::get)
     val online = signedIn && playlist.synced
     if (renaming) NameDialog("Rename playlist", playlist.name, onDismiss = { renaming = false }) { LibraryStore.renamePlaylist(id, it); renaming = false }
     if (deleting) {
@@ -781,9 +786,9 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                     }
                     if (songs.isNotEmpty()) {
                         PlayButtons(
-                            onPlay = { actions.playAll(songs, 0, false, playlist.name) },
-                            onShuffle = { actions.playAll(songs, 0, true, playlist.name) },
-                            onSmartShuffle = { actions.smartShuffle(songs, playlist.name) },
+                            onPlay = { actions.playAll(shown, 0, false, playlist.name) },
+                            onShuffle = { actions.playAll(shown, 0, true, playlist.name) },
+                            onSmartShuffle = { actions.smartShuffle(shown, playlist.name) },
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                         )
                     }
@@ -800,19 +805,21 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         item { tools(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
         // Keyed by the song (and which copy of it), not its place, so a row taken out pops
         // alone and the rows below slide up rather than every row after it being redrawn.
+        item { com.opentune.ui.browse.ListSearchField(query, { query = it }, { query = "" }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+        if (shown.isEmpty()) item { Text(com.opentune.ui.theme.tr("No matching songs"), Modifier.padding(24.dp)) }
         val keys = songKeys(songs)
-        itemsIndexed(songs, key = { i, _ -> keys[i] }) { i, song ->
+        itemsIndexed(shown, key = { i, _ -> keys[matching[i]] }) { i, song ->
             SongListItem(
                 song = song,
-                onClick = { actions.playAll(songs, i, false, playlist.name) },
+                onClick = { actions.playAll(shown, i, false, playlist.name) },
                 modifier = Modifier.animateItem(),
                 isCurrent = song.videoId == actions.currentVideoId,
                 isPlaying = actions.isPlaying,
                 onPlayNext = { actions.playNext(song) },
                 onAddToQueue = { actions.addToQueue(song) },
-                onRemoveFromPlaylist = { removeWithUndo(id, i) },
+                onRemoveFromPlaylist = { removeWithUndo(id, matching[i]) },
                 // Swipe right to add to the queue, left to take it out of the playlist.
-                onSwipeRemove = { removeWithUndo(id, i) },
+                onSwipeRemove = { removeWithUndo(id, matching[i]) },
             )
         }
     }

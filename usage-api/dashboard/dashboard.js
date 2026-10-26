@@ -93,7 +93,7 @@ async function loadPeriod() {
   $('period-title').textContent = range.from === range.to ? dateLabel(range.from) : `${dateLabel(range.from)} – ${dateLabel(range.to)}`;
   $('period-status').textContent = 'Loading selected dates…';
   for (const id of ['period-active', 'period-plays', 'period-average']) $(id).textContent = '—';
-  for (const id of ['daily-table', 'versions-table', 'chart']) empty(id, 'Loading…');
+  for (const id of ['daily-table', 'versions-table', 'cohort-table', 'chart']) empty(id, 'Loading…');
   $('day-detail').textContent = 'Loading daily counts…';
   for (const button of document.querySelectorAll('[data-days]')) { const preset = presetRange(Number(button.dataset.days), new Date(), reportZone()); button.setAttribute('aria-pressed', String(preset.from === range.from && preset.to === range.to)); }
   try {
@@ -111,11 +111,14 @@ async function loadPeriod() {
     table('daily-table', [`Date (${zoneLabel()})`, 'Active', 'Plays'], dailyRows(data).reverse().map(row => [row.day, row.active, row.plays]), { daily: true });
     if (data.versions) table('versions-table', ['Version', 'Active', 'Plays'], data.versions.map(row => [row.version, row.installations, row.plays]));
     else empty('versions-table', 'Date-filtered versions need the analytics API update.');
+    if (data.cohorts) table('cohort-table', ['Date', 'New', 'Returning', 'New plays', 'Returning plays', 'Listeners'],
+      data.cohorts.slice().reverse().map(row => [row.day, row.newInstallations, row.returningInstallations, row.newPlays, row.returningPlays, row.listeners]));
+    else empty('cohort-table', 'Cohort reporting needs the API update.');
     chart();
   } catch (e) {
     if (signal.aborted) return;
     $('period-status').textContent = `Activity unavailable — not zero. ${e.message}`;
-    for (const id of ['daily-table', 'versions-table', 'chart']) empty(id, 'Unavailable. Try refreshing data.');
+    for (const id of ['daily-table', 'versions-table', 'cohort-table', 'chart']) empty(id, 'Unavailable. Try refreshing data.');
     $('day-detail').textContent = 'Daily counts are unavailable.';
   } finally { if (!signal.aborted) $('period').setAttribute('aria-busy', 'false'); }
 }

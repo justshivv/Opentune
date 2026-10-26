@@ -27,6 +27,8 @@ class AppLanguageTest {
         }
         compose.onNodeWithText(expected).assertExists()
     }
+    @Test fun arabicChromeUsesAndroidResources() = language("ar", "الرئيسية")
+    @Test fun spanishChromeUsesAndroidResources() = language("es", "Inicio")
     @Test fun hindiChromeUsesAndroidResources() = language("hi", "होम")
     @Test fun punjabiChromeUsesAndroidResources() = language("pa", "ਮੁੱਖ ਪੰਨਾ")
 }

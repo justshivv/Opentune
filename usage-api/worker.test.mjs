@@ -345,3 +345,16 @@ test('public counts are read once in five minutes',async()=>{
   assert.equal(await rememberFor(db,'k',300000,read,299999),1);
   assert.equal(await rememberFor(db,'k',300000,read,300000),2);
 });
+
+test('cohorts count upgrades once and distinguish new and returning listening', async () => {
+  const db = database();
+  await ingest(db, {installationId:id, days:[{day:'2026-10-08',version:'0.4.2',plays:2}]}, now);
+  await ingest(db, body(3), now);
+  await ingest(db, body(2, '0.4.3'), now);
+  await ingest(db, {...body(7), installationId:id.replace(/1$/, '2')}, now);
+  await ingest(db, {...body(7), installationId:id.replace(/1$/, '2')}, now);
+  const result = await summary(db, now);
+  const row = result.cohorts.find(x => x.day === '2026-10-09');
+  assert.deepEqual({...row}, {day:'2026-10-09',newInstallations:1,returningInstallations:1,newPlays:7,returningPlays:5,listeners:2});
+  assert.equal(row.newPlays + row.returningPlays, result.today.plays);
+});

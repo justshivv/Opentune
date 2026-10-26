@@ -199,6 +199,15 @@
             android:windowSoftInputMode="adjustResize" />
 
         <!-- The home-screen widget. -->
+
+        <receiver android:name=".widget.AlbumArtWidget" android:exported="false" android:label="@string/widget_album_art_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_album_art_info" />
+        </receiver>
+        <receiver android:name=".widget.StudioWidget" android:exported="false" android:label="@string/widget_studio_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_studio_info" />
+        </receiver>
         <receiver
             android:name=".widget.NowPlayingWidget"
             android:exported="false"

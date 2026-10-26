@@ -162,6 +162,12 @@ private fun resourceFor(text: String): Int? = when (text) {
         "Storage and data" -> R.string.ui_16b736d0bb81
         "Preparing audio" -> R.string.ui_1ef943e86ccb
         "Good quality" -> R.string.ui_9b492f471393
+        "Buffering" -> R.string.ui_c08626d0a514
+        "Search this list" -> R.string.ui_079dd748ac12
+        "No matching songs" -> R.string.ui_fb8369faa132
+        "Offline · waiting for connection" -> R.string.ui_bae7366a908e
+        "Taking longer than usual · tap Pause to stop" -> R.string.ui_911bc41787b4
+        "Playback stopped · tap Play to retry" -> R.string.ui_3dea15e6341e
         else -> null
     }
 

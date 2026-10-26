@@ -24,7 +24,7 @@ async function start(extra = {}) {
 }
 
 test('the VPS server answers like the Worker: public manifests, signed searches, no replays', async () => {
-  const server = await start();
+  const server = await start({ ADDON_WORKERS: '2' });
   try {
     assert.equal((await fetch(server.base + '/monochrome/manifest.json')).status, 200);
     assert.equal((await fetch(server.base + '/auth/challenge')).status, 200);

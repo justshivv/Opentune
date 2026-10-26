@@ -34,6 +34,7 @@ object Usage {
 
     fun init(context: Context) {
         if (prefs == null) prefs = context.applicationContext.getSharedPreferences("usage_v2", Context.MODE_PRIVATE)
+        if (!BuildConfig.DEBUG) UsageUploadWorker.schedule(context)
     }
     private val enabled get() = !BuildConfig.DEBUG && AppSettings.ui.value.countUsage && prefs != null
 
@@ -53,17 +54,34 @@ object Usage {
         scope.launch { lock.withLock {
             if (!enabled) return@withLock
             val p = prefs ?: return@withLock
-            val (id, pending) = persistDaily(p, now, BuildConfig.VERSION_NAME, play) ?: return@withLock
+            persistDaily(p, now, BuildConfig.VERSION_NAME, play) ?: return@withLock
+            sendPending(p, now)
+        } }
+    }
+
+    /** Background upload does not create activity for a day when the app was not used. */
+    internal suspend fun flushPending() = lock.withLock {
+        if (enabled) prefs?.let { sendPending(it, System.currentTimeMillis()) }
+    }
+
+    private fun sendPending(p: SharedPreferences, now: Long) {
+            if (!enabled) return
+            val id = p.getString("installation", null) ?: return
+            val pending = p.getStringSet("pending", emptySet()).orEmpty().toMutableSet()
+            if (pending.isEmpty()) return
             // The totals are cumulative and kept on the phone until they're taken, so they go
-            // out at most every few hours (sooner once a day has ended), not after every song:
+            // out at most every few hours (including across midnight), not after every song:
             // one report per play was most of the Worker's daily allowance.
             val monotonic = System.nanoTime() / 1_000_000
-            if (!due(p.getLong("last-report", 0L), now, pending, istDay(now))) return@withLock
-            if (lastAttempt != 0L && monotonic - lastAttempt < RETRY_MS) return@withLock
+            if (!due(p.getLong("last-report", 0L), now, pending, istDay(now))) return
+            if (lastAttempt != 0L && monotonic - lastAttempt < RETRY_MS) return
+            val attempted = p.getLong("last-attempt", 0L)
+            if (attempted > 0L && now >= attempted && now - attempted < RETRY_MS) return
             lastAttempt = monotonic
+            p.edit().putLong("last-attempt", now).commit()
             try {
-                val base = endpoint(monotonic) ?: return@withLock
-                if (!enabled) return@withLock
+                val base = endpoint(monotonic) ?: return
+                if (!enabled) return
                 val batch = pending.sorted().take(64)
                 val payload = buildJsonObject {
                     put("installationId", id)
@@ -89,21 +107,19 @@ object Usage {
                 }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { /* Retain the exact totals for the next foreground/play retry. */ }
-        } }
     }
 
     /** How long totals wait on the phone before they're sent. */
-    internal const val REPORT_EVERY_MS = 3 * 60 * 60_000L
+    internal const val REPORT_EVERY_MS = 4 * 60 * 60_000L
     /** The least time between two tries in one run, after one that failed. */
-    private const val RETRY_MS = 15 * 60_000L
+    private const val RETRY_MS = REPORT_EVERY_MS
 
     /**
      * Whether the totals are worth sending now: never sent, sent long enough
-     * ago, or holding a day other than [today] (finished, so its count is final).
+     * ago, with a four-hour gap even when a day ends. [today] is kept for old callers.
      */
     internal fun due(lastReport: Long, now: Long, pending: Set<String>, today: String): Boolean =
-        lastReport <= 0L || now - lastReport >= REPORT_EVERY_MS || now < lastReport ||
-            pending.any { it.substringBefore('|') != today }
+        pending.isNotEmpty() && (lastReport <= 0L || now - lastReport >= REPORT_EVERY_MS || now < lastReport)
 
     internal fun persistDaily(p: SharedPreferences, now: Long, version: String, play: Boolean): Pair<String, MutableSet<String>>? {
             val id = p.getString("installation", null) ?: UUID.randomUUID().toString().also {
