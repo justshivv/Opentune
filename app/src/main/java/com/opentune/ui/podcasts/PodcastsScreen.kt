@@ -122,7 +122,7 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-            item { PageHeader("Podcasts", actions = onOpenSettings?.let { open -> { com.opentune.ui.components.AccountButton(open) } }) }
+            item { PageHeader(com.opentune.ui.theme.tr("Podcasts"), actions = onOpenSettings?.let { open -> { com.opentune.ui.components.AccountButton(open) } }) }
             item {
                 TextField(
                     value = query,

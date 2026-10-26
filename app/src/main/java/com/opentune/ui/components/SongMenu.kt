@@ -357,7 +357,7 @@ private fun PlaylistPickRow(
     ) {
         Box(Modifier.size(52.dp).clip(RoundedCornerShape(12.dp))) { art() }
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Text(com.opentune.ui.theme.tr(title), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (added) Icon(Icons.Rounded.CheckCircle, "Already in this playlist", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))

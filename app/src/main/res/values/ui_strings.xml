@@ -148,4 +148,10 @@
     <string name="ui_4391d8a99171">Privacy &amp; data</string>
     <string name="ui_a4bb4e5d515e">Added by admin</string>
     <string name="ui_0a7d95fa81ae">Your source</string>
+    <string name="ui_f3a8d6981011">Look and feel</string>
+    <string name="ui_8ca344247c18">Motion</string>
+    <string name="ui_5da7ca5ffda2">Connected services</string>
+    <string name="ui_16b736d0bb81">Storage and data</string>
+    <string name="ui_1ef943e86ccb">Preparing audio</string>
+    <string name="ui_9b492f471393">Good quality</string>
 </resources>

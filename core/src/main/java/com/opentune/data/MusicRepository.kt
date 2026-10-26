@@ -354,6 +354,7 @@ object MusicRepository {
         }))
         topShelf + top.map { entry ->
             async {
+              try {
                 val song = entry.song ?: return@async emptyList()
                 val id = artistIdFor(song) ?: return@async emptyList()
                 val page = personalArtistPage(id)
@@ -363,6 +364,8 @@ object MusicRepository {
                     .filter { shelf -> shelf.items.isNotEmpty() && shelf.items.all { it.browseId != null } }
                     .take(3)
                     .map { it.copy(subtitle = "Because you like $name") }
+              } catch (e: CancellationException) { throw e }
+              catch (_: Exception) { emptyList<HomeShelf>() }
             }
         }.awaitAll().flatten()
     }

@@ -7,6 +7,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.isFocusable
@@ -85,6 +87,7 @@ class TvRemoteTest {
         compose.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Theme"))
         compose.onNodeWithText("Theme").assertIsDisplayed()
         save("tv-settings-look")
     }

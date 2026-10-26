@@ -4,6 +4,9 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -13,8 +16,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasScrollToNodeAction
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.settings.AppSettings
@@ -58,6 +59,7 @@ class SettingsScreenshotTest {
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()
         compose.onNodeWithText("Theme").assertIsDisplayed()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("COLOUR", ignoreCase = true))
         compose.onNodeWithText("COLOUR", ignoreCase = true).assertExists()
         save("settings-look")
     }

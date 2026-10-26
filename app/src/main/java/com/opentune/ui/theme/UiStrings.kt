@@ -156,6 +156,12 @@ private fun resourceFor(text: String): Int? = when (text) {
         "Privacy & data" -> R.string.ui_4391d8a99171
         "Added by admin" -> R.string.ui_a4bb4e5d515e
         "Your source" -> R.string.ui_0a7d95fa81ae
+        "Look and feel" -> R.string.ui_f3a8d6981011
+        "Motion" -> R.string.ui_8ca344247c18
+        "Connected services" -> R.string.ui_5da7ca5ffda2
+        "Storage and data" -> R.string.ui_16b736d0bb81
+        "Preparing audio" -> R.string.ui_1ef943e86ccb
+        "Good quality" -> R.string.ui_9b492f471393
         else -> null
     }
 

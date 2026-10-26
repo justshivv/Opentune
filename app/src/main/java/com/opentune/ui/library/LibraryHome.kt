@@ -176,7 +176,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
 
     val page: @Composable () -> Unit = { LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item {
-            PageHeader("Library", actions = { com.opentune.ui.components.AccountButton(nav.settings) })
+            PageHeader(com.opentune.ui.theme.tr("Library"), actions = { com.opentune.ui.components.AccountButton(nav.settings) })
         }
         item {
             YearCard(
@@ -556,7 +556,7 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
     val list = remember(entries) { entries.values.sortedByDescending { it.addedAt } }
     val ready = remember(list) { list.filter { it.state == DownloadState.DONE }.map { it.song.toSong() } }
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item { PageHeader("Downloads", onBack = onBack) }
+        item { PageHeader(com.opentune.ui.theme.tr("Downloads"), onBack = onBack) }
         if (list.isEmpty()) {
             item {
                 MessageState(Icons.Rounded.Download, "No downloads yet", Modifier.padding(top = 32.dp), message = "Pick Download from any song's menu to keep it for offline listening.")

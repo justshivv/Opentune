@@ -216,7 +216,7 @@ fun SpeedDialScreen(contentPadding: PaddingValues, onItemClick: (ShelfItem) -> U
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = (maxWidth - 16.dp) / 4
         LazyVerticalGrid(GridCells.Fixed(4), contentPadding = contentPadding, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
-            item(span = { GridItemSpan(maxLineSpan) }) { PageHeader(SpeedDial.TITLE, onBack = onBack) }
+            item(span = { GridItemSpan(maxLineSpan) }) { PageHeader(com.opentune.ui.theme.tr(SpeedDial.TITLE), onBack = onBack) }
             itemsIndexed(items, key = { i, item -> "$i:${item.videoId ?: item.browseId}" }) { _, item ->
                 ItemCard(
                     item.title, item.subtitle, item.thumbnailUrl, item.type(),

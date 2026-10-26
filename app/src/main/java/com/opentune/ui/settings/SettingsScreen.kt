@@ -257,7 +257,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             if (page != null) {
-                item { PageHeader(page.title, onBack = { openKey = null }) }
+                item { PageHeader(com.opentune.ui.theme.tr(page.title), onBack = { openKey = null }) }
                 placed.filter { it.category == page }.groupBy { it.group }.forEach { (group, rows) ->
                     item(key = "label:$group") { GroupLabel(group) }
                     item(key = "card:$group") {
@@ -277,7 +277,7 @@ fun SettingsScreen(
                     }
                 }
             } else {
-                item { PageHeader("Settings", onBack = onBack) }
+                item { PageHeader(com.opentune.ui.theme.tr("Settings"), onBack = onBack) }
                 item {
                     TextField(
                         value = query,

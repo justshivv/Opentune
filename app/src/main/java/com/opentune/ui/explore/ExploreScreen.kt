@@ -95,7 +95,7 @@ fun ExploreScreen(
     showHeader: Boolean = true,
 ) {
     val header: (@Composable () -> Unit)? = if (!showHeader) null else ({
-        PageHeader("Explore", actions = onOpenSettings?.let { open -> { com.opentune.ui.components.AccountButton(open) } })
+        PageHeader(com.opentune.ui.theme.tr("Explore"), actions = onOpenSettings?.let { open -> { com.opentune.ui.components.AccountButton(open) } })
     })
     val loader = rememberLoader("explore:canvas") { ExploreFeed.load() }
     val state by loader.state.collectAsState()

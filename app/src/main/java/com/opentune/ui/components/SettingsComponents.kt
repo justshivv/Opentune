@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun GroupLabel(text: String, modifier: Modifier = Modifier) {
     Text(
-        text.uppercase(),
+        com.opentune.ui.theme.tr(text).uppercase(),
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

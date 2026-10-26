@@ -278,7 +278,7 @@ fun ServerArtistsScreen(contentPadding: PaddingValues, nav: ServerNav, onBack: (
     val loader = rememberLoader("server:artists") { Subsonic.artists() }
     val state by loader.state.collectAsState()
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item { PageHeader("Artists", onBack = onBack) }
+        item { PageHeader(com.opentune.ui.theme.tr("Artists"), onBack = onBack) }
         when (val s = state) {
             is UiState.Loading -> items(3) { ShelfPlaceholder() }
             is UiState.Error -> item { ErrorState(s.message, onRetry = { loader.reload() }) }
