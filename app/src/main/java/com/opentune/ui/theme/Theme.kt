@@ -130,7 +130,7 @@ private fun TvRipples(content: @Composable () -> Unit) {
  * a dark, immersive surface whatever the app theme is.
  */
 @Composable
-fun PlayerTheme(seed: Color?, settings: ThemeSettings, neutral: Boolean = false, content: @Composable () -> Unit) {
+fun PlayerTheme(seed: Color?, settings: ThemeSettings, neutral: Boolean = false, active: Boolean = true, content: @Composable () -> Unit) {
     val scheme = rememberDynamicColorScheme(
         seedColor = seed ?: Color(settings.seedColor),
         isDark = true,
@@ -146,7 +146,7 @@ fun PlayerTheme(seed: Color?, settings: ThemeSettings, neutral: Boolean = false,
         surfaceContainer = Color(0xFF2B2B2E), surfaceContainerHigh = Color(0xFF36363A),
     ) else scheme
     MaterialTheme(
-        colorScheme = if (amoled) playerScheme.toPureBlack() else playerScheme.animated(),
+        colorScheme = if (!active) MaterialTheme.colorScheme else if (amoled) playerScheme.toPureBlack() else playerScheme.animated(),
         typography = rememberAppTypography(settings),
         shapes = AppShapes,
         content = content,

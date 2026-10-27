@@ -894,7 +894,16 @@ fun AppRoot(vm: PlayerViewModel) {
                 }
             }
             // Notes about what was just done float in over everything, the player included.
-            com.opentune.ui.components.PillHost(chromeUi.reduceAnimation, Modifier.align(Alignment.TopCenter))
+            val notificationTheme by com.opentune.data.settings.AppSettings.theme.collectAsState()
+            // Keep one host alive across player transitions, but use the visible screen's palette.
+            com.opentune.ui.theme.PlayerTheme(
+                seed = com.opentune.ui.theme.rememberArtworkSeed(song?.thumbnailUrl),
+                settings = notificationTheme,
+                neutral = chromeUi.playerStyle == com.opentune.data.settings.PlayerStyle.APPLE_MUSIC,
+                active = sheetOpen && song != null,
+            ) {
+                com.opentune.ui.components.PillHost(chromeUi.reduceAnimation, Modifier.align(Alignment.TopCenter))
+            }
         }
         if (opening) {
             com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })

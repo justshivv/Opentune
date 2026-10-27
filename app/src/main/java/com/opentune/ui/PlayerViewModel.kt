@@ -82,7 +82,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 listOfNotNull(current) + next.take(2).mapNotNull { queue.getOrNull(it) }
             }.distinctUntilChanged().collectLatest { songs ->
                 kotlinx.coroutines.coroutineScope {
-                    songs.forEach { song -> launch { warmArtwork(song.thumbnailUrl) } }
+                    songs.forEach { song -> launch {
+                        val saved = com.opentune.data.download.Downloads.artFor(song.videoId)?.toURI()?.toString()
+                        val cached = if (AppSettings.ui.value.albumCovers) com.opentune.data.covers.AlbumCovers.cached(song) else null
+                        warmArtwork(saved ?: cached ?: song.thumbnailUrl)
+                    } }
                 }
             }
         }

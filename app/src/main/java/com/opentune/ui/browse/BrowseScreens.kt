@@ -474,6 +474,9 @@ fun CollectionScreen(
     val search = remember(browseId) { PlaylistSearch() }
     val searching = search.open
     val query = search.query
+    LaunchedEffect(searching) {
+        if (searching && listState.firstVisibleItemIndex > 0) listState.scrollToItem(0)
+    }
     var order by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ListOrder.DEFAULT) }
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }

@@ -46,6 +46,9 @@ class PlaylistToolsScreenshotTest {
     @Before fun setUp() {
         val context = ApplicationProvider.getApplicationContext<android.app.Application>()
         AppSettings.init(context)
+        // Glass now matches the account playlist page. Robolectric's software
+        // screenshot canvas cannot draw RuntimeShader; exercise its reduced-blur layout.
+        AppSettings.updateUi { it.copy(reduceBlur = true) }
         LibraryStore.init(context)
         id = LibraryStore.createPlaylist("Late nights")
         LibraryStore.addAllToPlaylist(id, songs.take(2))
@@ -53,6 +56,14 @@ class PlaylistToolsScreenshotTest {
     }
 
     @Test fun page() = shoot("playlist/page") { LocalPlaylistScreen(id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {}) }
+
+    @Test fun spotifyUsesTheSamePlaylistLayout() {
+        LibraryStore.putSpotifyPlaylist("1234567890123456789012", "Late nights", songs, "revision", null)
+        val spotify = LibraryStore.playlists.value.first { it.spotifyId != null }
+        shoot("playlist/spotify") { LocalPlaylistScreen(spotify.id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {}) }
+        compose.onNodeWithText("Spotify").assertExists()
+        compose.onNodeWithText("Search this list").assertDoesNotExist()
+    }
 
     @Test fun addSheet() = shoot("playlist/add") { AddSongsSheet(id, onDismiss = {}) }
 

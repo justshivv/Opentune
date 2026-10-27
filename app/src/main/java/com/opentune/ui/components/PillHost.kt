@@ -136,20 +136,20 @@ fun PillHost(reduceMotion: Boolean, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
     val lift = with(density) { 18.dp.toPx() }
     val shadow = with(density) { 10.dp.toPx() }
-    // In the app's own colours: its raised surface with a touch of the theme colour,
-    // rather than the inverse (a white pill on a dark app).
+    // Use the same surface and content pairs as the surrounding interface.
+    // Tint only the status mark; tinting the whole face fights custom/AMOLED themes.
     val colors = MaterialTheme.colorScheme
-    val face = androidx.compose.ui.graphics.lerp(colors.surfaceContainerHighest, colors.primary, 0.12f)
+    val face = colors.surfaceContainerHigh
     val ink = colors.onSurface
     val badge = when (pill.kind) {
-        Pills.Kind.DONE -> colors.primary
-        Pills.Kind.ERROR -> colors.error
-        Pills.Kind.INFO -> colors.primary.copy(alpha = 0.22f)
+        Pills.Kind.DONE -> colors.primaryContainer
+        Pills.Kind.ERROR -> colors.errorContainer
+        Pills.Kind.INFO -> colors.secondaryContainer
     }
     val markInk = when (pill.kind) {
-        Pills.Kind.DONE -> colors.onPrimary
-        Pills.Kind.ERROR -> colors.onError
-        Pills.Kind.INFO -> colors.primary
+        Pills.Kind.DONE -> colors.onPrimaryContainer
+        Pills.Kind.ERROR -> colors.onErrorContainer
+        Pills.Kind.INFO -> colors.onSecondaryContainer
     }
     Box(modifier.fillMaxWidth().statusBarsPadding().padding(top = 8.dp, start = 24.dp, end = 24.dp), contentAlignment = Alignment.TopCenter) {
         Row(

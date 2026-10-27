@@ -694,6 +694,9 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(searching) {
+        if (searching && listState.firstVisibleItemIndex > 0) listState.scrollToItem(0)
+    }
     val matching = remember(songs, query, order) {
         val found = songs.indices.filter { songs[it].title.contains(query.trim(), true) || songs[it].artist.contains(query.trim(), true) }
         when (order) {
