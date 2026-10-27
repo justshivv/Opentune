@@ -726,7 +726,6 @@ fun PlayerLayout(
                     titleTop = with(LocalDensity.current) { bigTitle?.top?.takeIf { it > 0f }?.toDp() },
                     // Lyrics and the queue are read over the whole page, so the Canvas frosts top to bottom.
                     canvasBehindText = pane != Pane.COVER,
-                    cinematic = apple,
                 )
             }
 
@@ -770,7 +769,7 @@ fun PlayerLayout(
                     onSignal = { showSignal = true },
                     onLyrics = { toggle(Pane.LYRICS) },
                     onQueue = { toggle(Pane.QUEUE) },
-                    showLines = pane != Pane.LYRICS,
+                    showLines = state.ui.lyricsPreview && pane != Pane.LYRICS,
                     side = when (pane) {
                         Pane.COVER -> null
                         Pane.LYRICS -> { ->
@@ -931,6 +930,7 @@ fun PlayerLayout(
                                 onSyncLine = syncLine,
                                 playing = lyricsPlaying,
                                 seeks = lyricsSeeks,
+                                controlsVisible = !controlsHidden,
                             )
                         } else if (p == Pane.COVER) {
                             val seekBy: (Long) -> Unit = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) }
@@ -1053,6 +1053,7 @@ fun PlayerLayout(
                                             onSyncLine = syncLine,
                                             playing = lyricsPlaying,
                                             seeks = lyricsSeeks,
+                                            controlsVisible = !controlsHidden,
                                         )
                                     } else {
                                         Text(com.opentune.ui.theme.tr("Queue"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
@@ -1134,7 +1135,7 @@ fun PlayerLayout(
                         SkipToChorus { nextChorus?.let { actions.seekTo((it - 250).coerceAtLeast(0)) } }
                     }
                 }
-                if (pane != Pane.LYRICS && state.ui.syncedLyrics && !minimal && !apple && roomy && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
+                if (pane != Pane.LYRICS && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
                     LyricPreview(state.lyrics, lyricsPosition, onOpen = { toggle(Pane.LYRICS) }, Modifier.padding(top = 4.dp))
                 }
                 Spacer(Modifier.height(8.dp))
@@ -1272,6 +1273,10 @@ fun PlayerLayout(
                     MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
                     MenuRow(Icons.Rounded.Tune, "Lyrics offset") { close(); showOffset = true }
                     MenuRow(Icons.Rounded.Lyrics, "Lyrics source") { close(); showLyricsSource = true }
+                    MenuRow(Icons.Rounded.Lyrics, if (state.ui.lyricsPreview) "Hide lyrics preview" else "Show lyrics preview") {
+                        close()
+                        AppSettings.updateUi { it.copy(lyricsPreview = !it.lyricsPreview) }
+                    }
                     if (com.opentune.data.lyrics.Romanizer.available) {
                         MenuRow(Icons.Rounded.Translate, if (lyricsSettings.romanize) "Hide romanized lyrics" else "Show romanized lyrics") {
                             close()

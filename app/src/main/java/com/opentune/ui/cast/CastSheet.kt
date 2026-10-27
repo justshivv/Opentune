@@ -28,8 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.VolumeDown
-import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.CastConnected
 import androidx.compose.material.icons.rounded.Refresh
@@ -39,17 +37,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,11 +54,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.opentune.cast.Cast
 import com.opentune.cast.CastTarget
-import com.opentune.cast.RemoteStatus
 import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.components.rememberHaptics
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 
 /**
  * Picks a device to play on: Chromecasts and DLNA renderers (smart TVs,
@@ -76,7 +66,6 @@ import kotlinx.coroutines.launch
 fun CastSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
-    val scope = rememberCoroutineScope()
     val devices by Cast.devices.collectAsState()
     val scanning by Cast.scanning.collectAsState()
     val session by Cast.session.collectAsState()
@@ -84,7 +73,6 @@ fun CastSheet(onDismiss: () -> Unit) {
     FloatingCard(onDismiss = onDismiss, title = "Play on", icon = Icons.Rounded.Cast) {
         Column(Modifier.verticalScroll(rememberScrollState()).animateContentSize().padding(bottom = 12.dp)) {
             session?.let { s ->
-                val status by (s.receiver?.status ?: remember { MutableStateFlow(RemoteStatus()) }).collectAsState()
                 Column(
                     Modifier
                         .fillMaxWidth()
@@ -114,18 +102,7 @@ fun CastSheet(onDismiss: () -> Unit) {
                     }
                     val receiver = s.receiver
                     if (receiver != null) {
-                        var level by remember(receiver) { mutableFloatStateOf(-1f) }
-                        val shown = if (level >= 0f) level else status.volume ?: 0.5f
-                        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.AutoMirrored.Rounded.VolumeDown, null, Modifier.size(20.dp))
-                            Slider(
-                                value = shown,
-                                onValueChange = { level = it },
-                                onValueChangeFinished = { val v = level; scope.launch { receiver.setVolume(v) } },
-                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                            )
-                            Icon(Icons.AutoMirrored.Rounded.VolumeUp, null, Modifier.size(20.dp))
-                        }
+                        com.opentune.ui.player.VolumeBar(Modifier.padding(top = 8.dp))
                     }
                 }
             }

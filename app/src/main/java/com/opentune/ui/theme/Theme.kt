@@ -138,7 +138,8 @@ fun PlayerTheme(seed: Color?, settings: ThemeSettings, neutral: Boolean = false,
         style = PaletteStyle.Vibrant,
     )
     val amoled = settings.playerBackground == com.opentune.data.settings.PlayerBackground.AMOLED
-    val playerScheme = if (neutral) androidx.compose.material3.darkColorScheme(
+    // Keep artwork-derived background tones even when the layout uses white controls.
+    val playerScheme = if (neutral) scheme.copy(
         primary = Color.White, onPrimary = Color.Black, secondary = Color.White, tertiary = Color.White,
         background = Color(0xFF202023), surface = Color(0xFF202023), onSurface = Color.White,
         onBackground = Color.White, onSurfaceVariant = Color(0xFFCACACE),

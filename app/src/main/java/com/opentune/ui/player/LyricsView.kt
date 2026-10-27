@@ -128,10 +128,13 @@ fun LyricsView(
     playing: () -> Boolean = { true },
     /** Rises on each seek or skip, so the sync clock takes those jumps cleanly. */
     seeks: () -> Long = { 0L },
+    /** Follow the player's existing focus timer and touch-to-reveal controls. */
+    controlsVisible: Boolean = true,
 ) {
     // The song and its lines as they were when sharing began, so a song
     // change while the sheet is open can't mix one song's words with another's.
     var sharing by remember { mutableStateOf<Pair<com.opentune.data.model.Song, List<String>>?>(null) }
+    var shareStartAt by remember { mutableStateOf(-1) }
     // Synced lines picked for a lyric card, by index; picking starts with a
     // long press on a line (or the share button) and ends with Cancel or Share.
     val syncedLines = ((state as? LyricsState.Found)?.lyrics as? Lyrics.Synced)?.lines
@@ -169,45 +172,51 @@ fun LyricsView(
         val found = (state as? LyricsState.Found)?.lyrics
         if (found != null) {
             val haptics = com.opentune.ui.components.rememberHaptics()
-            Row(
-                Modifier.align(Alignment.TopEnd).padding(top = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            AnimatedVisibility(
+                visible = controlsVisible,
+                enter = fadeIn(tween(220)),
+                exit = fadeOut(tween(360)),
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp),
             ) {
-                // Turn romanized lines (Latin letters under another script) on or off from the page.
-                if (found is Lyrics.Synced && Romanizer.available) {
-                    val romanizeOn = AppSettings.lyrics.collectAsState().value.romanize
-                    LyricActionButton(Icons.Rounded.Translate, if (romanizeOn) "Turn off romanization" else "Show romanized lyrics", active = romanizeOn) {
-                        haptics.tick()
-                        AppSettings.updateLyrics { it.copy(romanize = !it.romanize) }
-                    }
-                }
-                if (shareSong != null) {
-                    // Lines with words in them (synced lyrics carry empty ones for the gaps), with
-                    // their start times so the sheet can open on the line being sung.
-                    val timed = remember(found) {
-                        when (found) {
-                            is Lyrics.Synced -> found.lines.filter { it.text.isNotBlank() }.map { it.text.trim() to it.startMs }
-                            is Lyrics.Plain -> found.text.lines().map { it.trim() }.filter { it.isNotEmpty() }.map { it to -1L }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    // Turn romanized lines (Latin letters under another script) on or off from the page.
+                    if (found is Lyrics.Synced && Romanizer.available) {
+                        val romanizeOn = AppSettings.lyrics.collectAsState().value.romanize
+                        LyricActionButton(Icons.Rounded.Translate, if (romanizeOn) "Turn off romanization" else "Show romanized lyrics", active = romanizeOn) {
+                            haptics.tick()
+                            AppSettings.updateLyrics { it.copy(romanize = !it.romanize) }
                         }
                     }
-                    val lines = remember(timed) { timed.map { it.first } }
-                    var startAt by remember { mutableStateOf(-1) }
-                    LyricActionButton(Icons.Rounded.FormatQuote, "Share lyrics") {
-                        haptics.tick()
-                        val now = position()
-                        if (found is Lyrics.Synced && synced) {
-                            // Start picking on the page itself, from the line being sung.
-                            selection.clear()
-                            selection.add(found.lines.indexOfLast { it.startMs <= now }.coerceAtLeast(0))
-                        } else {
-                            startAt = if (found is Lyrics.Synced) timed.indexOfLast { it.second <= now } else -1
-                            sharing = shareSong to lines
+                    if (shareSong != null) {
+                        // Lines with words in them (synced lyrics carry empty ones for the gaps), with
+                        // their start times so the sheet can open on the line being sung.
+                        val timed = remember(found) {
+                            when (found) {
+                                is Lyrics.Synced -> found.lines.filter { it.text.isNotBlank() }.map { it.text.trim() to it.startMs }
+                                is Lyrics.Plain -> found.text.lines().map { it.trim() }.filter { it.isNotEmpty() }.map { it to -1L }
+                            }
+                        }
+                        val lines = remember(timed) { timed.map { it.first } }
+                        LyricActionButton(Icons.Rounded.FormatQuote, "Share lyrics") {
+                            haptics.tick()
+                            val now = position()
+                            if (found is Lyrics.Synced && synced) {
+                                // Start picking on the page itself, from the line being sung.
+                                selection.clear()
+                                selection.add(found.lines.indexOfLast { it.startMs <= now }.coerceAtLeast(0))
+                            } else {
+                                shareStartAt = if (found is Lyrics.Synced) timed.indexOfLast { it.second <= now } else -1
+                                sharing = shareSong to lines
+                            }
                         }
                     }
-                    sharing?.let { (song, shared) -> com.opentune.ui.share.LyricCardSheet(song, shared, startAt = startAt, onDismiss = { sharing = null }) }
                 }
             }
         }
+        // The action row may hide while the sheet is open; keep the sheet independent.
+        sharing?.let { (song, shared) -> com.opentune.ui.share.LyricCardSheet(song, shared, startAt = shareStartAt, onDismiss = { sharing = null }) }
         sharingPicked?.let { (song, picked) ->
             com.opentune.ui.share.LyricCardSheet(song, picked, startAt = 0, onDismiss = { sharingPicked = null }, pickable = false)
         }

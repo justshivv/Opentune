@@ -150,9 +150,11 @@ class Chromecast(
     override suspend fun seek(positionMs: Long) = media("SEEK") { put("currentTime", positionMs / 1000.0) }
 
     override suspend fun setVolume(level: Float) {
-        runCatching {
-            send(RECEIVER, NS_RECEIVER, JSONObject().put("type", "SET_VOLUME").put("requestId", requestIds.getAndIncrement()).put("volume", JSONObject().put("level", level.coerceIn(0f, 1f).toDouble())))
-        }
+        if (!level.isFinite()) return
+        // request dispatches socket writes on IO and waits for the receiver's
+        // status, so a UI caller neither blocks the main thread nor guesses volume.
+        request(RECEIVER, NS_RECEIVER, JSONObject().put("type", "SET_VOLUME")
+            .put("volume", JSONObject().put("level", level.coerceIn(0f, 1f).toDouble())))
     }
 
     private suspend fun media(type: String, extra: JSONObject.() -> Unit = {}) {
@@ -228,11 +230,11 @@ class Chromecast(
             }
             type == "RECEIVER_STATUS" -> {
                 val status = payload.optJSONObject("status")
-                status?.optJSONObject("volume")?.optDouble("level")?.takeIf { !it.isNaN() }?.let { level ->
-                    _status.value = _status.value.copy(volume = level.toFloat())
+                status?.optJSONObject("volume")?.optDouble("level")?.takeIf { it.isFinite() }?.let { level ->
+                    _status.value = _status.value.copy(volume = level.toFloat().coerceIn(0f, 1f))
                 }
                 // Someone else took the Chromecast over, or it was stopped on the TV.
-                if (transportId != null && status != null && runningApp(payload) == null) {
+                if (transportId != null && status?.has("applications") == true && runningApp(payload) == null) {
                     _status.value = _status.value.copy(state = RemoteState.GONE, at = SystemClock.elapsedRealtime())
                 }
             }
@@ -259,7 +261,9 @@ class Chromecast(
             else -> _status.value.state
         }
         val position = s.optDouble("currentTime", Double.NaN).takeIf { !it.isNaN() }?.let { (it * 1000).toLong() } ?: _status.value.positionMs
-        val volume = s.optJSONObject("volume")?.optDouble("level")?.takeIf { !it.isNaN() }?.toFloat() ?: _status.value.volume
+        // MEDIA_STATUS volume is the media session's gain, not device volume.
+        // SET_VOLUME above controls the receiver; only RECEIVER_STATUS owns it.
+        val volume = _status.value.volume
         _status.value = RemoteStatus(state, position, SystemClock.elapsedRealtime(), volume, loadedId)
     }
 

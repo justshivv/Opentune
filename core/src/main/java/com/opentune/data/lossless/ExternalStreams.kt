@@ -87,9 +87,9 @@ object ExternalStreams {
         val url = JioSaavnSource.resolve(song, duration, report = { reportSaavn(song.videoId, it) }) ?: return null
         val rendition = Rendition(java.util.UUID.randomUUID().toString(), url, "JioSaavn · 320 kbps (lossy)", false, now(),
             provider = "JioSaavn", kbps = 320, sessionRevision = com.opentune.data.addons.AddonStore.revision.value)
-        // A simultaneous FLAC result remains the preferred cached rendition.
-        cached(song.videoId)?.takeIf { it.lossless && it.mimeType == null }?.let { return it }
-        remember(song.videoId, rendition)
+        // Keep this lossy fallback address, but never overwrite a FLAC which
+        // answered while JioSaavn was still searching. Decide atomically.
+        remember(song.videoId, rendition, preserveLossless = true)
         return rendition
     }
 
@@ -135,6 +135,9 @@ object ExternalStreams {
      * twice at once and the add-ons aren't asked the same thing over and over.
      */
     suspend fun find(song: Song, durationMs: Long, beforePlayback: Boolean = false, force: Boolean = false, losslessOnly: Boolean = false): Rendition? {
+        // A verified candidate can play now even if a background retry is still
+        // looking for better sources. That lookup continues and publishes upgrades.
+        if (losslessOnly && !force) cached(song.videoId)?.takeIf { it.lossless }?.let { return it }
         if (!losslessOnly || force) return findNow(song, durationMs, beforePlayback, force, losslessOnly)
         return joined(song) { findNow(song, durationMs, beforePlayback, false, true) }
     }
@@ -277,8 +280,8 @@ object ExternalStreams {
             if (losslessSearched.size > 512) losslessSearched.clear()
             losslessSearched += videoId
         }
-        if (earlier != null && earlier === held && fresh == null) detail += "${earlier.provider}: verified FLAC, found earlier and still used"
-        if (allowed(true)) detail += if (track == null && earlier == null) "FLAC: no verified matching stream available" else "Add-on audio selected; playback diagnostics show the decoded format"
+        if (earlier != null && earlier === held && fresh == null) detail += "${earlier.provider}: verified FLAC, found earlier and available for playback"
+        if (allowed(true)) detail += if (track == null && earlier == null) "FLAC: no verified matching stream available" else "Verified FLAC available; the track info above shows the source currently playing"
         val askedSaavn = !losslessOnly && track == null && earlier == null && allowed(false) && !saavnMissed && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
         val saavn = if (askedSaavn) JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
         report(videoId, detail.joinToString("\n").ifEmpty { "No external source eligible for this quality setting." })
@@ -357,11 +360,13 @@ object ExternalStreams {
         return rendition
     }
 
-    internal fun remember(videoId: String, rendition: Rendition) {
+    internal fun remember(videoId: String, rendition: Rendition, preserveLossless: Boolean = false) {
         if (renditions.size > 256) renditions.clear()
         pinned.entries.removeIf { now() - it.value.second.at >= 2 * 60 * 60_000L }
         pinned[rendition.key] = videoId to rendition
-        renditions[videoId] = rendition
+        renditions.compute(videoId) { _, current ->
+            if (preserveLossless && current?.lossless == true && cached(videoId) == current) current else rendition
+        }
     }
 
     fun get(videoId: String, key: String): Rendition? = pinned[key]?.takeIf { it.first == videoId }?.second

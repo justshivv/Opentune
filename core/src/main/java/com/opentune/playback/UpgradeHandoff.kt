@@ -5,6 +5,13 @@ internal enum class UpgradeBridgeResult { COMPLETED, READY_FOR_REPLACEMENT, UNAV
 
 /** Only overlap audio when very close. A small offset still upgrades, with separate fades. */
 internal enum class UpgradeAlignment { BLEND, SHORT_FADE, SEEK }
+
+/** Bound the entire alignment attempt, not each seek; a buffered stream can still replace. */
+internal suspend fun boundedUpgradeAlignment(
+    timeoutMs: Long = 1_200L,
+    align: suspend () -> UpgradeAlignment,
+): UpgradeAlignment = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { align() } ?: UpgradeAlignment.SEEK
+
 internal fun upgradeAlignment(driftMs: Long): UpgradeAlignment = when (driftMs) {
     in -20L..20L -> UpgradeAlignment.BLEND
     in -250L..250L -> UpgradeAlignment.SHORT_FADE

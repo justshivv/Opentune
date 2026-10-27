@@ -6,6 +6,26 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UpgradeHandoffTest {
+    @Test fun slowAlignmentUsesBufferedReplacementWithinOneOverallBudget() = runBlocking {
+        val alignment = boundedUpgradeAlignment(timeoutMs = 20) {
+            kotlinx.coroutines.delay(10_000)
+            error("Must not wait for repeated slow alignment attempts")
+        }
+        assertEquals(UpgradeAlignment.SEEK, alignment)
+        assertTrue(performUpgradeHandoff(
+            bridge = { UpgradeBridgeResult.READY_FOR_REPLACEMENT }, stillCurrent = { true },
+            prebuffer = { error("Already buffered") }, replace = { true },
+        ))
+    }
+
+    @Test fun promptAlignmentAndParentCancellationArePreserved() = runBlocking {
+        assertEquals(UpgradeAlignment.SHORT_FADE, boundedUpgradeAlignment { UpgradeAlignment.SHORT_FADE })
+        try {
+            boundedUpgradeAlignment { throw CancellationException("Track skipped") }
+            fail("Cancellation must not trigger replacement")
+        } catch (_: CancellationException) { /* Expected: caller owns cancellation. */ }
+    }
+
     @Test fun flacArrivingDuringSaavnPreparationRetiresTheIntermediateLoad() = runBlocking {
         var flacReady = false
         var polls = 0

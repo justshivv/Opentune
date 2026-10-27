@@ -22,10 +22,29 @@ class AutoplayTest {
     }
 
     @Test
-    fun extendsWithOneOrNoTracksLeftInPlayOrder() {
-        assertFalse(Autoplay.shouldExtend(remaining = 2, queueSize = 5))
+    fun startsFetchingWithThreeTracksLeftInPlayOrder() {
+        assertFalse(Autoplay.shouldExtend(remaining = 4, queueSize = 5))
+        assertTrue(Autoplay.shouldExtend(remaining = 3, queueSize = 5))
+        assertTrue(Autoplay.shouldExtend(remaining = 2, queueSize = 5))
         assertTrue(Autoplay.shouldExtend(remaining = 1, queueSize = 5))
         assertTrue(Autoplay.shouldExtend(remaining = 0, queueSize = 5))
+    }
+
+    @Test fun readySecondaryRadioDoesNotWaitForStalledPrimary() = kotlinx.coroutines.runBlocking {
+        val stalled = kotlinx.coroutines.CompletableDeferred<List<Song>>()
+        val ready = kotlinx.coroutines.CompletableDeferred(listOf(song("next")))
+        val result = kotlinx.coroutines.withTimeout(1_000) {
+            Autoplay.readyRadios(listOf(stalled, ready), { true }, graceMs = 5)
+        }
+        assertEquals(listOf(emptyList(), listOf(song("next"))), result)
+        assertTrue(stalled.isCancelled)
+    }
+
+    @Test fun duplicateOnlyResultDoesNotDisplaceUsableRecommendation() = kotlinx.coroutines.runBlocking {
+        val duplicate = kotlinx.coroutines.CompletableDeferred(listOf(song("queued")))
+        val ready = kotlinx.coroutines.CompletableDeferred(listOf(song("new")))
+        val result = Autoplay.readyRadios(listOf(duplicate, ready), { it.videoId != "queued" }, graceMs = 5)
+        assertEquals(listOf("new"), Autoplay.newTracks(setOf("queued"), Autoplay.blend(result, emptyList())).map { it.videoId })
     }
 
     @Test

@@ -152,12 +152,12 @@ object PlaylistImport {
             .filter { it.second >= 5 } // a title and the artist, or a title and the length
             .maxByOrNull { it.second }?.first ?: return null
         // An upload credited to "Various Artists" or the like is still the song; it shows who sings it.
-        return if (placeholder(key(pick.artist)) && track.artists.isNotEmpty()) pick.copy(artist = track.artists.joinToString(", ")) else pick
+        return if (placeholder(key(pick.artist)) && track.artists.isNotEmpty()) pick.copy(artist = track.artists.joinToString(", "), artistId = null) else pick
     }
 
     /** "Various Artists", "VA", "Unknown Artist": an upload's stand-in for whoever sings. */
     internal fun placeholder(artistKey: String) =
-        artistKey.isEmpty() || artistKey in setOf("variousartist", "variousartists", "va", "unknownartist", "unknown", "artist")
+        com.opentune.data.model.isPlaceholderArtist(artistKey)
 
     /** Lower-case letters and digits, with "(feat. …)", "- Remastered 2011" and similar taken off. */
     internal fun key(s: String): String =

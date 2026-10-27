@@ -59,7 +59,25 @@ class NowPlayingWidgetTest {
         val view = manager.getViewFor(id)
         assertEquals("Blinding Lights", view.findViewById<TextView>(R.id.widget_title).text.toString())
         assertEquals("The Weeknd", view.findViewById<TextView>(R.id.widget_artist).text.toString())
-        assertEquals(View.VISIBLE, view.findViewById<View>(R.id.widget_like).visibility)
+        assertEquals(View.GONE, view.findViewById<View>(R.id.widget_like).visibility)
         assertEquals("Play", view.findViewById<ImageButton>(R.id.widget_play).contentDescription)
+    }
+
+    @Test fun compactWidgetRestoresSecondaryControlsWhenResizedWider() {
+        context.getSharedPreferences("widget", 0).edit().putString("id", "aaaaaaaaaa1")
+            .putString("title", "A saved song").putString("artist", "An artist").commit()
+        val realManager = AppWidgetManager.getInstance(context)
+        val id = manager.createWidget(NowPlayingWidget::class.java, R.layout.widget_now_playing)
+        for (width in listOf(280, 440, 280)) {
+            val options = android.os.Bundle().apply { putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, width) }
+            realManager.updateAppWidgetOptions(id, options)
+            NowPlayingWidget().onAppWidgetOptionsChanged(context, realManager, id, options)
+            val view = manager.getViewFor(id)
+            assertEquals(if (width >= 420) View.VISIBLE else View.GONE, view.findViewById<View>(R.id.widget_like).visibility)
+            assertEquals(if (width >= 360) View.VISIBLE else View.GONE, view.findViewById<View>(R.id.widget_previous).visibility)
+            assertEquals(View.VISIBLE, view.findViewById<View>(R.id.widget_play).visibility)
+            assertEquals(View.VISIBLE, view.findViewById<View>(R.id.widget_next).visibility)
+            assertEquals("A saved song", view.findViewById<TextView>(R.id.widget_title).text.toString())
+        }
     }
 }

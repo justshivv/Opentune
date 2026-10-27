@@ -42,7 +42,8 @@ object NerdStats {
     private val _externalSource = MutableStateFlow<String?>(null)
     val externalSource = _externalSource.asStateFlow()
 
-    fun onExternalSource(label: String?) { _externalSource.value = label }
+    /** Provider of the playing external stream, never its requested-quality label. */
+    fun onExternalSource(provider: String?) { _externalSource.value = provider }
 
     private val _lastPicked = MutableStateFlow<Pair<String, Int>?>(null)
     val lastPicked = _lastPicked.asStateFlow()

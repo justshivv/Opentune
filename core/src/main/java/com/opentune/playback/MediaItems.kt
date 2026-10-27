@@ -119,6 +119,17 @@ fun MediaItem.toSong(): Song =
         queueTier = mediaMetadata.extras?.getString(EXTRA_TIER)?.let { t -> QueueTier.entries.firstOrNull { it.name == t } } ?: QueueTier.CONTEXT,
     )
 
+/** Update credits for this exact recording without touching its selected audio or queue extras. */
+internal fun MediaItem.withTrackArtistCredit(credit: Song): MediaItem {
+    if (mediaId != credit.videoId || !com.opentune.data.model.isPlaceholderArtist(mediaMetadata.artist?.toString()) ||
+        com.opentune.data.model.isPlaceholderArtist(credit.artist)) return this
+    val extras = Bundle(mediaMetadata.extras ?: Bundle()).apply {
+        remove(EXTRA_ARTIST_ID)
+        credit.artistId?.let { putString(EXTRA_ARTIST_ID, it) }
+    }
+    return buildUpon().setMediaMetadata(mediaMetadata.buildUpon().setArtist(credit.artist).setExtras(extras).build()).build()
+}
+
 /** Which part of the queue this entry is in. */
 val MediaItem.queueTier: QueueTier
     get() = mediaMetadata.extras?.getString(EXTRA_TIER)?.let { t -> QueueTier.entries.firstOrNull { it.name == t } } ?: QueueTier.CONTEXT

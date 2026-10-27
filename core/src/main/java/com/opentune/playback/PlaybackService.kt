@@ -67,7 +67,6 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.media3.common.Tracks
@@ -809,6 +808,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            refreshArtistCredit(mediaItem)
             // The same song put onto its better stream: the swap that did it is
             // still running, waiting to bring the volume back up. A new upgrade
             // check here used to cancel it and leave every song after silent.
@@ -1144,6 +1144,36 @@ class PlaybackService : MediaLibraryService() {
         }.onFailure { Log.w(TAG, "Couldn't apply loudness gain", it) }
     }
 
+    private val artistCredits = LinkedHashMap<String, com.opentune.data.model.Song>()
+    private var artistCreditJob: Pair<String, Job>? = null
+
+    /** Repair compilation placeholders using the watch entry for the same video, never a title guess. */
+    private fun refreshArtistCredit(item: MediaItem?) {
+        val id = item?.mediaId
+        if (id != null && artistCreditJob?.let { it.first == id && it.second.isActive } == true) return
+        artistCreditJob?.second?.cancel()
+        if (item == null || id == null || !isYouTubeId(id) ||
+            !com.opentune.data.model.isPlaceholderArtist(item.mediaMetadata.artist?.toString())) return
+        artistCreditJob = id to scope.launch {
+            // A metadata replacement must happen outside the player's transition callback.
+            kotlinx.coroutines.yield()
+            val credit = artistCredits[id] ?: try {
+                com.opentune.data.MusicRepository.watchQueue(id).firstOrNull {
+                    it.videoId == id && !com.opentune.data.model.isPlaceholderArtist(it.artist)
+                }?.also {
+                    if (artistCredits.size >= 128) artistCredits.remove(artistCredits.keys.first())
+                    artistCredits[id] = it
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { null } ?: return@launch
+            val player = mediaSession?.player ?: return@launch
+            val current = player.currentMediaItem?.takeIf { it.mediaId == id } ?: return@launch
+            val corrected = current.withTrackArtistCredit(credit)
+            if (corrected !== current) player.replaceMediaItem(player.currentMediaItemIndex, corrected)
+        }
+    }
+
     // ---- Quality upgrade -----------------------------------------------------------
 
     private var upgradeJob: Job? = null
@@ -1269,7 +1299,8 @@ class PlaybackService : MediaLibraryService() {
                 val existing = externalStreamKeyOf(selectedUri(playing))?.let { ExternalStreams.get(id, it) }
                 if (existing?.lossless == true && com.opentune.data.addons.AddonResolver.qualityScore(lossless.bits, lossless.sampleRate) <=
                     com.opentune.data.addons.AddonResolver.qualityScore(existing.bits, existing.sampleRate)) { tell("Already playing the best quality there is for this song"); return@launch }
-                started()
+                // The FLAC bridge prepares its own buffer while the current stream
+                // plays. Do not wait up to six seconds for the lossy buffer first.
                 if (player.currentMediaItem?.mediaId != id) return@launch
                 val left = player.duration - player.currentPosition
                 if (player.duration > 0 && left < UPGRADE_MIN_REMAINING_MS) { tell("Too close to the end of the song to switch"); return@launch }
@@ -1854,17 +1885,17 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /** Small offsets take a short fade immediately; only a large offset needs another seek. */
-    private suspend fun lineUp(follower: ExoPlayer, leader: ExoPlayer): UpgradeAlignment {
+    private suspend fun lineUp(follower: ExoPlayer, leader: ExoPlayer): UpgradeAlignment = boundedUpgradeAlignment {
         var lead = BRIDGE_SEEK_LEAD_MS
         repeat(BRIDGE_ALIGN_TRIES) {
-            if (!settledPlaying(follower)) return UpgradeAlignment.SEEK
+            if (!settledPlaying(follower)) return@boundedUpgradeAlignment UpgradeAlignment.SEEK
             val drift = follower.currentPosition - leader.currentPosition
             val alignment = upgradeAlignment(drift)
-            if (alignment != UpgradeAlignment.SEEK) return alignment
+            if (alignment != UpgradeAlignment.SEEK) return@boundedUpgradeAlignment alignment
             lead = (lead - drift).coerceIn(0L, 2_000L)
             follower.seekTo(leader.currentPosition + lead)
         }
-        return if (settledPlaying(follower)) upgradeAlignment(follower.currentPosition - leader.currentPosition)
+        if (settledPlaying(follower)) upgradeAlignment(follower.currentPosition - leader.currentPosition)
         else UpgradeAlignment.SEEK
     }
 
@@ -1895,7 +1926,9 @@ class PlaybackService : MediaLibraryService() {
         val uri = item?.localConfiguration?.uri?.let(::selectedUri)
         val key = uri?.let(::externalStreamKeyOf)
         val rendition = if (item != null && key != null) ExternalStreams.get(item.mediaId, key) else null
-        NerdStats.onExternalSource(rendition?.label)
+        // The lookup label can say "lossless requested" long after decoding starts.
+        // Stats describe the playing source; codec/quality come from the decoder.
+        NerdStats.onExternalSource(rendition?.provider)
         val downloaded = item?.let { com.opentune.data.download.Downloads.entryNow(it.mediaId) }
             ?.takeIf { uri?.scheme == "file" && it.path == uri.path }
         val provider = when {
@@ -2145,42 +2178,38 @@ class PlaybackService : MediaLibraryService() {
             val others = if (Subsonic.isSubsonic(seed)) emptyList() else Autoplay.seeds(queue) { s ->
                 isYouTubeId(s.videoId) && !Podcasts.isEpisode(s.videoId)
             }.drop(1)
-            val extra = others.map { s ->
+            val queuedAtStart = queue.mapTo(HashSet()) { it.videoId }
+            fun usable(song: Song): Boolean = song.videoId !in queuedAtStart &&
+                !LibraryStore.isDisliked(song.videoId) && !LibraryStore.hidden.value.hides(song.videoId, song.artist)
+            val requests = (listOf(seedItem.toSong()) + others).mapIndexed { index, song ->
                 async {
-                    try {
-                        Recommendations.after(s, engine).songs
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Radio for ${s.videoId} failed", e)
-                        emptyList()
+                    var answer = emptyList<Song>()
+                    val waits = if (index == 0) RADIO_RETRY_MS else longArrayOf(0)
+                    for ((attempt, wait) in waits.withIndex()) {
+                        if (wait > 0) delay(wait)
+                        answer = try {
+                            kotlinx.coroutines.withTimeoutOrNull(RADIO_REQUEST_MS) {
+                                if (Subsonic.isSubsonic(song.videoId)) Subsonic.randomSongs(RADIO_FROM_SERVER)
+                                else Recommendations.after(song, engine).songs
+                            }.orEmpty()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Radio for ${song.videoId} failed (try ${attempt + 1})", e)
+                            emptyList()
+                        }
+                        if (answer.any(::usable)) break
                     }
+                    answer
                 }
             }
-            var lead: List<Song>? = null
-            for ((attempt, wait) in RADIO_RETRY_MS.withIndex()) {
-                if (wait > 0) delay(wait)
-                lead = try {
-                    if (Subsonic.isSubsonic(seed)) {
-                        Subsonic.randomSongs(RADIO_FROM_SERVER)
-                    } else {
-                        // YouTube Music, Spotify or JioSaavn, as chosen; the songs always play from YouTube Music.
-                        Recommendations.after(seedItem.toSong(), engine).songs
-                    }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "Radio for $seed failed (try ${attempt + 1})", e)
-                    null
-                }
-                if (!lead.isNullOrEmpty()) break
-            }
-            if (lead.isNullOrEmpty()) {
-                extra.forEach { it.cancel() }
-                return@launch
-            }
-            val radio = Autoplay.blend(listOf(lead) + extra.awaitAll(), queue)
-            if (AppSettings.playback.value.recommender != engine) return@launch
+            // A fast secondary seed is useful even if the primary is retrying.
+            // Preserve seed order for ranking, but don't await every slow catalogue.
+            val ready = Autoplay.readyRadios(requests, ::usable)
+            if (ready.all { it.isEmpty() }) return@launch
+            val radio = Autoplay.blend(ready, queue)
+            if (!AppSettings.playback.value.autoplay || AppSettings.playback.value.recommender != engine ||
+                player.repeatMode != Player.REPEAT_MODE_OFF) return@launch
             // The queue may have been replaced while the request was out; radio
             // for a track that's no longer last doesn't belong at the end.
             val count = player.mediaItemCount
@@ -2199,7 +2228,7 @@ class PlaybackService : MediaLibraryService() {
             val ended = player.playbackState == Player.STATE_ENDED
             player.addMediaItems(additions.map { it.copy(queueTier = QueueTier.AUTOPLAY).toMediaItem() })
             // The song finished before the next ones came; carry on into them.
-            if (ended) {
+            if (ended && player.playWhenReady) {
                 player.seekToNextMediaItem()
                 player.prepare()
                 player.play()
@@ -2443,6 +2472,7 @@ class PlaybackService : MediaLibraryService() {
         const val PREFETCH_SETTLE_MS = 1_500L
         /** Songs a server queue carries on with when it runs out. */
         const val RADIO_FROM_SERVER = 25
+        const val RADIO_REQUEST_MS = 12_000L
         /** With "end of song", how long the song fades out before it stops. */
         const val END_FADE_MS = 15_000L
         /** Waits before each ask for radio: at once, then twice more if it fails. */

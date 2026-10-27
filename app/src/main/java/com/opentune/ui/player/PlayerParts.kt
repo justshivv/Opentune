@@ -138,6 +138,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 
 /**
  * The full player's backdrop, in the style chosen in settings. With
@@ -167,7 +168,6 @@ fun PlayerBackdrop(
     titleTop: Dp? = null,
     /** Lyrics or the queue are open over the Canvas: it's frosted and darkened all the way up. */
     canvasBehindText: Boolean = false,
-    cinematic: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     if (style == PlayerBackground.AMOLED) {
@@ -175,7 +175,7 @@ fun PlayerBackdrop(
         return
     }
     Box(modifier.background(scheme.surface)) {
-        if (!cinematic) when (style) {
+        when (style) {
             PlayerBackground.AMOLED -> Unit
             PlayerBackground.ECHO_GLOW -> EchoGlowBackground(animate && playing, Modifier.matchParentSize())
             PlayerBackground.MESH -> MeshGradient(artworkUrl, animate, Modifier.matchParentSize())
@@ -713,7 +713,9 @@ fun SeekBar(
         Canvas(
             Modifier
                 .fillMaxWidth()
-                .height(28.dp)
+                // Reserve the actual touch target in layout; thick tracks and
+                // their handles must not spill into the quality button below.
+                .height(maxOf(48.dp, base * 6f))
                 .onFocusChanged { focused = it.isFocused }
                 .onKeyEvent { e ->
                     val step = seekStepMs(e.key, durationMs) ?: return@onKeyEvent false
@@ -834,11 +836,11 @@ fun SeekBar(
                 val sample = if (durationMs > 0) "-" + formatTime(durationMs) else "--:--"
                 with(density) { (measurer.measure(sample, timeStyle).size.width + 8.dp.roundToPx()).toDp() }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(if (loading) "--:--" else formatTime(elapsedSeconds * 1000), modifier = Modifier.width(timeWidth),
                     style = timeStyle, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                // Raised a little, closer to the bar it describes than the times beside it.
-                quality?.let { Box(Modifier.weight(1f).offset(y = (-14).dp), contentAlignment = Alignment.Center) { it() } }
+                // Keep this button below the seek target, including its minimum touch bounds.
+                quality?.let { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { it() } }
                 Text(
                     when {
                         durationMs <= 0 -> "--:--"
@@ -853,7 +855,7 @@ fun SeekBar(
                 )
             }
         }
-        if (look.seekbarTime == com.opentune.data.settings.SeekbarTime.HIDDEN) quality?.let { Box(Modifier.fillMaxWidth().offset(y = (-6).dp), contentAlignment = Alignment.Center) { it() } }
+        if (look.seekbarTime == com.opentune.data.settings.SeekbarTime.HIDDEN) quality?.let { Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { it() } }
     }
 }
 
@@ -1071,6 +1073,7 @@ fun NerdStatsLine(format: AudioFormatInfo?) {
     val kbps = format?.bitrateKbps ?: picked?.second.takeIf { lossless == null }
     val parts = listOfNotNull(
         format?.codec,
+        format?.bitDepth?.takeIf { it > 0 }?.let { "$it-bit" },
         kbps?.let { "$it kbps" },
         format?.sampleRateHz?.let { "%.1f kHz".format(it / 1000f) },
         format?.channels?.let { if (it == 2) "stereo" else if (it == 1) "mono" else "$it ch" },
@@ -1086,52 +1089,102 @@ fun NerdStatsLine(format: AudioFormatInfo?) {
     )
 }
 
-/** The phone's media volume, kept in step with the hardware buttons. */
+/** Volume of the active output: the cast receiver when connected, otherwise the phone. */
 @Composable
 fun VolumeBar(modifier: Modifier = Modifier) {
+    val session by com.opentune.cast.Cast.session.collectAsState()
+    val receiver = session?.receiver
+    // Cancel gestures and pending UI work when the output changes.
+    androidx.compose.runtime.key(receiver) { OutputVolumeBar(receiver, modifier) }
+}
+
+@Composable
+internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Modifier) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val am = remember { context.getSystemService(AudioManager::class.java) }
     val max = remember { am?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)?.coerceAtLeast(1) ?: 1 }
-    var volume by remember { mutableFloatStateOf(am?.getStreamVolume(AudioManager.STREAM_MUSIC)?.toFloat() ?: 0f) }
+    val remoteVolume = receiver?.status?.collectAsState()?.value?.volume
+    var volume by remember { mutableFloatStateOf(
+        if (receiver != null) remoteVolume ?: 0f else (am?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0).toFloat() / max
+    ) }
     var dragging by remember { mutableStateOf(false) }
+    var pending by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val commands = remember { kotlinx.coroutines.sync.Mutex() }
+    LaunchedEffect(remoteVolume, dragging, pending) {
+        if (receiver != null && !dragging && pending == 0) remoteVolume?.let { volume = it.coerceIn(0f, 1f) }
+    }
     LaunchedEffect(am) {
+        if (receiver != null) return@LaunchedEffect
         while (true) {
-            if (!dragging) volume = am?.getStreamVolume(AudioManager.STREAM_MUSIC)?.toFloat() ?: volume
+            if (!dragging) volume = (am?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0).toFloat() / max
             delay(400)
         }
     }
+    fun commit() {
+        val level = volume
+        if (receiver == null) {
+            am?.setStreamVolume(AudioManager.STREAM_MUSIC, (level * max).roundToInt(), 0)
+        } else {
+            pending++
+            scope.launch {
+                try {
+                    commands.withLock { receiver.setVolume(level) }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    com.opentune.data.Pills.info("Couldn't change the volume on ${receiver.name}", context)
+                } finally {
+                    pending--
+                }
+            }
+        }
+    }
+    fun adjust(step: Float) {
+        volume = (volume + step).coerceIn(0f, 1f)
+        commit()
+    }
+    val step = if (receiver != null) 0.05f else 1f / max
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.AutoMirrored.Rounded.VolumeDown, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+        Icon(Icons.AutoMirrored.Rounded.VolumeDown, "Volume down", tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp).clickable { adjust(-step) })
         val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
         val fill = MaterialTheme.colorScheme.onSurface
-        fun set(x: Float, width: Int) {
-            volume = (x / width).coerceIn(0f, 1f) * max
-            am?.setStreamVolume(AudioManager.STREAM_MUSIC, volume.roundToInt(), 0)
+        fun preview(x: Float, width: Int) {
+            if (width <= 0) return
+            volume = (x / width).coerceIn(0f, 1f)
+            if (receiver == null) commit()
         }
         Canvas(
             Modifier
                 .weight(1f)
                 .padding(horizontal = 10.dp)
                 .height(28.dp)
-                .pointerInput(max) { detectTapGestures { set(it.x, size.width) } }
-                .pointerInput(max) {
+                .semantics {
+                    contentDescription = receiver?.let { "${it.name} volume" } ?: "Media volume"
+                    progressBarRangeInfo = ProgressBarRangeInfo(volume, 0f..1f)
+                    setProgress { volume = it.coerceIn(0f, 1f); commit(); true }
+                }
+                .pointerInput(max, receiver) { detectTapGestures { preview(it.x, size.width); commit() } }
+                .pointerInput(max, receiver) {
                     detectHorizontalDragGestures(
                         onDragStart = { dragging = true },
-                        onDragEnd = { dragging = false },
+                        onDragEnd = { commit(); dragging = false },
                         onDragCancel = { dragging = false },
                     ) { change, _ ->
                         change.consume()
-                        set(change.position.x, size.width)
+                        preview(change.position.x, size.width)
                     }
                 },
         ) {
             val h = 4.dp.toPx()
             val y = (size.height - h) / 2
-            val f = (volume / max).coerceIn(0f, 1f)
+            val f = volume.coerceIn(0f, 1f)
             drawRoundRect(track, Offset(0f, y), Size(size.width, h), CornerRadius(h / 2))
             drawRoundRect(fill, Offset(0f, y), Size(size.width * f, h), CornerRadius(h / 2))
         }
-        Icon(Icons.AutoMirrored.Rounded.VolumeUp, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+        Icon(Icons.AutoMirrored.Rounded.VolumeUp, "Volume up", tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp).clickable { adjust(step) })
     }
 }
 
@@ -1166,7 +1219,7 @@ fun ArtworkSwipeArea(
 
 /**
  * The cover as a record: round, with grooves and a spindle hole, turning
- * at 33 rpm while the song plays and resting where it stopped on pause.
+ * gently once every 20 seconds while playing, resting where it stopped on pause.
  */
 @Composable
 fun VinylPane(
@@ -1224,7 +1277,7 @@ fun VinylPane(
     }
 }
 
-private const val VINYL_DEGREES_PER_SECOND = 360f * 33.3f / 60f
+private const val VINYL_DEGREES_PER_SECOND = 360f / 20f
 
 /**
  * While the seek bar is dragged, the line sung at that point in a bubble

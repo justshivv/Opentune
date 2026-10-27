@@ -179,6 +179,7 @@ class CastTest {
             }
             val app = org.json.JSONObject().put("appId", "CC1AD845").put("transportId", "web-5").put("sessionId", "s-1")
             var position = 12.0
+            var volume = 0.4
             runCatching {
                 while (true) {
                     val bytes = ByteArray(input.readInt()).also(input::readFully)
@@ -189,8 +190,15 @@ class CastTest {
                     val id = json.optInt("requestId")
                     when (type) {
                         "LAUNCH", "GET_STATUS" -> if (frame.namespace.endsWith("receiver")) reply(frame, frame.namespace, org.json.JSONObject().put("type", "RECEIVER_STATUS").put("requestId", id)
-                            .put("status", org.json.JSONObject().put("applications", org.json.JSONArray().put(app)).put("volume", org.json.JSONObject().put("level", 0.4))))
+                            .put("status", org.json.JSONObject().put("applications", org.json.JSONArray().put(app)).put("volume", org.json.JSONObject().put("level", volume))))
                         else reply(frame, frame.namespace, mediaStatus(id, "PLAYING", position))
+                        "SET_VOLUME" -> {
+                            check(frame.destination == "receiver-0" && frame.namespace.endsWith("receiver"))
+                            volume = json.getJSONObject("volume").getDouble("level")
+                            // A volume-only report must not disconnect the active media app.
+                            reply(frame, frame.namespace, org.json.JSONObject().put("type", "RECEIVER_STATUS").put("requestId", id)
+                                .put("status", org.json.JSONObject().put("volume", org.json.JSONObject().put("level", volume))))
+                        }
                         "LOAD" -> {
                             position = json.getDouble("currentTime")
                             reply(frame, frame.namespace, mediaStatus(id, "PLAYING", position))
@@ -209,10 +217,18 @@ class CastTest {
             assertEquals(RemoteState.PLAYING, cast.status.value.state)
             assertEquals(30_000L, cast.status.value.positionMs)
             assertEquals("song", cast.status.value.mediaId)
+            // Media-session gain is 1.0, while the receiver is at 40%.
+            assertEquals(0.4f, cast.status.value.volume!!, 0.001f)
+            runBlocking { cast.setVolume(0.65f) }
+            assertEquals(0.65f, cast.status.value.volume!!, 0.001f)
+            runBlocking { cast.setVolume(0.2f) }
+            assertEquals(0.2f, cast.status.value.volume!!, 0.001f)
+            assertEquals(RemoteState.PLAYING, cast.status.value.state)
             runBlocking { cast.pause() }
             val deadline = System.currentTimeMillis() + 5_000
             while (System.currentTimeMillis() < deadline && cast.status.value.state != RemoteState.PAUSED) Thread.sleep(50)
             assertEquals(RemoteState.PAUSED, cast.status.value.state)
+            assertEquals(0.2f, cast.status.value.volume!!, 0.001f)
             val order = seen.toList()
             assertEquals("receiver-0:CONNECT", order[0])
             assertTrue(order.indexOf("receiver-0:LAUNCH") < order.indexOf("web-5:CONNECT"))
@@ -227,5 +243,6 @@ class CastTest {
     private fun mediaStatus(requestId: Int, state: String, position: Double) = org.json.JSONObject()
         .put("type", "MEDIA_STATUS")
         .put("requestId", requestId)
-        .put("status", org.json.JSONArray().put(org.json.JSONObject().put("mediaSessionId", 7).put("playerState", state).put("currentTime", position)))
+        .put("status", org.json.JSONArray().put(org.json.JSONObject().put("mediaSessionId", 7).put("playerState", state).put("currentTime", position)
+            .put("volume", org.json.JSONObject().put("level", 1.0))))
 }

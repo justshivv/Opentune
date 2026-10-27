@@ -729,13 +729,11 @@ object InnertubeParser {
             // credit; the "All" tab often lists only "Song • 4:30" otherwise,
             // and an album's own rows carry no credit at all — the release is
             // billed once, in the header the row hangs under.
-            artist = credits.artistName?.takeIf { it.isNotBlank() }
-                ?: artist
-                ?: fallback.artistName
-                ?: "Unknown artist",
+            artist = com.opentune.data.model.preferredArtist(credits.artistName, artist, fallback.artistName),
             thumbnailUrl = thumbnails.best(),
             durationText = duration,
-            artistId = credits.artistId ?: fallback.artistId,
+            artistId = credits.artistId?.takeUnless { com.opentune.data.model.isPlaceholderArtist(credits.artistName) }
+                ?: fallback.artistId?.takeUnless { com.opentune.data.model.isPlaceholderArtist(fallback.artistName) },
             albumId = credits.albumId ?: fallback.albumId,
             albumName = credits.albumName ?: fallback.albumName,
             // Only playlist rows carry one; on an album or a search hit this
@@ -777,10 +775,10 @@ object InnertubeParser {
         return Song(
             videoId = videoId,
             title = title,
-            artist = credits.artistName?.takeIf { it.isNotBlank() } ?: artist ?: "Unknown artist",
+            artist = com.opentune.data.model.preferredArtist(credits.artistName, artist),
             thumbnailUrl = thumbnails.best(),
             durationText = duration,
-            artistId = credits.artistId,
+            artistId = credits.artistId?.takeUnless { com.opentune.data.model.isPlaceholderArtist(credits.artistName) },
             albumId = credits.albumId,
             albumName = credits.albumName,
             isVideo = rowType == "video" || thumbnails.isNotSquare(),
@@ -895,7 +893,8 @@ object InnertubeParser {
             val pageType = browse.o("browseEndpointContextSupportedConfigs")
                 .o("browseEndpointContextMusicConfig").s("pageType").orEmpty()
             credits = when {
-                "ARTIST" in pageType && credits.artistId == null ->
+                "ARTIST" in pageType && (credits.artistId == null ||
+                    (com.opentune.data.model.isPlaceholderArtist(credits.artistName) && !com.opentune.data.model.isPlaceholderArtist(run.s("text")))) ->
                     credits.copy(artistId = id, artistName = run.s("text"))
                 "ALBUM" in pageType && credits.albumId == null ->
                     credits.copy(albumId = id, albumName = run.s("text"))
@@ -1085,17 +1084,18 @@ object InnertubeParser {
             // the leading runs before the first bullet are the credit.
             val bylineRuns = renderer.o("longBylineText").a("runs").orEmpty()
             val byline = bylineRuns.map { it.s("text").orEmpty() }
-            val artist = byline.takeWhile { !it.contains("•") }.joinToString("").trim()
+            val artist = byline.joinToString("").substringBefore("•").trim()
+            val shortArtist = renderer.o("shortBylineText").runs().substringBefore("•").trim()
             // Those same runs link out to the artist and album pages, which is
             // how a track started from the queue knows where it came from.
-            val credits = creditsOf(bylineRuns)
+            val credits = creditsOf(bylineRuns + renderer.o("shortBylineText").a("runs").orEmpty())
             out[videoId] = Song(
                 videoId = videoId,
                 title = title,
-                artist = artist,
+                artist = com.opentune.data.model.preferredArtist(artist, shortArtist, credits.artistName),
                 thumbnailUrl = renderer.o("thumbnail").a("thumbnails").best(),
                 durationText = renderer.o("lengthText").runs().takeIf { it.isNotBlank() },
-                artistId = credits.artistId,
+                artistId = credits.artistId?.takeUnless { com.opentune.data.model.isPlaceholderArtist(credits.artistName) },
                 albumId = credits.albumId,
                 albumName = credits.albumName,
                 // A catalogue track is credited "Artist • Album • Year"; the

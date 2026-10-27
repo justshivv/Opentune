@@ -11,10 +11,38 @@ object Autoplay {
 
     /**
      * How close to the end of the queue playback gets before more radio is
-     * fetched. One track of slack means the fetch normally finishes while the
-     * second-to-last track is still playing, so the hand-off is gapless.
+     * fetched. Three tracks of slack give slow catalogues time to answer
+     * before the queue runs dry, including when the listener skips a song.
      */
-    const val TRACKS_BEFORE_END = 1
+    const val TRACKS_BEFORE_END = 3
+
+    /** Use ready, playable recommendations without waiting for every secondary seed. */
+    internal suspend fun readyRadios(
+        requests: List<kotlinx.coroutines.Deferred<List<Song>>>,
+        usable: (Song) -> Boolean,
+        graceMs: Long = 250,
+    ): List<List<Song>> {
+        val pending = requests.indices.toMutableSet()
+        val answers = MutableList(requests.size) { emptyList<Song>() }
+        var deadline: Long? = null
+        suspend fun next(): Pair<Int, List<Song>> = kotlinx.coroutines.selects.select {
+            pending.forEach { i -> requests[i].onAwait { i to it } }
+        }
+        try {
+            while (pending.isNotEmpty()) {
+                val left = deadline?.let { (it - System.nanoTime()) / 1_000_000 }
+                if (left != null && left <= 0) break
+                val answer = if (left == null) next() else kotlinx.coroutines.withTimeoutOrNull(left) { next() } ?: break
+                val (index, songs) = answer
+                pending.remove(index)
+                answers[index] = songs
+                if (deadline == null && songs.any(usable)) deadline = System.nanoTime() + graceMs * 1_000_000
+            }
+            return answers
+        } finally {
+            requests.forEach { if (!it.isCompleted) it.cancel() }
+        }
+    }
 
     /**
      * @param remaining tracks still to play after the current one, in play

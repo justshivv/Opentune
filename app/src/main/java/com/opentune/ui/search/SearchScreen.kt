@@ -176,10 +176,8 @@ fun SearchScreen(
             shape = CircleShape,
             placeholder = { Text(source.placeholder) },
             leadingIcon = {
-                androidx.compose.animation.Crossfade(explore != null && searching, label = "searchLead") { back ->
-                    if (back) IconButton(onClick = leave) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to Explore") }
-                    else Icon(Icons.Filled.Search, null)
-                }
+                SearchLeadingIcon(explore != null && searching, onBack = leave,
+                    onSearch = { field.requestFocus(); keyboard?.show() })
             },
             trailingIcon = {
                 if (query.isNotEmpty()) {
@@ -240,6 +238,17 @@ fun SearchScreen(
                 }
                 Results(results, contentPadding, currentVideoId, isPlaying, onPlay, onPlayNext, onAddToQueue, onBrowse, vm::retry)
             }
+        }
+    }
+}
+
+/** Both states occupy the same slot; focus changes only the glyph, never the field's layout. */
+@Composable
+internal fun SearchLeadingIcon(back: Boolean, onBack: () -> Unit, onSearch: () -> Unit) {
+    IconButton(onClick = if (back) onBack else onSearch, modifier = Modifier.size(48.dp)) {
+        androidx.compose.animation.Crossfade(back, modifier = Modifier.size(24.dp), animationSpec = tween(160), label = "searchLead") { showBack ->
+            Icon(if (showBack) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Search,
+                if (showBack) "Back to Explore" else "Search", modifier = Modifier.fillMaxSize())
         }
     }
 }

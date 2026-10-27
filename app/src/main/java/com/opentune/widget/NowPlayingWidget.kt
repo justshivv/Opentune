@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
 import android.widget.RemoteViews
@@ -25,6 +26,7 @@ import com.opentune.MainActivity
 import com.opentune.R
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.model.Song
+import com.opentune.data.model.artworkAt
 import com.opentune.data.subsonic.Subsonic
 import com.opentune.playback.toSong
 import java.io.File
@@ -33,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The home-screen widget: cover, title and artist, previous / play-pause /
@@ -47,6 +50,16 @@ import kotlinx.coroutines.launch
 @OptIn(UnstableApi::class)
 open class NowPlayingWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
+        val state = load(context)
+        render(context, state)
+        if (state.thumbnailUrl != null && (!coverFile(context).exists() ||
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("cover-thumbnail", null) != state.thumbnailUrl)) {
+            coverFor = state.thumbnailUrl
+            loadCover(context, state)
+        }
+    }
+
+    override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) {
         render(context, load(context))
     }
 
@@ -109,7 +122,7 @@ open class NowPlayingWidget : AppWidgetProvider() {
         private fun loadCover(context: Context, state: State) {
             coverJob?.cancel()
             val file = coverFile(context)
-            val url = Subsonic.resolveCover(state.thumbnailUrl)
+            val url = Subsonic.resolveCover(state.thumbnailUrl.artworkAt(COVER_PX))
             if (url == null) {
                 file.delete()
                 render(context, state)
@@ -118,46 +131,65 @@ open class NowPlayingWidget : AppWidgetProvider() {
             coverJob = scope.launch {
                 val request = ImageRequest.Builder(context).data(url).size(COVER_PX).allowHardware(false).build()
                 val bitmap = (context.imageLoader.execute(request) as? SuccessResult)?.image?.toBitmap() ?: return@launch
-                launch(Dispatchers.IO) {
-                    runCatching { file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) } }
-                }.join()
-                render(context, last ?: state)
+                val temporary = File.createTempFile("widget-cover-", ".jpg", context.cacheDir)
+                try {
+                    val written = withContext(Dispatchers.IO) {
+                        runCatching { temporary.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, it) } }.getOrDefault(false)
+                    }
+                    if (!written || coverFor != state.thumbnailUrl || !temporary.renameTo(file)) return@launch
+                    // Match the saved file to its song only after a successful atomic write.
+                    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit {
+                        putString("cover-thumbnail", state.thumbnailUrl)
+                    }
+                    render(context, last ?: state)
+                } finally {
+                    temporary.delete()
+                }
             }
         }
 
         private fun render(context: Context, state: State) {
             val manager = AppWidgetManager.getInstance(context)
+            val cover = coverFile(context).takeIf {
+                state.videoId != null && it.exists() && state.thumbnailUrl != null &&
+                    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("cover-thumbnail", null) == state.thumbnailUrl
+            }?.let { BitmapFactory.decodeFile(it.path) }
             val designs = listOf(
                 NowPlayingWidget::class.java to R.layout.widget_now_playing,
                 AlbumArtWidget::class.java to R.layout.widget_album_art,
                 StudioWidget::class.java to R.layout.widget_studio,
             )
             for ((provider, layout) in designs) {
-            val ids = manager.getAppWidgetIds(ComponentName(context, provider))
-            if (ids.isEmpty()) continue
-            val views = RemoteViews(context.packageName, layout)
-            val empty = state.videoId == null
-            views.setTextViewText(R.id.widget_title, if (empty) context.getString(R.string.widget_nothing_playing) else state.title)
-            views.setTextViewText(R.id.widget_artist, if (empty) context.getString(R.string.widget_open) else state.artist)
-            val cover = coverFile(context).takeIf { !empty && it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
-            if (cover != null) views.setImageViewBitmap(R.id.widget_cover, cover) else views.setImageViewResource(R.id.widget_cover, R.drawable.ic_widget_cover)
-            views.setImageViewResource(R.id.widget_play, if (state.playing) R.drawable.ic_widget_pause else R.drawable.ic_widget_play)
-            views.setContentDescription(R.id.widget_play, context.getString(if (state.playing) R.string.widget_pause else R.string.widget_play))
-            views.setImageViewResource(R.id.widget_like, if (state.liked) R.drawable.ic_widget_heart_filled else R.drawable.ic_widget_heart)
-            views.setContentDescription(R.id.widget_like, context.getString(if (state.liked) R.string.widget_unlike else R.string.widget_like))
-            views.setViewVisibility(R.id.widget_like, if (empty) View.GONE else View.VISIBLE)
+                val ids = manager.getAppWidgetIds(ComponentName(context, provider))
+                if (ids.isEmpty()) continue
+                for (id in ids) {
+                    val views = RemoteViews(context.packageName, layout)
+                    val width = manager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 300)
+                    val compact = provider == NowPlayingWidget::class.java
+                    val empty = state.videoId == null
+                    views.setTextViewText(R.id.widget_title, if (empty) context.getString(R.string.widget_nothing_playing) else state.title)
+                    views.setTextViewText(R.id.widget_artist, if (empty) context.getString(R.string.widget_open) else state.artist)
+                    if (cover != null) views.setImageViewBitmap(R.id.widget_cover, cover) else views.setImageViewResource(R.id.widget_cover, R.drawable.ic_widget_cover)
+                    views.setImageViewResource(R.id.widget_play, if (state.playing) R.drawable.ic_widget_pause else R.drawable.ic_widget_play)
+                    views.setContentDescription(R.id.widget_play, context.getString(if (state.playing) R.string.widget_pause else R.string.widget_play))
+                    views.setImageViewResource(R.id.widget_like, if (state.liked) R.drawable.ic_widget_heart_filled else R.drawable.ic_widget_heart)
+                    views.setContentDescription(R.id.widget_like, context.getString(if (state.liked) R.string.widget_unlike else R.string.widget_like))
+                    // Keep real space for the song's title on narrow launcher cells.
+                    views.setViewVisibility(R.id.widget_like, if (empty || (compact && width < 420)) View.GONE else View.VISIBLE)
+                    views.setViewVisibility(R.id.widget_previous, if (compact && width < 360) View.GONE else View.VISIBLE)
 
-            views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(
-                context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            ))
-            views.setOnClickPendingIntent(R.id.widget_previous, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
-            views.setOnClickPendingIntent(R.id.widget_play, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
-            views.setOnClickPendingIntent(R.id.widget_next, mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT))
-            views.setOnClickPendingIntent(R.id.widget_like, PendingIntent.getBroadcast(
-                context, 1, Intent(context, NowPlayingWidget::class.java).setAction(ACTION_LIKE),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            ))
-            manager.updateAppWidget(ids, views)
+                    views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(
+                        context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                    ))
+                    views.setOnClickPendingIntent(R.id.widget_previous, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+                    views.setOnClickPendingIntent(R.id.widget_play, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+                    views.setOnClickPendingIntent(R.id.widget_next, mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT))
+                    views.setOnClickPendingIntent(R.id.widget_like, PendingIntent.getBroadcast(
+                        context, 1, Intent(context, NowPlayingWidget::class.java).setAction(ACTION_LIKE),
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                    ))
+                    manager.updateAppWidget(id, views)
+                }
             }
         }
 

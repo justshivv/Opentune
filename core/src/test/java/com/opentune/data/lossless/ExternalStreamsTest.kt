@@ -12,6 +12,36 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class ExternalStreamsTest {
+    @Test fun lateSaavnKeepsVerifiedFlacPreferredAndRemainsAvailableAsFallback() {
+        AppSettings.init(RuntimeEnvironment.getApplication())
+        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessUnmeteredOnly = false, jioSaavnQuality = true) }
+        val flac = ExternalStreams.Rendition("preferred-flac", "https://cdn.example/flac", "FLAC", true,
+            System.nanoTime() / 1_000_000, mimeType = "audio/flac")
+        val saavn = flac.copy(key = "late-saavn", url = "https://cdn.example/aac", lossless = false, mimeType = null, provider = "JioSaavn")
+        ExternalStreams.remember("late-lossy", flac)
+        ExternalStreams.remember("late-lossy", saavn, preserveLossless = true)
+        assertEquals(flac, ExternalStreams.cached("late-lossy"))
+        assertEquals(saavn, ExternalStreams.saavnFor("late-lossy"))
+        assertEquals(saavn.url, ExternalStreams.resolve("late-lossy", saavn.key))
+        // An expired FLAC must not prevent a usable fallback being cached.
+        ExternalStreams.remember("expired-preferred", flac.copy(key = "stale-flac", at = flac.at - 11 * 60_000))
+        ExternalStreams.remember("expired-preferred", saavn.copy(key = "fresh-saavn"), preserveLossless = true)
+        assertFalse(ExternalStreams.cached("expired-preferred")!!.lossless)
+    }
+
+    @Test fun verifiedFlacReturnsImmediatelyWithoutRepeatingMaximumQualitySearch() = kotlinx.coroutines.runBlocking {
+        AppSettings.init(RuntimeEnvironment.getApplication())
+        AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessUnmeteredOnly = false) }
+        val flac = ExternalStreams.Rendition("ready-flac", "https://cdn.example/ready", "FLAC", true,
+            System.nanoTime() / 1_000_000, maximumSearch = false, mimeType = "audio/flac")
+        ExternalStreams.remember("ready-song", flac)
+        val result = kotlinx.coroutines.withTimeout(1_000) {
+            ExternalStreams.find(com.opentune.data.model.Song(videoId = "ready-song", title = "Song", artist = "Artist", thumbnailUrl = null),
+                180_000, beforePlayback = true, losslessOnly = true)
+        }
+        assertEquals(flac, result)
+    }
+
     @Test fun startupCacheRejectsExpiredFailedAndDisabledRenditions() {
         AppSettings.init(RuntimeEnvironment.getApplication())
         AppSettings.updatePlayback { it.copy(wifiQuality = AudioQuality.MAX, mobileQuality = AudioQuality.MAX, losslessUnmeteredOnly = false, jioSaavnQuality = true) }

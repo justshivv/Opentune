@@ -5,7 +5,7 @@ name: Test APK (no release)
 on:
   workflow_dispatch:
   push:
-    branches: [feat/http-audio-addons, claude/wizardly-sagan-8ge2ek]
+    branches: [feat/http-audio-addons, claude/wizardly-sagan-8ge2ek, fix/spotify-player-regressions]
 permissions:
   contents: read
 concurrency:
