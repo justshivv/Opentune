@@ -260,6 +260,10 @@ object LibraryStore {
     /** Adds [songs] in order, skipping any already there; one write for the lot. */
     @Synchronized
     fun addAllToPlaylist(id: String, songs: List<Song>) {
+        if (playlist(id)?.spotifyId != null) {
+            com.opentune.data.spotify.SpotifyPlaylistWrites.add(id, songs)
+            return
+        }
         var added = emptyList<SongRef>()
         editPlaylist(id) { p ->
             val have = p.songs.mapTo(HashSet()) { it.videoId }
@@ -270,6 +274,15 @@ object LibraryStore {
     }
 
     fun addToPlaylist(id: String, song: Song) = addAllToPlaylist(id, listOf(song))
+
+    /** Only called after the remote service has accepted the write. */
+    @Synchronized
+    internal fun confirmSpotifyAddition(id: String, spotifyId: String, song: Song) {
+        editPlaylist(id) { p ->
+            if (p.spotifyId != spotifyId || p.songs.any { it.videoId == song.videoId }) p
+            else p.copy(songs = p.songs + SongRef.of(song), spotifyRevision = null)
+        }
+    }
 
     @Synchronized
     fun removeFromPlaylist(id: String, index: Int) {

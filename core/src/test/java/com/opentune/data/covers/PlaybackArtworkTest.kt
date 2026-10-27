@@ -30,6 +30,14 @@ class PlaybackArtworkTest {
         assertEquals("file:/saved-cover.jpg", saved.choose(song, apple))
     }
 
+    @Test fun missingCoverAcceptsLaterMetadataForTheSameTrack() {
+        val art = PlaybackArtwork { null }
+        val song = Song("late", "Song", "Artist", null)
+        assertEquals(null, art.choose(song))
+        assertEquals("https://images.test/cover", art.choose(song.copy(thumbnailUrl = "https://images.test/cover")))
+        assertEquals("https://images.test/cover", art.choose(song.copy(thumbnailUrl = "https://images.test/different")))
+    }
+
     @Test fun eachImageHostIsResizedItsOwnWay() {
         assertEquals("https://is1-ssl.mzstatic.com/a.jpg/3000x3000bb.jpg", "https://is1-ssl.mzstatic.com/a.jpg/100x100bb.jpg".artworkAt(4000))
         assertEquals("https://cdn-images.dzcdn.net/images/cover/a/160x160-000000-80-0-0.jpg", "https://cdn-images.dzcdn.net/images/cover/a/1000x1000-000000-80-0-0.jpg".artworkAt(160))

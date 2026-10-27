@@ -30,6 +30,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import kotlinx.serialization.json.putJsonArray
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
@@ -208,6 +209,34 @@ object SpotifyWebPlayer {
     }
 
     // ---- Matching -------------------------------------------------------------------
+
+    /** A real account write. Only an acknowledged snapshot may update the local copy. */
+    internal suspend fun appendPlaylist(cookie: String, id: String, uris: List<String>, retried: Boolean = false): String {
+        require(id.matches(Regex("[A-Za-z0-9]{22}"))) { "Invalid Spotify playlist" }
+        require(uris.isNotEmpty() && uris.size <= 100 && uris.all { it.matches(Regex("spotify:track:[A-Za-z0-9]{22}")) })
+        val bearer = accessToken(cookie)
+        val body = buildJsonObject { putJsonArray("uris") { uris.forEach { add(JsonPrimitive(it)) } } }
+        val request = Request.Builder().url("https://api.spotify.com/v1/playlists/$id/items")
+            .header("Authorization", "Bearer ${bearer.token}")
+            .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+        val (code, text) = runInterruptible(Dispatchers.IO) {
+            Http.client.newCall(request).execute().use { it.code to it.body.string() }
+        }
+        if (code == 401 && !retried) {
+            access = null
+            return appendPlaylist(cookie, id, uris, true)
+        }
+        return playlistWriteSnapshot(code, text)
+    }
+
+    internal fun playlistWriteSnapshot(code: Int, text: String): String {
+        if (code == 403) throw IOException("Spotify did not allow this change. You need permission to edit this playlist.")
+        if (code == 401) throw SignedOut("Reconnect Spotify to edit playlists")
+        if (code !in 200..299) throw IOException("Spotify could not save the song (HTTP $code)")
+        val root = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull()
+        return root?.text("snapshot_id")?.takeIf { it.isNotBlank() }
+            ?: throw IOException("Spotify did not confirm the playlist change. Refresh before trying again.")
+    }
 
     /** Tracks in a `searchTracks` answer. */
     internal fun hitsIn(root: JsonObject): List<Hit> {

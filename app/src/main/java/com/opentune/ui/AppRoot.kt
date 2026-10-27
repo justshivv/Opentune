@@ -317,7 +317,7 @@ fun AppRoot(vm: PlayerViewModel) {
         keepInPlaylist = { s, id ->
             LibraryStore.addToPlaylist(id, s)
             com.opentune.playback.SmartShuffle.keep(s.videoId)
-            LibraryStore.playlist(id)?.let { p -> com.opentune.data.Pills.done("Added to ${p.name}") }
+            LibraryStore.playlist(id)?.takeIf { it.spotifyId == null }?.let { p -> com.opentune.data.Pills.done("Added to ${p.name}") }
         },
         progressOf = { s -> if (s.videoId == vm.currentSong.value?.videoId) vm.positionMs() to vm.durationMs.value else null },
         viewArtist = { s ->

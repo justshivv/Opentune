@@ -438,7 +438,8 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
                                     com.opentune.data.Pills.info("Already in ${p.name}", context)
                                 } else {
                                     LibraryStore.addToPlaylist(p.id, song)
-                                    com.opentune.data.Pills.done("Added to ${p.name}", context)
+                                    if (p.spotifyId == null) com.opentune.data.Pills.done("Added to ${p.name}", context)
+                                    else com.opentune.data.Pills.info("Saving to Spotify…", context)
                                 }
                                 onDone()
                             },

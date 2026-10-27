@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import com.opentune.data.model.artworkAt
 
 sealed interface LyricsState {
     data object Loading : LyricsState
@@ -76,6 +77,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         Together.attach(player)
         viewModelScope.launch { player.connect() }
         viewModelScope.launch { watchLyrics() }
+        viewModelScope.launch {
+            combine(player.currentSong, player.queue, player.upNext) { current, queue, next ->
+                listOfNotNull(current) + next.take(2).mapNotNull { queue.getOrNull(it) }
+            }.distinctUntilChanged().collectLatest { songs ->
+                kotlinx.coroutines.coroutineScope {
+                    songs.forEach { song -> launch { warmArtwork(song.thumbnailUrl) } }
+                }
+            }
+        }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             // Reading the cookie starts the WebView engine: off the main thread, and not at app start.
             com.opentune.ui.spotify.SpotifyConnection.refresh()
@@ -94,7 +104,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 } ?: 0L
                 kotlinx.coroutines.coroutineScope {
                     if (ui.albumCovers) launch {
-                        com.opentune.data.covers.AlbumCovers.coverFor(song, duration)?.let { betterCover.value = song.videoId to it }
+                        com.opentune.data.covers.AlbumCovers.coverFor(song, duration)?.let {
+                            // Keep the visible cover until its replacement is decoded and cached.
+                            if (warmArtwork(it)) betterCover.value = song.videoId to it
+                        }
                     }
                     if (motion && duration > 0) launch {
                         com.opentune.data.covers.AppleMotionArt.forSong(song, duration)?.let { motionFound.value = song.videoId to it }
@@ -111,6 +124,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
+    }
+
+    private suspend fun warmArtwork(url: String?): Boolean {
+        if (url == null) return false
+        val app = getApplication<Application>()
+        val loader = coil3.SingletonImageLoader.get(app)
+        return withTimeoutOrNull(5_000) {
+            kotlinx.coroutines.coroutineScope {
+                val small = launch {
+                    loader.execute(coil3.request.ImageRequest.Builder(app)
+                        .data(url.artworkAt(com.opentune.data.model.ROW_ART_PX)).size(com.opentune.data.model.ROW_ART_PX).build())
+                }
+                val result = loader.execute(coil3.request.ImageRequest.Builder(app)
+                    .data(url.artworkAt(com.opentune.data.model.PLAYER_ART_PX)).size(com.opentune.data.model.PLAYER_ART_PX).build())
+                small.join()
+                result is coil3.request.SuccessResult
+            }
+        } ?: false
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

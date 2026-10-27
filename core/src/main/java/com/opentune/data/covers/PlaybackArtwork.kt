@@ -21,7 +21,7 @@ class PlaybackArtwork(
     private var url: String? = null
     private var upgraded = false
     fun choose(song: Song, better: String? = null): String? {
-        if (id != song.videoId) {
+        if (id != song.videoId || url == null) {
             id = song.videoId
             upgraded = false
             url = (preferred(song) ?: song.thumbnailUrl).artworkAt(PLAYER_ART_PX)

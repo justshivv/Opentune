@@ -310,9 +310,49 @@ internal fun listMeta(kind: String, songs: List<com.opentune.data.model.Song>): 
     return listOfNotNull(kind, count, length).joinToString(" · ")
 }
 
+/** Shared artwork, typography and spacing for YouTube, Spotify and local playlists. */
+@Composable
+internal fun PlaylistHeading(title: String, subtitle: String, thumbnail: String?, songs: List<com.opentune.data.model.Song>,
+    isAlbum: Boolean = false, cover: (@Composable () -> Unit)? = null) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        if (cover == null) Artwork(
+            thumbnail.artworkAt(HEADER_ART_PX),
+            Modifier.fillMaxWidth(0.76f).aspectRatio(1f).shadow(24.dp, MaterialTheme.shapes.large),
+            shape = MaterialTheme.shapes.large,
+            placeholder = Icons.Filled.Album,
+        )
+        else Box(Modifier.fillMaxWidth(0.76f).aspectRatio(1f).shadow(24.dp, MaterialTheme.shapes.large)) { cover() }
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 20.dp),
+        )
+        // Who it's by, then what it is: "Playlist · 146 Tracks · 9h 48m".
+        if (subtitle.isNotBlank()) {
+            com.opentune.ui.components.SubtitleLine(
+                subtitle,
+                explicit = isAlbum && songs.any { it.isExplicit == true },
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Text(
+            listMeta(if (isAlbum) "Album" else "Playlist", songs),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+}
+
 /** Shuffle in a round glass button, Play as a wide light pill, and a round button to save the list. */
 @Composable
-private fun ListPlayRow(
+internal fun ListPlayRow(
     enabled: Boolean,
     saved: Boolean,
     onPlay: () -> Unit,
@@ -320,6 +360,7 @@ private fun ListPlayRow(
     onSmartShuffle: () -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
+    actionLabel: String? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -338,7 +379,7 @@ private fun ListPlayRow(
             Modifier.size(56.dp).glass(androidx.compose.foundation.shape.CircleShape).clip(androidx.compose.foundation.shape.CircleShape).clickable(enabled = enabled, onClick = onSave),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(if (saved) Icons.Filled.Check else Icons.Filled.Add, if (saved) "Remove from library" else "Save to library", tint = colors.onSurface)
+            Icon(if (saved) Icons.Filled.Check else Icons.Filled.Add, actionLabel ?: if (saved) "Remove from library" else "Save to library", tint = colors.onSurface)
         }
     }
 }
@@ -430,8 +471,9 @@ fun CollectionScreen(
     val isAlbum = MusicRepository.typeOf(browseId) == BrowseType.ALBUM
     val title = (state as? UiState.Success)?.data?.title.orEmpty()
     // Looking through the list, its order, and the page's own menu, as BitChord has them.
-    var searching by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    var query by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    val search = remember(browseId) { PlaylistSearch() }
+    val searching = search.open
+    val query = search.query
     var order by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ListOrder.DEFAULT) }
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
@@ -454,14 +496,14 @@ fun CollectionScreen(
     }
     if (moreOpen && loaded != null) ListMoreSheet(loaded, isAlbum, actions, onDismiss = { moreOpen = false })
 
-    GlassPage(Modifier.fillMaxSize(), overlay = {
+    GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
         CollapsingBar(title, listState, onBack) {
             // Search, order and more in one glass pill.
             Row(
                 Modifier.height(48.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                androidx.compose.material3.IconButton(onClick = { searching = !searching; if (!searching) query = "" }) {
+                androidx.compose.material3.IconButton(onClick = { if (searching) search.close() else search.open = true }) {
                     Icon(if (searching) Icons.Filled.Close else Icons.Filled.Search, if (searching) "Stop searching" else "Search this list")
                 }
                 Box {
@@ -497,37 +539,7 @@ fun CollectionScreen(
                                     Placeholder(Modifier.padding(top = 20.dp).width(200.dp).height(24.dp))
                                     Placeholder(Modifier.padding(top = 8.dp).width(140.dp).height(16.dp))
                                 } else {
-                                    Artwork(
-                                        c.thumbnailUrl.artworkAt(HEADER_ART_PX),
-                                        Modifier.fillMaxWidth(0.76f).aspectRatio(1f).shadow(24.dp, MaterialTheme.shapes.large),
-                                        shape = MaterialTheme.shapes.large,
-                                        placeholder = Icons.Filled.Album,
-                                    )
-                                    Text(
-                                        c.title,
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(top = 20.dp),
-                                    )
-                                    // Who it's by, then what it is: "Playlist · 146 Tracks · 9h 48m".
-                                    if (c.subtitle.isNotBlank()) {
-                                        com.opentune.ui.components.SubtitleLine(
-                                            c.subtitle,
-                                            explicit = isAlbum && c.songs.any { it.isExplicit == true },
-                                            style = MaterialTheme.typography.titleMedium,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier.padding(top = 4.dp),
-                                        )
-                                    }
-                                    Text(
-                                        listMeta(if (isAlbum) "Album" else "Playlist", c.songs),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(top = 6.dp),
-                                    )
+                                    PlaylistHeading(c.title, c.subtitle, c.thumbnailUrl, c.songs, isAlbum)
                                 }
                                 val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
                                 val saved = c != null && savedLists.any { it.browseId == c.browseId }
@@ -560,7 +572,7 @@ fun CollectionScreen(
                                         onPrivacy = { own.choose() },
                                     )
                                 }
-                                Column {
+                                if (searching) Column {
                                     // Opened, the field rises to just under the bar, clear of the
                                     // keyboard that comes up with it, instead of staying down under the cover.
                                     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -572,9 +584,9 @@ fun CollectionScreen(
                                         val below = topInset + with(density) { SEARCH_FIELD_TOP.toPx() }
                                         listState.animateScrollBy(y - below)
                                     }
-                                    ListSearchField(
-                                        query, { query = it }, onClear = { query = ""; searching = false },
-                                        Modifier.padding(bottom = 12.dp).onGloballyPositioned { if (fieldY == null) fieldY = it.positionInRoot().y }, autoFocus = searching,
+                                    PlaylistSearchField(
+                                        search,
+                                        Modifier.padding(bottom = 12.dp).onGloballyPositioned { if (fieldY == null) fieldY = it.positionInRoot().y },
                                     )
                                 }
                             }
