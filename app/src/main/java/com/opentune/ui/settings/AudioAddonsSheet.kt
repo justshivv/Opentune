@@ -101,7 +101,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
                                     Text(com.opentune.ui.theme.tr(if (addon.ownerOff) "Turned off by the admin for now" else if (availability[addon.key] == false) "Service unavailable" else checks[addon.key] ?: if (com.opentune.data.addons.AddonResolver.paused(addon.key)) "Paused by its owner for now" else if (blocked) "Needs a supported wired, USB or HDMI output" else if (!addon.enabled) "Disabled" else "Lossless · ${if (addon.manifest.downloads) "Streaming & downloads" else "Streaming only"}"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Switch(addon.enabled && !addon.ownerOff, { AddonStore.enable(addon.key, it) }, enabled = !addon.ownerOff)
-                                Icon(Icons.Rounded.DragHandle, null, Modifier.size(48.dp)
+                                if (!com.opentune.ui.tv.LocalIsTv.current) Icon(Icons.Rounded.DragHandle, null, Modifier.size(48.dp)
                                     .semantics {
                                         contentDescription = "Reorder ${addon.manifest.name}"
                                         customActions = listOf(
@@ -140,6 +140,10 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
                                             if (target != from) { AddonStore.move(addon.key, target - from); haptics.tick() }
                                         }
                                     }.padding(12.dp))
+                            }
+                            if (com.opentune.ui.tv.LocalIsTv.current) Row(Modifier.padding(horizontal = 16.dp)) {
+                                TextButton(onClick = { AddonStore.move(addon.key, -1) }, enabled = index > 0) { Text("Move up") }
+                                TextButton(onClick = { AddonStore.move(addon.key, 1) }, enabled = index < addons.lastIndex) { Text("Move down") }
                             }
                             if (expanded == addon.key) Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                                 if (!addon.admin) Text(AddonProtocol.url(addon.base).host, style = MaterialTheme.typography.bodySmall)

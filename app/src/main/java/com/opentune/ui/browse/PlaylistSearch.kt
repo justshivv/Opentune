@@ -42,16 +42,18 @@ internal fun Modifier.dismissPlaylistSearch(search: PlaylistSearch): Modifier = 
                 val outside = !search.bounds.contains(down.position + origin)
                 var dragged = false
                 var released = false
+                var longPress = false
                 do {
                     val event = awaitPointerEvent(PointerEventPass.Final)
                     val pointer = event.changes.firstOrNull { it.id == down.id }
                     if (event.changes.size > 1 || pointer == null ||
                         (pointer.position - down.position).getDistance() > viewConfiguration.touchSlop) dragged = true
                     released = pointer != null && !pointer.pressed
+                    if (pointer != null && pointer.uptimeMillis - down.uptimeMillis >= viewConfiguration.longPressTimeoutMillis) longPress = true
                 } while (event.changes.any { it.pressed })
                 // Observe the whole gesture without consuming it. A scroll must not close search,
                 // and a real outside tap must still reach the row/button underneath it.
-                if (outside && released && !dragged) {
+                if (outside && released && !dragged && !longPress) {
                     search.close()
                     focus.clearFocus()
                     keyboard?.hide()

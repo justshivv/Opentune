@@ -144,6 +144,7 @@ internal fun LandscapePlayer(
         BoxWithConstraints(Modifier.weight(if (television) 1.3f else 1f).fillMaxHeight().focusGroup()) {
             // Short screens drop the coming lines first, then the volume.
             val roomy = maxHeight >= 300.dp
+            val previewFits = !television || maxHeight >= 440.dp
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
                 Row(verticalAlignment = Alignment.Top) {
                     // Lyrics or the queue in the cover's place: the cover stays in sight, small, before the title.
@@ -177,7 +178,7 @@ internal fun LandscapePlayer(
                 if (state.ui.sourcePill) SourceQualityBadge(song.videoId, state.audioFormat, onClick = onSignal, modifier = Modifier.align(Alignment.CenterHorizontally))
                 // The line being sung and the next, together above the controls, in the lyrics' own type.
                 val lines = if (showLines) rememberLyricLines(state.lyrics, lyricsPosition) else null
-                if (lines != null && (!television || maxHeight >= 440.dp)) LyricsPeek(lines, next = roomy, animate = animate, onClick = onLyrics)
+                if (lines != null && previewFits) LyricsPeek(lines, next = roomy, animate = animate, onClick = onLyrics)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (television) Arrangement.Center else Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     if (!television) RoundIcon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Unlike" else "Like", { haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE); onLike() }, tint = if (liked) scheme.primary else scheme.onSurface)
                     Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {

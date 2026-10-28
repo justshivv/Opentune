@@ -539,7 +539,8 @@ internal fun SourceBar(selected: SearchSource, onSelect: (SearchSource) -> Unit,
                 Box(
                     Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
                         // Not focusable, so tapping a tab leaves the keyboard and the bar as they are.
-                        .pointerInput(s) { detectTapGestures { onSelect(s) } }
+                        .then(if (com.opentune.ui.tv.LocalIsTv.current) Modifier.clickable { onSelect(s) }
+                            else Modifier.pointerInput(s) { detectTapGestures { onSelect(s) } })
                         .semantics { role = Role.Tab; this.selected = on; contentDescription = s.label },
                     contentAlignment = Alignment.Center,
                 ) {
