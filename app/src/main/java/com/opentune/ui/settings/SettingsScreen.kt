@@ -731,6 +731,7 @@ private fun settingsSections(
                             SettingRow(
                                 "Spotify",
                                 summary = when {
+                                    spotifySync.running && spotifySync.error != null -> "Connected · Connection interrupted. Retrying…"
                                     spotifySync.running && spotifySync.current != null -> "Connected · bringing over ${spotifySync.current} (${spotifySync.index} of ${spotifySync.count})"
                                     spotifySync.running -> "Connected · reading your Spotify library…"
                                     spotifySync.error != null -> "Connected · ${spotifySync.error}. Tap to try again"

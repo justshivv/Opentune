@@ -53,4 +53,31 @@ class SpotifyLibraryTest {
         assertEquals("Daily Mix 1", mixes.single().name)
         assertEquals("Arijit Singh, Pritam and more", mixes.single().owner)
     }
+    @Test
+    fun personalMixDescriptionsKeepLinkLabelsWithoutHtmlOrSpotifyUris() {
+        val source = json(checkNotNull(javaClass.classLoader?.getResource("spotify-home.json")).readText())
+        val original = source.toString()
+        val withMarkup = json(original.replace("Arijit Singh, Pritam and more",
+            "<a href='spotify:playlist:37i9dQ'>Arijit Singh</a>, <a href='spotify:artist:artist'>Pritam</a> &amp; more"))
+        assertEquals("Arijit Singh, Pritam & more", SpotifyLibrary.mixesIn(withMarkup).single().owner)
+    }
+
+    @Test
+    fun descriptionsHandleEntitiesLineBreaksAndUnfinishedMarkup() {
+        assertEquals("R&B '90s 🎵 <3", SpotifyLibrary.plainDescription("<p>R&amp;B&nbsp;&#39;90s<br>&#x1F3B5; &lt;3</p>"))
+        assertEquals("Artists and more", SpotifyLibrary.plainDescription("<a href='spotify:playlist:x'>Artists</a> and <b>more"))
+        assertEquals("1 < 2 and A & B", SpotifyLibrary.plainDescription("1 < 2 and A & B"))
+        assertEquals("Visible", SpotifyLibrary.plainDescription("<!-- hidden --><script>hidden()</script><style>.x{}</style>Visible"))
+        assertEquals("", SpotifyLibrary.plainDescription(null))
+    }
+
+    @Test
+    fun oldCachedMixDescriptionsAreReadableBeforeSyncRuns() {
+        val saved = """{"id":"mix","name":"Pop Mix","description":"<a href='spotify:playlist:old'>Your favourites</a> &amp; more"}"""
+        val mix = Json.decodeFromString(SpotifySync.Mix.serializer(), saved)
+        assertEquals("Your favourites & more", mix.readableDescription)
+        assertEquals("mix", mix.id)
+        assertEquals("Pop Mix", mix.name)
+    }
+
 }

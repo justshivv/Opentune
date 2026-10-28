@@ -37,6 +37,12 @@ object SpotifyConnection {
         com.opentune.data.spotify.SpotifySync.sync(cookie, force, onSignedOut = ::lost)
     }
 
+    /** A validated connection returned, or the app resumed: retry a failed read without signing out. */
+    fun retryFailedSync() {
+        val status = com.opentune.data.spotify.SpotifySync.status.value
+        if (status.retryable && !status.running && connected.value) syncPlaylists()
+    }
+
     /** Spotify no longer accepts the sign-in: show it as disconnected and say why. */
     fun lost(reason: String?) {
         com.opentune.data.spotify.SpotifySync.cancel()

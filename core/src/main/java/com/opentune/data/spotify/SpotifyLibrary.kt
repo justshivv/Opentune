@@ -78,6 +78,14 @@ object SpotifyLibrary {
         }),
     )
 
+    /** Spotify descriptions are HTML fragments. Keep link labels, never markup or link targets. */
+    fun plainDescription(value: String?): String {
+        if (value.isNullOrBlank()) return ""
+        val body = org.jsoup.Jsoup.parseBodyFragment(value).body()
+        body.select("script, style, template").remove()
+        return body.text()
+    }
+
     /** The personal mixes in a `home` answer, each once. */
     internal fun mixesIn(root: JsonObject): List<Playlist> {
         val sections = root.at("data", "home", "sectionContainer", "sections", "items") as? JsonArray ?: return emptyList()
@@ -89,7 +97,7 @@ object SpotifyLibrary {
                 if (!uri.startsWith("spotify:playlist:")) return@mapNotNull null
                 val name = data.text("name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 val images = (data.at("images", "items") as? JsonArray)?.firstOrNull()
-                Playlist(uri.substringAfterLast(':'), name, data.text("description")?.takeIf { it.isNotBlank() }, largest(images.at("sources")))
+                Playlist(uri.substringAfterLast(':'), name, plainDescription(data.text("description")).takeIf { it.isNotBlank() }, largest(images.at("sources")))
             }
             .distinctBy { it.id }
     }

@@ -46,4 +46,28 @@ class CollectionLoaderTest {
         assertTrue(loader.state.value is UiState.Success)
         assertEquals(2, attempts)
     }
+    @Test fun reopeningFreshPlaylistUsesCacheUntilExplicitRefresh() {
+        var requests = 0
+        val refreshed = first.copy(title = "Updated mix")
+        val loader = CollectionLoader("VLmix", "test", fetch = { requests++; refreshed }, cached = { first }, fresh = { true })
+        ShadowLooper.idleMainLooper()
+        assertEquals(0, requests)
+        assertEquals(first, (loader.state.value as UiState.Success).data)
+        loader.reload()
+        ShadowLooper.idleMainLooper()
+        assertEquals(1, requests)
+        assertEquals(refreshed, loader.preview.value)
+    }
+
+    @Test fun stalePlaylistDoesNotShrinkToItsFirstPageDuringRefresh() {
+        val cached = first.copy(songs = first.songs + Song("two", "Second", "Artist", null))
+        val finished = CompletableDeferred<Collection>()
+        val loader = CollectionLoader("VLmix", "test", fetch = { page -> page(first); finished.await() }, cached = { cached }, fresh = { false })
+        ShadowLooper.idleMainLooper()
+        assertEquals(cached, loader.preview.value)
+        finished.complete(first.copy(title = "Refreshed playlist"))
+        ShadowLooper.idleMainLooper()
+        assertEquals("Refreshed playlist", loader.preview.value?.title)
+    }
+
 }

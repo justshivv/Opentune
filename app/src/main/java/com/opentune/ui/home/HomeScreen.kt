@@ -166,7 +166,7 @@ fun HomeScreen(
         if (!spotifyConnected || !ui.spotifyMixes) emptyList()
         else spotifyMixesAll.mapNotNull { m ->
             val songs = hidden.songs(m.songs.map { it.toSong() })
-            if (songs.size < 6) null else com.opentune.data.history.DailyMixes.Mix("spotify:${m.id}", m.name, m.description.orEmpty(), songs)
+            if (songs.size < 6) null else com.opentune.data.history.DailyMixes.Mix("spotify:${m.id}", m.name, m.readableDescription, songs)
         }
     }
     val signedIn by AccountStore.signedIn.collectAsState()

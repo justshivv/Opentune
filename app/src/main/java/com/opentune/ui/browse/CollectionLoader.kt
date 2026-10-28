@@ -24,6 +24,7 @@ internal class CollectionLoader(
     private val cached: suspend () -> Collection? = {
         withContext(Dispatchers.IO) { LibraryCache.collection(browseId, owner)?.let { it.copy(songs = ContentFilter.songs(it.songs)) } }
     },
+    private val fresh: suspend () -> Boolean = { withContext(Dispatchers.IO) { LibraryCache.fresh(browseId, owner) } },
 ) : ViewModel() {
     private val _state = MutableStateFlow<UiState<Collection>>(UiState.Loading)
     val state = _state.asStateFlow()
@@ -31,18 +32,29 @@ internal class CollectionLoader(
     val preview = _preview.asStateFlow()
     private var job: Job? = null
 
-    init { reload() }
+    private var completePreview = false
+    init { reload(force = false) }
 
-    fun reload() {
+    fun reload(force: Boolean = true) {
         job?.cancel()
         job = viewModelScope.launch {
             _state.value = UiState.Loading
             try {
                 if (_preview.value == null) {
                     _preview.value = cached()
+                    completePreview = _preview.value != null
                 }
-                val complete = fetch { _preview.value = it }
+                val current = _preview.value
+                if (!force && current != null && fresh()) {
+                    _state.value = UiState.Success(current)
+                    return@launch
+                }
+                // Keep a complete cached list steady while refreshing. A new first page must not
+                // shrink a 400-song list back to 100 and force it to grow again on every visit.
+                val keepComplete = completePreview
+                val complete = fetch { if (!keepComplete) _preview.value = it }
                 _preview.value = complete
+                completePreview = true
                 _state.value = UiState.Success(complete)
             } catch (e: CancellationException) {
                 throw e

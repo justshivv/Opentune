@@ -51,6 +51,7 @@ object SpotifySync {
         val count: Int = 0,
         val lastSynced: Long = 0,
         val error: String? = null,
+        val retryable: Boolean = false,
     )
 
     /** One of Spotify's mixes made for the listener, with its songs found on YouTube Music. */
@@ -62,7 +63,10 @@ object SpotifySync {
         val imageUrl: String? = null,
         val revision: String? = null,
         val songs: List<SongRef> = emptyList(),
-    )
+    ) {
+        /** Also cleans descriptions saved by older builds, without waiting for another account sync. */
+        val readableDescription: String get() = SpotifyLibrary.plainDescription(description)
+    }
 
     @Serializable
     private data class Saved(val lastSynced: Long = 0, val found: Map<String, SongRef> = emptyMap(), val mixes: List<Mix> = emptyList())
@@ -102,23 +106,27 @@ object SpotifySync {
      */
     fun sync(cookie: String, force: Boolean = false, onSignedOut: (String?) -> Unit = {}) {
         if (job?.isActive == true) return
-        if (!force && System.currentTimeMillis() - _status.value.lastSynced < EVERY_MS) return
+        if (!force && _status.value.error == null && System.currentTimeMillis() - _status.value.lastSynced < EVERY_MS) return
         job = scope.launch {
-            _status.update { it.copy(running = true, current = null, index = 0, count = 0, error = null) }
+            _status.update { it.copy(running = true, current = null, index = 0, count = 0, error = null, retryable = false) }
             try {
-                run(cookie, force)
+                recoverSpotifyRead(
+                    online = com.opentune.data.settings.AppSettings::isOnline,
+                    connected = { SpotifyWebPlayer.account() == cookie },
+                    onRetry = { e -> _status.update { it.copy(current = null, error = spotifySyncError(e), retryable = true) } },
+                ) { run(cookie, force) }
                 val now = System.currentTimeMillis()
-                _status.update { it.copy(running = false, current = null, lastSynced = now) }
+                _status.update { it.copy(running = false, current = null, lastSynced = now, error = null, retryable = false) }
                 save(now)
             } catch (e: CancellationException) {
                 _status.update { it.copy(running = false, current = null) }
                 throw e
             } catch (e: SpotifyWebPlayer.SignedOut) {
-                _status.update { it.copy(running = false, current = null, error = e.message) }
+                _status.update { it.copy(running = false, current = null, error = e.message, retryable = false) }
                 onSignedOut(e.message)
             } catch (e: Exception) {
                 Log.w(TAG, "sync failed", e)
-                _status.update { it.copy(running = false, current = null, error = e.message ?: "Couldn't reach Spotify") }
+                _status.update { it.copy(running = false, current = null, error = spotifySyncError(e), retryable = spotifyConnectionFailure(e)) }
             }
         }
     }
@@ -134,7 +142,8 @@ object SpotifySync {
             } catch (e: SpotifyWebPlayer.SignedOut) {
                 throw e
             } catch (e: Exception) {
-                // The library still comes over without them.
+                if (spotifyConnectionFailure(e)) throw e
+                // The library still comes over without unavailable mixes.
                 Log.w(TAG, "mixes failed", e)
             }
         }

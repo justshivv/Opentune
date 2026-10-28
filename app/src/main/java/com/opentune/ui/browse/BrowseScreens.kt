@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -415,7 +416,7 @@ internal fun ListSearchField(query: String, onQuery: (String) -> Unit, onClear: 
 
 /** The page's own menu: the list's cover and name, then what can be done with the whole list. */
 @Composable
-private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, actions: SongActions, onDismiss: () -> Unit) {
+private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, actions: SongActions, onRefresh: () -> Unit, onDismiss: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
     val saved = savedLists.any { it.browseId == c.browseId }
@@ -438,6 +439,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
         val card = com.opentune.ui.components.LocalFloatingCard.current
         val close: () -> Unit = { card?.close() ?: onDismiss() }
         Column {
+            com.opentune.ui.components.MenuRow(Icons.Filled.Refresh, "Refresh") { close(); onRefresh() }
             com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Filled.PlaylistPlay, "Play next") { close(); c.songs.asReversed().forEach(actions.playNext) }
             com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Filled.QueueMusic, "Add to queue") { close(); c.songs.forEach(actions.addToQueue) }
             com.opentune.ui.components.MenuRow(Icons.Filled.Download, "Download all") {
@@ -499,7 +501,7 @@ fun CollectionScreen(
             ListOrder.Z_TO_A -> found.sortedByDescending { it.title.lowercase() }
         }
     }
-    if (moreOpen && loaded != null) ListMoreSheet(loaded, isAlbum, actions, onDismiss = { moreOpen = false })
+    if (moreOpen && loaded != null) ListMoreSheet(loaded, isAlbum, actions, onRefresh = { loader.reload() }, onDismiss = { moreOpen = false })
 
     GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
         PlaylistSearchHeader(search) {
@@ -582,9 +584,6 @@ fun CollectionScreen(
 
                             }
                         }
-                    }
-                    if (firstPage != null && loadingState is UiState.Loading) item(key = "loading-pages") {
-                        androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 20.dp))
                     }
                     if (firstPage != null && loadingState is UiState.Error) item(key = "retry-pages") {
                         androidx.compose.material3.TextButton(onClick = { loader.reload() }) { Text("Some tracks couldn't load. Retry") }

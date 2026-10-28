@@ -558,7 +558,7 @@ fun AppRoot(vm: PlayerViewModel) {
         // iOS-style rubber band at the ends of every list.
         LocalOverscrollFactory provides RubberBandOverscrollFactory,
     ) {
-        Box(
+        com.opentune.ui.components.ConnectionBanner(
             Modifier.fillMaxSize().tvMediaKeys(handleTvMedia).graphicsLayer {
                 if (dive < 1f) {
                     val s = 1.14f - 0.14f * (1f - (1f - dive) * (1f - dive))
@@ -587,6 +587,8 @@ fun AppRoot(vm: PlayerViewModel) {
                     alpha = if (p < 0.8f) 1f else 1f - (p - 0.8f) / 0.2f
                 }
             },
+            reduceMotion = chromeUi.reduceAnimation,
+            onOnline = { com.opentune.ui.spotify.SpotifyConnection.retryFailedSync() },
         ) {
             Box(
                 Modifier.fillMaxSize()
@@ -940,7 +942,6 @@ fun AppRoot(vm: PlayerViewModel) {
             ) {
                 com.opentune.ui.components.PillHost(chromeUi.reduceAnimation, Modifier.align(Alignment.TopCenter))
             }
-            com.opentune.ui.components.ConnectionBanner(Modifier.align(Alignment.TopCenter), chromeUi.reduceAnimation)
         }
         if (opening) {
             com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })
