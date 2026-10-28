@@ -35,11 +35,11 @@ struct AppearanceView: View {
         .navigationTitle("Appearance")
     }
 
-    private var chosenDesign: Font.Design { fontDesign(font) }
+    private var chosenDesign: Font.Design { appFontDesign(font) }
     private var chosenWeight: Font.Weight { textWeight(weight) }
 }
 
-func fontDesign(_ name: String) -> Font.Design {
+func appFontDesign(_ name: String) -> Font.Design {
     switch name { case "rounded": return .rounded; case "serif": return .serif; case "monospaced": return .monospaced; default: return .default }
 }
 func textWeight(_ name: String) -> Font.Weight {
@@ -50,6 +50,10 @@ struct AppReadability: ViewModifier {
     @AppStorage("appearance.font") private var font = "system"
     @AppStorage("appearance.weight") private var weight = "medium"
     func body(content: Content) -> some View {
-        content.fontDesign(fontDesign(font)).fontWeight(textWeight(weight))
+        if #available(iOS 16.1, *) {
+            content.fontDesign(appFontDesign(font)).fontWeight(textWeight(weight))
+        } else {
+            content.font(.system(.body, design: appFontDesign(font))).fontWeight(textWeight(weight))
+        }
     }
 }

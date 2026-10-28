@@ -97,7 +97,7 @@ OpenTune's native iOS build is an `.ipa`. It is not currently on the App Store o
    VPN & Device Management**, select your developer profile and choose **Trust**.
    These prompts depend on the installer and iOS version.
 5. Open OpenTune from the Home Screen. Keep the same installer/source for updates.
-   With a free Apple ID the signing certificate normally expires after **7 days**:
+   With a free Apple ID the app normally needs re-signing every **7 days**:
    enable the installer's refresh setup and check its expiry date. Background refresh
    is not guaranteed, so refresh manually in the installer before expiry if needed.
 

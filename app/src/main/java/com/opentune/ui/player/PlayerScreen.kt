@@ -358,7 +358,7 @@ fun PlayerLayout(
     var touchedAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var controlsAway by remember { mutableStateOf(false) }
     var seenTouch by remember { mutableLongStateOf(touchedAt) }
-    val artworkMotion = com.opentune.ui.components.rememberArtworkMotion(state.isPlaying)
+    val artworkMotion = com.opentune.ui.components.rememberArtworkMotion(state.isPlaying && state.ui.movingCover && !state.ui.reduceAnimation)
     val television = com.opentune.ui.tv.LocalIsTv.current
     val focusable = !television && state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
         ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)

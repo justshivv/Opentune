@@ -102,6 +102,7 @@ object SpotifyWebPlayer {
 
     private val json = Json { ignoreUnknownKeys = true }
     private val lock = Mutex()
+    private val rateLimit = SpotifyRateLimit()
     private var dir: File? = null
     private var webPlayer: WebPlayer? = null
     private var access: Access? = null
@@ -152,7 +153,7 @@ object SpotifyWebPlayer {
      * The same recording on Spotify, found with the web player's own search
      * (see [pick]); null when there's no confident match.
      */
-    suspend fun findTrack(title: String, artist: String, album: String?, durationMs: Long, cookie: String): Hit? {
+    suspend fun findTrack(title: String, artist: String, album: String?, durationMs: Long, cookie: String, onRateWait: (Long) -> Unit = {}): Hit? {
         val cleaned = TrackNameCleaner.clean(title, artist)
         val search = query("searchTracks", cookie, buildJsonObject {
             put("searchTerm", "${cleaned.title} ${cleaned.artist}")
@@ -162,7 +163,7 @@ object SpotifyWebPlayer {
             put("includeAudiobooks", false)
             put("includePreReleases", false)
             put("includeAuthors", false)
-        })
+        }, onRateWait = onRateWait)
         return pick(hitsIn(search), cleaned.title, cleaned.artist, album, durationMs)
     }
 
@@ -195,9 +196,7 @@ object SpotifyWebPlayer {
             .header("User-Agent", USER_AGENT)
             .apply { if (clientToken != null) header("Client-Token", clientToken) }
             .build()
-        val (code, text) = runInterruptible(Dispatchers.IO) {
-            Http.client.newCall(request).execute().use { it.code to it.body?.string() }
-        }
+        val (code, text) = send(request)
         if (code == 401 && !retried) {
             access = null
             client = null
@@ -208,10 +207,18 @@ object SpotifyWebPlayer {
             ?: throw IOException("Spotify answered with something other than JSON")
     }
 
+    private suspend fun send(request: Request, onRateWait: (Long) -> Unit = {}, beforeSend: () -> Unit = {}): SpotifyRateLimit.Reply =
+        rateLimit.execute(onRateWait) {
+            beforeSend()
+            runInterruptible(Dispatchers.IO) {
+                Http.client.newCall(request).execute().use { SpotifyRateLimit.Reply(it.code, it.body?.string().orEmpty(), it.header("Retry-After")) }
+            }
+        }
+
     // ---- Matching -------------------------------------------------------------------
 
     /** A real account write. Only an acknowledged snapshot may update the local copy. */
-    internal suspend fun appendPlaylist(cookie: String, id: String, uris: List<String>, retried: Boolean = false): String {
+    internal suspend fun appendPlaylist(cookie: String, id: String, uris: List<String>, retried: Boolean = false, onRateWait: (Long) -> Unit = {}): String {
         require(id.matches(Regex("[A-Za-z0-9]{22}"))) { "Invalid Spotify playlist" }
         require(uris.isNotEmpty() && uris.size <= 100 && uris.all { it.matches(Regex("spotify:track:[A-Za-z0-9]{22}")) })
         val bearer = accessToken(cookie)
@@ -219,12 +226,12 @@ object SpotifyWebPlayer {
         val request = Request.Builder().url("https://api.spotify.com/v1/playlists/$id/items")
             .header("Authorization", "Bearer ${bearer.token}")
             .post(body.toString().toRequestBody("application/json".toMediaType())).build()
-        val (code, text) = runInterruptible(Dispatchers.IO) {
-            Http.client.newCall(request).execute().use { it.code to it.body.string() }
+        val (code, text) = send(request, onRateWait) {
+            if (account() != cookie) throw SignedOut("Spotify account changed. Try saving again.")
         }
         if (code == 401 && !retried) {
             access = null
-            return appendPlaylist(cookie, id, uris, true)
+            return appendPlaylist(cookie, id, uris, true, onRateWait)
         }
         return playlistWriteSnapshot(code, text)
     }
@@ -284,7 +291,7 @@ object SpotifyWebPlayer {
 
     // ---- Pathfinder -----------------------------------------------------------------
 
-    internal suspend fun query(operation: String, cookie: String, variables: JsonObject, retried: Boolean = false): JsonObject {
+    internal suspend fun query(operation: String, cookie: String, variables: JsonObject, retried: Boolean = false, onRateWait: (Long) -> Unit = {}): JsonObject {
         val bearer = accessToken(cookie)
         val player = webPlayer()
         val clientToken = clientToken(bearer, player)
@@ -309,20 +316,21 @@ object SpotifyWebPlayer {
             .header("User-Agent", USER_AGENT)
             .apply { if (clientToken != null) header("Client-Token", clientToken) }
             .build()
-        val (code, text) = runInterruptible(Dispatchers.IO) {
-            Http.client.newCall(request).execute().use { it.code to it.body?.string() }
+        val writing = operation == "addToLibrary" || operation == "removeFromLibrary"
+        val (code, text) = send(request, onRateWait) {
+            if (writing && account() != cookie) throw SignedOut("Spotify account changed. Try saving again.")
         }
         if (code == 401 && !retried) {
             access = null
             client = null
-            return query(operation, cookie, variables, true)
+            return query(operation, cookie, variables, true, onRateWait)
         }
         val root = text?.let { runCatching { json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
         val errors = (root?.get("errors") as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.text("message") }
         // A rebuilt web player retires the old hashes: read them again once.
         if (errors.any { it.contains("PersistedQueryNotFound", ignoreCase = true) } && !retried) {
             lock.withLock { webPlayer = null; readWebPlayer(force = true) }
-            return query(operation, cookie, variables, true)
+            return query(operation, cookie, variables, true, onRateWait)
         }
         if (code !in 200..299) throw IOException("Spotify $operation answered $code")
         return root ?: throw IOException("Spotify $operation answered with something other than JSON")
@@ -351,9 +359,7 @@ object SpotifyWebPlayer {
                 .header("Accept", "application/json")
                 .header("Referer", "$WEB_PLAYER/")
                 .build()
-            val (status, text) = runInterruptible(Dispatchers.IO) {
-                Http.client.newCall(request).execute().use { it.code to it.body?.string() }
-            }
+            val (status, text) = send(request)
             val body = text?.let { runCatching { json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
             // The web player reads this flag to learn its secret has been retired.
             if (body?.get("totpVerExpired") != null && !force) continue

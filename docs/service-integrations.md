@@ -35,3 +35,20 @@ browser's update service. A development ZIP installed with **Load unpacked** can
 replace its own files or silently reinstall itself. It still needs the downloaded
 folder replaced and Reload selected in the extension manager. Store publication is
 required for the usual automatic consumer update experience.
+
+## Spotify saves
+
+Playlist additions send a real account write and require Spotify's returned snapshot
+before updating OpenTune's copy. They need an editable playlist and a verified matching
+recording. This does not submit listening history to Spotify.
+
+Spotify requests share a paced request lane. HTTP 429 responses honor `Retry-After`
+(seconds or an HTTP date); short cooldowns get at most two retries within a 90-second
+wait budget. Longer cooldowns produce a readable wait message and prevent subsequent
+requests from ignoring that cooldown. Repeated taps are coalesced while a save is pending;
+multiple songs are sent in playlist batches of up to 100. Connection failures and
+unconfirmed successful responses are not automatically replayed, because the previous
+write might already have reached Spotify. Refresh before manually retrying those cases.
+
+Spotify still controls account permissions, availability and rate limits. Automated
+response tests cannot establish that a particular account's web session permits writes.
