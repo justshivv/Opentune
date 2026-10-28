@@ -129,21 +129,27 @@ object MusicRepository {
     /** The songs the last picks shelf showed, so a refresh brings new ones forward. */
     @Volatile private var lastPicks: Set<String> = emptySet()
 
-    suspend fun home(): List<HomeShelf> = io {
+    suspend fun home(): List<HomeShelf> = io { coroutineScope {
         if (homeRefreshRequested.getAndSet(false)) {
             // Join before invalidating, so an older load cannot repopulate stale caches.
             homeMoreJob?.cancelAndJoin()
             extrasCache.clear()
             seedCache = null
         }
+        // Resolve personal picks alongside the feed so the page publishes one set of picks,
+        // rather than briefly restoring the old radio shelf before replacing it later.
+        val personal = async { kotlinx.coroutines.withTimeoutOrNull(5_000) {
+            try { extraShelves(HomeSource.RADIO) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+        }.orEmpty() }
         val response = Innertube.browse("FEmusic_home")
-        val first = InnertubeParser.parseHome(response).filter { it.items.isNotEmpty() }
+        val first = personal.await() + InnertubeParser.parseHome(response).filter { it.items.isNotEmpty() }
+
         // In the exported log, so a Home that looks wrong can be compared with what YouTube sent.
         DebugLog.d("Home", "first page: " + first.joinToString { "${it.title} (${it.items.size}${if (it.personal) ", for the account" else ""})" })
         homeMoreJob?.cancel()
         homeMoreJob = scope.launch { followHome(first, InnertubeParser.sectionListContinuation(response)) }
         first
-    }
+    } }
 
     /**
      * Fills in the rest of Home while its first page is on screen.
@@ -478,20 +484,20 @@ object MusicRepository {
         InnertubeParser.parseSearchSuggestions(Innertube.searchSuggestions(input))
     }
 
-    suspend fun collection(browseId: String): Collection = io {
+    suspend fun collection(browseId: String, onPage: ((Collection) -> Unit)? = null): Collection = io {
         val owner = com.opentune.data.library.LibraryCache.owner()
         val response = Innertube.browse(browseId)
         val header = InnertubeParser.parseBrowseHeader(response)
         val page = InnertubeParser.parsePlaylistShelf(response)
         // A song on two pages of the playlist, as on one, shows once.
-        val songs = ((page?.songs?.takeIf { it.isNotEmpty() } ?: InnertubeParser.collectSongsDeep(response)) + laterPages(page?.continuation)).distinctBy { it.videoId }
+        val songs = (page?.songs?.takeIf { it.isNotEmpty() } ?: InnertubeParser.collectSongsDeep(response)).distinctBy { it.videoId }.toMutableList()
         // Signed out, no page has a save button, which would read as "owned".
         val owned = if (Innertube.cookie != null && InnertubeParser.isEditablePlaylist(browseId)) {
             InnertubeParser.parsePlaylistOwned(response)
         } else {
             false
         }
-        Collection(
+        fun snapshot() = Collection(
             browseId = browseId,
             title = header?.title.orEmpty(),
             subtitle = header?.subtitle.orEmpty(),
@@ -500,7 +506,20 @@ object MusicRepository {
             songs = ContentFilter.songs(songs.map { song -> if (song.thumbnailUrl == null) song.copy(thumbnailUrl = header?.thumbnailUrl) else song }),
             owned = owned,
             privacy = if (owned == true) InnertubeParser.parsePlaylistPrivacy(response) else null,
-        ).also { com.opentune.data.library.LibraryCache.save(it, owner) }
+        )
+        onPage?.invoke(snapshot())
+        var token = page?.continuation
+        val seen = HashSet<String>()
+        while (token != null && seen.add(token) && seen.size <= 100) {
+            val next = kotlinx.coroutines.withTimeoutOrNull(12_000) {
+                InnertubeParser.parsePlaylistContinuation(Innertube.browseContinuation(token!!))
+            } ?: throw java.io.IOException("Playlist page timed out")
+            val known = songs.mapTo(HashSet()) { it.videoId }
+            songs += next.songs.filter { known.add(it.videoId) }
+            onPage?.invoke(snapshot())
+            token = next.continuation
+        }
+        snapshot().also { com.opentune.data.library.LibraryCache.save(it, owner) }
     }
 
     /** The rest of a playlist's songs, page by page after the first. */

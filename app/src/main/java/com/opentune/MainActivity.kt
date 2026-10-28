@@ -45,6 +45,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.opentune.data.innertube.Innertube.regionOverride = runCatching {
+            getSystemService(android.telephony.TelephonyManager::class.java)?.networkCountryIso?.takeIf { it.length == 2 }
+        }.getOrNull() ?: android.content.res.Resources.getSystem().configuration.locales[0].country.takeIf { it.length == 2 }
         java.util.Locale.setDefault(resources.configuration.locales[0])
         enableEdgeToEdge()
         if (savedInstanceState == null) receive(intent)

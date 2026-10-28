@@ -171,7 +171,15 @@ internal fun ArtistPageView(
     onShowAll: (HomeShelf) -> Unit,
 ) {
     val listState = rememberLazyListState()
-    val photo = page?.thumbnailUrl.artworkAt(ARTIST_PHOTO_PX)
+    // One portrait per page visit. Fetch better artwork for the next visit rather than
+    // replacing a visible face and leaving its palette tied to the previous one.
+    val photo = remember(browseId, page?.name) {
+        page?.name?.let { com.opentune.data.covers.AppleArtistArtRepository.cached(it)?.heroUrl }
+            ?: page?.thumbnailUrl.artworkAt(ARTIST_PHOTO_PX)
+    }
+    androidx.compose.runtime.LaunchedEffect(page?.name) {
+        page?.name?.let { com.opentune.data.covers.AppleArtistArtRepository.artFor(it) }
+    }
     val context = LocalContext.current
     ArtistTint(photo) {
         GlassPage(
@@ -280,11 +288,10 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
     // Apple Music's header for the artist, when it has one: a sharper photo, and
     // for some a looping video. YouTube's photo shows until (and unless) it comes.
     val name = page?.name
-    var apple by remember(name) { mutableStateOf(name?.let { com.opentune.data.covers.AppleArtistArtRepository.cached(it) }) }
-    androidx.compose.runtime.LaunchedEffect(name) { if (name != null && apple == null) apple = com.opentune.data.covers.AppleArtistArtRepository.artFor(name) }
-    val shown = apple?.heroUrl ?: photo
+    val apple = remember(name) { name?.let { com.opentune.data.covers.AppleArtistArtRepository.cached(it) } }
+    val shown = photo
     // The clip only where moving pictures are welcome and data is free.
-    val video = apple?.videoUrl?.takeIf { !still && !AppSettings.onMeteredNetwork() }
+    val video = apple?.videoUrl?.takeIf { apple?.heroUrl == shown && !still && !AppSettings.onMeteredNetwork() }
     val drift: androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit = {
         if (!still && listState.firstVisibleItemIndex == 0) translationY = listState.firstVisibleItemScrollOffset * PARALLAX
     }

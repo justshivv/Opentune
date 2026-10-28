@@ -168,6 +168,8 @@ fun PlayerBackdrop(
     titleTop: Dp? = null,
     /** Lyrics or the queue are open over the Canvas: it's frosted and darkened all the way up. */
     canvasBehindText: Boolean = false,
+    fullCoverVisible: Boolean = true,
+    artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     if (style == PlayerBackground.AMOLED) {
@@ -216,7 +218,7 @@ fun PlayerBackdrop(
                 // fades out there into whatever backdrop is below it, with a light
                 // scrim at the top so the status line stays readable. It's never
                 // shorter than it is wide; taller, it's cropped at the sides.
-                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible) 1f else 0f }) {
                 val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
                 val solid = (1f - FULL_COVER_FADE / height).coerceIn(0.4f, 0.8f)
                 Box(
@@ -237,7 +239,7 @@ fun PlayerBackdrop(
                         url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
                         Modifier.matchParentSize(),
                         shape = RectangleShape,
-                        imageModifier = Modifier.livingArt(playing, movingCover),
+                        imageModifier = Modifier.livingArt(playing, movingCover, artworkMotion),
                     )
                     Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.2f to Color.Transparent)))
                 }
@@ -468,6 +470,7 @@ fun ArtworkPane(
     onSwipePrevious: () -> Unit,
     modifier: Modifier = Modifier,
     moving: Boolean = false,
+    artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
     change: com.opentune.data.settings.CoverChange = com.opentune.data.settings.CoverChange.FADE,
     /** The song's place in the queue, so Carousel knows which way to slide. */
     index: Int = 0,
@@ -534,7 +537,7 @@ fun ArtworkPane(
                         alpha = if (com.opentune.ui.components.PlayerMorph.coverAway) 0f else 1f
                     },
                 shape = MaterialTheme.shapes.extraLarge,
-                imageModifier = Modifier.livingArt(isPlaying, moving),
+                imageModifier = Modifier.livingArt(isPlaying, moving, artworkMotion),
             ) {
                 // Only on the playing song's cover, not on one leaving as the song changes.
                 if (video != null && url == song.thumbnailUrl) {

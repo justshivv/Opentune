@@ -151,110 +151,121 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
 
 /** [cardLabel] names the period on the shared Replay card. */
 private enum class ReplayPeriod(val label: String, val days: Long?, val cardLabel: String) {
-    MONTH("4 weeks", 28, "Last 4 weeks"),
-    HALF_YEAR("6 months", 182, "Last 6 months"),
-    YEAR("This year", 365, "This year"),
-    ALL("All time", null, "All time"),
+    WEEK("Weekly", 7, "Last 7 days"),
+    MONTH("Monthly", 30, "Last 30 days"),
+    YEAR("Yearly", null, "This year"),
+    ALL("Lifetime", null, "All time"),
 }
 
-/** Top songs, artists and albums from this device's listening history. */
+/** Ranked listening summaries; all figures come from recorded listens on this device. */
 @Composable
 fun ReplayScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit, onOpenWrapped: () -> Unit = {}) {
     val records by History.records.collectAsState()
+    val account by com.opentune.data.account.AccountStore.account.collectAsState()
     var period by rememberSaveable { mutableStateOf(ReplayPeriod.MONTH) }
     val summary = remember(records, period) {
-        val since = period.days?.let { System.currentTimeMillis() - TimeUnit.DAYS.toMillis(it) } ?: 0L
+        val since = when (period) {
+            ReplayPeriod.YEAR -> java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.DAY_OF_YEAR, 1); set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            else -> period.days?.let { System.currentTimeMillis() - TimeUnit.DAYS.toMillis(it) } ?: 0L
+        }
         History.replay(records, since)
     }
     val topSongs = remember(summary) { summary.topSongs.mapNotNull { it.song } }
     var sharing by rememberSaveable { mutableStateOf(false) }
     if (sharing) ReplayShareSheet(summary, period.cardLabel, onDismiss = { sharing = false })
-
-    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+    val background = MaterialTheme.colorScheme.background
+    val accent = MaterialTheme.colorScheme.primaryContainer
+    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize().background(
+        androidx.compose.ui.graphics.Brush.verticalGradient(listOf(accent.copy(alpha = 0.45f), background)))) {
         item {
             PageHeader("Replay", onBack = onBack, actions = if (summary.totalPlays == 0) null else {
                 { GlassIconButton(Icons.Rounded.Share, "Share my Replay", { sharing = true }) }
             })
+            Text("${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)}", Modifier.padding(horizontal = 24.dp),
+                style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
-            com.opentune.ui.wrapped.WrappedBanner(
-                "Your Wrapped",
-                "Your top artists, songs and listening habits as an animated story",
-                onOpenWrapped,
-                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
-        item {
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(ReplayPeriod.entries) { p ->
-                    FilterChip(selected = p == period, onClick = { period = p }, label = { Text(p.label) })
-                }
-            }
-        }
-        item {
-            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatTile("${TimeUnit.MILLISECONDS.toMinutes(summary.listenedMs)}", "minutes", Modifier.weight(1f))
-                StatTile("${summary.totalPlays}", "plays", Modifier.weight(1f))
-                StatTile("${summary.artistCount}", "artists", Modifier.weight(1f))
-            }
-        }
-        if (summary.totalPlays == 0) {
-            item {
-                MessageState(Icons.Rounded.BarChart, "Nothing to replay yet", Modifier.padding(top = 16.dp), message = "Listen for a while and your top songs and artists show up here.")
-            }
-            return@LazyColumn
-        }
-        if (summary.topArtists.isNotEmpty()) {
-            item { SectionHeader("Top artists") }
-            item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    itemsIndexed(summary.topArtists.take(12)) { i, a ->
-                        Column(Modifier.width(112.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Artwork(a.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.size(112.dp), CircleShape)
-                            Text("${i + 1}. ${a.title}", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
-                            Text("${a.plays} plays", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+            Row(Modifier.fillMaxWidth().padding(16.dp).clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainer),
+                horizontalArrangement = Arrangement.SpaceEvenly) {
+                ReplayPeriod.entries.forEach { p ->
+                    androidx.compose.material3.TextButton(onClick = { period = p }, modifier = Modifier.weight(1f),
+                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                            containerColor = if (p == period) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
+                            contentColor = if (p == period) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)) {
+                        Text(p.label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
                     }
                 }
             }
         }
         item {
-            SectionHeader("Top songs", action = {
-                PlayButtons(onPlay = { actions.playAll(topSongs, 0, false, "Replay") }, onShuffle = { actions.playAll(topSongs, 0, true, "Replay") }, compact = true, onSmartShuffle = { actions.smartShuffle(topSongs, "Replay") })
-            })
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                item { ReplayExperienceCard("${TimeUnit.MILLISECONDS.toMinutes(summary.listenedMs)}", "MINUTES LISTENED", account?.name ?: "Your listening", "${summary.totalPlays} plays · ${period.cardLabel}") }
+                summary.topSongs.firstOrNull()?.let { song -> item { ReplayExperienceCard(song.title, "TOP SONG", song.subtitle, "${song.plays} plays") } }
+                summary.topArtists.firstOrNull()?.let { artist -> item { ReplayExperienceCard(artist.title, "TOP ARTIST", "${TimeUnit.MILLISECONDS.toMinutes(artist.listenedMs)} minutes", "${artist.plays} plays") } }
+            }
         }
-        itemsIndexed(summary.topSongs, key = { i, e -> "s:$i:${e.key}" }) { i, entry ->
+        item {
+            androidx.compose.material3.FilledTonalButton(onClick = { actions.playAll(topSongs, 0, false, "Replay") },
+                enabled = topSongs.isNotEmpty(), modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp)) { Text("Play your Replay") }
+        }
+        if (summary.totalPlays == 0) item {
+            MessageState(Icons.Rounded.BarChart, "Nothing to replay yet", Modifier.padding(16.dp), message = "Listen for a while and your top songs and artists show up here.")
+        }
+        if (summary.topSongs.isNotEmpty()) item { SectionHeader("Top songs") }
+        itemsIndexed(summary.topSongs, key = { i, entry -> "s:$i:${entry.key}" }) { i, entry ->
             val song = entry.song ?: return@itemsIndexed
-            SongListItem(
-                song = song.copy(durationText = "${entry.plays} plays"),
+            SongListItem(song,
                 onClick = { actions.playAll(topSongs, i, false, "Replay") },
-                isCurrent = song.videoId == actions.currentVideoId,
-                isPlaying = actions.isPlaying,
-                leading = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${i + 1}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp), textAlign = TextAlign.Center)
-                        Spacer(Modifier.width(8.dp))
-                        Artwork(song.thumbnailUrl, Modifier.size(52.dp))
-                    }
-                },
-                onPlayNext = { actions.playNext(song) },
-                onAddToQueue = { actions.addToQueue(song) },
-            )
+                isCurrent = song.videoId == actions.currentVideoId, isPlaying = actions.isPlaying,
+                leading = { Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${i + 1}", Modifier.width(32.dp), color = if (i == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    Artwork(song.thumbnailUrl, Modifier.size(56.dp))
+                } }, onPlayNext = { actions.playNext(song) }, onAddToQueue = { actions.addToQueue(song) },
+                trailing = { Text("${entry.plays} · ${TimeUnit.MILLISECONDS.toMinutes(entry.listenedMs)} min", style = MaterialTheme.typography.labelSmall) })
         }
-        if (summary.topAlbums.isNotEmpty()) {
-            item { SectionHeader("Top albums") }
-            item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(summary.topAlbums.take(12)) { a ->
-                        Column(Modifier.width(140.dp)) {
-                            Artwork(a.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.size(140.dp), MaterialTheme.shapes.medium)
-                            Text(a.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-                            Text("${a.subtitle} • ${a.plays} plays", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-            }
+        if (summary.topArtists.isNotEmpty()) item { SectionHeader("Top artists") }
+        itemsIndexed(summary.topArtists, key = { i, entry -> "a:$i:${entry.key}" }) { i, entry -> ReplayRankRow(i, entry, true) }
+        if (summary.topAlbums.isNotEmpty()) item { SectionHeader("Top albums") }
+        itemsIndexed(summary.topAlbums, key = { i, entry -> "l:$i:${entry.key}" }) { i, entry -> ReplayRankRow(i, entry, false) }
+        item {
+            com.opentune.ui.wrapped.WrappedBanner("Your listening story", "Explore your listening habits as an animated story", onOpenWrapped,
+                Modifier.padding(horizontal = 16.dp, vertical = 16.dp))
         }
+    }
+}
+
+@Composable
+private fun ReplayExperienceCard(value: String, label: String, who: String, detail: String) {
+    Column(Modifier.width(300.dp).height(220.dp).clip(RoundedCornerShape(28.dp))
+        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.surfaceContainer)))
+        .padding(24.dp), verticalArrangement = Arrangement.SpaceBetween) {
+        Text("YOUR LISTENING EXPERIENCE", style = MaterialTheme.typography.labelSmall)
+        Column {
+            Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(label, style = MaterialTheme.typography.labelSmall)
+        }
+        Column {
+            Text(who, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun ReplayRankRow(index: Int, entry: com.opentune.data.history.TopEntry, round: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("${index + 1}", Modifier.width(32.dp), color = if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Artwork(entry.thumbnailUrl, Modifier.size(56.dp), if (round) CircleShape else RoundedCornerShape(12.dp))
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+            Text(entry.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${TimeUnit.MILLISECONDS.toMinutes(entry.listenedMs)} min", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text("${entry.plays}", style = MaterialTheme.typography.labelLarge)
     }
 }
 

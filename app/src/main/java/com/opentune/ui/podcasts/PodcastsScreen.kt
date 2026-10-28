@@ -87,13 +87,14 @@ private enum class SearchKind(val label: String) { SHOWS("Shows"), EPISODES("Epi
 fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenShow: (String) -> Unit, onOpenSettings: (() -> Unit)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
     var kind by rememberSaveable { mutableStateOf(SearchKind.SHOWS) }
-    val loader = rememberLoader("podcasts:home") { Podcasts.home() }
+    val loader = rememberLoader("podcasts:home:${com.opentune.data.innertube.Innertube.currentRegion}") { Podcasts.home() }
     val state by loader.state.collectAsState()
     val subscriptions by Podcasts.subscriptions.collectAsState()
     val progress by Podcasts.progress.collectAsState()
     val inProgress = remember(progress) { Podcasts.inProgress(progress).take(10) }
+    var refreshGeneration by remember { mutableIntStateOf(0) }
     var latest by remember { mutableStateOf<List<PodcastEpisode>>(emptyList()) }
-    LaunchedEffect(subscriptions.map { it.browseId }) {
+    LaunchedEffect(subscriptions.map { it.browseId }, refreshGeneration) {
         latest = runCatching { Podcasts.latestFromSubscriptions() }.getOrDefault(latest)
     }
 
@@ -118,7 +119,7 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
     val refreshing by loader.refreshing.collectAsState()
     com.opentune.ui.components.MarkRefreshBox(
         isRefreshing = refreshing,
-        onRefresh = { loader.reload(keepContent = true) },
+        onRefresh = { refreshGeneration++; attempt++; loader.reload(keepContent = true) },
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {

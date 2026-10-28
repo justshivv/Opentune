@@ -1,5 +1,6 @@
 package com.opentune.ui.player
 
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -659,7 +660,7 @@ private fun motionOf(animation: LyricsAnimation) = when (animation) {
 }
 
 @Composable
-private fun LyricLineView(
+internal fun LyricLineView(
     line: LyricLine,
     distance: Int,
     isActive: Boolean,
@@ -724,12 +725,11 @@ private fun LyricLineView(
     val base = lyricsStyle().copy(textAlign = align, textDirection = if (rtl) TextDirection.Rtl else TextDirection.Ltr)
     val style = if ((motion.glow || ui.lyricsGlow) && isActive) base.copy(shadow = Shadow(bright.copy(alpha = 0.55f), blurRadius = 24f)) else base
     val text = remember(line) { if (line.words.isEmpty()) line.text else line.words.joinToString("") { it.text } }
-    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val layout = remember(text) { mutableStateOf<TextLayoutResult?>(null) }
     // Where each word sits, worked out once per layout rather than every frame.
     // A word's trailing space is left out, and a word that still runs across a
     // wrap gets one box per row: a single box for the word that ends the first
     // row would span both rows edge to edge and dim the whole line until sung.
-    val wordBoxes = remember(layout, line) { wordBoxesOf(layout, line, text) }
     // Words light one by one only where the source timed them. A line timed as a
     // whole lights all at once, on time, rather than sweeping on guessed word times.
     val sweep = isActive && line.wordSynced && line.words.isNotEmpty()
@@ -782,30 +782,23 @@ private fun LyricLineView(
                 transformOrigin = TransformOrigin(origin, 0.5f)
             },
     ) {
-        if (sweep) {
-            // One crisp line: the whole active line stays readable and bright, sung words
-            // lift to full while those not reached yet sit a touch below. No blurred copy,
-            // so a line that wraps to two rows has no glowing halo or box around it.
-            Text(
-                text = text,
-                style = style,
-                color = bright,
-                onTextLayout = { layout = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // Its own layer, so dimming the unsung words doesn't punch through what's behind.
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .drawWithContent { drawContent(); sweepDim(line, wordBoxes, position(), 0.4f, rtl) },
-            )
-        } else {
-            Text(
-                text = text,
-                style = style,
-                color = if (isActive) bright else dim,
-                onTextLayout = { layout = it },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        // Keep one text node and one shaping/layout result through activation. Replacing
+        // the node made the first active frame draw without its word mask, then flash dim.
+        Text(
+            text = text,
+            style = style,
+            color = if (isActive) bright else dim,
+            onTextLayout = { layout.value = it },
+            modifier = Modifier.fillMaxWidth()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithCache {
+                    val boxes = wordBoxesOf(layout.value, line, text)
+                    onDrawWithContent {
+                        drawContent()
+                        if (sweep) sweepDim(line, boxes, position(), 0.4f, rtl)
+                    }
+                },
+        )
         // Backing vocals, smaller and softer, under the line they're sung with.
         line.background?.let {
             Text(
@@ -827,13 +820,14 @@ private fun LyricLineView(
 }
 
 /** Where each of [line]'s words sits in [layout] of [text]: one box per row a word covers, trailing space left out. */
-private fun wordBoxesOf(layout: TextLayoutResult?, line: LyricLine, text: String): List<List<Rect>> {
+internal fun wordBoxesOf(layout: TextLayoutResult?, line: LyricLine, text: String): List<List<Rect>> {
     val l = layout ?: return emptyList()
     var start = 0
     // Where the word before ended on each row: a word's box reaches back to it, so the gap
     // between them (where a j's hook or a slanted letter's foot reaches) is lit with the
     // word that follows, not left lit from the start.
-    val prevRight = HashMap<Int, Float>()
+    val previousEdge = HashMap<Int, Float>()
+    val rtl = com.opentune.data.lyrics.readsRightToLeft(line)
     return line.words.map { w ->
         val end = (start + w.text.length).coerceAtMost(text.length)
         var visibleEnd = end
@@ -854,12 +848,16 @@ private fun wordBoxesOf(layout: TextLayoutResult?, line: LyricLine, text: String
                 // j's hook left of a row's first word. The box takes them in where
                 // no other word can be, so no part of a letter stays lit early.
                 val pad = box.height * GLYPH_OVERHANG
-                val before = prevRight[row]
-                prevRight[row] = box.right
+                val before = previousEdge[row]
+                previousEdge[row] = if (rtl) box.left else box.right
                 Rect(
-                    left = if (from == l.getLineStart(row)) box.left - pad else minOf(box.left, before ?: box.left),
+                    left = if (rtl) {
+                        if (to == l.getLineEnd(row, visibleEnd = true)) box.left - pad else box.left
+                    } else if (from == l.getLineStart(row)) box.left - pad else minOf(box.left, before ?: box.left),
                     top = if (row == 0) box.top - pad else box.top,
-                    right = if (to == l.getLineEnd(row, visibleEnd = true)) box.right + pad else box.right,
+                    right = if (rtl) {
+                        if (from == l.getLineStart(row)) box.right + pad else maxOf(box.right, before ?: box.right)
+                    } else if (to == l.getLineEnd(row, visibleEnd = true)) box.right + pad else box.right,
                     bottom = if (row == l.lineCount - 1) box.bottom + pad else box.bottom,
                 )
             }
@@ -877,21 +875,24 @@ private fun wordBoxesOf(layout: TextLayoutResult?, line: LyricLine, text: String
 @Composable
 internal fun SungLine(line: LyricLine, position: () -> Long, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier) {
     val bright = MaterialTheme.colorScheme.onSurface
-    val text = remember(line) { if (line.words.isEmpty()) line.text else line.words.joinToString("") { it.text }.trim() }
-    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    val boxes = remember(layout, line) { wordBoxesOf(layout, line, text) }
+    val text = remember(line) { if (line.words.isEmpty()) line.text else line.words.joinToString("") { it.text } }
+    val layout = remember(text) { mutableStateOf<TextLayoutResult?>(null) }
+    val rtl = remember(line) { com.opentune.data.lyrics.readsRightToLeft(line) }
     Text(
         text,
         style = style,
         color = bright,
         maxLines = 1,
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-        onTextLayout = { layout = it },
+        onTextLayout = { layout.value = it },
         modifier = modifier
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-            .drawWithContent {
-                drawContent()
-                if (line.wordSynced) sweepDim(line, boxes, position(), 0.55f)
+            .drawWithCache {
+                val boxes = wordBoxesOf(layout.value, line, text)
+                onDrawWithContent {
+                    drawContent()
+                    if (line.wordSynced) sweepDim(line, boxes, position(), 0.55f, rtl)
+                }
             },
     )
 }

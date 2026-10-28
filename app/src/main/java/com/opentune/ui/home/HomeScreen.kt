@@ -133,7 +133,10 @@ fun HomeScreen(
     var historyOpen by remember { mutableStateOf(false) }
     val first = (state as? UiState.Success<List<HomeShelf>>)?.data?.let { hidden.shelves(ContentFilter.shelves(it, hideExplicit)) }.orEmpty()
     val allShelves = first + more
-    val feed = remember(allShelves) { arrangeHomeShelves(allShelves) }
+    val feed = remember(first, more) {
+        val firstPage = arrangeHomeShelves(first)
+        arrangeHomeShelves(allShelves).copy(quickPicks = firstPage.quickPicks ?: arrangeHomeShelves(allShelves).quickPicks)
+    }
     // YouTube Music's own Speed dial when it sends one (signed in), else the songs
     // played most on this phone, with what's hidden or filtered left out.
     val collectionPlays by com.opentune.data.history.ListenedCollections.plays.collectAsState()
@@ -297,7 +300,8 @@ fun HomeScreen(
                     }
                     val title = runtime.title(section.id, "Quick picks")
                     val picks = feed.quickPicks
-                    if (picks != null) QuickPicks(picks.copy(title = title, subtitle = ""), onItemClick, historyAction)
+                    if (refreshing) SongRowPlaceholder()
+                    else if (picks != null) QuickPicks(picks.copy(title = title, subtitle = ""), onItemClick, historyAction)
                     else SectionHeader(title, action = historyAction)
                 }
                 "mixes" -> if (mixes.isNotEmpty()) item(key = "mixes") {

@@ -243,6 +243,7 @@ internal fun MorphBox(
      */
     fullBleed: Boolean = false,
     contentModifier: Modifier = Modifier,
+    artworkMotion: ArtworkMotion? = null,
 ) {
     val big = if (from.width >= to.width) from else to
     val small = if (big === from) to else from
@@ -298,7 +299,7 @@ internal fun MorphBox(
     ) {
         // The mini player's own copy underneath, already loaded, so it never shows empty.
         if (smallUrl != null) Artwork(smallUrl, Modifier.matchParentSize(), RectangleShape)
-        Artwork(url, Modifier.matchParentSize(), RectangleShape)
+        Artwork(url, Modifier.matchParentSize(), RectangleShape, imageModifier = Modifier.livingArt(true, artworkMotion != null, artworkMotion) { grownAt(p()) })
     }
 }
 

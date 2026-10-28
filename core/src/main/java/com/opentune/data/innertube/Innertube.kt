@@ -61,6 +61,12 @@ import java.util.Locale
  * from the stored cookie; no long-lived token is ever minted or stored.
  */
 object Innertube {
+    /** Region from the device's network country or system locale; never precise location. */
+    @Volatile var regionOverride: String? = null
+    val currentRegion: String
+        get() = (regionOverride ?: Locale.getDefault().country).uppercase(Locale.ROOT)
+            .takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "US"
+
     /** The UI language as YouTube spells it (hl). */
     val currentLanguage: String
         get() {
@@ -1272,7 +1278,7 @@ object Innertube {
                                 put("clientName", "WEB_REMIX")
                                 put("clientVersion", clientVersion)
                                 put("hl", currentLanguage)
-                                put("gl", "US")
+                                put("gl", currentRegion)
                                 visitorData?.let { put("visitorData", it) }
                             }
                             putJsonObject("user") {
@@ -1329,7 +1335,7 @@ object Innertube {
                                 put("clientName", "WEB_REMIX")
                                 put("clientVersion", clientVersion)
                                 put("hl", "en")
-                                put("gl", "US")
+                                put("gl", currentRegion)
                                 visitorData?.let { put("visitorData", it) }
                             }
                             putJsonObject("user") {
@@ -1413,7 +1419,7 @@ object Innertube {
                             playerClient.deviceModel?.let { put("deviceModel", it) }
                             playerClient.androidSdkVersion?.let { put("androidSdkVersion", it.toInt()) }
                             put("hl", currentLanguage)
-                            put("gl", "US")
+                            put("gl", currentRegion)
                             visitorData?.let { put("visitorData", it) }
                         }
                     }

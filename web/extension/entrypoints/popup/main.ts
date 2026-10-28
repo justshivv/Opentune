@@ -1,4 +1,5 @@
 import './style.css';
+import { mountUpdates } from './updates';
 import {
   BRIDGE_CHANNEL,
   BRIDGE_PROTOCOL,
@@ -193,7 +194,7 @@ function setDiscord(state: DiscordState): void {
 
 document.getElementById('version')!.textContent = `v${browser.runtime.getManifest().version}`;
 const site = document.getElementById('site') as HTMLAnchorElement;
-site.href = __SITE_ORIGINS__[0] ?? '#';
+site.href = browser.runtime.getManifest().homepage_url ?? 'https://justshivv.github.io/Opentune/player/';
 
 render();
 call('yt.authState', {})
@@ -202,3 +203,5 @@ call('yt.authState', {})
 call('spotify.authState', {}).then(setSpotify).catch(() => undefined);
 call('discord.state', {}).then(setDiscord).catch(() => undefined);
 
+
+mountUpdates(document.getElementById("updates")!);

@@ -163,3 +163,8 @@ body {
   word-break: break-word;
 }
 
+
+#updates { margin-top: 12px; }
+#updates .site { cursor: pointer; width: 100%; font: inherit; }
+#updates [hidden] { display: none; }
+.update-status { font-size: 12px; line-height: 1.5; opacity: .8; margin: 8px 4px; }

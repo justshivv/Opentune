@@ -358,6 +358,7 @@ fun AppRoot(vm: PlayerViewModel) {
         together = { nav.navigate("together") },
         importPlaylist = { nav.navigate("import") },
         wrapped = { nav.navigate("wrapped") },
+        history = { nav.navigate("history") },
     ) }
     val serverNav = remember(nav) {
         ServerNav(
@@ -696,6 +697,7 @@ fun AppRoot(vm: PlayerViewModel) {
                     }
                     composable("equalizer") { EqualizerScreen(content, onBack = { nav.popBackStack() }) }
                     composable("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    composable("history") { com.opentune.ui.library.ListeningHistoryScreen(content, actions, onBack = { nav.popBackStack() }) }
                     composable("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }, onOpenWrapped = { nav.navigate("wrapped") }) }
                     composable("wrapped") { WrappedScreen(actions, onBack = { nav.popBackStack() }, player = vm.player) }
                     composable("recognize?listen={listen}", listOf(navArgument("listen") { type = NavType.BoolType; defaultValue = false })) { e ->
@@ -938,6 +940,7 @@ fun AppRoot(vm: PlayerViewModel) {
             ) {
                 com.opentune.ui.components.PillHost(chromeUi.reduceAnimation, Modifier.align(Alignment.TopCenter))
             }
+            com.opentune.ui.components.ConnectionBanner(Modifier.align(Alignment.TopCenter), chromeUi.reduceAnimation)
         }
         if (opening) {
             com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })

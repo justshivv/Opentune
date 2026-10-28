@@ -461,12 +461,12 @@ fun CollectionScreen(
     onBack: () -> Unit,
 ) {
     val owner = com.opentune.data.library.LibraryCache.owner()
-    val loader = rememberLoader("collection:$owner:$browseId", saved = {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            com.opentune.data.library.LibraryCache.collection(browseId, owner)?.let { it.copy(songs = com.opentune.data.ContentFilter.songs(it.songs)) }
-        }
-    }) { MusicRepository.collection(browseId) }
-    val state by loader.state.collectAsState()
+    val loader = androidx.lifecycle.viewmodel.compose.viewModel<CollectionLoader>(key = "collection:$owner:$browseId") {
+        CollectionLoader(browseId, owner)
+    }
+    val loadingState by loader.state.collectAsState()
+    val firstPage by loader.preview.collectAsState()
+    val state = firstPage?.let { UiState.Success(it) } ?: loadingState
     val listState = rememberLazyListState()
     val isAlbum = MusicRepository.typeOf(browseId) == BrowseType.ALBUM
     val title = (state as? UiState.Success)?.data?.title.orEmpty()
@@ -580,6 +580,12 @@ fun CollectionScreen(
 
                             }
                         }
+                    }
+                    if (firstPage != null && loadingState is UiState.Loading) item(key = "loading-pages") {
+                        androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+                    }
+                    if (firstPage != null && loadingState is UiState.Error) item(key = "retry-pages") {
+                        androidx.compose.material3.TextButton(onClick = { loader.reload() }) { Text("Some tracks couldn't load. Retry") }
                     }
                     if (c == null) {
                         items(8) { SongRowPlaceholder() }

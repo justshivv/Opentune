@@ -358,6 +358,7 @@ fun PlayerLayout(
     var touchedAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var controlsAway by remember { mutableStateOf(false) }
     var seenTouch by remember { mutableLongStateOf(touchedAt) }
+    val artworkMotion = com.opentune.ui.components.rememberArtworkMotion(state.isPlaying)
     val television = com.opentune.ui.tv.LocalIsTv.current
     val focusable = !television && state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
         ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
@@ -706,7 +707,9 @@ fun PlayerLayout(
                     Modifier.fillMaxSize(),
                     animate = !state.ui.reduceAnimation,
                     // While it flies the cover is drawn by the flight, not here as well.
-                    fullCover = fullCover && !flight.active,
+                    fullCover = fullStyle,
+                    fullCoverVisible = fullCover && !flight.active,
+                    artworkMotion = artworkMotion,
                     fullCoverBottom = with(LocalDensity.current) { coverBottomPx.takeIf { it > 0f }?.toDp() },
                     movingCover = state.ui.movingCover && !state.ui.reduceAnimation,
                     playing = state.isPlaying,
@@ -720,9 +723,6 @@ fun PlayerLayout(
                 )
             }
 
-            if (!docked) Box(Modifier.fillMaxWidth()
-                .windowInsetsTopHeight(WindowInsets.statusBars)
-                .background(Color.Black.copy(alpha = 0.58f)))
 
             // Behind the lyrics, the cover's colours drift slowly.
             androidx.compose.animation.AnimatedVisibility(
@@ -867,12 +867,12 @@ fun PlayerLayout(
                 val listsShown = remember { androidx.compose.animation.core.Animatable(if (outerPane == Pane.COVER) 0f else 1f) }
                 var listsBuilt by remember { mutableStateOf(outerPane != Pane.COVER) }
                 LaunchedEffect(Unit) { delay(LISTS_PREWARM_MS); listsBuilt = true }
-                LaunchedEffect(outerPane, flight.following) {
+                LaunchedEffect(outerPane, flight.following, flight.active) {
                     val target = if (outerPane == Pane.COVER) 0f else 1f
                     if (flight.following && outerPane == Pane.COVER) {
                         listsBuilt = true
                         androidx.compose.runtime.snapshotFlow { flight.pull }.collect { listsShown.snapTo(it.coerceIn(0f, 1f)) }
-                    } else if (state.ui.reduceAnimation) {
+                    } else if (state.ui.reduceAnimation || flight.active) {
                         listsBuilt = listsBuilt || target == 1f
                         listsShown.snapTo(target)
                     } else {
@@ -955,6 +955,7 @@ fun PlayerLayout(
                                         ArtworkPane(
                                             current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous,
                                             moving = state.ui.movingCover && !state.ui.reduceAnimation,
+                                            artworkMotion = artworkMotion,
                                             change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                                             index = state.currentIndex,
                                             onSeekBy = seekBy.takeIf { state.ui.doubleTapSeek },
@@ -1138,11 +1139,6 @@ fun PlayerLayout(
                 if (state.ui.statsForNerds) {
                     Box(Modifier.clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
                 }
-                if (state.loadingMessage != null) Text(
-                    com.opentune.ui.theme.tr(state.loadingMessage),
-                    modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 PlayerControls(
                     isPlaying = state.isPlaying,
                     isBuffering = state.isBuffering,
@@ -1223,6 +1219,7 @@ fun PlayerLayout(
                         origin = origin,
                         fullBleed = fullStyle,
                         contentModifier = Modifier.testTag("pane-cover-flight"),
+                        artworkMotion = artworkMotion.takeIf { state.ui.movingCover && !state.ui.reduceAnimation },
                     )
                     // Drawn outside the player's own colours, so given them here: the title and
                     // its buttons changed colour as they flew.

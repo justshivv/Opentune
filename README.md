@@ -68,38 +68,65 @@ Questions, ideas or bug reports: join the
 
 Each release lists SHA-256 checksums of its APKs in `SHA256SUMS.txt`.
 
-### iPhone and iPad (early)
+### iPhone and iPad
 
-There's a first iOS version, written natively in SwiftUI: Home, search,
-album, playlist and artist pages, a full player with synced lyrics and a
-queue you can edit, radio once the queue runs out, background play,
-lock-screen controls, AirPlay, likes and history. Downloads, the
-equalizer and the other Android extras aren't in it yet.
+**Requires iOS/iPadOS 16 or newer. An Android APK cannot be installed on an iPhone.**
+OpenTune's native iOS build is an `.ipa`. It is not currently on the App Store or TestFlight.
 
-It isn't on the App Store, and Apple doesn't allow apps like it there, so
-it's installed the way other open-source iOS apps are, signed with your own
-Apple ID:
+**Recommended: SideStore, or classic AltStore (not AltStore PAL)**
 
-1. Set up [SideStore](https://sidestore.io) or
-   [AltStore](https://altstore.io). This needs a computer once; after that
-   everything happens on the phone.
-2. In SideStore or AltStore, add this source and install OpenTune from it:
-   `https://justshivv.github.io/Opentune/ios/source.json`
-   New builds then show up there as updates.
-3. With a free Apple ID, apps have to be re-signed every 7 days. SideStore
-   and AltStore do it for you in the background.
+1. On a Windows PC or Mac, follow the official [SideStore setup guide](https://sidestore.io)
+   or [classic AltStore installation guide](https://altstore.io). Complete that setup first,
+   including its required pairing, background refresh or companion software. Classic
+   AltStore needs AltServer available for refresh; SideStore has its own pairing/VPN setup.
+2. On your iPhone/iPad, open the installed SideStore or classic AltStore app. Go to
+   **Sources → Add source (+)** and paste this exact URL:
 
-AltStore PAL, the version from the EU app marketplace, can't install it:
-it only takes apps that Apple has notarized and given a marketplace ID, and
-it says the source's apps "lack marketplaceID". Use SideStore or classic
-AltStore (installed with AltServer from a computer) instead.
+   ```text
+   https://justshivv.github.io/Opentune/ios/source.json
+   ```
 
-The `.ipa` itself is at
-[releases/download/ios/OpenTune-iOS.ipa](https://github.com/justshivv/Opentune/releases/download/ios/OpenTune-iOS.ipa),
-for [Sideloadly](https://sideloadly.io) or other installers. It's rebuilt
-whenever the iOS app changes on main.
+3. Open the new OpenTune source, choose **OpenTune**, and tap **Install**. Let the
+   installer sign the app with your Apple ID. Enter Apple credentials only into the
+   installer you chose, never into an OpenTune issue, chat or website form.
+4. If iOS asks, enable **Settings → Privacy & Security → Developer Mode**, restart,
+   and confirm. If it reports an untrusted developer, open **Settings → General →
+   VPN & Device Management**, select your developer profile and choose **Trust**.
+   These prompts depend on the installer and iOS version.
+5. Open OpenTune from the Home Screen. Keep the same installer/source for updates.
+   With a free Apple ID the signing certificate normally expires after **7 days**:
+   enable the installer's refresh setup and check its expiry date. Background refresh
+   is not guaranteed, so refresh manually in the installer before expiry if needed.
 
-iOS 16 or newer.
+**Alternative: install the IPA with a computer**
+
+1. Download [OpenTune-iOS.ipa](https://github.com/justshivv/Opentune/releases/download/ios/OpenTune-iOS.ipa)
+   and install [Sideloadly](https://sideloadly.io) on your PC or Mac.
+2. Connect and unlock your iPhone/iPad, tap **Trust this computer**, choose that device
+   in Sideloadly, select the IPA, then follow its signing/install instructions.
+3. Complete the Developer Mode/Trust prompts above if shown. Use the same Apple ID
+   and installation method when updating; follow Sideloadly's refresh instructions.
+
+**Common problems**
+
+- **“Lacks marketplaceID”**: you are using AltStore PAL. Use SideStore or classic
+  AltStore installed through AltServer; PAL is a different distribution system.
+- **The file downloads but nothing installs**: Safari cannot install an IPA directly.
+  Import it into your configured installer, or use the source URL above.
+- **The app stops opening after a week**: refresh/re-sign it through the same installer.
+  Avoid deleting it first, because deleting the app also deletes its local data.
+- **Signing/device limit error**: free Apple accounts have signing and active-app limits.
+  Follow your installer's guidance to deactivate another app or wait for a signing slot.
+
+Without sideloading, you can also open the [web player](https://justshivv.github.io/Opentune/player/)
+from Safari and choose **Share → Add to Home Screen**. This installs the web app,
+not the native IPA. Safari on iOS cannot run our Chrome/Firefox session extension,
+so extension-dependent playback and account features are unavailable there.
+
+The native iOS build currently includes Home, search, artist/album/playlist browsing,
+a player with synced lyrics and queue editing, background audio, lock-screen controls,
+AirPlay, likes and history. Feature availability differs from Android; platform parity
+work does not change what is present in the currently published IPA.
 
 ### Android TV
 

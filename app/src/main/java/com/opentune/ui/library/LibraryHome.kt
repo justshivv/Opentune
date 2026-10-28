@@ -20,6 +20,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.ViewList
+import com.opentune.data.settings.AppSettings
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -120,6 +124,7 @@ class LibraryNav(
     val together: () -> Unit = {},
     val importPlaylist: () -> Unit = {},
     val wrapped: () -> Unit = {},
+    val history: () -> Unit = {},
     /** An album or playlist downloaded as a whole, by its id. */
     val downloaded: (String) -> Unit = {},
 )
@@ -150,8 +155,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
-    val recents = remember(records) { History.recents(records, 30) }
-    var recentsOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val libraryUi by AppSettings.ui.collectAsState()
     val yearStart = remember {
         Calendar.getInstance().apply { set(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0) }.timeInMillis
     }
@@ -215,7 +219,12 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
 
     val page: @Composable () -> Unit = { LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item {
-            PageHeader(com.opentune.ui.theme.tr("Library"), actions = { com.opentune.ui.components.AccountButton(nav.settings) })
+            PageHeader(com.opentune.ui.theme.tr("Library"), actions = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = nav.history) { Icon(Icons.Rounded.History, "Listening history") }
+                    com.opentune.ui.components.AccountButton(nav.settings)
+                }
+            })
         }
         item {
             YearCard(
@@ -263,6 +272,10 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         item {
             SectionHeader("Playlists", action = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { AppSettings.updateUi { it.copy(playlistGrid = !it.playlistGrid) } }) {
+                        Icon(if (libraryUi.playlistGrid) Icons.Rounded.ViewList else Icons.Rounded.GridView,
+                            if (libraryUi.playlistGrid) "Show playlists as a list" else "Show playlists as tiles")
+                    }
                     if (signedIn) {
                         IconButton(onClick = refresh, enabled = !refreshing) {
                             if (refreshing) androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -296,12 +309,30 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
             val rows = groups[platform].orEmpty()
             if (rows.isEmpty()) continue
             item(key = "group:$platform") { SectionHeader(platform) }
-            items(if (expandedGroups[platform] == true) rows else rows.take(5), key = { it.key }) { row ->
+            val visibleRows = if (expandedGroups[platform] == true) rows else rows.take(5)
+            if (libraryUi.playlistGrid) {
+                items(visibleRows.chunked(2), key = { "tiles:$platform:${it.first().key}" }) { pair ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        pair.forEach { row ->
+                            Column(Modifier.weight(1f).clip(MaterialTheme.shapes.large).clickable(onClick = row.onClick).padding(6.dp)) {
+                                if (row.local != null && row.url == null) com.opentune.ui.components.PlaylistCover(row.title,
+                                    row.local.songs.map { it.thumbnailUrl }, Modifier.fillMaxWidth().aspectRatio(1f))
+                                else Artwork(row.url, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.large)
+                                Text(row.title, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(row.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            } else {
+            items(visibleRows, key = { it.key }) { row ->
                 PlaylistRow(row.url, row.title, row.subtitle, row.onClick, Modifier.animateItem(),
                     from = if (platform == "Spotify") "Spotify" else null,
                     cover = if (row.local != null && row.url == null) ({
                         com.opentune.ui.components.PlaylistCover(row.local.name, row.local.songs.map { it.thumbnailUrl }, Modifier.size(56.dp))
                     }) else null)
+            }
             }
             if (rows.size > 5) item(key = "fold:$platform") {
                 TextButton(onClick = { expandedGroups[platform] = expandedGroups[platform] != true }, modifier = Modifier.fillMaxWidth()) {
@@ -309,41 +340,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 }
             }
         }
-        if (recents.isNotEmpty()) {
-            item {
-                SectionHeader("Recently played", action = {
-                    PlayButtons(onPlay = { actions.playAll(recents, 0, false, "Recently played") }, onShuffle = { actions.playAll(recents, 0, true, "Recently played") }, compact = true, onSmartShuffle = { actions.smartShuffle(recents, "Recently played") })
-                })
-            }
-            // The last few, with the rest a tap away, so the list doesn't run the page long.
-            val shownRecents = if (recentsOpen) recents else recents.take(RECENTS_FOLDED)
-            itemsIndexed(shownRecents, key = { i, s -> "r$i:${s.videoId}" }) { i, song ->
-                SongListItem(
-                    song = song,
-                    onClick = { actions.playAll(recents, i, false, "Recently played") },
-                    isCurrent = song.videoId == actions.currentVideoId,
-                    isPlaying = actions.isPlaying,
-                    onPlayNext = { actions.playNext(song) },
-                    onAddToQueue = { actions.addToQueue(song) },
-                    modifier = Modifier.animateItem(),
-                )
-            }
-            if (recents.size > RECENTS_FOLDED) {
-                item(key = "recentsToggle") {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).animateItem(), contentAlignment = Alignment.Center) {
-                        androidx.compose.material3.FilledTonalButton(onClick = { recentsOpen = !recentsOpen }) {
-                            Icon(
-                                if (recentsOpen) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
-                                null,
-                                Modifier.size(20.dp),
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (recentsOpen) "Show less" else "Show all ${recents.size}")
-                        }
-                    }
-                }
-            }
-        }
+
     } }
 
     // Pull to refresh only when there's an account to refresh from.
@@ -354,8 +351,6 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
 }
 
-/** How many recently played songs show before "Show all". */
-private const val RECENTS_FOLDED = 5
 
 /** This year in numbers on a neon card; opens the Wrapped story. */
 @Composable

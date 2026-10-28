@@ -120,6 +120,8 @@ object Podcasts {
      * answers (it does for signed-in accounts in many countries), and the
      * popular episodes and suggested shows from Explore and Home otherwise.
      */
+    private val homeVisits = java.util.concurrent.atomic.AtomicInteger(0)
+
     suspend fun home(): Home = withContext(Dispatchers.IO) {
         coroutineScope {
             val page = async { runCatching { Innertube.browse("FEmusic_non_music_audio") }.getOrNull() }
@@ -132,7 +134,7 @@ object Podcasts {
                 .distinctBy { it.browseId }
             if (popular.isEmpty() && shows.isEmpty()) throw java.io.IOException("YouTube Music sent no podcasts")
             // Two topics filled in up front, a different pair each day.
-            val day = (System.currentTimeMillis() / 86_400_000L).toInt()
+            val day = (System.currentTimeMillis() / 86_400_000L).toInt() + homeVisits.getAndIncrement()
             val picks = listOf(day % TOPICS.size, (day * 7 + 3) % TOPICS.size).distinct().map { TOPICS[it] }
             val more = picks.map { topic -> async { topic to runCatching { searchShows(topic) }.getOrDefault(emptyList()) } }.awaitAll()
                 .filter { it.second.isNotEmpty() }
