@@ -75,6 +75,8 @@ jobs:
       - name: Build
         if: steps.version.outputs.skip != 'true'
         env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
           OPENTUNE_KEYSTORE_PASSWORD: ${{ secrets.OPENTUNE_KEYSTORE_PASSWORD }}
           OPENTUNE_KEY_ALIAS: ${{ secrets.OPENTUNE_KEY_ALIAS }}
           OPENTUNE_KEY_PASSWORD: ${{ secrets.OPENTUNE_KEY_PASSWORD }}

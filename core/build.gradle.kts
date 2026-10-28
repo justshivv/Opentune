@@ -16,6 +16,14 @@ val appBuild = rootProject.file("app/build.gradle.kts").readText()
 val appVersionName = Regex("""versionName = "([^"]+)"""").find(appBuild)!!.groupValues[1]
 val appVersionCode = Regex("""versionCode = (\d+)""").find(appBuild)!!.groupValues[1]
 
+// Registered OpenTune application credentials are supplied by the build owner.
+// Last.fm mobile authentication requires these; listeners only enter their login.
+fun lastFmCredential(name: String): String {
+    val value = providers.environmentVariable(name).orNull.orEmpty().trim()
+    require(value.isEmpty() || value.matches(Regex("[a-fA-F0-9]{32}"))) { "$name must be a Last.fm application credential" }
+    return "\"$value\""
+}
+
 android {
     namespace = "com.opentune.core"
     compileSdk = 37
@@ -24,6 +32,8 @@ android {
         minSdk = 26
         buildConfigField("String", "VERSION_NAME", "\"$appVersionName\"")
         buildConfigField("int", "VERSION_CODE", appVersionCode)
+        buildConfigField("String", "LASTFM_API_KEY", lastFmCredential("LASTFM_API_KEY"))
+        buildConfigField("String", "LASTFM_API_SECRET", lastFmCredential("LASTFM_API_SECRET"))
         consumerProguardFiles("consumer-rules.pro")
     }
     compileOptions {

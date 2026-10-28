@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
@@ -26,15 +27,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Request
 
-/**
- * Last.fm scrobbling with the listener's own API account: they create an API
- * key and secret at last.fm/api, sign in once with their username and
- * password (exchanged for a session key; the password is never stored), and
- * every song heard long enough is scrobbled. Scrobbles that can't be sent
- * wait in a queue and go with the next one.
- *
- * The session key is a credential, so it lives in app-private storage and is
- * left out of backups, like the YouTube cookie.
+/** Last.fm mobile authentication exchanges the password once for a private session key.
+ * The build supplies OpenTune's application credentials. Existing sessions keep their own
+ * signing key pair so an app update never breaks their queued scrobbles.
  */
 object LastFm {
     private const val API = "https://ws.audioscrobbler.com/2.0/"
@@ -67,22 +62,37 @@ object LastFm {
     val apiKey: String get() = prefs?.getString(K_KEY, null).orEmpty()
     val secret: String get() = prefs?.getString(K_SECRET, null).orEmpty()
 
-    /** Exchanges the listener's login for a session key, with their own API key and secret. */
-    suspend fun signIn(apiKey: String, secret: String, username: String, password: String): Result<Unit> = runCatching {
-        val response = call(
-            mapOf("method" to "auth.getMobileSession", "username" to username, "password" to password),
-            apiKey.trim(), secret.trim(), session = null,
-        )
-        val session = response["session"]?.jsonObject ?: error(errorOf(response) ?: "Last.fm didn't return a session")
-        val key = session["key"]?.jsonPrimitive?.content ?: error("Last.fm didn't return a session")
-        val name = session["name"]?.jsonPrimitive?.content ?: username
-        prefs?.edit {
-            putString(K_KEY, apiKey.trim())
-            putString(K_SECRET, secret.trim())
-            putString(K_SESSION, key)
-            putString(K_USER, name)
+    private val bundledLogin: Boolean get() = com.opentune.core.BuildConfig.LASTFM_API_KEY.isNotBlank() && com.opentune.core.BuildConfig.LASTFM_API_SECRET.isNotBlank()
+    private val loginKey: String get() = if (bundledLogin) com.opentune.core.BuildConfig.LASTFM_API_KEY else apiKey
+    private val loginSecret: String get() = if (bundledLogin) com.opentune.core.BuildConfig.LASTFM_API_SECRET else secret
+    val canSignIn: Boolean get() = loginKey.isNotBlank() && loginSecret.isNotBlank()
+
+    suspend fun signIn(username: String, password: String): Result<Unit> = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        try {
+            check(canSignIn) { "Last.fm sign-in isn't available in this build yet." }
+            val apiKey = loginKey
+            val secret = loginSecret
+            val response = call(
+                mapOf("method" to "auth.getMobileSession", "username" to username, "password" to password),
+                apiKey, secret, session = null,
+            )
+            val session = response["session"]?.jsonObject ?: error(errorOf(response) ?: "Last.fm didn't return a session")
+            val key = session["key"]?.jsonPrimitive?.content ?: error("Last.fm didn't return a session")
+            val name = session["name"]?.jsonPrimitive?.content ?: username
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            prefs?.edit {
+                putString(K_KEY, apiKey)
+                putString(K_SECRET, secret)
+                putString(K_SESSION, key)
+                putString(K_USER, name)
+            }
+            _account.value = Account(name)
+            Result.success(Unit)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        _account.value = Account(name)
     }
 
     fun signOut() {

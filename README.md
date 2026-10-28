@@ -35,6 +35,9 @@ Built with Kotlin, Jetpack Compose and Media3. Android 8.0 and newer.
 Questions, ideas or bug reports: join the
 [Discord](https://discord.gg/6udrCVh5n).
 
+Build-owner setup and current Last.fm, Discord and extension-update limits are
+documented in [service integrations](docs/service-integrations.md).
+
 ## See it
 
 <p align="center">

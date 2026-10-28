@@ -17,7 +17,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Partial pages belong to the ViewModel, so rotating never loses an in-flight page. */
-internal class CollectionLoader(private val browseId: String, private val owner: String) : ViewModel() {
+internal class CollectionLoader(
+    private val browseId: String,
+    private val owner: String,
+    private val fetch: suspend ((Collection) -> Unit) -> Collection = { progress -> MusicRepository.collection(browseId, progress) },
+    private val cached: suspend () -> Collection? = {
+        withContext(Dispatchers.IO) { LibraryCache.collection(browseId, owner)?.let { it.copy(songs = ContentFilter.songs(it.songs)) } }
+    },
+) : ViewModel() {
     private val _state = MutableStateFlow<UiState<Collection>>(UiState.Loading)
     val state = _state.asStateFlow()
     private val _preview = MutableStateFlow<Collection?>(null)
@@ -32,11 +39,9 @@ internal class CollectionLoader(private val browseId: String, private val owner:
             _state.value = UiState.Loading
             try {
                 if (_preview.value == null) {
-                    _preview.value = withContext(Dispatchers.IO) {
-                        LibraryCache.collection(browseId, owner)?.let { it.copy(songs = ContentFilter.songs(it.songs)) }
-                    }
+                    _preview.value = cached()
                 }
-                val complete = MusicRepository.collection(browseId) { _preview.value = it }
+                val complete = fetch { _preview.value = it }
                 _preview.value = complete
                 _state.value = UiState.Success(complete)
             } catch (e: CancellationException) {

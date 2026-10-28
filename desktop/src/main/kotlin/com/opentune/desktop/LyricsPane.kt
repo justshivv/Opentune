@@ -43,6 +43,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.SpanStyle
@@ -216,14 +218,14 @@ private fun LyricRow(line: LyricLine, active: Boolean, at: Long, onClick: () -> 
     val lit = scheme.onSurface
     val dim = scheme.onSurface.copy(alpha = 0.32f)
     val ink by animateColorAsState(if (active) lit else dim)
-    val scale by animateFloatAsState(if (active) 1f else 0.94f)
+    val scale by animateFloatAsState(if (active) 1f else 0.94f, androidx.compose.animation.core.spring(dampingRatio = 1f))
     val second = line.voice == VOICE_SECOND
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalAlignment = if (second) Alignment.End else Alignment.Start,
     ) {
         val style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-        val text = if (active && line.words.isNotEmpty()) {
+        val text = if (active && line.wordSynced && line.words.isNotEmpty()) {
             // Each word fills in as it's sung.
             buildAnnotatedString {
                 line.words.forEach { w ->
@@ -233,14 +235,17 @@ private fun LyricRow(line: LyricLine, active: Boolean, at: Long, onClick: () -> 
                         else -> (at - w.startMs).toFloat() / (w.endMs - w.startMs).coerceAtLeast(1)
                     }
                     withStyle(SpanStyle(color = lerp(dim, lit, f))) { append(w.text) }
-                    if (!w.text.endsWith(" ")) append(" ")
                 }
             }
         } else {
-            buildAnnotatedString { withStyle(SpanStyle(color = ink)) { append(line.text) } }
+            buildAnnotatedString { withStyle(SpanStyle(color = ink)) { append(lyricDisplayText(line)) } }
         }
         Text(
-            text, style = style.copy(fontSize = style.fontSize * scale),
+            text, style = style,
+            modifier = Modifier.fillMaxWidth().graphicsLayer {
+                scaleX = scale; scaleY = scale
+                transformOrigin = TransformOrigin(if (second) 1f else 0f, 0.5f)
+            },
             textAlign = if (second) TextAlign.End else TextAlign.Start,
         )
         line.background?.let {
@@ -262,3 +267,7 @@ private fun PlainLyrics(text: String) {
         )
     }
 }
+
+/** Timed syllables already contain their intended spacing; never insert extra spaces. */
+internal fun lyricDisplayText(line: LyricLine): String =
+    if (line.words.isEmpty()) line.text else line.words.joinToString("") { it.text }

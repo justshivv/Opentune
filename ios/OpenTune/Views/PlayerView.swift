@@ -175,7 +175,7 @@ struct LyricsPane: View {
                                     .foregroundStyle(.white.opacity(i == active ? 1 : (i < active ? 0.45 : 0.3)))
                                     .scaleEffect(i == active ? 1 : 0.96, anchor: .leading)
                                     .blur(radius: i == active ? 0 : (abs(i - active) > 2 ? 1.2 : 0.5))
-                                    .animation(.spring(response: 0.45, dampingFraction: 0.8), value: active)
+                                    .animation(.spring(response: 0.45, dampingFraction: 1), value: active)
                                     .id(i)
                                     .onTapGesture { player.seek(to: Double(line.startMs) / 1000) }
                             }
@@ -185,7 +185,7 @@ struct LyricsPane: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .onChange(of: active) { i in
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { proxy.scrollTo(max(i, 0), anchor: .center) }
+                        withAnimation(.spring(response: 0.6, dampingFraction: 1)) { proxy.scrollTo(max(i, 0), anchor: .center) }
                     }
                     .onAppear { proxy.scrollTo(max(active, 0), anchor: .center) }
                 }
