@@ -40,10 +40,14 @@ class ConnectionBannerLayoutTest {
         val bottom = compose.onNodeWithTag("bottom").fetchSemanticsNode().boundsInRoot.bottom
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { visible.value = true }
+        // SubcomposeLayout creates the notice during measurement. Flush that frame
+        // before advancing its animation clock, just as a rendered frame would.
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(160)
         compose.waitForIdle()
         val moving = compose.onNodeWithTag("heading").fetchSemanticsNode().boundsInRoot.top
-        assertTrue(moving > initial)
+        assertTrue("The page must move during entry: initial=$initial, moving=$moving", moving > initial)
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
         val header = compose.onNodeWithTag("heading").fetchSemanticsNode().boundsInRoot
@@ -52,6 +56,8 @@ class ConnectionBannerLayoutTest {
         assertTrue("The banner must end before the page heading", banner.bottom <= header.top)
         assertEquals(bottom, compose.onNodeWithTag("bottom").fetchSemanticsNode().boundsInRoot.bottom, 1f)
         compose.runOnIdle { visible.value = false }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
         compose.onNodeWithText("You're back online.").assertDoesNotExist()
