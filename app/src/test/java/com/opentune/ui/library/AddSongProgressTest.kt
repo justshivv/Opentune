@@ -6,6 +6,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performClick
 import com.opentune.data.model.Song
 import com.opentune.data.spotify.SpotifyPlaylistWrites.SaveProgress
@@ -29,7 +31,7 @@ class AddSongProgressTest {
             MaterialTheme { AddRow(Song("aaaaaaaaaaa", "Song", "Artist", null), added.value, progress.value) { taps++ } }
         }
         compose.onNodeWithText("Saving to Spotify…").assertExists()
-        compose.onNodeWithText("Song").assertIsNotEnabled().performClick()
+        compose.onNodeWithText("Song").assertIsNotEnabled().performTouchInput { click() }
         assertEquals(0, taps)
         compose.runOnIdle { progress.value = SaveProgress("Spotify is busy. Try again shortly.", failed = true) }
         compose.onNodeWithText("Spotify is busy. Try again shortly.").assertExists()

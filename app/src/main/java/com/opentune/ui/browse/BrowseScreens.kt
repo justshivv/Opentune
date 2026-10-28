@@ -124,6 +124,7 @@ internal fun CollapsingBar(
     listState: LazyListState,
     onBack: () -> Unit,
     forceCollapsed: Boolean = false,
+    artworkBehind: Boolean = true,
     actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
 ) {
     val scrolled by remember(listState) { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
@@ -190,7 +191,7 @@ internal fun CollapsingBar(
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = Color.Transparent,
                 actionIconContentColor = androidx.compose.animation.animateColorAsState(
-                    if (collapsed) MaterialTheme.colorScheme.onSurface else Color.White, androidx.compose.animation.core.tween(260), label = "barIcons",
+                    if (collapsed || !artworkBehind) MaterialTheme.colorScheme.onSurface else Color.White, androidx.compose.animation.core.tween(260), label = "barIcons",
                 ).value,
             ),
         )
@@ -266,6 +267,7 @@ internal fun ShuffleButton(onShuffle: () -> Unit, onSmartShuffle: (() -> Unit)?,
  */
 @Composable
 internal fun HeaderBackdrop(url: String?, modifier: Modifier = Modifier) {
+    if (url.isNullOrBlank()) return
     val background = MaterialTheme.colorScheme.background
     Box(modifier.clipToBounds()) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

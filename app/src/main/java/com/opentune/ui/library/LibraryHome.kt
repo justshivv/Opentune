@@ -804,7 +804,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     }
     com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
         com.opentune.ui.browse.PlaylistSearchHeader(search) {
-        com.opentune.ui.browse.CollapsingBar(playlist.name, listState, onBack, forceCollapsed = searching) {
+        com.opentune.ui.browse.CollapsingBar(playlist.name, listState, onBack, forceCollapsed = searching,
+            artworkBehind = !(playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).isNullOrBlank()) {
             Row(Modifier.height(48.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { if (searching) search.close() else search.open = true }) {
                     Icon(if (searching) Icons.Rounded.Close else Icons.Rounded.Search, "Search this list")
