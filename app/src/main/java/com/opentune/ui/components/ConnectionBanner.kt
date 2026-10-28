@@ -34,6 +34,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.flow.distinctUntilChanged
 
+/** Offset of the app page inside the window while a connectivity notice has reserved space. */
+internal val LocalPageTopOffset = staticCompositionLocalOf { 0f }
+
 /** Network changes are observed locally; no polling or analytics request is needed. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @Composable
@@ -50,21 +53,21 @@ fun ConnectionBanner(modifier: Modifier = Modifier, reduceMotion: Boolean = fals
             visible = false
             val notices = ConnectionNoticeState()
             try {
-        callbackFlow {
-            val cm = context.getSystemService(ConnectivityManager::class.java)
-            fun report() { trySend(AppSettings.isOnline()) }
-            val listener = object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) = report()
-                override fun onLost(network: Network) = report()
-                override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = report()
-            }
-            cm?.registerDefaultNetworkCallback(listener)
-            report()
-            awaitClose { if (cm != null) runCatching { cm.unregisterNetworkCallback(listener) } }
-        }.steadyConnectivity().collect { online ->
-            if (online) available()
-            notices.accept(online)?.let { state -> notice = state; generation++; visible = true }
-        }
+                callbackFlow {
+                    val cm = context.getSystemService(ConnectivityManager::class.java)
+                    fun report() { trySend(AppSettings.isOnline()) }
+                    val listener = object : ConnectivityManager.NetworkCallback() {
+                        override fun onAvailable(network: Network) = report()
+                        override fun onLost(network: Network) = report()
+                        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = report()
+                    }
+                    cm?.registerDefaultNetworkCallback(listener)
+                    report()
+                    awaitClose { if (cm != null) runCatching { cm.unregisterNetworkCallback(listener) } }
+                }.steadyConnectivity().collect { online ->
+                    if (online) available()
+                    notices.accept(online)?.let { state -> notice = state; generation++; visible = true }
+                }
             } finally { visible = false }
         }
     }
@@ -111,8 +114,11 @@ internal fun ConnectionNoticeLayout(
         val occupied = ((banner.maxOfOrNull { it.height } ?: 0) - statusInsets.getTop(this))
             .coerceIn(0, constraints.maxHeight)
         val pageHeight = constraints.maxHeight - occupied
-        val page = subcompose("page") { Box(Modifier.fillMaxSize(), content = content) }
-            .map { it.measure(constraints.copy(minHeight = pageHeight, maxHeight = pageHeight)) }
+        val page = subcompose("page") {
+            CompositionLocalProvider(LocalPageTopOffset provides occupied.toFloat()) {
+                Box(Modifier.fillMaxSize(), content = content)
+            }
+        }.map { it.measure(constraints.copy(minHeight = pageHeight, maxHeight = pageHeight)) }
         layout(constraints.maxWidth, constraints.maxHeight) {
             page.forEach { it.placeRelative(0, occupied) }
             banner.forEach { it.placeRelative(0, 0) }

@@ -672,7 +672,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     var savingOnline by remember { mutableStateOf(false) }
     var choosingPrivacy by remember { mutableStateOf(false) }
     var privateShare by remember { mutableStateOf(false) }
-    if (adding) AddSongsSheet(id, onDismiss = { adding = false })
+    if (adding && playlist != null && playlist.spotifyId == null) AddSongsSheet(id, onDismiss = { adding = false })
     // Changes made on YouTube Music since, once this page's own have gone.
     val remoteId = playlist?.remoteId
     LaunchedEffect(id, signedIn, remoteId) {
@@ -821,7 +821,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 Box {
                     IconButton(onClick = { moreOpen = true }) { Icon(Icons.Rounded.MoreHoriz, "More") }
                     androidx.compose.material3.DropdownMenu(moreOpen, { moreOpen = false }) {
-                        androidx.compose.material3.DropdownMenuItem(text = { Text("Add songs") }, onClick = { moreOpen = false; adding = true })
+                        if (playlist.spotifyId == null) androidx.compose.material3.DropdownMenuItem(text = { Text("Add songs") }, onClick = { moreOpen = false; adding = true })
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Downloads & playlist tools") }, onClick = { moreOpen = false; toolsOpen = true })
                         if (playlist.spotifyId == null) {
                             androidx.compose.material3.DropdownMenuItem(text = { Text("Rename") }, onClick = { moreOpen = false; renaming = true })
@@ -848,7 +848,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                         onPlay = { actions.playAll(shown, 0, false, playlist.name) },
                         onShuffle = { actions.playAll(shown, 0, true, playlist.name) },
                         onSmartShuffle = { actions.smartShuffle(shown, playlist.name) },
-                        onSave = { adding = true }, actionLabel = "Add songs",
+                        onSave = if (playlist.spotifyId == null) ({ adding = true }) else null, actionLabel = "Add songs",
                         modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 12.dp))
                     if (status != null && playlist.spotifyId == null) status()
                 }
@@ -856,7 +856,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         }
         if (songs.isEmpty()) {
             item {
-                MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "Nothing here yet", Modifier.padding(top = 32.dp), message = "Add songs here, or use Add to playlist in any song's menu.")
+                MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "Nothing here yet", Modifier.padding(top = 32.dp), message = if (playlist.spotifyId != null) "Songs added in Spotify appear after the next sync." else "Add songs here, or use Add to playlist in any song's menu.")
             }
             return@LazyColumn
         }

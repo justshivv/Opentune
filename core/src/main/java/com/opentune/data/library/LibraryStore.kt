@@ -261,7 +261,7 @@ object LibraryStore {
     @Synchronized
     fun addAllToPlaylist(id: String, songs: List<Song>) {
         if (playlist(id)?.spotifyId != null) {
-            com.opentune.data.spotify.SpotifyPlaylistWrites.add(id, songs)
+            com.opentune.data.Pills.info("Edit this playlist in Spotify")
             return
         }
         var added = emptyList<SongRef>()

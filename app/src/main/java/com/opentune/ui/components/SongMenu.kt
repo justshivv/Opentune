@@ -133,7 +133,7 @@ fun SongMenuSheet(
     // A song smart shuffle mixed into one of the app's own playlists can be kept there.
     val keepIn = origin?.playlistId?.takeIf { song.smartShuffle }
         ?.let { id -> playlists.firstOrNull { it.id == id } }
-        ?.takeIf { p -> p.songs.none { it.videoId == song.videoId } }
+        ?.takeIf { p -> p.spotifyId == null && p.songs.none { it.videoId == song.videoId } }
     val download = downloads[song.videoId]
     // Files on this phone and songs on your server: no YouTube actions.
     val local = !isYouTubeId(song.videoId)
@@ -373,7 +373,8 @@ private fun PlaylistPickRow(
 @Composable
 fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
-    val playlists by LibraryStore.playlists.collectAsState()
+    val allPlaylists by LibraryStore.playlists.collectAsState()
+    val playlists = remember(allPlaylists) { allPlaylists.filter { it.spotifyId == null } }
     val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
     val account by com.opentune.data.library.LibraryCache.playlists.collectAsState()
     val owned by com.opentune.data.library.LibraryCache.owned.collectAsState()
@@ -438,8 +439,7 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
                                     com.opentune.data.Pills.info("Already in ${p.name}", context)
                                 } else {
                                     LibraryStore.addToPlaylist(p.id, song)
-                                    if (p.spotifyId == null) com.opentune.data.Pills.done("Added to ${p.name}", context)
-                                    else com.opentune.data.Pills.info("Saving to Spotify…", context)
+                                    com.opentune.data.Pills.done("Added to ${p.name}", context)
                                 }
                                 onDone()
                             },

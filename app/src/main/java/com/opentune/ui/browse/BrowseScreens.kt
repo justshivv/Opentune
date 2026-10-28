@@ -361,7 +361,7 @@ internal fun ListPlayRow(
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
     onSmartShuffle: () -> Unit,
-    onSave: () -> Unit,
+    onSave: (() -> Unit)?,
     modifier: Modifier = Modifier,
     actionLabel: String? = null,
 ) {
@@ -378,7 +378,7 @@ internal fun ListPlayRow(
             Spacer(Modifier.width(8.dp))
             Text(com.opentune.ui.theme.tr("Play"), style = MaterialTheme.typography.titleMedium)
         }
-        Box(
+        if (onSave != null) Box(
             Modifier.size(56.dp).glass(androidx.compose.foundation.shape.CircleShape).clip(androidx.compose.foundation.shape.CircleShape).clickable(enabled = enabled, onClick = onSave),
             contentAlignment = Alignment.Center,
         ) {
