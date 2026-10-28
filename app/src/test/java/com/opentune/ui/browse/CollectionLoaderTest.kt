@@ -14,7 +14,7 @@ import org.robolectric.shadows.ShadowLooper
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = android.app.Application::class)
 class CollectionLoaderTest {
-    private val first = Collection("VLmix", "Chill mix", "", null, listOf(Song("one", "First", "Artist")))
+    private val first = Collection("VLmix", "Chill mix", "", null, listOf(Song("one", "First", "Artist", null)))
 
     @Test fun firstTracksAreUsableWhileLaterPagesArePending() {
         val later = CompletableDeferred<Collection>()
@@ -22,7 +22,7 @@ class CollectionLoaderTest {
         ShadowLooper.idleMainLooper()
         assertEquals(first, loader.preview.value)
         assertTrue(loader.state.value is UiState.Loading)
-        val complete = first.copy(songs = first.songs + Song("two", "Second", "Artist"))
+        val complete = first.copy(songs = first.songs + Song("two", "Second", "Artist", null))
         later.complete(complete)
         ShadowLooper.idleMainLooper()
         assertEquals(complete, loader.preview.value)

@@ -86,10 +86,6 @@
                  Compose UI, which picks its layout from the window's size, so pages,
                  scroll positions and the player stay as they were rather than the
                  activity starting over. -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <!-- The TV home screen's row of apps. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -147,6 +143,49 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+
+        <!-- MainActivity stays enabled for links, notifications and TV; only launcher aliases change. -->
+        <activity-alias android:name=".icon.Classic" android:targetActivity=".MainActivity"
+            android:enabled="true" android:exported="true"
+            android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icon.Midnight" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@mipmap/ic_launcher_midnight" android:roundIcon="@mipmap/ic_launcher_midnight" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icon.Pearl" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@mipmap/ic_launcher_pearl" android:roundIcon="@mipmap/ic_launcher_pearl" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icon.Rose" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@mipmap/ic_launcher_rose" android:roundIcon="@mipmap/ic_launcher_rose" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icon.Ocean" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@mipmap/ic_launcher_ocean" android:roundIcon="@mipmap/ic_launcher_ocean" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
 
         <service
             android:name=".playback.PlaybackService"

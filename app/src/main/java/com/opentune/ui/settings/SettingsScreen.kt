@@ -425,6 +425,7 @@ private fun settingsSections(
     val pendingUpdate by UpdateCheck.pending.collectAsState()
     var updateBytes by remember { mutableStateOf(0L) }
     var playerStyleDialog by remember { mutableStateOf(false) }
+    var appIconDialog by remember { mutableStateOf(false) }
     var fontDialog by remember { mutableStateOf(false) }
     var languageDialog by remember { mutableStateOf(false) }
     var recommenderDialog by remember { mutableStateOf(false) }
@@ -524,6 +525,7 @@ private fun settingsSections(
     if (supportDialog) com.opentune.ui.components.SupportDialog(onDismiss = { supportDialog = false })
     if (followedDialog) FollowedArtistsDialog(onDismiss = { followedDialog = false })
     if (hiddenDialog) HiddenDialog(onDismiss = { hiddenDialog = false })
+    if (appIconDialog) AppIconDialog { appIconDialog = false }
     if (fontDialog) com.opentune.ui.theme.FontSettingsSheet { fontDialog = false }
     if (playerStyleDialog) {
         ChoiceSheet(
@@ -990,6 +992,9 @@ private fun settingsSections(
                     NavRow("App language", { languageDialog = true }, icon = Icons.Rounded.Language,
                         value = com.opentune.ui.theme.AppLanguages.selected(context).label)
                 },
+                Entry("App icon", "launcher icon design glass pearl midnight rose ocean") {
+                    NavRow("App icon", { appIconDialog = true }, summary = "Choose the OpenTune icon on your home screen", icon = Icons.Rounded.Palette)
+                }
                 Entry("Fonts & readability", "font typeface text weight bold thin ttf otf import custom") {
                     NavRow("Fonts & readability", { fontDialog = true }, summary = "Built-in fonts, text weight and your own font file", icon = Icons.Rounded.TextFields, value = theme.font.label)
                 },
