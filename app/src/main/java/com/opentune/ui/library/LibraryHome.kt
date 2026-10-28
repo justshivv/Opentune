@@ -668,6 +668,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
+    var toolsOpen by remember { mutableStateOf(false) }
     var savingOnline by remember { mutableStateOf(false) }
     var choosingPrivacy by remember { mutableStateOf(false) }
     var privateShare by remember { mutableStateOf(false) }
@@ -757,12 +758,15 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     val tools: @Composable (Modifier) -> Unit = { modifier ->
         ListTools(
             songs,
-            onAddSongs = { adding = true },
+            onAddSongs = null,
             onShare = share,
             modifier = modifier,
             privacy = playlist.privacy,
             onPrivacy = if (online) ({ choosingPrivacy = true }) else null,
         )
+    }
+    if (toolsOpen) com.opentune.ui.components.FloatingCard(onDismiss = { toolsOpen = false }, title = "Playlist tools") {
+        tools(Modifier.fillMaxWidth().padding(16.dp))
     }
     // Where the playlist stands with YouTube Music, under its cover.
     val status: (@Composable () -> Unit)? = when {
@@ -817,6 +821,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                     IconButton(onClick = { moreOpen = true }) { Icon(Icons.Rounded.MoreHoriz, "More") }
                     androidx.compose.material3.DropdownMenu(moreOpen, { moreOpen = false }) {
                         androidx.compose.material3.DropdownMenuItem(text = { Text("Add songs") }, onClick = { moreOpen = false; adding = true })
+                        androidx.compose.material3.DropdownMenuItem(text = { Text("Downloads & playlist tools") }, onClick = { moreOpen = false; toolsOpen = true })
                         if (playlist.spotifyId == null) {
                             androidx.compose.material3.DropdownMenuItem(text = { Text("Rename") }, onClick = { moreOpen = false; renaming = true })
                             androidx.compose.material3.DropdownMenuItem(text = { Text("Delete") }, onClick = { moreOpen = false; deleting = true })
@@ -852,10 +857,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             item {
                 MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "Nothing here yet", Modifier.padding(top = 32.dp), message = "Add songs here, or use Add to playlist in any song's menu.")
             }
-            item { tools(Modifier.fillMaxWidth().padding(16.dp)) }
             return@LazyColumn
         }
-        if (!searching) item { tools(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
         // Keyed by the song (and which copy of it), not its place, so a row taken out pops
         // alone and the rows below slide up rather than every row after it being redrawn.
         if (shown.isEmpty()) item { Text(com.opentune.ui.theme.tr("No matching songs"), Modifier.padding(24.dp)) }

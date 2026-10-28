@@ -17,7 +17,17 @@ object ExternalStreams {
         /** Picked by hand in Search: played whatever the quality settings say. */
         val picked: Boolean = false,
         /** The add-on's track id and tier, to ask it for a new link to this same file (see [refreshLink]). */
-        val trackId: String? = null, val tier: String? = null)
+        val trackId: String? = null, val tier: String? = null, val codec: String? = null)
+    // The source selected by playback can outlive the short startup lookup cache.
+    @Volatile private var playing: Pair<String, String>? = null
+    fun playing(videoId: String?, key: String?) {
+        playing = if (videoId != null && key != null) videoId to key else null
+    }
+    fun downloadPreference(videoId: String): Rendition? =
+        playing?.takeIf { it.first == videoId }?.let { get(videoId, it.second) }
+            ?.takeIf { it.lossless && addonAllowed(it) }
+            ?: cached(videoId)?.takeIf { it.lossless }
+
     private val renditions = ConcurrentHashMap<String, Rendition>()
     private val pinned = ConcurrentHashMap<String, Pair<String, Rendition>>()
     /**
@@ -239,7 +249,7 @@ object ExternalStreams {
         fun losslessRendition(track: LosslessSource.Track) = Rendition(java.util.UUID.randomUUID().toString(), track.url,
             "${track.provider} · lossless requested", true, now(), provider = track.provider, bits = track.bits, sampleRate = track.sampleRate,
             maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track.addonId, mimeType = track.mimeType,
-            trackId = track.trackId.ifEmpty { null }, tier = track.tier.ifEmpty { null })
+            trackId = track.trackId.ifEmpty { null }, tier = track.tier.ifEmpty { null }, codec = track.codec)
         val tracks = if (allowed(true) && !losslessMissed) LosslessSource.resolveAll(song, duration,
             beforePlayback || AppSettings.playback.value.losslessHiRes, bestAvailable = beforePlayback, report = { line ->
                 synchronized(detail) {
@@ -304,7 +314,7 @@ object ExternalStreams {
             track?.let { "${it.provider} · lossless requested" } ?: "JioSaavn · 320 kbps (lossy)", track != null, now(),
             provider = track?.provider ?: "JioSaavn", bits = track?.bits, sampleRate = track?.sampleRate,
             kbps = if (track == null) 320 else null, maximumSearch = beforePlayback, sessionRevision = com.opentune.data.addons.AddonStore.revision.value, addonId = track?.addonId, mimeType = track?.mimeType,
-            trackId = track?.trackId?.ifEmpty { null }, tier = track?.tier?.ifEmpty { null })
+            trackId = track?.trackId?.ifEmpty { null }, tier = track?.tier?.ifEmpty { null }, codec = track?.codec)
         remember(videoId, rendition)
         // The other verified files of this recording, to fall back on if this one won't load.
         if (track != null) {
@@ -351,7 +361,7 @@ object ExternalStreams {
             provider = stream.provider, bits = stream.bits, sampleRate = stream.sampleRate, kbps = stream.kbps,
             maximumSearch = true, sessionRevision = com.opentune.data.addons.AddonStore.revision.value,
             addonId = stream.addonId, mimeType = stream.mimeType, picked = true,
-            trackId = stream.trackId.ifEmpty { null }, tier = stream.tier.ifEmpty { null })
+            trackId = stream.trackId.ifEmpty { null }, tier = stream.tier.ifEmpty { null }, codec = stream.codec)
         losslessMissUntil.remove(videoId)
         saavnMissUntil.remove(videoId)
         saavnReports.remove(videoId)

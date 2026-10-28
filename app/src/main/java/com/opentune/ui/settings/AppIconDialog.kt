@@ -51,6 +51,7 @@ internal fun selectAppIcon(context: Context, choice: AppIcon) {
 @Composable
 internal fun AppIconDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     var selected by remember { mutableStateOf(AppIcon.selected(context)) }
     var error by remember { mutableStateOf<String?>(null) }
     FloatingDialog(onDismissRequest = onDismiss, title = { Text("App icon") }, text = {
@@ -58,7 +59,7 @@ internal fun AppIconDialog(onDismiss: () -> Unit) {
             Text("Your launcher controls the icon shape. Changes may take a moment to appear.", style = MaterialTheme.typography.bodyMedium)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(AppIcon.entries) { icon ->
-                    val bitmap = remember(icon) { context.getDrawable(icon.resource)!!.toBitmap(192, 192).asImageBitmap() }
+                    val bitmap = remember(icon, resources) { resources.getDrawable(icon.resource, context.theme).toBitmap(192, 192).asImageBitmap() }
                     Column(Modifier.width(104.dp).semantics { this.selected = selected == icon }.clickable(role = Role.RadioButton) {
                         runCatching { selectAppIcon(context, icon) }.onSuccess { selected = icon; error = null }
                             .onFailure { error = "Couldn't change the launcher icon. Try again." }

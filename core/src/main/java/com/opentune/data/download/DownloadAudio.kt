@@ -10,7 +10,15 @@ import java.io.IOException
 /** Use the same container sniffers as playback before marking a download complete. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal object DownloadAudio {
-    fun validate(file: File) {
+    fun validate(file: File, expected: com.opentune.data.addons.AddonStream? = null) {
+        if (expected?.codec == "flac") {
+            val header = ByteArray(42).also { bytes -> java.io.DataInputStream(file.inputStream()).use { it.readFully(bytes) } }
+            val actual = com.opentune.data.lossless.LosslessSource.flacInfo(header)
+                ?: throw IOException("The download did not contain the promised FLAC audio")
+            if ((expected.bits != null && expected.bits != actual.bits) ||
+                (expected.sampleRate != null && expected.sampleRate != actual.sampleRate))
+                throw IOException("The downloaded FLAC quality changed; trying another source")
+        }
         if (file.length() == 0L) throw IOException("The server returned empty audio")
         val extractors = arrayOf(Mp4Extractor(), FragmentedMp4Extractor(), MatroskaExtractor(), androidx.media3.extractor.flac.FlacExtractor(), androidx.media3.extractor.wav.WavExtractor(), androidx.media3.extractor.ogg.OggExtractor())
         try {

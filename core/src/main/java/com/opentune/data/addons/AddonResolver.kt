@@ -31,9 +31,9 @@ object AddonResolver {
         pausedUntil[addon] = now() + maxOf(e.retryAfterSeconds * 1_000, PAUSED_MIN_MS)
         return true
     }
-    fun failed(addon: String, song: String) {
+    fun failed(addon: String, song: String, hold: Boolean = true) {
         if (failures.size > 256) failures.clear()
-        failures["$addon:$song"] = now() + FAILED_HOLD_MS
+        if (hold) failures["$addon:$song"] = now() + FAILED_HOLD_MS
         staleLinks += "$addon:$song"
     }
     fun retry() { failures.clear() }
@@ -62,8 +62,8 @@ object AddonResolver {
     /**
      * Every usable add-on is asked at once; of the verified matches that come
      * back, the best quality wins, and between equals the one higher in the
-     * listener's order. Nothing is cut off for being slow: once one add-on
-     * has a verified match, the others get [GRACE_MS] more and the best so
+     * listener's order. Downloads await all bounded lookups so fallback files are not lost.
+     * For playback, once one add-on has a verified match, the others get [FIRST_GRACE_MS] more and the best so
      * far is returned, while any still working carry on in the background
      * (up to [ADDON_LIMIT_MS], a guard against a hung connection). A later
      * answer of higher quality than the one returned goes to [late], so it
@@ -215,8 +215,8 @@ object AddonResolver {
         var firstMatch = 0L
         // Playing: the first verified file is used at once and the rest follow through [late],
         // so a song never waits on the slower add-ons to start sounding lossless. A download
-        // gives them a moment, as it keeps whichever file it takes.
-        val grace = if (download) GRACE_MS else FIRST_GRACE_MS
+        // waits for every bounded lookup, so a failed host cannot hide a later fallback.
+        val grace = if (download) Long.MAX_VALUE else FIRST_GRACE_MS
         try {
             while (received < addons.size) {
                 val wait = if (firstMatch == 0L) Long.MAX_VALUE else grace - (System.nanoTime() - firstMatch) / 1_000_000
@@ -261,8 +261,6 @@ object AddonResolver {
         return best
     }
 
-    /** How long the other add-ons get once one has a verified match, before the best so far is used, for a download. */
-    private const val GRACE_MS = 2_500L
     /** The same for playing: only enough to take answers that came in together. */
     private const val FIRST_GRACE_MS = 250L
     /** The least an add-on that answered HTTP 429 is left alone for, when it doesn't say. */

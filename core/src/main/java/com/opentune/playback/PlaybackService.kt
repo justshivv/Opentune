@@ -579,6 +579,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        ExternalStreams.playing(null, null)
         (mediaSession?.player as? ExoPlayer)?.takeIf { it.mediaItemCount > 0 }?.let { p ->
             QueueStore.save(QueueStore.Saved((0 until p.mediaItemCount).map { SongRef.of(p.getMediaItemAt(it).toSong()) }, p.currentMediaItemIndex, p.currentPosition))
         }
@@ -1928,6 +1929,7 @@ class PlaybackService : MediaLibraryService() {
         val rendition = if (item != null && key != null) ExternalStreams.get(item.mediaId, key) else null
         // The lookup label can say "lossless requested" long after decoding starts.
         // Stats describe the playing source; codec/quality come from the decoder.
+        ExternalStreams.playing(item?.mediaId, key)
         NerdStats.onExternalSource(rendition?.provider)
         val downloaded = item?.let { com.opentune.data.download.Downloads.entryNow(it.mediaId) }
             ?.takeIf { uri?.scheme == "file" && it.path == uri.path }

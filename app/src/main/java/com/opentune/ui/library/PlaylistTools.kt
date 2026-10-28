@@ -202,22 +202,32 @@ fun AddSongsButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 fun AddSongsSheet(playlistId: String, onDismiss: () -> Unit) {
     val playlists by LibraryStore.playlists.collectAsState()
-    val inList = playlists.firstOrNull { it.id == playlistId }?.songs?.map { it.videoId }?.toSet().orEmpty()
+    val playlist = playlists.firstOrNull { it.id == playlistId }
+    val inList = playlist?.songs?.map { it.videoId }?.toSet().orEmpty()
+    val progress by com.opentune.data.spotify.SpotifyPlaylistWrites.progress.collectAsState()
     val records by History.records.collectAsState()
     val recent = remember(records) { History.recents(records, 20) }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Song>?>(null) }
     var searching by remember { mutableStateOf(false) }
-    LaunchedEffect(query) {
+    var searchError by remember { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableStateOf(0) }
+    LaunchedEffect(query, attempt) {
         val q = query.trim()
+        searchError = null
         if (q.isEmpty()) { results = null; searching = false; return@LaunchedEffect }
         // Wait for a pause in the typing, then ask.
         delay(350)
         searching = true
-        results = runCatching { MusicRepository.search(q, SearchFilter.SONGS) }.getOrDefault(emptyList())
-            .mapNotNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
-            .distinctBy { it.videoId }
-        searching = false
+        try {
+            results = MusicRepository.search(q, SearchFilter.SONGS)
+                .mapNotNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
+                .distinctBy { it.videoId }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            searchError = com.opentune.ui.friendlyError(e)
+        } finally { searching = false }
     }
     FloatingCard(
         onDismiss = onDismiss,
@@ -250,21 +260,30 @@ fun AddSongsSheet(playlistId: String, onDismiss: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             )
-            list.forEach { song -> AddRow(song, song.videoId in inList) { LibraryStore.addToPlaylist(playlistId, song) } }
+            searchError?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(10.dp))
+                androidx.compose.material3.TextButton(onClick = { attempt++ }) { Text("Retry search") }
+            }
+            list.forEach { song ->
+                AddRow(song, song.videoId in inList,
+                    progress[com.opentune.data.spotify.SpotifyPlaylistWrites.SaveKey(playlistId, song.videoId)]) {
+                    LibraryStore.addToPlaylist(playlistId, song)
+                }
+            }
             Spacer(Modifier.height(12.dp))
         }
     }
 }
 
 @Composable
-private fun AddRow(song: Song, added: Boolean, onAdd: () -> Unit) {
+internal fun AddRow(song: Song, added: Boolean, progress: com.opentune.data.spotify.SpotifyPlaylistWrites.SaveProgress? = null, onAdd: () -> Unit) {
     val haptics = rememberHaptics()
     val pop by animateFloatAsState(if (added) 1f else 0f, tween(260), label = "added")
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .clickable(enabled = !added) { haptics.press(); onAdd() }
+            .clickable(enabled = !added && progress?.busy != true) { haptics.press(); onAdd() }
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -272,7 +291,10 @@ private fun AddRow(song: Song, added: Boolean, onAdd: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(song.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(song.artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (added) "Added" else progress?.message ?: song.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (!added && progress?.failed == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = if (progress?.failed == true) 3 else 2, overflow = TextOverflow.Ellipsis)
         }
         Box(
             Modifier
@@ -282,10 +304,12 @@ private fun AddRow(song: Song, added: Boolean, onAdd: () -> Unit) {
                 .background(if (added) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center,
         ) {
-            AnimatedContent(added, transitionSpec = { (fadeIn(tween(180)) + scaleIn(tween(220), 0.6f)) togetherWith fadeOut(tween(120)) }, label = "addIcon") { a ->
+            if (!added && progress?.busy == true) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else AnimatedContent(added, transitionSpec = { (fadeIn(tween(180)) + scaleIn(tween(220), 0.6f)) togetherWith fadeOut(tween(120)) }, label = "addIcon") { a ->
                 Icon(
                     if (a) Icons.Rounded.Check else Icons.Rounded.Add,
-                    if (a) "Added" else "Add to playlist",
+                    if (a) "Added" else if (progress?.failed == true) "Retry adding to playlist" else "Add to playlist",
                     tint = if (a) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(20.dp),
                 )

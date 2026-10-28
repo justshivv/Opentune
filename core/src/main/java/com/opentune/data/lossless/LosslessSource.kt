@@ -8,7 +8,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 /** Lossless validation and ordered, user-configured HTTP sources. */
 object LosslessSource {
     data class Track(val url: String, val provider: String, val bits: Int?, val sampleRate: Int?,
-        val addonId: String, val mimeType: String? = null, val trackId: String = "", val tier: String = "")
+        val addonId: String, val mimeType: String? = null, val trackId: String = "", val tier: String = "", val codec: String? = null)
     internal data class FlacInfo(val bits: Int, val sampleRate: Int, val durationMs: Long)
     /** [late] gets a better match from an add-on that answered after the one returned (see [AddonResolver.resolve]). */
     suspend fun resolve(song: Song, durationMs: Long, preferHiRes: Boolean = false, bestAvailable: Boolean = false,
@@ -23,7 +23,7 @@ object LosslessSource {
         AddonResolver.resolveAll(song, durationMs, bestAvailable = preferHiRes || bestAvailable, report = report,
             late = { late(it.toTrack()) }, skip = skip, settled = settled).map { it.toTrack() }
 
-    private fun com.opentune.data.addons.AddonStream.toTrack() = Track(url, provider, bits, sampleRate, addonId, mimeType, trackId, tier)
+    private fun com.opentune.data.addons.AddonStream.toTrack() = Track(url, provider, bits, sampleRate, addonId, mimeType, trackId, tier, codec)
     internal fun flacInfo(bytes: ByteArray): FlacInfo? {
         if (bytes.size < 42 || String(bytes, 0, 4, Charsets.US_ASCII) != "fLaC") return null
         if (bytes[4].toInt() and 0x7f != 0 || bytes[5] != 0.toByte() || bytes[6] != 0.toByte() || bytes[7] != 34.toByte()) return null
