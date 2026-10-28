@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import com.opentune.ui.browse.playlistSearchResults
 import com.opentune.ui.browse.dismissPlaylistSearch
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
@@ -694,8 +695,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    LaunchedEffect(searching) {
-        if (searching && listState.firstVisibleItemIndex > 0) listState.scrollToItem(0)
+    LaunchedEffect(searching, query) {
+        if (searching) listState.scrollToItem(0)
     }
     val matching = remember(songs, query, order) {
         val found = songs.indices.filter { songs[it].title.contains(query.trim(), true) || songs[it].artist.contains(query.trim(), true) }
@@ -803,7 +804,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         })
     }
     com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
-        com.opentune.ui.browse.CollapsingBar(playlist.name, listState, onBack) {
+        com.opentune.ui.browse.PlaylistSearchHeader(search) {
+        com.opentune.ui.browse.CollapsingBar(playlist.name, listState, onBack, forceCollapsed = searching) {
             Row(Modifier.height(48.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { if (searching) search.close() else search.open = true }) {
                     Icon(if (searching) Icons.Rounded.Close else Icons.Rounded.Search, "Search this list")
@@ -829,9 +831,10 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 }
             }
         }
+        }
     }) {
-    LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item(key = "header") {
+    LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().playlistSearchResults(search)) {
+        if (!searching) item(key = "header") {
             Box {
                 com.opentune.ui.browse.HeaderBackdrop((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(HEADER_ART_PX), Modifier.matchParentSize())
                 Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -847,7 +850,6 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                         onSave = { adding = true }, actionLabel = "Add songs",
                         modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 12.dp))
                     if (status != null && playlist.spotifyId == null) status()
-                    if (search.open) com.opentune.ui.browse.PlaylistSearchField(search, Modifier.padding(bottom = 12.dp))
                 }
             }
         }
@@ -858,7 +860,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             item { tools(Modifier.fillMaxWidth().padding(16.dp)) }
             return@LazyColumn
         }
-        item { tools(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
+        if (!searching) item { tools(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
         // Keyed by the song (and which copy of it), not its place, so a row taken out pops
         // alone and the rows below slide up rather than every row after it being redrawn.
         if (shown.isEmpty()) item { Text(com.opentune.ui.theme.tr("No matching songs"), Modifier.padding(24.dp)) }

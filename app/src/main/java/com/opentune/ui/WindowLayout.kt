@@ -64,8 +64,10 @@ fun appLayout(
     paneCollapsed: Boolean = false,
     wideLayout: Boolean = true,
     sidePlayer: Boolean = true,
+    television: Boolean = false,
 ): AppLayout {
     val width = WidthClass.of(widthDp)
+    if (television) return AppLayout(width, NavChrome.RAIL, if (hasSong) NowPlaying.BAR else NowPlaying.NONE, null)
     if (width == WidthClass.COMPACT || !wideLayout) {
         return AppLayout(width, NavChrome.DOCK, if (hasSong) NowPlaying.DOCK else NowPlaying.NONE, null)
     }

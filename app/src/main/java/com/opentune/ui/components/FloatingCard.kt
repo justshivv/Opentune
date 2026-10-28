@@ -209,7 +209,7 @@ fun FloatingCard(
                 var naturalPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
                 val fullPx = minOf(with(density) { (maxCard * 0.9f).toPx() }, naturalPx)
                 // Start at full height when asked, so the whole menu shows at once; otherwise half.
-                val halfPx = if (startExpanded) fullPx else minOf(with(density) { (maxCard * 0.5f).toPx() }, fullPx)
+                val halfPx = if (startExpanded || com.opentune.ui.tv.LocalIsTv.current) fullPx else minOf(with(density) { (maxCard * 0.5f).toPx() }, fullPx)
                 val range = (fullPx - halfPx).coerceAtLeast(0f)
                 fun settle(velocity: Float) {
                     settling?.cancel()

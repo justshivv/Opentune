@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         if (savedInstanceState == null) receive(intent)
         tv = com.opentune.ui.tv.Tv.isTv(this)
+        if (tv) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         setContent {
             val vm: PlayerViewModel = viewModel()
             val theme by AppSettings.theme.collectAsState()
@@ -82,7 +83,10 @@ class MainActivity : ComponentActivity() {
                         },
                         label = "welcome",
                     ) { welcome ->
-                        if (welcome) WelcomeScreen(onDone = {}) else AppRoot(vm)
+                        val page: @androidx.compose.runtime.Composable () -> Unit = {
+                            if (welcome) WelcomeScreen(onDone = {}) else AppRoot(vm)
+                        }
+                        if (tv) com.opentune.ui.tv.TvRemoteSurface(page) else page()
                     }
                     com.opentune.ui.account.ConfirmPairing()
                     }

@@ -40,4 +40,26 @@ class PlaylistSearchTest {
         compose.onNode(hasSetTextAction()).assertDoesNotExist()
         compose.runOnIdle { assertEquals("", state.query); assertEquals(1, outsideClicks) }
     }
+    @Test fun swipingResultsKeepsSearchPinnedAndQueryIntact() {
+        lateinit var state: PlaylistSearch
+        compose.setContent {
+            MaterialTheme {
+                state = remember { PlaylistSearch().apply { open = true; query = "Song" } }
+                Box(Modifier.fillMaxSize().dismissPlaylistSearch(state)) {
+                    androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().playlistSearchResults(state)) {
+                        items(40) { Text("Song $it", Modifier.fillMaxWidth().height(androidx.compose.ui.unit.Dp(64f))) }
+                    }
+                    PlaylistSearchHeader(state) { Text("Playlist", Modifier.height(androidx.compose.ui.unit.Dp(56f))) }
+                }
+            }
+        }
+        val field = compose.onNode(hasSetTextAction())
+        val before = field.fetchSemanticsNode().boundsInRoot
+        compose.onNode(hasScrollAction()).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        field.assertIsDisplayed()
+        assertEquals(before, field.fetchSemanticsNode().boundsInRoot)
+        compose.runOnIdle { assertTrue(state.open); assertEquals("Song", state.query) }
+    }
+
 }

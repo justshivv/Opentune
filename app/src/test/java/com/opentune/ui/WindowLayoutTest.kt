@@ -89,4 +89,14 @@ class WindowLayoutTest {
         assertEquals(4, gridColumns(1000f))
         assertEquals(2, gridColumns(0f))
     }
+    @Test fun televisionsAlwaysHaveRailAndFullScreenPlayerRegardlessOfPhonePreferences() {
+        for ((w, h) in listOf(640 to 360, 960 to 540, 1280 to 720, 1920 to 1080)) {
+            val layout = appLayout(w, h, true, wideLayout = false, sidePlayer = true, television = true)
+            assertEquals(NavChrome.RAIL, layout.nav)
+            assertEquals(NowPlaying.BAR, layout.nowPlaying)
+            assertFalse(layout.sidePlayer)
+            assertNull(layout.contentMaxWidthDp)
+        }
+    }
+
 }

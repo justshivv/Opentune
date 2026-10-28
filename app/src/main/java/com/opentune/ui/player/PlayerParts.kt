@@ -1144,10 +1144,13 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
         volume = (volume + step).coerceIn(0f, 1f)
         commit()
     }
+    var focused by remember { mutableStateOf(false) }
+    val focusInk = MaterialTheme.colorScheme.primary
+    val television = com.opentune.ui.tv.LocalIsTv.current
     val step = if (receiver != null) 0.05f else 1f / max
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.AutoMirrored.Rounded.VolumeDown, "Volume down", tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp).clickable { adjust(-step) })
+            modifier = Modifier.size(if (television) 48.dp else 20.dp).clickable { adjust(-step) })
         val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
         val fill = MaterialTheme.colorScheme.onSurface
         fun preview(x: Float, width: Int) {
@@ -1159,7 +1162,18 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
             Modifier
                 .weight(1f)
                 .padding(horizontal = 10.dp)
-                .height(28.dp)
+                .height(if (television) 48.dp else 28.dp)
+                .onFocusChanged { focused = it.isFocused }
+                .onKeyEvent { e ->
+                    when (e.key) {
+                        Key.DirectionLeft, Key.DirectionRight -> {
+                            if (e.type == KeyEventType.KeyDown) adjust(if (e.key == Key.DirectionRight) step else -step)
+                            true
+                        }
+                        else -> false
+                    }
+                }
+                .focusable()
                 .semantics {
                     contentDescription = receiver?.let { "${it.name} volume" } ?: "Media volume"
                     progressBarRangeInfo = ProgressBarRangeInfo(volume, 0f..1f)
@@ -1177,14 +1191,15 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
                     }
                 },
         ) {
-            val h = 4.dp.toPx()
+            val h = (if (focused) 8.dp else 4.dp).toPx()
             val y = (size.height - h) / 2
             val f = volume.coerceIn(0f, 1f)
             drawRoundRect(track, Offset(0f, y), Size(size.width, h), CornerRadius(h / 2))
+            if (focused) drawRoundRect(focusInk, Offset(0f, y - 3.dp.toPx()), Size(size.width, h + 6.dp.toPx()), CornerRadius(h), style = Stroke(2.dp.toPx()))
             drawRoundRect(fill, Offset(0f, y), Size(size.width * f, h), CornerRadius(h / 2))
         }
         Icon(Icons.AutoMirrored.Rounded.VolumeUp, "Volume up", tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp).clickable { adjust(step) })
+            modifier = Modifier.size(if (television) 48.dp else 20.dp).clickable { adjust(step) })
     }
 }
 

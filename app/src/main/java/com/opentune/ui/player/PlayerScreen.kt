@@ -358,8 +358,10 @@ fun PlayerLayout(
     var touchedAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var controlsAway by remember { mutableStateOf(false) }
     var seenTouch by remember { mutableLongStateOf(touchedAt) }
-    val focusable = state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
+    val television = com.opentune.ui.tv.LocalIsTv.current
+    val focusable = !television && state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
         ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
+    androidx.activity.compose.BackHandler(enabled = television && pane != Pane.COVER) { paneName = Pane.COVER.name }
     val sheetOpen = showMenu || showRemix || showSleep || showCast || showOffset || showLyricsSource || showDetails || showSignal
     LaunchedEffect(touchedAt, focusable, sheetOpen) {
         // A sheet opening or closing leaves the controls as they are, the tap that opened
@@ -429,7 +431,7 @@ fun PlayerLayout(
     val windowHeight = with(LocalDensity.current) { androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height.toDp() }
     val roomy = !docked || windowHeight >= DOCKED_ROOMY_HEIGHT
     // On its side the player has its own layout.
-    val landscape = !docked && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val landscape = !docked && (television || LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE)
     // Full-screen cover only fits the layouts built around a plain square cover.
     val fullCover = !landscape && !amoled && (apple || state.ui.fullScreenCover) && pane == Pane.COVER && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     // Where the cover area ends, measured from the top of the player, so a

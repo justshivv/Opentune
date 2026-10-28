@@ -139,6 +139,7 @@ fun QueuePane(
         }
     }
     val list = rememberLazyListState()
+    val television = com.opentune.ui.tv.LocalIsTv.current
     val canDrag = !shuffle
 
     LazyColumn(modifier, state = list, contentPadding = PaddingValues(bottom = 12.dp)) {
@@ -180,7 +181,7 @@ fun QueuePane(
                     }
                     .then(if (isDragged) Modifier else Modifier.animateItem())
                     .then(
-                        if (!canDrag) Modifier else Modifier.pointerInput(index) {
+                        if (!canDrag || television) Modifier else Modifier.pointerInput(index) {
                             detectDragGesturesAfterLongPress(
                                 onDragStart = {
                                     haptics.press()
@@ -215,7 +216,13 @@ fun QueuePane(
                         },
                     ),
             ) {
-                QueueRow(song, isCurrent = false, isPlaying = false, handle = canDrag, onClick = { onPlayIndex(index) }, onRemove = { onRemoveIndex(index) })
+                Column {
+                    QueueRow(song, isCurrent = false, isPlaying = false, handle = canDrag && !com.opentune.ui.tv.LocalIsTv.current, onClick = { onPlayIndex(index) }, onRemove = { onRemoveIndex(index) })
+                    if (com.opentune.ui.tv.LocalIsTv.current && canDrag) Row {
+                        androidx.compose.material3.TextButton(onClick = { onMove(index, order[pos - 1]) }, enabled = pos > 0) { Text("Move up") }
+                        androidx.compose.material3.TextButton(onClick = { onMove(index, order[pos + 1]) }, enabled = pos < order.lastIndex) { Text("Move down") }
+                    }
+                }
             }
             if (pos == order.lastIndex) Spacer(Modifier.height(8.dp))
         }

@@ -1,8 +1,5 @@
 package com.opentune.ui.browse
 
-import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.foundation.gestures.animateScrollBy
 import com.opentune.ui.components.GlassPage
 import com.opentune.ui.components.LocalHazeState
 import androidx.compose.ui.layout.layout
@@ -126,9 +123,11 @@ internal fun CollapsingBar(
     title: String,
     listState: LazyListState,
     onBack: () -> Unit,
+    forceCollapsed: Boolean = false,
     actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
 ) {
-    val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    val scrolled by remember(listState) { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    val collapsed = forceCollapsed || scrolled
     // Once the header scrolls away the bar frosts in: the list under it is
     // blurred and washed with the page colour, and the frost thins out over
     // a short tail below the bar instead of stopping at a hard line.
@@ -314,14 +313,15 @@ internal fun listMeta(kind: String, songs: List<com.opentune.data.model.Song>): 
 @Composable
 internal fun PlaylistHeading(title: String, subtitle: String, thumbnail: String?, songs: List<com.opentune.data.model.Song>,
     isAlbum: Boolean = false, cover: (@Composable () -> Unit)? = null) {
+    val coverSize = if (com.opentune.ui.tv.LocalIsTv.current) Modifier.size(220.dp) else Modifier.fillMaxWidth(0.76f).aspectRatio(1f)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         if (cover == null) Artwork(
             thumbnail.artworkAt(HEADER_ART_PX),
-            Modifier.fillMaxWidth(0.76f).aspectRatio(1f).shadow(24.dp, MaterialTheme.shapes.large),
+            coverSize.shadow(24.dp, MaterialTheme.shapes.large),
             shape = MaterialTheme.shapes.large,
             placeholder = Icons.Filled.Album,
         )
-        else Box(Modifier.fillMaxWidth(0.76f).aspectRatio(1f).shadow(24.dp, MaterialTheme.shapes.large)) { cover() }
+        else Box(coverSize.shadow(24.dp, MaterialTheme.shapes.large)) { cover() }
         Text(
             title,
             style = MaterialTheme.typography.headlineSmall,
@@ -474,8 +474,8 @@ fun CollectionScreen(
     val search = remember(browseId) { PlaylistSearch() }
     val searching = search.open
     val query = search.query
-    LaunchedEffect(searching) {
-        if (searching && listState.firstVisibleItemIndex > 0) listState.scrollToItem(0)
+    LaunchedEffect(searching, query) {
+        if (searching) listState.scrollToItem(0)
     }
     var order by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ListOrder.DEFAULT) }
     var sortOpen by remember { mutableStateOf(false) }
@@ -500,7 +500,8 @@ fun CollectionScreen(
     if (moreOpen && loaded != null) ListMoreSheet(loaded, isAlbum, actions, onDismiss = { moreOpen = false })
 
     GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
-        CollapsingBar(title, listState, onBack) {
+        PlaylistSearchHeader(search) {
+        CollapsingBar(title, listState, onBack, forceCollapsed = searching) {
             // Search, order and more in one glass pill.
             Row(
                 Modifier.height(48.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 4.dp),
@@ -524,13 +525,14 @@ fun CollectionScreen(
                 androidx.compose.material3.IconButton(onClick = { moreOpen = true }, enabled = loaded != null) { Icon(Icons.Filled.MoreHoriz, "More") }
             }
         }
+        }
     }) {
         when (val s = state) {
             is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
             else -> {
                 val c = (s as? UiState.Success)?.data
-                LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-                    item(key = "header") {
+                LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().playlistSearchResults(search)) {
+                    if (!searching) item(key = "header") {
                         Box {
                             HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize())
                             Column(
@@ -575,23 +577,7 @@ fun CollectionScreen(
                                         onPrivacy = { own.choose() },
                                     )
                                 }
-                                if (searching) Column {
-                                    // Opened, the field rises to just under the bar, clear of the
-                                    // keyboard that comes up with it, instead of staying down under the cover.
-                                    val density = androidx.compose.ui.platform.LocalDensity.current
-                                    val topInset = WindowInsets.statusBars.getTop(density)
-                                    var fieldY by remember { mutableStateOf<Float?>(null) }
-                                    LaunchedEffect(fieldY != null, searching) {
-                                        if (!searching) return@LaunchedEffect
-                                        val y = fieldY ?: return@LaunchedEffect
-                                        val below = topInset + with(density) { SEARCH_FIELD_TOP.toPx() }
-                                        listState.animateScrollBy(y - below)
-                                    }
-                                    PlaylistSearchField(
-                                        search,
-                                        Modifier.padding(bottom = 12.dp).onGloballyPositioned { if (fieldY == null) fieldY = it.positionInRoot().y },
-                                    )
-                                }
+
                             }
                         }
                     }
@@ -623,15 +609,9 @@ fun CollectionScreen(
                             )
                         }
                     }
-                    // Room to scroll the search field up clear of the keyboard, however short the list.
-                    if (searching) item(key = "search-room") {
-                        Spacer(Modifier.height(androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp))
-                    }
+
                 }
             }
         }
     }
 }
-
-/** How far below the status bar an opened list search sits: just under the top bar. */
-private val SEARCH_FIELD_TOP = 76.dp

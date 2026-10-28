@@ -118,6 +118,7 @@ fun OpenTuneTheme(
 @Composable
 private fun TvRipples(content: @Composable () -> Unit) {
     CompositionLocalProvider(
+        androidx.compose.foundation.LocalIndication provides com.opentune.ui.components.FocusRing(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
         androidx.compose.material3.LocalRippleConfiguration provides androidx.compose.material3.RippleConfiguration(
             rippleAlpha = androidx.compose.material.ripple.RippleAlpha(draggedAlpha = 0.16f, focusedAlpha = 0.32f, hoveredAlpha = 0.1f, pressedAlpha = 0.24f),
         ),
