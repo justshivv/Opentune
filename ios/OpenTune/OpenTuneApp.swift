@@ -20,6 +20,7 @@ struct OpenTuneApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .modifier(AppReadability())
                 .environmentObject(library)
                 .environmentObject(player)
                 .preferredColorScheme(.dark)

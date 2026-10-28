@@ -994,7 +994,7 @@ private fun settingsSections(
                 },
                 Entry("App icon", "launcher icon design glass pearl midnight rose ocean") {
                     NavRow("App icon", { appIconDialog = true }, summary = "Choose the OpenTune icon on your home screen", icon = Icons.Rounded.Palette)
-                }
+                },
                 Entry("Fonts & readability", "font typeface text weight bold thin ttf otf import custom") {
                     NavRow("Fonts & readability", { fontDialog = true }, summary = "Built-in fonts, text weight and your own font file", icon = Icons.Rounded.TextFields, value = theme.font.label)
                 },

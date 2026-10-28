@@ -7,6 +7,14 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.lightColorScheme
+import com.opentune.data.settings.AppSettings
+import com.opentune.data.settings.AppFont
+import com.opentune.data.settings.ThemeMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -22,7 +30,18 @@ import androidx.compose.ui.unit.sp
  */
 @Composable
 fun DesktopTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = Scheme, typography = Type, shapes = AppShapes, content = content)
+    val settings by AppSettings.theme.collectAsState()
+    val dark = when (settings.mode) { ThemeMode.DARK -> true; ThemeMode.LIGHT -> false; ThemeMode.SYSTEM -> isSystemInDarkTheme() }
+    val colors = if (dark) { if (settings.pureBlack) Scheme else Scheme.copy(background = Color(0xff17171b), surface = Color(0xff17171b)) }
+        else lightColorScheme(primary = Color(0xff904a44), primaryContainer = Color(0xffffdad6), secondary = Color(0xff775652))
+    val family = when (settings.font) {
+        AppFont.OUTFIT -> Outfit
+        AppFont.SERIF -> FontFamily.Serif
+        AppFont.MONO -> FontFamily.Monospace
+        else -> FontFamily.SansSerif
+    }
+    val type = remember(family, settings.textWeight) { readableType(family, settings.textWeight.minimum) }
+    MaterialTheme(colorScheme = colors, typography = type, shapes = AppShapes, content = content)
 }
 
 /**
@@ -111,3 +130,14 @@ private val AppShapes = Shapes(
     large = RoundedCornerShape(24.dp),
     extraLarge = RoundedCornerShape(32.dp),
 )
+
+private fun readableType(family: FontFamily, minimum: Int): Typography {
+    fun TextStyle.readable() = copy(fontFamily = family, fontWeight = FontWeight(maxOf(fontWeight?.weight ?: 400, minimum)))
+    return Typography(
+        displayLarge = Type.displayLarge.readable(), displayMedium = Type.displayMedium.readable(), displaySmall = Type.displaySmall.readable(),
+        headlineLarge = Type.headlineLarge.readable(), headlineMedium = Type.headlineMedium.readable(), headlineSmall = Type.headlineSmall.readable(),
+        titleLarge = Type.titleLarge.readable(), titleMedium = Type.titleMedium.readable(), titleSmall = Type.titleSmall.readable(),
+        bodyLarge = Type.bodyLarge.readable(), bodyMedium = Type.bodyMedium.readable(), bodySmall = Type.bodySmall.readable(),
+        labelLarge = Type.labelLarge.readable(), labelMedium = Type.labelMedium.readable(), labelSmall = Type.labelSmall.readable(),
+    )
+}

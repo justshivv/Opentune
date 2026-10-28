@@ -62,6 +62,7 @@ internal fun SettingsPage() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 24.dp, bottom = LocalPageBottom.current)) {
         PageTitle("Settings")
         Column(Modifier.widthIn(max = 760.dp).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            AppearanceSection()
             PlaybackSection()
             EqualizerSection()
             LyricsSection()
@@ -269,5 +270,38 @@ private fun ServerSection() {
                 },
                 enabled = !busy && address.isNotBlank() && user.isNotBlank() && password.isNotEmpty(),
         ) { Text(if (busy) "Connecting…" else "Connect") }
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun AppearanceSection() {
+    val theme by AppSettings.theme.collectAsState()
+    Section("Appearance") {
+        Text("Theme")
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.opentune.data.settings.ThemeMode.entries.forEach { mode ->
+                FilterChip(theme.mode == mode, { AppSettings.updateTheme { it.copy(mode = mode) } }, label = { Text(mode.label) })
+            }
+        }
+        SwitchRow("Pure black", "Black surfaces in dark mode", theme.pureBlack) { on -> AppSettings.updateTheme { it.copy(pureBlack = on) } }
+        Text("Font")
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.opentune.data.settings.AppFont.entries.filter { it != com.opentune.data.settings.AppFont.CUSTOM }.forEach { font ->
+                FilterChip(theme.font == font, { AppSettings.updateTheme { it.copy(font = font) } }, label = { Text(font.label) })
+            }
+        }
+        Text("Text weight")
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.opentune.data.settings.TextWeight.entries.forEach { weight ->
+                FilterChip(theme.textWeight == weight, { AppSettings.updateTheme { it.copy(textWeight = weight) } }, label = { Text(weight.label) })
+            }
+        }
+        Text("Player background")
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(com.opentune.data.settings.PlayerBackground.MESH, com.opentune.data.settings.PlayerBackground.GRADIENT, com.opentune.data.settings.PlayerBackground.AMOLED).forEach { bg ->
+                FilterChip(theme.playerBackground == bg, { AppSettings.updateTheme { it.copy(playerBackground = bg) } }, label = { Text(bg.label) })
+            }
+        }
     }
 }

@@ -194,6 +194,9 @@ struct LibraryView: View {
         }
         .background(Theme.background)
         .navigationTitle("Library")
+        .toolbar { ToolbarItem(placement: .navigationBarTrailing) {
+            NavigationLink { AppearanceView() } label: { Image(systemName: "gearshape").accessibilityLabel("Appearance settings") }
+        } }
         .confirmationDialog("Clear listening history?", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Clear", role: .destructive) { library.clearHistory() }
         }

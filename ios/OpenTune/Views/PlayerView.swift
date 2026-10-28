@@ -9,6 +9,9 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var pane = Pane.cover
     @State private var scrub: Double?
+    @AppStorage("player.background") private var background = "artwork"
+    @AppStorage("player.lyricsPreview") private var lyricsPreview = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum Pane { case cover, lyrics, queue }
 
@@ -27,23 +30,39 @@ struct PlayerView: View {
                 .frame(maxHeight: .infinity)
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 titleRow
+                if lyricsPreview && pane == .cover, case let .synced(lines, _)? = player.lyrics {
+                    let at = lines.activeIndex(Int64(player.position * 1000))
+                    if lines.indices.contains(at) {
+                        Button { pane = .lyrics } label: {
+                            Text(lines[at].text).font(.subheadline.weight(.semibold)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                        }.buttonStyle(.plain).accessibilityLabel("Open lyrics: " + lines[at].text)
+                    }
+                }
                 seekBar
                 controls
                 bottomBar
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 12)
-            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: pane)
+            .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 1), value: pane)
         }
         .preferredColorScheme(.dark)
     }
 
     private var backdrop: some View {
         ZStack {
-            Theme.background
-            Artwork(url: player.current?.thumbnailUrl, size: Art.card, corner: 0)
-                .scaleEffect(1.6).blur(radius: 70).opacity(0.6)
-            LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+            if background == "amoled" {
+                Color.black
+            } else {
+                Theme.background
+                if background == "artwork" {
+                    Artwork(url: player.current?.thumbnailUrl, size: Art.card, corner: 0)
+                        .scaleEffect(1.6).blur(radius: 70).opacity(0.6)
+                } else {
+                    LinearGradient(colors: [Theme.accent.opacity(0.3), Theme.background], startPoint: .top, endPoint: .bottom)
+                }
+                LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+            }
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.6), value: player.current?.videoId)

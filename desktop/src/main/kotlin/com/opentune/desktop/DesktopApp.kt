@@ -80,6 +80,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -445,10 +446,17 @@ private fun MiniPlayer(song: Song, onOpen: () -> Unit) {
 @Composable
 private fun NowPlaying(song: Song, onClose: () -> Unit) {
     var showLyrics by remember { mutableStateOf(true) }
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).clickable(enabled = false) {}) {
-        // The cover, faint, behind everything.
-        AsyncImage(Subsonic.resolveCover(song.thumbnailUrl), null, contentScale = ContentScale.Crop, alpha = 0.18f, modifier = Modifier.fillMaxSize())
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.4f), Color.Black))))
+    val theme by AppSettings.theme.collectAsState()
+    val amoled = theme.playerBackground == com.opentune.data.settings.PlayerBackground.AMOLED
+    val gradient = theme.playerBackground == com.opentune.data.settings.PlayerBackground.GRADIENT
+    val bg = if (amoled) Color.Black else Color(0xff17171b)
+    MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme()) {
+    Box(Modifier.fillMaxSize().background(bg).clickable(enabled = false) {}) {
+        if (!amoled && !gradient) {
+            AsyncImage(Subsonic.resolveCover(song.thumbnailUrl), null, contentScale = ContentScale.Crop, alpha = 0.18f, modifier = Modifier.fillMaxSize().blur(48.dp))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(bg.copy(alpha = 0.4f), bg))))
+        }
+        if (gradient) Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(MaterialTheme.colorScheme.primaryContainer, bg))))
         IconButton(onClick = onClose, modifier = Modifier.padding(16.dp).align(Alignment.TopStart)) { Icon(Icons.Rounded.ExpandMore, "Close", Modifier.size(30.dp)) }
         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 56.dp)) {
             val beside = maxWidth >= 900.dp
@@ -478,6 +486,7 @@ private fun NowPlaying(song: Song, onClose: () -> Unit) {
                 }
             }
         }
+    }
     }
 }
 
