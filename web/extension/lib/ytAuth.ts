@@ -53,20 +53,48 @@ async function savePrefs(change: Partial<Prefs>): Promise<void> {
 
 // ---- Signing --------------------------------------------------------------------
 
-async function signingSecret(): Promise<string | null> {
+/** The signing cookies the browser holds, by name. */
+async function signingCookies(): Promise<Map<string, string>> {
+  const found = new Map<string, string>();
   for (const name of SIGNING_COOKIES) {
     const cookie = await browser.cookies.get({ url: `${MUSIC_ORIGIN}/`, name }).catch(() => null);
-    if (cookie?.value) return cookie.value;
+    if (cookie?.value) found.set(name, cookie.value);
   }
-  return null;
+  return found;
 }
 
-/** `SAPISIDHASH <seconds>_<sha1(seconds + " " + secret + " " + origin)>`, as DesktopYouTubeAuth.sapisidHash. */
-async function sapisidHash(secret: string, origin: string): Promise<string> {
+async function signingSecret(): Promise<string | null> {
+  return (await signingCookies()).values().next().value ?? null;
+}
+
+async function sha1Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * The Authorization value YouTube's own web client sends: one hash per
+ * signing cookie, `<scheme> <seconds>_<sha1(seconds + " " + cookie + " " + origin)>`.
+ *
+ * All three matter. Where the browser treats the extension's request as
+ * cross-site (some Chromium builds and privacy settings), only the
+ * SameSite=None cookies go with it, `__Secure-3PSID` and `__Secure-3PAPISID`,
+ * and Google checks the request against SAPISID3PHASH. A lone SAPISIDHASH
+ * then has no SAPISID cookie to match, and YouTube answers as signed out.
+ */
+async function sapisidHashes(cookies: Map<string, string>, origin: string): Promise<string> {
   const timestamp = Math.floor(Date.now() / 1000);
-  const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(`${timestamp} ${secret} ${origin}`));
-  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  return `SAPISIDHASH ${timestamp}_${hex}`;
+  const first = cookies.get('SAPISID') ?? cookies.get('__Secure-3PAPISID');
+  const schemes: [string, string | undefined][] = [
+    ['SAPISIDHASH', first],
+    ['SAPISID1PHASH', cookies.get('__Secure-1PAPISID')],
+    ['SAPISID3PHASH', cookies.get('__Secure-3PAPISID')],
+  ];
+  const parts: string[] = [];
+  for (const [scheme, secret] of schemes) {
+    if (secret) parts.push(`${scheme} ${timestamp}_${await sha1Hex(`${timestamp} ${secret} ${origin}`)}`);
+  }
+  return parts.join(' ');
 }
 
 /** Who a signed request acts as. */
@@ -93,8 +121,8 @@ export async function signedFetch(
   identity: Identity,
   signAs?: string,
 ): Promise<Response> {
-  const secret = await signingSecret();
-  if (!secret) throw new SignedOutError('The browser is not signed in to YouTube.');
+  const cookies = await signingCookies();
+  if (!cookies.size) throw new SignedOutError('The browser is not signed in to YouTube.');
   ruleReady ??= installExtensionFetchRule().catch((error: unknown) => {
     ruleReady = null;
     throw error;
@@ -103,7 +131,7 @@ export async function signedFetch(
 
   const origin = signAs ?? new URL(url).origin;
   const headers = new Headers(init.headers);
-  headers.set('Authorization', await sapisidHash(secret, origin));
+  headers.set('Authorization', await sapisidHashes(cookies, origin));
   headers.set('X-Goog-AuthUser', identity.authUser);
   headers.set('X-Origin', origin);
   if (identity.pageId) headers.set('X-Goog-PageId', identity.pageId);
@@ -268,24 +296,31 @@ async function readLogin(authUser: string): Promise<{ account: StoredAccount | n
 /**
  * The login YouTube Music itself is using in this browser: its page's
  * `SESSION_INDEX` (ytcfg). That's the right default rather than index 0,
- * which may be a login that has expired.
+ * which may be a login that has expired. The same page says whether YouTube
+ * saw a session on the request at all (`LOGGED_IN`).
  */
-async function webSessionIndex(): Promise<string | null> {
+async function webSession(): Promise<{ index: string | null; loggedIn: boolean | null }> {
   try {
     const response = await signedFetch(`${MUSIC_ORIGIN}/`, { headers: { Accept: 'text/html' } }, { authUser: '0', pageId: null });
     const html = await response.text();
-    return /"SESSION_INDEX":"?(\d+)/.exec(html)?.[1] ?? null;
+    const loggedIn = /"LOGGED_IN":(true|false)/.exec(html)?.[1];
+    return { index: /"SESSION_INDEX":"?(\d+)/.exec(html)?.[1] ?? null, loggedIn: loggedIn ? loggedIn === 'true' : null };
   } catch {
-    return null;
+    return { index: null, loggedIn: null };
   }
 }
 
+/** Said when YouTube's own page didn't see the session either: the cookies never reached it. */
+const COOKIES_NOT_SENT =
+  "the browser didn't send your YouTube session with the extension's requests. Open music.youtube.com in a tab, check you're signed in there, then retry. If it still fails, allow cookies for youtube.com in the browser's privacy settings (Brave Shields, Edge tracking prevention)";
+
 async function readAccounts(): Promise<{ list: StoredAccount[]; webIndex: string | null }> {
   problem = null;
-  const [results, webIndex] = await Promise.all([
+  const [results, web] = await Promise.all([
     Promise.all(Array.from({ length: MAX_LOGINS }, (_, i) => readLogin(String(i)))),
-    webSessionIndex(),
+    webSession(),
   ]);
+  const webIndex = web.index;
   const list: StoredAccount[] = [];
   const seen = new Set<string>();
   for (const { account } of results) {
@@ -296,8 +331,9 @@ async function readAccounts(): Promise<{ list: StoredAccount[]; webIndex: string
     list.push(account);
   }
   if (!list.length) {
-    problem = results[Number(webIndex ?? 0)]?.why ?? results[0]?.why ?? 'no signed-in Google account found';
-    console.warn(`OpenTune: no YouTube account found: ${problem}`);
+    const why = results[Number(webIndex ?? 0)]?.why ?? results[0]?.why ?? 'no signed-in Google account found';
+    problem = web.loggedIn === false ? COOKIES_NOT_SENT : why;
+    console.warn(`OpenTune: no YouTube account found: ${why}`);
   }
   return { list, webIndex };
 }

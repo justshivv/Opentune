@@ -9,7 +9,7 @@ Prompt §5.3. There's no login screen: BitChord uses the YouTube session the bro
 3. The extension (`extension/lib/ytFetch.ts`, `ytAuth.ts`):
    - accepts only `https://(music|www).youtube.com/youtubei/v1/*`;
    - drops any identity headers the page sent;
-   - adds `Authorization: SAPISIDHASH <ts>_<sha1(ts SAPISID origin)>` (as `DesktopYouTubeAuth.kt`), `X-Goog-AuthUser`, `X-Goog-PageId` for a brand channel and `X-Origin`. That single hash is enough: in the user's Chrome it got the same signed-in answers as `SAPISIDHASH … SAPISID1PHASH … SAPISID3PHASH …`;
+   - adds `Authorization: SAPISIDHASH … SAPISID1PHASH … SAPISID3PHASH …`, one `<ts>_<sha1(ts cookie origin)>` per signing cookie the jar holds, as YouTube's own web client does, plus `X-Goog-AuthUser`, `X-Goog-PageId` for a brand channel and `X-Origin`. In the developer's Chrome the lone SAPISIDHASH was enough, because Chrome sent the first-party cookies with the worker's requests. A user's browser that treated those requests as cross-site sent only the SameSite=None cookies (`__Secure-3PSID`, `__Secure-3PAPISID`), and every `account_menu` came back `logged_in=0`. SAPISID3PHASH is what Google checks those cookies against;
    - fetches with `credentials: 'include'`, so the browser attaches the cookies itself. A session rule for the extension's own requests (tabId −1) sets the YouTube Origin and Referer the signature was computed for.
 4. `onBehalfOfUser` isn't sent. The desktop app found a stale `dataSyncId` answered 400 on every request, and `X-Goog-AuthUser` plus `X-Goog-PageId` already pick the identity.
 
@@ -53,7 +53,7 @@ When the identity changes, the page resets every `['music', …]` query and the 
   - the like state (`LIKE` for Liked Music tracks). Library "Songs" are saved songs, not liked ones, so they read `INDIFFERENT`;
   - the add-to-playlist list. YouTube's list has no "already contains" flag, and its Liked Music entry is a like, so it's filtered out;
   - an album's in-library state.
-- **Dropped:** two changes made while chasing the expired-login bug did nothing and were reverted: the three-hash signature, and setting the Cookie header from the jar through a session rule. Chrome attaches the cookies to the worker's `credentials: 'include'` requests itself.
-- **When the account can't be read**, the extension says why: an HTTP status, or YouTube's own `logged_in=0` from `responseContext.serviceTrackingParams`. The popup shows it, the Extension page too, and the sidebar shows a Retry pill.
+- **Dropped:** setting the Cookie header from the jar through a session rule did nothing for the expired-login bug and was reverted. Chrome attaches the cookies to the worker's `credentials: 'include'` requests itself. The three-hash signature was dropped then too, and is back since 0.1.3 for the cross-site case above.
+- **When the account can't be read**, the extension says why: an HTTP status, or YouTube's own `logged_in=0` from `responseContext.serviceTrackingParams`. When music.youtube.com's own page (`LOGGED_IN` in ytcfg) didn't see a session either, the cookies never reached YouTube, and it says so with what to try. The popup shows it, the Extension page too, and the sidebar shows a Retry pill.
 - **Still to check signed in:** the writes (Favorite, Add to Library, Add to Playlist), not tried because they change the account; channel switching, and age-restricted playback (and whether the signed web clients' streams outlast ~60 s, given the WebPO problem in `youtube-playback.md`).
 
