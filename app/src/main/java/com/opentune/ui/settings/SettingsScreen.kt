@@ -122,6 +122,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -234,6 +235,16 @@ fun SettingsScreen(
     val placed = remember(sections) { place(sections) }
     val open = SETTINGS_CATEGORIES.firstOrNull { it.key == openKey }
     androidx.activity.compose.BackHandler(enabled = open != null) { openKey = null }
+    // Back from a page on a TV: the remote's focus goes back to the row that opened it,
+    // not to wherever it fell when the page went (the rail's first button).
+    val tv = com.opentune.ui.tv.LocalIsTv.current
+    var cameFrom by rememberSaveable { mutableStateOf<String?>(null) }
+    val returnTo = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(open) {
+        if (!tv || open != null || cameFrom == null) return@LaunchedEffect
+        repeat(3) { androidx.compose.runtime.withFrameNanos { } }
+        runCatching { returnTo.requestFocus() }
+    }
     val q = query.trim()
     val languageContext = LocalContext.current
     // Kept out here, so coming back from a page finds the main list where it was left.
@@ -330,14 +341,16 @@ fun SettingsScreen(
                                     }
                                     // The account row wears the signed-in Google photo in place of the icon.
                                     val avatar = account?.thumbnailUrl?.takeIf { c.key == "account" && signedIn }
+                                    androidx.compose.foundation.layout.Box(if (c.key == cameFrom) Modifier.focusRequester(returnTo) else Modifier) {
                                     NavRow(
                                         c.title,
-                                        { openKey = c.key },
+                                        { cameFrom = c.key; openKey = c.key },
                                         summary = summary,
                                         icon = if (avatar == null) c.icon else null,
                                         dot = c.key == "about" && updatePending,
                                         leading = avatar?.let { url -> { Artwork(url, Modifier.size(28.dp), CircleShape) } },
                                     )
+                                    }
                                 }
                             }
                         }

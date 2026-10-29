@@ -125,8 +125,10 @@ class MainActivity : ComponentActivity() {
      * or the fastest one when [hz] is 0. Without it the system decides.
      */
     private fun preferRefreshRate(on: Boolean, hz: Int) {
+        // The language-wrapped context can come without a display of its own: then the window's.
         @Suppress("DEPRECATION")
-        val display = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) display else windowManager.defaultDisplay) ?: return
+        val display = runCatching { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) display else windowManager.defaultDisplay }.getOrNull()
+            ?: runCatching { window.decorView.display ?: windowManager.defaultDisplay }.getOrNull() ?: return
         val now = display.mode
         val modes = display.supportedModes
             .filter { it.physicalWidth == now.physicalWidth && it.physicalHeight == now.physicalHeight }

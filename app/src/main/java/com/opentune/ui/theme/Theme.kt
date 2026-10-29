@@ -116,11 +116,14 @@ fun OpenTuneTheme(
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun TvRipples(content: @Composable () -> Unit) {
+internal fun TvRipples(content: @Composable () -> Unit) {
     CompositionLocalProvider(
         androidx.compose.foundation.LocalIndication provides com.opentune.ui.components.FocusRing(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+        // Material's own buttons draw focus as a tint, not the ring: in the accent, and strong
+        // enough to find from across a room. The faint grey was easy to lose on a light page.
         androidx.compose.material3.LocalRippleConfiguration provides androidx.compose.material3.RippleConfiguration(
-            rippleAlpha = androidx.compose.material.ripple.RippleAlpha(draggedAlpha = 0.16f, focusedAlpha = 0.32f, hoveredAlpha = 0.1f, pressedAlpha = 0.24f),
+            color = MaterialTheme.colorScheme.primary,
+            rippleAlpha = androidx.compose.material.ripple.RippleAlpha(draggedAlpha = 0.16f, focusedAlpha = 0.42f, hoveredAlpha = 0.1f, pressedAlpha = 0.24f),
         ),
         content = content,
     )
@@ -150,8 +153,10 @@ fun PlayerTheme(seed: Color?, settings: ThemeSettings, neutral: Boolean = false,
         colorScheme = if (!active) MaterialTheme.colorScheme else if (amoled) playerScheme.toPureBlack() else playerScheme.animated(),
         typography = rememberAppTypography(settings),
         shapes = AppShapes,
-        content = content,
-    )
+    ) {
+        // MaterialTheme puts the phone ripple back: on a TV the player keeps the focus ring too.
+        if (com.opentune.ui.tv.LocalIsTv.current) TvRipples(content) else content()
+    }
 }
 
 /**

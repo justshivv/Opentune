@@ -190,9 +190,15 @@ class PlayerConnection(private val context: Context) {
 
     suspend fun connect() {
         val sessionToken = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val newController = MediaController.Builder(context, sessionToken)
-            .buildAsync()
-            .await()
+        // A session that turns the app away (or can't be started) is logged, not a crash.
+        val newController = try {
+            MediaController.Builder(context, sessionToken).buildAsync().await()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            com.opentune.data.DebugLog.w("PlayerConnection", "Couldn't connect to the player", e)
+            return
+        }
         newController.addListener(listener)
         controller = newController
         refresh(newController)

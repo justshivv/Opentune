@@ -730,7 +730,8 @@ fun Modifier.menuClickable(onClick: () -> Unit, onLongClick: (() -> Unit)?): Mod
         }
     }
     return this
-        .indication(shown, androidx.compose.material3.ripple())
+        // The app's own: a ripple on a phone, the focus ring on a TV.
+        .indication(shown, androidx.compose.foundation.LocalIndication.current)
         .combinedClickable(
             interactionSource = pressed,
             indication = null,

@@ -617,7 +617,7 @@ fun AppRoot(vm: PlayerViewModel) {
                     popEnterTransition = { PageMotion.popEnter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
                     popExitTransition = { PageMotion.popExit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
                 ) {
-                    composable(Tab.HOME.route) {
+                    page(Tab.HOME.route) {
                         HomeScreen(
                             contentPadding = content,
                             actions = actions,
@@ -628,16 +628,16 @@ fun AppRoot(vm: PlayerViewModel) {
                             onOpenSpeedDial = { nav.navigate("speed-dial") },
                         )
                     }
-                    composable("speed-dial") {
+                    page("speed-dial") {
                         com.opentune.ui.home.SpeedDialScreen(content, onItemClick = openItem, onBack = { nav.popBackStack() })
                     }
-                    composable(Tab.EXPLORE.route) {
+                    page(Tab.EXPLORE.route) {
                         ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, onOpenSettings = { nav.navigate("settings") })
                     }
-                    composable(Tab.PODCASTS.route) {
+                    page(Tab.PODCASTS.route) {
                         com.opentune.ui.podcasts.PodcastsScreen(content, actions, onOpenShow = { id -> nav.navigate("podcast/${Uri.encode(id)}") }, onOpenSettings = { nav.navigate("settings") })
                     }
-                    composable("podcast/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                    page("podcast/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.podcasts.PodcastShowScreen(
                             e.arguments?.getString("id").orEmpty(),
                             content,
@@ -646,10 +646,10 @@ fun AppRoot(vm: PlayerViewModel) {
                             onOpenShow = { id -> nav.navigate("podcast/${Uri.encode(id)}") },
                         )
                     }
-                    composable(Tab.LIBRARY.route) {
+                    page(Tab.LIBRARY.route) {
                         LibraryScreen(contentPadding = content, actions = actions, nav = libraryNav)
                     }
-                    composable(SEARCH_ROUTE) {
+                    page(SEARCH_ROUTE) {
                         SearchScreen(
                             contentPadding = content,
                             currentVideoId = song?.videoId,
@@ -667,7 +667,7 @@ fun AppRoot(vm: PlayerViewModel) {
                             }),
                         )
                     }
-                    composable("settings") {
+                    page("settings") {
                         SettingsScreen(
                             contentPadding = content,
                             onBack = { nav.popBackStack() },
@@ -680,7 +680,7 @@ fun AppRoot(vm: PlayerViewModel) {
                             onOpenDevices = { nav.navigate("devices") },
                         )
                     }
-                    composable("devices") {
+                    page("devices") {
                         com.opentune.ui.settings.LinkDeviceScreen(
                             content,
                             onBack = { nav.popBackStack() },
@@ -688,32 +688,32 @@ fun AppRoot(vm: PlayerViewModel) {
                             onTogether = { nav.navigate("together") },
                         )
                     }
-                    composable("login") { entry ->
+                    page("login") { entry ->
                         // Only while it's still the page in front: a late second call mustn't close the one under it.
                         LoginScreen(onDone = { if (nav.currentBackStackEntry == entry) nav.popBackStack() })
                     }
-                    composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }, onOpenList = { id -> nav.navigate("downloaded/${Uri.encode(id)}") }) }
-                    composable("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                    page("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }, onOpenList = { id -> nav.navigate("downloaded/${Uri.encode(id)}") }) }
+                    page("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }
-                    composable("liked") {
+                    page("liked") {
                         LikedScreen(content, actions, onBack = { nav.popBackStack() }, onOpenYouTubeLikes = { nav.openBrowse("VLLM", BrowseType.PLAYLIST) })
                     }
-                    composable("playlist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                    page("playlist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         LocalPlaylistScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }
-                    composable("equalizer") { EqualizerScreen(content, onBack = { nav.popBackStack() }) }
-                    composable("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
-                    composable("history") { com.opentune.ui.library.ListeningHistoryScreen(content, actions, onBack = { nav.popBackStack() }) }
-                    composable("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }, onOpenWrapped = { nav.navigate("wrapped") }) }
-                    composable("wrapped") { WrappedScreen(actions, onBack = { nav.popBackStack() }, player = vm.player) }
-                    composable("recognize?listen={listen}", listOf(navArgument("listen") { type = NavType.BoolType; defaultValue = false })) { e ->
+                    page("equalizer") { EqualizerScreen(content, onBack = { nav.popBackStack() }) }
+                    page("local") { LocalMusicScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    page("history") { com.opentune.ui.library.ListeningHistoryScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    page("replay") { ReplayScreen(content, actions, onBack = { nav.popBackStack() }, onOpenWrapped = { nav.navigate("wrapped") }) }
+                    page("wrapped") { WrappedScreen(actions, onBack = { nav.popBackStack() }, player = vm.player) }
+                    page("recognize?listen={listen}", listOf(navArgument("listen") { type = NavType.BoolType; defaultValue = false })) { e ->
                         com.opentune.ui.recognize.RecognizeScreen(
                             content, onPlay = { vm.play(it, "Found by listening") }, onBack = { nav.popBackStack() },
                             listenAtOnce = e.arguments?.getBoolean("listen") == true,
                         )
                     }
-                    composable(
+                    page(
                         "import?link={link}",
                         listOf(navArgument("link") { type = NavType.StringType; nullable = true; defaultValue = null }),
                     ) { e ->
@@ -726,28 +726,28 @@ fun AppRoot(vm: PlayerViewModel) {
                             onOpenExportify = { appContext.startActivity(android.content.Intent(appContext, com.opentune.ui.spotify.ExportifyActivity::class.java)) },
                         )
                     }
-                    composable("radio") { com.opentune.ui.radio.RadioScreen(content, actions, onBack = { nav.popBackStack() }) }
-                    composable(
+                    page("radio") { com.opentune.ui.radio.RadioScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    page(
                         "together?code={code}",
                         arguments = listOf(androidx.navigation.navArgument("code") { nullable = true; defaultValue = null }),
                     ) { entry ->
                         com.opentune.ui.together.TogetherScreen(content, entry.arguments?.getString("code"), onBack = { nav.popBackStack() })
                     }
-                    composable("server") { ServerScreen(content, actions, serverNav, onBack = { nav.popBackStack() }) }
-                    composable("server/artists") { ServerArtistsScreen(content, serverNav, onBack = { nav.popBackStack() }) }
-                    composable("server/album/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                    page("server") { ServerScreen(content, actions, serverNav, onBack = { nav.popBackStack() }) }
+                    page("server/artists") { ServerArtistsScreen(content, serverNav, onBack = { nav.popBackStack() }) }
+                    page("server/album/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         ServerAlbumScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() }, onArtist = serverNav.artist)
                     }
-                    composable("server/artist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                    page("server/artist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         ServerArtistScreen(e.arguments?.getString("id").orEmpty(), content, serverNav, onBack = { nav.popBackStack() })
                     }
-                    composable("server/playlist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                    page("server/playlist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         ServerPlaylistScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }
-                    composable("collection/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                    page("collection/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         CollectionScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }
-                    composable("artist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                    page("artist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         ArtistScreen(
                             e.arguments?.getString("id").orEmpty(), content, actions,
                             onBack = { nav.popBackStack() },
@@ -759,7 +759,7 @@ fun AppRoot(vm: PlayerViewModel) {
                             },
                         )
                     }
-                    composable(
+                    page(
                         "artist-items/{id}?params={params}&title={title}",
                         listOf(
                             navArgument("id") { type = NavType.StringType },
@@ -777,7 +777,7 @@ fun AppRoot(vm: PlayerViewModel) {
                             onItemClick = openItem,
                         )
                     }
-                    composable(
+                    page(
                         "mood/{id}?params={params}&title={title}",
                         listOf(
                             navArgument("id") { type = NavType.StringType },
@@ -971,3 +971,10 @@ private fun NavHostController.openBrowse(browseId: String, type: BrowseType = Mu
     if (here?.destination?.route == route && here.arguments?.getString("id") == browseId) return
     navigate(route.replace("{id}", Uri.encode(browseId)))
 }
+
+/** A destination of the NavHost; on a TV it keeps the remote's place when it's come back to (see TvPage). */
+private fun androidx.navigation.NavGraphBuilder.page(
+    route: String,
+    arguments: List<androidx.navigation.NamedNavArgument> = emptyList(),
+    content: @Composable androidx.compose.animation.AnimatedContentScope.(androidx.navigation.NavBackStackEntry) -> Unit,
+) = composable(route, arguments) { entry -> com.opentune.ui.tv.TvPage { content(entry) } }

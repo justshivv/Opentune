@@ -235,21 +235,21 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     val page: @Composable () -> Unit = { LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item {
             PageHeader(com.opentune.ui.theme.tr("Library"), actions = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // History and the account side by side in one glass pill.
+                Row(
+                    Modifier.height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     IconButton(onClick = nav.history) { Icon(Icons.Rounded.History, "Listening history") }
-                    com.opentune.ui.components.AccountButton(nav.settings)
+                    com.opentune.ui.components.AccountButton(nav.settings, plain = true)
                 }
             })
         }
         item {
-            YearCard(
-                year = year,
-                minutes = TimeUnit.MILLISECONDS.toMinutes(summary.listenedMs),
-                plays = summary.totalPlays,
-                topArtist = summary.topArtists.firstOrNull()?.title,
-                topSong = summary.topSongs.firstOrNull()?.title,
-                onClick = nav.wrapped,
-            )
+            // This year's listening, a card each for the minutes and the top song, artist and album; opens Replay.
+            val since = remember(records) { memberSince(records.lastOrNull()?.playedAt) }
+            ReplayCards(summary, ReplayRange.YEAR, account?.name ?: com.opentune.data.together.Together.savedName.takeIf { it.isNotBlank() } ?: "You",
+                since, onClick = nav.replay, modifier = Modifier.padding(vertical = 8.dp))
         }
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -365,17 +365,6 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
 }
 
-
-/** This year in numbers on a neon card; opens the Wrapped story. */
-@Composable
-private fun YearCard(year: Int, minutes: Long, plays: Int, topArtist: String?, topSong: String?, onClick: () -> Unit) {
-    val line = buildList {
-        add("$minutes minutes · $plays plays")
-        topArtist?.let { add("Top artist: $it") }
-        topSong?.let { add("Top song: $it") }
-    }.joinToString("\n")
-    com.opentune.ui.wrapped.WrappedBanner("Your $year Wrapped", line, onClick, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-}
 
 /** One of the four library shortcuts: an accent badge, a name and a count. */
 @Composable

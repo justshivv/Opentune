@@ -80,6 +80,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.opentune.data.model.Song
@@ -142,7 +145,10 @@ fun SearchScreen(
             keyboard?.show()
         }
     }
-    val searching = explore == null || focused || query.isNotEmpty()
+    // The sources under the bar, focused from it with the remote: the bar is still in use.
+    var sourcesFocused by remember { mutableStateOf(false) }
+    val searching = explore == null || focused || sourcesFocused || query.isNotEmpty()
+    val tv = com.opentune.ui.tv.LocalIsTv.current
 
     fun submit(q: String) {
         focus.clearFocus()
@@ -172,7 +178,21 @@ fun SearchScreen(
             onValueChange = vm::onQueryChange,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
                 .focusRequester(field)
-                .onFocusChanged { focused = it.isFocused },
+                .onFocusChanged { focused = it.isFocused }
+                // A remote's arrows: up and down leave the bar (to the sources and results), and
+                // left and right do once there's nothing typed. A text field otherwise keeps them all.
+                .then(if (!tv) Modifier else Modifier.onPreviewKeyEvent { e ->
+                    if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    val direction = when (e.key) {
+                        androidx.compose.ui.input.key.Key.DirectionDown -> androidx.compose.ui.focus.FocusDirection.Down
+                        androidx.compose.ui.input.key.Key.DirectionUp -> androidx.compose.ui.focus.FocusDirection.Up
+                        androidx.compose.ui.input.key.Key.DirectionLeft -> androidx.compose.ui.focus.FocusDirection.Left.takeIf { query.isEmpty() }
+                        androidx.compose.ui.input.key.Key.DirectionRight -> androidx.compose.ui.focus.FocusDirection.Right.takeIf { query.isEmpty() }
+                        else -> null
+                    } ?: return@onPreviewKeyEvent false
+                    keyboard?.hide()
+                    focus.moveFocus(direction)
+                }),
             singleLine = true,
             shape = CircleShape,
             placeholder = { Text(source.placeholder) },
@@ -197,12 +217,14 @@ fun SearchScreen(
             keyboardActions = KeyboardActions(onSearch = { submit(query) }),
         )
         // Where to look, while the bar is in use.
+        // They stay while focused themselves: moving down to them takes the focus off the bar.
         androidx.compose.animation.AnimatedVisibility(
-            focused,
+            focused || sourcesFocused,
             enter = androidx.compose.animation.fadeIn(tween(180)) + androidx.compose.animation.expandVertically(spring(dampingRatio = 1f, stiffness = 600f)),
             exit = androidx.compose.animation.fadeOut(tween(140)) + androidx.compose.animation.shrinkVertically(spring(dampingRatio = 1f, stiffness = 600f)),
         ) {
-            SourceBar(source, vm::setSource, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp))
+            SourceBar(source, vm::setSource, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+                .onFocusChanged { sourcesFocused = it.hasFocus })
         }
 
         when {

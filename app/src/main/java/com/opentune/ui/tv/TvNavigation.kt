@@ -68,6 +68,33 @@ internal fun TvRemoteSurface(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().focusRequester(requester).focusRestorer().focusGroup()) { content() }
 }
 
+/** Set when the rail opened a page: the remote's focus stays on the rail then. */
+internal object TvFocus {
+    @Volatile var fromRail = false
+}
+
+/**
+ * A page that, on a TV, takes the remote's focus back when it's come back to: it goes
+ * when another page opens over it, and its focus fell to the rail's first button. A page
+ * restored from its saved state is one come back to (Back, or a pop); one the rail opened
+ * leaves the focus on the rail.
+ */
+@Composable
+internal fun TvPage(content: @Composable () -> Unit) {
+    if (!LocalIsTv.current) { content(); return }
+    val requester = remember { FocusRequester() }
+    var visited by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize().focusRequester(requester).focusRestorer().focusGroup()) { content() }
+    LaunchedEffect(Unit) {
+        // A few frames: the page's rows are laid out and its scroll put back. The focus goes to
+        // the first row in view: the one that opened the page went with the page when it left.
+        repeat(3) { withFrameNanos { } }
+        if (visited && !TvFocus.fromRail) runCatching { requester.requestFocus() }
+        TvFocus.fromRail = false
+        visited = true
+    }
+}
+
 internal val TV_RAIL_GUTTER = 144.dp
 
 /** A stable, labeled destination for every remote user, even with phone chrome settings saved. */
@@ -93,7 +120,8 @@ private fun TvDestination(label: String, icon: androidx.compose.ui.graphics.vect
     val shape = RoundedCornerShape(16.dp)
     Surface(shape = shape, color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.fillMaxWidth().clip(shape).clickable(
-            interactionSource = remember { MutableInteractionSource() }, indication = FocusRing(shape), role = Role.Button, onClick = click,
+            interactionSource = remember { MutableInteractionSource() }, indication = FocusRing(shape), role = Role.Button,
+            onClick = { TvFocus.fromRail = true; click() },
         ).heightIn(min = 52.dp).padding(10.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(icon, null, Modifier.size(22.dp))
