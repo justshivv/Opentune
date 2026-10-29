@@ -78,13 +78,13 @@ class TvAppTest {
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         var steps = 0
-        while (!focused().startsWith("Look and feel")) {
-            assertTrue("Never reached Look and feel", ++steps < 12)
+        while (!focused().startsWith("Appearance")) {
+            assertTrue("Never reached Appearance", ++steps < 12)
             press(KeyEvent.KEYCODE_DPAD_DOWN)
         }
         press(KeyEvent.KEYCODE_DPAD_CENTER)
         press(KeyEvent.KEYCODE_BACK)
-        assertTrue("Back left the focus at ${focused()}", focused().startsWith("Look and feel"))
+        assertTrue("Back left the focus at ${focused()}", focused().startsWith("Appearance"))
     }
 
     @Test fun backFromAPageKeepsTheFocusOnThePageItCameBackTo() {

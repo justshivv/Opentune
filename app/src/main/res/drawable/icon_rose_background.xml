@@ -1,3 +1,18 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <gradient android:angle="270" android:startColor="#FF739C" android:endColor="#8C183E" />
-</shape>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sunset: warm orange running into pink and violet. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="108" android:endY="108">
+                <item android:offset="0" android:color="#FFFFB45E" />
+                <item android:offset="0.45" android:color="#FFFF4F7B" />
+                <item android:offset="1" android:color="#FF7B2FD6" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

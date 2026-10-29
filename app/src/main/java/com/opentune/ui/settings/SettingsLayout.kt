@@ -31,21 +31,27 @@ internal class SettingsCategory(
  */
 internal val FOLDED_GROUPS = mapOf("Seek bar" to 2)
 
-/** Where every setting lives. A setting not named here lands under "More" on its section's page. */
+/**
+ * Where every setting lives. Each page holds one kind of thing, and each heading on it
+ * a few settings that go together. A setting not named here lands under "More" on its
+ * section's page, so a new one is never lost, but every setting today has its place.
+ */
 internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
-        "account", "Account", "YouTube Music sign-in and your other devices", Icons.Rounded.Person,
+        "account", "Accounts", "YouTube Music, Spotify and your other devices", Icons.Rounded.Person,
         listOf(
-            "YouTube Music" to listOf("YouTube Music account", "Sign out"),
+            "YouTube Music" to listOf("YouTube Music account", "Add another account", "Sign out"),
+            "Listening history" to listOf("Sync listening history", "Pause account sync"),
+            "Spotify" to listOf("Spotify account", "Spotify"),
             "Other devices" to listOf("Link a device"),
         ),
     ),
     SettingsCategory(
-        "audio", "Audio", "Quality, loudness, effects and output", Icons.Rounded.GraphicEq,
+        "audio", "Sound", "Quality, loudness, effects and output", Icons.Rounded.GraphicEq,
         listOf(
             "Streaming quality" to listOf("On Wi-Fi", "On mobile data", "Upgrade quality while playing"),
             "Loudness" to listOf("Loudness normalization", "Volume level", "Normalize on the phone speaker"),
-            "Sound" to listOf("Equalizer", "Clarity", "Spatial audio", "System audio effects"),
+            "Effects" to listOf("Equalizer", "Clarity", "Spatial audio", "System audio effects"),
             "Output" to listOf("Output precision", "Prefer USB DAC", "Bit-perfect USB output"),
         ),
     ),
@@ -57,49 +63,49 @@ internal val SETTINGS_CATEGORIES = listOf(
         ),
     ),
     SettingsCategory(
-        "playback", "Playback", "Crossfade, autoplay, recommendations and devices", Icons.Rounded.PlayCircle,
+        "playback", "Playback", "Between songs, autoplay and headphones", Icons.Rounded.PlayCircle,
         listOf(
             "Between songs" to listOf("Crossfade", "Skip silence", "Preload upcoming songs"),
-            "Account sync" to listOf("Sync listening history", "Pause account sync"),
-            "Autoplay" to listOf("Autoplay", "Recommendations", "Don't repeat songs in current session", "Smart shuffle", "Hidden songs and artists"),
-            "Headphones and devices" to listOf("Resume when headphones connect", "Pause at zero volume", "Background playback", "Stop music on close from recents"),
+            "Autoplay and suggestions" to listOf("Autoplay", "Recommendations", "Don't repeat songs in current session", "Smart shuffle", "Hidden songs and artists"),
+            "Headphones and the app" to listOf("Resume when headphones connect", "Pause at zero volume", "Background playback", "Stop music on close from recents"),
             "Music videos" to listOf("SponsorBlock", "SponsorBlock categories"),
-        ),
-    ),
-    SettingsCategory(
-        "look", "Look and feel", "Theme, colour, glass and haptics", Icons.Rounded.Palette,
-        listOf(
-            "Tabs" to listOf("Separate Explore tab"),
-            "Home" to listOf("Speed dial"),
-            "Language" to listOf("App language"),
-            "Theme" to listOf("Theme", "Pure black", "Fonts & readability"),
-            "Colour" to listOf("Color from artwork", "Mini player takes the cover's colour", "Artist pages take the photo's colour", "Material You", "Accent color", "Palette style"),
-            "Glass" to listOf("Liquid Glass", "Glass style", "Frosted top edge", "Reduce dynamic blur"),
-            "Feel" to listOf("Haptic feedback", "High refresh rate", "Wide-screen layout"),
-        ),
-    ),
-    SettingsCategory(
-        "player", "Player", "Layout, buttons, cover and background", Icons.Rounded.Album,
-        listOf(
-            "Layout" to listOf("Player layout", "Player buttons", "Player background", "Player beside the page"),
-            "Cover art" to listOf("Moving cover art", "Moving covers on Home", "Glow under the cover", "Song change", "Full-screen cover art", "Album covers"),
-            "Seek bar" to listOf("Wavy seek bar", "Lyric preview while seeking", "Seek bar thickness", "Seek bar handle", "Seek bar colour", "Seek bar time", "Song part marks"),
-            "Controls" to listOf("Lyrics preview", "Audio quality label", "Skip to chorus", "Hide volume bar", "Hide song status", "Show stats for nerds"),
-        ),
-    ),
-    SettingsCategory(
-        "motion", "Motion", "How the dock, pages and player move", Icons.Rounded.Animation,
-        listOf(
-            "Dock" to listOf("Dock animation", "Dock lens"),
-            "Pages and player" to listOf("Opening animation", "Page transitions", "Player opening"),
-            "Less motion" to listOf("Reduce animation"),
         ),
     ),
     SettingsCategory(
         "lyrics", "Lyrics", "Sync, animation, size and sources", Icons.Rounded.Lyrics,
         listOf(
-            "Display" to listOf("Synced lyrics", "Lyrics animation", "Lyrics text size", "Lyrics alignment", "Glow on the sung line", "Blur unfocused lyrics", "Lyrics take the screen"),
+            "Display" to listOf("Synced lyrics", "Lyrics text size", "Lyrics alignment", "Lyrics take the screen"),
+            "Effects" to listOf("Lyrics animation", "Glow on the sung line", "Blur unfocused lyrics"),
             "Sources" to listOf("Lyrics sources"),
+        ),
+    ),
+    SettingsCategory(
+        "look", "Appearance", "Theme, colour, glass, language and icon", Icons.Rounded.Palette,
+        listOf(
+            "Theme" to listOf("Theme", "Pure black", "Fonts & readability"),
+            "Colour" to listOf("Color from artwork", "Mini player takes the cover's colour", "Artist pages take the photo's colour", "Material You", "Accent color", "Palette style"),
+            "Glass" to listOf("Liquid Glass", "Glass style", "Frosted top edge", "Reduce dynamic blur"),
+            "Home and tabs" to listOf("Separate Explore tab", "Speed dial", "Wide-screen layout"),
+            "Language and icon" to listOf("App language", "App icon"),
+        ),
+    ),
+    SettingsCategory(
+        "player", "Player", "Layout, cover art, seek bar and what it shows", Icons.Rounded.Album,
+        listOf(
+            "Layout" to listOf("Player layout", "Player buttons", "Player background", "Player beside the page"),
+            "Cover art" to listOf("Full-screen cover art", "Moving cover art", "Glow under the cover", "Song change", "Album covers", "Double-tap to skip 10 seconds"),
+            "Animated covers" to listOf("Animated covers", "Animated covers on Wi-Fi only", "Moving covers on Home"),
+            "Seek bar" to listOf("Wavy seek bar", "Lyric preview while seeking", "Seek bar thickness", "Seek bar handle", "Seek bar colour", "Seek bar time", "Song part marks"),
+            "On the player" to listOf("Lyrics preview", "Audio quality label", "Skip to chorus", "Hide volume bar", "Hide song status", "Show stats for nerds"),
+        ),
+    ),
+    SettingsCategory(
+        "motion", "Motion and feel", "Animations, haptics and smoothness", Icons.Rounded.Animation,
+        listOf(
+            "Dock" to listOf("Dock animation", "Dock lens"),
+            "Pages and player" to listOf("Opening animation", "Page transitions", "Player opening"),
+            "Feel" to listOf("Haptic feedback"),
+            "Smoothness" to listOf("High performance mode", "High refresh rate", "Reduce animation"),
         ),
     ),
     SettingsCategory(
@@ -123,14 +129,16 @@ internal val SETTINGS_CATEGORIES = listOf(
         "data", "Storage and data", "Cache, backups and listening history", Icons.Rounded.Storage,
         listOf(
             "Storage" to listOf("Song cache limit", "Clear song cache", "Clear image cache", "Delete downloaded updates"),
-            "Your data" to listOf("Replay", "Wrapped", "Export data", "Import data", "Clear listening history"),
+            "Your listening" to listOf("Replay", "Wrapped", "Clear listening history"),
+            "Backup" to listOf("Export data", "Import data"),
         ),
     ),
     SettingsCategory(
         "about", "About", "Updates, source code and diagnostics", Icons.Rounded.Info,
         listOf(
             "Updates" to listOf("What's new", "Check for updates", "Check for updates automatically"),
-            "OpenTune" to listOf("OpenTune community", "Show the welcome again", "Support OpenTune", "Star on GitHub", "Count this phone in usage numbers", "Source code", "Export diagnostics"),
+            "Community" to listOf("OpenTune community", "Support OpenTune", "Star on GitHub", "Source code"),
+            "Help" to listOf("Show the welcome again", "Count this phone in usage numbers", "Export diagnostics"),
         ),
     ),
 )
@@ -138,8 +146,8 @@ internal val SETTINGS_CATEGORIES = listOf(
 /** How the main Settings page groups its categories. */
 internal val SETTINGS_HOME = listOf(
     "You" to listOf("account"),
-    "Sound" to listOf("audio", "addons", "playback", "lyrics"),
-    "Look" to listOf("look", "player", "motion"),
+    "Listening" to listOf("audio", "playback", "lyrics", "addons"),
+    "Look and feel" to listOf("look", "player", "motion"),
     "Your music" to listOf("library", "services", "data"),
     "App" to listOf("about"),
 )

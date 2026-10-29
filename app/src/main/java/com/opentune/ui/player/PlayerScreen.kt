@@ -59,6 +59,9 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Equalizer
@@ -821,42 +824,45 @@ fun PlayerLayout(
                         }
                     },
             ) {
-                // Grab handle, then "Playing from" or the remix pill.
-                // Docked, there's nothing to pull down: a button at the end folds the pane away.
+                // "Playing from", whose room it is, or the remix pill.
+                val statusLine: @Composable () -> Unit = {
+                    val room by Together.room.collectAsState()
+                    AnimatedContent(sound.isDefault, label = "remixPill") { normal ->
+                        if (room != null) {
+                            TogetherPill(room!!, actions.openTogether)
+                        } else if (normal) {
+                            if (!state.ui.hideSongStatus) SongStatus(state.source)
+                        } else {
+                            AssistChip(
+                                onClick = { showRemix = true },
+                                label = { Text(RemixPreset.matching(sound)?.label ?: "Custom remix") },
+                                leadingIcon = { Icon(Icons.Rounded.GraphicEq, null, Modifier.size(18.dp)) },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                ),
+                            )
+                        }
+                    }
+                }
+                // Grab handle. Docked, there's nothing to pull down: a button at the end folds the pane away.
                 Column(Modifier.fillMaxWidth().padding(top = if (docked) 0.dp else 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (!docked) Box(
                         Modifier.size(width = 40.dp, height = 5.dp).clip(CircleShape)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
                             .clickable(onClick = actions.collapse),
                     )
-                    Box(if (docked) Modifier.fillMaxWidth().height(48.dp) else Modifier.heightIn(min = 40.dp), contentAlignment = Alignment.Center) {
-                        if (docked) {
-                            Box(
-                                Modifier.align(Alignment.CenterEnd).size(40.dp).clip(CircleShape).clickable(onClick = actions.collapse),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Hide player", Modifier.size(26.dp))
-                            }
+                    // Docked, the line stays in the header beside the hide button; otherwise it sits
+                    // over the top of the pages and goes as the lyrics or queue come in.
+                    if (docked) Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.align(Alignment.CenterEnd).size(40.dp).clip(CircleShape).clickable(onClick = actions.collapse),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Hide player", Modifier.size(26.dp))
                         }
-                        val room by Together.room.collectAsState()
-                        AnimatedContent(sound.isDefault, label = "remixPill", modifier = if (docked) Modifier.padding(horizontal = 44.dp) else Modifier) { normal ->
-                            if (room != null) {
-                                TogetherPill(room!!, actions.openTogether)
-                            } else if (normal) {
-                                if (!state.ui.hideSongStatus) SongStatus(state.source)
-                            } else {
-                                AssistChip(
-                                    onClick = { showRemix = true },
-                                    label = { Text(RemixPreset.matching(sound)?.label ?: "Custom remix") },
-                                    leadingIcon = { Icon(Icons.Rounded.GraphicEq, null, Modifier.size(18.dp)) },
-                                    colors = AssistChipDefaults.assistChipColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    ),
-                                )
-                            }
-                        }
+                        Box(Modifier.padding(horizontal = 44.dp)) { statusLine() }
                     }
                 }
 
@@ -1072,6 +1078,7 @@ fun PlayerLayout(
                                             onRemoveIndex = actions.removeIndex,
                                             onMove = actions.moveIndex,
                                             modifier = Modifier.weight(1f).fillMaxWidth(),
+                                            appleWords = apple,
                                         )
                                     }
                                     }
@@ -1086,7 +1093,9 @@ fun PlayerLayout(
                     // The cover page: only while it's in sight, so its cover reports its own place.
                     if (outerPane == Pane.COVER || !listsFull) {
                         Box(
-                            Modifier.fillMaxSize().zIndex(if (outerPane == Pane.COVER) 1f else 0f).graphicsLayer {
+                            Modifier.fillMaxSize().zIndex(if (outerPane == Pane.COVER) 1f else 0f)
+                                .padding(top = if (docked) 0.dp else STATUS_ROOM)
+                                .graphicsLayer {
                                 val v = paneProgress()
                                 alpha = (1f - v * 1.6f).coerceIn(0f, 1f)
                                 val sc = 1f - 0.06f * v
@@ -1114,6 +1123,20 @@ fun PlayerLayout(
                                 },
                         ) { paneBody(Pane.LYRICS, parked) }
                     }
+                    // The status line over the top: on the cover page it has its own room; as the
+                    // lists come in it lifts away and fades on their clock, so nothing under it
+                    // moves, and comes back down the same way with the cover.
+                    if (!docked && !listsFull) {
+                        val lift = with(LocalDensity.current) { 14.dp.toPx() }
+                        Box(
+                            Modifier.fillMaxWidth().height(STATUS_ROOM).zIndex(2f).graphicsLayer {
+                                val v = paneProgress()
+                                alpha = (1f - v * 2.2f).coerceIn(0f, 1f)
+                                translationY = -lift * v
+                            },
+                            contentAlignment = Alignment.Center,
+                        ) { statusLine() }
+                    }
                 }
 
                 val synced = (state.lyrics as? LyricsState.Found)?.lyrics as? com.opentune.data.lyrics.Lyrics.Synced
@@ -1140,14 +1163,14 @@ fun PlayerLayout(
                     }
                 }
                 if (pane != Pane.LYRICS && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
-                    LyricPreview(state.lyrics, lyricsPosition, onOpen = { toggle(Pane.LYRICS) }, Modifier.padding(top = 4.dp))
+                    LyricPreview(state.lyrics, lyricsPosition, onOpen = { toggle(Pane.LYRICS) }, Modifier.padding(top = 4.dp), plain = apple)
                 }
                 Spacer(Modifier.height(8.dp))
                 // The line at a point of the song, for the bubble shown while the bar is dragged.
                 val lyricAt: ((Long) -> String?)? = if (state.ui.lyricScrubPreview && synced != null) {
                     { ms -> synced.lines.lastOrNull { it.startMs <= ms + offsetMs }?.text?.takeIf { it.isNotBlank() } }
                 } else null
-                SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation, playing = state.isPlaying, lyricAt = lyricAt, marks = marks, quality = { if (state.ui.sourcePill) SourceQualityBadge(current.videoId, state.audioFormat, onClick = { showSignal = true }) })
+                SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation && !apple, playing = state.isPlaying, lyricAt = lyricAt, marks = marks, quality = { if (state.ui.sourcePill) SourceQualityBadge(current.videoId, state.audioFormat, onClick = { showSignal = true }) })
                 if (state.ui.statsForNerds) {
                     Box(Modifier.clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
                 }
@@ -1158,7 +1181,8 @@ fun PlayerLayout(
                     onTogglePlay = actions.togglePlay,
                     onNext = actions.next,
                     onPrevious = actions.previous,
-                    style = state.ui.controlStyle,
+                    // Apple Music's bare glyphs, whatever buttons are chosen for the other layouts.
+                    style = if (apple) com.opentune.data.settings.ControlStyle.BLOOM else state.ui.controlStyle,
                     animate = !state.ui.reduceAnimation && state.loadingMessage?.startsWith("Offline") != true,
                     progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
                 )
@@ -1178,8 +1202,11 @@ fun PlayerLayout(
                             // Its two halves split by a hairline; the fill is the morphing one behind.
                             Row(Modifier.height(52.dp).clip(RoundedCornerShape(30.dp)), verticalAlignment = Alignment.CenterVertically) {
                                 // Each half is the button: a press fills the half, not a circle round the icon.
-                                PillButton(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true }, enabled = enabled)
-                                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                // Apple Music's has where it's playing, then who's listening with you.
+                                if (!apple) {
+                                    PillButton(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true }, enabled = enabled)
+                                    Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                }
                                 PillButton(
                                     outputRoute.icon,
                                     "Audio output",
@@ -1188,6 +1215,11 @@ fun PlayerLayout(
                                     { showOutput = true },
                                     enabled = enabled,
                                 )
+                                if (apple) {
+                                    val room by Together.room.collectAsState()
+                                    Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                    PillButton(Icons.Rounded.Person, "Listen together", room != null, actions.openTogether, enabled = enabled)
+                                }
                             }
                         },
                         secondContent = { enabled ->
@@ -1360,6 +1392,7 @@ private fun LyricsOffsetDialog(videoId: String, autoMs: Long, onDismiss: () -> U
 /** Title and artist with the heart and "…" glass buttons on the right. */
 @Composable
 private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () -> Unit, compact: Boolean = false) {
+    val apple = AppSettings.ui.collectAsState().value.playerStyle == PlayerStyle.APPLE_MUSIC
     Column(Modifier.weight(1f)) {
         // Tapping the title opens its album, and the artist opens their page.
         val menu = LocalSongMenu.current
@@ -1367,7 +1400,11 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
         MarqueeText(
             song.title,
             Modifier.fillMaxWidth().then(if (album != null) Modifier.clickable(onClickLabel = "Open album") { menu?.openAlbum?.invoke(album) } else Modifier),
-            style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+            style = when {
+                apple -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                compact -> MaterialTheme.typography.titleLarge
+                else -> MaterialTheme.typography.headlineSmall
+            },
         )
         // Each artist's name opens their own page.
         val named = menu?.viewArtistNamed?.takeIf { !song.videoId.startsWith("local:") }
@@ -1375,14 +1412,20 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
             song.artist,
             onArtist = named?.let { open -> { name: String -> open(song, name) } },
             explicit = song.isExplicit == true,
-            style = MaterialTheme.typography.titleMedium,
+            style = if (apple) MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else MaterialTheme.typography.titleMedium,
         )
     }
     Spacer(Modifier.width(10.dp))
-    HeartButton(liked, onLike)
+    if (apple) StarButton(liked, onLike) else HeartButton(liked, onLike)
     Spacer(Modifier.width(10.dp))
-    Box(Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable(onClick = onMore), contentAlignment = Alignment.Center) {
-        Icon(Icons.Rounded.MoreHoriz, "More", Modifier.size(26.dp))
+    Box(
+        Modifier.size(46.dp).clip(CircleShape)
+            .background(if (apple) Color.White.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(onClick = onMore),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Rounded.MoreHoriz, "More", Modifier.size(if (apple) 24.dp else 26.dp))
     }
 }
 
@@ -1435,6 +1478,33 @@ private fun TitleFlight(
         Row(Modifier.fillMaxWidth().align(Alignment.CenterStart).graphicsLayer { alpha = side(q()) }, verticalAlignment = Alignment.CenterVertically) {
             TitleRow(song, liked, onLike = {}, onMore = {}, compact = true)
         }
+    }
+}
+
+/** Apple Music's favourite: a star in a soft round button that fills in red. */
+@Composable
+private fun StarButton(liked: Boolean, onClick: () -> Unit) {
+    val haptics = com.opentune.ui.components.rememberHaptics()
+    val still = AppSettings.ui.collectAsState().value.reduceAnimation
+    val pop = remember { androidx.compose.animation.core.Animatable(1f) }
+    var pops by remember { mutableStateOf(0) }
+    LaunchedEffect(pops) {
+        if (pops == 0 || still) return@LaunchedEffect
+        pop.snapTo(0.7f)
+        pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 500f))
+    }
+    Box(
+        Modifier.size(46.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f))
+            .clickable(indication = com.opentune.ui.components.FocusRing(CircleShape), interactionSource = null) {
+                haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE)
+                if (!liked) pops++
+                onClick()
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(if (liked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+            if (liked) "Remove from Liked" else "Favourite", Modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+            tint = if (liked) Color(0xFFFA2D48) else LocalContentColor.current)
     }
 }
 
@@ -1548,6 +1618,9 @@ private fun Modifier.fitSquare(): Modifier = layout { measurable, constraints ->
 
 /** Below this window height the docked player drops the lyric line, volume and output name. */
 private val DOCKED_ROOMY_HEIGHT = 720.dp
+
+/** Room kept at the top of the cover page for the "Playing from" line over it. */
+private val STATUS_ROOM = 40.dp
 
 /** How long the lyrics view goes untouched before the controls slide away. */
 private const val LYRICS_FOCUS_MS = 5_000L

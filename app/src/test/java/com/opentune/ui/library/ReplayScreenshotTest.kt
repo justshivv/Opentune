@@ -64,9 +64,9 @@ class ReplayScreenshotTest {
     @Test fun story() {
         listens()
         compose.mainClock.autoAdvance = false
+        val summary = History.replay(History.records.value, ReplayRange.WEEK.since())
         compose.setContent {
             OpenTuneTheme(ThemeSettings(mode = ThemeMode.DARK, dynamicColor = false)) {
-                val summary = History.replay(History.records.value, ReplayRange.WEEK.since())
                 ReplayStory(summary, ReplayRange.WEEK, onDismiss = {})
             }
         }

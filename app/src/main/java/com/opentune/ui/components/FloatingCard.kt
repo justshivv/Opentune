@@ -3,7 +3,6 @@ package com.opentune.ui.components
 import kotlinx.coroutines.flow.first
 import android.os.Build
 import android.view.WindowManager
-import androidx.compose.animation.core.Animatable
 import kotlinx.coroutines.Job
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -178,7 +177,8 @@ fun FloatingCard(
         val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
         val shown by animateFloatAsState(
             if (open) 1f else 0f,
-            if (still) snap() else if (open) spring(dampingRatio = 0.8f, stiffness = 360f) else tween(EXIT_MS.toInt()),
+            // No bounce: a card that overshoots its place and comes back reads as a shudder.
+            if (still) snap() else if (open) spring(dampingRatio = 1f, stiffness = 340f) else tween(EXIT_MS.toInt()),
             label = "card",
         )
         if (frost != Frost.FAILED) {
@@ -188,10 +188,13 @@ fun FloatingCard(
         // The card rises once the blur behind it is ready (or has failed), and the first frame
         // is laid out: rising while the blur was still being made, its glass changed from nearly
         // solid to clear partway up, and the first frames, busy building the menu, were dropped.
+        // An expandable card also waits to know its own height: measured on its first
+        // frames, it went from tall to its real size while rising, a jump halfway up.
+        var measured by remember { mutableStateOf(!expandable) }
         LaunchedEffect(Unit) {
             androidx.compose.runtime.withFrameNanos { }
             kotlinx.coroutines.withTimeoutOrNull(FROST_WAIT_MS) {
-                androidx.compose.runtime.snapshotFlow { frost }.first { it != Frost.PENDING }
+                androidx.compose.runtime.snapshotFlow { frost != Frost.PENDING && measured }.first { it }
             }
             open = true
         }
@@ -281,6 +284,7 @@ fun FloatingCard(
                                     // Lists that can't be measured whole (lazy ones) just take the height asked for.
                                     val natural = runCatching { measurable.maxIntrinsicHeight(constraints.maxWidth) }.getOrNull()
                                     if (natural != null && natural.toFloat() != naturalPx) naturalPx = natural.toFloat()
+                                    measured = true
                                     val want = (halfPx + extra).roundToInt()
                                     val h = minOf(want, natural ?: want).coerceIn(constraints.minHeight, constraints.maxHeight)
                                     val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
@@ -382,13 +386,13 @@ fun FloatingCard(
                         }
                         if (header != null) header()
                     }
-                    // The body rises in just behind the card.
-                    val rise = remember { Animatable(if (still) 1f else 0f) }
-                    LaunchedEffect(Unit) { if (!still) { delay(50); rise.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 300f)) } }
+                    // The body rises in just behind the card, on the card's own clock, so the
+                    // two never pull against each other.
                     Column(
                         Modifier.weight(1f, fill = expandable).fillMaxWidth().nestedScroll(grow).padding(contentPadding).graphicsLayer {
-                            alpha = rise.value.coerceIn(0f, 1f)
-                            translationY = (1f - rise.value) * 16.dp.toPx()
+                            val rise = ((shown - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                            alpha = rise
+                            translationY = (1f - rise) * 16.dp.toPx()
                         },
                         content = content,
                     )

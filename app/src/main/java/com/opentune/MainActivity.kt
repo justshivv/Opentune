@@ -53,6 +53,22 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) receive(intent)
         tv = com.opentune.ui.tv.Tv.isTv(this)
         if (tv) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        // A TV's graphics are a phone's from years back driving a far bigger picture: live blur,
+        // glass and moving covers made every press of the remote land late. Turned down the
+        // first time the app opens on one, after which they're the viewer's to turn back on.
+        if (tv && !AppSettings.ui.value.tvTuned) AppSettings.updateUi {
+            it.copy(
+                tvTuned = true,
+                reduceBlur = true,
+                liquidGlass = false,
+                frostedTopEdge = false,
+                coverGlow = false,
+                movingCover = false,
+                blurLyrics = false,
+                wavySeekbar = false,
+                openingAnimation = false,
+            )
+        }
         setContent {
             val vm: PlayerViewModel = viewModel()
             val theme by AppSettings.theme.collectAsState()

@@ -364,6 +364,7 @@ fun AppRoot(vm: PlayerViewModel) {
         importPlaylist = { nav.navigate("import") },
         wrapped = { nav.navigate("wrapped") },
         history = { nav.navigate("history") },
+        allPlaylists = { nav.navigate("playlists") },
     ) }
     val serverNav = remember(nav) {
         ServerNav(
@@ -696,6 +697,7 @@ fun AppRoot(vm: PlayerViewModel) {
                     page("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }
+                    page("playlists") { com.opentune.ui.library.AllPlaylistsScreen(content, libraryNav, onBack = { nav.popBackStack() }) }
                     page("liked") {
                         LikedScreen(content, actions, onBack = { nav.popBackStack() }, onOpenYouTubeLikes = { nav.openBrowse("VLLM", BrowseType.PLAYLIST) })
                     }

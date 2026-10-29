@@ -74,13 +74,13 @@ class TvRemoteTest {
         compose.waitForIdle()
         compose.onNode(isFocused()).assertExists()
 
-        // From the first row, down until Look and feel is focused, then OK opens it.
-        compose.onNode(hasText("Account") and isFocusable()).performSemanticsAction(SemanticsActions.RequestFocus)
+        // From the first row, down until Appearance is focused, then OK opens it.
+        compose.onNode(hasText("Accounts") and isFocusable()).performSemanticsAction(SemanticsActions.RequestFocus)
         compose.waitForIdle()
         save("tv-settings-focused")
         var presses = 0
-        while (compose.onAllNodes(isFocused() and hasText("Look and feel")).fetchSemanticsNodes().isEmpty()) {
-            assertTrue("The remote never reached Look and feel", ++presses < 15)
+        while (compose.onAllNodes(isFocused() and hasText("Appearance")).fetchSemanticsNodes().isEmpty()) {
+            assertTrue("The remote never reached Appearance", ++presses < 15)
             compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
             compose.waitForIdle()
         }

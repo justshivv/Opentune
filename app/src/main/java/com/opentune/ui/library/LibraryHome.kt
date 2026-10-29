@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.material.icons.rounded.GridView
-import androidx.compose.material.icons.rounded.ViewList
 import com.opentune.data.settings.AppSettings
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -39,6 +37,8 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -73,6 +73,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -130,6 +133,8 @@ class LibraryNav(
     val importPlaylist: () -> Unit = {},
     val wrapped: () -> Unit = {},
     val history: () -> Unit = {},
+    /** Every playlist, from Show all. */
+    val allPlaylists: () -> Unit = {},
     /** An album or playlist downloaded as a whole, by its id. */
     val downloaded: (String) -> Unit = {},
 )
@@ -139,38 +144,90 @@ private data class LibraryPlaylistRow(
     val local: com.opentune.data.library.LocalPlaylist? = null,
     /** What it's pinned by: a local playlist's id, or its YouTube Music browse id. */
     val pin: String,
+    /** Where it lives: "Spotify", "YouTube Music" or "On this phone". */
+    val source: String,
+    /** How often its songs were played; only known for the ones kept here. */
+    val plays: Int = 0,
     val onClick: () -> Unit,
 )
 
 /** Pinning playlists to the top of Library. */
 internal object LibraryPins {
     fun pinned(key: String) = key in AppSettings.ui.value.pinnedPlaylists
-    fun toggle(key: String) = AppSettings.updateUi { ui ->
-        ui.copy(pinnedPlaylists = if (key in ui.pinnedPlaylists) ui.pinnedPlaylists - key else ui.pinnedPlaylists + key)
+    /** As many as the row on Library shows. */
+    const val MAX = 5
+
+    fun toggle(key: String) {
+        val pins = AppSettings.ui.value.pinnedPlaylists
+        if (key !in pins && pins.size >= MAX) {
+            com.opentune.data.Pills.info("Up to $MAX playlists can be pinned. Unpin one first")
+            return
+        }
+        AppSettings.updateUi { ui ->
+            ui.copy(pinnedPlaylists = if (key in ui.pinnedPlaylists) ui.pinnedPlaylists - key else ui.pinnedPlaylists + key)
+        }
     }
 }
 
 private const val YT_PLAYLISTS = "library:ytPlaylists"
 
+/** Wide enough that two and a bit show across a phone, as in the other music apps. */
+private val TILE_WIDTH = 164.dp
+
+/**
+ * Every playlist in Library, the pinned ones first in the order they were pinned,
+ * then those made on Spotify, those on YouTube Music and those only on this phone.
+ */
+@Composable
+private fun rememberPlaylistRows(nav: LibraryNav): List<LibraryPlaylistRow> {
+    val records by History.records.collectAsState()
+    val playlists by LibraryStore.playlists.collectAsState()
+    val downloadEntries by Downloads.entries.collectAsState()
+    val hearted by LibraryStore.savedLists.collectAsState()
+    val signedIn by AccountStore.signedIn.collectAsState()
+    val pinned = AppSettings.ui.collectAsState().value.pinnedPlaylists
+    val cachedPlaylists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
+    val spotifyConnected by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+    // One linked to a playlist here is listed once, as that one.
+    val ytPlaylists = if (signedIn) remember(cachedPlaylists, playlists) { PlaylistLinks.unlinked(cachedPlaylists, playlists) } else emptyList()
+    val playCounts = remember(records) { records.groupingBy { it.videoId }.eachCount() }
+    val rows = mutableListOf<LibraryPlaylistRow>()
+    for (p in playlists) {
+        val source = when {
+            p.spotifyId != null && spotifyConnected -> "Spotify"
+            p.spotifyId == null && p.synced -> "YouTube Music"
+            else -> "On this phone"
+        }
+        val saved = p.songs.count { downloadEntries[it.videoId]?.state == DownloadState.DONE }
+        rows += LibraryPlaylistRow(p.id, p.name,
+            "${p.songs.size} songs" + if (saved > 0) " · $saved downloaded" else "",
+            p.coverUrl, p, pin = p.id, source = source,
+            plays = p.songs.sumOf { playCounts[it.videoId] ?: 0 }, onClick = { nav.playlist(p.id) })
+    }
+    for (h in hearted) {
+        rows += LibraryPlaylistRow("saved:${h.browseId}", h.title, h.subtitle, h.thumbnailUrl, pin = h.browseId, source = "YouTube Music", onClick = { nav.browse(h.browseId) })
+    }
+    for (p in ytPlaylists.filter { p -> hearted.none { it.browseId == p.browseId } }) {
+        val browseId = p.browseId ?: continue
+        rows += LibraryPlaylistRow("yt:$browseId", p.title, p.subtitle, p.thumbnailUrl, pin = browseId, source = "YouTube Music", onClick = { nav.browse(browseId) })
+    }
+    val order = listOf("Spotify", "YouTube Music", "On this phone")
+    val pinnedRows = pinned.mapNotNull { key -> rows.firstOrNull { it.pin == key } }
+    return pinnedRows + rows.filter { it !in pinnedRows }.sortedBy { order.indexOf(it.source) }
+}
+
 @Composable
 fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: LibraryNav) {
     val records by History.records.collectAsState()
     val liked by LibraryStore.liked.collectAsState()
-    val playlists by LibraryStore.playlists.collectAsState()
     val finished by Downloads.done.collectAsState(Downloads.doneNow())
-    val downloadEntries by Downloads.entries.collectAsState()
-    val hearted by LibraryStore.savedLists.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val libraryUi by AppSettings.ui.collectAsState()
     val yearStart = remember {
         Calendar.getInstance().apply { set(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0) }.timeInMillis
     }
-    val year = remember { Calendar.getInstance().get(Calendar.YEAR) }
     val summary = remember(records) { History.replay(records, yearStart) }
-    val cachedPlaylists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
-    // One linked to a playlist here is listed once, as that one.
-    val ytPlaylists = if (signedIn) remember(cachedPlaylists, playlists) { PlaylistLinks.unlinked(cachedPlaylists, playlists) } else emptyList()
     LaunchedEffect(signedIn, account?.email) {
         if (signedIn) runCatching { MusicRepository.libraryPlaylists() }
     }
@@ -202,34 +259,11 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     if (naming) NewPlaylistDialog(signedIn, onDismiss = { naming = false }) { name, privacy -> naming = false; nav.playlist(LibraryStore.createPlaylist(name, privacy = privacy)) }
     val doneCount = finished.size
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-
-    val spotifyConnected by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
-    val expandedGroups = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
-    val groups = linkedMapOf<String, MutableList<LibraryPlaylistRow>>()
-    fun group(name: String) = groups.getOrPut(name) { mutableListOf() }
-    for (p in playlists) {
-        val platform = when {
-            p.spotifyId != null && spotifyConnected -> "Spotify"
-            p.spotifyId == null && p.synced -> "YouTube Music"
-            else -> "On this phone"
-        }
-        val saved = p.songs.count { downloadEntries[it.videoId]?.state == DownloadState.DONE }
-        group(platform) += LibraryPlaylistRow(p.id, p.name,
-            "${p.songs.size} songs" + if (saved > 0) " · $saved downloaded" else "",
-            p.coverUrl, p, pin = p.id, onClick = { nav.playlist(p.id) })
-    }
-    for (h in hearted) {
-        group("YouTube Music") += LibraryPlaylistRow("saved:${h.browseId}", h.title, h.subtitle, h.thumbnailUrl, pin = h.browseId, onClick = { nav.browse(h.browseId) })
-    }
-    for (p in ytPlaylists.filter { p -> hearted.none { it.browseId == p.browseId } }) {
-        val browseId = p.browseId ?: continue
-        group("YouTube Music") += LibraryPlaylistRow("yt:$browseId", p.title, p.subtitle, p.thumbnailUrl, pin = browseId, onClick = { nav.browse(browseId) })
-    }
-    // Pinned ones go to the top, in the order they were pinned, and out of their own group.
-    val pinnedRows = libraryUi.pinnedPlaylists.mapNotNull { key -> groups.values.firstNotNullOfOrNull { rows -> rows.firstOrNull { it.pin == key } } }
-    if (pinnedRows.isNotEmpty()) {
-        groups.values.forEach { rows -> rows.removeAll { it in pinnedRows } }
-        groups["Pinned"] = pinnedRows.toMutableList()
+    val rows = rememberPlaylistRows(nav)
+    // The pinned ones, then the most played; Show all has the rest.
+    val top = remember(rows, libraryUi.pinnedPlaylists) {
+        val pinned = rows.filter { it.pin in libraryUi.pinnedPlaylists }
+        (pinned + rows.filter { it !in pinned }.sortedByDescending { it.plays }).take(5)
     }
 
     val page: @Composable () -> Unit = { LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -287,74 +321,32 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         item {
             SectionHeader("Playlists", action = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { AppSettings.updateUi { it.copy(playlistGrid = !it.playlistGrid) } }) {
-                        Icon(if (libraryUi.playlistGrid) Icons.Rounded.ViewList else Icons.Rounded.GridView,
-                            if (libraryUi.playlistGrid) "Show playlists as a list" else "Show playlists as tiles")
-                    }
                     if (signedIn) {
                         IconButton(onClick = { pulled = false; refresh() }, enabled = !refreshing) {
                             if (refreshing) androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                             else Icon(Icons.Rounded.Refresh, "Refresh YouTube Music playlists", Modifier.size(20.dp))
                         }
                     }
-                    TextButton(onClick = nav.importPlaylist) {
-                        Icon(Icons.Rounded.Download, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Import")
-                    }
-                    TextButton(onClick = { naming = true }) {
-                        Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("New")
-                    }
+                    TextButton(onClick = nav.allPlaylists) { Text("Show all", fontWeight = FontWeight.SemiBold) }
                 }
             })
         }
-        if (playlists.isEmpty() && ytPlaylists.isEmpty() && hearted.isEmpty()) {
-            item {
-                Text(
-                    "Make one with New, bring one over from Spotify or YouTube Music with Import, or add any song from its menu.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                )
-            }
-        }
-        for (platform in listOf("Pinned", "Spotify", "YouTube Music", "On this phone")) {
-            val rows = groups[platform].orEmpty()
-            if (rows.isEmpty()) continue
-            item(key = "group:$platform") { SectionHeader(platform) }
-            if (libraryUi.playlistGrid) {
-                // Tiles go sideways, a row to each group, so a long group doesn't push the rest far down.
-                item(key = "tiles:$platform") {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    ) {
-                        items(rows, key = { it.key }) { row -> PlaylistTile(row, Modifier.width(150.dp).animateItem()) }
+        item(key = "playlist-tiles") {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            ) {
+                item(key = "new") { NewPlaylistTile(signedIn, { naming = true }, Modifier.width(TILE_WIDTH)) }
+                item(key = "import") {
+                    ActionTile("Import Spotify", "From a playlist link", nav.importPlaylist, Modifier.width(TILE_WIDTH)) {
+                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(64.dp))
                     }
                 }
-                continue
-            }
-            val visibleRows = if (expandedGroups[platform] == true || platform == "Pinned") rows else rows.take(5)
-            items(visibleRows, key = { "$platform:${it.key}" }) { row ->
-                PinnableRow(row.pin, Modifier.animateItem()) { onLongClick ->
-                    PlaylistRow(row.url, row.title, row.subtitle, row.onClick,
-                        from = if (row.local?.spotifyId != null && spotifyConnected) "Spotify" else null,
-                        onLongClick = onLongClick,
-                        cover = if (row.local != null && row.url == null) ({
-                            com.opentune.ui.components.PlaylistCover(row.local.name, row.local.songs.map { it.thumbnailUrl }, Modifier.size(56.dp))
-                        }) else null)
-                }
-            }
-            if (platform != "Pinned" && rows.size > 5) item(key = "fold:$platform") {
-                TextButton(onClick = { expandedGroups[platform] = expandedGroups[platform] != true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (expandedGroups[platform] == true) "Show less" else "Show more (${rows.size - 5})")
-                }
+                item(key = "liked") { LikedTile(liked.size, nav.liked, Modifier.width(TILE_WIDTH)) }
+                items(top, key = { it.key }) { row -> PlaylistTile(row, Modifier.width(TILE_WIDTH).animateItem()) }
             }
         }
-
     } }
 
     // Pull to refresh only when there's an account to refresh from.
@@ -365,6 +357,143 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
 }
 
+/** The orders "Show all" can put playlists in. Pinned ones stay first in each. */
+private enum class PlaylistOrder(val label: String) {
+    LIBRARY("Where they're from"), PLAYED("Most played"), NEWEST("Newest first"), NAME("A to Z"), SONGS("Most songs");
+
+    fun sort(rows: List<LibraryPlaylistRow>): List<LibraryPlaylistRow> = when (this) {
+        LIBRARY -> rows
+        PLAYED -> rows.sortedByDescending { it.plays }
+        NEWEST -> rows.sortedByDescending { it.local?.createdAt ?: 0L }
+        NAME -> rows.sortedBy { it.title.lowercase() }
+        SONGS -> rows.sortedByDescending { it.local?.songs?.size ?: -1 }
+    }
+}
+
+/** Every playlist, two to a row, from "Show all" on Library. */
+@Composable
+fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: () -> Unit) {
+    val liked by LibraryStore.liked.collectAsState()
+    val signedIn by AccountStore.signedIn.collectAsState()
+    val pinned = AppSettings.ui.collectAsState().value.pinnedPlaylists
+    var order by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PlaylistOrder.LIBRARY) }
+    var sorting by remember { mutableStateOf(false) }
+    var naming by remember { mutableStateOf(false) }
+    if (naming) NewPlaylistDialog(signedIn, onDismiss = { naming = false }) { name, privacy -> naming = false; nav.playlist(LibraryStore.createPlaylist(name, privacy = privacy)) }
+    val rows = rememberPlaylistRows(nav)
+    val shown = remember(rows, order, pinned) {
+        val top = rows.filter { it.pin in pinned }
+        top + order.sort(rows.filter { it !in top })
+    }
+    val full = androidx.compose.foundation.lazy.grid.GridItemSpan(2)
+    // Behind it all, the first playlist's cover blurred across the top, running down into its colour.
+    val coverUrl = shown.firstOrNull { it.url != null }?.url.artworkAt(CARD_ART_PX)
+    val seed = com.opentune.ui.theme.rememberArtworkSeed(coverUrl)
+    val background = MaterialTheme.colorScheme.background
+    val accent by androidx.compose.animation.animateColorAsState(
+        seed?.let { androidx.compose.ui.graphics.lerp(background, it, 0.22f) } ?: background, label = "playlistsAccent",
+    )
+    Box(Modifier.fillMaxSize().background(accent)) {
+    if (coverUrl != null) CoverWash(coverUrl, accent, Modifier.fillMaxWidth().height(440.dp))
+    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+        contentPadding = contentPadding,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+    ) {
+        item(key = "header", span = { full }) {
+            PageHeader(com.opentune.ui.theme.tr("Playlists"), onBack = onBack, actions = {
+                // Sorting and the account in one glass pill, as on Library.
+                Row(
+                    Modifier.height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box {
+                        IconButton(onClick = { sorting = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort playlists") }
+                        androidx.compose.material3.DropdownMenu(sorting, { sorting = false }, shape = RoundedCornerShape(20.dp)) {
+                            PlaylistOrder.entries.forEach { o ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(o.label, fontWeight = if (o == order) FontWeight.SemiBold else null) },
+                                    trailingIcon = if (o == order) ({ Icon(Icons.Rounded.Check, null) }) else null,
+                                    onClick = { order = o; sorting = false },
+                                )
+                            }
+                        }
+                    }
+                    com.opentune.ui.components.AccountButton(nav.settings, plain = true)
+                }
+            })
+        }
+        item(key = "new") { NewPlaylistTile(signedIn, { naming = true }) }
+        item(key = "liked") { LikedTile(liked.size, nav.liked) }
+        items(shown.size, key = { shown[it].key }) { i -> PlaylistTile(shown[i], Modifier.animateItem()) }
+    }
+    }
+}
+
+/**
+ * A cover blurred and spread wide, fading down into [into]. Before Android 12, which
+ * can't blur, a tiny copy of it stretched to fill gives the same soft wash.
+ */
+@Composable
+private fun CoverWash(url: String, into: Color, modifier: Modifier) {
+    Box(modifier.clipToBounds()) {
+        val blurs = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        androidx.compose.animation.Crossfade(url, label = "coverWash") { u ->
+            Artwork(
+                if (blurs) u else u.artworkAt(24),
+                Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f; alpha = 0.8f }
+                    .then(if (blurs) Modifier.blur(70.dp) else Modifier),
+                shape = androidx.compose.ui.graphics.RectangleShape,
+            )
+        }
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to into.copy(alpha = 0.1f), 0.6f to into.copy(alpha = 0.55f), 1f to into)))
+    }
+}
+
+/** A tile that does something rather than open a playlist: a picture in a dark square, a name and a line under it. */
+@Composable
+private fun ActionTile(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    background: Brush? = null,
+    art: @Composable () -> Unit,
+) {
+    Column(modifier.clip(MaterialTheme.shapes.large).then(Modifier.menuClickable(onClick = onClick, onLongClick = null)).padding(6.dp)) {
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(1f).clip(MaterialTheme.shapes.large)
+                .then(if (background != null) Modifier.background(background) else Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)),
+            Alignment.Center,
+        ) { art() }
+        TileText(title, subtitle)
+    }
+}
+
+@Composable
+private fun NewPlaylistTile(signedIn: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    ActionTile("New playlist", if (signedIn) "Saved to YouTube Music" else "On this phone", onClick, modifier) {
+        Icon(Icons.Rounded.Add, null, Modifier.size(44.dp))
+    }
+}
+
+/** Liked songs as a playlist, in purple running into pink. */
+@Composable
+private fun LikedTile(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    ActionTile("Liked Music", if (count == 0) "Auto playlist" else "Auto playlist · $count songs", onClick, modifier,
+        background = Brush.verticalGradient(listOf(Color(0xFF8C6AF0), Color(0xFFF95AAE)))) {
+        Icon(Icons.Rounded.ThumbUp, null, Modifier.size(72.dp), tint = Color.White)
+    }
+}
+
+@Composable
+private fun TileText(title: String, subtitle: String) {
+    Text(title, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+        maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
 
 /** One of the four library shortcuts: an accent badge, a name and a count. */
 @Composable
@@ -431,8 +560,7 @@ private fun PlaylistTile(row: LibraryPlaylistRow, modifier: Modifier = Modifier)
             if (row.local != null && row.url == null) com.opentune.ui.components.PlaylistCover(row.title,
                 row.local.songs.map { it.thumbnailUrl }, Modifier.fillMaxWidth().aspectRatio(1f))
             else Artwork(row.url.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.large)
-            Text(row.title, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(row.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            TileText(row.title, if (row.local != null) "${row.source} · ${row.subtitle}" else row.subtitle)
         }
     }
 }

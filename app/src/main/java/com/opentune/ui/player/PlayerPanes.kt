@@ -119,6 +119,8 @@ fun QueuePane(
     onMove: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
     smartShuffle: Boolean = false,
+    /** Apple Music's words for what comes after the queue. */
+    appleWords: Boolean = false,
 ) {
     val autoplay = AppSettings.playback.collectAsState().value.autoplay
     val haptics = com.opentune.ui.components.rememberHaptics()
@@ -153,11 +155,13 @@ fun QueuePane(
             Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.AllInclusive, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
                 Column(Modifier.padding(start = 14.dp)) {
-                    Text("Up next", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(if (appleWords && autoplay && !shuffle && !smartShuffle) "AutoPlay" else "Up next",
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
                         when {
                             shuffle -> "Shuffled · turn shuffle off to reorder"
                             smartShuffle -> "Smart shuffle · similar songs are marked with a sparkle"
+                            autoplay && appleWords -> "Similar music will keep playing"
                             autoplay -> "Similar music keeps playing after these"
                             else -> "Playback stops after these"
                         },
@@ -270,11 +274,20 @@ private fun QueueRow(song: Song, isCurrent: Boolean, isPlaying: Boolean, handle:
 
 /** The line being sung right now, under the title; tap to open the lyrics. */
 @Composable
-fun LyricPreview(lyrics: LyricsState, position: () -> Long, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun LyricPreview(
+    lyrics: LyricsState, position: () -> Long, onOpen: () -> Unit, modifier: Modifier = Modifier,
+    /** Apple Music's look: plain grey words while they're found, no pill. */
+    plain: Boolean = false,
+) {
     // The position function changes with the lyrics offset; read the latest.
     val pos by rememberUpdatedState(position)
     // While the lyrics are being found, say so where the line will be.
-    if (lyrics is LyricsState.Loading) { SettingUpBadge(modifier); return }
+    if (lyrics is LyricsState.Loading) {
+        if (plain) Text("Finding the words", modifier.padding(vertical = 6.dp), style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        else SettingUpBadge(modifier)
+        return
+    }
     val synced = (lyrics as? LyricsState.Found)?.lyrics as? Lyrics.Synced ?: return
     val line by remember(synced) {
         derivedStateOf {

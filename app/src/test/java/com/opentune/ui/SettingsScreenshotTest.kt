@@ -55,7 +55,7 @@ class SettingsScreenshotTest {
 
     @Test fun categoriesThenAPage() {
         save("settings-home")
-        compose.onNodeWithText("Look and feel").performClick()
+        compose.onNodeWithText("Appearance").performClick()
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()
         compose.onNodeWithText("Theme").assertIsDisplayed()

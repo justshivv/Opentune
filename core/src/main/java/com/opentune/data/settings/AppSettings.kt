@@ -340,6 +340,8 @@ data class InterfaceSettings(
     val playlistGrid: Boolean = false,
     /** Playlists pinned to the top of Library, first pinned first: a local playlist's id, or a YouTube Music browse id. */
     val pinnedPlaylists: List<String> = emptyList(),
+    /** On a TV, the heavy effects have been turned down once; they can be turned back on by hand. */
+    val tvTuned: Boolean = false,
     val reduceAnimation: Boolean = false,
     /** The mark's dive into the app when it starts. */
     val openingAnimation: Boolean = true,
