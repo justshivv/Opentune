@@ -200,7 +200,7 @@ private fun rememberPlaylistRows(nav: LibraryNav): List<LibraryPlaylistRow> {
         }
         val saved = p.songs.count { downloadEntries[it.videoId]?.state == DownloadState.DONE }
         rows += LibraryPlaylistRow(p.id, p.name,
-            "${p.songs.size} songs" + if (saved > 0) " · $saved downloaded" else "",
+            (if (p.songs.size == 1) "1 song" else "${p.songs.size} songs") + if (saved > 0) " · $saved downloaded" else "",
             p.coverUrl, p, pin = p.id, source = source,
             plays = p.songs.sumOf { playCounts[it.videoId] ?: 0 }, onClick = { nav.playlist(p.id) })
     }

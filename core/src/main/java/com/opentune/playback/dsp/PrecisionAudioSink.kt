@@ -31,7 +31,8 @@ import java.nio.ByteOrder
 class PrecisionAudioSink(
     private val delegate: AudioSink,
     private val dsp: DspAudioProcessor,
-    private val floatWanted: () -> Boolean,
+    /** Whether to put out float for a song whose decoder gives this [C] encoding. */
+    private val floatWanted: (sourceEncoding: Int) -> Boolean,
 ) : ForwardingAudioSink(delegate) {
 
     private var precise = false
@@ -58,7 +59,7 @@ class PrecisionAudioSink(
      * through bit for bit.
      */
     override fun getFormatSupport(format: Format): Int =
-        if (readable(format) && (format.pcmEncoding != C.ENCODING_PCM_FLOAT || floatWanted())) AudioSink.SINK_FORMAT_SUPPORTED_DIRECTLY
+        if (readable(format) && (format.pcmEncoding != C.ENCODING_PCM_FLOAT || floatWanted(C.ENCODING_PCM_FLOAT))) AudioSink.SINK_FORMAT_SUPPORTED_DIRECTLY
         else super.getFormatSupport(format)
 
     override fun supportsFormat(format: Format): Boolean = getFormatSupport(format) != AudioSink.SINK_FORMAT_UNSUPPORTED
@@ -72,10 +73,12 @@ class PrecisionAudioSink(
             return
         }
         inputEncoding = format.pcmEncoding
+        // Read as the output opens, so an exclusive USB DAC is set to a format that holds it whole.
+        com.opentune.playback.BitPerfectUsb.sourceEncoding = inputEncoding
         channels = format.channelCount
         sampleRate = format.sampleRate
         val floatFormat = format.buildUpon().setPcmEncoding(C.ENCODING_PCM_FLOAT).build()
-        outputEncoding = if (floatWanted() && delegate.getFormatSupport(floatFormat) == AudioSink.SINK_FORMAT_SUPPORTED_DIRECTLY) {
+        outputEncoding = if (floatWanted(inputEncoding) && delegate.getFormatSupport(floatFormat) == AudioSink.SINK_FORMAT_SUPPORTED_DIRECTLY) {
             C.ENCODING_PCM_FLOAT
         } else {
             C.ENCODING_PCM_16BIT

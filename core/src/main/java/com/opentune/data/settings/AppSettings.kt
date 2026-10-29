@@ -376,6 +376,8 @@ data class InterfaceSettings(
     val seekbarColor: SeekbarColor = SeekbarColor.PLAIN,
     /** What the time on the right of the seek bar shows. */
     val seekbarTime: SeekbarTime = SeekbarTime.LEFT,
+    /** The audio details page: cards of format, routing and source, or the live pipeline. */
+    val signalPathStyle: SignalPathStyle = SignalPathStyle.DETAILS,
     /** Small dots on the seek bar where the song's parts (verse, chorus) begin. */
     val seekbarMarks: Boolean = true,
     /** A "Skip to chorus" button beside the source pill, when the lyrics mark the chorus. */
@@ -619,6 +621,12 @@ enum class SeekbarColor(val label: String) {
     PLAIN("Plain"),
     ACCENT("Accent"),
     GRADIENT("Gradient"),
+}
+
+/** How the audio details from the quality label are laid out. */
+enum class SignalPathStyle(val label: String) {
+    DETAILS("Format details"),
+    TIMELINE("Pipeline"),
 }
 
 enum class SeekbarTime(val label: String) {

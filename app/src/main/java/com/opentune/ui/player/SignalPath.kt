@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -72,7 +73,14 @@ import kotlin.math.sin
  * the rail, goes once and a half round each node's ring, and moves on.
  */
 @Composable
-fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit) {
+fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.opentune.data.model.Song? = null) {
+    // The format cards unless the pipeline was chosen in Settings, or asked for from the cards.
+    val chosen = AppSettings.ui.collectAsState().value.signalPathStyle
+    var pipeline by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    if (chosen == com.opentune.data.settings.SignalPathStyle.DETAILS && !pipeline) {
+        FormatDetailsDialog(song, format, onDismiss, onPipeline = { pipeline = true })
+        return
+    }
     val context = LocalContext.current
     val am = remember { context.getSystemService(AudioManager::class.java) }
     val eq by AppSettings.equalizer.collectAsState()

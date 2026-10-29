@@ -1333,7 +1333,7 @@ fun PlayerLayout(
         if (showOffset) LyricsOffsetDialog(current.videoId, autoOffsetMs, onDismiss = { showOffset = false })
         if (showLyricsSource) LyricsSourceDialog(current, state.durationMs, onDismiss = { showLyricsSource = false })
         if (showDetails) TrackDetailsDialog(current, state.durationMs, onDismiss = { showDetails = false })
-        if (showSignal) SignalPathDialog(state.audioFormat, onDismiss = { showSignal = false })
+        if (showSignal) SignalPathDialog(state.audioFormat, onDismiss = { showSignal = false }, song = current)
     }
 }
 

@@ -68,7 +68,7 @@ class SettingsScreenshotTest {
         compose.onNodeWithText("Search settings").performTextInput("jelly")
         compose.waitForIdle()
         assertTrue(compose.onAllNodesWithText("Dock lens").fetchSemanticsNodes().isNotEmpty())
-        assertTrue(compose.onAllNodesWithText("Motion · Dock", ignoreCase = true).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodesWithText("Motion and feel · Dock", ignoreCase = true).fetchSemanticsNodes().isNotEmpty())
         // Each setting lives on one page only.
         assertTrue(compose.onAllNodesWithText("Dock lens").fetchSemanticsNodes().size == 1)
         save("settings-search")

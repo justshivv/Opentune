@@ -13,6 +13,8 @@ import org.json.JSONObject
  */
 object CommunityAddons {
     private const val CONFIG = "https://justshivv.github.io/Opentune/usage-config.json"
+    /** The owner's server, and the Cloudflare Worker it took over from. */
+    private val CATALOG_HOSTS = setOf("addon-opentune.rethinknow.in", "opentune-usage.create-a-new-site-with-sites.workers.dev")
     private val mutex = Mutex()
     private var lastCheck = 0L
     private const val EVERY_MS = 10 * 60_000L
@@ -28,7 +30,7 @@ object CommunityAddons {
                 }) else {
                     val config = JSONObject(AddonHttp.bytes(CONFIG, 8192, false).toString(Charsets.UTF_8))
                     val base = AddonProtocol.url(config.getString("apiBase"))
-                    require(base.host == "opentune-usage.create-a-new-site-with-sites.workers.dev")
+                    require(base.host in CATALOG_HOSTS)
                     JSONObject(AddonHttp.bytes(base.newBuilder().encodedPath("/v1/addons").build().toString(), 65536, false).toString(Charsets.UTF_8))
                 }
                 val sources = document.getJSONArray("sources")

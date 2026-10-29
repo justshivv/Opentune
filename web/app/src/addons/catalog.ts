@@ -1,9 +1,9 @@
 import { currentConfig, refreshConfig } from '@/config/remote';
 import { endpoint, type Addon } from '@opentune/shared/addons';
 
-/** Where the site says the OpenTune Worker is; the catalog is only ever read from that Worker. */
+/** Where the site says the owner's server is; the catalog is only ever read from one of these. */
 const CONFIG_URL = 'https://justshivv.github.io/Opentune/usage-config.json';
-const WORKER_HOST = 'opentune-usage.create-a-new-site-with-sites.workers.dev';
+const CATALOG_HOSTS = ['addon-opentune.rethinknow.in', 'opentune-usage.create-a-new-site-with-sites.workers.dev'];
 /** As on Android: looked at on start and when Audio sources opens, at most this often. */
 const REFRESH_MS = 15 * 60_000;
 
@@ -54,7 +54,7 @@ export async function fetchPublished(force = false): Promise<Published[] | null>
   running ??= (async () => {
     const config = (await (await fetch(CONFIG_URL, { cache: 'no-store', credentials: 'omit', signal: AbortSignal.timeout(8000) })).json()) as { apiBase?: unknown };
     const base = new URL(String(config.apiBase));
-    if (base.protocol !== 'https:' || base.hostname !== WORKER_HOST) throw new Error('Unexpected source catalog address');
+    if (base.protocol !== 'https:' || !CATALOG_HOSTS.includes(base.hostname)) throw new Error('Unexpected source catalog address');
     const response = await fetch(new URL('/v1/addons', base), { credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(8000) });
     if (!response.ok) throw new Error(`Source catalog returned HTTP ${response.status}`);
     const published = publishedOf(await response.json());

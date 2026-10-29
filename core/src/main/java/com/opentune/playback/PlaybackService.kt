@@ -190,11 +190,10 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
-        val floatOutput = AppSettings.playback.value.floatOutput
         // The main player and the bridge decode the same way: the bridge used to
         // take the phone's default FLAC decoder, which some phones can't play
         // add-on FLAC with, so the swap to it failed and the song stayed on YouTube.
-        fun renderersFor(effects: DspAudioProcessor) = object : DefaultRenderersFactory(context) {
+        fun renderersFor(effects: DspAudioProcessor, exclusive: Boolean) = object : DefaultRenderersFactory(context) {
             init {
                 setEnableDecoderFallback(true)
                 setMediaCodecSelector { mime, secure, tunneling ->
@@ -211,15 +210,27 @@ class PlaybackService : MediaLibraryService() {
                 enableAudioTrackPlaybackParams: Boolean,
             ): AudioSink = com.opentune.playback.dsp.PrecisionAudioSink(
                 // The effects run in the precision sink, on float samples, not in Media3's chain.
+                // Float is always allowed through; the precision sink decides, song by song, whether to use it.
                 DefaultAudioSink.Builder(context)
-                    .setEnableFloatOutput(floatOutput)
+                    .setEnableFloatOutput(true)
                     .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain())
+                    .apply {
+                        // Only the main player takes the DAC exclusively: the bridge opening its
+                        // own output would switch the DAC under the song that's playing.
+                        if (exclusive) setAudioOutputProvider(ExclusiveUsbOutputProvider(
+                            androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider.Builder(context).build()))
+                    }
                     .build(),
                 effects,
-                floatWanted = { floatOutput },
+                // Float where asked for, and for an exclusive USB DAC whenever the song has more
+                // than 16 bits: float carries 24-bit samples exactly, and they go out whole.
+                floatWanted = { source ->
+                    AppSettings.playback.value.floatOutput ||
+                        (BitPerfectUsb.wanted && source != C.ENCODING_PCM_16BIT && source != C.ENCODING_PCM_8BIT)
+                },
             )
         }
-        val renderers = renderersFor(dsp)
+        val renderers = renderersFor(dsp, exclusive = true)
 
         // Start as soon as a little audio is in: the defaults wait for 2.5 s,
         // which is video-sized caution. A stream starts after half a second buffered
@@ -258,7 +269,7 @@ class PlaybackService : MediaLibraryService() {
         // better stream from where the song is, through the same sources and
         // so into the same cache, and the swap then reads what it fetched.
         auditionPlayer = {
-            ExoPlayer.Builder(context, renderersFor(bridgeDsp))
+            ExoPlayer.Builder(context, renderersFor(bridgeDsp, exclusive = false))
                 .setMediaSourceFactory(qualitySources)
                 .setLoadControl(
                     DefaultLoadControl.Builder()
@@ -394,13 +405,14 @@ class PlaybackService : MediaLibraryService() {
         }
 
         audioManager = getSystemService(AudioManager::class.java)?.also { am ->
+            BitPerfectUsb.init(am)
             am.registerAudioDeviceCallback(deviceCallback, null)
         }
         scope.launch {
             AppSettings.playback.map { it.preferUsbDac }.distinctUntilChanged().collect { applyPreferredDevice() }
         }
         scope.launch {
-            AppSettings.playback.map { it.bitPerfectUsb to it.floatOutput }.distinctUntilChanged().collect { applyBitPerfect() }
+            AppSettings.playback.map { it.bitPerfectUsb to it.floatOutput }.distinctUntilChanged().collect { applyBitPerfect(reopen = true) }
         }
         registerReceiver(volumeReceiver, IntentFilter("android.media.VOLUME_CHANGED_ACTION"), VOLUME_RECEIVER_FLAGS)
 
@@ -596,7 +608,7 @@ class PlaybackService : MediaLibraryService() {
         loudnessEnhancer = null
         audioManager?.unregisterAudioDeviceCallback(deviceCallback)
         runCatching { unregisterReceiver(volumeReceiver) }
-        audioManager?.let { BitPerfectUsb.apply(it, wanted = false, sampleRate = outputRate, float = false) }
+        BitPerfectUsb.setWanted(false)
         scope.cancel()
         startupSelections.clear()
         soundEffects?.release()
@@ -892,11 +904,7 @@ class PlaybackService : MediaLibraryService() {
                 }
                 return
             }
-            val rate = format.sampleRate.takeIf { it > 0 } ?: return
-            if (rate != outputRate) {
-                outputRate = rate
-                if (AppSettings.playback.value.bitPerfectUsb) applyBitPerfect()
-            }
+            // The DAC follows the song's rate by itself: it's set as each song's output opens.
         }
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -2054,6 +2062,10 @@ class PlaybackService : MediaLibraryService() {
     private val deviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
             applyPreferredDevice()
+            // A DAC plugged in mid-song: the song moves onto it exclusively at once.
+            if (devicesListed && BitPerfectUsb.wanted && addedDevices.orEmpty().any { it.type in USB_OUTPUTS }) {
+                (mediaSession?.player as? ExoPlayer)?.let(::reopenOutput)
+            }
             // The callback reports every device already there as it's
             // registered; only one that turns up afterwards is a connection.
             if (!devicesListed) {
@@ -2063,7 +2075,10 @@ class PlaybackService : MediaLibraryService() {
             if (addedDevices.orEmpty().any { it.isSink && it.type in LISTENING_DEVICES }) resumeOnConnect()
         }
 
-        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = applyPreferredDevice()
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+            applyPreferredDevice()
+            if (removedDevices.orEmpty().any { it.type in USB_OUTPUTS }) BitPerfectUsb.devicesChanged()
+        }
     }
     private var devicesListed = false
 
@@ -2109,15 +2124,29 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    /** The decoder's output rate for the current track, for the bit-perfect mixer. */
-    private var outputRate = 48_000
+    private var exclusiveWas: Boolean? = null
 
-    private fun applyBitPerfect() {
-        val am = audioManager ?: return
+    /**
+     * Turns exclusive USB output on or off. With [reopen], a song already
+     * playing has its output opened again where it is (a seek in place does
+     * it), so the change is heard now and not from the next song.
+     */
+    private fun applyBitPerfect(reopen: Boolean = false) {
         val pb = AppSettings.playback.value
-        BitPerfectUsb.apply(am, pb.bitPerfectUsb, outputRate, pb.floatOutput)
+        BitPerfectUsb.setWanted(pb.bitPerfectUsb)
         applyLoudness()
-        mediaSession?.player?.let { openEffectSession((it as ExoPlayer).audioSessionId) }
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        openEffectSession(player.audioSessionId)
+        val changed = exclusiveWas != null && exclusiveWas != pb.bitPerfectUsb
+        exclusiveWas = pb.bitPerfectUsb
+        if (reopen && (changed || pb.bitPerfectUsb)) reopenOutput(player)
+    }
+
+    /** The song's output closed and opened again at the same place, so it opens on the current route. */
+    private fun reopenOutput(player: ExoPlayer) {
+        if (player.playbackState != Player.STATE_READY && player.playbackState != Player.STATE_BUFFERING) return
+        if (player.currentMediaItem == null) return
+        player.seekTo(player.currentPosition)
     }
 
     /**
@@ -2499,6 +2528,8 @@ class PlaybackService : MediaLibraryService() {
             AudioDeviceInfo.TYPE_BLE_HEADSET,
             AudioDeviceInfo.TYPE_BLE_SPEAKER,
         )
+        /** A USB DAC or headset, the outputs exclusive mode takes. */
+        val USB_OUTPUTS = setOf(AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET)
         /** Outputs that take media away from the phone's speaker. */
         val EXTERNAL_OUTPUTS = LISTENING_DEVICES + setOf(
             AudioDeviceInfo.TYPE_USB_DEVICE,

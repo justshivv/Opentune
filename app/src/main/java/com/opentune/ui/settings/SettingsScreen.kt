@@ -808,13 +808,19 @@ private fun settingsSections(
                 Entry("Audio add-ons", "source URL manifest order priority lossless flac high res") {
                     SettingRow("Audio add-ons", icon = Icons.Rounded.HighQuality, summary = "Add service URLs and choose source priority", onClick = { audioAddons = true })
                 },
-                Entry("Bit-perfect USB output", "dac exclusive passthrough hi-fi audiophile mixer bypass") {
+                Entry("Bit-perfect USB output", "dac exclusive mode usb audio player pro hiby passthrough hi-fi audiophile mixer bypass sample rate switching") {
+                    val usb by BitPerfectUsb.status.collectAsState()
                     ToggleRow(
-                        "Bit-perfect USB output",
+                        "Exclusive USB output",
                         pb.bitPerfectUsb,
                         { v -> AppSettings.updatePlayback { it.copy(bitPerfectUsb = v) } },
-                        summary = if (BitPerfectUsb.supported) "Sends the song unchanged to a USB DAC: no mixing, resampling, effects or crossfade. Volume is applied by the app; at full volume the signal is bit-exact."
-                        else "Needs Android 14 or newer",
+                        summary = if (!BitPerfectUsb.supported) "Needs Android 14 or newer"
+                        else when (val s = usb) {
+                            is BitPerfectUsb.Status.Active -> "Exclusive on ${s.device}: ${s.format.ifEmpty { "${s.bits}-bit" }} at ${s.sampleRate / 1000.0} kHz, bit for bit"
+                            is BitPerfectUsb.Status.NoMatch -> "On. The DAC lists no bit-perfect mode for ${s.sampleRate / 1000.0} kHz, so this song goes through Android's mixer"
+                            BitPerfectUsb.Status.NoDac -> "On. Plug in a USB DAC and the music moves to it"
+                            else -> "The DAC plays only OpenTune, switched to each song's own sample rate and bit depth: no mixing, resampling or effects. Volume is applied by the app; at full volume the signal is bit-exact"
+                        },
                         icon = Icons.Rounded.Usb,
                         enabled = BitPerfectUsb.supported,
                         beta = true,
@@ -1103,6 +1109,11 @@ private fun settingsSections(
                 Entry("Seek bar time", "progress bar remaining total length duration time left") {
                     SettingRow("Time on the right", icon = Icons.Rounded.Schedule, below = {
                         PillSegmented(com.opentune.data.settings.SeekbarTime.entries, ui.seekbarTime, { it.label }, { v -> AppSettings.updateUi { it.copy(seekbarTime = v) } })
+                    })
+                },
+                Entry("Audio details page", "signal path pipeline format details bit perfect output routing codec resolution") {
+                    SettingRow("Audio details page", summary = "What the quality label opens: cards of format, output and source, or the live pipeline", icon = Icons.Rounded.GraphicEq, below = {
+                        PillSegmented(com.opentune.data.settings.SignalPathStyle.entries, ui.signalPathStyle, { it.label }, { v -> AppSettings.updateUi { it.copy(signalPathStyle = v) } })
                     })
                 },
                 Entry("Song part marks", "seek bar chorus verse dots marks parts") {

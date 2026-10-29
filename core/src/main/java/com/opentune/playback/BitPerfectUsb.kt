@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.media.AudioMixerAttributes
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.media3.common.C
 import com.opentune.data.DebugLog as Log
 import kotlin.math.pow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,11 +15,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Bit-perfect output to a USB DAC on Android 14 and newer, through the
- * platform's own mixer bypass ([AudioManager.setPreferredMixerAttributes]
- * with [AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT]). The DAC then gets
- * the decoder's samples at the song's own rate: no Android resampling, no
- * mixing, no system effects.
+ * Exclusive, bit-perfect output to a USB DAC on Android 14 and newer, through
+ * the platform's own mixer bypass ([AudioManager.setPreferredMixerAttributes]
+ * with [AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT]). While it's on, the
+ * DAC takes nothing but this app's music, unmixed, unresampled and without
+ * system effects.
+ *
+ * Each time a song's output opens ([prepare], from [ExclusiveUsbOutputProvider]),
+ * the DAC is switched to that song's own sample rate and to the sample format
+ * that carries its bit depth whole: 16-bit stays 16-bit where the DAC takes it,
+ * 24-bit goes out as 24-bit packed or 32-bit, never cut to 16. So a 44.1 kHz
+ * album followed by a 96 kHz one plays each at its own rate, as USB Audio
+ * Player PRO or HiBy do with their own drivers.
  *
  * Android doesn't apply the system volume in this mode, so the app does it:
  * [softwareGainDb] follows the volume keys on a perceptual curve, and at
@@ -29,8 +37,9 @@ object BitPerfectUsb {
         data object Off : Status
         data object Unsupported : Status
         data object NoDac : Status
-        data class NoMatch(val sampleRate: Int) : Status
-        data class Active(val device: String, val sampleRate: Int, val bits: Int) : Status
+        /** The DAC has no bit-perfect format for this song: Android's normal mixer plays it instead. */
+        data class NoMatch(val sampleRate: Int, val bits: Int = 0) : Status
+        data class Active(val device: String, val sampleRate: Int, val bits: Int, val format: String = "") : Status
     }
 
     private val _status = MutableStateFlow<Status>(Status.Off)
@@ -40,68 +49,147 @@ object BitPerfectUsb {
 
     val supported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 
-    private val media: AudioAttributes = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_MEDIA)
-        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-        .build()
-
-    private var applied: AudioDeviceInfo? = null
+    /** Whether the listener has asked for it (Settings, Sound). */
+    @Volatile var wanted = false
+        private set
 
     /**
-     * Asks for (or drops) the bit-perfect mixer on the connected USB DAC, at
-     * [sampleRate] and 16-bit or float to match what the player outputs.
+     * The decoder's own sample format (a [C] PCM encoding) for the song whose
+     * output is about to open, so the DAC is asked for a format that holds it whole.
      */
-    fun apply(am: AudioManager, wanted: Boolean, sampleRate: Int, float: Boolean) {
-        if (!supported) {
-            _status.value = if (wanted) Status.Unsupported else Status.Off
-            return
+    @Volatile var sourceEncoding: Int = C.ENCODING_PCM_16BIT
+
+    // Made when first needed, so the decoder side can tell this object a song's format off a device too.
+    private val media: AudioAttributes by lazy {
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .build()
+    }
+
+    private var audioManager: AudioManager? = null
+    private var applied: AudioDeviceInfo? = null
+    /** The mixer last asked for, so the same song's output opening again doesn't ask twice. */
+    private var appliedKey: Triple<Int, Int, Int>? = null
+
+    fun init(am: AudioManager) { audioManager = am }
+
+    /** Turns it on or off; on, it takes hold as the next output opens. */
+    fun setWanted(wanted: Boolean) {
+        this.wanted = wanted
+        val am = audioManager
+        when {
+            !wanted -> { am?.let(::clear); _status.value = Status.Off }
+            !supported -> _status.value = Status.Unsupported
+            am == null || usbDac(am) == null -> { am?.let(::clear); _status.value = Status.NoDac }
         }
-        applyApi34(am, wanted, sampleRate, float)
+    }
+
+    /** A USB device came or went: drop a mixer set on a DAC that's gone. */
+    fun devicesChanged() {
+        val am = audioManager ?: return
+        if (!wanted || !supported) return
+        if (usbDac(am) == null) {
+            clear(am)
+            _status.value = Status.NoDac
+        }
+    }
+
+    /**
+     * For an output about to open at [sampleRate] with [channels]: the sample
+     * format (a [C] PCM encoding) the DAC takes this song in bit for bit, with
+     * the DAC already set to it. Null leaves the output on Android's normal path.
+     */
+    @Synchronized
+    fun prepare(sampleRate: Int, channels: Int): Int? {
+        val am = audioManager ?: return null
+        if (!wanted) return null
+        if (!supported) { _status.value = Status.Unsupported; return null }
+        return prepareApi34(am, sampleRate, channels, sourceEncoding)
     }
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-    private fun applyApi34(am: AudioManager, wanted: Boolean, sampleRate: Int, float: Boolean) {
-        val dac = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-            .firstOrNull { it.type == AudioDeviceInfo.TYPE_USB_DEVICE || it.type == AudioDeviceInfo.TYPE_USB_HEADSET }
-        if (!wanted || dac == null) {
+    private fun prepareApi34(am: AudioManager, sampleRate: Int, channels: Int, source: Int): Int? {
+        val dac = usbDac(am)
+        if (dac == null) {
             clear(am)
-            _status.value = if (!wanted) Status.Off else Status.NoDac
-            return
+            _status.value = Status.NoDac
+            return null
         }
-        val encoding = if (float) AudioFormat.ENCODING_PCM_FLOAT else AudioFormat.ENCODING_PCM_16BIT
-        val choice = runCatching { am.getSupportedMixerAttributes(dac) }.getOrDefault(emptyList())
-            .filter { it.mixerBehavior == AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT }
-            .firstOrNull {
-                it.format.sampleRate == sampleRate && it.format.encoding == encoding &&
-                    it.format.channelMask == AudioFormat.CHANNEL_OUT_STEREO
-            }
+        val mask = when (channels) {
+            1 -> AudioFormat.CHANNEL_OUT_MONO
+            2 -> AudioFormat.CHANNEL_OUT_STEREO
+            else -> return null.also { clear(am); _status.value = Status.NoMatch(sampleRate, bitsOf(source)) }
+        }
+        val offered = runCatching { am.getSupportedMixerAttributes(dac) }.getOrDefault(emptyList())
+            .filter { it.mixerBehavior == AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT && it.format.sampleRate == sampleRate && it.format.channelMask == mask }
+        // The first format, in order, that holds the song's samples whole.
+        val choice = carriers(source).firstNotNullOfOrNull { encoding -> offered.firstOrNull { it.format.encoding == encoding } }
         if (choice == null) {
-            // Asking for a format that doesn't match makes the DAC buzz; leave the normal mixer.
+            // Asking for a format the DAC doesn't list makes it buzz or go quiet; leave Android's mixer.
             clear(am)
-            _status.value = Status.NoMatch(sampleRate)
-            return
+            _status.value = Status.NoMatch(sampleRate, bitsOf(source))
+            return null
         }
-        val ok = runCatching { am.setPreferredMixerAttributes(media, dac, choice) }
-            .onFailure { Log.w(TAG, "Couldn't set the bit-perfect mixer", it) }
-            .getOrDefault(false)
-        if (ok) {
+        val key = Triple(dac.id, sampleRate, choice.format.encoding)
+        if (key != appliedKey || applied?.id != dac.id) {
+            val ok = runCatching { am.setPreferredMixerAttributes(media, dac, choice) }
+                .onFailure { Log.w(TAG, "Couldn't set the bit-perfect mixer", it) }
+                .getOrDefault(false)
+            if (!ok) {
+                clear(am)
+                _status.value = Status.NoMatch(sampleRate, bitsOf(source))
+                return null
+            }
             applied = dac
-            _status.value = Status.Active(dac.productName?.toString() ?: "USB DAC", sampleRate, if (float) 32 else 16)
-        } else {
-            clear(am)
-            _status.value = Status.NoMatch(sampleRate)
+            appliedKey = key
         }
+        val encoding = choice.format.encoding
+        _status.value = Status.Active(dac.productName?.toString()?.takeIf { it.isNotBlank() } ?: "USB DAC", sampleRate, bitsOf(encoding), label(encoding))
+        return encoding
     }
+
+    private fun usbDac(am: AudioManager): AudioDeviceInfo? = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        .firstOrNull { it.type == AudioDeviceInfo.TYPE_USB_DEVICE || it.type == AudioDeviceInfo.TYPE_USB_HEADSET }
 
     private fun clear(am: AudioManager) {
         val dac = applied ?: return
         if (supported) runCatching { clearApi34(am, dac) }
         applied = null
+        appliedKey = null
     }
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun clearApi34(am: AudioManager, dac: AudioDeviceInfo) {
         am.clearPreferredMixerAttributes(media, dac)
+    }
+
+    /**
+     * The DAC formats that carry [source] without losing a bit, best first.
+     * A 16-bit song goes out as 16-bit where it can, else padded into a wider
+     * word (the same value, exactly); a 24-bit one never goes out as 16.
+     */
+    internal fun carriers(source: Int): List<Int> = when (source) {
+        C.ENCODING_PCM_8BIT, C.ENCODING_PCM_16BIT -> listOf(C.ENCODING_PCM_16BIT, C.ENCODING_PCM_24BIT, C.ENCODING_PCM_32BIT, C.ENCODING_PCM_FLOAT)
+        C.ENCODING_PCM_24BIT -> listOf(C.ENCODING_PCM_24BIT, C.ENCODING_PCM_32BIT, C.ENCODING_PCM_FLOAT)
+        C.ENCODING_PCM_32BIT -> listOf(C.ENCODING_PCM_32BIT, C.ENCODING_PCM_FLOAT)
+        else -> listOf(C.ENCODING_PCM_FLOAT, C.ENCODING_PCM_32BIT, C.ENCODING_PCM_24BIT)
+    }
+
+    internal fun bitsOf(encoding: Int): Int = when (encoding) {
+        C.ENCODING_PCM_8BIT -> 8
+        C.ENCODING_PCM_16BIT -> 16
+        C.ENCODING_PCM_24BIT -> 24
+        C.ENCODING_PCM_32BIT, C.ENCODING_PCM_FLOAT -> 32
+        else -> 0
+    }
+
+    private fun label(encoding: Int): String = when (encoding) {
+        C.ENCODING_PCM_16BIT -> "16-bit PCM"
+        C.ENCODING_PCM_24BIT -> "24-bit PCM"
+        C.ENCODING_PCM_32BIT -> "32-bit PCM"
+        C.ENCODING_PCM_FLOAT -> "32-bit float"
+        else -> ""
     }
 
     /**

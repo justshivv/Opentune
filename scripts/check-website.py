@@ -17,7 +17,7 @@ summary = {'asOf': iso + 'T12:00:00Z', 'totals': {'installs': 1234, 'plays': 543
            'currentVersions': [{'version':'0.4.10','installations':19,'inferred':19},{'version':'0.4.13','installations':1,'inferred':0}], 'versions': [], 'downloads': [{'release': '0.4.' + str(i), 'browsers': i + 1} for i in range(12)], 'downloadBrowsers': 99}
 login_html = subprocess.check_output(['node', '--input-type=module', '-e',
     "import {authRoute} from './usage-api/auth.mjs'; console.log(await (await authRoute(new Request('https://usage.test/login'),{})).text());"], text=True, cwd=ROOT.parent)
-backend = 'opentune-usage.create-a-new-site-with-sites.workers.dev'
+backend = urlparse(json.loads((ROOT / 'usage-config.json').read_text())['apiBase']).netloc
 mode = 'normal'
 def route(request):
     url = urlparse(request.request.url)

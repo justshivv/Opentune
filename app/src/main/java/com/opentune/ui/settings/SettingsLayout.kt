@@ -96,7 +96,7 @@ internal val SETTINGS_CATEGORIES = listOf(
             "Cover art" to listOf("Full-screen cover art", "Moving cover art", "Glow under the cover", "Song change", "Album covers", "Double-tap to skip 10 seconds"),
             "Animated covers" to listOf("Animated covers", "Animated covers on Wi-Fi only", "Moving covers on Home"),
             "Seek bar" to listOf("Wavy seek bar", "Lyric preview while seeking", "Seek bar thickness", "Seek bar handle", "Seek bar colour", "Seek bar time", "Song part marks"),
-            "On the player" to listOf("Lyrics preview", "Audio quality label", "Skip to chorus", "Hide volume bar", "Hide song status", "Show stats for nerds"),
+            "On the player" to listOf("Lyrics preview", "Audio quality label", "Audio details page", "Skip to chorus", "Hide volume bar", "Hide song status", "Show stats for nerds"),
         ),
     ),
     SettingsCategory(

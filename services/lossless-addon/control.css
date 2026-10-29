@@ -1,5 +1,75 @@
-:root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#f0f2ed;background:#10120f;color-scheme:dark;font-size:16px}*{box-sizing:border-box}body{margin:0}main{max-width:1000px;margin:auto;padding:48px 24px}header{max-width:760px;margin-bottom:32px}h1{font-size:clamp(2rem,5vw,3.8rem);line-height:1.08;letter-spacing:-.04em;margin:12px 0 20px}h2{font-size:1.3rem;margin:0 0 12px}.eyebrow{font-size:.78rem;letter-spacing:.15em;color:#c2d591}p,footer{color:#aeb5a5;line-height:1.65}a{color:#d6e6af}.card{background:#1b1e18;border:1px solid #353c2e;border-radius:22px;padding:28px;margin:20px 0}.toolbar{position:sticky;top:0;z-index:2;background:#10120ff2;padding:18px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}.toolbar>div{display:flex;gap:8px;flex-wrap:wrap}button{background:#d6e6af;color:#18220c;border:1px solid transparent;border-radius:999px;padding:12px 20px;font:inherit;font-weight:650;cursor:pointer}button.quiet{background:transparent;color:#e0e5d6;border-color:#4c5641}button:disabled{opacity:.5;cursor:wait}input,textarea{width:100%;background:#11150e;border:1px solid #4a533e;border-radius:10px;padding:12px;color:inherit;font:inherit;margin-top:7px}textarea{font:13px/1.6 ui-monospace,monospace;resize:vertical}label{display:block;margin:16px 0;font-size:.9rem}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.check{display:flex;align-items:center;gap:10px}.check input,.section input[type=checkbox]{width:22px;height:22px;margin:0}.section{display:flex;align-items:center;gap:12px;border-top:1px solid #343c2c;padding:12px 0}.section label{flex:1;margin:0}.section button{padding:9px 13px}.section small{color:#aeb5a5}.error{color:#ffb4ab!important}#status:empty{display:none}#status{padding:14px;border-left:3px solid #d6e6af}#preview article{padding:18px;border-radius:14px;background:#28301d;margin-top:12px}#preview h3{margin:0 0 8px}#preview ol{line-height:2}#history>div{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #343c2c;padding:12px 0}footer{font-size:.85rem;padding:20px 0}button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid #e4f6b9;outline-offset:3px}[hidden]{display:none!important}@media(max-width:650px){main{padding:28px 16px}.card{padding:20px}.grid{grid-template-columns:1fr;gap:0}.toolbar{align-items:flex-start;flex-direction:column}.section{gap:7px}.section button{padding:9px}}
+/* OpenTune app controls. The same dark, one-accent look as the usage dashboard. */
+:root{color-scheme:dark;--bg:#0c0d0f;--panel:#15171a;--panel-2:#1b1e22;--line:#272a2f;--line-2:#363a40;--text:#f3f4f0;--muted:#a3a8ae;--faint:#6f757c;--accent:#c8ef9b;--ink:#15200c;--danger:#ffb4ab;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;color:var(--text);background:var(--bg)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;background:radial-gradient(1000px 480px at 90% -140px,#2a3a1c66,transparent 70%),radial-gradient(700px 380px at -10% 0,#1d2a3a55,transparent 70%),var(--bg);-webkit-font-smoothing:antialiased}
+main{max-width:980px;margin:auto;padding:56px 24px 40px}
+header{max-width:720px;margin-bottom:28px}
+header a{display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border-radius:999px;background:#c8ef9b14;border:1px solid #5f7449;color:var(--accent);font-weight:600;font-size:.85rem;text-decoration:none}
+header a:hover{background:#c8ef9b22}
+h1{font-size:clamp(2.1rem,5vw,3.8rem);line-height:1.04;letter-spacing:-.045em;font-weight:650;margin:10px 0 16px}
+h2{font-size:1.15rem;font-weight:600;letter-spacing:-.015em;margin:0 0 8px}
+.eyebrow{font-size:.7rem;font-weight:700;letter-spacing:.16em;color:var(--accent);margin:0}
+p,footer{color:var(--muted);line-height:1.65}
+a{color:var(--accent)}
 
-.source{border-top:1px solid #343c2c;padding:16px 0}.source-actions{display:flex;gap:8px;flex-wrap:wrap}
+.card{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-radius:22px;padding:26px;margin:18px 0;box-shadow:0 1px 0 #ffffff08 inset,0 20px 40px -30px #000}
+.card>p{margin:0 0 6px;font-size:.92rem}
+#login{max-width:440px}
+#login h2{font-size:1.4rem;margin-bottom:4px}
+#login button{width:100%;margin-top:8px}
 
-.section label{min-width:0}.section small{overflow-wrap:anywhere}.source-actions button{font-size:.85rem}
+/* The bar with Publish stays at hand while editing. */
+.toolbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 -24px;padding:14px 24px;background:#0c0d0fe0;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.toolbar strong{font-size:.95rem}
+.toolbar>div{display:flex;gap:8px;flex-wrap:wrap}
+
+button{background:var(--accent);color:var(--ink);border:1px solid transparent;border-radius:999px;padding:11px 20px;font:inherit;font-size:.9rem;font-weight:650;cursor:pointer;min-height:44px}
+button:hover{background:#dcf9bd}
+button.quiet{background:transparent;color:var(--text);border-color:var(--line-2)}
+button.quiet:hover{background:#ffffff0d;border-color:#6d7f59}
+button:disabled{opacity:.5;cursor:wait}
+
+input,textarea{width:100%;background:var(--bg);border:1px solid var(--line-2);border-radius:12px;padding:12px 14px;color:inherit;font:inherit;margin-top:7px}
+input:hover,textarea:hover{border-color:#4a5058}
+textarea{font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
+label{display:block;margin:16px 0;font-size:.85rem;font-weight:600;color:var(--text)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 20px}
+.check{display:flex;align-items:center;gap:12px;font-weight:500}
+.check input,.section input[type=checkbox]{width:22px;height:22px;margin:0;accent-color:var(--accent)}
+
+/* Home sections: one row each, the switch, the label and the move buttons. */
+.section{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg);padding:10px 12px;margin:8px 0}
+.section label{flex:1;margin:0;min-width:0}
+.section input:not([type=checkbox]){margin-top:4px}
+.section button{padding:7px 12px;min-height:36px;font-size:.8rem}
+.section small{color:var(--muted);overflow-wrap:anywhere;font-weight:400}
+
+.source{border:1px solid var(--line);border-radius:14px;background:var(--bg);padding:14px 16px;margin:10px 0}
+.source-actions{display:flex;gap:8px;flex-wrap:wrap}
+.source-actions button{font-size:.8rem;min-height:36px;padding:7px 12px}
+
+#status{margin:0 0 12px;padding:12px 16px;border-radius:14px;background:#c8ef9b12;border:1px solid #5f7449;color:var(--text)}
+#status:empty{display:none}
+.error{color:var(--danger)!important}
+#status.error{background:#ffb4ab12;border-color:#8a4a44}
+
+#preview article{padding:18px;border-radius:16px;background:#1f2a15;border:1px solid #3b4d2a;margin-top:12px}
+#preview h3{margin:0 0 8px}
+#preview ol{line-height:2;color:var(--muted)}
+#history>div{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--line);padding:12px 0}
+#history>div:first-child{border-top:0}
+
+footer{font-size:.8rem;color:var(--faint);padding:24px 0 0}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+[hidden]{display:none!important}
+
+@media(max-width:650px){
+  main{padding:32px 16px}
+  .card{padding:18px;border-radius:18px}
+  .grid{grid-template-columns:1fr;gap:0}
+  .toolbar{margin:0 -16px;padding:12px 16px;align-items:flex-start;flex-direction:column}
+  .toolbar>div{width:100%}
+  .toolbar>div button{flex:1}
+  .section{flex-wrap:wrap;gap:8px}
+}
+@media(prefers-reduced-motion:no-preference){button,input,textarea{transition:background .15s,border-color .15s,color .15s}}

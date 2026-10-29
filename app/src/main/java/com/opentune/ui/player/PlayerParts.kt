@@ -171,6 +171,8 @@ fun PlayerBackdrop(
     fullCoverVisible: Boolean = true,
     artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
 ) {
+    // On a TV the backdrop holds still: redrawn every frame across a big picture, it cost the remote its quickness.
+    val animate = animate && !com.opentune.ui.tv.LocalIsTv.current
     val scheme = MaterialTheme.colorScheme
     if (style == PlayerBackground.AMOLED) {
         Box(modifier.background(Color.Black))
