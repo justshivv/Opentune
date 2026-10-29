@@ -1,5 +1,6 @@
 package com.opentune.ui.search
 
+import com.opentune.ui.components.menuClickable
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -487,7 +488,7 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth()
             .then(if (list != null) Modifier.menuAnchor(anchor, view) else Modifier)
-            .combinedClickable(onClick = onClick, onLongClick = list?.let { { haptics.press(); menuOpen = true } })
+            .then(Modifier.menuClickable(onClick = onClick, onLongClick = list?.let { { haptics.press(); menuOpen = true } }))
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

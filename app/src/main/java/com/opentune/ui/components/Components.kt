@@ -1,5 +1,7 @@
 package com.opentune.ui.components
 
+import androidx.compose.foundation.indication
+import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.sp
@@ -313,7 +315,7 @@ fun SongListItem(
                 .fillMaxWidth()
                 .then(swipeActions)
                 .menuAnchor(anchor, view)
-                .combinedClickable(onClick = onClick, onLongClick = {
+                .menuClickable(onClick = onClick, onLongClick = {
                     if (hasMenu) {
                         haptics.press()
                         if (anchor.rect != null) contextOpen = true else menuOpen = true
@@ -452,7 +454,7 @@ fun ItemCard(
             .clip(MaterialTheme.shapes.medium)
             .then(
                 if (menu == null) Modifier.clickable(onClick = onClick)
-                else Modifier.combinedClickable(onClick = onClick, onLongClick = { haptics.press(); contextOpen = true }),
+                else Modifier.menuClickable(onClick = onClick, onLongClick = { haptics.press(); contextOpen = true }),
             )
             .padding(6.dp),
     ) {
@@ -702,4 +704,45 @@ fun MarqueeText(
         maxLines = 1,
         modifier = modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_500),
     )
+}
+
+/**
+ * combinedClickable for an item whose long press opens a menu. A tap ripples as usual;
+ * a long press stops the ripple as the menu opens. Held through the menu, the ripple
+ * was still fading on the item when the lifted copy settled back onto it.
+ */
+@Composable
+fun Modifier.menuClickable(onClick: () -> Unit, onLongClick: (() -> Unit)?): Modifier {
+    val pressed = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val shown = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val current = remember { arrayOfNulls<androidx.compose.foundation.interaction.PressInteraction.Press>(1) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.compose.runtime.LaunchedEffect(pressed) {
+        pressed.interactions.collect { i ->
+            when (i) {
+                is androidx.compose.foundation.interaction.PressInteraction.Press -> { current[0] = i; shown.emit(i) }
+                is androidx.compose.foundation.interaction.PressInteraction.Release ->
+                    if (current[0] === i.press) { current[0] = null; shown.emit(i) }
+                is androidx.compose.foundation.interaction.PressInteraction.Cancel ->
+                    if (current[0] === i.press) { current[0] = null; shown.emit(i) }
+                else -> shown.emit(i)
+            }
+        }
+    }
+    return this
+        .indication(shown, androidx.compose.material3.ripple())
+        .combinedClickable(
+            interactionSource = pressed,
+            indication = null,
+            onLongClick = onLongClick?.let { long ->
+                {
+                    current[0]?.let { press ->
+                        current[0] = null
+                        scope.launch { shown.emit(androidx.compose.foundation.interaction.PressInteraction.Cancel(press)) }
+                    }
+                    long()
+                }
+            },
+            onClick = onClick,
+        )
 }

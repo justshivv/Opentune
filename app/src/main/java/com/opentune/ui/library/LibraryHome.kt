@@ -1,5 +1,6 @@
 package com.opentune.ui.library
 
+import com.opentune.ui.components.menuClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -411,7 +412,7 @@ private fun PlaylistRow(
     onLongClick: (() -> Unit)? = null,
 ) {
     Row(
-        modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier.fillMaxWidth().then(Modifier.menuClickable(onClick = onClick, onLongClick = onLongClick)).padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (cover != null) {
@@ -437,7 +438,7 @@ private fun PlaylistRow(
 @Composable
 private fun PlaylistTile(row: LibraryPlaylistRow, modifier: Modifier = Modifier) {
     PinnableRow(row.pin, modifier) { onLongClick ->
-        Column(Modifier.clip(MaterialTheme.shapes.large).combinedClickable(onClick = row.onClick, onLongClick = onLongClick).padding(6.dp)) {
+        Column(Modifier.clip(MaterialTheme.shapes.large).then(Modifier.menuClickable(onClick = row.onClick, onLongClick = onLongClick)).padding(6.dp)) {
             if (row.local != null && row.url == null) com.opentune.ui.components.PlaylistCover(row.title,
                 row.local.songs.map { it.thumbnailUrl }, Modifier.fillMaxWidth().aspectRatio(1f))
             else Artwork(row.url.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.large)

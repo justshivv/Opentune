@@ -1,5 +1,6 @@
 package com.opentune.ui.home
 
+import com.opentune.ui.components.menuClickable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -171,7 +172,7 @@ private fun SpeedDialTile(item: ShelfItem, onClick: () -> Unit, modifier: Modifi
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .then(
                 if (menu == null) Modifier.clickable(onClick = onClick)
-                else Modifier.combinedClickable(onClick = onClick, onLongClick = { haptics.press(); menuOpen = true }),
+                else Modifier.menuClickable(onClick = onClick, onLongClick = { haptics.press(); menuOpen = true }),
             ),
     ) {
         if (round) {
