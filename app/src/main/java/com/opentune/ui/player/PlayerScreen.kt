@@ -973,6 +973,7 @@ fun PlayerLayout(
                                             onSeekBy = seekBy.takeIf { state.ui.doubleTapSeek },
                                             glow = state.ui.coverGlow && !state.ui.reduceAnimation && !amoled && !apple,
                                             video = state.coverVideo,
+                                            canvasShowing = state.canvasVideo != null,
                                         )
                                 }
                                 }

@@ -1,5 +1,6 @@
 package com.opentune.ui.home
 
+import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -108,6 +109,21 @@ fun HomeScreen(
     val loader = rememberLoader("home:${playback.recommender.name}") { MusicRepository.home() }
     val state by loader.state.collectAsState()
     val refreshing by loader.refreshing.collectAsState()
+    // New picks shown as soon as they're made, while the rest of the page reloads. They stay
+    // until the next refresh: YouTube Music's own Quick picks, the same every time, showed
+    // first and were swapped for these a few seconds later.
+    var freshPicks by remember { mutableStateOf<HomeShelf?>(null) }
+    var picksPending by remember { mutableStateOf(false) }
+    val pickScope = androidx.compose.runtime.rememberCoroutineScope()
+    val refreshHome: () -> Unit = {
+        freshPicks = null
+        picksPending = true
+        val picks = MusicRepository.refreshPicks()
+        pickScope.launch {
+            try { picks.await().firstOrNull()?.let { freshPicks = it } } finally { picksPending = false }
+        }
+        loader.reload(keepContent = true)
+    }
     val moreAll by MusicRepository.homeMore.collectAsState()
     val library by AppSettings.library.collectAsState()
     val hideExplicit = library.hideExplicit
@@ -124,8 +140,7 @@ fun HomeScreen(
             kotlinx.coroutines.delay(wait)
             shownListen = newestListen
             lastListeningRefresh = android.os.SystemClock.elapsedRealtime()
-            MusicRepository.refreshHomeRecommendations()
-            loader.reload(keepContent = true)
+            refreshHome()
         }
     }
     val recents = remember(records, hideExplicit) { ContentFilter.songs(History.recents(records, 100), hideExplicit) }
@@ -218,14 +233,13 @@ fun HomeScreen(
             if (r != "home") return@collect
             if (listState.firstVisibleItemIndex > 12) listState.scrollToItem(6)
             listState.animateScrollToItem(0)
-            MusicRepository.refreshHomeRecommendations()
-            loader.reload(keepContent = true)
+            refreshHome()
         }
     }
 
     com.opentune.ui.components.MarkRefreshBox(
         isRefreshing = refreshing,
-        onRefresh = { MusicRepository.refreshHomeRecommendations(); loader.reload(keepContent = true) },
+        onRefresh = refreshHome,
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize().nestedScroll(covers.scrollWatch)) {
@@ -300,8 +314,8 @@ fun HomeScreen(
                         }
                     }
                     val title = runtime.title(section.id, "Quick picks")
-                    val picks = feed.quickPicks
-                    if (refreshing) SongRowPlaceholder()
+                    val picks = freshPicks ?: feed.quickPicks
+                    if ((refreshing || picksPending) && freshPicks == null) SongRowPlaceholder()
                     else if (picks != null) QuickPicks(picks.copy(title = title, subtitle = ""), onItemClick, historyAction)
                     else SectionHeader(title, action = historyAction)
                 }
@@ -558,7 +572,9 @@ internal fun MixesShelf(
 @Composable
 private fun MixCard(mix: com.opentune.data.history.DailyMixes.Mix, onClick: () -> Unit) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
-    Column(Modifier.width(156.dp).clip(shape).clickable(onClick = onClick)) {
+    // Only the art is cut to the rounded shape: cutting the whole card took the corners
+    // off the first letters of the artists' second line under it.
+    Column(Modifier.width(156.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).clickable(onClick = onClick)) {
         Box(Modifier.size(156.dp).clip(shape)) {
             val covers = mix.covers
             if (covers.size >= 4) {
@@ -598,7 +614,7 @@ private fun MixCard(mix: com.opentune.data.history.DailyMixes.Mix, onClick: () -
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp, bottom = 2.dp),
+            modifier = Modifier.padding(top = 6.dp, start = 4.dp, end = 4.dp, bottom = 6.dp),
         )
     }
 }

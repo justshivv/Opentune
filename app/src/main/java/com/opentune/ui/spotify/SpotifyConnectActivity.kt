@@ -75,6 +75,7 @@ class SpotifyConnectActivity : ComponentActivity() {
                     service = "Spotify",
                     brand = SpotifyGreen,
                     icon = Icons.Rounded.GraphicEq,
+                    logo = com.opentune.R.drawable.ic_spotify,
                     gives = "Your playlists in Library, each song's Canvas, and suggestions made for you",
                     loading = loading,
                     onBack = { finish() },

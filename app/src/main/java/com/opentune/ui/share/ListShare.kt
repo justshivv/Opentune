@@ -29,6 +29,10 @@ object ListShare {
     fun sharePlaylist(context: Context, title: String, playlistId: String, covers: List<String?> = emptyList(), subtitle: String? = null) =
         send(context, "$title\n${playlistLink(playlistId)}", title, covers, subtitle)
 
+    /** A playlist brought over from Spotify: its Spotify link, not every song in it. */
+    fun shareSpotify(context: Context, title: String, spotifyId: String, covers: List<String?> = emptyList(), subtitle: String? = null) =
+        send(context, "$title\nhttps://open.spotify.com/playlist/$spotifyId", title, covers, subtitle)
+
     /**
      * A playlist made in the app has no address of its own, so it goes as
      * its songs, each with its link, up to [MAX_SONGS] of them.

@@ -119,6 +119,21 @@ object MusicRepository {
         homeRefreshes.incrementAndGet()
     }
 
+    /** Picks made ahead by [refreshPicks], for the reload that follows to show the same ones. */
+    @Volatile private var nextPicks: kotlinx.coroutines.Deferred<List<HomeShelf>>? = null
+
+    /**
+     * Home pulled down: new picks off the next recent song, straight away, without
+     * waiting for the rest of the page. The reload that follows takes these same picks.
+     */
+    fun refreshPicks(): kotlinx.coroutines.Deferred<List<HomeShelf>> {
+        refreshHomeRecommendations()
+        val engine = AppSettings.playback.value.recommender
+        return scope.async {
+            try { radioShelf(engine) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+        }.also { nextPicks = it }
+    }
+
     /** How many times Home has been refreshed: each refresh seeds its picks from a different recent song. */
     private val homeRefreshes = java.util.concurrent.atomic.AtomicInteger(0)
     /**
@@ -138,9 +153,14 @@ object MusicRepository {
         }
         // Resolve personal picks alongside the feed so the page publishes one set of picks,
         // rather than briefly restoring the old radio shelf before replacing it later.
-        val personal = async { kotlinx.coroutines.withTimeoutOrNull(5_000) {
-            try { extraShelves(HomeSource.RADIO) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
-        }.orEmpty() }
+        val ahead = nextPicks.also { nextPicks = null }
+        val personal = async {
+            ahead?.let { kotlinx.coroutines.withTimeoutOrNull(5_000) { it.await() } }?.takeIf { it.isNotEmpty() }
+                ?.also { extrasCache[HomeSource.RADIO] = Fetched(it, System.currentTimeMillis()) }
+                ?: kotlinx.coroutines.withTimeoutOrNull(5_000) {
+                    try { extraShelves(HomeSource.RADIO) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+                }.orEmpty()
+        }
         val response = Innertube.browse("FEmusic_home")
         val first = personal.await() + InnertubeParser.parseHome(response).filter { it.items.isNotEmpty() }
 
@@ -653,13 +673,26 @@ object MusicRepository {
     suspend fun artistIdFor(song: Song, name: String): String? {
         val first = song.artist.split(", ", " & ").first().trim()
         if (name.equals(first, ignoreCase = true)) song.artistId?.let { return it }
-        return io {
-            runCatching {
-                val found = InnertubeParser.parseSearchPage(Innertube.search(name, SearchFilter.ARTISTS.params)).rows
-                    .mapNotNull { (it as? SearchResult.Browse)?.item?.takeIf { b -> b.type == BrowseType.ARTIST } }
-                (found.firstOrNull { it.title.equals(name, ignoreCase = true) } ?: found.firstOrNull())?.browseId
-            }.getOrNull()
-        }
+        val key = name.trim().lowercase()
+        synchronized(artistIds) { artistIds[key] }?.let { return it }
+        // A search can fail on a slow network: tried twice, then, for the first artist, the player's own queue.
+        val found = io {
+            repeat(2) {
+                runCatching {
+                    val found = InnertubeParser.parseSearchPage(Innertube.search(name, SearchFilter.ARTISTS.params)).rows
+                        .mapNotNull { (it as? SearchResult.Browse)?.item?.takeIf { b -> b.type == BrowseType.ARTIST } }
+                    (found.firstOrNull { it.title.equals(name, ignoreCase = true) } ?: found.firstOrNull())?.browseId
+                }.getOrNull()?.let { return@io it }
+            }
+            null
+        } ?: if (name.equals(first, ignoreCase = true)) artistIdFor(song) else null
+        if (found != null) synchronized(artistIds) { artistIds[key] = found }
+        return found
+    }
+
+    /** Artist pages found by name, so a second tap on the same name opens at once. */
+    private val artistIds = object : LinkedHashMap<String, String>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 200
     }
 
     /** What a browse id opens, read off its prefix. */

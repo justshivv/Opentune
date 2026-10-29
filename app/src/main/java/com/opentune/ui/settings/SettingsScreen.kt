@@ -1575,7 +1575,6 @@ private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 10
 /** Spotify's green disc, for its rows in Account. */
 @Composable
 private fun SpotifyMark() {
-    Box(Modifier.size(40.dp).clip(CircleShape).background(com.opentune.ui.account.SpotifyGreen), contentAlignment = Alignment.Center) {
-        Icon(Icons.Rounded.GraphicEq, null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(22.dp))
-    }
+    // Spotify's own mark, in its own colours.
+    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), "Spotify", Modifier.size(40.dp))
 }

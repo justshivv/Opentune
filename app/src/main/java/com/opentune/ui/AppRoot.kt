@@ -145,6 +145,7 @@ fun AppRoot(vm: PlayerViewModel) {
     var playerCovers by remember { mutableStateOf(false) }
     val haze = rememberHazeState()
     val uiScope = rememberCoroutineScope()
+    val artistLookup = remember { java.util.concurrent.atomic.AtomicReference<kotlinx.coroutines.Job?>(null) }
     val backdrop = rememberLayerBackdrop()
     // Floating glass blurs a recording of the page (and bends it, with Liquid Glass on).
     val sampled = com.opentune.ui.components.backdropBlurOn()
@@ -323,25 +324,29 @@ fun AppRoot(vm: PlayerViewModel) {
             LibraryStore.playlist(id)?.takeIf { it.spotifyId == null }?.let { p -> com.opentune.data.Pills.done("Added to ${p.name}") }
         },
         progressOf = { s -> if (s.videoId == vm.currentSong.value?.videoId) vm.positionMs() to vm.durationMs.value else null },
+        // One artist lookup at a time: a slower earlier one that failed showed its
+        // "Couldn't find" over the page a later tap had already opened.
         viewArtist = { s ->
-            uiScope.launch {
+            artistLookup.get()?.cancel()
+            artistLookup.set(uiScope.launch {
                 val id = MusicRepository.artistIdFor(s)
                 if (id == null) {
                     com.opentune.data.Pills.error("Couldn't find ${s.artist}'s page")
                 } else {
                     fromPlayer { nav.openBrowse(id, BrowseType.ARTIST) }
                 }
-            }
+            })
         },
         viewArtistNamed = { s, name ->
-            uiScope.launch {
+            artistLookup.get()?.cancel()
+            artistLookup.set(uiScope.launch {
                 val id = MusicRepository.artistIdFor(s, name)
                 if (id == null) {
                     com.opentune.data.Pills.error("Couldn't find $name's page")
                 } else {
                     fromPlayer { nav.openBrowse(id, BrowseType.ARTIST) }
                 }
-            }
+            })
         },
     ) }
     val libraryNav = remember(nav) { LibraryNav(
@@ -687,7 +692,7 @@ fun AppRoot(vm: PlayerViewModel) {
                         // Only while it's still the page in front: a late second call mustn't close the one under it.
                         LoginScreen(onDone = { if (nav.currentBackStackEntry == entry) nav.popBackStack() })
                     }
-                    composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }) }
+                    composable("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }, onOpenList = { id -> nav.navigate("downloaded/${Uri.encode(id)}") }) }
                     composable("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }

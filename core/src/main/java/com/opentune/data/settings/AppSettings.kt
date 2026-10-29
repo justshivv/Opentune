@@ -338,6 +338,8 @@ val DEFAULT_SPONSORBLOCK_CATEGORIES = setOf("music_offtopic", "sponsor", "selfpr
 @Serializable
 data class InterfaceSettings(
     val playlistGrid: Boolean = false,
+    /** Playlists pinned to the top of Library, first pinned first: a local playlist's id, or a YouTube Music browse id. */
+    val pinnedPlaylists: List<String> = emptyList(),
     val reduceAnimation: Boolean = false,
     /** The mark's dive into the app when it starts. */
     val openingAnimation: Boolean = true,

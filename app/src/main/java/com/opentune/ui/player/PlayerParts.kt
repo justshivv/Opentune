@@ -492,7 +492,13 @@ fun ArtworkPane(
     glow: Boolean = false,
     /** Apple's animated cover for this song, looped over the still one. */
     video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
+    /**
+     * Spotify's Canvas is playing behind the player: the still cover over it fades away,
+     * keeping its place, so the clip shows and swipes and taps on it still work.
+     */
+    canvasShowing: Boolean = false,
 ) {
+    val coverShown by animateFloatAsState(if (canvasShowing) 0f else 1f, tween(450), label = "coverOverCanvas")
     val scale by animateFloatAsState(
         if (isPlaying) 1f else 0.86f,
         spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessLow),
@@ -526,7 +532,8 @@ fun ArtworkPane(
             },
         contentAlignment = Alignment.Center,
     ) {
-        if (glow) CoverGlow(isPlaying, scale, Modifier.matchParentSize())
+        if (glow && !canvasShowing) CoverGlow(isPlaying, scale, Modifier.matchParentSize())
+        Box(Modifier.graphicsLayer { alpha = coverShown }, contentAlignment = Alignment.Center) {
         CoverSwap(CoverShown(song.thumbnailUrl, index, song.videoId), change) { url, motion ->
             UpgradingArtwork(
                 url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
@@ -552,7 +559,7 @@ fun ArtworkPane(
                 imageModifier = Modifier.livingArt(isPlaying, moving, artworkMotion),
             ) {
                 // Only on the playing song's cover, not on one leaving as the song changes.
-                if (video != null && url == song.thumbnailUrl) {
+                if (video != null && !canvasShowing && url == song.thumbnailUrl) {
                     val quality = com.opentune.data.settings.AppSettings.ui.collectAsState().value.motionQuality
                     // Keyed on the quality, so a new choice in Settings takes effect at once.
                     androidx.compose.runtime.key(quality) {
@@ -560,6 +567,7 @@ fun ArtworkPane(
                     }
                 }
             }
+        }
         }
         if (onSeekBy != null) SeekTaps(onSeekBy, scale, Modifier.matchParentSize())
     }

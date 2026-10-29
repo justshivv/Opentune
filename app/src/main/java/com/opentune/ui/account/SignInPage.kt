@@ -57,6 +57,8 @@ internal fun SignInPage(
     unavailable: String? = null,
     /** A short tip under the header, e.g. which sign-in methods work here. */
     hint: String? = null,
+    /** The service's own logo, in its own colours, shown instead of [icon] on [brand]. */
+    logo: Int? = null,
     web: @Composable (Modifier) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -80,7 +82,8 @@ internal fun SignInPage(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Box(Modifier.size(52.dp).clip(CircleShape).background(brand), contentAlignment = Alignment.Center) {
+            if (logo != null) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(logo), null, Modifier.size(52.dp))
+            else Box(Modifier.size(52.dp).clip(CircleShape).background(brand), contentAlignment = Alignment.Center) {
                 Icon(icon, null, tint = Color.White, modifier = Modifier.size(28.dp))
             }
             Column(Modifier.weight(1f)) {

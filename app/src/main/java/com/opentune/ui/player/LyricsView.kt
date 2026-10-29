@@ -790,7 +790,21 @@ internal fun LyricLineView(
             color = if (isActive) bright else dim,
             onTextLayout = { layout.value = it },
             modifier = Modifier.fillMaxWidth()
+                // The sung line's glow spreads past its words, and the offscreen buffer the word
+                // sweep is drawn in is only as big as the text: the glow stopped at its edge in a
+                // dark line. The buffer is GLOW_BLEED larger on every side, laid out as if it weren't.
+                .layout { measurable, constraints ->
+                    val bleed = GLOW_BLEED.roundToPx()
+                    val p = measurable.measure(constraints.copy(
+                        minWidth = constraints.minWidth + bleed * 2,
+                        maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth + bleed * 2 else constraints.maxWidth,
+                        minHeight = constraints.minHeight + bleed * 2,
+                        maxHeight = if (constraints.hasBoundedHeight) constraints.maxHeight + bleed * 2 else constraints.maxHeight,
+                    ))
+                    layout((p.width - bleed * 2).coerceAtLeast(0), (p.height - bleed * 2).coerceAtLeast(0)) { p.place(-bleed, -bleed) }
+                }
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .padding(GLOW_BLEED)
                 .drawWithCache {
                     val boxes = wordBoxesOf(layout.value, line, text)
                     onDrawWithContent {
@@ -818,6 +832,9 @@ internal fun LyricLineView(
         }
     }
 }
+
+/** Room round a line's words for its glow to fade out in (the glow's blur is 24 px). */
+private val GLOW_BLEED = 16.dp
 
 /** Where each of [line]'s words sits in [layout] of [text]: one box per row a word covers, trailing space left out. */
 internal fun wordBoxesOf(layout: TextLayoutResult?, line: LyricLine, text: String): List<List<Rect>> {

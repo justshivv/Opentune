@@ -552,6 +552,10 @@ fun CollectionScreen(
                                 }
                                 val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
                                 val saved = c != null && savedLists.any { it.browseId == c.browseId }
+                                val own = c?.let { rememberOwnPlaylist(it) }
+                                // Already in the account's library (made there, or saved there): nothing for a plus to add.
+                                val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
+                                val inAccount = own != null || (c != null && accountLists.any { it.browseId?.removePrefix("VL") == c.browseId.removePrefix("VL") })
                                 ListPlayRow(
                                     enabled = !c?.songs.isNullOrEmpty(),
                                     saved = saved,
@@ -559,18 +563,16 @@ fun CollectionScreen(
                                     onPlay = { c?.let { actions.playAll(shown.ifEmpty { it.songs }, 0, false, it.title) } },
                                     onShuffle = { c?.let { actions.playAll(shown.ifEmpty { it.songs }, 0, true, it.title) } },
                                     onSmartShuffle = { c?.let { actions.smartShuffle(shown.ifEmpty { it.songs }, it.title) } },
-                                    onSave = {
+                                    onSave = if (inAccount && !saved) null else ({
                                         c?.let {
                                             com.opentune.data.library.LibraryStore.setSaved(
                                                 com.opentune.data.library.SavedList(it.browseId, it.title, it.subtitle, it.thumbnailUrl), !saved,
                                             )
                                         }
-                                    },
+                                    }),
                                     modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 12.dp),
                                 )
                                 if (c != null) {
-                                    val context = androidx.compose.ui.platform.LocalContext.current
-                                    val own = rememberOwnPlaylist(c)
                                     // Your own playlist keeps its tools: privacy, sharing your copy.
                                     if (own != null) com.opentune.ui.library.ListTools(
                                         c.songs, onAddSongs = null, Modifier.fillMaxWidth().padding(bottom = 16.dp),

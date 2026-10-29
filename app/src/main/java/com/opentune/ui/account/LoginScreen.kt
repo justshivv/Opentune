@@ -93,6 +93,32 @@ fun LoginScreen(onDone: () -> Unit) {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                    // Some phones are sent back to YouTube's own site (m.youtube.com) rather than
+                    // YouTube Music once signed in, and the screen sat on YouTube's home page. The
+                    // session is the same on any YouTube page: taken from there, and YouTube Music
+                    // opened so its own cookies are set. Checked again for a few seconds, as the
+                    // cookies can arrive just after the page says it has finished.
+                    var sentToMusic = false
+                    fun check(view: WebView, url: String?) {
+                        if (gone.get() || finished) return
+                        val host = url?.let { runCatching { android.net.Uri.parse(it).host }.getOrNull() }?.lowercase() ?: return
+                        if (host != "youtube.com" && !host.endsWith(".youtube.com")) return
+                        // The hand-over page from Google, which sets the new session: an older one can still be there.
+                        if (runCatching { android.net.Uri.parse(url).path }.getOrNull()?.startsWith("/signin") == true) return
+                        val cookie = CookieManager.getInstance().getCookie(MUSIC) ?: return
+                        if (!AccountStore.hasSession(cookie)) return
+                        if (host != "music.youtube.com") {
+                            if (!sentToMusic) { sentToMusic = true; view.loadUrl("$MUSIC/") }
+                            return
+                        }
+                        finished = true
+                        CookieManager.getInstance().flush()
+                        AccountStore.signIn(cookie)
+                        // Closed once this callback has returned: leaving from inside it destroyed
+                        // the WebView while it was still running the callback, and on some WebView
+                        // versions that crashed the app outright, signed in or not.
+                        main.post { leave() }
+                    }
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                             if (!gone.get()) loading = true
@@ -101,16 +127,13 @@ fun LoginScreen(onDone: () -> Unit) {
                         override fun onPageFinished(view: WebView, url: String?) {
                             if (gone.get()) return
                             loading = false
-                            if (finished || url?.startsWith(MUSIC) != true) return
-                            val cookie = CookieManager.getInstance().getCookie(MUSIC) ?: return
-                            if (!AccountStore.hasSession(cookie)) return
-                            finished = true
-                            CookieManager.getInstance().flush()
-                            AccountStore.signIn(cookie)
-                            // Closed once this callback has returned: leaving from inside it destroyed
-                            // the WebView while it was still running the callback, and on some WebView
-                            // versions that crashed the app outright, signed in or not.
-                            main.post { leave() }
+                            check(view, url)
+                            for (wait in listOf(1_000L, 2_500L, 5_000L)) main.postDelayed({ if (!gone.get()) check(view, view.url) }, wait)
+                        }
+
+                        // YouTube's pages change address without loading a new page.
+                        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+                            if (!gone.get()) check(view, url)
                         }
                     }
                     loadUrl(SIGN_IN_URL)
