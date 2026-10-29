@@ -337,6 +337,14 @@ fun AppRoot(vm: PlayerViewModel) {
                 }
             })
         },
+        viewAlbum = { s ->
+            artistLookup.get()?.cancel()
+            artistLookup.set(uiScope.launch {
+                val id = MusicRepository.albumIdFor(s)
+                if (id == null) com.opentune.data.Pills.error("Couldn't find the album for \"${s.title}\"")
+                else fromPlayer { nav.openBrowse(id, BrowseType.ALBUM) }
+            })
+        },
         viewArtistNamed = { s, name ->
             artistLookup.get()?.cancel()
             artistLookup.set(uiScope.launch {

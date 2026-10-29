@@ -79,6 +79,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.zIndex
 import androidx.media3.common.Player
 import com.opentune.data.lyrics.Lyrics
@@ -283,9 +285,7 @@ fun LyricPreview(
     val pos by rememberUpdatedState(position)
     // While the lyrics are being found, say so where the line will be.
     if (lyrics is LyricsState.Loading) {
-        if (plain) Text("Finding the words", modifier.padding(vertical = 6.dp), style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        else SettingUpBadge(modifier)
+        if (plain) FindingTheWords(modifier.padding(vertical = 6.dp)) else SettingUpBadge(modifier)
         return
     }
     val synced = (lyrics as? LyricsState.Found)?.lyrics as? Lyrics.Synced ?: return
@@ -323,6 +323,40 @@ fun LyricPreview(
             SungLine(l, pos, MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), Modifier.graphicsLayer { this.alpha = alpha })
         }
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Open lyrics", Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/**
+ * "Finding the words", while the lyrics are looked for: smaller and lighter
+ * than the title and artist above, beside a lyrics mark, with a soft light
+ * passing along it, so it reads as a passing state rather than more of the
+ * song's details.
+ */
+@Composable
+private fun FindingTheWords(modifier: Modifier = Modifier) {
+    val ink = MaterialTheme.colorScheme.onSurface
+    val still = AppSettings.ui.collectAsState().value.reduceAnimation
+    val sweep = if (still) null else androidx.compose.animation.core.rememberInfiniteTransition(label = "finding").animateFloat(
+        -1f, 2f, androidx.compose.animation.core.infiniteRepeatable(tween(1_800, easing = androidx.compose.animation.core.LinearEasing)), label = "findingSweep",
+    )
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(PlayerIcons.Lyrics, null, Modifier.size(16.dp), tint = ink.copy(alpha = 0.55f))
+        Spacer(Modifier.width(8.dp))
+        var width by remember { mutableFloatStateOf(1f) }
+        val at = sweep?.value ?: 0.5f
+        Text(
+            "Finding the words…",
+            Modifier.onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) },
+            style = MaterialTheme.typography.labelLarge.copy(
+                letterSpacing = 0.4.sp,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                // A band of light two thirds of the text wide, crossing it again and again.
+                brush = if (still) androidx.compose.ui.graphics.SolidColor(ink.copy(alpha = 0.55f)) else Brush.horizontalGradient(
+                    listOf(ink.copy(alpha = 0.42f), ink.copy(alpha = 0.95f), ink.copy(alpha = 0.42f)),
+                    startX = at * width - width / 3f, endX = at * width + width / 3f,
+                ),
+            ),
+        )
     }
 }
 

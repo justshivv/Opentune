@@ -94,6 +94,8 @@ class SongMenuActions(
     val viewArtist: ((Song) -> Unit)? = null,
     /** Opens one of the song's artists by name, when it has several. */
     val viewArtistNamed: ((Song, String) -> Unit)? = null,
+    /** Opens the song's album, finding the page when the row didn't say which. */
+    val viewAlbum: ((Song) -> Unit)? = null,
     /** Where the song is and how long it runs, when it's the one playing; for the share picture. */
     val progressOf: (Song) -> Pair<Long, Long>? = { null },
     /** "Not interested": keeps the song out of suggestions; the shell offers Undo. */
@@ -219,7 +221,10 @@ fun SongMenuSheet(
                     actions.viewArtist != null && !local -> MenuRow(Icons.Rounded.Person, "View artist") { close(); actions.viewArtist.invoke(song) }
                     song.artistId != null -> MenuRow(Icons.Rounded.Person, "View artist") { close(); actions.openArtist(song.artistId!!) }
                 }
-                song.albumId?.let { id -> MenuRow(Icons.Rounded.Album, "Open album") { close(); actions.openAlbum(id) } }
+                when {
+                    song.albumId != null -> MenuRow(Icons.Rounded.Album, "Open album") { close(); actions.openAlbum(song.albumId!!) }
+                    actions.viewAlbum != null && !local -> MenuRow(Icons.Rounded.Album, "Open album") { close(); actions.viewAlbum.invoke(song) }
+                }
             }
             if (top != null || tools != null) {
                 HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))

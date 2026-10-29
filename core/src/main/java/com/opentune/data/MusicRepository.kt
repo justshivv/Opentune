@@ -690,6 +690,35 @@ object MusicRepository {
         return found
     }
 
+    /**
+     * The album page for [song]: its own album id when the row carried one, else
+     * the one YouTube Music's watch data gives the track, else the album of a
+     * search result that's the same song by the same artist.
+     */
+    suspend fun albumIdFor(song: Song): String? {
+        song.albumId?.let { return it }
+        synchronized(albumIds) { albumIds[song.videoId] }?.let { return it }
+        val found = io {
+            runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId)).firstOrNull { it.videoId == song.videoId }?.albumId }
+                .getOrNull()
+                ?: runCatching {
+                    val first = song.artist.split(", ", " & ").first().trim()
+                    val tracks = InnertubeParser.parseSearchPage(Innertube.search("${song.title} $first", SearchFilter.SONGS.params)).rows
+                        .mapNotNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
+                    // Only the same recording, or one with the same title by the same artist: a
+                    // near miss would open some other album with confidence.
+                    (tracks.firstOrNull { it.videoId == song.videoId }
+                        ?: tracks.firstOrNull { it.albumId != null && it.title.equals(song.title, ignoreCase = true) && it.artist.contains(first, ignoreCase = true) })?.albumId
+                }.getOrNull()
+        }
+        if (found != null) synchronized(albumIds) { albumIds[song.videoId] = found }
+        return found
+    }
+
+    private val albumIds = object : LinkedHashMap<String, String>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 200
+    }
+
     /** Artist pages found by name, so a second tap on the same name opens at once. */
     private val artistIds = object : LinkedHashMap<String, String>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 200

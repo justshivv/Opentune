@@ -1396,10 +1396,16 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
     Column(Modifier.weight(1f)) {
         // Tapping the title opens its album, and the artist opens their page.
         val menu = LocalSongMenu.current
-        val album = song.albumId?.takeIf { menu != null && !song.videoId.startsWith("local:") }
+        // Its album id when the song carries one, else the album is looked up on the tap.
+        val openAlbum: (() -> Unit)? = when {
+            menu == null || song.videoId.startsWith("local:") -> null
+            song.albumId != null -> ({ menu.openAlbum(song.albumId!!) })
+            menu.viewAlbum != null -> ({ menu.viewAlbum.invoke(song) })
+            else -> null
+        }
         MarqueeText(
             song.title,
-            Modifier.fillMaxWidth().then(if (album != null) Modifier.clickable(onClickLabel = "Open album") { menu?.openAlbum?.invoke(album) } else Modifier),
+            Modifier.fillMaxWidth().then(if (openAlbum != null) Modifier.clickable(onClickLabel = "Open album", onClick = openAlbum) else Modifier),
             style = when {
                 apple -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 compact -> MaterialTheme.typography.titleLarge
