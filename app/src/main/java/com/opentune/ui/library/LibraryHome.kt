@@ -54,6 +54,7 @@ import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import com.opentune.ui.browse.playlistSearchResults
+import com.opentune.ui.browse.coverWash
 import com.opentune.ui.browse.dismissPlaylistSearch
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
@@ -386,16 +387,28 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
         top + order.sort(rows.filter { it !in top })
     }
     val full = androidx.compose.foundation.lazy.grid.GridItemSpan(2)
-    // Behind it all, the first playlist's cover blurred across the top, running down into its colour.
-    val coverUrl = shown.firstOrNull { it.url != null }?.url.artworkAt(CARD_ART_PX)
+    val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    // Behind it all, the cover of the first playlist in view, blurred across the top and running
+    // down into its colour; as the page scrolls, both follow the playlists on screen.
+    val byKey = remember(shown) { shown.associateBy { it.key } }
+    val coverUrl by remember(byKey) {
+        androidx.compose.runtime.derivedStateOf {
+            grid.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item ->
+                byKey[item.key]?.let { it.url ?: it.local?.songs?.firstOrNull()?.thumbnailUrl }
+            }?.artworkAt(CARD_ART_PX)
+        }
+    }
     val seed = com.opentune.ui.theme.rememberArtworkSeed(coverUrl)
     val background = MaterialTheme.colorScheme.background
     val accent by androidx.compose.animation.animateColorAsState(
-        seed?.let { androidx.compose.ui.graphics.lerp(background, it, 0.22f) } ?: background, label = "playlistsAccent",
+        seed?.let { androidx.compose.ui.graphics.lerp(background, it, 0.24f) } ?: background,
+        androidx.compose.animation.core.tween(800), label = "playlistsAccent",
     )
-    Box(Modifier.fillMaxSize().background(accent)) {
-    if (coverUrl != null) CoverWash(coverUrl, accent, Modifier.fillMaxWidth().height(440.dp))
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to accent, 0.6f to accent,
+        1f to androidx.compose.ui.graphics.lerp(background, accent, 0.45f)))) {
+    coverUrl?.let { CoverWash(it, accent, Modifier.fillMaxWidth().height(440.dp)) }
     androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+        state = grid,
         columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
         contentPadding = contentPadding,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -440,7 +453,7 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
 private fun CoverWash(url: String, into: Color, modifier: Modifier) {
     Box(modifier.clipToBounds()) {
         val blurs = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
-        androidx.compose.animation.Crossfade(url, label = "coverWash") { u ->
+        androidx.compose.animation.Crossfade(url, animationSpec = androidx.compose.animation.core.tween(800), label = "coverWash") { u ->
             Artwork(
                 if (blurs) u else u.artworkAt(24),
                 Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f; alpha = 0.8f }
@@ -1025,10 +1038,12 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         }
         }
     }) {
-    LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().playlistSearchResults(search)) {
+    val tint = com.opentune.ui.browse.rememberCoverTint((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(CARD_ART_PX))
+    LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding,
+        modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search)) {
         if (!searching) item(key = "header") {
             Box {
-                com.opentune.ui.browse.HeaderBackdrop((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(HEADER_ART_PX), Modifier.matchParentSize())
+                com.opentune.ui.browse.HeaderBackdrop((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(HEADER_ART_PX), Modifier.matchParentSize(), into = tint)
                 Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     com.opentune.ui.browse.PlaylistHeading(playlist.name,
                         if (playlist.spotifyId != null) "Spotify" else if (playlist.synced) "YouTube Music" else "On this phone",

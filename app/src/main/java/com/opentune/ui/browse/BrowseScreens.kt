@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import com.opentune.data.MusicRepository
 import com.opentune.data.model.BrowseType
 import com.opentune.data.model.HEADER_ART_PX
+import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.Song
 import com.opentune.data.model.UiState
 import com.opentune.data.model.artworkAt
@@ -267,9 +268,14 @@ internal fun ShuffleButton(onShuffle: () -> Unit, onSmartShuffle: (() -> Unit)?,
  * cover stretched to fill makes the same soft wash.
  */
 @Composable
-internal fun HeaderBackdrop(url: String?, modifier: Modifier = Modifier) {
+internal fun HeaderBackdrop(
+    url: String?,
+    modifier: Modifier = Modifier,
+    /** What it fades into at its foot: the page under it, plain or tinted (see [rememberCoverTint]). */
+    into: Color = MaterialTheme.colorScheme.background,
+) {
     if (url.isNullOrBlank()) return
-    val background = MaterialTheme.colorScheme.background
+    val background = into
     Box(modifier.clipToBounds()) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Artwork(
@@ -290,6 +296,28 @@ internal fun HeaderBackdrop(url: String?, modifier: Modifier = Modifier) {
             ),
         )
     }
+}
+
+/** The page's colour taken from a cover: its own colour laid lightly over the background. */
+@Composable
+internal fun rememberCoverTint(url: String?): Color {
+    val background = MaterialTheme.colorScheme.background
+    val seed = com.opentune.ui.theme.rememberArtworkSeed(url)
+    val tint by androidx.compose.animation.animateColorAsState(
+        seed?.let { androidx.compose.ui.graphics.lerp(background, it, 0.26f) } ?: background, label = "coverTint",
+    )
+    return tint
+}
+
+/**
+ * The cover's colour behind the whole page, not just its header: even down the
+ * top half of the screen, where the header fades into it, then fading out to
+ * the plain background at the foot.
+ */
+@Composable
+internal fun Modifier.coverWash(tint: Color): Modifier {
+    val background = MaterialTheme.colorScheme.background
+    return this.background(Brush.verticalGradient(0f to tint, 0.5f to tint, 1f to background))
 }
 
 /** The orders a list's songs can be shown in. */
@@ -535,10 +563,11 @@ fun CollectionScreen(
             is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
             else -> {
                 val c = (s as? UiState.Success)?.data
-                LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().playlistSearchResults(search)) {
+                val tint = rememberCoverTint(c?.thumbnailUrl.artworkAt(CARD_ART_PX))
+                LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search)) {
                     if (!searching) item(key = "header") {
                         Box {
-                            HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize())
+                            HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize(), into = tint)
                             Column(
                                 Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
