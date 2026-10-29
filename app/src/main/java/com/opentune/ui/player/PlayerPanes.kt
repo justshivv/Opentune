@@ -8,6 +8,10 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -336,8 +340,8 @@ fun LyricPreview(
 private fun FindingTheWords(modifier: Modifier = Modifier) {
     val ink = MaterialTheme.colorScheme.onSurface
     val still = AppSettings.ui.collectAsState().value.reduceAnimation
-    val sweep = if (still) null else androidx.compose.animation.core.rememberInfiniteTransition(label = "finding").animateFloat(
-        -1f, 2f, androidx.compose.animation.core.infiniteRepeatable(tween(1_800, easing = androidx.compose.animation.core.LinearEasing)), label = "findingSweep",
+    val sweep = if (still) null else rememberInfiniteTransition(label = "finding").animateFloat(
+        -1f, 2f, infiniteRepeatable(tween(1_800, easing = LinearEasing)), label = "findingSweep",
     )
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Icon(PlayerIcons.Lyrics, null, Modifier.size(16.dp), tint = ink.copy(alpha = 0.55f))
