@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
                     val required by com.opentune.data.UpdateLock.required.collectAsState()
                     val behind by com.opentune.data.UpdateLock.behind.collectAsState()
                     LaunchedEffect(required) { if (required != null && vm.isPlaying.value) vm.togglePlayPause() }
-                    if (required != null) com.opentune.ui.settings.UpdateRequiredScreen(required!!, behind) else
+                    if (required != null) com.opentune.ui.settings.UpdateRequiredScreen(required!!, behind) else {
                     // A fresh install's welcome comes first; Home, built after it, starts from the picks.
                     androidx.compose.animation.AnimatedContent(
                         ui.welcome == WelcomeState.DUE,
@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity() {
                             if (welcome) WelcomeScreen(onDone = {}) else AppRoot(vm)
                         }
                         if (tv) com.opentune.ui.tv.TvRemoteSurface(page) else page()
+                    }
                     }
                     com.opentune.ui.account.ConfirmPairing()
                     }
