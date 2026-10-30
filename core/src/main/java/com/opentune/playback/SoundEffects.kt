@@ -19,6 +19,14 @@ import kotlinx.coroutines.flow.asStateFlow
  * [reverbAvailable] goes false so the UI can say so. Bass boost is a filter in
  * the app's own DSP, so it works on every phone.
  */
+/**
+ * Whether a song is stretched in time: speed or pitch off normal, silence
+ * skipped, or a listening room nudging its speed to keep in sync. Media3 does
+ * all of that only on 16-bit output, so float output is set aside while it is.
+ */
+fun isStretched(sound: SoundSettings, skipSilence: Boolean, inRoom: Boolean): Boolean =
+    kotlin.math.abs(sound.speed - 1f) > 0.001f || kotlin.math.abs(sound.pitch - 1f) > 0.001f || skipSilence || inRoom
+
 @OptIn(UnstableApi::class)
 class SoundEffects(private val player: ExoPlayer) {
 

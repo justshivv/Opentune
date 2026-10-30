@@ -224,9 +224,14 @@ class PlaybackService : MediaLibraryService() {
                 effects,
                 // Float where asked for, and for an exclusive USB DAC whenever the song has more
                 // than 16 bits: float carries 24-bit samples exactly, and they go out whole.
+                // Not while the song is stretched in time: Media3 changes speed and pitch, skips
+                // silence and nudges a listening room's sync only on 16-bit output, and on float
+                // it quietly plays at normal speed. The effects still run on float before that.
                 floatWanted = { source ->
-                    AppSettings.playback.value.floatOutput ||
-                        (BitPerfectUsb.wanted && source != C.ENCODING_PCM_16BIT && source != C.ENCODING_PCM_8BIT)
+                    !stretching() && (
+                        AppSettings.playback.value.floatOutput ||
+                            (BitPerfectUsb.wanted && source != C.ENCODING_PCM_16BIT && source != C.ENCODING_PCM_8BIT)
+                        )
                 },
             )
         }
@@ -413,6 +418,12 @@ class PlaybackService : MediaLibraryService() {
         }
         scope.launch {
             AppSettings.playback.map { it.bitPerfectUsb to it.floatOutput }.distinctUntilChanged().collect { applyBitPerfect(reopen = true) }
+        }
+        scope.launch {
+            // Speed or pitch moved off normal (or back), skip silence turned on or off, a room joined
+            // or left: the output is set up again, so the song changes over at once rather than at the next.
+            combine(AppSettings.sound, AppSettings.playback, com.opentune.data.together.Together.room) { _, _, _ -> stretching() }
+                .distinctUntilChanged().drop(1).collect { rebuildOutput() }
         }
         registerReceiver(volumeReceiver, IntentFilter("android.media.VOLUME_CHANGED_ACTION"), VOLUME_RECEIVER_FLAGS)
 
@@ -2140,6 +2151,27 @@ class PlaybackService : MediaLibraryService() {
         val changed = exclusiveWas != null && exclusiveWas != pb.bitPerfectUsb
         exclusiveWas = pb.bitPerfectUsb
         if (reopen && (changed || pb.bitPerfectUsb)) reopenOutput(player)
+    }
+
+    private fun stretching(): Boolean = isStretched(
+        AppSettings.sound.value, AppSettings.playback.value.skipSilence, com.opentune.data.together.Together.room.value != null,
+    )
+
+    /**
+     * The player's output set up afresh at the same place, for a change in
+     * whether the song is stretched: a seek keeps the output as it is, so the
+     * player is stopped and prepared again. Only when float could be in use.
+     */
+    private fun rebuildOutput() {
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val pb = AppSettings.playback.value
+        if (!pb.floatOutput && !pb.bitPerfectUsb) return
+        if (player.currentMediaItem == null) return
+        if (player.playbackState != Player.STATE_READY && player.playbackState != Player.STATE_BUFFERING) return
+        val at = player.currentPosition
+        player.stop()
+        player.prepare()
+        player.seekTo(at)
     }
 
     /** The song's output closed and opened again at the same place, so it opens on the current route. */
