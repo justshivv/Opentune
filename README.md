@@ -367,10 +367,17 @@ on your own connection with no hosted proxy.
   lyrics from the phone's sources (lit word by word, with a per-song source
   and offset), your own playlists, liked and recent songs, your own
   Subsonic server, the 15-band equalizer and its presets, speed,
-  balance and a sleep timer. It uses the phone app's code for YouTube Music,
-  lyrics, Subsonic and settings as-is, but finds streams with
-  NewPipe only, so some songs don't play yet. Signing in to YouTube Music
-  isn't there. On Linux it needs FFmpeg's libraries (libavcodec) for audio.
+  balance and a sleep timer. It looks and moves like the phone app, built
+  from the phone's own interface code (dock, side rail, docked player,
+  player buttons, page motion and colours from the cover). YouTube songs
+  play YouTube's Opus stream (about 160 kbps) through a bundled FFmpeg,
+  falling back to AAC; YouTube's player code runs on GraalJS; and the
+  library (liked songs, playlists and the full play history) is kept in
+  SQLite. It uses the phone app's code for YouTube Music, lyrics, Subsonic
+  and settings as-is, but finds streams with NewPipe only, so some songs
+  don't play yet. Signing in to YouTube Music isn't there. On Linux, songs
+  from your own server and JioSaavn still play through JavaFX, which needs
+  the system's FFmpeg libraries (libavcodec).
 - **Opens YouTube links.** music.youtube.com, youtube.com and youtu.be
   links, or links shared to the app, open in OpenTune.
 

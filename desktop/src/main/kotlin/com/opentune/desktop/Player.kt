@@ -97,8 +97,11 @@ object Player {
         // A change in Settings reaches the song already playing.
         scope.launch {
             combine(AppSettings.sound, AppSettings.equalizer) { _, _ -> }.collect {
-                val fx = synchronized(gate) { engine as? FxEngine }
-                fx?.let { e -> onFx { e.player?.let(::applyEffects) } }
+                when (val e = synchronized(gate) { engine }) {
+                    is FxEngine -> onFx { e.player?.let(::applyEffects) }
+                    is FfmpegEngine -> e.refreshEffects()
+                    else -> Unit
+                }
             }
         }
     }
@@ -244,8 +247,13 @@ object Player {
 
     // ---- The song's first source -------------------------------------------------
 
-    /** YouTube through the relay, or your server's MP3: what every song starts from. */
-    private fun startBase(song: Song, gen: Int, atMs: Long = 0) {
+    /**
+     * YouTube through the relay, or your server's MP3: what every song starts
+     * from. A YouTube song plays YouTube's Opus stream through FFmpeg where
+     * FFmpeg loads, and its AAC stream through JavaFX if that fails.
+     */
+    private fun startBase(song: Song, gen: Int, atMs: Long = 0, opus: Boolean = isYouTubeId(song.videoId) && Ffmpeg.available) {
+        if (opus) return startOpus(song, gen, atMs)
         val address = addressOf(song.videoId) ?: return fail(song, gen)
         lateinit var e: FxEngine
         e = FxEngine(
@@ -263,6 +271,40 @@ object Player {
             onError = { message ->
                 System.err.println("Player: ${song.videoId}: $message")
                 if (current(gen, e)) fail(song, gen)
+            },
+        )
+        synchronized(gate) {
+            if (gen != generation) return e.dispose()
+            engine = e
+        }
+        e.setVolume(_volume.value * fade)
+    }
+
+    /** YouTube's Opus stream, decoded by FFmpeg; on any failure, the AAC one from where it got to. */
+    private fun startOpus(song: Song, gen: Int, atMs: Long) {
+        lateinit var e: FfmpegEngine
+        e = FfmpegEngine(
+            Relay.addressOf(song.videoId, Streams.Kind.OPUS), startAtMs = { atMs }, autoplay = wanted,
+            onReady = { ms ->
+                if (current(gen, e)) {
+                    if (ms > 0) _durationOf.value = song.videoId to ms
+                    if (_quality.value == null) {
+                        _quality.value = Quality("YouTube", Streams.known(song.videoId, Streams.Kind.OPUS)?.let { "Opus ${it.kbps} kbps" } ?: "Opus")
+                    }
+                }
+            },
+            onStarted = { if (current(gen, e)) _loading.value = false },
+            onPlaying = { on -> if (current(gen, e)) { _playing.value = on; if (on) _loading.value = false } },
+            onEnd = { if (current(gen, e)) ended() },
+            onError = { message ->
+                System.err.println("Player: ${song.videoId}: Opus through FFmpeg failed ($message), trying AAC")
+                val mine = synchronized(gate) { (gen == generation && engine === e).also { if (it) engine = null } }
+                val at = runCatching { e.positionMs() }.getOrDefault(atMs)
+                e.dispose()
+                if (mine) {
+                    _quality.value = null
+                    startBase(song, gen, at, opus = false)
+                }
             },
         )
         synchronized(gate) {

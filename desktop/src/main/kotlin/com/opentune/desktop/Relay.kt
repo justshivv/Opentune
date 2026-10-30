@@ -27,20 +27,23 @@ object Relay {
         }
     }
 
-    /** The address the engine plays [videoId] from; JavaFX goes by its extension. */
-    fun addressOf(videoId: String): String = "http://127.0.0.1:${server.address.port}/song/$videoId.m4a"
+    /** The address an engine plays [videoId] from, in [kind]; JavaFX goes by the extension. */
+    fun addressOf(videoId: String, kind: Streams.Kind = Streams.Kind.AAC): String =
+        "http://127.0.0.1:${server.address.port}/song/$videoId.${kind.extension}"
 
     private fun serve(exchange: HttpExchange) {
-        val videoId = exchange.requestURI.path.removePrefix("/song/").removeSuffix(".m4a").takeIf { it.matches(VIDEO_ID) }
+        val name = exchange.requestURI.path.removePrefix("/song/")
+        val kind = Streams.Kind.entries.firstOrNull { name.endsWith(".${it.extension}") } ?: return exchange.sendResponseHeaders(404, -1)
+        val videoId = name.removeSuffix(".${kind.extension}").takeIf { it.matches(VIDEO_ID) }
             ?: return exchange.sendResponseHeaders(404, -1)
-        var stream = runCatching { runBlocking { Streams.resolve(videoId) } }.getOrElse {
+        var stream = runCatching { runBlocking { Streams.resolve(videoId, kind = kind) } }.getOrElse {
             System.err.println("Relay: no stream for $videoId: $it")
             return exchange.sendResponseHeaders(502, -1)
         }
         val size = runCatching { length(stream.url) }.getOrElse { first ->
             System.err.println("Relay: $videoId refused ($first), looking again")
             Streams.forget(videoId)
-            stream = runCatching { runBlocking { Streams.resolve(videoId, fresh = true) } }.getOrNull()
+            stream = runCatching { runBlocking { Streams.resolve(videoId, fresh = true, kind = kind) } }.getOrNull()
                 ?: return exchange.sendResponseHeaders(502, -1)
             runCatching { length(stream.url) }.getOrElse {
                 System.err.println("Relay: $videoId refused again ($it)")

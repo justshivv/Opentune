@@ -127,7 +127,7 @@ sourceSets {
         java {
             srcDir(coreSources)
             srcDir("src/shim/java")
-            include("android/**")
+            include("android/**", "org/schabi/newpipe/extractor/utils/JavaScript.java")
             include(sharedFromCore.filter { it.endsWith(".java") })
         }
     }
@@ -154,6 +154,29 @@ val javafxPlatform = run {
     }
 }
 
+/*
+ * NewPipe as core strips it, less its JavaScript runner too: the desktop runs
+ * YouTube's player code with its own, on GraalJS (src/shim/java).
+ */
+val newPipeForDesktop = tasks.register<Jar>("newPipeForDesktop") {
+    archiveFileName.set("NewPipeExtractor-desktop.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("stripped-libs"))
+    val stripped = rootProject.project(":core").tasks.named("stripNewPipeExtractorUtils")
+    dependsOn(stripped)
+    from(stripped.map { zipTree(it.outputs.files.singleFile) }) {
+        exclude("org/schabi/newpipe/extractor/utils/JavaScript.class")
+    }
+}
+
+// FFmpeg's natives, for the same system as JavaFX's.
+val bytedecoPlatform = when (javafxPlatform) {
+    "win" -> "windows-x86_64"
+    "mac" -> "macosx-x86_64"
+    "mac-aarch64" -> "macosx-arm64"
+    "linux-aarch64" -> "linux-arm64"
+    else -> "linux-x86_64"
+}
+
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
@@ -167,16 +190,21 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     // Stream addresses, as on the phone: NewPipe, with core's patched helper.
-    implementation(files(rootProject.project(":core").tasks.named("stripNewPipeExtractorUtils")))
+    implementation(files(newPipeForDesktop))
     implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0a5d5ef20ca7ef09549996")
     implementation("org.jsoup:jsoup:1.22.2")
     implementation("com.google.code.findbugs:jsr305:3.0.2")
     implementation("com.google.protobuf:protobuf-javalite:4.35.0")
+    // YouTube's player code runs on GraalJS, with Rhino as the fallback (see JavaScript.java).
+    implementation("org.graalvm.polyglot:polyglot:24.1.2")
+    implementation("org.graalvm.polyglot:js-community:24.1.2")
     implementation("org.mozilla:rhino:1.8.1")
     implementation("org.mozilla:rhino-engine:1.8.1")
 
     // Add-on responses (the shared protocol reads them with org.json, as on the phone),
     // FLAC decoding for lossless sources, and the QR code a phone scans to verify this computer.
+    // The library (liked songs, playlists, every play) in SQLite.
+    implementation("org.xerial:sqlite-jdbc:3.47.1.0")
     implementation("org.json:json:20240303")
     implementation("org.jflac:jflac-codec:1.5.2")
     implementation("com.google.zxing:core:3.5.4")
@@ -187,6 +215,16 @@ dependencies {
 
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
+
+    // FFmpeg (through JavaCV) plays YouTube's Opus stream and any format a source gives,
+    // with this system's natives only. JavaCV's other libraries (OpenCV and the rest) aren't needed.
+    implementation("org.bytedeco:javacv:1.5.12") {
+        listOf("opencv", "openblas", "flycapture", "libdc1394", "libfreenect", "libfreenect2", "librealsense", "librealsense2",
+            "videoinput", "artoolkitplus", "flandmark", "leptonica", "tesseract").forEach { exclude(group = "org.bytedeco", module = it) }
+    }
+    implementation("org.bytedeco:ffmpeg:7.1.1-1.5.12")
+    implementation("org.bytedeco:ffmpeg:7.1.1-1.5.12:$bytedecoPlatform")
+    implementation("org.bytedeco:javacpp:1.5.12:$bytedecoPlatform")
 
     for (module in listOf("base", "graphics", "media")) {
         implementation("org.openjfx:javafx-$module:21.0.5:$javafxPlatform")
@@ -214,8 +252,8 @@ compose.desktop {
             packageVersion = "1.0.$appVersionCode"
             description = "A music player for YouTube Music"
             vendor = "OpenTune"
-            // What jlink's scan suggests, plus scripting for Rhino and EC ciphers for HTTPS.
-            modules("java.instrument", "java.management", "java.net.http", "java.scripting", "jdk.crypto.ec", "jdk.dynalink", "jdk.httpserver", "jdk.jfr", "jdk.unsupported")
+            // What jlink's scan suggests, plus scripting for Rhino, java.sql for the library and EC ciphers for HTTPS.
+            modules("java.instrument", "java.management", "java.net.http", "java.scripting", "java.sql", "jdk.crypto.ec", "jdk.dynalink", "jdk.httpserver", "jdk.jfr", "jdk.unsupported")
             macOS {
                 iconFile.set(project.file("packaging/icons/AppIcon.icns"))
                 bundleID = "com.opentune.desktop"

@@ -56,6 +56,11 @@ under CC BY-NC-SA 4.0), and radio stations from the
 The QR code on a Listen together invite is made with
 [ZXing](https://github.com/zxing/zxing) (`com.google.zxing:core`), by the
 ZXing authors, under the Apache License 2.0.
+On computers, YouTube's Opus stream and other formats are decoded by
+[FFmpeg](https://ffmpeg.org) (LGPL 2.1 or later), through Bytedeco's
+[JavaCV](https://github.com/bytedeco/javacv) and
+[JavaCPP Presets](https://github.com/bytedeco/javacpp-presets) (Apache
+License 2.0 and GPLv2 with the Classpath exception).
 
 ## BitChord browser player and audio compatibility fixes
 

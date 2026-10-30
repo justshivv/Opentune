@@ -19,47 +19,56 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
 
 /**
  * Where a song's audio is, found with NewPipe as the phone app's last
- * fallback does. Only AAC in MP4 is kept: it's what the desktop's audio
- * engine plays on every system.
+ * fallback does: AAC in MP4, which JavaFX plays on every system, and Opus,
+ * YouTube's best, which FFmpeg plays.
  */
 object Streams {
     data class Stream(val url: String, val kbps: Int, val mimeType: String)
 
+    /** Which of a song's streams: AAC for JavaFX, or Opus (YouTube's best) for FFmpeg. */
+    enum class Kind(val extension: String) { AAC("m4a"), OPUS("webm") }
+
     /** YouTube's addresses last about six hours; reused for well under that. */
     private const val KEEP_MS = 60 * 60 * 1000L
     private val found = ConcurrentHashMap<String, Pair<Long, Stream>>()
+    private fun key(videoId: String, kind: Kind) = "$videoId/$kind"
 
     /** One extraction at a time: they share NewPipe's state and slow each other right down. */
     private val gate = Mutex()
 
     private val init by lazy { NewPipe.init(OkHttpDownloader) }
 
-    suspend fun resolve(videoId: String, fresh: Boolean = false): Stream {
-        if (!fresh) found[videoId]?.let { (at, s) -> if (System.currentTimeMillis() - at < KEEP_MS) return s }
+    suspend fun resolve(videoId: String, fresh: Boolean = false, kind: Kind = Kind.AAC): Stream {
+        if (!fresh) found[key(videoId, kind)]?.let { (at, s) -> if (System.currentTimeMillis() - at < KEEP_MS) return s }
         return gate.withLock {
             withContext(Dispatchers.IO) {
                 init
                 val extractor = ServiceList.YouTube.getStreamExtractor("https://www.youtube.com/watch?v=$videoId")
                 extractor.fetchPage()
-                val stream = pick(extractor.audioStreams) ?: error("No audio this computer can play for $videoId")
-                Stream(stream.content, stream.averageBitrate, stream.format?.mimeType ?: "audio/mp4")
-                    .also { found[videoId] = System.currentTimeMillis() to it }
+                val now = System.currentTimeMillis()
+                // Both kinds are kept from the one extraction, so switching engine costs nothing.
+                Kind.entries.forEach { k ->
+                    pick(extractor.audioStreams, k)?.let { s ->
+                        found[key(videoId, k)] = now to Stream(s.content, s.averageBitrate, s.format?.mimeType ?: "audio/mp4")
+                    }
+                }
+                found[key(videoId, kind)]?.second ?: error("No ${kind.name} audio for $videoId")
             }
         }
     }
 
-    /** The best AAC stream with a plain address; manifests and other codecs left out. */
-    internal fun pick(streams: List<AudioStream>): AudioStream? = streams
+    /** The best stream of [kind] with a plain address; manifests and other codecs left out. */
+    internal fun pick(streams: List<AudioStream>, kind: Kind = Kind.AAC): AudioStream? = streams
         .filter { !it.content.isNullOrBlank() && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
-        .filter { it.format?.mimeType == "audio/mp4" }
+        .filter { if (kind == Kind.AAC) it.format?.mimeType == "audio/mp4" else it.format?.mimeType == "audio/webm" }
         .maxByOrNull { it.averageBitrate }
 
     /** The stream already found for [videoId], for saying what's playing. */
-    fun known(videoId: String): Stream? = found[videoId]?.second
+    fun known(videoId: String, kind: Kind = Kind.AAC): Stream? = found[key(videoId, kind)]?.second
 
     /** Forgets an address the server refused, so the next try finds a new one. */
     fun forget(videoId: String) {
-        found.remove(videoId)
+        Kind.entries.forEach { found.remove(key(videoId, it)) }
     }
 
     private const val NEXT_ENDPOINT = "/youtubei/v1/next"

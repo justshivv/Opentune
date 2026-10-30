@@ -115,6 +115,14 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
         run: ./gradlew --no-daemon :desktop:test :desktop:${{ matrix.package }}
+      # The packaged app on its own trimmed runtime: FFmpeg, GraalJS and SQLite must load there too.
+      - name: Packaged app self-check
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          ./gradlew --no-daemon :desktop:createDistributable
+          app=desktop/build/compose/binaries/main/app
+          if [ -d "$app/OpenTune.app" ]; then "$app/OpenTune.app/Contents/MacOS/OpenTune" --self-check; else "$app/OpenTune/bin/OpenTune" --self-check; fi
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.os }}

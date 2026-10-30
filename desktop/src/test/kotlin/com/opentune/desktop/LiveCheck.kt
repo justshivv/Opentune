@@ -33,6 +33,43 @@ class LiveCheck {
         }
     }
 
+    /** YouTube's Opus stream, through the relay and FFmpeg, for a few seconds of real sound. */
+    @Test fun opusPlaysThroughFfmpeg() {
+        assumeTrue(System.getProperty("opentune.live") == "true")
+        val id = System.getProperty("opentune.video") ?: "dQw4w9WgXcQ"
+        val stream = runBlocking { Streams.resolve(id, kind = Streams.Kind.OPUS) }
+        println("LIVE opus: ${stream.mimeType} ${stream.kbps}kbps")
+        var played = 0L
+        val enough = java.util.concurrent.CountDownLatch(1)
+        var problem: String? = null
+        var length = 0L
+        val out = object : PcmOut {
+            override fun open(format: javax.sound.sampled.AudioFormat) = format
+            override fun write(bytes: ByteArray, off: Int, len: Int): Int {
+                played += len / 4
+                if (played > 48_000 * 3) enough.countDown()
+                return len
+            }
+            override fun start() = Unit
+            override fun stop() = Unit
+            override fun flush() = Unit
+            override fun drain() = Unit
+            override fun close() = Unit
+            override val framePosition: Long get() = played
+            override fun setGainDb(db: Float) = true
+        }
+        val engine = FfmpegEngine(
+            Relay.addressOf(id, Streams.Kind.OPUS), startAtMs = { 0 }, autoplay = true,
+            onReady = { length = it }, onStarted = {}, onPlaying = {}, onEnd = {}, onError = { problem = it; enough.countDown() }, out = out,
+        )
+        enough.await(60, java.util.concurrent.TimeUnit.SECONDS)
+        engine.dispose()
+        println("LIVE ffmpeg: ${played / 48} ms decoded of $length ms, problem $problem")
+        assertEquals(null, problem)
+        assertTrue(played > 48_000 * 3)
+        assertTrue(length > 60_000)
+    }
+
     /** JioSaavn's verified 320 kbps file for a well-known song. */
     @Test fun jioSaavnFindsAKnownSong() = runBlocking {
         assumeTrue(System.getProperty("opentune.live") == "true")

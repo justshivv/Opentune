@@ -16,7 +16,8 @@ import java.io.File
 /** Where the desktop keeps what it saves: ~/.opentune, read through the shared code's Context. */
 internal val appContext by lazy { android.content.Context(File(System.getProperty("user.home"), ".opentune")) }
 
-fun main() {
+fun main(args: Array<String>) {
+    if ("--self-check" in args) return selfCheck()
     // The shared settings and music server, as the phone starts them.
     AppSettings.init(appContext)
     Subsonic.init(appContext)
@@ -24,6 +25,8 @@ fun main() {
     // What's playing, to the listener's Discord profile and Last.fm scrobbles, when they've turned them on.
     DiscordPresence.start()
     LastFmDesktop.start()
+    // FFmpeg's natives unpack once on first use: done now, off the window's thread, so the first song doesn't wait.
+    Thread({ Ffmpeg.available }, "ffmpeg-load").apply { isDaemon = true; start() }
     // Covers on the same HTTP client as everything else.
     SingletonImageLoader.setSafe { context ->
         ImageLoader.Builder(context)
@@ -42,4 +45,28 @@ fun main() {
             DesktopApp()
         }
     }
+}
+
+/**
+ * `OpenTune --self-check`: loads what the installer must carry (FFmpeg,
+ * GraalJS, SQLite), prints what it found and exits, failing if any is
+ * missing. For checking a packaged build, where the trimmed Java runtime
+ * could be short of a module the tests' full one has.
+ */
+private fun selfCheck() {
+    val checks = listOf(
+        "FFmpeg" to { check(Ffmpeg.available) { "didn't load" }; "loaded" },
+        "GraalJS" to {
+            val got = org.schabi.newpipe.extractor.utils.JavaScript.run("var f = (a) => a?.at(-1) ?? 'x';", "f", "abc")
+            check(got == "c") { "got $got" }
+            "ran"
+        },
+        "SQLite" to { "${Library.playlists.value.size} playlists, ${Library.liked.value.size} liked" },
+    )
+    var failed = false
+    for ((name, run) in checks) {
+        val result = runCatching(run)
+        println("$name: " + result.fold({ "ok, $it" }, { failed = true; "FAILED, $it" }))
+    }
+    kotlin.system.exitProcess(if (failed) 1 else 0)
 }

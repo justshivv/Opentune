@@ -90,4 +90,39 @@ class DesktopTest {
         assertEquals(listOf("lofi"), com.opentune.data.settings.AppSettings.recentSearches.value)
         assertEquals(250L, com.opentune.data.settings.AppSettings.lyrics.value.offsets["dQw4w9WgXcQ"])
     }
+
+    @Test fun ffmpegFiltersMatchTheSoundSettings() {
+        val flat = com.opentune.data.settings.EqualizerSettings()
+        // Nothing to change: no filters, the song goes straight through.
+        assertNull(FfmpegEngine.filterChain(1f, flat))
+        assertNull(FfmpegEngine.filterChain(1f, flat.copy(enabled = true)))
+        assertEquals("atempo=1.250", FfmpegEngine.filterChain(1.25f, flat))
+        // A boost is taken off the whole curve, as the phone does, so it can't clip.
+        val bass = FfmpegEngine.filterChain(1f, flat.copy(enabled = true, bassDb = 6f))!!
+        assertTrue(bass, bass.contains("equalizer=f=1000:t=o:w=0.667:g=-6.00"))
+        assertFalse(bass, bass.contains("equalizer=f=25:"))
+        val left = FfmpegEngine.filterChain(1f, flat.copy(enabled = true, balance = -0.5f))!!
+        assertEquals("pan=stereo|c0=1.000*c0|c1=0.500*c1", left)
+    }
+
+    @Test fun theOldJsonLibraryIsReadInOnce() {
+        val folder = Files.createTempDirectory("opentune").toFile()
+        val file = java.io.File(folder, "desktop.json")
+        file.writeText(
+            """{"liked":[{"id":"dQw4w9WgXcQ","title":"Paper Boats","artist":"River Choir"}],""" +
+                """"recent":[{"id":"aaaaaaaaaaa","title":"Lanterns","artist":"River Choir"},{"id":"dQw4w9WgXcQ","title":"Paper Boats","artist":"River Choir"}],""" +
+                """"volume":0.4,"playlists":[{"id":"pl-1","name":"Night","songs":[{"id":"aaaaaaaaaaa","title":"Lanterns","artist":"River Choir"}]}]}""",
+        )
+        Library.useFile(file)
+        assertTrue(Library.isLiked("dQw4w9WgXcQ"))
+        assertEquals(listOf("aaaaaaaaaaa", "dQw4w9WgXcQ"), Library.recent.value.map { it.videoId })
+        assertEquals(0.4, Library.volume(), 0.0001)
+        assertEquals(listOf("Night"), Library.playlists.value.map { it.name })
+        assertEquals(listOf("Lanterns"), Library.playlists.value.single().songs.map { it.title })
+        // Kept aside, not read again.
+        assertFalse(file.exists())
+        assertTrue(java.io.File(folder, "desktop.json.imported").exists())
+        Library.useFile(file)
+        assertEquals(1, Library.liked.value.size)
+    }
 }
