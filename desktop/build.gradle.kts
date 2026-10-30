@@ -66,7 +66,16 @@ val generateBuildConfig = tasks.register("generateBuildConfig") {
     val out = layout.buildDirectory.dir("generated/buildconfig")
     outputs.dir(out)
     inputs.property("version", appVersionName)
+    // OpenTune's Last.fm application, as the phone builds take it (core/build.gradle.kts); empty
+    // in a local build, where Settings asks for the listener's own key instead.
+    val lastFmKey = providers.environmentVariable("LASTFM_API_KEY").orElse("").map { it.trim() }
+    val lastFmSecret = providers.environmentVariable("LASTFM_API_SECRET").orElse("").map { it.trim() }
+    inputs.property("lastFmKey", lastFmKey)
+    inputs.property("lastFmSecret", lastFmSecret)
     doLast {
+        listOf(lastFmKey.get(), lastFmSecret.get()).forEach {
+            require(it.isEmpty() || it.matches(Regex("[a-fA-F0-9]{32}"))) { "Last.fm credentials must be 32 hex characters" }
+        }
         val file = out.get().file("com/opentune/core/BuildConfig.kt").asFile
         file.parentFile.mkdirs()
         file.writeText(
@@ -77,6 +86,8 @@ val generateBuildConfig = tasks.register("generateBuildConfig") {
             |    const val DEBUG = false
             |    const val VERSION_NAME = "$appVersionName"
             |    const val VERSION_CODE = $appVersionCode
+            |    const val LASTFM_API_KEY = "${lastFmKey.get()}"
+            |    const val LASTFM_API_SECRET = "${lastFmSecret.get()}"
             |}
             |""".trimMargin(),
         )

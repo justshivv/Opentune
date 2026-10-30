@@ -21,6 +21,9 @@ fun main() {
     AppSettings.init(appContext)
     Subsonic.init(appContext)
     com.opentune.data.config.RemoteConfig.init(appContext)
+    // What's playing, to the listener's Discord profile and Last.fm scrobbles, when they've turned them on.
+    DiscordPresence.start()
+    LastFmDesktop.start()
     // Covers on the same HTTP client as everything else.
     SingletonImageLoader.setSafe { context ->
         ImageLoader.Builder(context)

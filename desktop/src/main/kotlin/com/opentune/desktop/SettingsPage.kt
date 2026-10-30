@@ -67,6 +67,7 @@ internal fun SettingsPage() {
             SourcesSection()
             EqualizerSection()
             LyricsSection()
+            ConnectedSection()
             ServerSection()
             Section("About") {
                 Text("OpenTune ${BuildConfig.VERSION_NAME} for computers", style = MaterialTheme.typography.bodyLarge)
@@ -303,6 +304,68 @@ private fun AppearanceSection() {
             listOf(com.opentune.data.settings.PlayerBackground.MESH, com.opentune.data.settings.PlayerBackground.GRADIENT, com.opentune.data.settings.PlayerBackground.AMOLED).forEach { bg ->
                 FilterChip(theme.playerBackground == bg, { AppSettings.updateTheme { it.copy(playerBackground = bg) } }, label = { Text(bg.label) })
             }
+        }
+    }
+}
+
+/** Discord's "Listening to" card and Last.fm scrobbles. */
+@Composable
+private fun ConnectedSection() {
+    val discord by DiscordPresence.enabled.collectAsState()
+    val discordStatus by DiscordPresence.status.collectAsState()
+    val lastFm by LastFmDesktop.state.collectAsState()
+    val waiting by LastFmDesktop.waiting.collectAsState()
+    var problem by remember { mutableStateOf<String?>(null) }
+    var key by remember { mutableStateOf(lastFm.ownKey) }
+    var secret by remember { mutableStateOf(lastFm.ownSecret) }
+    Section("Discord and Last.fm") {
+        SwitchRow(
+            "Show on Discord",
+            when (discordStatus) {
+                DiscordPresence.Status.Connected -> "The song you play shows on your Discord profile while the Discord app is open."
+                DiscordPresence.Status.NotRunning -> "Waiting for the Discord app. Open it on this computer and the song shows on your profile."
+                DiscordPresence.Status.Off -> "Show the song you play on your Discord profile, through the Discord app on this computer."
+            },
+            discord, DiscordPresence::setEnabled,
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Last.fm", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    when {
+                        lastFm.session != null -> "Scrobbling as ${lastFm.session!!.user}" + if (lastFm.queue.isNotEmpty()) " · ${lastFm.queue.size} waiting to send" else ""
+                        waiting -> "Press “Yes, allow access” on the Last.fm page that opened in your browser."
+                        else -> "Add the songs you play to your Last.fm profile once you’ve heard half of them, or four minutes."
+                    },
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            when {
+                lastFm.session != null -> OutlinedButton(onClick = LastFmDesktop::signOut) { Text("Disconnect") }
+                waiting -> OutlinedButton(onClick = LastFmDesktop::cancelSignIn) { Text("Cancel") }
+                else -> Button(
+                    enabled = LastFmDesktop.buildHasKeys || (key.isNotBlank() && secret.isNotBlank()),
+                    onClick = {
+                        problem = null
+                        if (!LastFmDesktop.buildHasKeys) LastFmDesktop.setOwnKeys(key, secret)
+                        LastFmDesktop.signIn { problem = it }
+                    },
+                ) { Text("Connect") }
+            }
+        }
+        problem?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
+        if (lastFm.session != null) {
+            SwitchRow("Scrobble", "Send what you play here to Last.fm.", lastFm.scrobbling, LastFmDesktop::setScrobbling)
+        } else if (!LastFmDesktop.buildHasKeys) {
+            Text(
+                "This build has no Last.fm application of its own. Create one free at last.fm/api/account/create and paste its key and secret.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(key, { key = it }, label = { Text("API key") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                secret, { secret = it }, label = { Text("Shared secret") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                visualTransformation = PasswordVisualTransformation(),
+            )
         }
     }
 }
