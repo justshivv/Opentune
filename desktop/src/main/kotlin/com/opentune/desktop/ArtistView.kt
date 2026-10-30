@@ -37,9 +37,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.SpanStyle
@@ -84,12 +86,18 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
     }
     val loaded = page
     val songs = loaded?.songs.orEmpty()
-    LazyColumn(contentPadding = PaddingValues(bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    val bar by remember { androidx.compose.runtime.derivedStateOf { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > 380 } }
+    Box(Modifier.fillMaxSize()) {
+    LazyColumn(state = list, contentPadding = PaddingValues(bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item(key = "hero") {
             val background = MaterialTheme.colorScheme.background
-            Box(Modifier.fillMaxWidth().height(460.dp)) {
+            Box(Modifier.fillMaxWidth().height(460.dp).clipToBounds()) {
                 AnimatedContent(hero ?: loaded?.thumbnailUrl ?: item.thumbnailUrl, transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(300)) }, label = "artist photo") { url ->
-                    Artwork(url, Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape)
+                    // The photo drifts up at half the scroll, so it slides away slower than the page.
+                    Artwork(url, Modifier.fillMaxSize().graphicsLayer {
+                        if (list.firstVisibleItemIndex == 0) translationY = list.firstVisibleItemScrollOffset * 0.5f
+                    }, androidx.compose.ui.graphics.RectangleShape)
                 }
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.15f), 0.55f to Color.Transparent, 1f to background)))
                 Column(
@@ -127,6 +135,8 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
                 }
             }
         }
+    }
+    TitleBar(name, bar)
     }
 }
 

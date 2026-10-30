@@ -40,6 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,7 +78,9 @@ internal object Motion {
 internal fun Modifier.hoverLift(source: MutableInteractionSource, grow: Float = 1.03f): Modifier = composed {
     val hovered by source.collectIsHoveredAsState()
     val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.97f else if (hovered) grow else 1f, Motion.soft(), label = "lift")
+    // With smooth motion off, things stay their size.
+    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+    val scale by animateFloatAsState(if (still) 1f else if (pressed) 0.97f else if (hovered) grow else 1f, Motion.soft(), label = "lift")
     hoverable(source).graphicsLayer { scaleX = scale; scaleY = scale }
 }
 

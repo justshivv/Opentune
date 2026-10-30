@@ -1,5 +1,14 @@
 package com.opentune.desktop
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import com.opentune.ui.components.glass
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,25 +65,59 @@ import com.opentune.data.settings.EqPreset
 import com.opentune.data.subsonic.Subsonic
 import kotlinx.coroutines.launch
 
-/** The phone's settings that mean something on a computer, saved in the same form. */
+/** The groups of settings, in the bar at the top and down the page. */
+private enum class Group(val label: String) { LOOK("Look"), PLAYBACK("Playback"), SOURCES("Sources"), SOUND("Equalizer"), LYRICS("Lyrics"), ACCOUNTS("Accounts"), SERVER("Your server"), ABOUT("About") }
+
+/**
+ * Settings, grouped into cards down the page with a bar of the groups
+ * across the top that glides to each; the bar stays in reach, frosted, as
+ * the page scrolls under it.
+ */
 @Composable
 internal fun SettingsPage() {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 24.dp, bottom = LocalPageBottom.current)) {
-        PageTitle("Settings")
-        Column(Modifier.widthIn(max = 760.dp).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            AppearanceSection()
-            PlaybackSection()
-            SourcesSection()
-            EqualizerSection()
-            LyricsSection()
-            ConnectedSection()
-            ServerSection()
-            Section("About") {
-                Text("OpenTune ${BuildConfig.VERSION_NAME} for computers", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Settings and playlists are kept in ${appContext.getFilesDir().parentFile.absolutePath}.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val at by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { (list.firstVisibleItemIndex - 1).coerceIn(0, Group.entries.lastIndex) } }
+    Box(Modifier.fillMaxSize()) {
+        androidx.compose.foundation.lazy.LazyColumn(
+            state = list,
+            contentPadding = PaddingValues(top = 28.dp + 64.dp, bottom = LocalPageBottom.current),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            item { Text("Settings", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp)) }
+            Group.entries.forEach { g ->
+                item(key = g) {
+                    Box(Modifier.padding(horizontal = 24.dp).widthIn(max = 820.dp)) {
+                        when (g) {
+                            Group.LOOK -> AppearanceSection()
+                            Group.PLAYBACK -> PlaybackSection()
+                            Group.SOURCES -> SourcesSection()
+                            Group.SOUND -> EqualizerSection()
+                            Group.LYRICS -> LyricsSection()
+                            Group.ACCOUNTS -> ConnectedSection()
+                            Group.SERVER -> ServerSection()
+                            Group.ABOUT -> Section("About") {
+                                Text("OpenTune ${BuildConfig.VERSION_NAME} for computers", style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    "Settings and playlists are kept in ${appContext.getFilesDir().parentFile.absolutePath}.",
+                                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // The groups, frosted over the page, each gliding to its card.
+        Row(
+            Modifier.fillMaxWidth().height(64.dp + DesktopWindow.topInset)
+                .glass(androidx.compose.foundation.shape.RoundedCornerShape(0.dp), MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
+                .padding(top = DesktopWindow.topInset, start = 20.dp, end = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Group.entries.forEachIndexed { i, g ->
+                Segment(g.label, at == i) { scope.launch { list.animateScrollToItem(i + 1, -72) } }
             }
         }
     }
@@ -82,9 +125,13 @@ internal fun SettingsPage() {
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(horizontal = 24.dp, vertical = 22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             content()
         }
     }
@@ -92,7 +139,10 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 
 @Composable
 internal fun SwitchRow(title: String, summary: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onChange(!checked) }.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             summary?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -279,44 +329,64 @@ private fun ServerSection() {
 @Composable
 private fun AppearanceSection() {
     val theme by AppSettings.theme.collectAsState()
-    Section("Appearance") {
-        Text("Theme")
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            com.opentune.data.settings.ThemeMode.entries.forEach { mode ->
-                FilterChip(theme.mode == mode, { AppSettings.updateTheme { it.copy(mode = mode) } }, label = { Text(mode.label) })
-            }
-        }
-        SwitchRow("Pure black", "Black surfaces in dark mode", theme.pureBlack) { on -> AppSettings.updateTheme { it.copy(pureBlack = on) } }
-        Text("Font")
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            com.opentune.data.settings.AppFont.entries.filter { it != com.opentune.data.settings.AppFont.CUSTOM }.forEach { font ->
-                FilterChip(theme.font == font, { AppSettings.updateTheme { it.copy(font = font) } }, label = { Text(font.label) })
-            }
-        }
-        Text("Text weight")
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            com.opentune.data.settings.TextWeight.entries.forEach { weight ->
-                FilterChip(theme.textWeight == weight, { AppSettings.updateTheme { it.copy(textWeight = weight) } }, label = { Text(weight.label) })
-            }
-        }
-        SwitchRow("Colour from artwork", "The app takes its colours from the playing song's cover", theme.colorFromArtwork) { on ->
-            AppSettings.updateTheme { it.copy(colorFromArtwork = on) }
-        }
-        Choices("Palette", com.opentune.data.settings.PaletteStyleOption.entries, theme.paletteStyle, { it.label }) { v -> AppSettings.updateTheme { it.copy(paletteStyle = v) } }
-        Choices("Player background", com.opentune.data.settings.PlayerBackground.entries, theme.playerBackground, { it.label }) { v -> AppSettings.updateTheme { it.copy(playerBackground = v) } }
-    }
-    // The phone's look and motion settings; the desktop draws the same pieces from them.
     val ui by AppSettings.ui.collectAsState()
-    Section("Look and motion") {
+    Section("Look") {
+        Choices("Theme", com.opentune.data.settings.ThemeMode.entries, theme.mode, { it.label }) { v -> AppSettings.updateTheme { it.copy(mode = v) } }
+        Text("Accent", style = MaterialTheme.typography.bodyLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            com.opentune.data.settings.SEED_COLORS.forEach { c ->
+                val chosen = theme.seedColor == c
+                Box(
+                    Modifier.size(30.dp).clip(CircleShape).background(Color(c))
+                        .then(if (chosen) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
+                        .clickable { AppSettings.updateTheme { it.copy(seedColor = c) } },
+                )
+            }
+        }
+        Choices("Font", com.opentune.data.settings.AppFont.entries.filter { it != com.opentune.data.settings.AppFont.CUSTOM }, theme.font, { it.label }) { v -> AppSettings.updateTheme { it.copy(font = v) } }
+        Choices("Text weight", com.opentune.data.settings.TextWeight.entries, theme.textWeight, { it.label }) { v -> AppSettings.updateTheme { it.copy(textWeight = v) } }
+        SwitchRow("Blur effects", "Frosted glass on the player, the bars and the search box, blurring what scrolls under them", !ui.reduceBlur) { on -> AppSettings.updateUi { it.copy(reduceBlur = !on) } }
+        if (!ui.reduceBlur) Choices("Glass", com.opentune.data.settings.GlassStyle.entries.filter { it != com.opentune.data.settings.GlassStyle.LIQUID }, ui.glassStyle, { it.label }) { v -> AppSettings.updateUi { it.copy(glassStyle = v) } }
+        SwitchRow("Smooth motion", "Pages glide in, covers lift under the pointer, rows rise into place", !ui.reduceAnimation) { on -> AppSettings.updateUi { it.copy(reduceAnimation = !on) } }
+        SwitchRow("Colour from the song", "A soft wash of the playing cover's colour behind the pages", theme.colorFromArtwork) { on -> AppSettings.updateTheme { it.copy(colorFromArtwork = on) } }
+        SwitchRow("Artist signatures", "An artist's handwritten signature over their photo, in place of their name, when there's one", ui.artistSignatures) { on ->
+            AppSettings.updateUi { it.copy(artistSignatures = on) }
+        }
+        if (ui.artistSignatures) SignatureServiceRow(ui.signatureApi)
+        Choices("Player background", com.opentune.data.settings.PlayerBackground.entries, theme.playerBackground, { it.label }) { v -> AppSettings.updateTheme { it.copy(playerBackground = v) } }
         Choices("Player buttons", com.opentune.data.settings.ControlStyle.entries, ui.controlStyle, { it.label }) { v -> AppSettings.updateUi { it.copy(controlStyle = v) } }
-        Choices("Page transition", com.opentune.data.settings.PageTransition.entries, ui.pageTransition, { it.label }) { v -> AppSettings.updateUi { it.copy(pageTransition = v) } }
         Choices("Player opens", com.opentune.data.settings.PlayerMotion.entries, ui.playerMotion, { it.label }) { v -> AppSettings.updateUi { it.copy(playerMotion = v) } }
-        Choices("Dock when scrolling", com.opentune.data.settings.DockMotion.entries, ui.dockMotion, { it.label }) { v -> AppSettings.updateUi { it.copy(dockMotion = v) } }
-        Choices("Tab highlight", com.opentune.data.settings.DockLens.entries, ui.dockLens, { it.label }) { v -> AppSettings.updateUi { it.copy(dockLens = v) } }
-        Choices("Glass", com.opentune.data.settings.GlassStyle.entries, ui.glassStyle, { it.label }) { v -> AppSettings.updateUi { it.copy(glassStyle = v) } }
-        SwitchRow("Mini player in the song's colour", "Tint the mini player with the cover", ui.miniPlayerTint) { on -> AppSettings.updateUi { it.copy(miniPlayerTint = on) } }
-        SwitchRow("Reduce animation", "Short fades in place of slides and springs", ui.reduceAnimation) { on -> AppSettings.updateUi { it.copy(reduceAnimation = on) } }
-        SwitchRow("Reduce blur", "Solid glass instead of frosted", ui.reduceBlur) { on -> AppSettings.updateUi { it.copy(reduceBlur = on) } }
+    }
+}
+
+/** The signature service's address, checked against its health address before it's kept; blank is OpenTune's default. */
+@Composable
+private fun SignatureServiceRow(current: String) {
+    var address by remember(current) { mutableStateOf(current) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    var checking by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedTextField(
+            address, { address = it; problem = null }, singleLine = true, label = { Text("Signature service") },
+            isError = problem != null, supportingText = problem?.let { p -> { Text(p) } }, modifier = Modifier.weight(1f),
+        )
+        OutlinedButton(
+            enabled = !checking && address.trim() != current,
+            onClick = {
+                val base = com.opentune.data.covers.ArtistSignatures.normalize(address.ifBlank { com.opentune.data.covers.ArtistSignatures.DEFAULT_API })
+                if (base == null) { problem = "Use an address starting with https://"; return@OutlinedButton }
+                checking = true
+                scope.launch {
+                    val ok = com.opentune.data.covers.ArtistSignatures.reachable(base)
+                    checking = false
+                    if (ok) {
+                        com.opentune.data.covers.ArtistSignatures.clear()
+                        AppSettings.updateUi { it.copy(signatureApi = base) }
+                    } else problem = "That service didn't answer"
+                }
+            },
+        ) { Text(if (checking) "Checking…" else "Save") }
     }
 }
 

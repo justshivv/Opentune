@@ -221,6 +221,9 @@ internal fun Segment(label: String, selected: Boolean, onClick: () -> Unit) {
  */
 @Composable
 internal fun PageBackdrop(cover: String?) {
+    val theme by AppSettings.theme.collectAsState()
+    // "Colour from artwork" off: the page stays plain grey.
+    if (!theme.colorFromArtwork) return
     val base = MaterialTheme.colorScheme.background
     val seed = rememberCoverColor(cover, base)
     val wash by animateColorAsState(if (cover == null) base else tint(seed, base, 0.22f), tween(800), label = "page wash")

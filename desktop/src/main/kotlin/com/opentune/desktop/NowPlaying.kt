@@ -228,7 +228,7 @@ private fun PlayerBackdrop(style: PlayerBackground, cover: String?, playing: Boo
             // The cover itself, huge and soft, drifting while the music plays.
             val drift = rememberDrift(playing)
             AnimatedContent(cover, transitionSpec = { fadeIn(tween(900)) togetherWith fadeOut(tween(900)) }, label = "backdrop", modifier = Modifier.matchParentSize()) { url ->
-                SoftCover(url, drift)
+                SoftCover(url, drift = drift)
             }
             // Darker toward the bottom so the title and controls stay readable.
             Box(
@@ -247,7 +247,7 @@ private fun PlayerBackdrop(style: PlayerBackground, cover: String?, playing: Boo
  * real blur of a window-sized image every step made the player stutter.
  */
 @Composable
-private fun SoftCover(url: String?, drift: () -> Float) {
+internal fun SoftCover(url: String?, strength: Float = 0.6f, drift: () -> Float) {
     val context = LocalPlatformContext.current
     val painter = coil3.compose.rememberAsyncImagePainter(
         remember(url) { ImageRequest.Builder(context).data(Subsonic.resolveCover(url)).size(96).build() },
@@ -262,7 +262,7 @@ private fun SoftCover(url: String?, drift: () -> Float) {
                 scaleX = s; scaleY = s
                 translationX = size.width * 0.05f * kotlin.math.sin(t * 0.13f)
                 translationY = size.height * 0.05f * kotlin.math.cos(t * 0.11f)
-                alpha = 0.6f
+                alpha = strength
             }
             .drawWithCache {
                 val small = androidx.compose.ui.graphics.ImageBitmap(SOFT_PX, SOFT_PX)

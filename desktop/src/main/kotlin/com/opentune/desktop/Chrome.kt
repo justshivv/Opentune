@@ -73,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import com.opentune.ui.components.glass
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.innertube.InnertubeParser
 import com.opentune.data.lyrics.Lyrics
@@ -187,10 +188,9 @@ internal fun PlayerPill(song: Song, panel: SidePanel?, onPanel: (SidePanel) -> U
     val progress = rememberProgress(song)
     Box(
         modifier.widthIn(max = 860.dp).fillMaxWidth().height(62.dp)
-            .shadow(24.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f))
-            .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape),
+            .shadow(28.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            // Frosted glass over the page sliding under it; solid with blur turned off.
+            .glass(shape, MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.66f)),
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             HoverIcon(Icons.Rounded.Shuffle, if (shuffled) "Shuffle on" else "Shuffle", lit = shuffled, size = 32.dp, iconSize = 17.dp, onClick = Player::toggleShuffle)

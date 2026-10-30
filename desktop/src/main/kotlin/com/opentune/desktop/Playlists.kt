@@ -147,29 +147,14 @@ internal fun PlaylistPage(id: String, onBack: () -> Unit) {
     val songs = remember(playlist) { playlist.songs.map { it.toSong() } }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
-        Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Mosaic(playlist.covers, Modifier.size(132.dp))
-            Column(Modifier.padding(start = 20.dp)) {
-                Text(playlist.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(
-                    if (songs.size == 1) "1 song" else "${songs.size} songs",
-                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (songs.isNotEmpty()) {
-                        PillButton("Play", Icons.Rounded.PlayArrow) { Player.playAll(songs, 0) }
-                        IconButton(onClick = { Player.playAll(songs.shuffled(), 0) }) { Icon(Icons.Rounded.Shuffle, "Shuffle") }
-                    }
-                    IconButton(onClick = { renaming = true }) { Icon(Icons.Rounded.Edit, "Rename") }
-                    IconButton(onClick = { deleting = true }) { Icon(Icons.Rounded.Delete, "Delete playlist") }
-                }
-            }
-        }
-        if (songs.isEmpty()) {
-            Message("No songs yet", "Add songs from search, Home or the player with the playlist button.")
-        } else {
-            SongList(songs, onRemove = { Library.removeFromPlaylist(id, it.videoId) }) { s, i -> Player.playAll(s, i) }
+    CollectionLayout(playlist.name, playlist.covers.firstOrNull(), songs, failed = false, onRemove = { Library.removeFromPlaylist(id, it.videoId) },
+        empty = "No songs yet. Add songs from search, Home or the player with the playlist button.") {
+        CollectionHero(
+            cover = { m -> Mosaic(playlist.covers, m) },
+            coverUrl = playlist.covers.firstOrNull(), kind = "Playlist", title = playlist.name, subtitle = "Made on this computer", songs = songs,
+        ) {
+            HoverIcon(Icons.Rounded.Edit, "Rename", size = 42.dp, iconSize = 20.dp) { renaming = true }
+            HoverIcon(Icons.Rounded.Delete, "Delete playlist", size = 42.dp, iconSize = 20.dp) { deleting = true }
         }
     }
     if (renaming) {

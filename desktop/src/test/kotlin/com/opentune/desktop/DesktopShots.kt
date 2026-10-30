@@ -96,6 +96,22 @@ class DesktopShots {
                 }
             }
         }
+        shoot("desktop-album", 1400, 1100, 12_000) {
+            DesktopTheme {
+                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+                    CollectionPage(com.opentune.data.model.ShelfItem("After Hours", "Album • The Weeknd • 2020", "https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg", null, "MPREb_ZlRCjVWDsrE"))
+                }
+            }
+        }
+        shoot("desktop-search", 1400, 1000, 10_000) {
+            DesktopTheme { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { SearchPage("", {}, 0, {}, {}) } }
+        }
+        shoot("desktop-settings", 1400, 1000, 4_000) {
+            DesktopTheme { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { SettingsPage() } }
+        }
+        shoot("desktop-liked", 1400, 1000, 6_000) {
+            DesktopTheme { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { LibraryPage(Shelf.LIKED, {}, {}) } }
+        }
         shoot("desktop-new", 1400, 1300, 12_000) {
             DesktopTheme {
                 Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { NewPage(onOpen = {}) }

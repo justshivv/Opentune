@@ -141,13 +141,7 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
     val speedDial = remember(history) { SpeedDial.fromHistory(history, limit = 27) }
     val mixes = remember(history) { DailyMixes.build(history) }
     val loaded = shelves
-    LazyColumn(state = list, contentPadding = PaddingValues(top = 24.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(30.dp)) {
-        item(key = "title") {
-            Column {
-                PageTitle("Home")
-                Text(greeting(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp))
-            }
-        }
+    ScrollPage("Home", greeting(), state = list) {
         if (mixes.isNotEmpty() || speedDial.isNotEmpty()) item(key = "picks") {
             Section("Top picks for you") { TopPicks(mixes, speedDial.take(8), onOpenMix = { onOpenAny(it) }) }
         }
@@ -415,8 +409,7 @@ private fun MoodTiles(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
 @Composable
 internal fun NewPage(onOpen: (ShelfItem) -> Unit) {
     val shelves by produceState<List<Pages.Shelf>?>(null) { value = runCatching { Pages.moreForHome() }.getOrDefault(emptyList()) }
-    LazyColumn(contentPadding = PaddingValues(top = 24.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(30.dp)) {
-        item { PageTitle("New") }
+    ScrollPage("New", "New releases and what's climbing the charts") {
         when (val loaded = shelves) {
             null -> items(3) { ShelfPlaceholder() }
             else -> if (loaded.isEmpty()) item { Message("Nothing new could be loaded", "Check your connection and try again.") }
@@ -457,8 +450,7 @@ internal fun MoodPage(mood: MoodKey, onOpen: (ShelfItem) -> Unit) {
     val shelves by produceState<List<Pages.Shelf>?>(null, mood) {
         value = runCatching { Pages.shelves(mood.browseId, mood.params) }.getOrDefault(emptyList())
     }
-    LazyColumn(contentPadding = PaddingValues(top = 24.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(30.dp)) {
-        item { PageTitle(mood.title) }
+    ScrollPage(mood.title) {
         when (val loaded = shelves) {
             null -> items(3) { ShelfPlaceholder() }
             else -> if (loaded.isEmpty()) item { Message("Nothing here right now", "Try another mood or genre.") }
@@ -467,21 +459,14 @@ internal fun MoodPage(mood: MoodKey, onOpen: (ShelfItem) -> Unit) {
     }
 }
 
-/** A daily mix's songs, with play and shuffle. */
+/** A daily mix: the head over a blur of its covers, then its songs. */
 @Composable
 internal fun MixPage(mix: DailyMixes.Mix) {
-    Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
-        Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Mosaic(mix.covers.filterNotNull(), Modifier.size(150.dp))
-            Column(Modifier.padding(start = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(mix.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text(mix.subtitle, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PillButton("Play", Icons.Rounded.PlayArrow) { Player.playAll(mix.songs, 0) }
-                }
-            }
-        }
-        SongList(mix.songs) { s, i -> Player.playAll(s, i) }
+    CollectionLayout(mix.title, mix.covers.firstOrNull(), mix.songs, failed = false) {
+        CollectionHero(
+            cover = { m -> Mosaic(mix.covers.filterNotNull(), m) },
+            coverUrl = mix.covers.firstOrNull(), kind = "Made for you", title = mix.title, subtitle = mix.subtitle, songs = mix.songs,
+        )
     }
 }
 
@@ -507,8 +492,7 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
     }
     val month = remember(history) { Wrapped.summarize(history, now - 30L * 86_400_000L, now) }
     val mixes = remember(history) { DailyMixes.build(history) }
-    LazyColumn(contentPadding = PaddingValues(top = 24.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(30.dp)) {
-        item(key = "title") { PageTitle("Library") }
+    ScrollPage("Library") {
         item(key = "year") { YearCard(year) }
         item(key = "shortcuts") {
             LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
