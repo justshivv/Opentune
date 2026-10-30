@@ -6,6 +6,9 @@ interface ImportMetaEnv {
   readonly VITE_EXTENSION_CHROME_URL?: string;
   readonly VITE_EXTENSION_FIREFOX_URL?: string;
   readonly VITE_EXTENSION_MANIFEST_URL?: string;
+  /** OpenTune's Last.fm application (pages.yml); without them a listener enters their own. */
+  readonly VITE_LASTFM_API_KEY?: string;
+  readonly VITE_LASTFM_API_SECRET?: string;
 }
 
 interface ImportMeta {

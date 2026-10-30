@@ -52,7 +52,7 @@ All go through Pathfinder (`api-partner.spotify.com/pathfinder/v2/query`). Hashe
 
 `extension/lib/discord.ts`, behind the build flag `DISCORD_PRESENCE`.
 
-- **The flag.** On for the site's zips. A Web Store build (`BITCHORD_STORE_BUILD=1`) leaves it out unless `DISCORD_PRESENCE=1`. Without it there's no `scripting` permission, no discord.com optional permission, no connect page, and no `discord` capability.
+- **The flag.** On for the site's zips. A Web Store build (`OPENTUNE_STORE_BUILD=1`) leaves it out unless `DISCORD_PRESENCE=1`. Without it there's no `scripting` permission, no discord.com optional permission, no connect page, and no `discord` capability.
 - **Connecting.**
   - "Connect Discord" (the app's Extension page or the popup) opens `discord.html`.
   - Its button asks for `https://discord.com/*`.

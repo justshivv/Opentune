@@ -128,9 +128,9 @@ export function DiscordIntegration() {
 
 function discordText(status: DiscordStatus): string {
   if (status.state === 'checking') return 'Checking…';
-  if (status.state === 'unavailable') return 'Not in this build of the extension';
+  if (status.state === 'unavailable') return 'Needs the OpenTune extension';
   const { available, connected, enabled, user, gateway, problem } = status.discord;
-  if (!available) return 'Not in this build of the extension';
+  if (!available) return 'Update the extension to 0.1.4 or later';
   if (!connected || !user) return 'Not connected';
   if (!enabled) return `${user.name} · presence off`;
   if (gateway === 'error') return problem ?? 'Couldn’t connect';

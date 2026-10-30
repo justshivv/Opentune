@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 're
 import '@/together/room';
 import { useDiscordPresence } from '@/playback/discordPresence';
 import { startHistoryReporting } from '@/playback/historyReporting';
+import { startScrobbling } from '@/playback/lastfm';
 import { Outlet, useLocation, useNavigationType } from 'react-router';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { config } from '@/config';
@@ -90,6 +91,8 @@ export function AppShell() {
   usePageScroll();
   // Plays into the account's YouTube Music history (Settings › Share Listening Activity).
   useEffect(() => startHistoryReporting(), []);
+  // Plays to the listener's Last.fm profile, once they've connected it (Settings › Last.fm).
+  useEffect(() => startScrobbling(), []);
   // The sources the owner publishes ("Added by admin"), folded into the listener's list.
   useEffect(() => {
     const refresh = () => { if (document.visibilityState === 'visible') void syncPublished(); };

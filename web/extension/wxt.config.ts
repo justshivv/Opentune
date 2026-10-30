@@ -11,7 +11,7 @@ const STORE_BUILD = process.env.OPENTUNE_STORE_BUILD === '1';
  * flag: on for the site's own zips, off for a Web Store upload unless
  * DISCORD_PRESENCE=1 says otherwise.
  */
-const DISCORD_PRESENCE = process.env.DISCORD_PRESENCE === '1';
+const DISCORD_PRESENCE = process.env.DISCORD_PRESENCE ? process.env.DISCORD_PRESENCE === '1' : !STORE_BUILD;
 const DISCORD_ORIGINS = ['https://discord.com/*'];
 
 const devPublicKey = readFileSync(new URL('./dev-key/public-key.txt', import.meta.url), 'utf8').trim();
