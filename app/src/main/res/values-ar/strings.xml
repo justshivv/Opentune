@@ -1,15 +1,15 @@
 <resources>
-    <string name="widget_description">What\'s playing, with play, skip and like</string>
+    <string name="widget_description">ما يُشغَّل الآن، مع التشغيل والتخطي والإعجاب</string>
     <string name="widget_nothing_playing">لا شيء قيد التشغيل</string>
-    <string name="widget_open">Tap to open OpenTune</string>
+    <string name="widget_open">انقر لفتح OpenTune</string>
     <string name="widget_like">إعجاب</string>
-    <string name="widget_unlike">Remove from Liked</string>
+    <string name="widget_unlike">إزالة من الإعجابات</string>
     <string name="widget_previous">السابق</string>
     <string name="widget_play">تشغيل</string>
     <string name="widget_pause">إيقاف مؤقت</string>
     <string name="widget_next">التالي</string>
-    <string name="recognize_label">Name that song</string>
-    <string name="recognize_widget_description">One tap listens for the song playing nearby and adds it to your library</string>
-    <string name="widget_album_art_label">Album artwork</string>
-    <string name="widget_studio_label">Studio controls</string>
+    <string name="recognize_label">ما هذه الأغنية؟</string>
+    <string name="recognize_widget_description">بنقرة واحدة يستمع إلى الأغنية التي تُشغَّل بالقرب منك ويضيفها إلى مكتبتك</string>
+    <string name="widget_album_art_label">غلاف الألبوم</string>
+    <string name="widget_studio_label">عناصر تحكم الاستوديو</string>
 </resources>

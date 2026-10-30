@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Lagu yang sedang dimainkan, dengan main, langkau dan suka</string>
+    <string name="widget_nothing_playing">Tiada apa-apa dimainkan</string>
+    <string name="widget_open">Ketik untuk membuka OpenTune</string>
+    <string name="widget_like">Suka</string>
+    <string name="widget_unlike">Alih keluar daripada Disukai</string>
+    <string name="widget_previous">Sebelumnya</string>
+    <string name="widget_play">Main</string>
+    <string name="widget_pause">Jeda</string>
+    <string name="widget_next">Seterusnya</string>
+    <string name="recognize_label">Kenal pasti lagu ini</string>
+    <string name="recognize_widget_description">Satu ketikan untuk mendengar lagu yang dimainkan berdekatan dan menambahkannya ke pustaka anda</string>
+    <string name="widget_album_art_label">Kulit album</string>
+    <string name="widget_studio_label">Kawalan studio</string>
+</resources>

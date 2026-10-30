@@ -1,15 +1,15 @@
 <resources>
-    <string name="widget_description">What\'s playing, with play, skip and like</string>
+    <string name="widget_description">O que está tocando, com tocar, pular e curtir</string>
     <string name="widget_nothing_playing">Nada tocando</string>
-    <string name="widget_open">Tap to open OpenTune</string>
+    <string name="widget_open">Toque para abrir o OpenTune</string>
     <string name="widget_like">Curtir</string>
-    <string name="widget_unlike">Remove from Liked</string>
+    <string name="widget_unlike">Remover das curtidas</string>
     <string name="widget_previous">Anterior</string>
     <string name="widget_play">Reproduzir</string>
     <string name="widget_pause">Pausar</string>
     <string name="widget_next">Próxima</string>
-    <string name="recognize_label">Name that song</string>
-    <string name="recognize_widget_description">One tap listens for the song playing nearby and adds it to your library</string>
-    <string name="widget_album_art_label">Album artwork</string>
-    <string name="widget_studio_label">Studio controls</string>
+    <string name="recognize_label">Que música é essa?</string>
+    <string name="recognize_widget_description">Com um toque, ouve a música tocando por perto e a adiciona à sua biblioteca</string>
+    <string name="widget_album_art_label">Capa do álbum</string>
+    <string name="widget_studio_label">Controles de estúdio</string>
 </resources>

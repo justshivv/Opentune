@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">آهنگ در حال پخش، با پخش، رد کردن و پسندیدن</string>
+    <string name="widget_nothing_playing">چیزی پخش نمی‌شود</string>
+    <string name="widget_open">برای باز کردن OpenTune ضربه بزنید</string>
+    <string name="widget_like">پسندیدن</string>
+    <string name="widget_unlike">حذف از پسندیده‌ها</string>
+    <string name="widget_previous">قبلی</string>
+    <string name="widget_play">پخش</string>
+    <string name="widget_pause">توقف</string>
+    <string name="widget_next">بعدی</string>
+    <string name="recognize_label">این آهنگ چیست؟</string>
+    <string name="recognize_widget_description">با یک ضربه آهنگی را که نزدیک شما پخش می‌شود می‌شنود و به کتابخانه‌تان اضافه می‌کند</string>
+    <string name="widget_album_art_label">جلد آلبوم</string>
+    <string name="widget_studio_label">کنترل‌های استودیو</string>
+</resources>

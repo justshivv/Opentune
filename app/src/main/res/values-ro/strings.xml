@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Ce se redă acum, cu redare, salt și apreciere</string>
+    <string name="widget_nothing_playing">Nu se redă nimic</string>
+    <string name="widget_open">Atinge pentru a deschide OpenTune</string>
+    <string name="widget_like">Apreciez</string>
+    <string name="widget_unlike">Elimină din aprecieri</string>
+    <string name="widget_previous">Anterioara</string>
+    <string name="widget_play">Redă</string>
+    <string name="widget_pause">Pauză</string>
+    <string name="widget_next">Următoarea</string>
+    <string name="recognize_label">Ce melodie e asta?</string>
+    <string name="recognize_widget_description">Cu o atingere ascultă melodia care se aude în apropiere și o adaugă în biblioteca ta</string>
+    <string name="widget_album_art_label">Copertă album</string>
+    <string name="widget_studio_label">Comenzi de studio</string>
+</resources>

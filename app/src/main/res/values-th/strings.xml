@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">เพลงที่กำลังเล่น พร้อมปุ่มเล่น ข้าม และถูกใจ</string>
+    <string name="widget_nothing_playing">ไม่มีเพลงที่กำลังเล่น</string>
+    <string name="widget_open">แตะเพื่อเปิด OpenTune</string>
+    <string name="widget_like">ถูกใจ</string>
+    <string name="widget_unlike">นำออกจากรายการที่ถูกใจ</string>
+    <string name="widget_previous">ก่อนหน้า</string>
+    <string name="widget_play">เล่น</string>
+    <string name="widget_pause">หยุดชั่วคราว</string>
+    <string name="widget_next">ถัดไป</string>
+    <string name="recognize_label">เพลงนี้คือเพลงอะไร</string>
+    <string name="recognize_widget_description">แตะครั้งเดียวเพื่อฟังเพลงที่เล่นอยู่ใกล้ๆ และเพิ่มลงในคลังเพลงของคุณ</string>
+    <string name="widget_album_art_label">ปกอัลบั้ม</string>
+    <string name="widget_studio_label">ตัวควบคุมสตูดิโอ</string>
+</resources>

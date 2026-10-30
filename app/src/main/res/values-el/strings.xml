@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Ό,τι παίζει τώρα, με αναπαραγωγή, παράλειψη και «μου αρέσει»</string>
+    <string name="widget_nothing_playing">Δεν παίζει τίποτα</string>
+    <string name="widget_open">Πατήστε για να ανοίξει το OpenTune</string>
+    <string name="widget_like">Μου αρέσει</string>
+    <string name="widget_unlike">Αφαίρεση από τα αγαπημένα</string>
+    <string name="widget_previous">Προηγούμενο</string>
+    <string name="widget_play">Αναπαραγωγή</string>
+    <string name="widget_pause">Παύση</string>
+    <string name="widget_next">Επόμενο</string>
+    <string name="recognize_label">Ποιο τραγούδι είναι αυτό;</string>
+    <string name="recognize_widget_description">Με ένα πάτημα ακούει το τραγούδι που παίζει κοντά σας και το προσθέτει στη βιβλιοθήκη σας</string>
+    <string name="widget_album_art_label">Εξώφυλλο άλμπουμ</string>
+    <string name="widget_studio_label">Χειριστήρια στούντιο</string>
+</resources>

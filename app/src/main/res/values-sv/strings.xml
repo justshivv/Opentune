@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Det som spelas, med spela, hoppa över och gilla</string>
+    <string name="widget_nothing_playing">Inget spelas</string>
+    <string name="widget_open">Tryck för att öppna OpenTune</string>
+    <string name="widget_like">Gilla</string>
+    <string name="widget_unlike">Ta bort från gillade</string>
+    <string name="widget_previous">Föregående</string>
+    <string name="widget_play">Spela</string>
+    <string name="widget_pause">Pausa</string>
+    <string name="widget_next">Nästa</string>
+    <string name="recognize_label">Vilken låt är det?</string>
+    <string name="recognize_widget_description">Ett tryck lyssnar efter låten som spelas i närheten och lägger till den i ditt bibliotek</string>
+    <string name="widget_album_art_label">Skivomslag</string>
+    <string name="widget_studio_label">Studiokontroller</string>
+</resources>

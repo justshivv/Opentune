@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Що грає зараз: відтворення, пропуск і вподобання</string>
+    <string name="widget_nothing_playing">Нічого не грає</string>
+    <string name="widget_open">Торкніться, щоб відкрити OpenTune</string>
+    <string name="widget_like">Подобається</string>
+    <string name="widget_unlike">Прибрати з вподобаного</string>
+    <string name="widget_previous">Попередня</string>
+    <string name="widget_play">Відтворити</string>
+    <string name="widget_pause">Пауза</string>
+    <string name="widget_next">Наступна</string>
+    <string name="recognize_label">Що це за пісня</string>
+    <string name="recognize_widget_description">Одним дотиком розпізнає пісню, що грає поруч, і додає її до вашої медіатеки</string>
+    <string name="widget_album_art_label">Обкладинка альбому</string>
+    <string name="widget_studio_label">Студійне керування</string>
+</resources>

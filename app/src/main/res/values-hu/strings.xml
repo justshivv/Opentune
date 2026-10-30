@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Ami most szól, lejátszással, átugrással és kedveléssel</string>
+    <string name="widget_nothing_playing">Semmi sem szól</string>
+    <string name="widget_open">Koppints az OpenTune megnyitásához</string>
+    <string name="widget_like">Tetszik</string>
+    <string name="widget_unlike">Eltávolítás a kedveltek közül</string>
+    <string name="widget_previous">Előző</string>
+    <string name="widget_play">Lejátszás</string>
+    <string name="widget_pause">Szünet</string>
+    <string name="widget_next">Következő</string>
+    <string name="recognize_label">Mi ez a dal?</string>
+    <string name="recognize_widget_description">Egy koppintással felismeri a közelben szóló dalt, és hozzáadja a könyvtáradhoz</string>
+    <string name="widget_album_art_label">Albumborító</string>
+    <string name="widget_studio_label">Stúdióvezérlők</string>
+</resources>

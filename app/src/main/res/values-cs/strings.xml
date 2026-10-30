@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Co právě hraje, s přehráváním, přeskočením a označením Líbí se mi</string>
+    <string name="widget_nothing_playing">Nic nehraje</string>
+    <string name="widget_open">Klepnutím otevřete OpenTune</string>
+    <string name="widget_like">Líbí se mi</string>
+    <string name="widget_unlike">Odebrat z oblíbených</string>
+    <string name="widget_previous">Předchozí</string>
+    <string name="widget_play">Přehrát</string>
+    <string name="widget_pause">Pozastavit</string>
+    <string name="widget_next">Další</string>
+    <string name="recognize_label">Co je to za skladbu?</string>
+    <string name="recognize_widget_description">Jedním klepnutím rozpozná skladbu, která hraje poblíž, a přidá ji do vaší knihovny</string>
+    <string name="widget_album_art_label">Obal alba</string>
+    <string name="widget_studio_label">Studiové ovládání</string>
+</resources>
