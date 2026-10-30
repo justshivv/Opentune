@@ -14,13 +14,35 @@
 
 /* A page arriving: a short fade and a few pixels of rise, done before the eye waits on it.
    Opacity and translate only, so it stays on the compositor however heavy the page. */
-.ot-page { animation: ot-page-in 0.22s var(--ot-ease-emph) both; }
-@keyframes ot-page-in { from { opacity: 0; translate: 0 6px; } }
+.ot-page { animation: ot-page-in 0.32s var(--ot-ease-emph) both; }
+@keyframes ot-page-in { from { opacity: 0; translate: 0 10px; } }
 
-/* A shelf fades in once, when its items arrive in place of the skeleton. On the list rather
-   than each item: items that remount while the shelf scrolls don't replay it. */
-.ot-shelf { animation: ot-fade-in 0.24s var(--ot-ease-emph) both; }
-@keyframes ot-fade-in { from { opacity: 0; } }
+/* A shelf's first cards rise in one after another when they arrive in place of the skeleton.
+   Only the first ten: the rest are off to the side, and none of them replay as the shelf scrolls. */
+.ot-shelf > li:nth-child(-n+10) { animation: ot-item-in 0.5s var(--ot-ease-emph) both; }
+.ot-shelf > li:nth-child(2) { animation-delay: 35ms; }
+.ot-shelf > li:nth-child(3) { animation-delay: 70ms; }
+.ot-shelf > li:nth-child(4) { animation-delay: 105ms; }
+.ot-shelf > li:nth-child(5) { animation-delay: 140ms; }
+.ot-shelf > li:nth-child(6) { animation-delay: 175ms; }
+.ot-shelf > li:nth-child(7) { animation-delay: 210ms; }
+.ot-shelf > li:nth-child(n+8):nth-child(-n+10) { animation-delay: 245ms; }
+@keyframes ot-item-in { from { opacity: 0; translate: 0 12px; } }
+
+/* An album or playlist header: the cover rises and settles, the names and buttons follow it. */
+.ot-detail-cover { animation: ot-cover-rise 0.65s var(--ot-ease-emph) both; }
+@keyframes ot-cover-rise { from { opacity: 0; scale: 0.92; translate: 0 16px; } }
+.ot-detail-text { animation: ot-rise 0.5s 0.07s var(--ot-ease-emph) both; }
+.ot-detail-actions { animation: ot-rise 0.5s 0.14s var(--ot-ease-emph) both; }
+@keyframes ot-rise { from { opacity: 0; translate: 0 10px; } }
+.ot-home-heading { animation: ot-rise 0.5s var(--ot-ease-emph) both; }
+
+/* The artist's photograph drifts down and in a little as the page scrolls over it, where the
+   browser can tie an animation to scrolling; elsewhere it stays put. */
+@supports (animation-timeline: scroll()) {
+  .ot-parallax { animation: ot-parallax linear both; animation-timeline: scroll(nearest block); animation-range: 0px 640px; }
+  @keyframes ot-parallax { to { translate: 0 28%; scale: 1.08; } }
+}
 
 /* A new song's names and cover slide in where the old ones were. */
 .ot-swap-in { animation: ot-swap-in 0.28s var(--ot-ease-emph) both; }
@@ -86,7 +108,8 @@
 :root[data-motion='false'] .ot-wave-line { display: none; }
 :root[data-motion='false'] .ot-wave-flat { opacity: 1 !important; }
 @media (prefers-reduced-motion: reduce) {
-  .ot-page, .ot-shelf, .ot-swap-in, .ot-cover-in, .ot-morph > svg, .ot-fav svg, .ot-burst { animation: none !important; }
+  .ot-lockup-art, .ot-lockup-art img, .ot-circle-lockup > div:first-child, .ot-circle-lockup > div:first-child img { transition: none !important; translate: none !important; scale: none !important; }
+  .ot-page, .ot-shelf > li, .ot-home-heading, .ot-parallax, .ot-detail-cover, .ot-detail-text, .ot-detail-actions, .ot-swap-in, .ot-cover-in, .ot-morph > svg, .ot-fav svg, .ot-burst { animation: none !important; }
   .ot-wave-line { display: none; }
   .ot-wave-flat { opacity: 1 !important; }
 }

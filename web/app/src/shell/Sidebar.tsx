@@ -53,7 +53,7 @@ const LIBRARY: NavItem[] = (Object.keys(LIBRARY_ICONS) as (keyof typeof LIBRARY_
 
 // A sidebar row; NavLink sets aria-current on the page's own row.
 const item =
-  'group flex h-9 items-center gap-2 mb-0.5 p-1 rounded-nav type-body-reduced text-primary hover:bg-quinary aria-[current=page]:bg-nav-selected';
+  'ot-nav-item group flex h-9 items-center gap-2 mb-0.5 p-1 rounded-nav type-body-reduced text-primary hover:bg-quinary aria-[current=page]:bg-nav-selected';
 // Apple's glyphs, drawn at 24px (their 24-unit box), which the user preferred to Apple's own 28px.
 const icon = 'inline-grid size-6 flex-none place-items-center text-primary group-aria-[current=page]:text-key';
 const navLabel = 'ot-side-label min-w-0 truncate';

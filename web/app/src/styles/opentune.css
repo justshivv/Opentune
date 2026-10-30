@@ -328,3 +328,52 @@
 .ot-toggle[aria-pressed='true'] { background-color: color-mix(in srgb, currentColor 20%, transparent); }
 .ot-toggle::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: currentColor; opacity: 0; scale: .2; transition: opacity .2s ease, scale .25s var(--ot-ease-settle); }
 .ot-toggle[aria-pressed='true']::after { opacity: 1; scale: 1; }
+
+/* Album and playlist headers: the cover blurred into a wash of its own colours behind the header,
+   fading into the page below it. Drawn from a 60px copy; at this blur nothing finer would show. */
+.ot-wash { position: absolute; inset: 0 0 -140px; z-index: -1; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .8s var(--ot-ease-emph); -webkit-mask-image: linear-gradient(180deg, #000 25%, transparent); mask-image: linear-gradient(180deg, #000 25%, transparent); }
+.ot-wash[data-loaded] { opacity: .75; }
+:root[data-appearance='light'] .ot-wash[data-loaded] { opacity: .5; }
+.ot-wash img { position: absolute; left: -20%; top: -50%; width: 140%; max-width: none; height: 200%; object-fit: cover; filter: blur(72px) saturate(1.8); }
+
+/* Cards: the cover lifts and zooms a little in its frame, a shade rises from the bottom and the play
+   disc comes up with it. Translate, scale and opacity only, so a full shelf stays on the compositor. */
+.ot-lockup-art { transition: translate .4s var(--ot-ease-settle), box-shadow .4s var(--ot-ease-settle); }
+.ot-lockup-art img { transition: opacity .2s ease-out, scale .7s var(--ot-ease-settle); }
+.ot-lockup-art:hover { translate: 0 -4px; box-shadow: 0 18px 34px -16px var(--radiosityShadowColor); }
+.ot-lockup-art:hover img { scale: 1.06; }
+.ot-lockup-shade { background: linear-gradient(180deg, transparent 40%, rgb(0 0 0 / .42)); opacity: 0; transition: opacity .3s ease-out; }
+.ot-lockup-art:is(:hover, :focus-within) .ot-lockup-shade { opacity: 1; }
+.ot-platter { opacity: 0; translate: 0 10px; scale: .8; transition: opacity .2s ease-out, translate .4s var(--ot-ease-settle), scale .4s var(--ot-ease-settle), filter .15s; }
+.ot-lockup-art:is(:hover, :focus-within) .ot-platter { opacity: 1; translate: 0 0; scale: 1; }
+.ot-lockup-art .ot-platter:hover { scale: 1.1; filter: brightness(1.12); }
+.ot-lockup-art .ot-platter:active { scale: .92; transition-duration: .08s; }
+.ot-circle-lockup > div:first-child { transition: translate .4s var(--ot-ease-settle), box-shadow .4s var(--ot-ease-settle); }
+.ot-circle-lockup > div:first-child img { transition: opacity .2s ease-out, scale .7s var(--ot-ease-settle); }
+.ot-circle-lockup:hover > div:first-child { translate: 0 -4px; box-shadow: 0 16px 30px -14px var(--radiosityShadowColor); }
+.ot-circle-lockup:hover > div:first-child img { scale: 1.06; }
+.ot-track-lockup { border-radius: 14px; transition: background-color .2s ease-out; }
+.ot-track-lockup:hover { background: var(--tracklistHoverColor); transition-duration: 0s; }
+
+/* A shelf's arrows: frosted discs that rise in at each end when the pointer is over the shelf. */
+.ot-arrow { translate: 0 -50%; scale: .8; opacity: 0; background: var(--glassMaterialBackground); -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px); box-shadow: 0 8px 24px var(--glassMaterialShadowColor), inset 0 0 0 .5px color-mix(in srgb, var(--glassMaterialInnerStroke) 30%, transparent); transition: opacity .2s ease-out, scale .35s var(--ot-ease-settle); }
+.group\/shelf:hover .ot-arrow:not(:disabled) { opacity: 1; scale: 1; }
+.group\/shelf .ot-arrow:not(:disabled):hover { scale: 1.08; }
+.group\/shelf .ot-arrow:not(:disabled):active { scale: .92; transition-duration: .08s; }
+
+/* Sidebar rows ease between states; the selected one carries a faint ring of the accent. */
+.ot-nav-item { transition: background-color .2s ease, box-shadow .2s ease; }
+.ot-nav-item svg { transition: scale .35s var(--ot-ease-settle); }
+.ot-nav-item:hover svg { scale: 1.08; }
+.ot-nav-item[aria-current='page'] { box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--keyColor) 30%, transparent); }
+
+/* Frosted glass along the top of the page once it has scrolled: what slides under the edge blurs
+   away instead of being cut off. The phone keeps its own glass top bar. */
+.ot-scroll-edge { position: absolute; top: 0; left: var(--web-navigation-width); right: 0; height: 64px; z-index: calc(var(--z-web-chrome) - 3); pointer-events: none; opacity: 0; transition: opacity .35s ease; -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); -webkit-mask-image: linear-gradient(#000 30%, transparent); mask-image: linear-gradient(#000 30%, transparent); }
+.ot-scroll-edge[data-shown='true'] { opacity: 1; }
+@media (max-width: 483.98px) { .ot-scroll-edge { display: none; } }
+
+@media (prefers-reduced-transparency: reduce) {
+  .ot-wash, .ot-scroll-edge { display: none; }
+  .ot-arrow { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--opaqueShelfBG); }
+}

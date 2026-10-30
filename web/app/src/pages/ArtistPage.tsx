@@ -79,7 +79,7 @@ export default function ArtistPage() {
     <>
       {/* The hero (report §4): full-bleed, ~1.93:1 of the content column, the name and actions centred near the bottom. */}
       <header className="relative max-h-[70vh] overflow-hidden">
-        <div className="relative w-full">
+        <div className="ot-parallax relative w-full">
           <Artwork src={data.heroImage} displayWidth={1200} aspect={1165 / 604} eager />
           {/* Apple's photograph fades in over YouTube's once it arrives. */}
           {apple && (
@@ -98,12 +98,12 @@ export default function ArtistPage() {
           className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,color-mix(in_srgb,var(--page-tint,var(--pageBG))_70%,transparent)_80%,var(--page-tint,var(--pageBG))_100%)]"
           aria-hidden="true"
         />
-        <div className="absolute inset-x-0 bottom-6 flex flex-col items-center gap-1.5 px-(--body-gutter) text-center">
+        <div className="ot-detail-text absolute inset-x-0 bottom-6 flex flex-col items-center gap-1.5 px-(--body-gutter) text-center">
           <ArtistName name={data.name} apple={apple} />
           {data.audience && <p className="type-callout-emphasized text-secondary">{data.audience}</p>}
           <button
             // The 56px key-colour play button.
-            className="mt-2.5 grid size-14 place-items-center rounded-full bg-(--play-fill,var(--keyColorBG)) text-(--play-glyph,#fff) shadow-[0_2px_6px_-4px_#0006,inset_0_0_2px_#ffffff1a] disabled:opacity-40 enabled:hover:scale-[1.04]"
+            className="ot-press mt-2.5 grid size-14 place-items-center rounded-full bg-(--play-fill,var(--keyColorBG)) text-(--play-glyph,#fff) shadow-[0_10px_28px_-10px_#000a,inset_0_0_2px_#ffffff1a] disabled:opacity-40 enabled:hover:brightness-110"
             // Apple's fill for the Play circle, with the triangle in the page's colour,
             // as the phone cuts it out of the circle; white without a key colour.
             style={

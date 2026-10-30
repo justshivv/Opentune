@@ -106,7 +106,7 @@
   --glassMaterialShadowColor: #0000001a;
   --glassMaterialInnerStroke: #000000;
   --glassMaterialInnerStrokeAlpha: 0.05;
-  --glassMaterialBackdropFilter: saturate(220%) blur(16px);
+  --glassMaterialBackdropFilter: saturate(190%) blur(36px);
 
   --systemStandardThinMaterialSover: #f6f6f67a;
   --systemStandardThickMaterialSover: #f6f6f6b8;

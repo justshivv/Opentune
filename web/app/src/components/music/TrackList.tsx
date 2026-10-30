@@ -46,7 +46,7 @@ const link = 'text-inherit hover:underline group-data-current/row:text-primary';
  * a fill on hover, a stronger one for the playing row.
  */
 const row = [
-  'group/row relative grid items-center bg-transparent hover:bg-tracklist-hover data-unavailable:cursor-default',
+  'group/row relative grid items-center bg-transparent transition-[background-color] duration-150 ease-out hover:bg-tracklist-hover hover:duration-0 data-unavailable:cursor-default',
   'data-current:bg-[color-mix(in_srgb,var(--systemPrimary)_12%,transparent)]',
   'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:border-t-[0.5px] before:border-t-divider',
   'hover:before:border-t-transparent data-current:before:border-t-transparent [&:hover+&]:before:border-t-transparent [&[data-current]+&]:before:border-t-transparent',

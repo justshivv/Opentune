@@ -8,9 +8,9 @@ import { browseHref } from './links';
 import { CircleLockup, SquareLockup, TrackLockup, VideoLockup } from './Lockups';
 import { playList } from './play';
 
-// Arrow buttons (report §2): 28×52 glass pills, only ≥1000px, shown on shelf hover.
+// Arrow buttons: round frosted discs at each end, only ≥1000px, rising in on shelf hover (.ot-arrow).
 const arrow =
-  'absolute top-1/2 z-3 hidden h-13 w-7 -translate-y-1/2 place-items-center rounded-pill bg-thin-material text-secondary opacity-0 transition-[opacity,background-color,color] duration-(--duration-arrow) ease-linear [backdrop-filter:saturate(180%)_blur(60px)] hover:text-primary disabled:pointer-events-none lg:grid lg:enabled:group-hover/shelf:opacity-100';
+  'ot-arrow absolute top-1/2 z-3 hidden size-10 place-items-center rounded-full text-primary disabled:pointer-events-none lg:grid';
 
 function renderItem(shelf: Shelf, item: MusicItem): ReactNode {
   switch (shelf.layout) {
@@ -59,23 +59,23 @@ export function ShelfScroller({ kind, children }: { kind: ShelfKind; children: R
   return (
     <div className="group/shelf relative">
       <button
-        className={`${arrow} left-1.5`}
+        className={`${arrow} left-3`}
         aria-label="Previous Page"
         disabled={edges.start}
         onClick={() => page(-1)}
       >
-        <ChevronLeft size={20} strokeWidth={2.4} />
+        <ChevronLeft size={22} strokeWidth={2.4} />
       </button>
       <ul ref={list} className={`ot-shelf ${shelfList} ${shelfKinds[kind]}`} onScroll={measure}>
         {children}
       </ul>
       <button
-        className={`${arrow} right-1.5`}
+        className={`${arrow} right-3`}
         aria-label="Next Page"
         disabled={edges.end}
         onClick={() => page(1)}
       >
-        <ChevronRight size={20} strokeWidth={2.4} />
+        <ChevronRight size={22} strokeWidth={2.4} />
       </button>
     </div>
   );
@@ -85,11 +85,11 @@ export function ShelfScroller({ kind, children }: { kind: ShelfKind; children: R
 function ShelfTitle({ title, to }: { title: string; to?: string | null }) {
   return (
     <div className={shelfHeader}>
-      <h2 className="type-title-2-emphasized">
+      <h2 className="type-title-2-emphasized tracking-[-0.01em]">
         {to ? (
           <PrefetchLink to={to} className="group/title inline-flex items-center gap-0.5">
             {title}
-            <ChevronRight size={18} strokeWidth={2.6} className="text-secondary group-hover/title:text-primary" />
+            <ChevronRight size={18} strokeWidth={2.6} className="text-secondary transition-[translate,color] duration-200 ease-(--ot-ease-settle) group-hover/title:translate-x-0.5 group-hover/title:text-primary" />
           </PrefetchLink>
         ) : (
           title
