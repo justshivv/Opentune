@@ -2212,7 +2212,7 @@ class PlaybackService : MediaLibraryService() {
             val queuedAtStart = queue.mapTo(HashSet()) { it.videoId }
             fun usable(song: Song): Boolean = song.videoId !in queuedAtStart &&
                 !LibraryStore.isDisliked(song.videoId) && !LibraryStore.hidden.value.hides(song.videoId, song.artist)
-            val requests = (listOf(seedItem.toSong()) + others).mapIndexed { index, song ->
+            fun ask() = (listOf(seedItem.toSong()) + others).mapIndexed { index, song ->
                 async {
                     var answer = emptyList<Song>()
                     val waits = if (index == 0) RADIO_RETRY_MS else longArrayOf(0)
@@ -2236,7 +2236,19 @@ class PlaybackService : MediaLibraryService() {
             }
             // A fast secondary seed is useful even if the primary is retrying.
             // Preserve seed order for ranking, but don't await every slow catalogue.
-            val ready = Autoplay.readyRadios(requests, ::usable)
+            // Nothing at all (the network was down, every catalogue busy) is asked
+            // again a little later while the song plays, rather than waiting for the
+            // next thing the player happens to do: that left a single song with no
+            // queue after it until something, such as opening the player, stirred it.
+            var ready: List<List<Song>> = emptyList()
+            for ((round, pause) in RADIO_AGAIN_MS.withIndex()) {
+                if (pause > 0) delay(pause)
+                val count = player.mediaItemCount
+                if (!AppSettings.playback.value.autoplay || count == 0 || player.getMediaItemAt(count - 1).mediaId != seed) return@launch
+                ready = Autoplay.readyRadios(ask(), ::usable)
+                if (ready.any { it.isNotEmpty() }) break
+                Log.i(TAG, "No radio for $seed yet (round ${round + 1}), asking again shortly")
+            }
             if (ready.all { it.isEmpty() }) return@launch
             val radio = Autoplay.blend(ready, queue)
             if (!AppSettings.playback.value.autoplay || AppSettings.playback.value.recommender != engine ||
@@ -2508,6 +2520,8 @@ class PlaybackService : MediaLibraryService() {
         const val END_FADE_MS = 15_000L
         /** Waits before each ask for radio: at once, then twice more if it fails. */
         val RADIO_RETRY_MS = longArrayOf(0L, 3_000L, 10_000L)
+        /** Whole rounds of asking, when a round brings nothing: now, then again while the song plays. */
+        val RADIO_AGAIN_MS = longArrayOf(0L, 20_000L, 45_000L, 90_000L)
         /** An episode only jumps to its saved place if it hasn't got going yet. */
         const val RESUME_SLACK_MS = 5_000L
         const val SEGMENT_POLL_MS = 250L
