@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Il brano in riproduzione, con riproduci, salta e mi piace</string>
+    <string name="widget_nothing_playing">Nessuna riproduzione</string>
+    <string name="widget_open">Tocca per aprire OpenTune</string>
+    <string name="widget_like">Mi piace</string>
+    <string name="widget_unlike">Rimuovi dai Mi piace</string>
+    <string name="widget_previous">Precedente</string>
+    <string name="widget_play">Riproduci</string>
+    <string name="widget_pause">Pausa</string>
+    <string name="widget_next">Successivo</string>
+    <string name="recognize_label">Riconosci il brano</string>
+    <string name="recognize_widget_description">Con un tocco ascolta il brano che suona vicino a te e lo aggiunge alla tua libreria</string>
+    <string name="widget_album_art_label">Copertina dell\'album</string>
+    <string name="widget_studio_label">Controlli da studio</string>
+</resources>

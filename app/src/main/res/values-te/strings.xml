@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">ప్లే అవుతున్న పాట, ప్లే, స్కిప్ మరియు లైక్‌తో</string>
+    <string name="widget_nothing_playing">ఏదీ ప్లే కావడం లేదు</string>
+    <string name="widget_open">OpenTune తెరవడానికి నొక్కండి</string>
+    <string name="widget_like">లైక్</string>
+    <string name="widget_unlike">లైక్ చేసినవాటి నుండి తీసివేయండి</string>
+    <string name="widget_previous">మునుపటి</string>
+    <string name="widget_play">ప్లే</string>
+    <string name="widget_pause">పాజ్</string>
+    <string name="widget_next">తదుపరి</string>
+    <string name="recognize_label">ఆ పాటను గుర్తించండి</string>
+    <string name="recognize_widget_description">ఒక్క ట్యాప్‌తో దగ్గరలో ప్లే అవుతున్న పాటను వింటుంది, దాన్ని మీ లైబ్రరీకి జోడిస్తుంది</string>
+    <string name="widget_album_art_label">ఆల్బమ్ కవర్</string>
+    <string name="widget_studio_label">స్టూడియో కంట్రోల్స్</string>
+</resources>

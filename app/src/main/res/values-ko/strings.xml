@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">재생 중인 곡을 보여 주고 재생, 건너뛰기, 좋아요를 할 수 있어요</string>
+    <string name="widget_nothing_playing">재생 중인 곡 없음</string>
+    <string name="widget_open">탭하여 OpenTune 열기</string>
+    <string name="widget_like">좋아요</string>
+    <string name="widget_unlike">좋아요 취소</string>
+    <string name="widget_previous">이전</string>
+    <string name="widget_play">재생</string>
+    <string name="widget_pause">일시중지</string>
+    <string name="widget_next">다음</string>
+    <string name="recognize_label">이 노래 찾기</string>
+    <string name="recognize_widget_description">한 번 탭하면 주변에서 재생 중인 노래를 듣고 보관함에 추가해요</string>
+    <string name="widget_album_art_label">앨범 아트</string>
+    <string name="widget_studio_label">스튜디오 컨트롤</string>
+</resources>

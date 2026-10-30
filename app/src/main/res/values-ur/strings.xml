@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">جو گانا چل رہا ہے، چلانے، چھوڑنے اور پسند کرنے کے ساتھ</string>
+    <string name="widget_nothing_playing">کچھ نہیں چل رہا</string>
+    <string name="widget_open">OpenTune کھولنے کے لیے تھپتھپائیں</string>
+    <string name="widget_like">پسند کریں</string>
+    <string name="widget_unlike">پسندیدہ سے ہٹائیں</string>
+    <string name="widget_previous">پچھلا</string>
+    <string name="widget_play">چلائیں</string>
+    <string name="widget_pause">روکیں</string>
+    <string name="widget_next">اگلا</string>
+    <string name="recognize_label">وہ گانا پہچانیں</string>
+    <string name="recognize_widget_description">ایک تھپکی میں قریب بجتا گانا سنتا ہے اور اسے آپ کی لائبریری میں شامل کرتا ہے</string>
+    <string name="widget_album_art_label">البم کور</string>
+    <string name="widget_studio_label">اسٹوڈیو کنٹرولز</string>
+</resources>

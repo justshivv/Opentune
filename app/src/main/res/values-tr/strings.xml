@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Çalan şarkı; oynatma, atlama ve beğenme ile</string>
+    <string name="widget_nothing_playing">Hiçbir şey çalmıyor</string>
+    <string name="widget_open">OpenTune\'u açmak için dokunun</string>
+    <string name="widget_like">Beğen</string>
+    <string name="widget_unlike">Beğenilenlerden kaldır</string>
+    <string name="widget_previous">Önceki</string>
+    <string name="widget_play">Oynat</string>
+    <string name="widget_pause">Duraklat</string>
+    <string name="widget_next">Sonraki</string>
+    <string name="recognize_label">Bu şarkı ne?</string>
+    <string name="recognize_widget_description">Tek dokunuşla yakında çalan şarkıyı dinler ve kitaplığınıza ekler</string>
+    <string name="widget_album_art_label">Albüm kapağı</string>
+    <string name="widget_studio_label">Stüdyo kontrolleri</string>
+</resources>

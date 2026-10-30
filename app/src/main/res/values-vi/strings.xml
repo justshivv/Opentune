@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Bài đang phát, kèm phát, bỏ qua và thích</string>
+    <string name="widget_nothing_playing">Không có gì đang phát</string>
+    <string name="widget_open">Nhấn để mở OpenTune</string>
+    <string name="widget_like">Thích</string>
+    <string name="widget_unlike">Xóa khỏi mục Đã thích</string>
+    <string name="widget_previous">Trước</string>
+    <string name="widget_play">Phát</string>
+    <string name="widget_pause">Tạm dừng</string>
+    <string name="widget_next">Tiếp</string>
+    <string name="recognize_label">Nhận diện bài hát</string>
+    <string name="recognize_widget_description">Một lần nhấn để nghe bài hát đang phát gần bạn và thêm vào thư viện</string>
+    <string name="widget_album_art_label">Ảnh bìa album</string>
+    <string name="widget_studio_label">Điều khiển phòng thu</string>
+</resources>

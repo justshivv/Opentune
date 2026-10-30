@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">Odtwarzany utwór z przyciskami odtwarzania, pomijania i polubienia</string>
+    <string name="widget_nothing_playing">Nic nie jest odtwarzane</string>
+    <string name="widget_open">Dotknij, aby otworzyć OpenTune</string>
+    <string name="widget_like">Polub</string>
+    <string name="widget_unlike">Usuń z polubionych</string>
+    <string name="widget_previous">Poprzedni</string>
+    <string name="widget_play">Odtwórz</string>
+    <string name="widget_pause">Wstrzymaj</string>
+    <string name="widget_next">Następny</string>
+    <string name="recognize_label">Rozpoznaj utwór</string>
+    <string name="recognize_widget_description">Jednym dotknięciem rozpoznaje utwór grający w pobliżu i dodaje go do biblioteki</string>
+    <string name="widget_album_art_label">Okładka albumu</string>
+    <string name="widget_studio_label">Sterowanie studyjne</string>
+</resources>

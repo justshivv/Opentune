@@ -1,0 +1,15 @@
+<resources>
+    <string name="widget_description">显示正在播放的歌曲，可播放、跳过和点赞</string>
+    <string name="widget_nothing_playing">没有正在播放的内容</string>
+    <string name="widget_open">点按打开 OpenTune</string>
+    <string name="widget_like">喜欢</string>
+    <string name="widget_unlike">从喜欢中移除</string>
+    <string name="widget_previous">上一首</string>
+    <string name="widget_play">播放</string>
+    <string name="widget_pause">暂停</string>
+    <string name="widget_next">下一首</string>
+    <string name="recognize_label">听歌识曲</string>
+    <string name="recognize_widget_description">点按一下即可识别附近正在播放的歌曲，并添加到你的音乐库</string>
+    <string name="widget_album_art_label">专辑封面</string>
+    <string name="widget_studio_label">录音室控制</string>
+</resources>
