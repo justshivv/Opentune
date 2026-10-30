@@ -61,3 +61,9 @@ test('owner login, origin checks and edit conflicts protect publication; public 
     assert.equal(await call('/monochrome/search'), null);
   } finally { f.close(); }
 });
+
+test('the app configuration is the control dashboard\'s even beside the usage server', async () => {
+  const { isControlPath } = await import('./control.mjs');
+  for (const path of ['/v1/app-config', '/v1/app-config/key', '/control', '/control/', '/control/config']) assert.equal(isControlPath(path), true, path);
+  for (const path of ['/v1/activity', '/v1/addons', '/v1/public', '/usage/', '/v1/app-configuration', '/controls']) assert.equal(isControlPath(path), false, path);
+});

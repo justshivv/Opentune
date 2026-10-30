@@ -102,6 +102,13 @@ export class ConfigStore {
 const privateHeaders = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
   'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'" };
 const same = (a, b) => timingSafeEqual(createHash('sha256').update(String(a)).digest(), createHash('sha256').update(String(b)).digest());
+/**
+ * The owner's dashboard and the app configuration it publishes. These are
+ * always this module's, even when the usage server takes the rest of /v1/:
+ * apps read /v1/app-config without signing in.
+ */
+export const isControlPath = path => path === '/control' || path.startsWith('/control/') || path === '/v1/app-config' || path.startsWith('/v1/app-config/');
+
 export function createControl(store, env = process.env) {
   const attempts = new Map();
   const credentials = () => typeof env.CONTROL_ADMIN_USERNAME === 'string' && env.CONTROL_ADMIN_USERNAME.length >= 3 &&
@@ -117,7 +124,7 @@ export function createControl(store, env = process.env) {
   const json = (body, status = 200, headers = {}) => Response.json(body, { status, headers: { ...privateHeaders, ...headers } });
   return async request => {
     const url = new URL(request.url), path = url.pathname;
-    if (!path.startsWith('/control') && !path.startsWith('/v1/app-config')) return null;
+    if (!isControlPath(path)) return null;
     if (['/v1/app-config', '/v1/app-config/key'].includes(path) && request.method === 'GET') {
       const origin = request.headers.get('Origin');
       const cors = (env.WEB_ORIGINS || 'https://justshivv.github.io').split(',').includes(origin) ? { 'Access-Control-Allow-Origin': origin } : {};
