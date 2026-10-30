@@ -224,7 +224,6 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                                     Pages(
                                         page = page,
                                         still = ui.reduceAnimation,
-                                        transition = ui.pageTransition,
                                         queue = queue,
                                         index = index,
                                         compact = compact,
@@ -264,15 +263,13 @@ fun DesktopApp(startPanel: SidePanel? = null) {
 }
 
 /**
- * The open page, coming and going the way the phone's pages do for the
- * chosen page transition: an opened album or playlist pushes in over the
- * page, and going back pops it off again.
+ * The open page: the new one fades in with a short rise (a short drop going
+ * back), the old one fades out.
  */
 @Composable
 private fun Pages(
     page: Page,
     still: Boolean,
-    transition: com.opentune.data.settings.PageTransition,
     queue: List<Song>,
     index: Int,
     compact: Boolean,
@@ -285,12 +282,17 @@ private fun Pages(
     onPlaylist: (String) -> Unit,
     onBack: () -> Unit,
 ) {
+    val pxPerDp = androidx.compose.ui.platform.LocalDensity.current.density
     AnimatedContent(
         page,
         transitionSpec = {
+            // A desktop page changes with a quick fade and a short rise, not the phone's
+            // full-page slides and scales: moving a whole window of covers each frame stutters.
             val back = initialState.opened != null && targetState.opened == null
-            if (back) PageMotion.popEnter(transition, still) togetherWith PageMotion.popExit(transition, still)
-            else PageMotion.enter(transition, still) togetherWith PageMotion.exit(transition, still)
+            val rise = (if (still) 0 else if (back) -12 else 16) * pxPerDp
+            (fadeIn(tween(if (still) 120 else 200, delayMillis = if (still) 0 else 40)) +
+                slideInVertically(tween(260, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))) { rise.toInt() }) togetherWith
+                fadeOut(tween(if (still) 90 else 110))
         },
         label = "page",
         modifier = Modifier.fillMaxSize(),
@@ -321,34 +323,86 @@ internal val LocalPageBottom = staticCompositionLocalOf { 32.dp }
 
 // ---- Pages -------------------------------------------------------------------
 
+/**
+ * Home, as the phone fills it: what you played lately and your liked songs
+ * first, then YouTube Music's rows, more of them loading as you near the
+ * end, page after page until YouTube runs out.
+ */
 @Composable
 private fun HomePage(onOpen: (ShelfItem) -> Unit) {
     var shelves by remember { mutableStateOf<List<Pages.Shelf>?>(null) }
+    var next by remember { mutableStateOf<String?>(null) }
+    var loadingMore by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val recent by Library.recent.collectAsState()
+    val liked by Library.liked.collectAsState()
     fun load() {
         failed = false
-        scope.launch { runCatching { Pages.home() }.onSuccess { shelves = it }.onFailure { failed = true } }
+        scope.launch {
+            runCatching { Pages.home() }
+                .onSuccess { shelves = it.shelves; next = it.next }
+                .onFailure { failed = true }
+        }
+    }
+    fun more() {
+        val token = next ?: return
+        if (loadingMore) return
+        loadingMore = true
+        scope.launch {
+            runCatching { Pages.homeMore(token) }
+                .onSuccess { page ->
+                    // A row YouTube sends twice is shown once.
+                    val have = shelves.orEmpty().mapTo(HashSet()) { it.title }
+                    shelves = shelves.orEmpty() + page.shelves.filter { it.title !in have }
+                    next = page.next
+                }
+                .onFailure { next = null }
+            loadingMore = false
+        }
     }
     LaunchedEffect(Unit) { load() }
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Near the end: the next page, before the listener gets there.
+    val nearEnd by remember {
+        androidx.compose.runtime.derivedStateOf {
+            val info = list.layoutInfo
+            info.totalItemsCount > 0 && (info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= info.totalItemsCount - 3
+        }
+    }
+    LaunchedEffect(nearEnd, next, shelves) { if (nearEnd && shelves != null) more() }
     val loaded = shelves
-    LazyColumn(contentPadding = PaddingValues(top = 24.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-        item { PageTitle(greeting()) }
+    val own = remember(recent, liked) {
+        listOfNotNull(
+            recent.takeIf { it.isNotEmpty() }?.let { Pages.Shelf("Listen again", it.take(20).map(Pages::cardOf)) },
+            liked.takeIf { it.isNotEmpty() }?.let { Pages.Shelf("From your liked songs", it.take(20).map(Pages::cardOf)) },
+        )
+    }
+    LazyColumn(state = list, contentPadding = PaddingValues(top = 24.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(26.dp)) {
+        item(key = "title") { PageTitle(greeting()) }
+        itemsIndexed(own, key = { i, _ -> "own$i" }) { _, shelf -> ShelfRow(shelf, onOpen) }
         when {
-            failed -> item { Message("Couldn't load Home", "Check your connection and try again.", action = "Try again" to ::load) }
-            loaded == null -> items(3) { ShelfPlaceholder() }
-            else -> itemsIndexed(loaded) { n, shelf ->
-                Column(Modifier.appear(n), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(shelf.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp))
-                    val songs = remember(shelf) { shelf.items.mapNotNull(Pages::songOf) }
-                    LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        items(shelf.items) { item ->
-                            Card(item) {
-                                val song = Pages.songOf(item)
-                                if (song != null) Player.playAll(songs, songs.indexOfFirst { it.videoId == song.videoId }) else onOpen(item)
-                            }
-                        }
-                    }
+            failed -> item(key = "failed") { Message("Couldn't load Home", "Check your connection and try again.", action = "Try again" to ::load) }
+            loaded == null -> items(3, key = { "placeholder$it" }) { ShelfPlaceholder() }
+            else -> {
+                itemsIndexed(loaded, key = { i, _ -> "yt$i" }) { _, shelf -> ShelfRow(shelf, onOpen) }
+                if (next != null) item(key = "more") { ShelfPlaceholder() }
+            }
+        }
+    }
+}
+
+/** One of Home's rows: its title, and its cards in a row that scrolls sideways. */
+@Composable
+private fun ShelfRow(shelf: Pages.Shelf, onOpen: (ShelfItem) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(shelf.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp))
+        val songs = remember(shelf) { shelf.items.mapNotNull(Pages::songOf) }
+        LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            items(shelf.items) { item ->
+                Card(item) {
+                    val song = Pages.songOf(item)
+                    if (song != null) Player.playAll(songs, songs.indexOfFirst { it.videoId == song.videoId }.coerceAtLeast(0)) else onOpen(item)
                 }
             }
         }
@@ -563,6 +617,8 @@ internal fun SongList(songs: List<Song>, current: Int = -1, onRemove: ((Song) ->
     val index by Player.index.collectAsState()
     val playingId = queue.getOrNull(index)?.videoId
     val playingNow by Player.playing.collectAsState()
+    // Rows rise in only as the list first shows; scrolled back into view, they're simply there.
+    val since = remember(songs) { System.nanoTime() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = LocalPageBottom.current)) {
         itemsIndexed(songs, key = { i, s -> "$i:${s.videoId}" }) { i, song ->
             val isLiked = liked.any { it.videoId == song.videoId }
@@ -570,7 +626,7 @@ internal fun SongList(songs: List<Song>, current: Int = -1, onRemove: ((Song) ->
             var adding by remember { mutableStateOf(false) }
             val hover = remember { MutableInteractionSource() }
             Row(
-                Modifier.appear(i).padding(horizontal = 8.dp).fillMaxWidth().hoverWash(hover, RoundedCornerShape(12.dp))
+                Modifier.appear(i, since).padding(horizontal = 8.dp).fillMaxWidth().hoverWash(hover, RoundedCornerShape(12.dp))
                     .clickable(interactionSource = hover, indication = null) { onPlay(songs, i) }.padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

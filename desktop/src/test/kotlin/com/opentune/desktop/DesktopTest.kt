@@ -7,6 +7,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import androidx.compose.ui.graphics.asSkiaBitmap
 
 class DesktopTest {
     @Test fun rangesAreClippedToTheStream() {
@@ -43,6 +44,21 @@ class DesktopTest {
         assertEquals(Player.Repeat.ONE, Player.repeat.value)
         Player.cycleRepeat()
         assertEquals(Player.Repeat.OFF, Player.repeat.value)
+    }
+
+    @Test fun theSoftCoverBlendsAHardEdgeIntoAFade() {
+        // Half black, half white, as a cover split hard down the middle.
+        val image = androidx.compose.ui.graphics.ImageBitmap(32, 32)
+        val canvas = androidx.compose.ui.graphics.Canvas(image)
+        canvas.drawRect(0f, 0f, 16f, 32f, androidx.compose.ui.graphics.Paint().apply { color = androidx.compose.ui.graphics.Color.Black })
+        canvas.drawRect(16f, 0f, 32f, 32f, androidx.compose.ui.graphics.Paint().apply { color = androidx.compose.ui.graphics.Color.White })
+        soften(image)
+        val bitmap = image.asSkiaBitmap()
+        val red = { x: Int -> ((bitmap.getColor(x, 16) shr 16) and 0xFF) / 255f }
+        // Grey across the middle, still dark and light at the far edges, rising steadily between.
+        assertTrue("middle ${red(16)}", red(16) in 0.35f..0.65f)
+        assertTrue(red(0) < 0.2f && red(31) > 0.8f)
+        assertTrue((1 until 32).all { red(it) >= red(it - 1) - 0.01f })
     }
 
     @Test fun timesReadAsMinutesAndSeconds() {

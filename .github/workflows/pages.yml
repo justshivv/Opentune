@@ -50,6 +50,9 @@ jobs:
           package_json_file: web/package.json
       - name: Browser player and companion extensions
         working-directory: web
+        env:
+          # OpenTune's own Discord application (a repository variable); see web/extension/lib/discord.ts.
+          DISCORD_APP_ID: ${{ vars.DISCORD_APP_ID }}
         run: |
           pnpm install --frozen-lockfile
           pnpm --filter @opentune/extension icons

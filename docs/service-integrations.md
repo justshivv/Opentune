@@ -20,12 +20,30 @@ and build logs, not out of distributed binaries.
 
 ## Discord presence
 
-BitChord's Android presence uses a Discord user-token gateway implementation and its
-own Discord application identity. It is not a registration-free standard OAuth
-integration. OpenTune needs its own application identity and an implemented, tested
-presence transport before this can be offered as a working Android setting. That
-Android integration is not included in this build. No BitChord credentials or
-application identity are used.
+Discord titles a presence card with the registered name of the Discord application
+it comes from, so OpenTune needs its own application, named OpenTune. Earlier
+desktop and extension builds borrowed BitChord's application id, which is why the
+card read "Listening to BitChord". That id is gone; no BitChord application
+identity is used now.
+
+To set it up once:
+
+1. At [discord.com/developers/applications](https://discord.com/developers/applications),
+   create an application named **OpenTune** and give it the OpenTune icon
+   (`docs/logo.png`).
+2. Copy its **Application ID** (a 17 to 20 digit number; it isn't a secret).
+3. In the repository's **Settings → Secrets and variables → Actions → Variables**,
+   add a variable `DISCORD_APP_ID` with that number. CI, release and the website
+   build read it, so the desktop app and the browser extension carry it.
+
+A desktop build without one asks for the id in **Settings → Discord and Last.fm**
+and shows nothing on Discord until it has one. The extension without one still
+posts its card named OpenTune, but with the cover as a plain link and no
+application behind its buttons.
+
+The Android app has no Discord presence yet. BitChord's Android presence uses a
+Discord user-token gateway, not a registration-free OAuth integration; OpenTune
+would need a tested transport of its own before offering it there.
 
 ## Browser extension updates
 

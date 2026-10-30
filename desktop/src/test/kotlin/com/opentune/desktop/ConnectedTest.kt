@@ -46,6 +46,8 @@ class ConnectedTest {
     fun theDiscordCardNamesTheSongAndLinksIt() {
         val song = Song("dQw4w9WgXcQ", "Never Gonna Give You Up", "Rick Astley", "https://lh3.googleusercontent.com/abc=w60-h60-l90-rj", albumName = "Whenever You Need Somebody")
         val card = DiscordPresence.activity(song, positionMs = 30_000, durationMs = 213_000, withType = true)
+        // "Listening to <song>" in the status line, not the application's name.
+        assertEquals(2, card.getInt("status_display_type"))
         assertEquals(2, card.getInt("type"))
         assertEquals("Never Gonna Give You Up", card.getString("details"))
         assertEquals("Rick Astley", card.getString("state"))
@@ -72,9 +74,18 @@ class ConnectedTest {
             }
         }.apply { isDaemon = true; start() }
         DiscordPresence.setEnabled(true)
+        // Not an application id: refused, and nothing kept.
+        assertEquals(false, DiscordPresence.setOwnAppId("BitChord"))
+        if (!DiscordPresence.buildHasApp) {
+            DiscordPresence.setOwnAppId("")
+            assertEquals(null, DiscordPresence.appId())
+        }
+        assertEquals(true, DiscordPresence.setOwnAppId(" 123456789012345678 "))
         DiscordPresence.start()
         withTimeout(10_000) { DiscordPresence.status.first { it == DiscordPresence.Status.Connected } }
-        assertEquals("1543679166967193620", handshake!!.getString("client_id"))
+        // The build's own application when it has one, else the one pasted in Settings.
+        assertEquals(DiscordPresence.appId(), handshake!!.getString("client_id"))
+        if (!DiscordPresence.buildHasApp) assertEquals("123456789012345678", handshake!!.getString("client_id"))
         assertEquals(1, handshake!!.getInt("v"))
         discord.interrupt()
         server.close()

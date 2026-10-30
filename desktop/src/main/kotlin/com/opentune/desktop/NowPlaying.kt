@@ -92,6 +92,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -226,19 +228,7 @@ private fun PlayerBackdrop(style: PlayerBackground, cover: String?, playing: Boo
             // The cover itself, huge and soft, drifting while the music plays.
             val drift = rememberDrift(playing)
             AnimatedContent(cover, transitionSpec = { fadeIn(tween(900)) togetherWith fadeOut(tween(900)) }, label = "backdrop", modifier = Modifier.matchParentSize()) { url ->
-                Artwork(
-                    url,
-                    Modifier.fillMaxSize().graphicsLayer {
-                        val t = drift()
-                        val s = 1.35f + 0.08f * kotlin.math.sin(t * 0.21f)
-                        scaleX = s; scaleY = s
-                        translationX = size.width * 0.05f * kotlin.math.sin(t * 0.13f)
-                        translationY = size.height * 0.05f * kotlin.math.cos(t * 0.11f)
-                        alpha = 0.55f
-                        renderEffect = androidx.compose.ui.graphics.BlurEffect(90f, 90f, androidx.compose.ui.graphics.TileMode.Clamp)
-                    },
-                    androidx.compose.ui.graphics.RectangleShape,
-                )
+                SoftCover(url, drift)
             }
             // Darker toward the bottom so the title and controls stay readable.
             Box(
@@ -248,6 +238,86 @@ private fun PlayerBackdrop(style: PlayerBackground, cover: String?, playing: Boo
             )
         }
     }
+}
+
+/**
+ * The cover as a soft wash of its colours: a small copy, softened on the
+ * CPU and stretched smoothly over the player, drifting with [drift]. It looks
+ * like a heavy blur of the cover but costs almost nothing a frame, where a
+ * real blur of a window-sized image every step made the player stutter.
+ */
+@Composable
+private fun SoftCover(url: String?, drift: () -> Float) {
+    val context = LocalPlatformContext.current
+    val painter = coil3.compose.rememberAsyncImagePainter(
+        remember(url) { ImageRequest.Builder(context).data(Subsonic.resolveCover(url)).size(96).build() },
+    )
+    val state by painter.state.collectAsState()
+    val loaded = state is coil3.compose.AsyncImagePainter.State.Success
+    Box(
+        Modifier.fillMaxSize()
+            .graphicsLayer {
+                val t = drift()
+                val s = 1.35f + 0.08f * kotlin.math.sin(t * 0.21f)
+                scaleX = s; scaleY = s
+                translationX = size.width * 0.05f * kotlin.math.sin(t * 0.13f)
+                translationY = size.height * 0.05f * kotlin.math.cos(t * 0.11f)
+                alpha = 0.6f
+            }
+            .drawWithCache {
+                val small = androidx.compose.ui.graphics.ImageBitmap(SOFT_PX, SOFT_PX)
+                if (loaded) {
+                    androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+                        this, layoutDirection, androidx.compose.ui.graphics.Canvas(small), Size(SOFT_PX.toFloat(), SOFT_PX.toFloat()),
+                    ) { with(painter) { draw(size) } }
+                    soften(small)
+                }
+                val side = maxOf(size.width, size.height)
+                onDrawBehind {
+                    if (!loaded) return@onDrawBehind
+                    drawImage(
+                        small,
+                        dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - side) / 2).toInt(), ((size.height - side) / 2).toInt()),
+                        dstSize = androidx.compose.ui.unit.IntSize(side.toInt(), side.toInt()),
+                        filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
+                    )
+                }
+            },
+    )
+}
+
+/** How many pixels across the cover is drawn before it's stretched over the player. */
+private const val SOFT_PX = 32
+
+/**
+ * A box blur, three passes along rows then columns (close to a Gaussian),
+ * run in place over [image]'s pixels, so even a cover split hard down the
+ * middle comes out as one gradual fade.
+ */
+internal fun soften(image: androidx.compose.ui.graphics.ImageBitmap, radius: Int = 5, passes: Int = 3) {
+    val bitmap = image.asSkiaBitmap()
+    val side = bitmap.width
+    if (bitmap.height != side) return
+    val bytes = bitmap.readPixels() ?: return
+    val tmp = ByteArray(bytes.size)
+    fun pass(src: ByteArray, dst: ByteArray, step: Int, line: Int) {
+        val n = radius * 2 + 1
+        for (l in 0 until side) for (i in 0 until side) {
+            for (c in 0 until 4) {
+                var sum = 0
+                for (k in -radius..radius) {
+                    val j = (i + k).coerceIn(0, side - 1)
+                    sum += src[(l * line + j * step) * 4 + c].toInt() and 0xFF
+                }
+                dst[(l * line + i * step) * 4 + c] = (sum / n).toByte()
+            }
+        }
+    }
+    repeat(passes) {
+        pass(bytes, tmp, step = 1, line = side)
+        pass(tmp, bytes, step = side, line = 1)
+    }
+    bitmap.installPixels(bitmap.imageInfo, bytes, bitmap.rowBytes)
 }
 
 /** Seconds of drift that run while [playing] and hold still while paused. */

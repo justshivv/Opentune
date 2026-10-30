@@ -346,10 +346,26 @@ private fun ConnectedSection() {
             when (discordStatus) {
                 DiscordPresence.Status.Connected -> "The song you play shows on your Discord profile while the Discord app is open."
                 DiscordPresence.Status.NotRunning -> "Waiting for the Discord app. Open it on this computer and the song shows on your profile."
+                DiscordPresence.Status.NoApp -> "Needs a Discord application named OpenTune, which the card is titled with. Paste its id below."
                 DiscordPresence.Status.Off -> "Show the song you play on your Discord profile, through the Discord app on this computer."
             },
             discord, DiscordPresence::setEnabled,
         )
+        if (!DiscordPresence.buildHasApp) {
+            val saved by DiscordPresence.ownAppId.collectAsState()
+            var appId by remember(saved) { mutableStateOf(saved) }
+            val valid = appId.isBlank() || appId.trim().matches(Regex("[0-9]{17,20}"))
+            Text(
+                "This build has no Discord application of its own. Create one named OpenTune at discord.com/developers/applications and paste its Application ID.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                appId, { appId = it; if (it.isBlank() || it.trim().matches(Regex("[0-9]{17,20}"))) DiscordPresence.setOwnAppId(it) },
+                label = { Text("Discord Application ID") }, singleLine = true, isError = !valid,
+                supportingText = if (valid) null else ({ Text("An application id is 17 to 20 digits.") }),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Last.fm", style = MaterialTheme.typography.bodyLarge)

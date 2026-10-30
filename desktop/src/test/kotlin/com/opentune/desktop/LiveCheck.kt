@@ -16,9 +16,10 @@ import org.junit.Test
 class LiveCheck {
     @Test fun aSongStreamsThroughTheRelay() = runBlocking {
         assumeTrue(System.getProperty("opentune.live") == "true")
-        val home = Pages.home()
-        assertTrue("no home", home.isNotEmpty())
-        println("LIVE home: ${home.size} shelves, first ${home.first().title}")
+        val first = Pages.home()
+        assertTrue("no home", first.shelves.isNotEmpty())
+        val more = first.next?.let { Pages.homeMore(it).shelves }.orEmpty()
+        println("LIVE home: ${first.shelves.size} shelves, first ${first.shelves.first().title}; next page ${more.size} more")
 
         // YouTube Music gives a server far less than a home connection gets, so the
         // stream is checked on a well-known public video rather than a searched one.

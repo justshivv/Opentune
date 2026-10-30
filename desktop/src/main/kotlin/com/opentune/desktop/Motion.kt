@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -89,37 +90,45 @@ internal fun Modifier.hoverWash(source: MutableInteractionSource, shape: android
     hoverable(source).clip(shape).background(wash)
 }
 
-/** Rises and fades in after [index] steps, for the first rows of a list; later ones are there at once. */
-internal fun Modifier.appear(index: Int): Modifier = composed {
-    val shown = remember { Animatable(if (index < 14) 0f else 1f) }
+/**
+ * Rises and fades in after [index] steps, for the first rows of a list;
+ * later ones are there at once. [since] is when the list first showed: a row
+ * composed again after that (scrolled back into view) doesn't animate again.
+ */
+internal fun Modifier.appear(index: Int, since: Long = 0L): Modifier = composed {
+    val fresh = since == 0L || System.nanoTime() - since < 600_000_000L
+    val shown = remember { Animatable(if (index < 14 && fresh) 0f else 1f) }
     LaunchedEffect(Unit) {
         if (shown.value < 1f) {
-            delay(index * 28L)
-            shown.animateTo(1f, Motion.fade(320))
+            delay(index * 24L)
+            shown.animateTo(1f, Motion.fade(280))
         }
     }
     graphicsLayer {
         alpha = shown.value
-        translationY = (1f - shown.value) * 18.dp.toPx()
+        translationY = (1f - shown.value) * 14.dp.toPx()
     }
 }
 
-/** A shimmering placeholder, in the shape what's loading will take. */
+/** A shimmering placeholder, in the shape what's loading will take; the sweep moves in drawing alone. */
 @Composable
 internal fun Placeholder(modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp)) {
     val base = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
     val light = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.13f)
-    val sweep by rememberInfiniteTransition(label = "shimmer").animateFloat(
+    val sweep = rememberInfiniteTransition(label = "shimmer").animateFloat(
         -1f, 2f, infiniteRepeatable(tween(1_400, easing = LinearEasing)), label = "sweep",
     )
     Box(
-        modifier.clip(shape).background(
-            Brush.linearGradient(
-                listOf(base, light, base),
-                start = androidx.compose.ui.geometry.Offset(sweep * 600f, 0f),
-                end = androidx.compose.ui.geometry.Offset(sweep * 600f + 300f, 120f),
-            ),
-        ),
+        modifier.clip(shape).drawBehind {
+            val x = sweep.value * 600f
+            drawRect(
+                Brush.linearGradient(
+                    listOf(base, light, base),
+                    start = androidx.compose.ui.geometry.Offset(x, 0f),
+                    end = androidx.compose.ui.geometry.Offset(x + 300f, 120f),
+                ),
+            )
+        },
     )
 }
 

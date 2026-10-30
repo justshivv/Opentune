@@ -91,7 +91,12 @@ val generateBuildConfig = tasks.register("generateBuildConfig") {
     val lastFmSecret = providers.environmentVariable("LASTFM_API_SECRET").orElse("").map { it.trim() }
     inputs.property("lastFmKey", lastFmKey)
     inputs.property("lastFmSecret", lastFmSecret)
+    // OpenTune's own Discord application (discord.com/developers, named "OpenTune"): Discord titles
+    // the card with the application's name. Empty in a local build, where Settings takes one.
+    val discordAppId = providers.environmentVariable("DISCORD_APP_ID").orElse("").map { it.trim() }
+    inputs.property("discordAppId", discordAppId)
     doLast {
+        require(discordAppId.get().isEmpty() || discordAppId.get().matches(Regex("[0-9]{17,20}"))) { "DISCORD_APP_ID must be a Discord application id" }
         listOf(lastFmKey.get(), lastFmSecret.get()).forEach {
             require(it.isEmpty() || it.matches(Regex("[a-fA-F0-9]{32}"))) { "Last.fm credentials must be 32 hex characters" }
         }
@@ -107,6 +112,7 @@ val generateBuildConfig = tasks.register("generateBuildConfig") {
             |    const val VERSION_CODE = $appVersionCode
             |    const val LASTFM_API_KEY = "${lastFmKey.get()}"
             |    const val LASTFM_API_SECRET = "${lastFmSecret.get()}"
+            |    const val DISCORD_APP_ID = "${discordAppId.get()}"
             |}
             |""".trimMargin(),
         )

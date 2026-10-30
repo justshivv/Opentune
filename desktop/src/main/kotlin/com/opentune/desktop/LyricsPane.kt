@@ -207,7 +207,9 @@ private fun SyncedLyrics(song: Song, lyrics: Lyrics.Synced, offset: Long) {
         modifier = Modifier.fillMaxSize(),
     ) {
         itemsIndexed(lyrics.lines, key = { i, l -> "$i:${l.startMs}" }) { i, line ->
-            LyricRow(line, i == active, at) { Player.seekTo((line.startMs - offset).coerceAtLeast(0)) }
+            // Only the line being sung follows the clock; the rest stay as they are, so the
+            // 25-a-second position updates redraw one row rather than the whole list.
+            LyricRow(line, i == active, if (i == active) at else 0L) { Player.seekTo((line.startMs - offset).coerceAtLeast(0)) }
         }
     }
 }

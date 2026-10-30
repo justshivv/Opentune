@@ -26,33 +26,61 @@ import org.json.JSONObject
 /**
  * "Listening to OpenTune" on the listener's Discord profile, through the
  * Discord app running on the same computer (its local RPC socket), the way
- * Discord means apps to do it. No account token is involved: it is OpenTune's
- * own Discord application (the one the web extension uses) and works only
+ * Discord means apps to do it. No account token is involved, and it works only
  * while the Discord app is open. Paused or stopped, the card comes down.
+ *
+ * Discord heads the card with the registered name of the application whose id
+ * the handshake gives, so it has to be OpenTune's own: the build's
+ * (DISCORD_APP_ID) or one pasted in Settings. With neither, nothing is shown
+ * rather than the card carrying another app's name.
  */
 object DiscordPresence {
-    /** OpenTune's Discord application (web/extension/lib/discord.ts). */
-    private const val CLIENT_ID = "1543679166967193620"
+    /** A Discord application id: a snowflake, 17 to 20 digits. */
+    private val APP_ID = Regex("[0-9]{17,20}")
     private const val OP_HANDSHAKE = 0
     private const val OP_FRAME = 1
     private const val OP_CLOSE = 2
     private const val RETRY_MS = 15_000L
 
-    enum class Status { Off, NotRunning, Connected }
+    enum class Status { Off, NoApp, NotRunning, Connected }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var file = File(System.getProperty("user.home"), ".opentune/discord.json")
 
-    private val _enabled = MutableStateFlow(runCatching { JSONObject(file.readText()).optBoolean("enabled", true) }.getOrDefault(true))
+    private fun saved(): JSONObject = runCatching { JSONObject(file.readText()) }.getOrDefault(JSONObject())
+
+    private val _enabled = MutableStateFlow(saved().optBoolean("enabled", true))
     val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
+    /** An application id pasted in Settings, for a build without one of its own. */
+    private val _ownAppId = MutableStateFlow(saved().optString("appId"))
+    val ownAppId: StateFlow<String> = _ownAppId.asStateFlow()
+    /** Whether this build carries OpenTune's Discord application. */
+    val buildHasApp: Boolean get() = com.opentune.core.BuildConfig.DISCORD_APP_ID.matches(APP_ID)
+
+    /** The application the card goes out under, or null when there's none to use. */
+    internal fun appId(): String? =
+        com.opentune.core.BuildConfig.DISCORD_APP_ID.takeIf { it.matches(APP_ID) } ?: _ownAppId.value.trim().takeIf { it.matches(APP_ID) }
+
+    /** Keeps [id] when it's a Discord application id; false (and nothing kept) otherwise. */
+    fun setOwnAppId(id: String): Boolean {
+        val clean = id.trim()
+        if (clean.isNotEmpty() && !clean.matches(APP_ID)) return false
+        _ownAppId.value = clean
+        save()
+        return true
+    }
     private val _status = MutableStateFlow(Status.Off)
     val status: StateFlow<Status> = _status.asStateFlow()
 
     fun setEnabled(on: Boolean) {
         _enabled.value = on
+        save()
+    }
+
+    private fun save() {
         runCatching {
             file.parentFile.mkdirs()
-            file.writeText(JSONObject().put("enabled", on).toString())
+            file.writeText(JSONObject().put("enabled", _enabled.value).put("appId", _ownAppId.value).toString())
         }
     }
 
@@ -87,6 +115,8 @@ object DiscordPresence {
     /** For tests: the on/off switch kept in [at] instead. */
     internal fun useFile(at: File) {
         file = at
+        _enabled.value = saved().optBoolean("enabled", true)
+        _ownAppId.value = saved().optString("appId")
     }
 
     /** Where the Discord app listens: discord-ipc-0…9, in the usual folders and the Flatpak and Snap ones. */
@@ -134,7 +164,11 @@ object DiscordPresence {
     internal fun activity(song: Song, positionMs: Long, durationMs: Long, withType: Boolean): JSONObject {
         val started = System.currentTimeMillis() - positionMs
         return JSONObject().apply {
-            if (withType) put("type", 2) // Listening
+            if (withType) {
+                put("type", 2) // Listening
+                // The status line reads "Listening to <song>" rather than the application's name.
+                put("status_display_type", 2)
+            }
             put("details", line(song.title))
             put("state", line(song.artist.ifBlank { "Unknown artist" }))
             put("timestamps", JSONObject().put("start", started).apply { if (durationMs > 0) put("end", started + durationMs) })
@@ -159,6 +193,7 @@ object DiscordPresence {
         scope.launch {
             var pipe: Pipe? = null
             var shown: String? = null
+            var connectedAs: String? = null
             // An older Discord refuses the activity type; then the card goes without it.
             var withType = true
             fun disconnect() {
@@ -176,10 +211,22 @@ object DiscordPresence {
                     delay(1_000)
                     continue
                 }
+                val app = appId()
+                if (app == null) {
+                    if (pipe != null) disconnect()
+                    _status.value = Status.NoApp
+                    delay(1_000)
+                    continue
+                }
+                // A new id pasted in Settings: the card goes out under it from now on.
+                if (pipe != null && connectedAs != app) {
+                    runCatching { pipe!!.send(OP_FRAME, setActivity(null)); pipe!!.receive() }
+                    disconnect()
+                }
                 if (pipe == null) {
                     pipe = runCatching {
                         open()?.also { p ->
-                            p.send(OP_HANDSHAKE, JSONObject().put("v", 1).put("client_id", CLIENT_ID))
+                            p.send(OP_HANDSHAKE, JSONObject().put("v", 1).put("client_id", app))
                             val (op, ready) = p.receive()
                             if (op == OP_CLOSE || ready.optString("evt") != "READY") { p.close(); throw IOException(ready.optString("message", "Discord refused the connection")) }
                         }
@@ -189,6 +236,7 @@ object DiscordPresence {
                         delay(RETRY_MS)
                         continue
                     }
+                    connectedAs = app
                     _status.value = Status.Connected
                 }
                 val song = Player.current

@@ -12,11 +12,27 @@ import com.opentune.data.podcasts.PodcastParser
 object Pages {
     data class Shelf(val title: String, val items: List<ShelfItem>)
 
-    /** Home's rows, each card a song, album, playlist or artist. */
-    suspend fun home(): List<Shelf> =
-        InnertubeParser.parseHome(Innertube.browse("FEmusic_home"))
-            .map { Shelf(it.title, it.items.filter { i -> i.videoId != null || i.browseId != null }) }
-            .filter { it.items.isNotEmpty() }
+    /** A page of Home's rows, and the token for the next page, null at the end. */
+    data class HomePage(val shelves: List<Shelf>, val next: String?)
+
+    /** Home's first rows, each card a song, album, playlist or artist. */
+    suspend fun home(): HomePage {
+        val page = Innertube.browse("FEmusic_home")
+        return HomePage(shelves(InnertubeParser.parseHome(page)), InnertubeParser.sectionListContinuation(page))
+    }
+
+    /** Home's next rows, as the phone loads them while you scroll. */
+    suspend fun homeMore(token: String): HomePage {
+        val page = Innertube.browseContinuation(token)
+        return HomePage(shelves(InnertubeParser.parseHomeContinuation(page)), InnertubeParser.sectionListContinuation(page))
+    }
+
+    private fun shelves(rows: List<com.opentune.data.model.HomeShelf>): List<Shelf> = rows
+        .map { Shelf(it.title, it.items.filter { i -> i.videoId != null || i.browseId != null }) }
+        .filter { it.items.isNotEmpty() }
+
+    /** A song as a Home card, for the shelves made from your own library. */
+    internal fun cardOf(song: Song): ShelfItem = ShelfItem(song.title, song.artist, song.thumbnailUrl, song.videoId, null, song.isExplicit == true)
 
     /**
      * Songs for [query]: YouTube Music's songs-only search, as the phone asks

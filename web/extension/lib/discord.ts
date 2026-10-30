@@ -2,6 +2,7 @@ import type { DiscordNowPlaying, DiscordPresenceOptions, DiscordState } from '@o
 import { installDiscordFetchRule } from './rules';
 
 declare const __DISCORD_PRESENCE__: boolean;
+declare const __DISCORD_APP_ID__: string;
 
 /**
  * Discord rich presence (prompt §7.2), behind the DISCORD_PRESENCE build flag.
@@ -26,8 +27,12 @@ declare const __DISCORD_PRESENCE__: boolean;
  *   timer in Chrome and Firefox; Chrome 116+ also counts socket traffic).
  */
 
-/** OpenTune's own Discord application (DiscordApplication.kt). */
-export const APPLICATION_ID = '1543679166967193620';
+/**
+ * OpenTune's own Discord application, from the build (DISCORD_APP_ID). Empty
+ * in a build without one: the card still goes up named OpenTune, with the
+ * cover as a plain link and no application behind its buttons.
+ */
+export const APPLICATION_ID: string = __DISCORD_APP_ID__;
 const GATEWAY = 'wss://gateway.discord.gg/?v=9&encoding=json';
 const API = 'https://discord.com/api/v9';
 const PROJECT_URL = 'https://github.com/justshivv/Opentune';
@@ -114,6 +119,7 @@ async function userInfo(token: string): Promise<Account['user']> {
 /** ExternalAssets.kt: Discord's CDN mirror of an http image, as an `mp:` asset; cached (ArtworkCache). */
 const artwork = new Map<string, string | null>();
 async function externalAsset(token: string, imageUrl: string): Promise<string | null> {
+  if (!APPLICATION_ID) return null;
   if (artwork.has(imageUrl)) return artwork.get(imageUrl)!;
   try {
     const list = await api<{ external_asset_path?: string }[]>(token, `/applications/${APPLICATION_ID}/external-assets`, {
@@ -428,7 +434,7 @@ export async function buildPresence(token: string, track: DiscordNowPlaying, opt
         ...(buttons.length && {
           buttons: buttons.map(([label]) => label),
           metadata: { button_urls: buttons.map(([, url]) => url) },
-          application_id: APPLICATION_ID,
+          ...(APPLICATION_ID ? { application_id: APPLICATION_ID } : {}),
         }),
         url: null,
       },
