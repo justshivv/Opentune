@@ -134,114 +134,217 @@ import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.subsonic.Subsonic
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.focus.focusRequester
+import com.opentune.ui.BottomChrome
+import com.opentune.ui.CHROME_MINI_HEIGHT
+import com.opentune.ui.CHROME_TAB_HEIGHT
+import com.opentune.ui.ChromeTab
+import com.opentune.ui.LocalChromeScroll
+import com.opentune.ui.NavChrome
+import com.opentune.ui.NavRail
+import com.opentune.ui.NowPlaying as Docking
+import com.opentune.ui.NowPlayingStrip
+import com.opentune.ui.PANE_GUTTER
+import com.opentune.ui.PageMotion
+import com.opentune.ui.PlayerPaneFrame
+import com.opentune.ui.RAIL_GUTTER
+import com.opentune.ui.STRIP_GUTTER
+import com.opentune.ui.appLayout
+import com.opentune.ui.components.LocalHazeState
+import com.opentune.ui.components.glass
+import com.opentune.ui.components.pressable
+import com.opentune.ui.rememberChromeScroll
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The pages, in the sidebar and (all but Settings) the dock; search sits apart in its own circle. */
-private enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector, val inDock: Boolean = true) {
+/** The pages, in the dock or the rail as on the phone; search sits apart in its own circle. */
+private enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
     HOME("Home", Icons.Outlined.Home, Icons.Rounded.Home),
     LIBRARY("Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
     QUEUE("Up next", Icons.AutoMirrored.Outlined.QueueMusic, Icons.AutoMirrored.Rounded.QueueMusic),
-    SETTINGS("Settings", Icons.Outlined.Settings, Icons.Rounded.Settings, inDock = false),
+    SETTINGS("Settings", Icons.Outlined.Settings, Icons.Rounded.Settings),
 }
 
-private val DOCK_HEIGHT = 64.dp
-private val MINI_HEIGHT = 64.dp
-private val DOCK_INSET = 6.dp
-private val LENS = RoundedCornerShape(26.dp)
+private val TABS = Tab.entries.map { ChromeTab(it.label, it.icon, it.selectedIcon) }
 
-/** Room left under each page for the mini player and the dock floating over it. */
-private val PAGE_BOTTOM = DOCK_HEIGHT + MINI_HEIGHT + 48.dp
+/** Room under each page's last row for the mini player and the dock floating over it. */
+private val PAGE_BOTTOM = CHROME_TAB_HEIGHT + CHROME_MINI_HEIGHT + 48.dp
 
+/**
+ * The window, laid out as the phone app lays out a screen of its size
+ * (appLayout): a narrow one is the phone, with the dock and the mini player
+ * floating over the page; a wider one has the rail down the side, and a wide
+ * one the player itself docked on the right, folding into a strip.
+ */
 @Composable
 fun DesktopApp() {
     var tab by remember { mutableStateOf(Tab.HOME) }
     var searching by remember { mutableStateOf(false) }
-    // What the sidebar's search box last searched for, in a wide window.
-    var searchFor by remember { mutableStateOf<String?>(null) }
     // An album, playlist or artist opened from Home, over the page.
     var opened by remember { mutableStateOf<ShelfItem?>(null) }
     var playerOpen by remember { mutableStateOf(false) }
+    var paneCollapsed by remember { mutableStateOf(false) }
     val queue by Player.queue.collectAsState()
     val index by Player.index.collectAsState()
     val song = queue.getOrNull(index)
+    val ui by AppSettings.ui.collectAsState()
+    val chromeScroll = rememberChromeScroll()
+    val select: (Int) -> Unit = { i -> tab = Tab.entries[i]; searching = false; opened = null; chromeScroll.expand() }
+    val openSearch = { searching = true; opened = null; chromeScroll.expand() }
+    val selected = if (searching || opened != null) null else tab.ordinal
 
-    @Composable
-    fun Page(sidebarSearch: Boolean) {
-        // Each page fades and rises into place as the last one fades away, as the phone's do.
-        val page: Any = opened ?: if (searching) SEARCH else tab
-        AnimatedContent(
-            page,
-            transitionSpec = {
-                (fadeIn(Motion.fade(260)) + slideInVertically(Motion.soft()) { 36 } + scaleIn(Motion.soft(), initialScale = 0.985f)) togetherWith
-                    fadeOut(Motion.fade(110))
-            },
-            label = "page",
-            modifier = Modifier.fillMaxSize(),
-        ) { shown ->
-            when {
-                shown is ShelfItem -> CollectionPage(shown, onBack = { opened = null })
-                shown == SEARCH -> SearchPage(if (sidebarSearch) searchFor.orEmpty() else null)
-                shown == Tab.HOME -> HomePage(onOpen = { opened = it }, onSettings = { tab = Tab.SETTINGS })
-                shown == Tab.LIBRARY -> LibraryPage()
-                shown == Tab.SETTINGS -> SettingsPage()
-                else -> SongPage("Up next", queue, "The queue is empty.", current = index, onPlay = { _, i -> Player.playAt(i) })
-            }
-        }
-    }
-
-    DesktopTheme {
+    DesktopTheme(artworkSeed = rememberArtworkSeed(song?.thumbnailUrl)) {
         Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                if (maxWidth >= WIDE) {
-                    // A computer-sized window: the pages beside a sidebar, the player along the top.
-                    Row(Modifier.fillMaxSize()) {
-                        Sidebar(
-                            selected = tab.takeUnless { searching || opened != null },
-                            searching = searching,
-                            onSelect = { tab = it; searching = false; opened = null },
-                            onSearch = { q -> searchFor = q; searching = true; opened = null },
-                        )
-                        Column(Modifier.weight(1f).fillMaxHeight()) {
-                            TopStrip(song, onOpen = { playerOpen = true }, onQueue = { tab = Tab.QUEUE; searching = false; opened = null })
-                            CompositionLocalProvider(LocalPageBottom provides 24.dp, LocalWide provides true) {
-                                Box(Modifier.weight(1f).fillMaxWidth()) {
-                                    Box(Modifier.fillMaxSize().align(Alignment.TopCenter).widthIn(max = 1100.dp)) { Page(sidebarSearch = true) }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // A narrow window keeps the phone's dock and mini player.
-                    Box(Modifier.fillMaxSize().padding(top = DesktopWindow.topInset)) { Page(sidebarSearch = false) }
-                    Column(
-                        Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp).widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        val mini = rememberLast(song)
-                        AnimatedVisibility(
-                            song != null,
-                            enter = slideInVertically(Motion.soft()) { it } + fadeIn(Motion.fade()),
-                            exit = slideOutVertically(Motion.soft()) { it } + fadeOut(Motion.fade(140)),
-                        ) { mini?.let { MiniPlayer(it, onOpen = { playerOpen = true }) } }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Dock(
-                                selected = tab.takeUnless { searching || opened != null },
-                                onSelect = { tab = it; searching = false; opened = null },
-                                modifier = Modifier.weight(1f),
+                val layout = appLayout(maxWidth.value.toInt(), (maxHeight - DesktopWindow.topInset).value.toInt(), song != null, paneCollapsed)
+                val rail = layout.nav == NavChrome.RAIL
+                val haze = rememberHazeState()
+                // The page makes room for the docked player as it slides in, rather than jumping.
+                val end by animateDpAsState(
+                    when (layout.nowPlaying) { Docking.PANE -> PANE_GUTTER; Docking.STRIP -> STRIP_GUTTER; else -> 0.dp },
+                    tween(if (ui.reduceAnimation) 0 else 420, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+                    label = "pane room",
+                )
+                val bottom = when {
+                    !rail -> PAGE_BOTTOM
+                    layout.nowPlaying == Docking.BAR -> CHROME_MINI_HEIGHT + 36.dp
+                    else -> 24.dp
+                }
+                Box(
+                    Modifier.fillMaxSize().hazeSource(haze).nestedScroll(chromeScroll)
+                        .padding(top = DesktopWindow.topInset, start = if (rail) RAIL_GUTTER else 0.dp, end = end),
+                ) {
+                    CompositionLocalProvider(LocalPageBottom provides bottom, LocalChromeScroll provides chromeScroll) {
+                        val width = layout.contentMaxWidthDp?.let { Modifier.widthIn(max = it.dp) } ?: Modifier
+                        Box(Modifier.align(Alignment.TopCenter).then(width).fillMaxSize()) {
+                            Pages(
+                                page = opened ?: if (searching) SEARCH else tab,
+                                still = ui.reduceAnimation,
+                                transition = ui.pageTransition,
+                                queue = queue,
+                                index = index,
+                                onOpen = { opened = it },
+                                onBack = { opened = null },
+                                onSettings = { select(Tab.SETTINGS.ordinal) },
                             )
-                            SearchOrb(searching) { searching = !searching; opened = null }
                         }
                     }
                 }
-                // The player rises over everything and sinks back when closed.
+
+                CompositionLocalProvider(LocalHazeState provides haze.takeIf { !ui.reduceBlur }) {
+                    if (!rail) {
+                        BottomChrome(
+                            inline = chromeScroll.inline,
+                            tabs = TABS,
+                            selected = selected,
+                            onSelect = select,
+                            onExpand = chromeScroll::expand,
+                            searchSelected = searching,
+                            onSearch = openSearch,
+                            mini = song?.let { s -> { folded, m -> MiniPlayer(s, folded, m) { playerOpen = true } } },
+                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 12.dp),
+                            motion = ui.dockMotion,
+                            lens = ui.dockLens,
+                            reduceMotion = ui.reduceAnimation,
+                        )
+                    } else {
+                        NavRail(
+                            tabs = TABS,
+                            selected = selected,
+                            onSelect = select,
+                            searchSelected = searching,
+                            onSearch = openSearch,
+                            modifier = Modifier.align(Alignment.CenterStart).padding(top = DesktopWindow.topInset),
+                            lens = ui.dockLens,
+                            reduceMotion = ui.reduceAnimation,
+                        )
+                        if (layout.nowPlaying == Docking.BAR && song != null) {
+                            MiniPlayer(
+                                song, inline = false,
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(start = RAIL_GUTTER, end = 12.dp, bottom = 12.dp)
+                                    .fillMaxWidth().height(CHROME_MINI_HEIGHT),
+                            ) { playerOpen = true }
+                        }
+                    }
+                    val strip = rememberLast(song)
+                    AnimatedVisibility(
+                        visible = layout.nowPlaying == Docking.STRIP,
+                        enter = fadeIn(tween(if (ui.reduceAnimation) 120 else 260, delayMillis = if (ui.reduceAnimation) 0 else 160)),
+                        exit = fadeOut(tween(120)),
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(top = DesktopWindow.topInset),
+                    ) {
+                        val playing by Player.playing.collectAsState()
+                        NowPlayingStrip(
+                            isPlaying = playing,
+                            hasNext = index < queue.lastIndex,
+                            onTogglePlay = Player::toggle,
+                            onNext = Player::next,
+                            onExpand = { paneCollapsed = false },
+                        ) { m -> strip?.let { MiniPlayer(it, inline = true, modifier = m) { paneCollapsed = false } } }
+                    }
+                }
+
+                // Wide windows: the player itself, docked on the right while a song is loaded.
+                val docked = rememberLast(song)
+                AnimatedVisibility(
+                    visible = layout.nowPlaying == Docking.PANE,
+                    enter = if (ui.reduceAnimation) fadeIn(tween(160)) else slideInHorizontally(tween(420, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))) { it } + fadeIn(tween(220)),
+                    exit = if (ui.reduceAnimation) fadeOut(tween(120)) else slideOutHorizontally(tween(320, easing = FastOutLinearInEasing)) { it } + fadeOut(tween(260)),
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(top = DesktopWindow.topInset),
+                ) {
+                    PlayerPaneFrame { docked?.let { NowPlaying(it, docked = true, onClose = { paneCollapsed = true }) } }
+                }
+
+                // Otherwise the player rises over everything, as the phone's does.
                 val full = rememberLast(song)
                 AnimatedVisibility(
-                    playerOpen && song != null,
-                    enter = slideInVertically(Motion.soft()) { it / 7 } + fadeIn(Motion.fade(240)) + scaleIn(Motion.soft(), initialScale = 0.97f),
-                    exit = slideOutVertically(Motion.fade(220)) { it / 9 } + fadeOut(Motion.fade(180)) + scaleOut(Motion.fade(220), targetScale = 0.98f),
-                ) { full?.let { NowPlaying(it, onClose = { playerOpen = false }) } }
+                    visible = playerOpen && song != null && !layout.sidePlayer,
+                    enter = PageMotion.playerIn(ui.playerMotion, ui.reduceAnimation),
+                    exit = PageMotion.playerOut(ui.playerMotion, ui.reduceAnimation),
+                ) { full?.let { NowPlaying(it, docked = false, onClose = { playerOpen = false }) } }
             }
+        }
+    }
+}
+
+/**
+ * The open page, coming and going the way the phone's pages do for the
+ * chosen page transition: an opened album or playlist pushes in over the
+ * page, and going back pops it off again.
+ */
+@Composable
+private fun Pages(
+    page: Any,
+    still: Boolean,
+    transition: com.opentune.data.settings.PageTransition,
+    queue: List<Song>,
+    index: Int,
+    onOpen: (ShelfItem) -> Unit,
+    onBack: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    AnimatedContent(
+        page,
+        transitionSpec = {
+            val back = initialState is ShelfItem && targetState !is ShelfItem
+            if (back) PageMotion.popEnter(transition, still) togetherWith PageMotion.popExit(transition, still)
+            else PageMotion.enter(transition, still) togetherWith PageMotion.exit(transition, still)
+        },
+        label = "page",
+        modifier = Modifier.fillMaxSize(),
+    ) { shown ->
+        when {
+            shown is ShelfItem -> CollectionPage(shown, onBack = onBack)
+            shown == SEARCH -> SearchPage()
+            shown == Tab.HOME -> HomePage(onOpen = onOpen, onSettings = onSettings)
+            shown == Tab.LIBRARY -> LibraryPage()
+            shown == Tab.SETTINGS -> SettingsPage()
+            else -> SongPage("Up next", queue, "The queue is empty.", current = index, onPlay = { _, i -> Player.playAt(i) })
         }
     }
 }
@@ -251,528 +354,14 @@ private const val SEARCH = "search"
 
 /** The last non-null [value], so something leaving can be drawn as it goes. */
 @Composable
-private fun <T> rememberLast(value: T?): T? {
+internal fun <T> rememberLast(value: T?): T? {
     val last = remember { mutableStateOf(value) }
     if (value != null) last.value = value
     return last.value
 }
 
-/** From this width the window gets a sidebar and a player strip instead of the dock. */
-private val WIDE = 980.dp
-
-/** Whether the pages sit beside the sidebar, which already carries the mark. */
-internal val LocalWide = staticCompositionLocalOf { false }
-
-/** Room under each page's last row: above the dock and mini player, or a little in a wide window. */
+/** Room under each page's last row, clear of whatever floats over the bottom of the window. */
 internal val LocalPageBottom = staticCompositionLocalOf { PAGE_BOTTOM }
-
-// ---- Wide window ---------------------------------------------------------------
-
-/** The sidebar: the app's name, search, and the pages, under the window's own buttons on a Mac. */
-@Composable
-private fun Sidebar(selected: Tab?, searching: Boolean, onSelect: (Tab) -> Unit, onSearch: (String) -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    var query by remember { mutableStateOf("") }
-    Column(
-        Modifier.width(240.dp).fillMaxHeight().background(scheme.surfaceContainerLow)
-            .padding(top = DesktopWindow.topInset + 16.dp, start = 12.dp, end = 12.dp, bottom = 16.dp),
-    ) {
-        Row(Modifier.padding(start = 10.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.foundation.Image(rememberLogo(Logo.MARK), null, Modifier.size(width = 30.dp, height = 23.dp))
-            Text("OpenTune", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
-        }
-        TextField(
-            query, { query = it },
-            placeholder = { Text("Search", style = MaterialTheme.typography.bodyMedium) },
-            leadingIcon = { Icon(Icons.Rounded.Search, null, Modifier.size(20.dp)) },
-            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear", Modifier.size(18.dp)) } },
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium,
-            shape = RoundedCornerShape(12.dp),
-            colors = TextFieldDefaults.colors(
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                focusedContainerColor = scheme.surfaceContainerHigh,
-                unfocusedContainerColor = scheme.surfaceContainerHigh,
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { query.trim().takeIf { it.isNotEmpty() }?.let(onSearch) }),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        )
-        Spacer(Modifier.height(14.dp))
-        // One highlight that slides to the page you pick, rather than one per row blinking.
-        val tops = remember { mutableStateMapOf<String, Float>() }
-        val chosen = if (searching) "Search" else selected?.label
-        Box(Modifier.fillMaxWidth().weight(1f)) {
-            val at = chosen?.let { tops[it] }
-            val top by animateFloatAsState(at ?: 0f, Motion.soft(), label = "sidebar highlight")
-            val shown by animateFloatAsState(if (at != null) 1f else 0f, Motion.fade(), label = "sidebar highlight alpha")
-            Box(
-                Modifier.offset { IntOffset(0, top.roundToInt()) }.fillMaxWidth().height(38.dp)
-                    .graphicsLayer { alpha = shown }.clip(RoundedCornerShape(10.dp)).background(scheme.primary.copy(alpha = 0.16f)),
-            )
-            Column(Modifier.fillMaxSize()) {
-                Text("MUSIC", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant, modifier = Modifier.padding(start = 10.dp, top = 6.dp, bottom = 6.dp))
-                fun Modifier.place(label: String) = onGloballyPositioned { tops[label] = it.positionInParent().y }
-                Tab.entries.filter { it.inDock }.forEach { t ->
-                    SidebarItem(t.label, if (t == selected) t.selectedIcon else t.icon, t == selected, Modifier.place(t.label)) { onSelect(t) }
-                }
-                SidebarItem("Search", Icons.Rounded.Search, searching, Modifier.place("Search")) { query.trim().takeIf { it.isNotEmpty() }?.let(onSearch) ?: onSearch("") }
-                Spacer(Modifier.weight(1f))
-                val settings = Tab.SETTINGS
-                SidebarItem(settings.label, if (settings == selected) settings.selectedIcon else settings.icon, settings == selected, Modifier.place(settings.label)) { onSelect(settings) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SidebarItem(label: String, icon: ImageVector, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val hover = remember { MutableInteractionSource() }
-    val ink by animateColorAsState(if (selected) scheme.primary else scheme.onSurfaceVariant, Motion.fade(), label = "sidebar ink")
-    val text by animateColorAsState(if (selected) scheme.onSurface else scheme.onSurfaceVariant, Motion.fade(), label = "sidebar text")
-    Row(
-        modifier.fillMaxWidth().height(38.dp).hoverWash(hover)
-            .clickable(interactionSource = hover, indication = null, onClick = onClick).padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, null, tint = ink, modifier = Modifier.size(20.dp))
-        Text(
-            label, style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = text, modifier = Modifier.padding(start = 12.dp),
-        )
-    }
-}
-
-/**
- * The player along the top of a wide window: the controls on the left, the
- * song in a capsule in the middle with a thin line for where it is, and
- * volume, like and the queue on the right.
- */
-@Composable
-private fun TopStrip(song: Song?, onOpen: () -> Unit, onQueue: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val playing by Player.playing.collectAsState()
-    val loading by Player.loading.collectAsState()
-    val error by Player.error.collectAsState()
-    val volume by Player.volume.collectAsState()
-    val liked by Library.liked.collectAsState()
-    Row(
-        Modifier.fillMaxWidth().height(DesktopWindow.topInset + 64.dp).padding(top = DesktopWindow.topInset).padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = Player::previous, enabled = song != null) { Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(26.dp)) }
-            val press = remember { MutableInteractionSource() }
-            Box(
-                Modifier.size(40.dp).hoverLift(press, 1.06f).clip(CircleShape).background(if (song != null) scheme.onSurface else scheme.surfaceContainerHigh)
-                    .clickable(interactionSource = press, indication = null, enabled = song != null, onClick = Player::toggle),
-                contentAlignment = Alignment.Center,
-            ) {
-                Crossfade(loading, animationSpec = Motion.fade(), label = "strip loading") { busy ->
-                    if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = scheme.surface, strokeWidth = 2.dp)
-                    else PlayPauseIcon(playing, scheme.surface, 24.dp)
-                }
-            }
-            IconButton(onClick = Player::next, enabled = song != null) { Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(26.dp)) }
-        }
-        Box(Modifier.weight(1f).padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-            NowPlayingCapsule(song, error, onOpen)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (song != null) {
-                val isLiked = liked.any { it.videoId == song.videoId }
-                LikeButton(isLiked, { Library.setLiked(song, !isLiked) })
-            }
-            Icon(Icons.AutoMirrored.Rounded.VolumeUp, "Volume", tint = scheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-            var level by remember { mutableFloatStateOf(volume.toFloat()) }
-            Slider(
-                value = level, onValueChange = { level = it; Player.setVolume(it.toDouble()) },
-                colors = SliderDefaults.colors(inactiveTrackColor = scheme.onSurface.copy(alpha = 0.18f)),
-                modifier = Modifier.width(110.dp).padding(horizontal = 6.dp),
-            )
-            IconButton(onClick = onQueue) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, "Up next", tint = scheme.onSurfaceVariant) }
-        }
-    }
-}
-
-/** The song playing, in a rounded box with a thin progress line along its foot; click to open the player. */
-@Composable
-private fun NowPlayingCapsule(song: Song?, error: String?, onOpen: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(12.dp)
-    Box(Modifier.widthIn(max = 560.dp).fillMaxWidth().height(48.dp).clip(shape).background(scheme.surfaceContainer)) {
-        if (song == null) {
-            Text("Nothing playing", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.align(Alignment.Center))
-            return@Box
-        }
-        val progress = rememberProgress(song)
-        val quality by Player.quality.collectAsState()
-        val hover = remember { MutableInteractionSource() }
-        Row(Modifier.fillMaxSize().hoverWash(hover, shape).clickable(interactionSource = hover, indication = null, onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
-            Cover(song.thumbnailUrl, 48.dp, RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
-            AnimatedContent(
-                song.videoId,
-                transitionSpec = { (fadeIn(Motion.fade(260)) + slideInVertically(Motion.soft()) { it / 2 }) togetherWith (fadeOut(Motion.fade(140)) + slideOutVertically(Motion.soft()) { -it / 2 }) },
-                label = "capsule song",
-                modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
-            ) { _ ->
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(song.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        error ?: song.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = if (error != null) scheme.error else scheme.onSurfaceVariant,
-                    )
-                }
-            }
-            if (quality?.lossless == true) {
-                Text(
-                    "LOSSLESS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = scheme.primary,
-                    modifier = Modifier.padding(end = 10.dp).clip(RoundedCornerShape(6.dp)).background(scheme.primary.copy(alpha = 0.14f)).padding(horizontal = 6.dp, vertical = 2.dp),
-                )
-            }
-            Text(
-                "${Time.format(progress.positionMs)} / ${Time.format(progress.durationMs)}",
-                style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant, modifier = Modifier.padding(end = 12.dp),
-            )
-        }
-        // Where the song is; clicking along the line seeks there.
-        BoxWithConstraints(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(6.dp)) {
-            val width = constraints.maxWidth.toFloat()
-            Box(
-                Modifier.fillMaxSize().pointerInput(progress.durationMs) {
-                    detectTapGestures { at -> if (progress.durationMs > 0) Player.seekTo((at.x / width * progress.durationMs).toLong()) }
-                },
-            ) {
-                val along by animateFloatAsState(progress.fraction(), tween(260, easing = LinearEasing), label = "capsule line")
-                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(along).height(2.dp).background(scheme.primary))
-            }
-        }
-    }
-}
-
-// ---- Chrome ------------------------------------------------------------------
-
-/** The phone's floating pill: a frosted bar, the open tab in a tinted lens that slides between them. */
-@Composable
-private fun Dock(selected: Tab?, onSelect: (Tab) -> Unit, modifier: Modifier) {
-    val pill = RoundedCornerShape(percent = 50)
-    val accent = MaterialTheme.colorScheme.primary
-    val tabs = Tab.entries.filter { it.inDock }
-    BoxWithConstraints(modifier.height(DOCK_HEIGHT).floating(pill).padding(DOCK_INSET)) {
-        val each = maxWidth / tabs.size
-        val at = tabs.indexOf(selected)
-        val x by animateDpAsState(each * at.coerceAtLeast(0), Motion.soft(), label = "lens")
-        val shown by animateFloatAsState(if (at >= 0) 1f else 0f, Motion.fade(), label = "lens alpha")
-        Box(
-            Modifier.offset(x = x).width(each).fillMaxHeight().graphicsLayer { alpha = shown }.clip(LENS)
-                .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.24f), accent.copy(alpha = 0.14f))))
-                .border(1.dp, Brush.verticalGradient(listOf(accent.copy(alpha = 0.45f), accent.copy(alpha = 0.08f))), LENS),
-        )
-        Row(Modifier.fillMaxSize()) {
-            tabs.forEach { t ->
-                val on = t == selected
-                val ink by animateColorAsState(if (on) accent else MaterialTheme.colorScheme.onSurfaceVariant, Motion.fade(), label = "dock ink")
-                val press = remember { MutableInteractionSource() }
-                Column(
-                    Modifier.weight(1f).fillMaxHeight().clip(LENS).hoverLift(press, 1.04f)
-                        .clickable(interactionSource = press, indication = null) { onSelect(t) },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Icon(if (on) t.selectedIcon else t.icon, null, tint = ink, modifier = Modifier.size(25.dp))
-                    Text(t.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
-                }
-            }
-        }
-    }
-}
-
-/** Search on its own: a frosted circle that fills with the accent while search is open. */
-@Composable
-private fun SearchOrb(selected: Boolean, onClick: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    Box(
-        Modifier
-            .size(DOCK_HEIGHT)
-            .floating(CircleShape)
-            .padding(DOCK_INSET)
-            .clip(CircleShape)
-            .background(if (selected) scheme.primary else Color.Transparent)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Rounded.Search, "Search", tint = if (selected) scheme.onPrimary else scheme.onSurface, modifier = Modifier.size(26.dp))
-    }
-}
-
-/** Now playing above the dock: cover, names, play inside a progress ring, next. */
-@Composable
-private fun MiniPlayer(song: Song, onOpen: () -> Unit) {
-    val playing by Player.playing.collectAsState()
-    val loading by Player.loading.collectAsState()
-    val error by Player.error.collectAsState()
-    val progress = rememberProgress(song)
-    val shape = RoundedCornerShape(22.dp)
-    Row(
-        Modifier.fillMaxWidth().height(MINI_HEIGHT).floating(shape).clickable(onClick = onOpen).padding(start = 10.dp, end = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Cover(song.thumbnailUrl, 44.dp, RoundedCornerShape(12.dp))
-        AnimatedContent(
-            song.videoId,
-            transitionSpec = { (fadeIn(Motion.fade(260)) + slideInHorizontally(Motion.soft()) { it / 4 }) togetherWith (fadeOut(Motion.fade(140)) + slideOutHorizontally(Motion.soft()) { -it / 4 }) },
-            label = "mini song",
-            modifier = Modifier.weight(1f).padding(start = 12.dp),
-        ) { _ ->
-            Column {
-                Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(
-                    error ?: song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall,
-                    color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Box(Modifier.size(46.dp).clip(CircleShape).clickable(onClick = Player::toggle), contentAlignment = Alignment.Center) {
-            ProgressRing(progress::fraction, 2.5.dp, Modifier.fillMaxSize().padding(3.dp))
-            if (loading) CircularProgressIndicator(Modifier.fillMaxSize().padding(3.dp), strokeWidth = 2.5.dp)
-            PlayPauseIcon(playing, MaterialTheme.colorScheme.onSurface, 24.dp)
-        }
-        IconButton(onClick = Player::next) { Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(26.dp)) }
-    }
-}
-
-/**
- * The full player over everything: big cover, names, seek bar, controls,
- * volume, over the cover's own colour. Lyrics slide in beside it in a wide
- * window, or take the cover's place in a narrow one.
- */
-@Composable
-private fun NowPlaying(song: Song, onClose: () -> Unit) {
-    var showLyrics by remember { mutableStateOf(true) }
-    val theme by AppSettings.theme.collectAsState()
-    val playing by Player.playing.collectAsState()
-    val amoled = theme.playerBackground == com.opentune.data.settings.PlayerBackground.AMOLED
-    val gradient = theme.playerBackground == com.opentune.data.settings.PlayerBackground.GRADIENT
-    val bg = if (amoled) Color.Black else Color(0xff17171b)
-    val cover = rememberCoverColor(song.thumbnailUrl, bg)
-    MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme()) {
-    Box(Modifier.fillMaxSize().background(bg).clickable(enabled = false) {}) {
-        if (!amoled) {
-            if (!gradient) {
-                Crossfade(song.thumbnailUrl, animationSpec = tween(700), label = "player backdrop") { url ->
-                    AsyncImage(Subsonic.resolveCover(url), null, contentScale = ContentScale.Crop, alpha = 0.2f, modifier = Modifier.fillMaxSize().blur(56.dp))
-                }
-            }
-            // The cover's colour from the top, fading into the dark below.
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(tint(cover, bg, if (gradient) 0.55f else 0.38f).copy(alpha = if (gradient) 1f else 0.8f), bg))))
-        }
-        IconButton(onClick = onClose, modifier = Modifier.padding(16.dp).align(Alignment.TopStart)) { Icon(Icons.Rounded.ExpandMore, "Close", Modifier.size(30.dp)) }
-        // A playing cover sits full size; paused, it eases back a little, as on the phone.
-        val coverScale by animateFloatAsState(if (playing) 1f else 0.9f, Motion.bouncy(), label = "cover scale")
-        @Composable
-        fun BigCover(size: Dp) {
-            AnimatedContent(
-                song.videoId,
-                transitionSpec = { (fadeIn(Motion.fade(320)) + scaleIn(Motion.soft(), 0.92f)) togetherWith (fadeOut(Motion.fade(200)) + scaleOut(Motion.soft(), 1.04f)) },
-                label = "big cover",
-            ) { _ ->
-                Cover(
-                    song.thumbnailUrl, size, RoundedCornerShape(24.dp),
-                    Modifier.graphicsLayer { scaleX = coverScale; scaleY = coverScale }
-                        .shadow(28.dp, RoundedCornerShape(24.dp), ambientColor = cover, spotColor = cover),
-                )
-            }
-        }
-        BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 56.dp)) {
-            val beside = maxWidth >= 900.dp
-            val (roomHigh, roomWide) = maxHeight to maxWidth
-            if (beside) {
-                // The lyrics' share of the width eases open and shut; the cover's side takes the rest.
-                val share by animateFloatAsState(if (showLyrics) 1f else 0f, Motion.soft(), label = "lyrics share")
-                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                    BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
-                        val coverSize = minOf(maxHeight - 280.dp, maxWidth * 0.8f, 440.dp).coerceAtLeast(140.dp)
-                        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            BigCover(coverSize)
-                            Spacer(Modifier.height(28.dp))
-                            PlayerControls(song, showLyrics) { showLyrics = !showLyrics }
-                        }
-                    }
-                    if (share > 0.01f) {
-                        Spacer(Modifier.width(48.dp * share))
-                        LyricsPane(song, Modifier.weight(share).fillMaxHeight().graphicsLayer { alpha = share; translationX = (1f - share) * 80f })
-                    }
-                }
-            } else {
-                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    AnimatedContent(
-                        showLyrics,
-                        transitionSpec = { (fadeIn(Motion.fade(260)) + scaleIn(Motion.soft(), 0.96f)) togetherWith fadeOut(Motion.fade(140)) },
-                        label = "lyrics or cover",
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentAlignment = Alignment.Center,
-                    ) { lyrics ->
-                        if (lyrics) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LyricsPane(song, Modifier.fillMaxHeight().widthIn(max = 640.dp).fillMaxWidth()) }
-                        } else {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { BigCover(minOf(roomHigh - 280.dp, roomWide * 0.45f, 460.dp).coerceAtLeast(160.dp)) }
-                        }
-                    }
-                    Spacer(Modifier.height(28.dp))
-                    PlayerControls(song, showLyrics) { showLyrics = !showLyrics }
-                }
-            }
-        }
-    }
-    }
-}
-
-/** Names, like, the lyrics switch, seek bar, the buttons and volume, under the cover. */
-@Composable
-private fun PlayerControls(song: Song, showLyrics: Boolean, onLyrics: () -> Unit) {
-    val playing by Player.playing.collectAsState()
-    val loading by Player.loading.collectAsState()
-    val error by Player.error.collectAsState()
-    val volume by Player.volume.collectAsState()
-    val liked by Library.liked.collectAsState()
-    val progress = rememberProgress(song)
-    var dragging by remember { mutableStateOf<Float?>(null) }
-    var adding by remember { mutableStateOf(false) }
-    var timing by remember { mutableStateOf(false) }
-    val sleep by Player.sleep.collectAsState()
-    val isLiked = liked.any { it.videoId == song.videoId }
-    val quality by Player.quality.collectAsState()
-    val faint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            AnimatedContent(
-                song.videoId,
-                transitionSpec = { (fadeIn(Motion.fade(300)) + slideInHorizontally(Motion.soft()) { it / 6 }) togetherWith (fadeOut(Motion.fade(150)) + slideOutHorizontally(Motion.soft()) { -it / 6 }) },
-                label = "player names",
-                modifier = Modifier.weight(1f),
-            ) { _ ->
-                Column {
-                    Text(song.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        error ?: song.artist, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    QualityLabel(quality, Modifier.padding(top = 4.dp))
-                }
-            }
-            IconButton(onClick = onLyrics) {
-                Icon(
-                    Icons.Rounded.Lyrics, if (showLyrics) "Hide lyrics" else "Show lyrics",
-                    tint = if (showLyrics) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            Box {
-                IconButton(onClick = { adding = true }) { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") }
-                AddToPlaylistMenu(song, adding) { adding = false }
-            }
-            LikeButton(isLiked, { Library.setLiked(song, !isLiked) }, idle = MaterialTheme.colorScheme.onSurface, size = 24.dp)
-        }
-        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(top = 12.dp)) {
-            Slider(
-                value = dragging ?: progress.fraction(),
-                onValueChange = { dragging = it },
-                onValueChangeFinished = { dragging?.let { Player.seekTo((it * progress.durationMs).toLong()) }; dragging = null },
-                enabled = progress.durationMs > 0,
-                colors = SliderDefaults.colors(inactiveTrackColor = faint),
-            )
-            Row {
-                Text(Time.format(progress.positionMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.weight(1f))
-                Text(Time.format(progress.durationMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp), modifier = Modifier.padding(top = 8.dp)) {
-            IconButton(onClick = Player::previous, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(38.dp)) }
-            val press = remember { MutableInteractionSource() }
-            Box(
-                Modifier.size(76.dp).hoverLift(press, 1.05f).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface)
-                    .clickable(interactionSource = press, indication = null, onClick = Player::toggle),
-                contentAlignment = Alignment.Center,
-            ) {
-                Crossfade(loading, animationSpec = Motion.fade(), label = "player loading") { busy ->
-                    if (busy) CircularProgressIndicator(Modifier.size(34.dp), color = MaterialTheme.colorScheme.surface, strokeWidth = 3.dp)
-                    else PlayPauseIcon(playing, MaterialTheme.colorScheme.surface, 40.dp)
-                }
-            }
-            IconButton(onClick = Player::next, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(38.dp)) }
-        }
-        Row(Modifier.widthIn(max = 380.dp).fillMaxWidth().padding(top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.AutoMirrored.Rounded.VolumeUp, "Volume", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            var level by remember { mutableFloatStateOf(volume.toFloat()) }
-            Slider(
-                value = level, onValueChange = { level = it; Player.setVolume(it.toDouble()) },
-                colors = SliderDefaults.colors(inactiveTrackColor = faint),
-                modifier = Modifier.weight(1f).padding(start = 10.dp),
-            )
-            Box {
-                IconButton(onClick = { timing = true }) {
-                    Icon(
-                        Icons.Rounded.Bedtime, "Sleep timer",
-                        tint = if (sleep != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                DropdownMenu(timing, onDismissRequest = { timing = false }) {
-                    Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).widthIn(max = 300.dp)) { SleepChips(sleep) }
-                }
-            }
-        }
-        (sleep as? Player.Sleep.At)?.let { at ->
-            var left by remember { mutableLongStateOf(0L) }
-            LaunchedEffect(at) { while (true) { left = at.epochMs - System.currentTimeMillis(); delay(1_000) } }
-            Text("Stopping in ${Time.format(left)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        }
-        if (sleep == Player.Sleep.EndOfSong) {
-            Text("Stopping after this song", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        }
-    }
-}
-
-/** A soft shadow and the phone's frosted fill, so a piece of chrome floats over the page. */
-private fun Modifier.floating(shape: Shape): Modifier =
-    this.shadow(18.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.45f))
-        .clip(shape)
-        .background(Color(0xFF232325).copy(alpha = 0.98f))
-        .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.02f))), shape)
-
-private class Progress(val positionMs: Long, val durationMs: Long) {
-    fun fraction(): Float = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-}
-
-/** Where the song is, read four times a second. */
-@Composable
-private fun rememberProgress(song: Song): Progress {
-    var position by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(song.videoId) {
-        while (true) {
-            position = Player.positionMs()
-            duration = Player.durationMs()
-            delay(250)
-        }
-    }
-    return Progress(position, duration)
-}
-
-/** A circle filling clockwise from the top as the song plays. */
-@Composable
-private fun ProgressRing(progress: () -> Float, stroke: Dp, modifier: Modifier) {
-    val accent = MaterialTheme.colorScheme.primary
-    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
-    Canvas(modifier) {
-        val w = stroke.toPx()
-        val inset = w / 2
-        val arc = Size(size.width - w, size.height - w)
-        drawArc(track, 0f, 360f, useCenter = false, topLeft = Offset(inset, inset), size = arc, style = Stroke(w))
-        drawArc(accent, -90f, 360f * progress(), useCenter = false, topLeft = Offset(inset, inset), size = arc, style = Stroke(w, cap = StrokeCap.Round))
-    }
-}
 
 // ---- Pages -------------------------------------------------------------------
 
@@ -792,11 +381,8 @@ private fun HomePage(onOpen: (ShelfItem) -> Unit, onSettings: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PageTitle(greeting())
                 Spacer(Modifier.weight(1f))
-                if (!LocalWide.current) {
-                    // The sidebar carries the mark and Settings in a wide window; here they sit by the greeting.
-                    IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    androidx.compose.foundation.Image(rememberLogo(Logo.MARK), "OpenTune", Modifier.padding(start = 4.dp, end = 24.dp).size(width = 34.dp, height = 26.dp))
-                }
+                // Settings in a glass circle by the greeting, as on the phone's Home.
+                GlassCircle(Icons.Rounded.Settings, "Settings", onSettings, Modifier.padding(end = 20.dp))
             }
         }
         when {
@@ -845,8 +431,8 @@ private fun greeting(): String = when (java.time.LocalTime.now().hour) {
 }
 
 @Composable
-private fun SearchPage(fromSidebar: String? = null) {
-    var query by remember { mutableStateOf(fromSidebar.orEmpty()) }
+private fun SearchPage() {
+    var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Song>?>(null) }
     var searching by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
@@ -862,16 +448,12 @@ private fun SearchPage(fromSidebar: String? = null) {
             searching = false
         }
     }
-    // The sidebar's box asks; this page shows what it found.
-    LaunchedEffect(fromSidebar) {
-        if (!fromSidebar.isNullOrBlank()) {
-            query = fromSidebar
-            run()
-        }
-    }
+    // Search opens ready to type, as the phone's does.
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
-        PageTitle(if (fromSidebar.isNullOrBlank()) "Search" else "Results for \"$fromSidebar\"")
-        if (fromSidebar == null) TextField(
+        PageTitle("Search")
+        TextField(
             query, { query = it },
             placeholder = { Text("Songs, albums, artists") },
             leadingIcon = { Icon(Icons.Rounded.Search, null) },
@@ -886,7 +468,7 @@ private fun SearchPage(fromSidebar: String? = null) {
             ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { run() }),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).focusRequester(focus),
         )
         val found = results
         when {
@@ -981,7 +563,7 @@ private fun CollectionPage(item: ShelfItem, onBack: () -> Unit) {
         Modifier.fillMaxSize().background(Brush.verticalGradient(0f to tint(colour, bg, 0.34f), 0.55f to tint(colour, bg, 0.16f), 1f to tint(colour, bg, 0.08f)))
             .padding(top = 16.dp),
     ) {
-        IconButton(onClick = onBack, modifier = Modifier.padding(start = 12.dp)) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+        GlassCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack, Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp))
         Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             val shape = if (round) CircleShape else MaterialTheme.shapes.medium
             Cover(item.thumbnailUrl, 168.dp, shape, Modifier.shadow(24.dp, shape, ambientColor = colour, spotColor = colour))
@@ -1121,7 +703,16 @@ internal fun Cover(url: String?, size: Dp, shape: Shape, modifier: Modifier = Mo
 /** A page's big bold name, as the phone's pages start. */
 @Composable
 internal fun PageTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+    Text(text, style = MaterialTheme.typography.displaySmall, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+}
+
+/** A round glass button holding one icon, as the phone's pages put back, menu and settings. */
+@Composable
+internal fun GlassCircle(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, size: Dp = 48.dp) {
+    Box(
+        modifier.size(size).pressable(onClick).glass(CircleShape),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, label, Modifier.size(size * 0.46f), tint = MaterialTheme.colorScheme.onSurface) }
 }
 
 @Composable

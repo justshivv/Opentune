@@ -1,17 +1,35 @@
 package com.opentune.desktop
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.asComposeImageBitmap
+import androidx.compose.ui.graphics.toArgb
+import coil3.SingletonImageLoader
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.toBitmap
+import com.materialkolor.PaletteStyle
+import com.materialkolor.ktx.themeColorOrNull
+import com.materialkolor.rememberDynamicColorScheme
+import com.opentune.data.subsonic.Subsonic
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.lightColorScheme
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AppFont
 import com.opentune.data.settings.ThemeMode
@@ -24,49 +42,65 @@ import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/** The colour read from the playing song's cover, or null with nothing playing. */
+internal val LocalArtworkSeed = staticCompositionLocalOf<Color?> { null }
+
 /**
- * The phone app's look as it comes out of the box: dark with true black
- * surfaces, the default red accent, the Outfit typeface and its corner sizes.
+ * The phone's theme: its colour scheme made the same way, by material-kolor
+ * from the chosen accent and palette style, or from the playing song's cover
+ * when "Colour from artwork" is on; true black when asked; the Outfit
+ * typeface and its corner sizes. Colours ease to a new song's over 600ms.
  */
 @Composable
-fun DesktopTheme(content: @Composable () -> Unit) {
+fun DesktopTheme(artworkSeed: Color? = null, content: @Composable () -> Unit) {
     val settings by AppSettings.theme.collectAsState()
     val dark = when (settings.mode) { ThemeMode.DARK -> true; ThemeMode.LIGHT -> false; ThemeMode.SYSTEM -> isSystemInDarkTheme() }
-    val colors = if (dark) { if (settings.pureBlack) Scheme else Scheme.copy(background = Color(0xff17171b), surface = Color(0xff17171b)) }
-        else lightColorScheme(primary = Color(0xff904a44), primaryContainer = Color(0xffffdad6), secondary = Color(0xff775652))
+    val seed = artworkSeed?.takeIf { settings.colorFromArtwork }
+    val generated = rememberDynamicColorScheme(
+        seedColor = seed ?: Color(settings.seedColor),
+        isDark = dark,
+        isAmoled = settings.pureBlack,
+        style = PaletteStyle.valueOf(settings.paletteStyle.name),
+    )
+    val scheme = if (dark && settings.pureBlack) generated.toPureBlack() else generated
+    val type = rememberType(settings)
+    MaterialTheme(colorScheme = scheme.animated(), typography = type, shapes = AppShapes) {
+        CompositionLocalProvider(LocalArtworkSeed provides artworkSeed, content = content)
+    }
+}
+
+/**
+ * The player's own dark scheme, seeded from the cover as on the phone, so it
+ * reads as a dark, immersive surface whatever the app's theme is.
+ */
+@Composable
+internal fun PlayerTheme(seed: Color?, content: @Composable () -> Unit) {
+    val settings by AppSettings.theme.collectAsState()
+    val scheme = rememberDynamicColorScheme(
+        seedColor = seed ?: Color(settings.seedColor),
+        isDark = true,
+        isAmoled = settings.pureBlack,
+        style = PaletteStyle.Vibrant,
+    )
+    val amoled = settings.playerBackground == com.opentune.data.settings.PlayerBackground.AMOLED
+    MaterialTheme(
+        colorScheme = if (amoled) scheme.toPureBlack() else scheme.animated(),
+        typography = rememberType(settings),
+        shapes = AppShapes,
+        content = content,
+    )
+}
+
+@Composable
+private fun rememberType(settings: com.opentune.data.settings.ThemeSettings): Typography {
     val family = when (settings.font) {
         AppFont.OUTFIT -> Outfit
         AppFont.SERIF -> FontFamily.Serif
         AppFont.MONO -> FontFamily.Monospace
         else -> FontFamily.SansSerif
     }
-    val type = remember(family, settings.textWeight) { readableType(family, settings.textWeight.minimum) }
-    MaterialTheme(colorScheme = colors, typography = type, shapes = AppShapes, content = content)
+    return remember(family, settings.textWeight) { readableType(family, settings.textWeight.minimum) }
 }
-
-/**
- * The phone's default scheme: what material-kolor makes of its first accent
- * colour (red, 0xFFE53935, tonal spot, dark), written out so the desktop
- * build needn't carry that library.
- */
-private val Scheme = darkColorScheme(
-    primary = Color(0xFFFFB4AC),
-    onPrimary = Color(0xFF561E1A),
-    primaryContainer = Color(0xFF73332E),
-    onPrimaryContainer = Color(0xFFFFDAD6),
-    secondary = Color(0xFFE7BDB8),
-    onSecondary = Color(0xFF442927),
-    secondaryContainer = Color(0xFF5D3F3C),
-    onSecondaryContainer = Color(0xFFFFDAD6),
-    tertiary = Color(0xFFE0C38C),
-    onTertiary = Color(0xFF3F2E04),
-    tertiaryContainer = Color(0xFF584419),
-    onTertiaryContainer = Color(0xFFFEDFA6),
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    inversePrimary = Color(0xFF904A44),
-    surfaceTint = Color(0xFFFFB4AC),
-).toPureBlack()
 
 /** As on the phone: true black, with greys that don't lean toward the accent. */
 private fun ColorScheme.toPureBlack(): ColorScheme = copy(
@@ -84,6 +118,65 @@ private fun ColorScheme.toPureBlack(): ColorScheme = copy(
     outline = Color(0xFF4A4A4F),
     outlineVariant = Color(0xFF2E2E32),
 )
+
+/** The scheme with every colour easing to its new value, so a change of seed fades rather than snaps. */
+@Composable
+private fun ColorScheme.animated(): ColorScheme {
+    val spec = tween<Color>(durationMillis = 600)
+    @Composable
+    fun Color.a() = animateColorAsState(this, spec, label = "scheme").value
+    return copy(
+        primary = primary.a(),
+        onPrimary = onPrimary.a(),
+        primaryContainer = primaryContainer.a(),
+        onPrimaryContainer = onPrimaryContainer.a(),
+        secondary = secondary.a(),
+        onSecondary = onSecondary.a(),
+        secondaryContainer = secondaryContainer.a(),
+        onSecondaryContainer = onSecondaryContainer.a(),
+        tertiary = tertiary.a(),
+        tertiaryContainer = tertiaryContainer.a(),
+        onTertiaryContainer = onTertiaryContainer.a(),
+        background = background.a(),
+        onBackground = onBackground.a(),
+        surface = surface.a(),
+        onSurface = onSurface.a(),
+        surfaceVariant = surfaceVariant.a(),
+        onSurfaceVariant = onSurfaceVariant.a(),
+        surfaceContainerLowest = surfaceContainerLowest.a(),
+        surfaceContainerLow = surfaceContainerLow.a(),
+        surfaceContainer = surfaceContainer.a(),
+        surfaceContainerHigh = surfaceContainerHigh.a(),
+        surfaceContainerHighest = surfaceContainerHighest.a(),
+        outline = outline.a(),
+        outlineVariant = outlineVariant.a(),
+    )
+}
+
+private val seedCache = java.util.concurrent.ConcurrentHashMap<String, Int>()
+private const val NO_COLOR = 0
+
+/**
+ * A cover's dominant usable colour, for seeding a scheme, read the way the
+ * phone reads it (material-kolor's theme colour of a small copy). Null until
+ * read and for covers without one; each cover is read once.
+ */
+@Composable
+internal fun rememberArtworkSeed(url: String?): Color? {
+    val context = LocalPlatformContext.current
+    var seed by remember(url) { mutableStateOf(url?.let(seedCache::get)?.takeIf { it != NO_COLOR }?.let(::Color)) }
+    LaunchedEffect(url) {
+        if (url == null || seedCache.containsKey(url)) return@LaunchedEffect
+        val result = SingletonImageLoader.get(context).execute(ImageRequest.Builder(context).data(Subsonic.resolveCover(url)).size(128).build())
+        val bitmap = (result as? SuccessResult)?.image?.toBitmap()
+        val argb = bitmap?.let {
+            withContext(Dispatchers.Default) { runCatching { it.asComposeImageBitmap().themeColorOrNull()?.toArgb() }.getOrNull() }
+        }
+        seedCache[url] = argb ?: NO_COLOR
+        seed = argb?.let(::Color)
+    }
+    return seed
+}
 
 private val outfitData: ByteArray by lazy {
     Thread.currentThread().contextClassLoader.getResourceAsStream("font/outfit_variable.ttf")!!.use { it.readBytes() }

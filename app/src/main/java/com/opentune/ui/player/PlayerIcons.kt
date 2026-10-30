@@ -1,8 +1,5 @@
 package com.opentune.ui.player
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
@@ -184,12 +181,3 @@ internal object PlayerIcons {
     }
 
 }
-
-/** The icon for where the sound is going: earbuds for Bluetooth, headphones for a wire or USB. */
-internal val OutputRoute.icon: ImageVector
-    get() = when (this) {
-        OutputRoute.CAST -> Icons.Rounded.Cast
-        OutputRoute.BLUETOOTH -> PlayerIcons.Earbuds
-        OutputRoute.HEADPHONES, OutputRoute.USB -> PlayerIcons.Headphones
-        OutputRoute.PHONE -> Icons.Rounded.Smartphone
-    }

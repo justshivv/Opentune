@@ -875,7 +875,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 exit = fadeOut(tween(120)),
                 modifier = Modifier.align(Alignment.CenterEnd),
             ) {
-                NowPlayingStrip(vm, onExpand = { paneCollapsed = false })
+                PlayerStrip(vm, onExpand = { paneCollapsed = false })
             }
             }
 
@@ -962,6 +962,20 @@ fun AppRoot(vm: PlayerViewModel) {
             com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })
         }
     }
+}
+
+/** [NowPlayingStrip] following the player. */
+@Composable
+private fun PlayerStrip(vm: PlayerViewModel, onExpand: () -> Unit) {
+    val isPlaying by vm.isPlaying.collectAsState()
+    val hasNext by vm.hasNext.collectAsState()
+    NowPlayingStrip(
+        isPlaying = isPlaying,
+        hasNext = hasNext,
+        onTogglePlay = vm::togglePlayPause,
+        onNext = vm::skipNext,
+        onExpand = onExpand,
+    ) { m -> MiniPlayerBar(vm, onExpand = onExpand, modifier = m, inline = true) }
 }
 
 /** The ids of the entries on the back stack, top last. The whole stack is only public as this restricted, long-stable flow. */

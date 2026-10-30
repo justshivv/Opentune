@@ -61,6 +61,25 @@ val sharedFromCore = listOf(
     "org/schabi/newpipe/extractor/utils/Utils.java",
 )
 
+/*
+ * The phone's own interface pieces, compiled as they are so the desktop looks
+ * and moves the same: the dock and its lens, the side rail and the docked
+ * player's frame, how pages and the player come and go, the player's buttons
+ * and icons, and the press and focus effects. Glass, haptics and translated
+ * labels, which reach into Android, have desktop stand-ins in src/shim.
+ */
+val appSources = rootProject.file("app/src/main/java")
+val sharedFromApp = listOf(
+    "com/opentune/ui/BottomChrome.kt",
+    "com/opentune/ui/SideChrome.kt",
+    "com/opentune/ui/PageMotion.kt",
+    "com/opentune/ui/WindowLayout.kt",
+    "com/opentune/ui/player/PlayerButtons.kt",
+    "com/opentune/ui/player/PlayerIcons.kt",
+    "com/opentune/ui/components/FocusRing.kt",
+    "com/opentune/ui/components/Motion.kt",
+)
+
 /** core's BuildConfig, for the shared files that read it, with this build's version. */
 val generateBuildConfig = tasks.register("generateBuildConfig") {
     val out = layout.buildDirectory.dir("generated/buildconfig")
@@ -98,10 +117,12 @@ sourceSets {
     main {
         kotlin {
             srcDir(coreSources)
+            srcDir(appSources)
             srcDir(generateBuildConfig)
             srcDir("src/shim/kotlin")
             include("com/opentune/desktop/**", "com/opentune/core/**", "shim/**")
             include(sharedFromCore.filter { it.endsWith(".kt") || it.endsWith("**") })
+            include(sharedFromApp)
         }
         java {
             srcDir(coreSources)
@@ -159,6 +180,10 @@ dependencies {
     implementation("org.json:json:20240303")
     implementation("org.jflac:jflac-codec:1.5.2")
     implementation("com.google.zxing:core:3.5.4")
+
+    // The phone's colour engine (schemes from a seed or the cover) and the blur behind its glass.
+    implementation("com.materialkolor:material-kolor:4.0.0")
+    implementation("dev.chrisbanes.haze:haze:1.7.1")
 
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")

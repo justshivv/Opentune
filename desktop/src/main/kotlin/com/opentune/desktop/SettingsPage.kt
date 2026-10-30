@@ -299,12 +299,34 @@ private fun AppearanceSection() {
                 FilterChip(theme.textWeight == weight, { AppSettings.updateTheme { it.copy(textWeight = weight) } }, label = { Text(weight.label) })
             }
         }
-        Text("Player background")
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(com.opentune.data.settings.PlayerBackground.MESH, com.opentune.data.settings.PlayerBackground.GRADIENT, com.opentune.data.settings.PlayerBackground.AMOLED).forEach { bg ->
-                FilterChip(theme.playerBackground == bg, { AppSettings.updateTheme { it.copy(playerBackground = bg) } }, label = { Text(bg.label) })
-            }
+        SwitchRow("Colour from artwork", "The app takes its colours from the playing song's cover", theme.colorFromArtwork) { on ->
+            AppSettings.updateTheme { it.copy(colorFromArtwork = on) }
         }
+        Choices("Palette", com.opentune.data.settings.PaletteStyleOption.entries, theme.paletteStyle, { it.label }) { v -> AppSettings.updateTheme { it.copy(paletteStyle = v) } }
+        Choices("Player background", com.opentune.data.settings.PlayerBackground.entries, theme.playerBackground, { it.label }) { v -> AppSettings.updateTheme { it.copy(playerBackground = v) } }
+    }
+    // The phone's look and motion settings; the desktop draws the same pieces from them.
+    val ui by AppSettings.ui.collectAsState()
+    Section("Look and motion") {
+        Choices("Player buttons", com.opentune.data.settings.ControlStyle.entries, ui.controlStyle, { it.label }) { v -> AppSettings.updateUi { it.copy(controlStyle = v) } }
+        Choices("Page transition", com.opentune.data.settings.PageTransition.entries, ui.pageTransition, { it.label }) { v -> AppSettings.updateUi { it.copy(pageTransition = v) } }
+        Choices("Player opens", com.opentune.data.settings.PlayerMotion.entries, ui.playerMotion, { it.label }) { v -> AppSettings.updateUi { it.copy(playerMotion = v) } }
+        Choices("Dock when scrolling", com.opentune.data.settings.DockMotion.entries, ui.dockMotion, { it.label }) { v -> AppSettings.updateUi { it.copy(dockMotion = v) } }
+        Choices("Tab highlight", com.opentune.data.settings.DockLens.entries, ui.dockLens, { it.label }) { v -> AppSettings.updateUi { it.copy(dockLens = v) } }
+        Choices("Glass", com.opentune.data.settings.GlassStyle.entries, ui.glassStyle, { it.label }) { v -> AppSettings.updateUi { it.copy(glassStyle = v) } }
+        SwitchRow("Mini player in the song's colour", "Tint the mini player with the cover", ui.miniPlayerTint) { on -> AppSettings.updateUi { it.copy(miniPlayerTint = on) } }
+        SwitchRow("Reduce animation", "Short fades in place of slides and springs", ui.reduceAnimation) { on -> AppSettings.updateUi { it.copy(reduceAnimation = on) } }
+        SwitchRow("Reduce blur", "Solid glass instead of frosted", ui.reduceBlur) { on -> AppSettings.updateUi { it.copy(reduceBlur = on) } }
+    }
+}
+
+/** A setting's name over a row of chips, one per choice. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun <T> Choices(title: String, choices: List<T>, selected: T, label: (T) -> String, onPick: (T) -> Unit) {
+    Text(title)
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        choices.forEach { c -> FilterChip(c == selected, { onPick(c) }, label = { Text(label(c)) }) }
     }
 }
 

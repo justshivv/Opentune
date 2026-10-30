@@ -149,7 +149,7 @@ internal fun PlaylistPage(id: String, onBack: () -> Unit) {
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(top = 16.dp)) {
-        IconButton(onClick = onBack, modifier = Modifier.padding(start = 12.dp)) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+        GlassCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack, Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp))
         Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Mosaic(playlist.covers, Modifier.size(132.dp))
             Column(Modifier.padding(start = 20.dp)) {

@@ -32,6 +32,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AllInclusive
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -645,6 +647,15 @@ private fun outputName(context: Context, am: AudioManager?): String {
 
 /** Which kind of output the sound is going to, for the player's output button and the pipeline page. */
 enum class OutputRoute { PHONE, HEADPHONES, BLUETOOTH, USB, CAST }
+
+/** The icon for where the sound is going: earbuds for Bluetooth, headphones for a wire or USB. */
+internal val OutputRoute.icon: ImageVector
+    get() = when (this) {
+        OutputRoute.CAST -> Icons.Rounded.Cast
+        OutputRoute.BLUETOOTH -> PlayerIcons.Earbuds
+        OutputRoute.HEADPHONES, OutputRoute.USB -> PlayerIcons.Headphones
+        OutputRoute.PHONE -> Icons.Rounded.Smartphone
+    }
 
 /** True for anything you'd put over your ears: the button shows a headphone icon for these. */
 val OutputRoute.isHeadset: Boolean get() = this == OutputRoute.HEADPHONES || this == OutputRoute.BLUETOOTH || this == OutputRoute.USB

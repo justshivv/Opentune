@@ -155,18 +155,6 @@ internal fun rememberCoverColor(url: String?, fallback: Color): Color {
 /** A colour from the cover, mixed into [into] so text stays readable over it. */
 internal fun tint(cover: Color, into: Color, amount: Float = 0.32f): Color = lerp(into, cover, amount)
 
-/** Play and pause swapping with a small turn and fade, never a jump. */
-@Composable
-internal fun PlayPauseIcon(playing: Boolean, tint: Color, size: Dp) {
-    AnimatedContent(
-        playing,
-        transitionSpec = { (scaleIn(Motion.soft(), 0.6f) + fadeIn(Motion.fade(160))) togetherWith (scaleOut(Motion.soft(), 0.6f) + fadeOut(Motion.fade(120))) },
-        label = "play pause",
-    ) { on ->
-        Icon(if (on) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (on) "Pause" else "Play", tint = tint, modifier = Modifier.size(size))
-    }
-}
-
 /** The heart, which jumps a little and fills when a song is liked. */
 @Composable
 internal fun LikeButton(liked: Boolean, onToggle: () -> Unit, idle: Color = MaterialTheme.colorScheme.onSurfaceVariant, size: Dp = 22.dp) {

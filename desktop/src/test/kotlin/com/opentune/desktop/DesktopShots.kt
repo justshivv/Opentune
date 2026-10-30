@@ -44,8 +44,19 @@ class DesktopShots {
     @Test fun windows() {
         assumeTrue(folder != null)
         AppSettings.init(appContext)
+        AppSettings.updateTheme { it.copy(mode = com.opentune.data.settings.ThemeMode.DARK) }
         shoot("desktop-wide", 1280, 800, 9_000) { DesktopApp() }
         shoot("desktop-narrow", 640, 900, 9_000) { DesktopApp() }
+        // With a song loaded: the docked player beside the pages, the mini player over the dock, the full player.
+        val song = com.opentune.data.model.Song(
+            "4NRXx6U8ABQ", "Blinding Lights", "The Weeknd",
+            "https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg",
+            albumName = "After Hours",
+        )
+        Player.cue(listOf(song, song.copy(videoId = "XXYlFuWEuKI", title = "Save Your Tears")), 0)
+        shoot("desktop-wide-song", 1440, 900, 9_000) { DesktopApp() }
+        shoot("desktop-narrow-song", 640, 900, 9_000) { DesktopApp() }
+        shoot("desktop-player", 640, 1000, 6_000) { DesktopTheme { NowPlaying(song, docked = false, onClose = {}) } }
         shoot("desktop-sources", 900, 1100) {
             DesktopTheme {
                 Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {

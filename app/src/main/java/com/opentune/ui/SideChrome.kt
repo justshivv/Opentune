@@ -53,7 +53,6 @@ import com.opentune.data.settings.DockLens
 import com.opentune.ui.components.Haptics
 import com.opentune.ui.components.glass
 import com.opentune.ui.components.rememberHaptics
-import com.opentune.ui.player.MiniPlayerBar
 
 /** How wide the rail's glass is. */
 private val RAIL_WIDTH = 72.dp
@@ -184,23 +183,9 @@ fun PlayerPaneFrame(modifier: Modifier = Modifier, content: @Composable () -> Un
 /**
  * The docked player folded away: a slim glass strip on the end edge with
  * the cover ringed by the song's progress, play or pause, and next. The
- * cover or the arrow opens the player again.
+ * cover or the arrow opens the player again. [cover] draws the round
+ * now-playing bubble.
  */
-@Composable
-fun NowPlayingStrip(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier = Modifier) {
-    val isPlaying by vm.isPlaying.collectAsState()
-    val hasNext by vm.hasNext.collectAsState()
-    NowPlayingStrip(
-        isPlaying = isPlaying,
-        hasNext = hasNext,
-        onTogglePlay = vm::togglePlayPause,
-        onNext = vm::skipNext,
-        onExpand = onExpand,
-        modifier = modifier,
-    ) { m -> MiniPlayerBar(vm, onExpand = onExpand, modifier = m, inline = true) }
-}
-
-/** [NowPlayingStrip] drawn from its state, with [cover] the round now-playing bubble. */
 @Composable
 internal fun NowPlayingStrip(
     isPlaying: Boolean,

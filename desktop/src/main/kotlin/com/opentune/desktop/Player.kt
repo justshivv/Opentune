@@ -122,6 +122,12 @@ object Player {
         open(start.coerceIn(songs.indices))
     }
 
+    /** Loads [songs] without playing them, for pictures of the window (DesktopShots). */
+    internal fun cue(songs: List<Song>, at: Int) {
+        _queue.value = songs
+        _index.value = at
+    }
+
     fun playAt(i: Int) {
         if (i in _queue.value.indices) open(i)
     }
