@@ -19,6 +19,9 @@ class LiveCheck {
         val first = Pages.home()
         assertTrue("no home", first.shelves.isNotEmpty())
         val more = first.next?.let { Pages.homeMore(it).shelves }.orEmpty()
+        val moods = runCatching { Pages.moods() }
+        println("LIVE moods: ${moods.getOrNull()?.size} ${moods.exceptionOrNull()} ${moods.getOrNull()?.take(5)?.map { it.title }}")
+        println("LIVE extras: ${Pages.moreForHome().map { it.title }}")
         println("LIVE home: ${first.shelves.size} shelves, first ${first.shelves.first().title}; next page ${more.size} more")
 
         // YouTube Music gives a server far less than a home connection gets, so the

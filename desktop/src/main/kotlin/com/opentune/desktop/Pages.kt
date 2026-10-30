@@ -28,8 +28,27 @@ object Pages {
     }
 
     private fun shelves(rows: List<com.opentune.data.model.HomeShelf>): List<Shelf> = rows
-        .map { Shelf(it.title, it.items.filter { i -> i.videoId != null || i.browseId != null }) }
+        // A genre's own card (FEmusic_…) needs the parameters a card doesn't carry, so it can't be opened from here.
+        .map { Shelf(it.title, it.items.filter { i -> i.videoId != null || (i.browseId != null && !i.browseId!!.startsWith("FEmusic_")) }) }
         .filter { it.items.isNotEmpty() }
+
+    /** Moods and genres, for the chips at the top of Home; read once a run. */
+    @Volatile private var moodCache: List<com.opentune.data.model.MoodGenre>? = null
+
+    suspend fun moods(): List<com.opentune.data.model.MoodGenre> = moodCache ?: InnertubeParser
+        .parseMoodAndGenres(Innertube.browse("FEmusic_moods_and_genres"))
+        .flatMap { it.items }.distinctBy { it.title }.take(24)
+        .also { moodCache = it }
+
+    /** A page of shelves: a mood or genre, New releases, Charts. */
+    suspend fun shelves(browseId: String, params: String? = null): List<Shelf> {
+        val response = Innertube.browse(browseId, params)
+        return shelves(InnertubeParser.parseHome(response).ifEmpty { InnertubeParser.parseHomeContinuation(response) })
+    }
+
+    /** What Home carries on with once YouTube's own rows run out, as the phone's Home does. */
+    suspend fun moreForHome(): List<Shelf> =
+        listOf("FEmusic_new_releases", "FEmusic_charts").flatMap { id -> runCatching { shelves(id) }.getOrDefault(emptyList()) }
 
     /** A song as a Home card, for the shelves made from your own library. */
     internal fun cardOf(song: Song): ShelfItem = ShelfItem(song.title, song.artist, song.thumbnailUrl, song.videoId, null, song.isExplicit == true)

@@ -366,7 +366,11 @@ on your own connection with no hosted proxy.
   It asks for headphones rather than playing from the watch's speaker.
 - **Desktop (early).** A Windows, macOS and Linux app (`desktop/`, run it
   with `./gradlew :desktop:run`; CI builds an MSI, DMG and DEB). It has
-  Home, search with recent searches, albums, playlists, artists and
+  Home (moods and genres, a speed dial and daily mixes made from what you
+  play there, quick picks, then YouTube Music's rows page after page, new
+  releases and the charts), a Library with your year so far, shortcuts, your
+  playlists, your mixes, this month's top songs and artists and what you
+  played last, search with recent searches, albums, playlists, artists and
   podcasts, a queue that carries on with YouTube Music's up-next, synced
   lyrics from the phone's sources (lit word by word, with a per-song source
   and offset), your own playlists, liked and recent songs, your own

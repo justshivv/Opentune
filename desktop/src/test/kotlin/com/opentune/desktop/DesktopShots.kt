@@ -66,6 +66,28 @@ class DesktopShots {
                 }
             }
         }
+        // A library with some listening in it: the speed dial, mixes, year card and top lists fill in.
+        Library.useFile(java.nio.file.Files.createTempDirectory("shots").resolve("desktop.json").toFile())
+        val listened = listOf(
+            "4NRXx6U8ABQ" to ("Blinding Lights" to "The Weeknd"), "XXYlFuWEuKI" to ("Save Your Tears" to "The Weeknd"),
+            "JGwWNGJdvx8" to ("Shape of You" to "Ed Sheeran"), "lp-EO5I60KA" to ("Thinking Out Loud" to "Ed Sheeran"),
+            "OPf0YbXqDm0" to ("Uptown Funk" to "Mark Ronson, Bruno Mars"), "hT_nvWreIhg" to ("Counting Stars" to "OneRepublic"),
+            "60ItHLz5WEA" to ("Faded" to "Alan Walker"), "YQHsXMglC9A" to ("Hello" to "Adele"),
+            "RgKAFK5djSk" to ("See You Again" to "Wiz Khalifa, Charlie Puth"), "CevxZvSJLk8" to ("Roar" to "Katy Perry"),
+            "fRh_vgS2dFE" to ("Sorry" to "Justin Bieber"), "kJQP7kiw5Fk" to ("Despacito" to "Luis Fonsi"),
+        ).map { (id, t) -> com.opentune.data.model.Song(id, t.first, t.second, "https://i.ytimg.com/vi/$id/hqdefault.jpg", "3:30") }
+        listened.forEachIndexed { i, s -> repeat(listened.size - i) { Library.played(s) } }
+        listened.take(5).forEach { Library.setLiked(it, true) }
+        Library.createPlaylist("Late night drive").also { id -> listened.take(6).forEach { Library.addToPlaylist(id, it) } }
+        Library.createPlaylist("Gym").also { id -> listened.drop(4).forEach { Library.addToPlaylist(id, it) } }
+        shoot("desktop-home-full", 1600, 1800, 12_000) { DesktopApp() }
+        shoot("desktop-library", 1400, 2000, 8_000) {
+            DesktopTheme {
+                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+                    LibraryHome(onShelf = {}, onPlaylist = {}, onOpenAny = {})
+                }
+            }
+        }
         shoot("desktop-qr", 300, 300, 300) { DesktopTheme { Box(Modifier.padding(20.dp)) { QrCode("opentune://addon-approve?id=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ", 180.dp) } } }
     }
 }

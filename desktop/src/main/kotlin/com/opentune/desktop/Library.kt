@@ -115,6 +115,19 @@ object Library {
         exec("DELETE FROM playlist_songs WHERE playlist = ? AND id = ?", id, videoId)
     }
 
+    /**
+     * Every play, newest first, as the phone's history keeps them, for the
+     * stats, mixes and speed dial the shared code makes from it. At most
+     * [limit], read fresh each time.
+     */
+    @Synchronized
+    fun history(limit: Int = 10_000): List<com.opentune.data.history.PlayRecord> = runCatching {
+        db.query(
+            "SELECT s.id, s.title, s.artist, s.cover, s.length, p.at FROM plays p JOIN songs s ON s.id = p.id ORDER BY p.at DESC, p.rowid DESC LIMIT ?",
+            limit,
+        ) { r -> com.opentune.data.history.PlayRecord(r.getString(1), r.getString(2), r.getString(3), r.getString(4), r.getString(5), playedAt = r.getLong(6)) }
+    }.getOrDefault(emptyList())
+
     fun volume(): Double = volume
     fun setVolume(v: Double) = write { exec("INSERT OR REPLACE INTO settings(key, value) VALUES ('volume', ?)", v.toString()) }
 

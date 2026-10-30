@@ -134,6 +134,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import com.opentune.data.model.ShelfItem
+import com.opentune.data.history.DailyMixes
 import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.subsonic.Subsonic
@@ -160,7 +161,7 @@ internal enum class Tab(val label: String, val icon: ImageVector, val selectedIc
 internal data class PlaylistKey(val id: String)
 
 /** What fills the page area: a tab, or something opened over it. */
-private data class Page(val tab: Tab, val shelf: Shelf = Shelf.LIKED, val opened: Any? = null)
+private data class Page(val tab: Tab, val shelf: Shelf? = null, val opened: Any? = null)
 
 /**
  * The window, laid out as a Mac music app is: a sidebar with search, the
@@ -232,6 +233,7 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                                         searches = searches,
                                         onSearch = { searches++ },
                                         onOpen = { go(page.copy(opened = it)) },
+                                        onOpenAny = { go(page.copy(opened = it)) },
                                         onShelf = { go(Page(Tab.LIBRARY, it)) },
                                         onPlaylist = { go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, PlaylistKey(it))) },
                                         onBack = { back() },
@@ -278,6 +280,7 @@ private fun Pages(
     searches: Int,
     onSearch: () -> Unit,
     onOpen: (ShelfItem) -> Unit,
+    onOpenAny: (Any) -> Unit,
     onShelf: (Shelf) -> Unit,
     onPlaylist: (String) -> Unit,
     onBack: () -> Unit,
@@ -301,9 +304,12 @@ private fun Pages(
         when {
             opened is ShelfItem -> CollectionPage(opened)
             opened is PlaylistKey -> PlaylistPage(opened.id, onBack = onBack)
+            opened is MoodKey -> MoodPage(opened, onOpen)
+            opened is DailyMixes.Mix -> MixPage(opened)
             shown.tab == Tab.SEARCH -> SearchPage(query, onQuery, searches, onSearch, showField = compact)
-            shown.tab == Tab.HOME -> HomePage(onOpen = onOpen)
-            shown.tab == Tab.LIBRARY -> LibraryPage(shown.shelf, onShelf, onPlaylist)
+            shown.tab == Tab.HOME -> HomePage(onOpen = onOpen, onOpenAny = onOpenAny)
+            shown.tab == Tab.LIBRARY -> shown.shelf?.let { LibraryPage(it, onShelf, onPlaylist) }
+                ?: LibraryHome(onShelf = onShelf, onPlaylist = onPlaylist, onOpenAny = onOpenAny)
             shown.tab == Tab.SETTINGS -> SettingsPage()
             else -> SongPage("Up next", queue, "The queue is empty.", current = index, onPlay = { _, i -> Player.playAt(i) })
         }
@@ -322,116 +328,6 @@ internal fun <T> rememberLast(value: T?): T? {
 internal val LocalPageBottom = staticCompositionLocalOf { 32.dp }
 
 // ---- Pages -------------------------------------------------------------------
-
-/**
- * Home, as the phone fills it: what you played lately and your liked songs
- * first, then YouTube Music's rows, more of them loading as you near the
- * end, page after page until YouTube runs out.
- */
-@Composable
-private fun HomePage(onOpen: (ShelfItem) -> Unit) {
-    var shelves by remember { mutableStateOf<List<Pages.Shelf>?>(null) }
-    var next by remember { mutableStateOf<String?>(null) }
-    var loadingMore by remember { mutableStateOf(false) }
-    var failed by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val recent by Library.recent.collectAsState()
-    val liked by Library.liked.collectAsState()
-    fun load() {
-        failed = false
-        scope.launch {
-            runCatching { Pages.home() }
-                .onSuccess { shelves = it.shelves; next = it.next }
-                .onFailure { failed = true }
-        }
-    }
-    fun more() {
-        val token = next ?: return
-        if (loadingMore) return
-        loadingMore = true
-        scope.launch {
-            runCatching { Pages.homeMore(token) }
-                .onSuccess { page ->
-                    // A row YouTube sends twice is shown once.
-                    val have = shelves.orEmpty().mapTo(HashSet()) { it.title }
-                    shelves = shelves.orEmpty() + page.shelves.filter { it.title !in have }
-                    next = page.next
-                }
-                .onFailure { next = null }
-            loadingMore = false
-        }
-    }
-    LaunchedEffect(Unit) { load() }
-    val list = androidx.compose.foundation.lazy.rememberLazyListState()
-    // Near the end: the next page, before the listener gets there.
-    val nearEnd by remember {
-        androidx.compose.runtime.derivedStateOf {
-            val info = list.layoutInfo
-            info.totalItemsCount > 0 && (info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= info.totalItemsCount - 3
-        }
-    }
-    LaunchedEffect(nearEnd, next, shelves) { if (nearEnd && shelves != null) more() }
-    val loaded = shelves
-    val own = remember(recent, liked) {
-        listOfNotNull(
-            recent.takeIf { it.isNotEmpty() }?.let { Pages.Shelf("Listen again", it.take(20).map(Pages::cardOf)) },
-            liked.takeIf { it.isNotEmpty() }?.let { Pages.Shelf("From your liked songs", it.take(20).map(Pages::cardOf)) },
-        )
-    }
-    LazyColumn(state = list, contentPadding = PaddingValues(top = 24.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(26.dp)) {
-        item(key = "title") { PageTitle(greeting()) }
-        itemsIndexed(own, key = { i, _ -> "own$i" }) { _, shelf -> ShelfRow(shelf, onOpen) }
-        when {
-            failed -> item(key = "failed") { Message("Couldn't load Home", "Check your connection and try again.", action = "Try again" to ::load) }
-            loaded == null -> items(3, key = { "placeholder$it" }) { ShelfPlaceholder() }
-            else -> {
-                itemsIndexed(loaded, key = { i, _ -> "yt$i" }) { _, shelf -> ShelfRow(shelf, onOpen) }
-                if (next != null) item(key = "more") { ShelfPlaceholder() }
-            }
-        }
-    }
-}
-
-/** One of Home's rows: its title, and its cards in a row that scrolls sideways. */
-@Composable
-private fun ShelfRow(shelf: Pages.Shelf, onOpen: (ShelfItem) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(shelf.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp))
-        val songs = remember(shelf) { shelf.items.mapNotNull(Pages::songOf) }
-        LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(shelf.items) { item ->
-                Card(item) {
-                    val song = Pages.songOf(item)
-                    if (song != null) Player.playAll(songs, songs.indexOfFirst { it.videoId == song.videoId }.coerceAtLeast(0)) else onOpen(item)
-                }
-            }
-        }
-    }
-}
-
-/** A shelf's shape, shimmering, while Home loads. */
-@Composable
-private fun ShelfPlaceholder() {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Placeholder(Modifier.padding(horizontal = 24.dp).width(180.dp).height(22.dp), RoundedCornerShape(8.dp))
-        Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            repeat(6) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Placeholder(Modifier.size(160.dp), MaterialTheme.shapes.medium)
-                    Placeholder(Modifier.width(120.dp).height(12.dp), RoundedCornerShape(6.dp))
-                    Placeholder(Modifier.width(80.dp).height(10.dp), RoundedCornerShape(5.dp))
-                }
-            }
-        }
-    }
-}
-
-/** Good morning, afternoon or evening, as Home on the phone greets you. */
-private fun greeting(): String = when (java.time.LocalTime.now().hour) {
-    in 5..11 -> "Good morning"
-    in 12..16 -> "Good afternoon"
-    else -> "Good evening"
-}
 
 /**
  * Search: the sidebar's box is its field, and Enter there runs it ([searches]

@@ -204,7 +204,7 @@ internal fun PillButton(label: String, icon: ImageVector, onClick: () -> Unit) {
 
 /** Four covers in a square, as the phone draws a playlist made in the app; one fills it, none leaves it plain. */
 @Composable
-private fun Mosaic(covers: List<String>, modifier: Modifier) {
+internal fun Mosaic(covers: List<String>, modifier: Modifier) {
     val shape = RoundedCornerShape(12.dp)
     Box(modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
         when {
