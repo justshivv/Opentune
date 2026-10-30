@@ -163,13 +163,27 @@ internal object Addons {
         return kept + incoming.map { (id, p) -> Source(id, p.name, p.url, enabled = true, admin = true, ownerOff = p.enabled == false) }
     }
 
-    /** Folds in what the owner publishes; quiet on failure, the list as it was keeps working. */
+    /**
+     * Folds in what the owner publishes; quiet on failure, the list as it was
+     * keeps working. As on the phone, the signed configuration from the
+     * owner's server (its /control/ page) decides; only when it carries no
+     * list is the older catalog behind the website's usage address asked.
+     */
     suspend fun syncPublished(force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         if (!force && System.currentTimeMillis() - lastCheck < REFRESH_MS) return@withContext true
         runCatching {
-            val base = JSONObject(text(CONFIG_URL)).getString("apiBase").toHttpUrl()
-            require(base.isHttps && base.host in CATALOG_HOSTS) { "Unexpected source catalog address" }
-            val published = publishedOf(text(base.newBuilder().encodedPath("/v1/addons").build().toString()))
+            runCatching { com.opentune.data.config.RemoteConfig.refresh(force) }
+            val managed = com.opentune.data.config.RemoteConfig.current.sources
+            val published = if (managed != null) {
+                managed.mapNotNull { s ->
+                    val url = runCatching { manifestUrl(s.url) }.getOrNull() ?: return@mapNotNull null
+                    Published(s.id, s.name.take(80), url, s.enabled)
+                }
+            } else {
+                val base = JSONObject(text(CONFIG_URL)).getString("apiBase").toHttpUrl()
+                require(base.isHttps && base.host in CATALOG_HOSTS) { "Unexpected source catalog address" }
+                publishedOf(text(base.newBuilder().encodedPath("/v1/addons").build().toString()))
+            }
             lastCheck = System.currentTimeMillis()
             val merged = merge(saved.value.sources, published)
             if (merged != saved.value.sources) save { it.copy(sources = merged) }

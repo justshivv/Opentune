@@ -55,6 +55,8 @@ val sharedFromCore = listOf(
     "com/opentune/data/subsonic/Subsonic.kt",
     // The add-on wire protocol, as the phone reads it.
     "com/opentune/data/addons/AddonModels.kt",
+    // The owner's signed app configuration from the VPS, which carries the published add-ons.
+    "com/opentune/data/config/RemoteConfig.kt",
     // NewPipe's patched helper, see that file.
     "org/schabi/newpipe/extractor/utils/Utils.java",
 )

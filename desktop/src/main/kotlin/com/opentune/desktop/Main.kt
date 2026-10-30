@@ -20,6 +20,7 @@ fun main() {
     // The shared settings and music server, as the phone starts them.
     AppSettings.init(appContext)
     Subsonic.init(appContext)
+    com.opentune.data.config.RemoteConfig.init(appContext)
     // Covers on the same HTTP client as everything else.
     SingletonImageLoader.setSafe { context ->
         ImageLoader.Builder(context)
