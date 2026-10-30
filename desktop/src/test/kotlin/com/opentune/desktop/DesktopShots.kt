@@ -47,7 +47,7 @@ class DesktopShots {
         AppSettings.updateTheme { it.copy(mode = com.opentune.data.settings.ThemeMode.DARK) }
         shoot("desktop-wide", 1280, 800, 9_000) { DesktopApp() }
         shoot("desktop-narrow", 640, 900, 9_000) { DesktopApp() }
-        // With a song loaded: the docked player beside the pages, the mini player over the dock, the full player.
+        // With a song loaded: the song in the top bar, the lyrics and queue column beside the page, the full player.
         val song = com.opentune.data.model.Song(
             "4NRXx6U8ABQ", "Blinding Lights", "The Weeknd",
             "https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg",
@@ -56,6 +56,8 @@ class DesktopShots {
         Player.cue(listOf(song, song.copy(videoId = "XXYlFuWEuKI", title = "Save Your Tears")), 0)
         shoot("desktop-wide-song", 1440, 900, 9_000) { DesktopApp() }
         shoot("desktop-narrow-song", 640, 900, 9_000) { DesktopApp() }
+        shoot("desktop-wide-lyrics", 1700, 1000, 9_000) { DesktopApp(startPanel = SidePanel.LYRICS) }
+        shoot("desktop-wide-queue", 1700, 1000, 6_000) { DesktopApp(startPanel = SidePanel.QUEUE) }
         shoot("desktop-player", 640, 1000, 6_000) { DesktopTheme { NowPlaying(song, docked = false, onClose = {}) } }
         shoot("desktop-sources", 900, 1100) {
             DesktopTheme {

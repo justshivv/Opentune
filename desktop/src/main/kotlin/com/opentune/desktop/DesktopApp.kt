@@ -20,6 +20,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -138,172 +141,120 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.focus.focusRequester
-import com.opentune.ui.BottomChrome
-import com.opentune.ui.CHROME_MINI_HEIGHT
-import com.opentune.ui.CHROME_TAB_HEIGHT
-import com.opentune.ui.ChromeTab
-import com.opentune.ui.LocalChromeScroll
-import com.opentune.ui.NavChrome
-import com.opentune.ui.NavRail
-import com.opentune.ui.NowPlaying as Docking
-import com.opentune.ui.NowPlayingStrip
-import com.opentune.ui.PANE_GUTTER
 import com.opentune.ui.PageMotion
-import com.opentune.ui.PlayerPaneFrame
-import com.opentune.ui.RAIL_GUTTER
-import com.opentune.ui.STRIP_GUTTER
-import com.opentune.ui.appLayout
-import com.opentune.ui.components.LocalHazeState
 import com.opentune.ui.components.glass
 import com.opentune.ui.components.pressable
-import com.opentune.ui.rememberChromeScroll
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The pages, in the dock or the rail as on the phone; search sits apart in its own circle. */
-private enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
+/** The sidebar's pages; an opened album, playlist or artist goes over them. */
+internal enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
     HOME("Home", Icons.Outlined.Home, Icons.Rounded.Home),
+    SEARCH("Search", Icons.Rounded.Search, Icons.Rounded.Search),
     LIBRARY("Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
     QUEUE("Up next", Icons.AutoMirrored.Outlined.QueueMusic, Icons.AutoMirrored.Rounded.QueueMusic),
     SETTINGS("Settings", Icons.Outlined.Settings, Icons.Rounded.Settings),
 }
 
-private val TABS = Tab.entries.map { ChromeTab(it.label, it.icon, it.selectedIcon) }
+/** A playlist made here, opened from the sidebar or Library. */
+internal data class PlaylistKey(val id: String)
 
-/** Room under each page's last row for the mini player and the dock floating over it. */
-private val PAGE_BOTTOM = CHROME_TAB_HEIGHT + CHROME_MINI_HEIGHT + 48.dp
+/** What fills the page area: a tab, or something opened over it. */
+private data class Page(val tab: Tab, val shelf: Shelf = Shelf.LIKED, val opened: Any? = null)
 
 /**
- * The window, laid out as the phone app lays out a screen of its size
- * (appLayout): a narrow one is the phone, with the dock and the mini player
- * floating over the page; a wider one has the rail down the side, and a wide
- * one the player itself docked on the right, folding into a strip.
+ * The window, laid out as a Mac music app is: a sidebar with search, the
+ * pages and your playlists; a bar along the top with the transport, the song
+ * playing and volume; the page below it, with lyrics or the queue in a
+ * column beside it when asked ([startPanel] opens with one, for pictures).
+ * Clicking the song opens the full player.
  */
 @Composable
-fun DesktopApp() {
-    var tab by remember { mutableStateOf(Tab.HOME) }
-    var searching by remember { mutableStateOf(false) }
-    // An album, playlist or artist opened from Home, over the page.
-    var opened by remember { mutableStateOf<ShelfItem?>(null) }
+fun DesktopApp(startPanel: SidePanel? = null) {
+    var page by remember { mutableStateOf(Page(Tab.HOME)) }
+    // Back goes through what was opened, the way it came.
+    val history = remember { mutableStateListOf<Page>() }
+    var query by remember { mutableStateOf("") }
+    var searches by remember { mutableStateOf(0) }
     var playerOpen by remember { mutableStateOf(false) }
-    var paneCollapsed by remember { mutableStateOf(false) }
+    var panel by remember { mutableStateOf(startPanel) }
     val queue by Player.queue.collectAsState()
     val index by Player.index.collectAsState()
     val song = queue.getOrNull(index)
     val ui by AppSettings.ui.collectAsState()
-    val chromeScroll = rememberChromeScroll()
-    val select: (Int) -> Unit = { i -> tab = Tab.entries[i]; searching = false; opened = null; chromeScroll.expand() }
-    val openSearch = { searching = true; opened = null; chromeScroll.expand() }
-    val selected = if (searching || opened != null) null else tab.ordinal
+    fun go(to: Page) {
+        if (to == page) return
+        history.add(page)
+        if (history.size > 30) history.removeAt(0)
+        page = to
+    }
+    val back: () -> Unit = { history.removeLastOrNull()?.let { page = it } }
 
     DesktopTheme(artworkSeed = rememberArtworkSeed(song?.thumbnailUrl)) {
         Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                val layout = appLayout(maxWidth.value.toInt(), (maxHeight - DesktopWindow.topInset).value.toInt(), song != null, paneCollapsed)
-                val rail = layout.nav == NavChrome.RAIL
-                val haze = rememberHazeState()
-                // The page makes room for the docked player as it slides in, rather than jumping.
-                val end by animateDpAsState(
-                    when (layout.nowPlaying) { Docking.PANE -> PANE_GUTTER; Docking.STRIP -> STRIP_GUTTER; else -> 0.dp },
-                    tween(if (ui.reduceAnimation) 0 else 420, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
-                    label = "pane room",
-                )
-                val bottom = when {
-                    !rail -> PAGE_BOTTOM
-                    layout.nowPlaying == Docking.BAR -> CHROME_MINI_HEIGHT + 36.dp
-                    else -> 24.dp
-                }
-                Box(
-                    Modifier.fillMaxSize().hazeSource(haze).nestedScroll(chromeScroll)
-                        .padding(top = DesktopWindow.topInset, start = if (rail) RAIL_GUTTER else 0.dp, end = end),
-                ) {
-                    CompositionLocalProvider(LocalPageBottom provides bottom, LocalChromeScroll provides chromeScroll) {
-                        val width = layout.contentMaxWidthDp?.let { Modifier.widthIn(max = it.dp) } ?: Modifier
-                        Box(Modifier.align(Alignment.TopCenter).then(width).fillMaxSize()) {
-                            Pages(
-                                page = opened ?: if (searching) SEARCH else tab,
-                                still = ui.reduceAnimation,
-                                transition = ui.pageTransition,
-                                queue = queue,
-                                index = index,
-                                onOpen = { opened = it },
-                                onBack = { opened = null },
-                                onSettings = { select(Tab.SETTINGS.ordinal) },
-                            )
+                val compact = maxWidth < 900.dp
+                val roomForPanel = maxWidth >= 1040.dp
+                Row(Modifier.fillMaxSize()) {
+                    Sidebar(
+                        compact = compact,
+                        page = page.tab.takeIf { page.opened == null || page.opened is PlaylistKey },
+                        shelf = page.shelf.takeIf { page.tab == Tab.LIBRARY && page.opened == null },
+                        openPlaylist = (page.opened as? PlaylistKey)?.id,
+                        query = query,
+                        onQuery = { query = it },
+                        onSearch = { searches++; go(Page(Tab.SEARCH)) },
+                        onTab = { go(Page(it)) },
+                        onShelf = { go(Page(Tab.LIBRARY, it)) },
+                        onPlaylist = { go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, PlaylistKey(it))) },
+                    )
+                    Column(Modifier.weight(1f).fillMaxHeight()) {
+                        TopBar(
+                            song = song,
+                            canGoBack = history.isNotEmpty(),
+                            onBack = back,
+                            panel = panel,
+                            onPanel = { p -> panel = if (panel == p) null else p },
+                            onOpenPlayer = { playerOpen = true },
+                        )
+                        Row(Modifier.weight(1f).fillMaxWidth()) {
+                            Box(Modifier.weight(1f).fillMaxHeight()) {
+                                PageBackdrop(song?.thumbnailUrl)
+                                CompositionLocalProvider(LocalPageBottom provides 32.dp) {
+                                    Pages(
+                                        page = page,
+                                        still = ui.reduceAnimation,
+                                        transition = ui.pageTransition,
+                                        queue = queue,
+                                        index = index,
+                                        compact = compact,
+                                        query = query,
+                                        onQuery = { query = it },
+                                        searches = searches,
+                                        onSearch = { searches++ },
+                                        onOpen = { go(page.copy(opened = it)) },
+                                        onShelf = { go(Page(Tab.LIBRARY, it)) },
+                                        onPlaylist = { go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, PlaylistKey(it))) },
+                                        onBack = { back() },
+                                    )
+                                }
+                            }
+                            val shown = rememberLast(panel)
+                            AnimatedVisibility(
+                                visible = panel != null && song != null && roomForPanel,
+                                enter = if (ui.reduceAnimation) fadeIn(tween(140)) else expandHorizontally(Motion.soft(), Alignment.Start) + fadeIn(tween(220, 80)),
+                                exit = if (ui.reduceAnimation) fadeOut(tween(120)) else shrinkHorizontally(tween(260), Alignment.Start) + fadeOut(tween(160)),
+                            ) {
+                                if (song != null && shown != null) SidePanelColumn(shown, song, queue, index) { panel = it }
+                            }
                         }
                     }
                 }
 
-                CompositionLocalProvider(LocalHazeState provides haze.takeIf { !ui.reduceBlur }) {
-                    if (!rail) {
-                        BottomChrome(
-                            inline = chromeScroll.inline,
-                            tabs = TABS,
-                            selected = selected,
-                            onSelect = select,
-                            onExpand = chromeScroll::expand,
-                            searchSelected = searching,
-                            onSearch = openSearch,
-                            mini = song?.let { s -> { folded, m -> MiniPlayer(s, folded, m) { playerOpen = true } } },
-                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 12.dp),
-                            motion = ui.dockMotion,
-                            lens = ui.dockLens,
-                            reduceMotion = ui.reduceAnimation,
-                        )
-                    } else {
-                        NavRail(
-                            tabs = TABS,
-                            selected = selected,
-                            onSelect = select,
-                            searchSelected = searching,
-                            onSearch = openSearch,
-                            modifier = Modifier.align(Alignment.CenterStart).padding(top = DesktopWindow.topInset),
-                            lens = ui.dockLens,
-                            reduceMotion = ui.reduceAnimation,
-                        )
-                        if (layout.nowPlaying == Docking.BAR && song != null) {
-                            MiniPlayer(
-                                song, inline = false,
-                                modifier = Modifier.align(Alignment.BottomCenter).padding(start = RAIL_GUTTER, end = 12.dp, bottom = 12.dp)
-                                    .fillMaxWidth().height(CHROME_MINI_HEIGHT),
-                            ) { playerOpen = true }
-                        }
-                    }
-                    val strip = rememberLast(song)
-                    AnimatedVisibility(
-                        visible = layout.nowPlaying == Docking.STRIP,
-                        enter = fadeIn(tween(if (ui.reduceAnimation) 120 else 260, delayMillis = if (ui.reduceAnimation) 0 else 160)),
-                        exit = fadeOut(tween(120)),
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(top = DesktopWindow.topInset),
-                    ) {
-                        val playing by Player.playing.collectAsState()
-                        NowPlayingStrip(
-                            isPlaying = playing,
-                            hasNext = index < queue.lastIndex,
-                            onTogglePlay = Player::toggle,
-                            onNext = Player::next,
-                            onExpand = { paneCollapsed = false },
-                        ) { m -> strip?.let { MiniPlayer(it, inline = true, modifier = m) { paneCollapsed = false } } }
-                    }
-                }
-
-                // Wide windows: the player itself, docked on the right while a song is loaded.
-                val docked = rememberLast(song)
-                AnimatedVisibility(
-                    visible = layout.nowPlaying == Docking.PANE,
-                    enter = if (ui.reduceAnimation) fadeIn(tween(160)) else slideInHorizontally(tween(420, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))) { it } + fadeIn(tween(220)),
-                    exit = if (ui.reduceAnimation) fadeOut(tween(120)) else slideOutHorizontally(tween(320, easing = FastOutLinearInEasing)) { it } + fadeOut(tween(260)),
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(top = DesktopWindow.topInset),
-                ) {
-                    PlayerPaneFrame { docked?.let { NowPlaying(it, docked = true, onClose = { paneCollapsed = true }) } }
-                }
-
-                // Otherwise the player rises over everything, as the phone's does.
+                // The full player rises over everything.
                 val full = rememberLast(song)
                 AnimatedVisibility(
-                    visible = playerOpen && song != null && !layout.sidePlayer,
+                    visible = playerOpen && song != null,
                     enter = PageMotion.playerIn(ui.playerMotion, ui.reduceAnimation),
                     exit = PageMotion.playerOut(ui.playerMotion, ui.reduceAnimation),
                 ) { full?.let { NowPlaying(it, docked = false, onClose = { playerOpen = false }) } }
@@ -319,38 +270,43 @@ fun DesktopApp() {
  */
 @Composable
 private fun Pages(
-    page: Any,
+    page: Page,
     still: Boolean,
     transition: com.opentune.data.settings.PageTransition,
     queue: List<Song>,
     index: Int,
+    compact: Boolean,
+    query: String,
+    onQuery: (String) -> Unit,
+    searches: Int,
+    onSearch: () -> Unit,
     onOpen: (ShelfItem) -> Unit,
+    onShelf: (Shelf) -> Unit,
+    onPlaylist: (String) -> Unit,
     onBack: () -> Unit,
-    onSettings: () -> Unit,
 ) {
     AnimatedContent(
         page,
         transitionSpec = {
-            val back = initialState is ShelfItem && targetState !is ShelfItem
+            val back = initialState.opened != null && targetState.opened == null
             if (back) PageMotion.popEnter(transition, still) togetherWith PageMotion.popExit(transition, still)
             else PageMotion.enter(transition, still) togetherWith PageMotion.exit(transition, still)
         },
         label = "page",
         modifier = Modifier.fillMaxSize(),
     ) { shown ->
+        val opened = shown.opened
         when {
-            shown is ShelfItem -> CollectionPage(shown, onBack = onBack)
-            shown == SEARCH -> SearchPage()
-            shown == Tab.HOME -> HomePage(onOpen = onOpen, onSettings = onSettings)
-            shown == Tab.LIBRARY -> LibraryPage()
-            shown == Tab.SETTINGS -> SettingsPage()
+            opened is ShelfItem -> CollectionPage(opened)
+            opened is PlaylistKey -> PlaylistPage(opened.id, onBack = onBack)
+            shown.tab == Tab.SEARCH -> SearchPage(query, onQuery, searches, onSearch, showField = compact)
+            shown.tab == Tab.HOME -> HomePage(onOpen = onOpen)
+            shown.tab == Tab.LIBRARY -> LibraryPage(shown.shelf, onShelf, onPlaylist)
+            shown.tab == Tab.SETTINGS -> SettingsPage()
             else -> SongPage("Up next", queue, "The queue is empty.", current = index, onPlay = { _, i -> Player.playAt(i) })
         }
     }
 }
-
-/** The search page's key among the pages, beside the tabs and opened collections. */
-private const val SEARCH = "search"
 
 /** The last non-null [value], so something leaving can be drawn as it goes. */
 @Composable
@@ -361,12 +317,12 @@ internal fun <T> rememberLast(value: T?): T? {
 }
 
 /** Room under each page's last row, clear of whatever floats over the bottom of the window. */
-internal val LocalPageBottom = staticCompositionLocalOf { PAGE_BOTTOM }
+internal val LocalPageBottom = staticCompositionLocalOf { 32.dp }
 
 // ---- Pages -------------------------------------------------------------------
 
 @Composable
-private fun HomePage(onOpen: (ShelfItem) -> Unit, onSettings: () -> Unit) {
+private fun HomePage(onOpen: (ShelfItem) -> Unit) {
     var shelves by remember { mutableStateOf<List<Pages.Shelf>?>(null) }
     var failed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -377,14 +333,7 @@ private fun HomePage(onOpen: (ShelfItem) -> Unit, onSettings: () -> Unit) {
     LaunchedEffect(Unit) { load() }
     val loaded = shelves
     LazyColumn(contentPadding = PaddingValues(top = 24.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PageTitle(greeting())
-                Spacer(Modifier.weight(1f))
-                // Settings in a glass circle by the greeting, as on the phone's Home.
-                GlassCircle(Icons.Rounded.Settings, "Settings", onSettings, Modifier.padding(end = 20.dp))
-            }
-        }
+        item { PageTitle(greeting()) }
         when {
             failed -> item { Message("Couldn't load Home", "Check your connection and try again.", action = "Try again" to ::load) }
             loaded == null -> items(3) { ShelfPlaceholder() }
@@ -430,52 +379,57 @@ private fun greeting(): String = when (java.time.LocalTime.now().hour) {
     else -> "Good evening"
 }
 
+/**
+ * Search: the sidebar's box is its field, and Enter there runs it ([searches]
+ * counts the runs). [showField] puts a field on the page itself, for a
+ * window too narrow for the sidebar's box.
+ */
 @Composable
-private fun SearchPage() {
-    var query by remember { mutableStateOf("") }
+private fun SearchPage(query: String, onQuery: (String) -> Unit, searches: Int, onSearch: () -> Unit, showField: Boolean) {
     var results by remember { mutableStateOf<List<Song>?>(null) }
     var searching by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    var shownFor by remember { mutableStateOf("") }
     val recentSearches by AppSettings.recentSearches.collectAsState()
-    fun run() {
-        val q = query.trim().takeIf { it.isNotEmpty() } ?: return
+    LaunchedEffect(searches) {
+        val q = query.trim().takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
         AppSettings.addRecentSearch(q)
         searching = true
         failed = false
-        scope.launch {
-            runCatching { Pages.search(q) }.onSuccess { results = it }.onFailure { failed = true }
-            searching = false
-        }
+        runCatching { Pages.search(q) }.onSuccess { results = it; shownFor = q }.onFailure { failed = true }
+        searching = false
     }
-    // Search opens ready to type, as the phone's does.
+    // Cleared: back to recent searches.
+    LaunchedEffect(query) { if (query.isBlank()) { results = null; shownFor = "" } }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    if (showField) LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
-        PageTitle("Search")
-        TextField(
-            query, { query = it },
-            placeholder = { Text("Songs, albums, artists") },
-            leadingIcon = { Icon(Icons.Rounded.Search, null) },
-            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
-            singleLine = true,
-            shape = CircleShape,
-            colors = TextFieldDefaults.colors(
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { run() }),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).focusRequester(focus),
-        )
+        PageTitle(if (shownFor.isEmpty()) "Search" else "Results for “$shownFor”")
+        if (showField) {
+            TextField(
+                query, onQuery,
+                placeholder = { Text("Songs, albums, artists") },
+                leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Rounded.Close, "Clear") } },
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).focusRequester(focus),
+            )
+        }
         val found = results
         when {
             searching -> Loading()
             failed -> Message("Couldn't search", "Check your connection and try again.")
-            found == null && recentSearches.isNotEmpty() -> RecentSearches(recentSearches) { query = it; run() }
-            found == null -> Message("Find something to play", "Search for a song or an artist.", icon = Icons.Rounded.Search)
+            found == null && recentSearches.isNotEmpty() -> RecentSearches(recentSearches) { onQuery(it); onSearch() }
+            found == null -> Message("Find something to play", "Type in the search box and press Enter.", icon = Icons.Rounded.Search)
             found.isEmpty() -> Message("No results", "Try different words.", icon = Icons.Rounded.SearchOff)
             else -> SongList(found) { songs, i -> Player.playAll(songs, i) }
         }
@@ -505,19 +459,16 @@ private fun RecentSearches(queries: List<String>, onPick: (String) -> Unit) {
     }
 }
 
-/** Liked songs, your playlists, and what you played lately. */
+/** Liked songs, your playlists, your server and what you played lately; [shelf] is the one showing. */
 @Composable
-private fun LibraryPage() {
-    var shelf by remember { mutableStateOf(Shelf.LIKED) }
-    var playlist by remember { mutableStateOf<String?>(null) }
+private fun LibraryPage(shelf: Shelf, onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit) {
     val liked by Library.liked.collectAsState()
     val played by Library.recent.collectAsState()
     val server by Subsonic.server.collectAsState()
-    playlist?.let { id -> return PlaylistPage(id, onBack = { playlist = null }) }
     Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
         PageTitle("Library")
-        Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Shelf.entries.filter { it != Shelf.SERVER || server != null }.forEach { s -> FilterChip(shelf == s, { shelf = s }, label = { Text(s.label) }) }
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Shelf.entries.filter { it != Shelf.SERVER || server != null }.forEach { s -> Segment(s.label, shelf == s) { onShelf(s) } }
         }
         AnimatedContent(
             shelf,
@@ -526,7 +477,7 @@ private fun LibraryPage() {
             modifier = Modifier.fillMaxSize(),
         ) { shelf ->
         when (shelf) {
-            Shelf.PLAYLISTS -> PlaylistGrid(onOpen = { playlist = it })
+            Shelf.PLAYLISTS -> PlaylistGrid(onOpen = onPlaylist)
             Shelf.LIKED -> if (liked.isEmpty()) Message("No liked songs yet", "Click the heart on a song to keep it here.")
                 else SongList(liked) { s, i -> Player.playAll(s, i) }
             Shelf.SERVER -> if (server != null) ServerShelf() else Message("No music server connected", "Connect one in Settings.")
@@ -537,7 +488,7 @@ private fun LibraryPage() {
     }
 }
 
-private enum class Shelf(val label: String) { LIKED("Liked songs"), PLAYLISTS("Playlists"), SERVER("Your server"), RECENT("Recent") }
+internal enum class Shelf(val label: String) { LIKED("Liked songs"), PLAYLISTS("Playlists"), SERVER("Your server"), RECENT("Recently played") }
 
 @Composable
 private fun SongPage(title: String, songs: List<Song>, empty: String, current: Int = -1, onPlay: (List<Song>, Int) -> Unit) {
@@ -549,7 +500,7 @@ private fun SongPage(title: String, songs: List<Song>, empty: String, current: I
 
 /** The songs of an album, playlist, artist or podcast, with a way back. */
 @Composable
-private fun CollectionPage(item: ShelfItem, onBack: () -> Unit) {
+private fun CollectionPage(item: ShelfItem) {
     var songs by remember(item) { mutableStateOf<List<Song>?>(null) }
     var failed by remember(item) { mutableStateOf(false) }
     LaunchedEffect(item) {
@@ -561,9 +512,8 @@ private fun CollectionPage(item: ShelfItem, onBack: () -> Unit) {
     val colour = rememberCoverColor(item.thumbnailUrl, bg)
     Column(
         Modifier.fillMaxSize().background(Brush.verticalGradient(0f to tint(colour, bg, 0.34f), 0.55f to tint(colour, bg, 0.16f), 1f to tint(colour, bg, 0.08f)))
-            .padding(top = 16.dp),
+            .padding(top = 24.dp),
     ) {
-        GlassCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack, Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp))
         Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             val shape = if (round) CircleShape else MaterialTheme.shapes.medium
             Cover(item.thumbnailUrl, 168.dp, shape, Modifier.shadow(24.dp, shape, ambientColor = colour, spotColor = colour))

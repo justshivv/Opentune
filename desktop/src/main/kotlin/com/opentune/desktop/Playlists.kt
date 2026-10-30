@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
@@ -148,8 +147,7 @@ internal fun PlaylistPage(id: String, onBack: () -> Unit) {
     val songs = remember(playlist) { playlist.songs.map { it.toSong() } }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().padding(top = 16.dp)) {
-        GlassCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack, Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp))
+    Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
         Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Mosaic(playlist.covers, Modifier.size(132.dp))
             Column(Modifier.padding(start = 20.dp)) {

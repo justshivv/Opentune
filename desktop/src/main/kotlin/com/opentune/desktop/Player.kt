@@ -51,6 +51,9 @@ object Player {
         data object EndOfSong : Sleep
     }
 
+    /** What happens at the end: stop (or autoplay on), go round the queue again, or the song again. */
+    enum class Repeat { OFF, ALL, ONE; fun next() = entries[(ordinal + 1) % entries.size] }
+
     /** What the song is playing from and in what form, shown under it. */
     data class Quality(val source: String, val detail: String, val lossless: Boolean = false)
 
@@ -74,6 +77,34 @@ object Player {
     val durationOf: StateFlow<Pair<String, Long>> = _durationOf.asStateFlow()
 
     val current: Song? get() = _queue.value.getOrNull(_index.value)
+
+    private val _repeat = MutableStateFlow(Repeat.OFF)
+    val repeat: StateFlow<Repeat> = _repeat.asStateFlow()
+    private val _shuffled = MutableStateFlow(false)
+    val shuffled: StateFlow<Boolean> = _shuffled.asStateFlow()
+    /** The queue's order before shuffling, to go back to. */
+    private var unshuffled: List<Song>? = null
+
+    fun cycleRepeat() { _repeat.value = _repeat.value.next() }
+
+    /** Shuffles what's after the song playing, or puts the queue back in its order. */
+    fun toggleShuffle() {
+        val q = _queue.value
+        val now = current
+        val original = unshuffled
+        if (_shuffled.value && original != null) {
+            _queue.value = original
+            _index.value = now?.let { s -> original.indexOfFirst { it.videoId == s.videoId } }?.takeIf { it >= 0 } ?: 0
+            unshuffled = null
+            _shuffled.value = false
+        } else if (q.isNotEmpty()) {
+            unshuffled = q
+            val at = _index.value.coerceIn(q.indices)
+            _queue.value = listOf(q[at]) + q.filterIndexed { i, _ -> i != at }.shuffled()
+            _index.value = 0
+            _shuffled.value = true
+        }
+    }
 
     private val _sleep = MutableStateFlow<Sleep?>(null)
     val sleep: StateFlow<Sleep?> = _sleep.asStateFlow()
@@ -121,6 +152,8 @@ object Player {
 
     fun playAll(songs: List<Song>, start: Int) {
         if (songs.isEmpty()) return
+        unshuffled = null
+        _shuffled.value = false
         _queue.value = songs
         open(start.coerceIn(songs.indices))
     }
@@ -153,6 +186,7 @@ object Player {
         val i = _index.value + 1
         when {
             i in _queue.value.indices -> open(i)
+            _repeat.value == Repeat.ALL && _queue.value.isNotEmpty() -> open(0)
             AppSettings.playback.value.autoplay -> extendThen { open(i) }
             else -> pauseAll()
         }
@@ -332,6 +366,8 @@ object Player {
         if (_sleep.value == Sleep.EndOfSong) {
             _sleep.value = null
             pauseAll()
+        } else if (_repeat.value == Repeat.ONE) {
+            open(_index.value)
         } else {
             next()
         }

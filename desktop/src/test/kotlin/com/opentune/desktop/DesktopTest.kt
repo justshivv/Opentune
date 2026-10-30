@@ -24,6 +24,27 @@ class DesktopTest {
         assertEquals("River Choir", Pages.artistIn("River Choir"))
     }
 
+    @Test fun shuffleKeepsTheSongPlayingFirstAndGoesBack() {
+        val songs = (0 until 12).map { Song("song${it.toString().padStart(7, '0')}", "Song $it", "Artist", null) }
+        Player.cue(songs, 4)
+        Player.toggleShuffle()
+        assertTrue(Player.shuffled.value)
+        assertEquals(0, Player.index.value)
+        assertEquals(songs[4], Player.queue.value.first())
+        assertEquals(songs.toSet(), Player.queue.value.toSet())
+        Player.toggleShuffle()
+        assertFalse(Player.shuffled.value)
+        assertEquals(songs, Player.queue.value)
+        assertEquals(4, Player.index.value)
+        assertEquals(Player.Repeat.OFF, Player.repeat.value)
+        Player.cycleRepeat()
+        assertEquals(Player.Repeat.ALL, Player.repeat.value)
+        Player.cycleRepeat()
+        assertEquals(Player.Repeat.ONE, Player.repeat.value)
+        Player.cycleRepeat()
+        assertEquals(Player.Repeat.OFF, Player.repeat.value)
+    }
+
     @Test fun timesReadAsMinutesAndSeconds() {
         assertEquals("0:00", Time.format(0))
         assertEquals("3:21", Time.format(201_000))

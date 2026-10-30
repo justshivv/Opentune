@@ -367,9 +367,12 @@ on your own connection with no hosted proxy.
   lyrics from the phone's sources (lit word by word, with a per-song source
   and offset), your own playlists, liked and recent songs, your own
   Subsonic server, the 15-band equalizer and its presets, speed,
-  balance and a sleep timer. It looks and moves like the phone app, built
-  from the phone's own interface code (dock, side rail, docked player,
-  player buttons, page motion and colours from the cover). YouTube songs
+  balance, shuffle, repeat and a sleep timer. It's laid out like a Mac
+  music app: a sidebar with search, the pages and your playlists; a bar
+  along the top with the transport, the song playing (click it for the
+  full player) and volume; and lyrics or the queue in a column beside the
+  page. The chrome is neutral grey with white as the accent, so the covers
+  bring the colour. YouTube songs
   play YouTube's Opus stream (about 160 kbps) through a bundled FFmpeg,
   falling back to AAC; YouTube's player code runs on GraalJS; and the
   library (liked songs, playlists and the full play history) is kept in

@@ -22,6 +22,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -46,27 +48,90 @@ import androidx.compose.ui.unit.sp
 internal val LocalArtworkSeed = staticCompositionLocalOf<Color?> { null }
 
 /**
- * The phone's theme: its colour scheme made the same way, by material-kolor
- * from the chosen accent and palette style, or from the playing song's cover
- * when "Colour from artwork" is on; true black when asked; the Outfit
- * typeface and its corner sizes. Colours ease to a new song's over 600ms.
+ * The desktop's theme: calm neutral greys with white as the accent, as a Mac
+ * music app looks, so the covers bring the colour; a light version in light
+ * mode, and the chosen typeface. The phone's true-black setting is left to
+ * the player here: a whole desktop window of black is harsh on a big screen.
  */
 @Composable
 fun DesktopTheme(artworkSeed: Color? = null, content: @Composable () -> Unit) {
     val settings by AppSettings.theme.collectAsState()
     val dark = when (settings.mode) { ThemeMode.DARK -> true; ThemeMode.LIGHT -> false; ThemeMode.SYSTEM -> isSystemInDarkTheme() }
-    val seed = artworkSeed?.takeIf { settings.colorFromArtwork }
-    val generated = rememberDynamicColorScheme(
-        seedColor = seed ?: Color(settings.seedColor),
-        isDark = dark,
-        isAmoled = settings.pureBlack,
-        style = PaletteStyle.valueOf(settings.paletteStyle.name),
-    )
-    val scheme = if (dark && settings.pureBlack) generated.toPureBlack() else generated
+    val scheme = studioScheme(dark)
     val type = rememberType(settings)
-    MaterialTheme(colorScheme = scheme.animated(), typography = type, shapes = AppShapes) {
+    MaterialTheme(colorScheme = scheme, typography = type, shapes = AppShapes) {
         CompositionLocalProvider(LocalArtworkSeed provides artworkSeed, content = content)
     }
+}
+
+/** The desktop's own greys, the ones every page and bar is drawn from. */
+internal object Studio {
+    val Page = Color(0xFF1E1E20)
+    val Sidebar = Color(0xFF171719)
+    val Raised = Color(0xFF2A2A2D)
+    val Secondary = Color(0xFF8E8E93)
+    val Divider = Color(0xFF2C2C2E)
+    val Destructive = Color(0xFFFF453A)
+}
+
+internal fun studioScheme(dark: Boolean): ColorScheme = if (dark) {
+    val page = Studio.Page
+    darkColorScheme(
+        primary = Color.White,
+        onPrimary = Color.Black,
+        primaryContainer = Color.White.copy(alpha = 0.16f),
+        onPrimaryContainer = Color.White,
+        secondary = Color(0xFFD1D1D6),
+        onSecondary = Color.Black,
+        secondaryContainer = Studio.Raised,
+        onSecondaryContainer = Color.White,
+        tertiary = Color(0xFFD1D1D6),
+        tertiaryContainer = Studio.Raised,
+        onTertiaryContainer = Color.White,
+        background = page,
+        onBackground = Color.White,
+        surface = page,
+        onSurface = Color.White,
+        surfaceVariant = Studio.Raised,
+        onSurfaceVariant = Studio.Secondary,
+        surfaceContainerLowest = Color(0xFF121214),
+        surfaceContainerLow = Studio.Sidebar,
+        surfaceContainer = Color(0xFF232325),
+        surfaceContainerHigh = Studio.Raised,
+        surfaceContainerHighest = Color(0xFF353538),
+        outline = Color(0xFF48484A),
+        outlineVariant = Studio.Divider,
+        error = Studio.Destructive,
+        surfaceTint = Color.White,
+    )
+} else {
+    lightColorScheme(
+        primary = Color.Black,
+        onPrimary = Color.White,
+        primaryContainer = Color.Black.copy(alpha = 0.08f),
+        onPrimaryContainer = Color.Black,
+        secondary = Color(0xFF3A3A3C),
+        secondaryContainer = Color(0xFFE5E5EA),
+        onSecondaryContainer = Color.Black,
+        tertiary = Color(0xFF3A3A3C),
+        tertiaryContainer = Color(0xFFE5E5EA),
+        onTertiaryContainer = Color.Black,
+        background = Color(0xFFFAFAFC),
+        onBackground = Color(0xFF1C1C1E),
+        surface = Color(0xFFFAFAFC),
+        onSurface = Color(0xFF1C1C1E),
+        surfaceVariant = Color(0xFFE5E5EA),
+        onSurfaceVariant = Color(0xFF6E6E73),
+        surfaceContainerLowest = Color.White,
+        surfaceContainerLow = Color(0xFFF0F0F3),
+        surfaceContainer = Color(0xFFEBEBEF),
+        surfaceContainerHigh = Color(0xFFE5E5EA),
+        surfaceContainerHighest = Color(0xFFDCDCE0),
+        outline = Color(0xFFC7C7CC),
+        outlineVariant = Color(0xFFE0E0E5),
+        error = Color(0xFFFF3B30),
+        surfaceTint = Color.Black,
+    )
 }
 
 /**
