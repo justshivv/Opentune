@@ -1067,7 +1067,7 @@ private fun settingsSections(
                 Entry("Player opening", "now playing sheet open close animation spring smooth bouncy snappy") {
                     NavRow("Player opening", { playerMotionDialog = true }, summary = ui.playerMotion.summary, icon = Icons.Rounded.UnfoldMore, value = ui.playerMotion.label)
                 },
-                Entry("Player background", "mesh gradient echo glow colours pure black oled amoled") {
+                Entry("Player background", "cover blur blurred mesh gradient echo glow colours pure black oled amoled") {
                     SettingRow("Player background", icon = Icons.Rounded.Wallpaper, below = {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PlayerBackground.entries.forEach { b ->

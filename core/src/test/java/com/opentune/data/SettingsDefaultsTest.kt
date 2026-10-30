@@ -38,12 +38,19 @@ class SettingsDefaultsTest {
         assertEquals(com.opentune.data.settings.DockMotion.MINIMIZE, ui.dockMotion)
     }
 
-    @Test fun aPlayerBackgroundThatWasDroppedReadsBackAsMesh() {
-        for (gone in listOf("BLUR", "PLAIN")) {
-            val settings = json.decodeFromString<SettingsState>("""{"theme":{"playerBackground":"$gone","pureBlack":false}}""")
-            assertEquals(com.opentune.data.settings.PlayerBackground.MESH, settings.theme.playerBackground)
-            assertFalse(settings.theme.pureBlack)
-        }
+    @Test fun aPlayerBackgroundThatWasDroppedReadsBackAsTheDefault() {
+        val settings = json.decodeFromString<SettingsState>("""{"theme":{"playerBackground":"PLAIN","pureBlack":false}}""")
+        assertEquals(com.opentune.data.settings.PlayerBackground.BLUR, settings.theme.playerBackground)
+        assertFalse(settings.theme.pureBlack)
+        // Blur was dropped once and is back: an old choice of it holds again.
+        assertEquals(
+            com.opentune.data.settings.PlayerBackground.BLUR,
+            json.decodeFromString<SettingsState>("""{"theme":{"playerBackground":"BLUR"}}""").theme.playerBackground,
+        )
+        assertEquals(
+            com.opentune.data.settings.PlayerBackground.MESH,
+            json.decodeFromString<SettingsState>("""{"theme":{"playerBackground":"MESH"}}""").theme.playerBackground,
+        )
     }
 
     @Test fun aDroppedDockMotionReadsBackAsTheDefault() {

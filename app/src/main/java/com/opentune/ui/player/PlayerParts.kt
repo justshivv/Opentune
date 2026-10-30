@@ -114,6 +114,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.toArgb
 import com.materialkolor.hct.Hct
 import androidx.compose.ui.input.pointer.pointerInput
@@ -182,6 +185,7 @@ fun PlayerBackdrop(
         when (style) {
             PlayerBackground.AMOLED -> Unit
             PlayerBackground.ECHO_GLOW -> EchoGlowBackground(animate && playing, Modifier.matchParentSize())
+            PlayerBackground.BLUR -> CoverBlur(artworkUrl, animate && playing, Modifier.matchParentSize())
             PlayerBackground.MESH -> MeshGradient(artworkUrl, animate, Modifier.matchParentSize())
             PlayerBackground.GRADIENT -> {
                 // Two tones: the cover's own colour at the top, deepening to
@@ -458,6 +462,83 @@ private fun MeshGradient(artworkUrl: String?, animate: Boolean, modifier: Modifi
         )
     }
 }
+
+/**
+ * The cover itself behind the player, blurred smooth, the way the album and
+ * playlist pages' headers show it: all of its colours blend into each other
+ * rather than a few picked out as patches. It sits on the song's own tone, so
+ * a dark cover still carries some colour, drifts and zooms slowly while
+ * [moving], and darkens toward the bottom for the title and controls.
+ * The cover is drawn tiny and stretched, which blends its colours on its
+ * own, then blurred; before Android 12, which has no blur, the stretch alone does it.
+ */
+@Composable
+private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    // Stepped like the mesh: a slow drift needs only a dozen steps a second, and each step
+    // makes the player's glass blur and bend again.
+    val t by produceState(0f, moving) {
+        if (!moving) return@produceState
+        val start = withFrameNanos { it } - (value * 1e9f).toLong()
+        while (true) {
+            delay(MESH_STEP_MS)
+            value = (withFrameNanos { it } - start) / 1e9f
+        }
+    }
+    val canBlur = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+    Box(modifier.background(lerp(scheme.surface, scheme.primaryContainer, 0.7f)).clipToBounds()) {
+        androidx.compose.animation.Crossfade(artworkUrl, animationSpec = tween(900), label = "coverBlur") { url ->
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val painter = coil3.compose.rememberAsyncImagePainter(
+                remember(url) { coil3.request.ImageRequest.Builder(context).data(url.artworkAt(120)).size(96).build() },
+            )
+            Box(
+                Modifier.fillMaxSize()
+                    .graphicsLayer {
+                        val s = 1.45f + 0.07f * sin(t * 0.21f)
+                        scaleX = s; scaleY = s
+                        translationX = size.width * 0.05f * sin(t * 0.13f)
+                        translationY = size.height * 0.04f * cos(t * 0.11f)
+                        // A little of the song's tone under it shows through, so a dark cover isn't black.
+                        alpha = 0.82f
+                    }
+                    .then(if (canBlur) Modifier.blur(60.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded) else Modifier)
+                    .drawWithCache {
+                        // The cover drawn into a tiny image, then stretched over the screen with
+                        // smooth filtering: the stretch itself blends its colours into soft fields,
+                        // whatever the image loader decoded, and the blur smooths what's left.
+                        val small = androidx.compose.ui.graphics.ImageBitmap(COVER_BLUR_PX, COVER_BLUR_PX)
+                        val loaded = painter.state.value is coil3.compose.AsyncImagePainter.State.Success
+                        if (loaded) {
+                            androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+                                this, layoutDirection, androidx.compose.ui.graphics.Canvas(small),
+                                androidx.compose.ui.geometry.Size(COVER_BLUR_PX.toFloat(), COVER_BLUR_PX.toFloat()),
+                            ) { with(painter) { draw(size) } }
+                        }
+                        val side = maxOf(size.width, size.height)
+                        onDrawBehind {
+                            if (!loaded) return@onDrawBehind
+                            drawImage(
+                                small,
+                                dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - side) / 2).toInt(), ((size.height - side) / 2).toInt()),
+                                dstSize = androidx.compose.ui.unit.IntSize(side.toInt(), side.toInt()),
+                                filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
+                            )
+                        }
+                    },
+            )
+        }
+        // Darker toward the bottom so the title and controls stay readable.
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.12f), 0.5f to Color.Black.copy(alpha = 0.3f), 1f to Color.Black.copy(alpha = 0.58f)),
+            ),
+        )
+    }
+}
+
+/** The size, in pixels, the cover is drawn at before Cover blur stretches it over the screen. */
+private const val COVER_BLUR_PX = 32
 
 private const val MESH_BLOBS = 5
 private const val MESH_CYCLE_NS = 40_000_000_000L

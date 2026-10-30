@@ -44,6 +44,8 @@ enum class PaletteStyleOption(val label: String) {
 
 @Serializable
 enum class PlayerBackground(val label: String) {
+    /** The cover itself, blurred smooth and drifting slowly, as the album and playlist pages' headers. */
+    BLUR("Cover blur"),
     /** Soft patches of several of the cover's colours, drifting into each other. */
     MESH("Mesh"),
     /** The cover's main colour at the top, deepening to dark, with a faint glow under the controls. */
@@ -87,7 +89,7 @@ data class ThemeSettings(
     val pureBlack: Boolean = true,
     /** Re-seed the whole app from the playing track's artwork. */
     val colorFromArtwork: Boolean = true,
-    val playerBackground: PlayerBackground = PlayerBackground.MESH,
+    val playerBackground: PlayerBackground = PlayerBackground.BLUR,
     val font: AppFont = AppFont.SYSTEM,
     val textWeight: TextWeight = TextWeight.MEDIUM,
     /** Private copied file ID, never an external storage path or URI. */
@@ -857,7 +859,7 @@ object AppSettings {
                 paletteStyle = enumOf(PaletteStyleOption.entries.toTypedArray(), p.getString("palette_style", null), PaletteStyleOption.TonalSpot),
                 pureBlack = p.getBoolean("pure_black", true),
                 colorFromArtwork = p.getBoolean("color_from_artwork", true),
-                playerBackground = enumOf(PlayerBackground.entries.toTypedArray(), p.getString("player_background", null), PlayerBackground.MESH),
+                playerBackground = enumOf(PlayerBackground.entries.toTypedArray(), p.getString("player_background", null), PlayerBackground.BLUR),
             ),
             sound = SoundSettings(
                 speed = p.getFloat("sound_speed", 1f),
