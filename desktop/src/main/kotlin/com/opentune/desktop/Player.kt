@@ -1,5 +1,6 @@
 package com.opentune.desktop
 
+import com.opentune.data.Http
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.innertube.InnertubeParser
 import com.opentune.data.isYouTubeId
@@ -7,6 +8,7 @@ import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.EQ_BANDS_HZ
 import com.opentune.data.subsonic.Subsonic
+import java.util.concurrent.ConcurrentHashMap
 import javafx.application.Platform
 import javafx.scene.media.EqualizerBand
 import javafx.scene.media.Media
@@ -17,19 +19,28 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.Request
 
 /**
- * The queue and the song playing, through JavaFX's media player. It reads
- * YouTube songs from [Relay], and songs on your own server straight from it. When the queue runs out it carries on with YouTube
- * Music's up-next for the last song, as the phone does, when autoplay is
- * on. The phone's speed, balance and 15-band equalizer settings are applied
- * through JavaFX's own equalizer, and the sleep timer winds the volume down.
+ * The queue and the song playing. A song starts from YouTube (or your own
+ * server) through JavaFX's media player, as it always has; meanwhile the
+ * audio sources are asked for something better, as on the phone: a verified
+ * FLAC from an add-on, played bit for bit by [FlacEngine], or JioSaavn's
+ * 320 kbps AAC. Whichever answers takes over at the same moment in the song,
+ * and the next song's sources are asked ahead, so it can start in its best
+ * quality. When the queue runs out it carries on with YouTube Music's
+ * up-next, when autoplay is on. The phone's speed, balance and equalizer
+ * settings apply to JavaFX's playback; a lossless file plays untouched.
  */
 object Player {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -39,6 +50,9 @@ object Player {
         data class At(val epochMs: Long, val minutes: Int) : Sleep
         data object EndOfSong : Sleep
     }
+
+    /** What the song is playing from and in what form, shown under it. */
+    data class Quality(val source: String, val detail: String, val lossless: Boolean = false)
 
     private val _queue = MutableStateFlow<List<Song>>(emptyList())
     val queue: StateFlow<List<Song>> = _queue.asStateFlow()
@@ -52,6 +66,8 @@ object Player {
     val error: StateFlow<String?> = _error.asStateFlow()
     private val _volume = MutableStateFlow(Library.volume())
     val volume: StateFlow<Double> = _volume.asStateFlow()
+    private val _quality = MutableStateFlow<Quality?>(null)
+    val quality: StateFlow<Quality?> = _quality.asStateFlow()
 
     /** The song's id and its exact length once the player knows it, for lyrics to match on. */
     private val _durationOf = MutableStateFlow("" to 0L)
@@ -65,14 +81,24 @@ object Player {
     /** 1 normally; less while the sleep timer winds down. */
     @Volatile private var fade = 1.0
 
-    private var media: MediaPlayer? = null
+    /** Guards the engines and which song they belong to; callbacks come from several threads. */
+    private val gate = Any()
+    private var engine: Engine? = null
+    /** A better source taking over, until its first sound. */
+    private var incoming: Engine? = null
+    /** Counts songs opened, so an engine left over from an earlier one is ignored. */
+    private var generation = 0
+    /** Whether the listener wants sound: true from play until pause. */
+    @Volatile private var wanted = false
+    private var upgradeJob: Job? = null
+    private var aheadJob: Job? = null
 
     init {
         // A change in Settings reaches the song already playing.
         scope.launch {
             combine(AppSettings.sound, AppSettings.equalizer) { _, _ -> }.collect {
-                // JavaFX starts with the first song, not for this.
-                if (media != null) onFx { media?.let(::applyEffects) }
+                val fx = synchronized(gate) { engine as? FxEngine }
+                fx?.let { e -> onFx { e.player?.let(::applyEffects) } }
             }
         }
     }
@@ -85,7 +111,7 @@ object Player {
         ready.await()
     }
 
-    private fun onFx(block: () -> Unit) {
+    internal fun onFx(block: () -> Unit) {
         fx
         if (Platform.isFxApplicationThread()) block() else Platform.runLater(block)
     }
@@ -100,9 +126,18 @@ object Player {
         if (i in _queue.value.indices) open(i)
     }
 
-    fun toggle() = onFx {
-        val m = media ?: return@onFx current?.let { open(_index.value) } ?: Unit
-        if (m.status == MediaPlayer.Status.PLAYING) m.pause() else m.play()
+    fun toggle() {
+        val e = synchronized(gate) { engine } ?: return current?.let { open(_index.value) } ?: Unit
+        wanted = !wanted
+        if (wanted) e.play() else e.pause()
+        synchronized(gate) { incoming }?.let { if (wanted) it.play() else it.pause() }
+        _playing.value = wanted
+    }
+
+    private fun pauseAll() {
+        wanted = false
+        synchronized(gate) { listOfNotNull(engine, incoming) }.forEach { it.pause() }
+        _playing.value = false
     }
 
     fun next() {
@@ -110,7 +145,7 @@ object Player {
         when {
             i in _queue.value.indices -> open(i)
             AppSettings.playback.value.autoplay -> extendThen { open(i) }
-            else -> onFx { media?.stop() }
+            else -> pauseAll()
         }
     }
 
@@ -134,7 +169,7 @@ object Player {
                 setFade(if (left < window) left.toDouble() / window else 1.0)
                 delay(1_000)
             }
-            onFx { media?.pause() }
+            pauseAll()
             setFade(1.0)
             _sleep.value = null
         }
@@ -149,72 +184,308 @@ object Player {
 
     private fun setFade(f: Double) {
         fade = f
-        onFx { media?.volume = _volume.value * fade }
+        applyVolume()
+    }
+
+    private fun applyVolume() {
+        val v = _volume.value * fade
+        synchronized(gate) { listOfNotNull(engine, incoming) }.forEach { it.setVolume(v) }
     }
 
     /** Back to the start of the song a few seconds in; before that, the song before. */
-    fun previous() = onFx {
-        val m = media
-        if (m != null && m.currentTime.toSeconds() > 4) m.seek(Duration.ZERO)
+    fun previous() {
+        if (positionMs() > 4_000) seekTo(0)
         else if (_index.value > 0) open(_index.value - 1)
     }
 
-    fun seekTo(ms: Long) = onFx { media?.seek(Duration.millis(ms.toDouble())) }
+    fun seekTo(ms: Long) {
+        synchronized(gate) { engine }?.seek(ms)
+    }
 
     fun setVolume(v: Double) {
         _volume.value = v.coerceIn(0.0, 1.0)
         Library.setVolume(_volume.value)
-        onFx { media?.volume = _volume.value * fade }
+        applyVolume()
     }
 
-    fun positionMs(): Long = media?.currentTime?.toMillis()?.toLong() ?: 0L
-    fun durationMs(): Long = media?.totalDuration?.toMillis()?.takeIf { it.isFinite() }?.toLong() ?: 0L
+    fun positionMs(): Long = synchronized(gate) { engine }?.positionMs() ?: 0L
+    fun durationMs(): Long = synchronized(gate) { engine }?.durationMs() ?: 0L
 
     private fun open(i: Int) {
         val song = _queue.value.getOrNull(i) ?: return
         _index.value = i
         _error.value = null
         _loading.value = true
+        _quality.value = null
+        wanted = true
+        _playing.value = false
         Library.played(song)
-        onFx {
-            media?.dispose()
-            val address = addressOf(song.videoId)
-            if (address == null) {
-                _loading.value = false
-                _error.value = "Couldn't play ${song.title}"
-                return@onFx
+        val gen = synchronized(gate) {
+            upgradeJob?.cancel()
+            aheadJob?.cancel()
+            incoming?.dispose(); incoming = null
+            engine?.dispose(); engine = null
+            ++generation
+        }
+        val ready = upgrades[song.videoId]?.takeIf { System.currentTimeMillis() - it.at < UPGRADE_KEEP_MS }
+        if (ready != null) start(song, gen, ready, takeover = false) else startBase(song, gen)
+        upgradeJob = scope.launch {
+            findUpgrades(song, gen)
+            // Then the next song's, so it can start in its best quality.
+            _queue.value.getOrNull(i + 1)?.let { following -> aheadJob = scope.launch { lookAhead(following) } }
+        }
+    }
+
+    // ---- The song's first source -------------------------------------------------
+
+    /** YouTube through the relay, or your server's MP3: what every song starts from. */
+    private fun startBase(song: Song, gen: Int, atMs: Long = 0) {
+        val address = addressOf(song.videoId) ?: return fail(song, gen)
+        lateinit var e: FxEngine
+        e = FxEngine(
+            address, startAtMs = { atMs }, autoplay = wanted,
+            onReady = { ms ->
+                if (current(gen, e)) {
+                    _loading.value = false
+                    if (ms > 0) _durationOf.value = song.videoId to ms
+                    if (_quality.value == null) _quality.value = baseQuality(song)
+                }
+            },
+            onStarted = {},
+            onPlaying = { on -> if (current(gen, e)) { _playing.value = on; if (on) _loading.value = false } },
+            onEnd = { if (current(gen, e)) ended() },
+            onError = { message ->
+                System.err.println("Player: ${song.videoId}: $message")
+                if (current(gen, e)) fail(song, gen)
+            },
+        )
+        synchronized(gate) {
+            if (gen != generation) return e.dispose()
+            engine = e
+        }
+        e.setVolume(_volume.value * fade)
+    }
+
+    private fun baseQuality(song: Song): Quality = when {
+        Subsonic.isSubsonic(song.videoId) -> Quality("Your server", "MP3 320 kbps")
+        else -> Quality("YouTube", Streams.known(song.videoId)?.let { "AAC ${it.kbps} kbps" } ?: "AAC")
+    }
+
+    private fun current(gen: Int, e: Engine) = synchronized(gate) { gen == generation && engine === e }
+
+    private fun fail(song: Song, gen: Int) {
+        if (synchronized(gate) { gen != generation }) return
+        _loading.value = false
+        _playing.value = false
+        _error.value = "Couldn't play ${song.title}"
+    }
+
+    private fun ended() {
+        if (_sleep.value == Sleep.EndOfSong) {
+            _sleep.value = null
+            pauseAll()
+        } else {
+            next()
+        }
+    }
+
+    // ---- Better sources ------------------------------------------------------------
+
+    /** A better source found for a song: what plays it and how it's labelled. */
+    private data class Upgrade(val flac: Addons.Flac?, val saavn: String?, val at: Long = System.currentTimeMillis()) {
+        val rank get() = if (flac != null) 2 else 1
+    }
+
+    /** Found sources by song, for a song played again or coming next. Add-on links expire, so not for long. */
+    private val upgrades = ConcurrentHashMap<String, Upgrade>()
+    private const val UPGRADE_KEEP_MS = 10 * 60_000L
+
+    /** How good what's playing is: 0 the starting source, 1 JioSaavn, 2 FLAC. */
+    private fun rankNow(): Int = when {
+        _quality.value?.lossless == true -> 2
+        _quality.value?.source == "JioSaavn" -> 1
+        else -> 0
+    }
+
+    private suspend fun wantedOf(song: Song): JioSaavn.Wanted? {
+        val listed = song.durationText?.let(::seconds)
+        val length = listed ?: withTimeoutOrNull(15_000) {
+            durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second / 1000.0
+        } ?: return null
+        return JioSaavn.Wanted(song.title, song.artist, song.albumName, length)
+    }
+
+    /** Asks JioSaavn and the add-ons at once; each better answer takes over as it comes. */
+    private suspend fun findUpgrades(song: Song, gen: Int) {
+        if (!isYouTubeId(song.videoId) || (!Addons.lossless.value && !Addons.jioSaavn.value)) return
+        Addons.syncPublished()
+        val wanted = wantedOf(song) ?: return
+        coroutineScope {
+            val saavn = async { if (Addons.jioSaavn.value) JioSaavn.find(wanted) else null }
+            val flac = async { runCatching { Addons.findFlac(wanted) }.getOrNull() }
+            saavn.await()?.let { url -> offer(song, gen, Upgrade(null, url)) }
+            flac.await()?.let { found -> offer(song, gen, Upgrade(found, null)) }
+        }
+    }
+
+    /** Finds the next song's sources before it plays. */
+    private suspend fun lookAhead(song: Song) {
+        if (!isYouTubeId(song.videoId) || upgrades[song.videoId]?.let { System.currentTimeMillis() - it.at < UPGRADE_KEEP_MS } == true) return
+        val listed = song.durationText?.let(::seconds) ?: return
+        val wanted = JioSaavn.Wanted(song.title, song.artist, song.albumName, listed)
+        val flac = runCatching { Addons.findFlac(wanted) }.getOrNull()
+        val found = if (flac != null) Upgrade(flac, null) else if (Addons.jioSaavn.value) JioSaavn.find(wanted)?.let { Upgrade(null, it) } else null
+        found?.let { upgrades[song.videoId] = it }
+    }
+
+    private fun offer(song: Song, gen: Int, upgrade: Upgrade) {
+        val known = upgrades[song.videoId]
+        if (known == null || known.rank <= upgrade.rank) upgrades[song.videoId] = upgrade
+        if (synchronized(gate) { gen == generation } && upgrade.rank > rankNow()) start(song, gen, upgrade, takeover = true)
+    }
+
+    /**
+     * Plays [upgrade]: taking over from what's playing at its position when
+     * [takeover], else from the start. The old engine plays on until the new
+     * one's first sound; if the new one fails, the old one simply carries on.
+     */
+    private fun start(song: Song, gen: Int, upgrade: Upgrade, takeover: Boolean) {
+        val old = synchronized(gate) { engine.takeIf { takeover } }
+        val startAt: () -> Long = { old?.positionMs() ?: 0L }
+        lateinit var e: Engine
+        val quality: () -> Quality = {
+            upgrade.flac?.let { f ->
+                val sixteen = (e as? FlacEngine)?.output?.sampleSizeInBits == 16 && f.bits > 16
+                Quality(f.provider, "FLAC ${f.bits}-bit / ${Addons.khz(f.rate)}" + if (sixteen) " · sound card at 16-bit" else "", lossless = true)
+            } ?: Quality("JioSaavn", "AAC 320 kbps")
+        }
+        val onStarted: () -> Unit = {
+            val replaced = synchronized(gate) {
+                if (gen != generation || (incoming !== e && engine !== e)) return@synchronized null
+                val before = engine.takeIf { it !== e }
+                incoming = null
+                engine = e
+                before ?: e
             }
-            val m = runCatching { MediaPlayer(Media(address)) }.getOrElse {
-                System.err.println("Player: ${song.videoId}: ${it.message}")
+            if (replaced != null) {
+                if (replaced !== e) replaced.dispose()
+                _quality.value = quality()
                 _loading.value = false
-                _error.value = "Couldn't play ${song.title}"
-                return@onFx
+                _playing.value = wanted
+                e.durationMs().takeIf { it > 0 }?.let { _durationOf.value = song.videoId to it }
             }
-            media = m
-            m.volume = _volume.value * fade
-            applyEffects(m)
-            m.setOnReady {
-                _loading.value = false
-                m.totalDuration?.toMillis()?.takeIf { it.isFinite() && it > 0 }?.let { _durationOf.value = song.videoId to it.toLong() }
-            }
-            m.setOnPlaying { _playing.value = true; _loading.value = false }
-            m.setOnPaused { _playing.value = false }
-            m.setOnStopped { _playing.value = false }
-            m.setOnEndOfMedia {
-                if (_sleep.value == Sleep.EndOfSong) {
-                    _sleep.value = null
-                    m.stop()
-                } else {
-                    next()
+        }
+        val onError: (String?) -> Unit = { message ->
+            System.err.println("Player: ${song.videoId}: upgrade failed: $message")
+            upgrades.remove(song.videoId)
+            val fallBack = synchronized(gate) {
+                when {
+                    gen != generation -> false
+                    incoming === e -> { incoming = null; false }
+                    engine === e -> { engine = null; true }
+                    else -> false
                 }
             }
-            m.setOnError {
-                System.err.println("Player: ${song.videoId}: ${m.error?.message}")
-                _loading.value = false
-                _playing.value = false
-                _error.value = "Couldn't play ${song.title}"
+            val at = runCatching { e.positionMs() }.getOrDefault(0L)
+            e.dispose()
+            if (fallBack) { _quality.value = null; startBase(song, gen, at) }
+        }
+        val onEnd: () -> Unit = { if (current(gen, e)) ended() }
+        e = if (upgrade.flac != null) {
+            val f = upgrade.flac
+            FlacEngine(
+                source = { download(f.url, f.headers) }, startAtMs = startAt, autoplay = wanted,
+                onStarted = onStarted, onEnd = onEnd, onError = onError,
+            )
+        } else {
+            FxEngine(
+                upgrade.saavn!!, startAtMs = startAt, autoplay = wanted,
+                onReady = {}, onStarted = onStarted,
+                onPlaying = { on -> if (current(gen, e)) _playing.value = on },
+                onEnd = onEnd, onError = onError,
+            )
+        }
+        e.setVolume(_volume.value * fade)
+        synchronized(gate) {
+            if (gen != generation) return e.dispose()
+            if (takeover) { incoming?.dispose(); incoming = e } else engine = e
+        }
+    }
+
+    private val files = Http.client.newBuilder().callTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS).build()
+
+    /** A FLAC file's bytes as they arrive. */
+    private fun download(url: String, headers: Map<String, String>): java.io.InputStream {
+        val response = files.newCall(Request.Builder().url(url).apply { headers.forEach { (k, v) -> header(k, v) } }.build()).execute()
+        if (!response.isSuccessful) {
+            response.close()
+            throw java.io.IOException("its file server returned HTTP ${response.code}")
+        }
+        return response.body!!.byteStream()
+    }
+
+    /** "3:45" or "1:02:03" in seconds. */
+    internal fun seconds(text: String): Double? {
+        val parts = text.trim().split(':').map { it.toIntOrNull() ?: return null }
+        if (parts.isEmpty() || parts.size > 3) return null
+        return parts.fold(0) { total, p -> total * 60 + p }.toDouble().takeIf { it > 0 }
+    }
+
+    // ---- JavaFX -------------------------------------------------------------------
+
+    /** JavaFX's media player for one address: YouTube through the relay, a server, or JioSaavn. */
+    private class FxEngine(
+        private val address: String,
+        private val startAtMs: () -> Long,
+        private val autoplay: Boolean,
+        private val onReady: (Long) -> Unit,
+        private val onStarted: () -> Unit,
+        private val onPlaying: (Boolean) -> Unit,
+        private val onEnd: () -> Unit,
+        private val onError: (String?) -> Unit,
+    ) : Engine {
+        @Volatile var player: MediaPlayer? = null
+        @Volatile private var disposed = false
+        @Volatile private var started = false
+        @Volatile private var volume = 1.0
+
+        init {
+            onFx {
+                if (disposed) return@onFx
+                val m = runCatching { MediaPlayer(Media(address)) }.getOrElse { onError(it.message); return@onFx }
+                player = m
+                m.volume = volume
+                applyEffects(m)
+                m.setOnReady {
+                    if (disposed) return@setOnReady
+                    onReady(m.totalDuration?.toMillis()?.takeIf { it.isFinite() && it > 0 }?.toLong() ?: 0L)
+                    startAtMs().takeIf { it > 500 }?.let { m.seek(Duration.millis(it.toDouble())) }
+                    if (autoplay) m.play() else { started = true; onStarted() }
+                }
+                m.setOnPlaying {
+                    if (!started) { started = true; onStarted() }
+                    onPlaying(true)
+                }
+                m.setOnPaused { onPlaying(false) }
+                m.setOnStopped { onPlaying(false) }
+                m.setOnEndOfMedia { onEnd() }
+                m.setOnError { onError(m.error?.message) }
             }
-            m.play()
+        }
+
+        override fun play() = onFx { player?.play() }
+        override fun pause() = onFx { player?.pause() }
+        override fun seek(ms: Long) = onFx { player?.seek(Duration.millis(ms.toDouble())) }
+        override fun positionMs(): Long = player?.currentTime?.toMillis()?.takeIf { it.isFinite() }?.toLong() ?: startAtMs()
+        override fun durationMs(): Long = player?.totalDuration?.toMillis()?.takeIf { it.isFinite() }?.toLong() ?: 0L
+        override fun setVolume(v: Double) {
+            volume = v
+            onFx { player?.volume = v }
+        }
+        override fun dispose() {
+            disposed = true
+            onFx { player?.dispose(); player = null }
         }
     }
 

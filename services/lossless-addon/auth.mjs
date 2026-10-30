@@ -8,6 +8,11 @@ const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods
   'Access-Control-Expose-Headers': 'Retry-After', 'Cache-Control': 'no-store', 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff' };
 export const reply = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: CORS });
 const token = () => randomBytes(32).toString('base64url');
+/**
+ * What OpenTune for computers sends as its Origin when it asks to pair. It isn't
+ * a website, so it isn't in WEB_ORIGINS; it pairs the same way, with a phone's approval.
+ */
+export const DESKTOP_ORIGIN = 'opentune-desktop://app';
 const denied = () => reply({ error: 'Verify this device with the current official OpenTune app. Unsupported devices cannot use this source.' }, 401);
 export const canonical = (session, time, nonce, method, path, body = '') => ['OpenTune-Addon-v1', session, time, nonce, method, path, sha256(body)].join('\n');
 function publicKey(pem) {
@@ -111,7 +116,7 @@ export function withAppVerification(handler, { trust = googleTrust, attest = ver
       }
       if (path === '/auth/web/start' && request.method === 'POST') {
         const origin = request.headers.get('Origin');
-        if (!(env.WEB_ORIGINS || 'https://justshivv.github.io').split(',').includes(origin)) return denied();
+        if (![...(env.WEB_ORIGINS || 'https://justshivv.github.io').split(','), DESKTOP_ORIGIN].includes(origin)) return denied();
         const input = JSON.parse(body), jwk = input.key;
         if (!jwk || jwk.kty !== 'EC' || jwk.crv !== 'P-256' || !TOKEN.test(jwk.x || '') || !TOKEN.test(jwk.y || '') || 'd' in jwk) return denied();
         const key = publicKey({ key: jwk, format: 'jwk' }).export({ type: 'spki', format: 'pem' }).toString();

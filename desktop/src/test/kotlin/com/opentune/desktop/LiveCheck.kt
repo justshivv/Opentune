@@ -33,6 +33,15 @@ class LiveCheck {
         }
     }
 
+    /** JioSaavn's verified 320 kbps file for a well-known song. */
+    @Test fun jioSaavnFindsAKnownSong() = runBlocking {
+        assumeTrue(System.getProperty("opentune.live") == "true")
+        val notes = mutableListOf<String>()
+        val url = JioSaavn.find(JioSaavn.Wanted("Kesariya", "Arijit Singh", "Brahmastra", 268.0), notes::add)
+        println("LIVE JioSaavn: $url ${notes.joinToString()}")
+        assertTrue(notes.joinToString(), url != null)
+    }
+
     /** JavaFX opens the song through the relay and plays it; needs a display (xvfb-run on a server). */
     @Test fun javaFxPlaysTheRelayedSong() {
         assumeTrue(System.getProperty("opentune.live") == "true")

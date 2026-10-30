@@ -77,6 +77,13 @@ test('browser is key-bound and requires explicit verified-native approval; web c
   assert.equal((await app(signed(browser, '/auth/web/info?id=' + pair.id), env)).status, 401);
   assert.equal((await app(signed(native, '/auth/web/approve', 'POST', JSON.stringify({ id: pair.id })), env)).status, 401);
 });
+test('the desktop app pairs like a browser, with its own origin', async () => {
+  const { app, env } = setup();
+  const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const r = await app(new Request(origin + '/auth/web/start', { method: 'POST', headers: { Origin: 'opentune-desktop://app' }, body: JSON.stringify({ key: keys.publicKey.export({ format: 'jwk' }) }) }), env);
+  assert.equal(r.status, 200);
+  assert.match((await r.json()).id, /^[\w-]{43}$/);
+});
 test('browser enrollment rejects unapproved origins and private/RSA keys', async () => {
   const { app, env } = setup();
   for (const headers of [{}, { Origin: 'https://evil.test' }, { Origin: 'https://justshivv.github.io' }]) {

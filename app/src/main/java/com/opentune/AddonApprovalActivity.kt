@@ -25,8 +25,11 @@ class AddonApprovalActivity : ComponentActivity() {
                 if (isFinishing) return@launch
                 waiting.dismiss()
                 if (info.optBoolean("approved")) { showResult("This browser request was already approved."); return@launch }
-                val dialog = AlertDialog.Builder(this@AddonApprovalActivity).setTitle("Allow OpenTune web player?")
-                    .setMessage("${info.getString("origin")}\n\nCode: ${info.getString("code")}\n\nOnly allow if you started this request and this exact code is visible in your web player. Access lasts up to 12 hours.")
+                // OpenTune for computers pairs the same way, under its own origin.
+                val desktop = info.getString("origin") == DESKTOP_ORIGIN
+                val asker = if (desktop) "OpenTune on your computer" else "your web player"
+                val dialog = AlertDialog.Builder(this@AddonApprovalActivity).setTitle(if (desktop) "Allow OpenTune for computers?" else "Allow OpenTune web player?")
+                    .setMessage("${if (desktop) "OpenTune for computers" else info.getString("origin")}\n\nCode: ${info.getString("code")}\n\nOnly allow if you started this request and this exact code is visible in $asker. Access lasts up to 12 hours.")
                     .setNegativeButton("Deny") { _, _ -> finish() }.setPositiveButton("Allow", null)
                     .setOnCancelListener { finish() }.create()
                 dialog.setOnShowListener {
@@ -35,7 +38,7 @@ class AddonApprovalActivity : ComponentActivity() {
                         setOnClickListener {
                             isEnabled = false
                             lifecycleScope.launch {
-                                try { FirstPartyAddonAuth.approveBrowser(id); dialog.dismiss(); showResult("Browser approved. Return to the web player.") }
+                                try { FirstPartyAddonAuth.approveBrowser(id); dialog.dismiss(); showResult(if (desktop) "Computer approved. Return to OpenTune on your computer." else "Browser approved. Return to the web player.") }
                                 catch (e: Exception) { dialog.dismiss(); showResult(e.message ?: "Approval failed") }
                             }
                         }
@@ -50,3 +53,6 @@ class AddonApprovalActivity : ComponentActivity() {
             .setPositiveButton("Done") { _, _ -> finish() }.setOnCancelListener { finish() }.show()
     }
 }
+
+/** The origin OpenTune for computers pairs under (services/lossless-addon/auth.mjs). */
+private const val DESKTOP_ORIGIN = "opentune-desktop://app"

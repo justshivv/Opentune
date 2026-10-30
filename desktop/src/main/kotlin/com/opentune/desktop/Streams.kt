@@ -54,6 +54,9 @@ object Streams {
         .filter { it.format?.mimeType == "audio/mp4" }
         .maxByOrNull { it.averageBitrate }
 
+    /** The stream already found for [videoId], for saying what's playing. */
+    fun known(videoId: String): Stream? = found[videoId]?.second
+
     /** Forgets an address the server refused, so the next try finds a new one. */
     fun forget(videoId: String) {
         found.remove(videoId)

@@ -13,7 +13,8 @@ plugins {
  * the song models, the HTTP client, settings, lyrics and Subsonic.
  * The few Android classes those touch (Context, SharedPreferences, Log)
  * have desktop stand-ins in src/shim. Everything else, the player
- * included, is its own. Nothing from core's lossless code is part of it.
+ * included, is its own. Of the phone's lossless code it takes only the
+ * add-on protocol; JioSaavn, the add-on catalog and FLAC playback are its own.
  */
 // core makes the NewPipe jar used below.
 evaluationDependsOn(":core")
@@ -52,6 +53,8 @@ val sharedFromCore = listOf(
     "com/opentune/data/lyrics/SimpMusic.kt",
     "com/opentune/data/lyrics/YouTubeCaptions.kt",
     "com/opentune/data/subsonic/Subsonic.kt",
+    // The add-on wire protocol, as the phone reads it.
+    "com/opentune/data/addons/AddonModels.kt",
     // NewPipe's patched helper, see that file.
     "org/schabi/newpipe/extractor/utils/Utils.java",
 )
@@ -138,6 +141,12 @@ dependencies {
     implementation("org.mozilla:rhino:1.8.1")
     implementation("org.mozilla:rhino-engine:1.8.1")
 
+    // Add-on responses (the shared protocol reads them with org.json, as on the phone),
+    // FLAC decoding for lossless sources, and the QR code a phone scans to verify this computer.
+    implementation("org.json:json:20240303")
+    implementation("org.jflac:jflac-codec:1.5.2")
+    implementation("com.google.zxing:core:3.5.4")
+
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
 
@@ -152,6 +161,8 @@ tasks.test {
     // The live check runs only when asked: -Dopentune.live=true
     systemProperty("opentune.live", System.getProperty("opentune.live") ?: "false")
     System.getProperty("opentune.video")?.let { systemProperty("opentune.video", it) }
+    // Pictures of the window, drawn offscreen: -Dopentune.shots=/some/folder
+    System.getProperty("opentune.shots")?.let { systemProperty("opentune.shots", it) }
     testLogging { showStandardStreams = true }
 }
 

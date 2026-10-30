@@ -64,6 +64,7 @@ internal fun SettingsPage() {
         Column(Modifier.widthIn(max = 760.dp).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             AppearanceSection()
             PlaybackSection()
+            SourcesSection()
             EqualizerSection()
             LyricsSection()
             ServerSection()
@@ -89,7 +90,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SwitchRow(title: String, summary: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(title: String, summary: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
