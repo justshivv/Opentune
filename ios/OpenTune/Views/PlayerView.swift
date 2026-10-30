@@ -145,9 +145,11 @@ struct PlayerView: View {
             Spacer()
             Button { player.next() } label: { Image(systemName: "forward.fill").font(.system(size: 30)) }
             Spacer()
-            Button { player.repeatOne.toggle() } label: {
-                Image(systemName: "repeat.1").foregroundStyle(player.repeatOne ? Theme.accent : .white.opacity(0.7))
+            Button { player.repeatMode = player.repeatMode.next } label: {
+                Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
+                    .foregroundStyle(player.repeatMode == .off ? .white.opacity(0.7) : Theme.accent)
             }
+            .accessibilityLabel(player.repeatMode == .off ? "Repeat off" : player.repeatMode == .all ? "Repeat all" : "Repeat this song")
         }
         .buttonStyle(.plain)
         .font(.title3)
@@ -157,11 +159,15 @@ struct PlayerView: View {
         HStack {
             paneButton(.lyrics, "quote.bubble")
             Spacer()
+            SleepMenu()
+            Spacer()
             AirPlayButton().frame(width: 30, height: 30)
+            Spacer()
+            SpeedMenu()
             Spacer()
             paneButton(.queue, "list.bullet")
         }
-        .padding(.horizontal, 30)
+        .padding(.horizontal, 12)
     }
 
     private func paneButton(_ p: Pane, _ icon: String) -> some View {
@@ -262,6 +268,66 @@ struct QueuePane: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .environment(\.editMode, .constant(.active))
+    }
+}
+
+/** Speed, and whether a faster song keeps its key. */
+struct SpeedMenu: View {
+    @EnvironmentObject private var player: Player
+    static let speeds: [Float] = [0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2]
+
+    var body: some View {
+        Menu {
+            Picker("Speed", selection: Binding(get: { player.speed }, set: { player.speed = $0 })) {
+                ForEach(Self.speeds, id: \.self) { v in Text(Self.label(v)).tag(v) }
+            }
+            Toggle("Keep the pitch", isOn: Binding(get: { player.keepPitch }, set: { player.keepPitch = $0 }))
+        } label: {
+            Text(Self.label(player.speed))
+                .font(.subheadline.weight(.bold).monospacedDigit())
+                .foregroundStyle(player.speed == 1 ? .white.opacity(0.8) : .black)
+                .frame(minWidth: 40, minHeight: 34)
+                .padding(.horizontal, 2)
+                .background(player.speed == 1 ? AnyShapeStyle(.clear) : AnyShapeStyle(.white), in: RoundedRectangle(cornerRadius: 9))
+        }
+        .accessibilityLabel("Playback speed " + Self.label(player.speed))
+    }
+
+    static func label(_ v: Float) -> String {
+        let text = v == v.rounded() ? String(format: "%.0f", v) : String(format: "%g", v)
+        return text + "×"
+    }
+}
+
+/** Stops the music after a while, or at the end of the song. */
+struct SleepMenu: View {
+    @EnvironmentObject private var player: Player
+
+    var body: some View {
+        Menu {
+            ForEach([5, 15, 30, 45, 60, 90], id: \.self) { m in
+                Button("\(m) minutes") { player.sleep(inMinutes: m) }
+            }
+            Button("End of this song") { player.sleepAtEndOfSong() }
+            if player.sleepAt != nil || player.sleepAtSongEnd {
+                Button("Turn off", role: .destructive) { player.sleep(inMinutes: nil) }
+            }
+        } label: {
+            let on = player.sleepAt != nil || player.sleepAtSongEnd
+            HStack(spacing: 4) {
+                Image(systemName: on ? "moon.zzz.fill" : "moon.zzz")
+                if let at = player.sleepAt {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text(formatTime(max(0, at.timeIntervalSince(context.date))))
+                            .font(.caption.weight(.semibold).monospacedDigit())
+                    }
+                }
+            }
+            .font(.title3)
+            .foregroundStyle(on ? Theme.accent : .white.opacity(0.8))
+            .frame(minWidth: 40, minHeight: 34)
+        }
+        .accessibilityLabel(player.sleepAt != nil || player.sleepAtSongEnd ? "Sleep timer on" : "Sleep timer")
     }
 }
 

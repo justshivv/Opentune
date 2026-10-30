@@ -4,6 +4,13 @@ import MediaPlayer
 import OpenTuneCore
 import UIKit
 
+/** What happens at the end of the queue, or of the song. */
+enum RepeatMode: String {
+    case off, all, one
+
+    var next: RepeatMode { self == .off ? .all : self == .all ? .one : .off }
+}
+
 /**
  * What's playing and what's next. One AVPlayer, fed a stream URL per song as
  * its turn comes (URLs go stale, so nothing is resolved ahead of time except
@@ -21,7 +28,27 @@ final class Player: ObservableObject {
     @Published private(set) var error: String?
     @Published private(set) var lyrics: Lyrics?
     @Published private(set) var lyricsLoading = false
-    @Published var repeatOne = false
+    @Published var repeatMode: RepeatMode = RepeatMode(rawValue: UserDefaults.standard.string(forKey: "player.repeat") ?? "") ?? .off {
+        didSet { UserDefaults.standard.set(repeatMode.rawValue, forKey: "player.repeat") }
+    }
+    /** How fast songs play, 0.5 to 2. */
+    @Published var speed: Float = Player.savedSpeed {
+        didSet {
+            UserDefaults.standard.set(speed, forKey: "player.speed")
+            applyRate()
+        }
+    }
+    /** Off, a faster song also sounds higher, as a record does; on, it keeps its key. */
+    @Published var keepPitch: Bool = UserDefaults.standard.object(forKey: "player.keepPitch") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(keepPitch, forKey: "player.keepPitch")
+            player.currentItem?.audioTimePitchAlgorithm = pitchAlgorithm
+        }
+    }
+    /** When the sleep timer stops the music; nil when it's off or waiting for the song's end. */
+    @Published private(set) var sleepAt: Date?
+    /** The sleep timer stops the music when this song ends. */
+    @Published private(set) var sleepAtSongEnd = false
     @Published var autoplay = true
     @Published private(set) var shuffled = false
 
@@ -40,10 +67,19 @@ final class Player: ObservableObject {
     private var artworkFor: String?
     private var unshuffled: [Song]?
     private var cancellables = Set<AnyCancellable>()
+    /** The song's loudness level, and the sleep timer's fade on top of it. */
+    private var baseVolume: Float = 1
+    private var fade: Float = 1
+
+    nonisolated private static var savedSpeed: Float {
+        let v = UserDefaults.standard.float(forKey: "player.speed")
+        return v >= 0.5 && v <= 2 ? v : 1
+    }
 
     init(library: Library) {
         self.library = library
         player.automaticallyWaitsToMinimizeStalling = true
+        player.defaultRate = speed
         configureSession()
         configureRemoteCommands()
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] time in
@@ -122,6 +158,8 @@ final class Player: ObservableObject {
 
     func toggle() {
         if isPlaying { player.pause() } else {
+            // A timer that ran out while paused doesn't stop the music the moment it starts again.
+            if let sleepAt, sleepAt.timeIntervalSinceNow <= 0 { sleep(inMinutes: nil) }
             if player.currentItem == nil { load() } else { player.play() }
         }
     }
@@ -131,6 +169,9 @@ final class Player: ObservableObject {
     func next() {
         if index + 1 < queue.count {
             index += 1
+            load()
+        } else if repeatMode == .all, !queue.isEmpty {
+            index = 0
             load()
         } else if autoplay {
             extendWithRadio(thenAdvance: true)
@@ -157,7 +198,7 @@ final class Player: ObservableObject {
 
     // MARK: Loading
 
-    private func load() {
+    private func load(autoplay play: Bool = true) {
         guard let song = current else { return }
         loadTask?.cancel()
         error = nil
@@ -169,6 +210,13 @@ final class Player: ObservableObject {
         player.replaceCurrentItem(with: nil)
         updateNowPlaying()
         loadLyrics(for: song)
+        // A saved song plays from its file, with or without the network.
+        if let offline = library.offline(song.videoId) {
+            let item = AVPlayerItem(url: offline.url)
+            setLoudness(offline.loudnessDb)
+            start(item, playing: play)
+            return
+        }
         loadTask = Task { [weak self] in
             do {
                 let stream = try await Innertube.shared.stream(song.videoId)
@@ -176,12 +224,9 @@ final class Player: ObservableObject {
                 let asset = AVURLAsset(url: stream.url, options: ["AVURLAssetHTTPHeaderFieldsKey": stream.headers])
                 let item = AVPlayerItem(asset: asset)
                 item.preferredForwardBufferDuration = 30
-                // YouTube's loudness measure: quieter masters come up, loud ones down, as on Android.
-                if let db = stream.loudnessDb { self.player.volume = Float(min(1, pow(10, -max(0, db) / 20))) } else { self.player.volume = 1 }
+                self.setLoudness(stream.loudnessDb)
                 if let ms = stream.durationMs, ms > 0 { self.duration = Double(ms) / 1000 }
-                self.observe(item)
-                self.player.replaceCurrentItem(with: item)
-                self.player.play()
+                self.start(item, playing: play)
             } catch {
                 guard !Task.isCancelled, let self, self.current?.videoId == song.videoId else { return }
                 self.isBuffering = false
@@ -191,6 +236,55 @@ final class Player: ObservableObject {
                 if self.current?.videoId == song.videoId, self.index + 1 < self.queue.count { self.next() }
             }
         }
+    }
+
+    private func start(_ item: AVPlayerItem, playing: Bool) {
+        item.audioTimePitchAlgorithm = pitchAlgorithm
+        observe(item)
+        player.replaceCurrentItem(with: item)
+        if playing { player.play() } else { isBuffering = false }
+    }
+
+    /** YouTube's loudness measure: loud masters come down, as on Android. */
+    private func setLoudness(_ db: Double?) {
+        baseVolume = db.map { Float(min(1, pow(10, -max(0, $0) / 20))) } ?? 1
+        applyVolume()
+    }
+
+    private func applyVolume() { player.volume = baseVolume * fade }
+
+    private var pitchAlgorithm: AVAudioTimePitchAlgorithm { keepPitch ? .spectral : .varispeed }
+
+    private func applyRate() {
+        player.defaultRate = speed
+        if player.rate > 0 { player.rate = speed }
+        updateNowPlaying()
+    }
+
+    // MARK: Sleep timer
+
+    /** Stops the music in [minutes], with the last seconds faded out; nil turns the timer off. */
+    func sleep(inMinutes minutes: Int?) {
+        sleepAtSongEnd = false
+        sleepAt = minutes.map { Date().addingTimeInterval(Double($0) * 60) }
+        fade = 1
+        applyVolume()
+    }
+
+    /** Stops the music when the song playing now ends. */
+    func sleepAtEndOfSong() {
+        sleepAt = nil
+        sleepAtSongEnd = true
+        fade = 1
+        applyVolume()
+    }
+
+    private func sleepNow() {
+        sleepAt = nil
+        sleepAtSongEnd = false
+        player.pause()
+        fade = 1
+        applyVolume()
     }
 
     private func observe(_ item: AVPlayerItem) {
@@ -207,7 +301,11 @@ final class Player: ObservableObject {
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                if self.repeatOne { self.seek(to: 0); self.player.play() } else { self.next() }
+                if self.sleepAtSongEnd {
+                    self.sleepAtSongEnd = false
+                    // Ready on the next song for the morning, but quiet.
+                    if self.index + 1 < self.queue.count { self.index += 1; self.load(autoplay: false) } else { self.seek(to: 0) }
+                } else if self.repeatMode == .one { self.seek(to: 0); self.player.play() } else { self.next() }
             }
         }
     }
@@ -220,8 +318,13 @@ final class Player: ObservableObject {
             countedPlay = true
             library.recordPlay(song)
         }
+        // The sleep timer: the last ten seconds fade out, then the music stops.
+        if let sleepAt {
+            let left = sleepAt.timeIntervalSinceNow
+            if left <= 0 { sleepNow() } else if left < 10 { fade = Float(left / 10); applyVolume() }
+        }
         // Near the end of the queue, have the radio's next songs ready.
-        if autoplay, index == queue.count - 1, duration > 0, duration - seconds < 25, radioTask == nil {
+        if autoplay, repeatMode != .all, index == queue.count - 1, duration > 0, duration - seconds < 25, radioTask == nil {
             extendWithRadio()
         }
     }
@@ -295,7 +398,8 @@ final class Player: ObservableObject {
             MPMediaItemPropertyArtist: song.artist,
             MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Double(speed) : 0.0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: Double(speed),
         ]
         if let album = song.albumName { info[MPMediaItemPropertyAlbumTitle] = album }
         let existing = MPNowPlayingInfoCenter.default().nowPlayingInfo

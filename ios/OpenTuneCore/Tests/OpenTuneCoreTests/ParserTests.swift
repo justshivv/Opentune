@@ -118,7 +118,7 @@ final class ParserTests: XCTestCase {
         {"streamingData":{"hlsManifestUrl":"https://m.example/hls.m3u8","adaptiveFormats":[
           {"itag":251,"mimeType":"audio/webm; codecs=\\"opus\\"","bitrate":160000,"url":"https://g.example/opus"},
           {"itag":139,"mimeType":"audio/mp4; codecs=\\"mp4a.40.5\\"","bitrate":48000,"url":"https://g.example/low"},
-          {"itag":140,"mimeType":"audio/mp4; codecs=\\"mp4a.40.2\\"","bitrate":130000,"url":"https://g.example/aac"}]},
+          {"itag":140,"mimeType":"audio/mp4; codecs=\\"mp4a.40.2\\"","bitrate":130000,"contentLength":"3245678","url":"https://g.example/aac"}]},
          "playerConfig":{"audioConfig":{"loudnessDb":-3.2}},"videoDetails":{"lengthSeconds":"200"}}
         """.utf8)))
         let stream = try XCTUnwrap(Innertube.pickStream(response, client: .ios))
@@ -126,6 +126,7 @@ final class ParserTests: XCTestCase {
         XCTAssertFalse(stream.isHLS)
         XCTAssertEqual(stream.loudnessDb, -3.2)
         XCTAssertEqual(stream.durationMs, 200_000)
+        XCTAssertEqual(stream.contentLength, 3_245_678)
         XCTAssertEqual(stream.headers["User-Agent"], Innertube.PlayerClient.ios.userAgent)
 
         let hlsOnly = try XCTUnwrap(JSON.parse(Data(#"{"streamingData":{"hlsManifestUrl":"https://m.example/hls.m3u8","adaptiveFormats":[]}}"#.utf8)))
@@ -194,6 +195,80 @@ final class LibraryTests: XCTestCase {
         XCTAssertEqual(again.recentSongs().map(\.videoId), ["def", "abc"])
         XCTAssertFalse(again.toggleLike(song))
         XCTAssertFalse(LibraryStore(directory: dir).isLiked("abc"))
+    }
+
+    func testPlaylistsSavedAlbumsAndSearchesSurviveARestart() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let a = Song(videoId: "a", title: "A", artist: "X", thumbnailUrl: "https://i/a")
+        let b = Song(videoId: "b", title: "B", artist: "Y", thumbnailUrl: "https://i/a")
+        let c = Song(videoId: "c", title: "C", artist: "Z", thumbnailUrl: "https://i/c")
+        let store = LibraryStore(directory: dir)
+        let road = store.createPlaylist("  Road trip ")
+        let blank = store.createPlaylist("   ")
+        XCTAssertTrue(store.addToPlaylist(road, a))
+        XCTAssertTrue(store.addToPlaylist(road, b))
+        XCTAssertFalse(store.addToPlaylist(road, a), "a song goes in once")
+        XCTAssertTrue(store.addToPlaylist(road, c))
+        store.reorderPlaylist(road, [c, a, b])
+        store.reorderPlaylist(road, [c, a]) // a song lost on the way: ignored
+        store.removeFromPlaylist(road, videoId: "a")
+        store.renamePlaylist(blank, to: "Gym")
+        store.renamePlaylist(blank, to: "  ") // ignored
+        XCTAssertTrue(store.toggleSaved(SavedCollection(browseId: "MPREb_1", title: "Album", subtitle: "Artist", thumbnailUrl: nil)))
+        for q in ["one", "two", "ONE"] { store.recordSearch(q) }
+
+        let again = LibraryStore(directory: dir)
+        XCTAssertEqual(again.playlists.map(\.name), ["Gym", "Road trip"])
+        let trip = try XCTUnwrap(again.playlists.first { $0.id == road })
+        XCTAssertEqual(trip.songs.map(\.videoId), ["c", "b"])
+        XCTAssertEqual(trip.covers, ["https://i/c", "https://i/a"])
+        XCTAssertTrue(again.isSaved("MPREb_1"))
+        XCTAssertEqual(again.searches, ["ONE", "two"])
+        again.deletePlaylist(blank)
+        XCTAssertFalse(again.toggleSaved(SavedCollection(browseId: "MPREb_1", title: "", subtitle: "", thumbnailUrl: nil)))
+        again.clearSearches()
+        let third = LibraryStore(directory: dir)
+        XCTAssertEqual(third.playlists.map(\.id), [road])
+        XCTAssertTrue(third.saved.isEmpty)
+        XCTAssertTrue(third.searches.isEmpty)
+    }
+
+    func testALibraryFromBeforePlaylistsStillOpens() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let old = #"{"liked":[{"videoId":"abc","title":"Song","artist":"Artist","isVideo":false}],"history":[]}"#
+        try Data(old.utf8).write(to: dir.appendingPathComponent("library.json"))
+        let store = LibraryStore(directory: dir)
+        XCTAssertTrue(store.isLiked("abc"))
+        XCTAssertTrue(store.playlists.isEmpty)
+        XCTAssertTrue(store.downloads.isEmpty)
+    }
+
+    func testDownloadsKeepTheirFileAndForgetIt() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = LibraryStore(directory: dir)
+        let song = Song(videoId: "abc", title: "Song", artist: "Artist")
+        let file = store.downloadsFolder.appendingPathComponent("abc.m4a")
+        try Data([1, 2, 3]).write(to: file)
+        store.addDownload(DownloadedSong(song: song, fileName: "abc.m4a", bytes: 3, loudnessDb: -2))
+        XCTAssertEqual(LibraryStore(directory: dir).downloadedFile("abc"), file)
+        XCTAssertEqual(store.download("abc")?.loudnessDb, -2)
+        store.removeDownload("abc")
+        XCTAssertNil(store.downloadedFile("abc"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    func testDownloadsComeInPieces() {
+        XCTAssertEqual(SongDownloader.ranges(total: 10, piece: 4), [0...3, 4...7, 8...9])
+        XCTAssertEqual(SongDownloader.ranges(total: 8, piece: 4), [0...3, 4...7])
+        XCTAssertEqual(SongDownloader.ranges(total: 0, piece: 4), [])
+        let url = SongDownloader.url(URL(string: "https://g.example/videoplayback?id=1&range=0-5")!, range: 10...19)
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        XCTAssertEqual(items.filter { $0.name == "range" }.map(\.value), ["10-19"])
+        XCTAssertEqual(items.first { $0.name == "id" }?.value, "1")
     }
 
     func testDurationFromText() {

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SearchView: View {
     @EnvironmentObject private var player: Player
+    @EnvironmentObject private var library: Library
     @Environment(\.openRoute) private var openRoute
     @State private var query = ""
     @State private var results: [SearchResult] = []
@@ -13,6 +14,23 @@ struct SearchView: View {
 
     var body: some View {
         List {
+            if query.isEmpty, searched.isEmpty, !library.searches.isEmpty {
+                Section {
+                    ForEach(library.searches, id: \.self) { s in
+                        Button { query = s; submit() } label: {
+                            Label(s, systemImage: "clock.arrow.circlepath").foregroundStyle(.white)
+                        }
+                        .swipeActions { Button(role: .destructive) { library.removeSearch(s) } label: { Label("Remove", systemImage: "xmark") } }
+                    }
+                } header: {
+                    HStack {
+                        Text("Recent searches")
+                        Spacer()
+                        Button("Clear") { library.clearSearches() }.font(.caption)
+                    }
+                }
+                .listRowBackground(Color.clear)
+            }
             if query != searched, !suggestions.isEmpty {
                 Section {
                     ForEach(suggestions, id: \.self) { s in
@@ -37,6 +55,7 @@ struct SearchView: View {
         .navigationTitle("Search")
         .searchable(text: $query, prompt: "Songs, albums, artists")
         .onSubmit(of: .search, submit)
+        .onChange(of: query) { q in if q.isEmpty { searched = ""; results = [] } }
         .task(id: query) {
             guard !query.isEmpty, query != searched else { suggestions = []; return }
             try? await Task.sleep(nanoseconds: 250_000_000)
@@ -84,6 +103,7 @@ struct SearchView: View {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return }
         searched = q
+        library.recordSearch(q)
         suggestions = []
         searching = true
         error = nil

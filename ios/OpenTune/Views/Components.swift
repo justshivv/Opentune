@@ -12,6 +12,8 @@ enum Theme {
 enum Route: Hashable {
     case collection(browseId: String, title: String?)
     case artist(browseId: String)
+    /** A playlist made on the phone. */
+    case playlist(id: String)
 
     static func of(browseId: String, title: String? = nil) -> Route {
         BrowseType.of(browseId) == .artist ? .artist(browseId: browseId) : .collection(browseId: browseId, title: title)
@@ -71,6 +73,7 @@ struct SongRow: View {
     @EnvironmentObject private var library: Library
     let song: Song
     var number: Int?
+    var inPlaylist: String?
     var onTap: () -> Void
 
     var body: some View {
@@ -90,10 +93,26 @@ struct SongRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(song.title).font(.body.weight(.medium)).lineLimit(1)
                         .foregroundStyle(player.current?.videoId == song.videoId ? Theme.accent : .white)
-                    SubtitleLine(text: [song.artist, song.durationText].compactMap { $0 }.joined(separator: " • "), explicit: song.isExplicit == true)
+                    HStack(spacing: 5) {
+                        if library.isDownloaded(song) {
+                            Image(systemName: "arrow.down.circle.fill").font(.caption2).foregroundStyle(Theme.accent).accessibilityLabel("Downloaded")
+                        }
+                        SubtitleLine(text: [song.artist, song.durationText].compactMap { $0 }.joined(separator: " • "), explicit: song.isExplicit == true)
+                    }
                 }
                 Spacer(minLength: 0)
-                SongMenu(song: song).foregroundStyle(Theme.subtle)
+                if let fraction = library.downloading[song.videoId] {
+                    ZStack {
+                        Circle().stroke(.white.opacity(0.15), lineWidth: 2.5)
+                        Circle().trim(from: 0, to: max(0.03, fraction))
+                            .stroke(Theme.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .animation(.easeOut(duration: 0.3), value: fraction)
+                    }
+                    .frame(width: 18, height: 18)
+                    .accessibilityLabel("Downloading")
+                }
+                SongMenu(song: song, inPlaylist: inPlaylist).foregroundStyle(Theme.subtle)
             }
             .contentShape(Rectangle())
         }
@@ -107,6 +126,9 @@ struct SongMenu: View {
     @EnvironmentObject private var library: Library
     @Environment(\.openRoute) private var openRoute
     let song: Song
+    /** The playlist this row is in, for a "Remove from playlist" item. */
+    var inPlaylist: String?
+    @State private var choosingPlaylist = false
 
     var body: some View {
         Menu {
@@ -116,14 +138,110 @@ struct SongMenu: View {
             Button { library.toggleLike(song) } label: {
                 library.isLiked(song) ? Label("Remove from liked", systemImage: "heart.slash") : Label("Like", systemImage: "heart")
             }
+            Button { choosingPlaylist = true } label: { Label("Add to playlist", systemImage: "text.badge.plus") }
+            if let inPlaylist {
+                Button(role: .destructive) { library.remove(song.videoId, from: inPlaylist) } label: { Label("Remove from playlist", systemImage: "minus.circle") }
+            }
+            if library.isDownloaded(song) {
+                Button(role: .destructive) { library.removeDownload(song.videoId) } label: { Label("Remove download", systemImage: "trash") }
+            } else if library.downloading[song.videoId] != nil {
+                Button { library.cancelDownload(song.videoId) } label: { Label("Stop downloading", systemImage: "xmark.circle") }
+            } else {
+                Button { library.download(song) } label: { Label("Download", systemImage: "arrow.down.circle") }
+            }
             if let openRoute, let artistId = song.artistId { Button { openRoute(.artist(browseId: artistId)) } label: { Label("Go to artist", systemImage: "person") } }
             if let openRoute, let albumId = song.albumId { Button { openRoute(.collection(browseId: albumId, title: song.albumName)) } label: { Label("Go to album", systemImage: "square.stack") } }
             ShareLink(item: URL(string: "https://music.youtube.com/watch?v=\(song.videoId)")!) { Label("Share", systemImage: "square.and.arrow.up") }
         } label: {
             Image(systemName: "ellipsis").frame(width: 36, height: 36).contentShape(Rectangle())
         }
+        .sheet(isPresented: $choosingPlaylist) { PlaylistPicker(song: song) }
     }
 }
+
+/** Picks a playlist for a song, or makes a new one with it in. */
+struct PlaylistPicker: View {
+    @EnvironmentObject private var library: Library
+    @Environment(\.dismiss) private var dismiss
+    let song: Song
+    @State private var newName = ""
+    @State private var naming = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Button { naming = true } label: { Label("New playlist", systemImage: "plus") }
+                ForEach(library.playlists) { p in
+                    let there = p.songs.contains { $0.videoId == song.videoId }
+                    Button {
+                        library.add(song, to: p.id)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            PlaylistCover(playlist: p).frame(width: 44, height: 44)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(p.name).foregroundStyle(.white)
+                                Text(songCount(p.songs.count)).font(.caption).foregroundStyle(Theme.subtle)
+                            }
+                            Spacer()
+                            if there { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
+                        }
+                    }
+                    .disabled(there)
+                }
+            }
+            .navigationTitle("Add to playlist")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .alert("New playlist", isPresented: $naming) {
+                TextField("Name", text: $newName)
+                Button("Create") {
+                    library.createPlaylist(newName, with: song)
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+/** A playlist's tile: four covers in a square, one when there's one, a note when there are none. */
+struct PlaylistCover: View {
+    let playlist: LocalPlaylist
+    var corner: CGFloat = 8
+
+    var body: some View {
+        let covers = playlist.covers
+        GeometryReader { geo in
+            let half = geo.size.width / 2
+            Group {
+                if covers.count >= 4 {
+                    VStack(spacing: 0) {
+                        HStack(spacing: 0) { tile(covers[0], half); tile(covers[1], half) }
+                        HStack(spacing: 0) { tile(covers[2], half); tile(covers[3], half) }
+                    }
+                } else if let first = covers.first {
+                    Artwork(url: first, size: Art.card, corner: 0)
+                } else {
+                    ZStack {
+                        LinearGradient(colors: [Theme.accent.opacity(0.55), Theme.card], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        Image(systemName: "music.note.list").font(.system(size: geo.size.width * 0.32)).foregroundStyle(.white.opacity(0.8))
+                    }
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+    }
+
+    private func tile(_ url: String, _ side: CGFloat) -> some View {
+        Artwork(url: url, size: Art.row, corner: 0).frame(width: side, height: side).clipped()
+    }
+}
+
+func songCount(_ n: Int) -> String { n == 1 ? "1 song" : "\(n) songs" }
 
 /** A card in a horizontal shelf. */
 struct ShelfCard: View {
@@ -217,6 +335,7 @@ struct RoutedStack<Content: View>: View {
                     switch route {
                     case let .collection(id, title): CollectionView(browseId: id, initialTitle: title)
                     case let .artist(id): ArtistView(browseId: id)
+                    case let .playlist(id): LocalPlaylistView(id: id)
                     }
                 }
         }

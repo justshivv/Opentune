@@ -4,6 +4,7 @@ import SwiftUI
 /** An album or playlist: blurred cover behind the header, then its tracks. */
 struct CollectionView: View {
     @EnvironmentObject private var player: Player
+    @EnvironmentObject private var library: Library
     let browseId: String
     var initialTitle: String?
     @State private var page: CollectionPage?
@@ -44,6 +45,24 @@ struct CollectionView: View {
         .background(Theme.background)
         .navigationTitle(page?.title ?? initialTitle ?? "")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                if let page {
+                    let saved = library.isSaved(browseId)
+                    Button {
+                        library.toggleSaved(SavedCollection(browseId: browseId, title: page.title.isEmpty ? (initialTitle ?? "") : page.title, subtitle: page.subtitle, thumbnailUrl: page.thumbnailUrl))
+                    } label: {
+                        Image(systemName: saved ? "heart.fill" : "heart").foregroundStyle(saved ? Theme.accent : .white)
+                    }
+                    .accessibilityLabel(saved ? "Remove from library" : "Save to library")
+                    Menu {
+                        Button { library.downloadAll(page.songs) } label: { Label("Download all", systemImage: "arrow.down.circle") }
+                        Button { page.songs.forEach { player.addToQueue($0) } } label: { Label("Add to queue", systemImage: "text.append") }
+                        ShareLink(item: URL(string: "https://music.youtube.com/browse/\(browseId)")!) { Label("Share", systemImage: "square.and.arrow.up") }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                }
+            }
+        }
         .task { if page == nil { await load() } }
     }
 
@@ -149,66 +168,5 @@ struct ArtistView: View {
 
     private func load() async {
         do { page = try await MusicRepository.artist(browseId); error = nil } catch { self.error = "Couldn't open this artist. \(error)" }
-    }
-}
-
-struct LibraryView: View {
-    @EnvironmentObject private var player: Player
-    @EnvironmentObject private var library: Library
-    @State private var tab = 0
-    @State private var confirmClear = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $tab) {
-                Text("Liked songs").tag(0)
-                Text("History").tag(1)
-            }
-            .pickerStyle(.segmented)
-            .padding()
-            List {
-                if tab == 0 {
-                    if library.liked.isEmpty {
-                        empty("No liked songs yet", "Tap the heart in the player to keep a song here.")
-                    } else {
-                        Button { player.play(library.liked.shuffled()) } label: { Label("Shuffle all", systemImage: "shuffle") }
-                            .listRowBackground(Color.clear)
-                        ForEach(Array(library.liked.enumerated()), id: \.element.videoId) { i, song in
-                            SongRow(song: song) { player.play(library.liked, from: i) }.listRowBackground(Color.clear)
-                        }
-                    }
-                } else {
-                    let history = library.history
-                    if history.isEmpty {
-                        empty("Nothing played yet", "Songs you listen to show up here. They stay on this phone.")
-                    } else {
-                        ForEach(Array(history.enumerated()), id: \.offset) { _, record in
-                            SongRow(song: record.song) { player.play([record.song]) }.listRowBackground(Color.clear)
-                        }
-                        Button("Clear history", role: .destructive) { confirmClear = true }.listRowBackground(Color.clear)
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-        }
-        .background(Theme.background)
-        .navigationTitle("Library")
-        .toolbar { ToolbarItem(placement: .navigationBarTrailing) {
-            NavigationLink { AppearanceView() } label: { Image(systemName: "gearshape").accessibilityLabel("Appearance settings") }
-        } }
-        .confirmationDialog("Clear listening history?", isPresented: $confirmClear, titleVisibility: .visible) {
-            Button("Clear", role: .destructive) { library.clearHistory() }
-        }
-    }
-
-    private func empty(_ title: String, _ message: String) -> some View {
-        VStack(spacing: 6) {
-            Text(title).font(.headline)
-            Text(message).font(.subheadline).foregroundStyle(Theme.subtle).multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-        .listRowBackground(Color.clear)
     }
 }

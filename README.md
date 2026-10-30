@@ -126,10 +126,14 @@ from Safari and choose **Share → Add to Home Screen**. This installs the web a
 not the native IPA. Safari on iOS cannot run our Chrome/Firefox session extension,
 so extension-dependent playback and account features are unavailable there.
 
-The native iOS build currently includes Home, search, artist/album/playlist browsing,
-a player with synced lyrics and queue editing, background audio, lock-screen controls,
-AirPlay, likes and history. Feature availability differs from Android; platform parity
-work does not change what is present in the currently published IPA.
+The native iOS build currently includes Home, search with recent searches,
+artist/album/playlist browsing, a player with synced lyrics and queue editing,
+shuffle, repeat (off, all, one), playback speed with or without a change of pitch,
+a sleep timer that fades out, background audio, lock-screen controls, AirPlay,
+likes, history, your own playlists, albums and playlists saved with the heart, and
+downloads for listening offline (one song, or Download all on an album or playlist).
+It still has less than Android: no equalizer, no sign-in, no add-on sources and
+lyrics from LRCLIB only.
 
 ### Android TV
 

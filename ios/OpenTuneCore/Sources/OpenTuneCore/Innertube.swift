@@ -52,6 +52,8 @@ public actor Innertube {
         /** YouTube's loudness measure, for normalisation. */
         public let loudnessDb: Double?
         public let durationMs: Int64?
+        /** The file's size in bytes, where YouTube says; downloads fetch it in pieces. */
+        public var contentLength: Int64? = nil
     }
 
     public enum Failure: Error, CustomStringConvertible, Sendable {
@@ -154,7 +156,8 @@ public actor Innertube {
         if let best = audio.max(by: { ($0["bitrate"]?.doubleValue ?? 0) < ($1["bitrate"]?.doubleValue ?? 0) }),
            let s = Optional(best).s("url"), let url = URL(string: s) {
             return Stream(url: url, headers: headers, isHLS: false, mimeType: Optional(best).s("mimeType"),
-                          bitrate: best["bitrate"]?.doubleValue.map { Int($0) }, loudnessDb: loudness, durationMs: durationMs)
+                          bitrate: best["bitrate"]?.doubleValue.map { Int($0) }, loudnessDb: loudness, durationMs: durationMs,
+                          contentLength: Optional(best).s("contentLength").flatMap { Int64($0) })
         }
         if let hls = data.s("hlsManifestUrl"), let url = URL(string: hls) {
             return Stream(url: url, headers: headers, isHLS: true, mimeType: "application/x-mpegURL", bitrate: nil, loudnessDb: loudness, durationMs: durationMs)
