@@ -81,6 +81,26 @@ class DesktopShots {
         Library.createPlaylist("Late night drive").also { id -> listened.take(6).forEach { Library.addToPlaylist(id, it) } }
         Library.createPlaylist("Gym").also { id -> listened.drop(4).forEach { Library.addToPlaylist(id, it) } }
         shoot("desktop-home-full", 1600, 1800, 12_000) { DesktopApp() }
+        shoot("desktop-now-playing", 1700, 1000, 12_000) { DesktopApp(startPanel = SidePanel.NOW) }
+        shoot("desktop-artist", 1400, 1300, 12_000) {
+            DesktopTheme {
+                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+                    ArtistView(com.opentune.data.model.ShelfItem("The Weeknd", "Artist", null, null, "UClYV6hHlupm_S_ObS1W-DYw"), onOpen = {})
+                }
+            }
+        }
+        shoot("desktop-artist-signed", 1400, 900, 12_000) {
+            DesktopTheme {
+                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+                    ArtistView(com.opentune.data.model.ShelfItem("Real Boss", "Artist", null, null, "UCnotarealchannel"), onOpen = {})
+                }
+            }
+        }
+        shoot("desktop-new", 1400, 1300, 12_000) {
+            DesktopTheme {
+                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { NewPage(onOpen = {}) }
+            }
+        }
         shoot("desktop-library", 1400, 2000, 8_000) {
             DesktopTheme {
                 Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {

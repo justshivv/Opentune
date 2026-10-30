@@ -45,6 +45,9 @@ val sharedFromCore = listOf(
     "com/opentune/data/history/ListenedCollections.kt",
     "com/opentune/data/library/Hidden.kt",
     "com/opentune/data/SavedFile.kt",
+    // Artist pages: Apple Music's header photo and the artist's signature.
+    "com/opentune/data/covers/AppleArtistArt.kt",
+    "com/opentune/data/covers/ArtistSignatures.kt",
     // Lyrics from every source the phone asks, without the romanizer (Android's ICU).
     "com/opentune/data/lyrics/Lyrics.kt",
     "com/opentune/data/lyrics/LyricsRepository.kt",

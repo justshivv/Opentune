@@ -143,28 +143,24 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
     val loaded = shelves
     LazyColumn(state = list, contentPadding = PaddingValues(top = 24.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(30.dp)) {
         item(key = "title") {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                PageTitle(greeting())
-                if (moods.isNotEmpty()) MoodChips(moods) { onOpenAny(MoodKey(it.title, it.browseId, it.params)) }
+            Column {
+                PageTitle("Home")
+                Text(greeting(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp))
             }
         }
-        if (speedDial.size >= 6) item(key = "speed") {
-            Section("Speed dial", "What you play most, lately counting for more") { SpeedDialGrid(speedDial) }
+        if (mixes.isNotEmpty() || speedDial.isNotEmpty()) item(key = "picks") {
+            Section("Top picks for you") { TopPicks(mixes, speedDial.take(8), onOpenMix = { onOpenAny(it) }) }
         }
-        if (mixes.isNotEmpty()) item(key = "mixes") {
-            Section("Made for you", "Mixed fresh each day from what you play here") {
-                LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(mixes, key = { it.id }) { mix -> MixCard(mix, onOpen = { onOpenAny(mix) }) }
-                }
-            }
+        if (recent.isNotEmpty()) item(key = "recents") { SongGrid("Recents", recent.take(32)) }
+        if (moods.isNotEmpty()) item(key = "moods") {
+            Section("Find your mood") { MoodTiles(moods) { onOpenAny(MoodKey(it.title, it.browseId, it.params)) } }
         }
-        if (recent.isNotEmpty()) item(key = "again") { ShelfRow(Pages.Shelf("Listen again", recent.take(20).map(Pages::cardOf)), onOpen) }
         when {
             failed -> item(key = "failed") { Message("Couldn't load Home", "Check your connection and try again.", action = "Try again" to ::load) }
             loaded == null -> items(3, key = { "placeholder$it" }) { ShelfPlaceholder() }
             else -> {
                 itemsIndexed(loaded, key = { i, _ -> "yt$i" }) { _, shelf ->
-                    if (isQuickPicks(shelf.title)) QuickPicks(shelf) else ShelfRow(shelf, onOpen)
+                    if (isSongShelf(shelf)) SongGrid(shelf.title, shelf.items.mapNotNull(Pages::songOf)) else ShelfRow(shelf, onOpen)
                 }
                 if (next != null || !extrasDone) item(key = "more") { ShelfPlaceholder() }
             }
@@ -175,7 +171,9 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
     }
 }
 
-private fun isQuickPicks(title: String) = title.trim().equals("Quick picks", ignoreCase = true)
+/** A row of songs (quick picks, trending): shown as columns of song rows, as BitChord's desktop shows them, not as cards. */
+private fun isSongShelf(shelf: Pages.Shelf) =
+    shelf.title.trim().equals("Quick picks", ignoreCase = true) || shelf.items.size >= 8 && shelf.items.count { it.videoId != null } * 10 >= shelf.items.size * 9
 
 /** Good morning, afternoon or evening, as Home on the phone greets you. */
 private fun greeting(): String = when (java.time.LocalTime.now().hour) {
@@ -298,24 +296,23 @@ private fun SpeedDialGrid(items: List<ShelfItem>) {
     }
 }
 
-/** YouTube's quick picks as four rows of songs that scroll sideways, as the phone shows them. */
+/** Songs as four rows that scroll sideways in columns, each with its cover, title and artist. */
 @Composable
-private fun QuickPicks(shelf: Pages.Shelf) {
-    val songs = remember(shelf) { shelf.items.mapNotNull(Pages::songOf) }
+internal fun SongGrid(title: String, songs: List<Song>, rows: Int = 4) {
     val queue by Player.queue.collectAsState()
     val index by Player.index.collectAsState()
     val playingId = queue.getOrNull(index)?.videoId
-    Section(shelf.title) {
+    Section(title) {
         LazyHorizontalGrid(
-            GridCells.Fixed(4),
-            Modifier.fillMaxWidth().height(252.dp),
+            GridCells.Fixed(rows.coerceAtMost(songs.size).coerceAtLeast(1)),
+            Modifier.fillMaxWidth().height(64.dp * rows.coerceAtMost(songs.size).coerceAtLeast(1) - 4.dp),
             contentPadding = PaddingValues(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(songs) { song ->
                 val hover = remember { MutableInteractionSource() }
                 Row(
-                    Modifier.width(340.dp).height(60.dp).hoverWash(hover, RoundedCornerShape(10.dp))
+                    Modifier.width(320.dp).height(60.dp).hoverWash(hover, RoundedCornerShape(10.dp))
                         .clickable(interactionSource = hover, indication = null) { Player.playAll(songs, songs.indexOf(song)) }
                         .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -331,6 +328,101 @@ private fun QuickPicks(shelf: Pages.Shelf) {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Top picks: tall cards, your daily mixes as a burst of colour with three
+ * of their covers in circles, then the songs you play most as full covers.
+ */
+@Composable
+private fun TopPicks(mixes: List<DailyMixes.Mix>, most: List<ShelfItem>, onOpenMix: (DailyMixes.Mix) -> Unit) {
+    val songs = remember(most) { most.mapNotNull(Pages::songOf) }
+    LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        items(mixes, key = { "mix" + it.id }) { mix -> PickCard(label = "Made for you", title = mix.title, line = mix.subtitle, colourOf = mix.covers.firstOrNull(), onClick = { onOpenMix(mix) }) {
+            MixCircles(mix.covers.filterNotNull())
+        } }
+        items(most, key = { "most" + (it.videoId ?: it.title) }) { item ->
+            PickCard(label = "Played most", title = item.title, line = item.subtitle, colourOf = item.thumbnailUrl, fullCover = item.thumbnailUrl, onClick = {
+                val at = songs.indexOfFirst { it.videoId == item.videoId }
+                if (at >= 0) Player.playAll(songs, at)
+            })
+        }
+    }
+}
+
+/** A tall card: a cover filling it, or a colour from [colourOf] with [art] on it; its kind, title and a line at the foot. */
+@Composable
+private fun PickCard(label: String, title: String, line: String, colourOf: String?, fullCover: String? = null, onClick: () -> Unit, art: @Composable () -> Unit = {}) {
+    val hover = remember { MutableInteractionSource() }
+    val base = MaterialTheme.colorScheme.surfaceContainerHigh
+    val colour = rememberCoverColor(colourOf, base)
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        Modifier.width(196.dp).height(262.dp).hoverLift(hover, 1.03f).clip(shape)
+            .background(Brush.linearGradient(listOf(lerpColor(colour, Color.White, 0.12f), lerpColor(colour, Color.Black, 0.35f))))
+            .clickable(interactionSource = hover, indication = null, onClick = onClick),
+    ) {
+        if (fullCover != null) Cover(fullCover, 262.dp, shape, Modifier.fillMaxSize()) else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { art() }
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.78f))))
+        Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f))
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(line, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+private fun lerpColor(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
+
+/** Three covers in overlapping circles, as a mix's card shows who's in it. */
+@Composable
+private fun MixCircles(covers: List<String>) {
+    Box(Modifier.size(170.dp).padding(bottom = 40.dp)) {
+        covers.getOrNull(0)?.let { Cover(it, 104.dp, CircleShape, Modifier.align(Alignment.TopStart).padding(top = 6.dp, start = 8.dp)) }
+        covers.getOrNull(1)?.let { Cover(it, 70.dp, CircleShape, Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) }
+        covers.getOrNull(2)?.let { Cover(it, 58.dp, CircleShape, Modifier.align(Alignment.BottomCenter)) }
+    }
+}
+
+/** Moods and genres as coloured tiles, two rows that scroll sideways. */
+@Composable
+private fun MoodTiles(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
+    val palette = listOf(0xFF2E7D32, 0xFF1565C0, 0xFF6A1B9A, 0xFFC62828, 0xFFEF6C00, 0xFF00838F, 0xFFAD1457, 0xFF4E342E, 0xFF283593, 0xFF9E9D24)
+    LazyHorizontalGrid(
+        GridCells.Fixed(2), Modifier.fillMaxWidth().height(176.dp),
+        contentPadding = PaddingValues(horizontal = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items(moods, key = { it.title }) { m ->
+            val hover = remember { MutableInteractionSource() }
+            val colour = Color(palette[(m.title.hashCode() and 0x7fffffff) % palette.size])
+            Box(
+                Modifier.width(200.dp).height(82.dp).hoverLift(hover, 1.03f).clip(RoundedCornerShape(12.dp))
+                    .background(Brush.linearGradient(listOf(colour, lerpColor(colour, Color.Black, 0.35f))))
+                    .clickable(interactionSource = hover, indication = null) { onOpen(m) }.padding(14.dp),
+            ) { Text(m.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 2) }
+        }
+    }
+}
+
+/**
+ * New: what's just come out and what's climbing, as BitChord's New tab has
+ * it: new albums and singles as covers, trending songs in columns of rows,
+ * then the charts.
+ */
+@Composable
+internal fun NewPage(onOpen: (ShelfItem) -> Unit) {
+    val shelves by produceState<List<Pages.Shelf>?>(null) { value = runCatching { Pages.moreForHome() }.getOrDefault(emptyList()) }
+    LazyColumn(contentPadding = PaddingValues(top = 24.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(30.dp)) {
+        item { PageTitle("New") }
+        when (val loaded = shelves) {
+            null -> items(3) { ShelfPlaceholder() }
+            else -> if (loaded.isEmpty()) item { Message("Nothing new could be loaded", "Check your connection and try again.") }
+                else items(loaded) { shelf ->
+                    if (isSongShelf(shelf)) SongGrid(shelf.title, shelf.items.mapNotNull(Pages::songOf)) else ShelfRow(shelf, onOpen)
+                }
         }
     }
 }

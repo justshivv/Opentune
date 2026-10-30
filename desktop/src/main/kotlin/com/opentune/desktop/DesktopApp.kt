@@ -57,6 +57,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
@@ -151,6 +153,7 @@ import kotlinx.coroutines.launch
 /** The sidebar's pages; an opened album, playlist or artist goes over them. */
 internal enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
     HOME("Home", Icons.Outlined.Home, Icons.Rounded.Home),
+    NEW("New", Icons.Rounded.GridView, Icons.Rounded.GridView),
     SEARCH("Search", Icons.Rounded.Search, Icons.Rounded.Search),
     LIBRARY("Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
     QUEUE("Up next", Icons.AutoMirrored.Outlined.QueueMusic, Icons.AutoMirrored.Rounded.QueueMusic),
@@ -164,11 +167,11 @@ internal data class PlaylistKey(val id: String)
 private data class Page(val tab: Tab, val shelf: Shelf? = null, val opened: Any? = null)
 
 /**
- * The window, laid out as a Mac music app is: a sidebar with search, the
- * pages and your playlists; a bar along the top with the transport, the song
- * playing and volume; the page below it, with lyrics or the queue in a
- * column beside it when asked ([startPanel] opens with one, for pictures).
- * Clicking the song opens the full player.
+ * The window, as BitChord's desktop lays it out: an icon rail down the left,
+ * the page, Now playing (or the lyrics, or the queue) in a column on the
+ * right when asked ([startPanel] opens with one, for pictures), and the
+ * player floating as a pill over the bottom of the page. Clicking the song
+ * in the pill opens the full player.
  */
 @Composable
 fun DesktopApp(startPanel: SidePanel? = null) {
@@ -190,65 +193,78 @@ fun DesktopApp(startPanel: SidePanel? = null) {
         page = to
     }
     val back: () -> Unit = { history.removeLastOrNull()?.let { page = it } }
+    val groups = remember {
+        listOf(
+            listOf(Tab.HOME, Tab.NEW, Tab.SEARCH, Tab.LIBRARY).map { RailItem(it, it.selectedIcon, it.label) },
+            listOf(
+                RailItem(Shelf.RECENT, Icons.Rounded.History, "Recently played"),
+                RailItem(Shelf.LIKED, Icons.Rounded.Favorite, "Liked songs"),
+                RailItem(Shelf.PLAYLISTS, Icons.AutoMirrored.Rounded.QueueMusic, "Playlists"),
+            ),
+            listOf(RailItem(Tab.QUEUE, Icons.AutoMirrored.Rounded.PlaylistPlay, "Up next")),
+        )
+    }
+    val railSelected: Any? = when {
+        page.opened is PlaylistKey -> Shelf.PLAYLISTS
+        page.opened != null -> null
+        page.tab == Tab.LIBRARY -> page.shelf ?: Tab.LIBRARY
+        else -> page.tab
+    }
 
     DesktopTheme(artworkSeed = rememberArtworkSeed(song?.thumbnailUrl)) {
         Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                val compact = maxWidth < 900.dp
-                val roomForPanel = maxWidth >= 1040.dp
+                val roomForPanel = maxWidth >= 1000.dp
+                val panelShown = panel != null && song != null && roomForPanel
                 Row(Modifier.fillMaxSize()) {
-                    Sidebar(
-                        compact = compact,
-                        page = page.tab.takeIf { page.opened == null || page.opened is PlaylistKey },
-                        shelf = page.shelf.takeIf { page.tab == Tab.LIBRARY && page.opened == null },
-                        openPlaylist = (page.opened as? PlaylistKey)?.id,
-                        query = query,
-                        onQuery = { query = it },
-                        onSearch = { searches++; go(Page(Tab.SEARCH)) },
-                        onTab = { go(Page(it)) },
-                        onShelf = { go(Page(Tab.LIBRARY, it)) },
-                        onPlaylist = { go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, PlaylistKey(it))) },
-                    )
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
-                        TopBar(
-                            song = song,
-                            canGoBack = history.isNotEmpty(),
-                            onBack = back,
-                            panel = panel,
-                            onPanel = { p -> panel = if (panel == p) null else p },
-                            onOpenPlayer = { playerOpen = true },
-                        )
-                        Row(Modifier.weight(1f).fillMaxWidth()) {
-                            Box(Modifier.weight(1f).fillMaxHeight()) {
-                                PageBackdrop(song?.thumbnailUrl)
-                                CompositionLocalProvider(LocalPageBottom provides 32.dp) {
-                                    Pages(
-                                        page = page,
-                                        still = ui.reduceAnimation,
-                                        queue = queue,
-                                        index = index,
-                                        compact = compact,
-                                        query = query,
-                                        onQuery = { query = it },
-                                        searches = searches,
-                                        onSearch = { searches++ },
-                                        onOpen = { go(page.copy(opened = it)) },
-                                        onOpenAny = { go(page.copy(opened = it)) },
-                                        onShelf = { go(Page(Tab.LIBRARY, it)) },
-                                        onPlaylist = { go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, PlaylistKey(it))) },
-                                        onBack = { back() },
-                                    )
-                                }
-                            }
-                            val shown = rememberLast(panel)
-                            AnimatedVisibility(
-                                visible = panel != null && song != null && roomForPanel,
-                                enter = if (ui.reduceAnimation) fadeIn(tween(140)) else expandHorizontally(Motion.soft(), Alignment.Start) + fadeIn(tween(220, 80)),
-                                exit = if (ui.reduceAnimation) fadeOut(tween(120)) else shrinkHorizontally(tween(260), Alignment.Start) + fadeOut(tween(160)),
-                            ) {
-                                if (song != null && shown != null) SidePanelColumn(shown, song, queue, index) { panel = it }
+                    Rail(
+                        groups, railSelected, canGoBack = history.isNotEmpty(), onBack = back,
+                        settings = RailItem(Tab.SETTINGS, Icons.Rounded.Settings, "Settings"),
+                    ) { key ->
+                        when (key) {
+                            is Tab -> go(Page(key))
+                            is Shelf -> go(Page(Tab.LIBRARY, key))
+                        }
+                    }
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        PageBackdrop(song?.thumbnailUrl)
+                        CompositionLocalProvider(LocalPageBottom provides if (song != null) PILL_ROOM else 32.dp) {
+                            Pages(
+                                page = page,
+                                still = ui.reduceAnimation,
+                                queue = queue,
+                                index = index,
+                                query = query,
+                                onQuery = { query = it },
+                                searches = searches,
+                                onSearch = { searches++ },
+                                onOpen = { go(page.copy(opened = it)) },
+                                onOpenAny = { go(page.copy(opened = it)) },
+                                onShelf = { go(Page(Tab.LIBRARY, it)) },
+                                onPlaylist = { go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, PlaylistKey(it))) },
+                                onBack = { back() },
+                            )
+                        }
+                        // The player floats over the foot of the page.
+                        val pill = rememberLast(song)
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = song != null,
+                            enter = fadeIn(tween(220)) + slideInVertically(Motion.soft()) { it / 2 },
+                            exit = fadeOut(tween(160)) + slideOutVertically(tween(200)) { it / 2 },
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 18.dp),
+                        ) {
+                            pill?.let {
+                                PlayerPill(it, panel.takeIf { panelShown }, onPanel = { p -> panel = if (panel == p && panelShown) null else p }, onOpenPlayer = { playerOpen = true })
                             }
                         }
+                    }
+                    val shown = rememberLast(panel)
+                    AnimatedVisibility(
+                        visible = panelShown,
+                        enter = if (ui.reduceAnimation) fadeIn(tween(140)) else expandHorizontally(Motion.soft(), Alignment.Start) + fadeIn(tween(220, 80)),
+                        exit = if (ui.reduceAnimation) fadeOut(tween(120)) else shrinkHorizontally(tween(260), Alignment.Start) + fadeOut(tween(160)),
+                    ) {
+                        if (song != null && shown != null) RightPanel(shown, song, queue, index, onPanel = { panel = it }, onOpenArtist = { go(page.copy(opened = it)) })
                     }
                 }
 
@@ -274,7 +290,6 @@ private fun Pages(
     still: Boolean,
     queue: List<Song>,
     index: Int,
-    compact: Boolean,
     query: String,
     onQuery: (String) -> Unit,
     searches: Int,
@@ -302,11 +317,13 @@ private fun Pages(
     ) { shown ->
         val opened = shown.opened
         when {
+            opened is ShelfItem && opened.browseId?.startsWith("UC") == true -> ArtistView(opened, onOpen)
             opened is ShelfItem -> CollectionPage(opened)
             opened is PlaylistKey -> PlaylistPage(opened.id, onBack = onBack)
             opened is MoodKey -> MoodPage(opened, onOpen)
             opened is DailyMixes.Mix -> MixPage(opened)
-            shown.tab == Tab.SEARCH -> SearchPage(query, onQuery, searches, onSearch, showField = compact)
+            shown.tab == Tab.SEARCH -> SearchPage(query, onQuery, searches, onSearch, showField = true)
+            shown.tab == Tab.NEW -> NewPage(onOpen)
             shown.tab == Tab.HOME -> HomePage(onOpen = onOpen, onOpenAny = onOpenAny)
             shown.tab == Tab.LIBRARY -> shown.shelf?.let { LibraryPage(it, onShelf, onPlaylist) }
                 ?: LibraryHome(onShelf = onShelf, onPlaylist = onPlaylist, onOpenAny = onOpenAny)

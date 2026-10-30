@@ -375,12 +375,13 @@ on your own connection with no hosted proxy.
   lyrics from the phone's sources (lit word by word, with a per-song source
   and offset), your own playlists, liked and recent songs, your own
   Subsonic server, the 15-band equalizer and its presets, speed,
-  balance, shuffle, repeat and a sleep timer. It's laid out like a Mac
-  music app: a sidebar with search, the pages and your playlists; a bar
-  along the top with the transport, the song playing (click it for the
-  full player) and volume; and lyrics or the queue in a column beside the
-  page. The chrome is neutral grey with white as the accent, so the covers
-  bring the colour. YouTube songs
+  balance, shuffle, repeat and a sleep timer. It's laid out like BitChord's
+  desktop app: an icon rail down the left, the player floating as a pill
+  over the foot of the page, and a column on the right with Now playing
+  (the cover, a lyrics preview and the artist), the full lyrics or the
+  queue. Artist pages open on Apple Music's photo of the artist with their
+  handwritten signature over it, and there's a New tab for new releases
+  and the charts. YouTube songs
   play YouTube's Opus stream (about 160 kbps) through a bundled FFmpeg,
   falling back to AAC; YouTube's player code runs on GraalJS; and the
   library (liked songs, playlists and the full play history) is kept in
