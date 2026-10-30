@@ -41,5 +41,17 @@ class UsageTest {
     @Test fun keepsOddVersionNamesToSafeCharacters() {
         assertEquals("ver-0.3.6-beta1x", Usage.periodKeys(0, "0.3.6-beta 1 (x)")[1])
     }
-}
 
+    @Test fun aNewInstallationIsRetriedSoonAndPlaysWaitForTheBatch() {
+        // Never counted: a failed try comes again within minutes, so the install shows straight away.
+        assertEquals(Usage.FIRST_RETRY_MS, Usage.retryAfter(0L))
+        assertEquals(15 * 60_000L, Usage.FIRST_RETRY_MS)
+        // Counted once: plays go out with the four-hour batch, a failure waits for the next one.
+        assertEquals(Usage.REPORT_EVERY_MS, Usage.retryAfter(1_760_000_000_000L))
+        val now = 1_760_000_000_000L
+        val plays = setOf("20261009|1.0.0|IST")
+        // 35 plays in the four hours after a report are held, then sent together.
+        assertEquals(false, Usage.due(now - 3 * 60 * 60_000L, now, plays, "20261009"))
+        assertEquals(true, Usage.due(now - Usage.REPORT_EVERY_MS, now, plays, "20261009"))
+    }
+}

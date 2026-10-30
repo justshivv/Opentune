@@ -34,7 +34,12 @@ object Usage {
 
     fun init(context: Context) {
         if (prefs == null) prefs = context.applicationContext.getSharedPreferences("usage_v2", Context.MODE_PRIVATE)
-        if (!BuildConfig.DEBUG) UsageUploadWorker.schedule(context)
+        if (!BuildConfig.DEBUG) {
+            UsageUploadWorker.schedule(context)
+            // A new installation is counted as soon as there's a network, even if the
+            // app is closed straight away; plays after that wait for the four-hour batch.
+            if (prefs?.getLong("last-report", 0L) == 0L) UsageUploadWorker.scheduleFirst(context)
+        }
     }
     private val enabled get() = !BuildConfig.DEBUG && AppSettings.ui.value.countUsage && prefs != null
 
@@ -59,6 +64,9 @@ object Usage {
         } }
     }
 
+    /** Whether this installation has been counted, or isn't being counted at all (no consent). */
+    internal fun counted(): Boolean = !enabled || (prefs?.getLong("last-report", 0L) ?: 0L) > 0L
+
     /** Background upload does not create activity for a day when the app was not used. */
     internal suspend fun flushPending() = lock.withLock {
         if (enabled) prefs?.let { sendPending(it, System.currentTimeMillis()) }
@@ -73,10 +81,14 @@ object Usage {
             // out at most every few hours (including across midnight), not after every song:
             // one report per play was most of the Worker's daily allowance.
             val monotonic = System.nanoTime() / 1_000_000
-            if (!due(p.getLong("last-report", 0L), now, pending, istDay(now))) return
-            if (lastAttempt != 0L && monotonic - lastAttempt < RETRY_MS) return
+            val lastReport = p.getLong("last-report", 0L)
+            if (!due(lastReport, now, pending, istDay(now))) return
+            // Until the installation has been counted once, a failed try is repeated
+            // within minutes; after that, plays only ever go out in the four-hour batch.
+            val retry = retryAfter(lastReport)
+            if (lastAttempt != 0L && monotonic - lastAttempt < retry) return
             val attempted = p.getLong("last-attempt", 0L)
-            if (attempted > 0L && now >= attempted && now - attempted < RETRY_MS) return
+            if (attempted > 0L && now >= attempted && now - attempted < retry) return
             lastAttempt = monotonic
             p.edit().putLong("last-attempt", now).commit()
             try {
@@ -113,6 +125,11 @@ object Usage {
     internal const val REPORT_EVERY_MS = 4 * 60 * 60_000L
     /** The least time between two tries in one run, after one that failed. */
     private const val RETRY_MS = REPORT_EVERY_MS
+    /** The same, for an installation not yet counted: it should show on the dashboard straight away. */
+    internal const val FIRST_RETRY_MS = 15 * 60_000L
+
+    /** How long a failed report waits before the next try: minutes for the first one, the batch interval after. */
+    internal fun retryAfter(lastReport: Long): Long = if (lastReport <= 0L) FIRST_RETRY_MS else RETRY_MS
 
     /**
      * Whether the totals are worth sending now: never sent, sent long enough
