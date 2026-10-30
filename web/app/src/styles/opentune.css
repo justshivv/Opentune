@@ -322,3 +322,9 @@
   .ot-side[data-folded='true'] .ot-side-header { height: 0.5px; margin: 12px 8px; padding: 0; overflow: hidden; color: transparent; background: var(--labelDivider); }
   .ot-side[data-folded='true'] .ot-side-badge { position: absolute; top: 5px; right: 9px; width: 8px; height: 8px; padding: 0; border-radius: 50%; font-size: 0; }
 }
+/* A switch-like button that is on (shuffle, repeat, lyrics, Up Next): a fill of its own colour behind the
+   icon and a dot under it, so the state reads at a glance and not only as a slightly brighter glyph. */
+.ot-toggle { position: relative; transition: background-color .2s ease, color .2s ease, scale .1s ease-in; }
+.ot-toggle[aria-pressed='true'] { background-color: color-mix(in srgb, currentColor 20%, transparent); }
+.ot-toggle::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: currentColor; opacity: 0; scale: .2; transition: opacity .2s ease, scale .25s var(--ot-ease-settle); }
+.ot-toggle[aria-pressed='true']::after { opacity: 1; scale: 1; }

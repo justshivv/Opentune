@@ -19,8 +19,8 @@ import { useUi } from '@/state/ui';
 import { Lcd } from './Lcd';
 
 const control = 'grid place-items-center rounded-[6px] disabled:opacity-40';
-// Shuffle and repeat: secondary, and the key colour when on, as Apple's toggles.
-const toggle = `${control} size-7 text-secondary aria-pressed:text-key`;
+// Shuffle and repeat: secondary, and when on the key colour on a fill of it with a dot under (.ot-toggle).
+const toggle = `${control} ot-toggle size-7 text-secondary aria-pressed:text-key`;
 const transport = `${control} size-7 text-primary`;
 const action = 'grid h-7 w-6 place-items-center rounded-[4px] text-primary aria-pressed:text-key';
 // The actions the volume level slides in over: they fade out while it's open.

@@ -73,8 +73,8 @@ function Scrubber() {
 
 const transportButton =
   'grid place-items-center rounded-full transition-[background-color,scale] duration-100 ease-in enabled:hover:bg-quinary enabled:active:scale-90 disabled:opacity-40';
-// Shuffle and repeat, when on: full white on the mesh, where red would clash.
-const toggle = `${transportButton} size-9 text-tertiary aria-pressed:text-primary`;
+// Shuffle and repeat, when on: full white on a soft fill with a dot under it (.ot-toggle); red would clash with the mesh.
+const toggle = `${transportButton} ot-toggle size-9 text-tertiary aria-pressed:text-primary`;
 const skip = `${transportButton} size-12 text-primary`;
 
 /** Shuffle, previous, play/pause, next, repeat. No volume: the pill keeps that. */
@@ -442,7 +442,7 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
       {hasLyrics && (
         <button
           data-morph-fade
-          className={`${corner} bottom-5 left-5 aria-pressed:text-primary`}
+          className={`${corner} ot-toggle bottom-5 left-5 aria-pressed:text-primary`}
           aria-label="Lyrics"
           aria-pressed={showLyrics}
           onClick={() => togglePanel('lyrics')}
@@ -452,7 +452,7 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
       )}
       <button
         data-morph-fade
-        className={`${corner} right-5 bottom-5 aria-pressed:text-primary`}
+        className={`${corner} ot-toggle right-5 bottom-5 aria-pressed:text-primary`}
         aria-label="Up Next"
         aria-pressed={showQueue}
         onClick={() => togglePanel('queue')}
