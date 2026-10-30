@@ -286,6 +286,12 @@
 
 /* A native select, its chevron drawn here so it matches in every browser. */
 .ot-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+/* The open list is drawn by the browser: the field's see-through tint gives it nothing to stand on, so Chrome on
+   Windows fell back to a white list under the page's light text. Solid page colours, in the page's own scheme. */
+.ot-select { color-scheme: inherit; }
+.ot-select option { background-color: color-mix(in srgb, var(--systemPrimary) 9%, var(--pageBG)); color: var(--systemPrimary); }
+.ot-select option:checked { background-color: color-mix(in srgb, var(--keyColor, var(--ot-seed)) 30%, color-mix(in srgb, var(--systemPrimary) 9%, var(--pageBG))); }
+.ot-select option:disabled { color: var(--systemTertiary); }
 
 .ot-segmented { display: inline-flex; padding: 3px; border-radius: 99px; background: var(--systemQuaternary); }
 .ot-segmented button { padding: 6px 14px; border-radius: 99px; font-size: 14px; font-weight: 600; color: var(--systemSecondary); transition: background-color .2s, color .2s; }
