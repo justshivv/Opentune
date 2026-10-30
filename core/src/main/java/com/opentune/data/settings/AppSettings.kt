@@ -396,6 +396,10 @@ data class InterfaceSettings(
     val albumCovers: Boolean = true,
     /** Apple Music's animated album covers loop, muted, in the player's cover. */
     val animatedCovers: Boolean = true,
+    /** An artist's handwritten signature over their photo on the artist page, from [signatureApi]. */
+    val artistSignatures: Boolean = true,
+    /** The artist-signature service asked for signatures (GET /v1/signatures?artist=…). */
+    val signatureApi: String = com.opentune.data.covers.ArtistSignatures.DEFAULT_API,
     /** How sharp Apple's animated covers play; sharper uses more data. */
     val motionQuality: MotionQuality = MotionQuality.MEDIUM,
     /** Animated covers and Spotify Canvas only load on Wi-Fi or another unmetered network. */

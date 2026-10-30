@@ -1128,6 +1128,9 @@ private fun settingsSections(
                 Entry("Album covers", "artwork cover musicbrainz cover art archive video thumbnail") {
                     ToggleRow("Sharper album covers", ui.albumCovers, { v -> AppSettings.updateUi { it.copy(albumCovers = v) } }, summary = "The player shows the album's cover from Apple Music, Deezer or the Cover Art Archive, sharper than YouTube's and in place of a video frame", icon = Icons.Rounded.Album)
                 },
+                Entry("Artist signatures", "artist signature handwritten autograph name artist page header") {
+                    com.opentune.ui.browse.ArtistSignatureSettings()
+                },
                 Entry("Animated covers", "apple music motion artwork video moving album cover animated") {
                     ToggleRow("Animated covers", ui.animatedCovers, { v -> AppSettings.updateUi { it.copy(animatedCovers = v) } }, summary = "When Apple Music has a moving cover for the album, it loops silently in the player's cover", icon = Icons.Rounded.Animation)
                     if (ui.animatedCovers) {
