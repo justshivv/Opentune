@@ -1,7 +1,7 @@
 import { ArrowUpRight, AudioLines, ChevronRight, Info, Mic2, Palette, Play, Plug, Smartphone, Tv, Users, Wrench, type LucideIcon } from 'lucide-react';
 import { lazy, Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { MdOutlineExtension } from 'react-icons/md';
-import { SiApplemusic, SiDiscord, SiGithub, SiLastdotfm, SiSpotify, SiYoutubemusic } from 'react-icons/si';
+import { SiApplemusic, SiDiscord, SiGithub, SiSpotify, SiYoutubemusic } from 'react-icons/si';
 import { PageHeader } from '@/components/PageHeader';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { LogoMark } from '@/components/icons/LogoMark';
@@ -13,7 +13,6 @@ import { useExtension } from '@/extension/useExtension';
 import { useYtAuth } from '@/extension/useYtAuth';
 import { useRoom } from '@/together/room';
 import { useHistorySettings } from '@/playback/historyReporting';
-import { useLastFm } from '@/playback/lastfm';
 import { CROSSFADE_CHOICES, usePlayer } from '@/state/player';
 import { AppleMusicIntegration, AppleMusicToggles, CanvasToggle, LyricSourcesAccess, SpotifyIntegration, Toggle } from './IntegrationSettings';
 import { AppearanceSettings } from './AppearanceSettings';
@@ -202,7 +201,6 @@ export default function SettingsPage() {
   const sourcesText = [sources ? `${sources} add-on${sources === 1 ? '' : 's'}` : 'No add-ons', jioSaavn ? 'JioSaavn' : null].filter(Boolean).join(' · ');
   const present = extension.state === 'present';
   const current = useCurrentSection();
-  const lastFmUser = useLastFm((s) => s.session?.user ?? null);
   const discordText = !present
     ? 'Needs the extension'
     : discord.state === 'ready' && discord.discord.connected
@@ -284,7 +282,6 @@ export default function SettingsPage() {
                 {present ? <SpotifyIntegration /> : <span className={settingsUi.value}>Needs the extension</span>}
               </div>
               <LinkRow to="/settings/discord" icon={<Glyph Icon={SiDiscord} color="#5865f2" />} title="Discord" value={discordText} />
-              <LinkRow to="/settings/lastfm" icon={<Glyph Icon={SiLastdotfm} color="#d51007" />} title="Last.fm" value={lastFmUser ?? 'Not connected'} />
               <LinkRow
                 to="/extension"
                 icon={<Glyph Icon={MdOutlineExtension} color="#636366" />}

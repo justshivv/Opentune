@@ -50,11 +50,6 @@ jobs:
           package_json_file: web/package.json
       - name: Browser player and companion extensions
         working-directory: web
-        env:
-          # OpenTune's Last.fm application, as the Android builds use it. Without these
-          # secrets the player asks listeners for their own Last.fm API key instead.
-          VITE_LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          VITE_LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
         run: |
           pnpm install --frozen-lockfile
           pnpm --filter @opentune/extension icons
