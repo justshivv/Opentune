@@ -345,7 +345,7 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
           {/* Shrinks a touch while paused, as Apple's does. Beside a column, a music video plays here at 16:9. */}
           <div
             ref={cover}
-            className={`ot-player-cover relative w-(--art) rounded-[28px] transition-[scale] duration-450 ease-[cubic-bezier(0.34,1.3,0.64,1)] motion-reduce:transition-none${
+            className={`ot-player-cover relative w-(--art) rounded-[28px] transition-[scale] duration-450 ease-(--ot-ease-settle) motion-reduce:transition-none${
               video ? ' aspect-video overflow-hidden bg-black' : ' aspect-square'
             }${playing ? '' : ' scale-92'}${column ? ' max-md:hidden' : ''}${theater ? ' hidden' : ''}`}
           >

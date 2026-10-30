@@ -8,7 +8,7 @@ export default function DiscordSettingsPage() {
   const status = useDiscord();
   return (
     <div className={settingsUi.centered}>
-      <PageHeader title="Discord" />
+      <PageHeader title="Discord" back={{ to: '/settings', label: 'Settings' }} />
       <div className={settingsUi.body}>
         <section className={settingsUi.group}>
           <div className={settingsUi.integrationPlain}>

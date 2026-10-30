@@ -35,7 +35,7 @@ export function Artwork({ src, displayWidth, aspect = 1, radius, className, eage
       {url && (
         <img
           key={`${url}#${attempt}`}
-          className="absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-250 ease-in data-loaded:opacity-100"
+          className="absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-200 ease-out data-loaded:opacity-100"
           data-loaded={loaded || undefined}
           src={url}
           alt=""

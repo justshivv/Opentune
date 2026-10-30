@@ -40,6 +40,7 @@
   --animate-*: initial;
   --animate-menu-in: menu-in 0.12s ease-out;
   --animate-slide-in: slide-in var(--duration-panel) var(--ease-out-panel) forwards;
+  --animate-slide-out: slide-out 0.22s var(--ot-ease-exit) forwards;
   --animate-fade: fade 0.15s ease-out;
   --animate-zoom: zoom 0.2s ease-out;
   --animate-fade-in: fade-in 0.4s ease;
@@ -56,6 +57,11 @@
   }
   @keyframes slide-in {
     from {
+      transform: translateX(100%);
+    }
+  }
+  @keyframes slide-out {
+    to {
       transform: translateX(100%);
     }
   }

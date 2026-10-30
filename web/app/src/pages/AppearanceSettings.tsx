@@ -27,8 +27,11 @@ export function AppearanceSettings() {
         <Segmented title="Theme" value={a.mode} options={[['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]} onChange={(mode) => a.update({ mode })} />
         <Toggle label="Pure black" detail="True black surfaces in dark mode." checked={a.pureBlack} onChange={(pureBlack) => a.update({ pureBlack })} />
         <Toggle label="Colors from artwork" detail="Let the playing song color OpenTune." checked={a.artworkColors} onChange={(artworkColors) => a.update({ artworkColors })} />
-        <fieldset className="ot-accent-picker">
-          <legend>Accent color{a.artworkColors && <span> · picking one turns off colors from artwork</span>}</legend>
+        <fieldset className="ot-accent-picker hairline-[16px]">
+          <legend>
+            Accent color
+            {a.artworkColors && <span>Picking one turns off colors from artwork.</span>}
+          </legend>
           <div>
             {ACCENTS.map(([name, color]) => (
               <button key={color} aria-label={name} title={name} aria-pressed={!a.artworkColors && a.accent === color} onClick={() => a.update({ accent: color, artworkColors: false })} style={{ background: color }}>

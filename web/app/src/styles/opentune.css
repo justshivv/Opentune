@@ -120,24 +120,29 @@
     --keyColor-pressed: color-mix(in srgb, var(--keyColor) 85%, black);
     --keyColor-focus-color: var(--keyColor);
   }
-  body { transition: background-color .35s, color .35s; }
+  body { transition: background-color .35s; }
 }
-.ot-accent-picker { border: 0; padding: 18px; }
-.ot-accent-picker legend { padding-top: 16px; font-weight: 600; }
-.ot-accent-picker > div { display: flex; flex-wrap: wrap; gap: 12px; }
-.ot-accent-picker button { width: 32px; height: 32px; border-radius: 50%; border: 3px solid transparent; outline-offset: 3px; }
-.ot-accent-picker button[aria-pressed='true'] { outline: 2px solid var(--systemPrimary); border-color: var(--pageBG); }
 .ot-home-heading { margin: 36px var(--body-gutter) 26px; display: flex; align-items: end; justify-content: space-between; gap: 16px; }
 .ot-home-heading p { color: var(--keyColor); font-weight: 650; margin-bottom: 9px; }
-.ot-home-heading h1 { font: var(--header-emphasized); letter-spacing: -.045em; }
+.ot-home-heading h1 { font: var(--header-emphasized); letter-spacing: -.03em; text-wrap: balance; }
 .ot-home-heading > div:last-child { display: flex; gap: 8px; flex-shrink: 0; }
-.ot-circle-button { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 50%; background: var(--systemQuinary); }
+.ot-circle-button { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 50%; background: var(--systemQuinary); transition: background-color .15s, scale .16s var(--ot-ease-settle); }
+.ot-circle-button:hover:not(:disabled) { background: var(--systemQuaternary); }
+.ot-circle-button:active:not(:disabled) { scale: .94; }
+.ot-circle-button:disabled { opacity: .5; }
 .ot-quick-title { display: flex; align-items: center; justify-content: space-between; margin: 0 var(--body-gutter); }
 .ot-quick-title h2 { font: var(--title-2-emphasized); }
 .ot-quick-title + section { margin-top: 8px; }
 .ot-quick-title + section > div:first-child { display: none; }
 .ot-home-links { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px var(--body-gutter) 0; }
-.ot-home-links a { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: var(--systemQuinary); border-radius: 24px; font-weight: 600; }
+.ot-home-links a { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: var(--systemQuinary); border-radius: 24px; font-weight: 600; transition: background-color .15s; }
+.ot-home-links a:hover { background: var(--systemQuaternary); }
+/* An announcement the owner publishes (Remote config › banners), above the feed. */
+.ot-banner { margin: 0 var(--body-gutter) 24px; padding: 18px 20px; border-radius: 18px; background: color-mix(in srgb, var(--keyColor) 12%, var(--systemQuinary)); }
+.ot-banner h2 { margin: 0 0 4px; font: var(--title-3-emphasized); }
+.ot-banner p { margin: 0; max-width: 64ch; color: var(--systemSecondary); font: var(--body-tall); }
+.ot-banner > div { margin-top: 12px; }
+.ot-banner a { display: inline-flex; padding: 7px 14px; border-radius: 99px; background: var(--keyColorBG); color: #fff; font: var(--body-emphasized); }
 .ot-quality-row { display: grid; grid-template-columns: 42px minmax(0,1fr) 42px; align-items: center; gap: 6px; min-height: 30px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--systemSecondary); }
 .ot-quality-row > span:last-child { text-align: right; }
 .ot-quality { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; max-width: 100%; justify-self: center; padding: 4px 8px; border-radius: 99px; font-size: clamp(11px, 1.2vw, 13px); font-weight: 650; line-height: 1; white-space: nowrap; transition: background-color .2s; }
@@ -167,14 +172,22 @@
 @keyframes ot-record { to { rotate: 360deg; } }
 .ot-mobile-dock { display: none; }
 .ot-source-list { list-style: none; padding: 0; margin: 0; }
-.ot-source-row { position: relative; display: grid; grid-template-columns: 22px 28px minmax(0,1fr) 40px 40px; gap: 10px; align-items: center; padding: 20px 16px; border-bottom: 1px solid var(--labelDivider); transition: transform .18s, background .18s, box-shadow .18s; }
-.ot-source-row[data-dragging='true'] { z-index: 2; background: var(--opaqueShelfBG); box-shadow: 0 12px 30px #0005; border-radius: 20px; }
-.ot-source-row strong { display: block; overflow-wrap: anywhere; }
-.ot-source-row small { color: var(--systemSecondary); }
-.ot-source-row details { grid-column: 3 / -1; font-size: 12px; }
-.ot-source-row details button { margin: 12px 12px 0 0; }
-.ot-grab { width: 40px; height: 44px; display: grid; place-items: center; touch-action: none; cursor: grab; border-radius: 50%; }
-.ot-grab:active { cursor: grabbing; background: var(--systemQuaternary); }
+.ot-source-row { position: relative; display: grid; grid-template-columns: 16px 28px minmax(0,1fr) 44px 32px; gap: 0 12px; align-items: center; padding: 12px 12px 12px 16px; border-bottom: 0.5px solid var(--labelDivider); transition: background-color .18s, box-shadow .18s, border-radius .18s; }
+.ot-source-row[data-dragging='true'] { z-index: 2; background: var(--opaqueShelfBG); box-shadow: 0 12px 30px #0005; border-radius: 14px; }
+.ot-source-row strong { display: block; overflow-wrap: anywhere; font: var(--title-3); }
+.ot-source-row small { display: block; margin-top: 2px; font: var(--callout); color: var(--systemSecondary); }
+.ot-source-index { font: var(--callout-emphasized); color: var(--systemTertiary); text-align: center; font-variant-numeric: tabular-nums; }
+.ot-source-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--systemQuaternary); color: var(--systemPrimary); }
+.ot-grab { display: grid; place-items: center; width: 32px; height: 36px; border-radius: 8px; color: var(--systemTertiary); cursor: grab; touch-action: none; transition: background-color .15s, color .15s; }
+.ot-grab:hover { background: var(--systemQuinary); color: var(--systemPrimary); }
+.ot-grab:active { cursor: grabbing; }
+.ot-source-row details { grid-column: 3 / -1; margin-top: 6px; font: var(--callout); color: var(--systemSecondary); }
+.ot-source-row summary { width: fit-content; cursor: pointer; border-radius: 6px; }
+.ot-source-row summary:hover { color: var(--systemPrimary); }
+.ot-source-row details button { margin: 8px 6px 0 0; padding: 4px 10px; border-radius: 99px; background: var(--systemQuaternary); color: var(--systemPrimary); font: var(--callout-emphasized); }
+.ot-source-row details button:disabled { opacity: .4; }
+.ot-field { padding: 9px 12px; border: 0; border-radius: 10px; background: var(--systemQuaternary); color: var(--systemPrimary); font: var(--body-reduced); outline-offset: 2px; }
+.ot-field::placeholder { color: var(--systemTertiary); }
 @media (max-width: 767px) {
   .ot-home-heading { align-items: center; }
   .ot-home-heading h1 { font-size: 31px; }
@@ -225,28 +238,60 @@
 .ot-room-notice { position: absolute; z-index: 9950; left: 50%; bottom: calc(var(--player-pill-height) + var(--player-bottom-offset, 16px) + 16px); translate: -50% 12px; max-width: min(440px, calc(100% - 32px)); margin: 0; padding: 12px 18px; border-radius: 20px; text-align: center; font-size: 14px; opacity: 0; transition: opacity .25s, translate .35s var(--ot-ease-emph); pointer-events: none; }
 .ot-room-notice[data-shown] { opacity: 1; translate: -50% 0; }
 @media (max-width: 483px) { .ot-room-notice { bottom: 170px; } }
-/* Settings */
-.ot-set-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 16px; padding: 20px; border-radius: 24px; background: radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--keyColor) 20%, transparent), transparent 65%), var(--systemQuinary); }
-.ot-set-mark { padding: 10px; border-radius: 16px; background: var(--keyColorBG); color: #fff; box-sizing: content-box; }
-.ot-set-hero-button { flex: none; padding: 10px 18px; border-radius: 99px; background: var(--keyColorBG); color: #fff; font-weight: 650; font-size: 15px; transition: scale .16s var(--ot-ease-spring); }
-.ot-set-hero-button:active { scale: .96; }
-.ot-set-jump { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 16px -4px 0; padding: 10px 4px; background: var(--pageBG); box-shadow: 0 10px 12px -6px var(--pageBG); mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); }
+/* Settings: one centred frame; a list of the sections beside the rows when the page is wide
+   enough for both, chips that stick under the title bar when it isn't. */
+.ot-settings { container-type: inline-size; }
+.ot-set-frame { max-width: calc(680px + 2 * var(--body-gutter)); margin-inline: auto; }
+.ot-set-layout { display: grid; grid-template-columns: minmax(0, 1fr); margin: 20px var(--body-gutter) 0; }
+.ot-set-side { display: none; }
+@container (min-width: 1020px) {
+  .ot-set-frame { max-width: calc(204px + 48px + 680px + 2 * var(--body-gutter)); }
+  .ot-set-layout { grid-template-columns: 204px minmax(0, 680px); column-gap: 48px; }
+  .ot-set-side { position: sticky; top: 24px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
+  .ot-set-jump { display: none !important; }
+  .ot-set-section { scroll-margin-top: 24px; }
+}
+.ot-set-side button { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius-nav-item); font: var(--title-3); text-align: start; transition: background-color .15s; }
+.ot-set-side button:hover { background: var(--systemQuinary); }
+.ot-set-side button[aria-current] { background: var(--navSidebarSelectedState); font-weight: 600; }
+.ot-set-side span { display: grid; flex: none; place-items: center; width: 24px; height: 24px; border-radius: 7px; color: #fff; }
+
+.ot-set-jump { position: sticky; top: 0; z-index: 2; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 12px -4px 0; padding: 10px 4px; background: var(--pageBG); box-shadow: 0 10px 12px -8px var(--pageBG); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
 .ot-set-jump::-webkit-scrollbar { display: none; }
-.ot-set-jump button { flex: none; padding: 7px 14px; border-radius: 99px; background: var(--systemQuinary); font-size: 14px; font-weight: 600; transition: background-color .2s; }
+.ot-set-jump button { flex: none; padding: 7px 14px; border-radius: 99px; background: var(--systemQuinary); font: var(--body-emphasized); font-size: 14px; transition: background-color .2s, color .2s; }
 .ot-set-jump button:hover { background: var(--systemQuaternary); }
-.ot-set-section { scroll-margin-top: 64px; margin-top: 26px; }
-.ot-set-title { display: flex; align-items: center; gap: 10px; margin: 0 4px 12px; font: var(--title-2-emphasized); }
-.ot-set-title > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; color: #fff; }
+.ot-set-jump button[aria-current] { background: var(--systemPrimary); color: var(--pageBG); }
+@media (max-width: 483.98px) {
+  /* Under the phone's glass title bar, which floats over the top of the page. */
+  .ot-set-jump { top: var(--mobile-top-bar-height); }
+  .ot-set-section { scroll-margin-top: calc(var(--mobile-top-bar-height) + 64px); }
+}
+
+.ot-set-section { scroll-margin-top: 72px; margin-top: 36px; }
+.ot-set-title { margin: 0 4px 10px; font: var(--title-2-emphasized); text-wrap: balance; }
+
+.ot-set-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; margin-top: 4px; padding: 14px 16px; border-radius: 18px; background: var(--systemQuinary); }
+.ot-set-mark { flex: none; padding: 9px; border-radius: 12px; background: var(--keyColorBG); color: #fff; box-sizing: content-box; }
+.ot-set-hero-text { display: grid; flex: 1 1 220px; gap: 2px; min-width: 0; }
+.ot-set-hero-button { flex: none; padding: 8px 16px; border-radius: 99px; background: var(--keyColorBG); color: #fff; font: var(--body-emphasized); font-size: 14px; text-align: center; transition: scale .16s var(--ot-ease-settle), filter .15s; }
+.ot-set-hero-button:hover { filter: brightness(1.08); }
+.ot-set-hero-button:active { scale: .96; }
+.ot-set-hero-button.ot-quiet { background: var(--systemQuaternary); color: var(--systemPrimary); }
+@container (max-width: 520px) { .ot-set-hero-button { flex: 1 1 100%; padding: 10px; } }
+
+/* A native select, its chevron drawn here so it matches in every browser. */
+.ot-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+
 .ot-segmented { display: inline-flex; padding: 3px; border-radius: 99px; background: var(--systemQuaternary); }
-.ot-segmented button { padding: 6px 14px; border-radius: 99px; font-size: 14px; font-weight: 600; color: var(--systemSecondary); transition: background-color .25s, color .25s; }
+.ot-segmented button { padding: 6px 14px; border-radius: 99px; font-size: 14px; font-weight: 600; color: var(--systemSecondary); transition: background-color .2s, color .2s; }
+.ot-segmented button:hover { color: var(--systemPrimary); }
 .ot-segmented button[aria-checked='true'] { background: var(--segmentedControlSelectedBG); color: var(--systemPrimary); box-shadow: 0 1px 4px #0002; }
-.ot-accent-picker legend span { font-weight: 400; color: var(--systemSecondary); font-size: 13px; }
-.ot-accent-picker button { display: grid; place-items: center; color: #fff; transition: scale .2s var(--ot-ease-spring); }
-.ot-accent-picker button:hover { scale: 1.1; }
-.ot-community { margin-top: 36px; padding: 24px; border-radius: 24px; background: linear-gradient(135deg, color-mix(in srgb, var(--keyColor) 18%, var(--systemQuinary)), var(--systemQuinary)); }
-.ot-community-icon { color: var(--keyColor); margin-bottom: 10px; }
-.ot-community h2 { font: var(--title-2-emphasized); margin: 0 0 6px; }
-.ot-community p { margin: 0; color: var(--systemSecondary); max-width: 52ch; }
-.ot-community > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.ot-community a { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 99px; background: var(--systemQuaternary); font-weight: 600; font-size: 14px; transition: background-color .2s; }
-.ot-community a:first-child { background: var(--keyColorBG); color: #fff; }
+
+/* The accent swatches: a row of their own under the label, inside the group. */
+.ot-accent-picker { position: relative; min-width: 0; margin: 0; border: 0; padding: 13px 16px 16px; }
+.ot-accent-picker legend { float: left; width: 100%; padding: 0; margin-bottom: 12px; font: var(--title-3); }
+.ot-accent-picker legend span { display: block; margin-top: 2px; font: var(--callout); color: var(--systemSecondary); }
+.ot-accent-picker > div { clear: both; display: flex; flex-wrap: wrap; gap: 10px; }
+.ot-accent-picker button { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; outline-offset: 2px; transition: scale .2s var(--ot-ease-settle); }
+.ot-accent-picker button:hover { scale: 1.08; }
+.ot-accent-picker button[aria-pressed='true'] { outline: 2px solid var(--systemPrimary); }

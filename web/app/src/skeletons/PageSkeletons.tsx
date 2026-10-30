@@ -8,10 +8,22 @@ import { ShelfSkeleton } from './ShelfSkeleton';
 
 const sectionTitle = 'mx-(--body-gutter) mt-3';
 
-export function HomeSkeleton() {
+/**
+ * Home while its feed loads. Its heading is the page's own ("What's playing?"),
+ * so nothing jumps when the feed replaces it; the page, which draws that
+ * heading itself with its buttons, asks for the shelves alone.
+ */
+export function HomeSkeleton({ heading = true }: { heading?: boolean }) {
   return (
     <div aria-busy="true">
-      <PageHeader title="Home" />
+      {heading && (
+        <header className="ot-home-heading">
+          <div>
+            <p>&nbsp;</p>
+            <h1>What's playing?</h1>
+          </div>
+        </header>
+      )}
       <ShelfSkeleton kind="editorial" />
       <ShelfSkeleton kind="tracks" />
       <ShelfSkeleton kind="square" />

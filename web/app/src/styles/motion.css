@@ -5,32 +5,31 @@
   --ot-ease-sheet: cubic-bezier(0.3, 0.1, 0.2, 1);
   /* Material's emphasized decelerate, for things arriving. */
   --ot-ease-emph: cubic-bezier(0.2, 0, 0, 1);
-  /* A spring that carries a little past and settles. */
-  --ot-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  /* A quick settle with no overshoot: presses, switches, the dock's selection. A curve that
+     carried past its end read as a wobble on a 60 Hz screen. */
+  --ot-ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Leaving: gathers speed, so what goes doesn't linger under what comes. */
+  --ot-ease-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
-/* A page arriving: a short rise and fade, as the app's screens slide in. */
-.ot-page { animation: ot-page-in 0.42s var(--ot-ease-emph) both; }
-@keyframes ot-page-in { from { opacity: 0; translate: 0 14px; } }
+/* A page arriving: a short fade and a few pixels of rise, done before the eye waits on it.
+   Opacity and translate only, so it stays on the compositor however heavy the page. */
+.ot-page { animation: ot-page-in 0.22s var(--ot-ease-emph) both; }
+@keyframes ot-page-in { from { opacity: 0; translate: 0 6px; } }
 
-/* Shelf items come in one after another. */
-.ot-shelf > li { animation: ot-rise 0.5s var(--ot-ease-emph) backwards; }
-.ot-shelf > li:nth-child(2) { animation-delay: 40ms; }
-.ot-shelf > li:nth-child(3) { animation-delay: 80ms; }
-.ot-shelf > li:nth-child(4) { animation-delay: 120ms; }
-.ot-shelf > li:nth-child(5) { animation-delay: 160ms; }
-.ot-shelf > li:nth-child(6) { animation-delay: 200ms; }
-.ot-shelf > li:nth-child(n + 7) { animation-delay: 240ms; }
-@keyframes ot-rise { from { opacity: 0; translate: 0 18px; scale: 0.97; } }
+/* A shelf fades in once, when its items arrive in place of the skeleton. On the list rather
+   than each item: items that remount while the shelf scrolls don't replay it. */
+.ot-shelf { animation: ot-fade-in 0.24s var(--ot-ease-emph) both; }
+@keyframes ot-fade-in { from { opacity: 0; } }
 
 /* A new song's names and cover slide in where the old ones were. */
-.ot-swap-in { animation: ot-swap-in 0.36s var(--ot-ease-emph) both; }
+.ot-swap-in { animation: ot-swap-in 0.28s var(--ot-ease-emph) both; }
 @keyframes ot-swap-in { from { opacity: 0; translate: 0 6px; } }
 .ot-cover-in { animation: ot-cover-in 0.45s var(--ot-ease-emph) both; }
 @keyframes ot-cover-in { from { opacity: 0; scale: 0.94; } }
 
 /* Pressed things give a little. */
-.ot-press { transition: scale 0.16s var(--ot-ease-spring); }
+.ot-press { transition: scale 0.16s var(--ot-ease-settle); }
 .ot-press:not(:disabled):active { scale: 0.92; transition-duration: 0.08s; }
 
 /* The Morph play button: a disc whose edge turns into slow waves while music plays. */
@@ -38,17 +37,19 @@
 .ot-morph > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; animation: ot-turn 14s linear infinite paused; }
 .ot-morph[data-playing] > svg { animation-play-state: running; }
 .ot-morph[data-buffering] > svg { animation-duration: 2.4s; animation-play-state: running; }
-.ot-morph > span { position: absolute; display: grid; place-items: center; color: #26110d; transition: opacity 0.22s, scale 0.32s var(--ot-ease-spring), rotate 0.32s var(--ot-ease-spring); }
+.ot-morph > span { position: absolute; display: grid; place-items: center; color: #26110d; transition: opacity 0.22s, scale 0.32s var(--ot-ease-settle), rotate 0.32s var(--ot-ease-settle); }
 .ot-morph > span[data-hidden] { opacity: 0; scale: 0.6; rotate: -40deg; }
 .ot-morph:hover > svg { filter: brightness(1.08); }
 @keyframes ot-turn { to { rotate: 360deg; } }
 
 /* The full player's wavy seek line: the played part waves and travels while music plays. */
-.ot-wave { position: relative; flex: 1; height: 14px; --h: 4px; }
+.ot-wave { position: relative; flex: 1; height: 14px; --thick: 0.5; }
 .ot-wave > * { position: absolute; inset-inline: 0; top: 50%; }
-.ot-wave-rest { height: var(--h); translate: 0 -50%; border-radius: 999px; background: var(--systemQuaternary); clip-path: inset(0 0 0 calc(var(--progress) * 100% + 4px)); transition: height 0.12s; }
-.ot-wave-flat, .ot-wave-line { color: var(--systemSecondary); clip-path: inset(-8px calc((1 - var(--progress)) * 100%) -8px 0); transition: opacity 0.4s, color 0.12s; }
-.ot-wave-flat { height: var(--h); translate: 0 -50%; border-radius: 999px; background: currentColor; }
+.ot-wave-rest { translate: 0 -50%; border-radius: 999px; background: var(--systemQuaternary); clip-path: inset(0 0 0 calc(var(--progress) * 100% + 4px)); }
+/* The line is drawn 8px tall and scaled to half: hovering thickens it on the compositor. */
+.ot-wave-rest, .ot-wave-flat { height: 8px; scale: 1 var(--thick); transition: scale 0.16s var(--ot-ease-emph); }
+.ot-wave-flat, .ot-wave-line { color: var(--systemSecondary); clip-path: inset(-8px calc((1 - var(--progress)) * 100%) -8px 0); transition: opacity 0.4s, color 0.12s, scale 0.16s var(--ot-ease-emph); }
+.ot-wave-flat { translate: 0 -50%; border-radius: 999px; background: currentColor; }
 .ot-wave-line {
   height: 14px; translate: 0 -50%; background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14'%3E%3Cpath d='M0 7C2.8 4 4.6 3 7 3s4.2 1 7 4 4.6 4 7 4 4.2-1 7-4' fill='none' stroke='%23000' stroke-width='3.4'/%3E%3C/svg%3E") 0 50% / 28px 14px repeat-x;
@@ -58,13 +59,13 @@
 }
 .ot-wave[data-wavy] .ot-wave-line { opacity: 1; scale: 1 1; animation-play-state: running; }
 .ot-wave[data-wavy] .ot-wave-flat { opacity: 0; }
-.ot-wave:hover, .ot-wave[data-dragging] { --h: 8px; }
+.ot-wave:hover, .ot-wave[data-dragging] { --thick: 1; }
 .ot-wave:hover > :not(.ot-wave-rest), .ot-wave[data-dragging] > :not(.ot-wave-rest) { color: var(--systemPrimary); }
 @keyframes ot-wave-travel { to { -webkit-mask-position: 28px 50%; mask-position: 28px 50%; } }
 
 /* The favourite star pops and throws sparks when it's turned on. */
 .ot-fav { position: relative; }
-.ot-fav[data-burst][aria-pressed='true'] svg { animation: ot-pop 0.5s var(--ot-ease-spring); }
+.ot-fav[data-burst][aria-pressed='true'] svg { animation: ot-pop 0.5s var(--ot-ease-settle); }
 .ot-burst { position: absolute; inset: 0; pointer-events: none; }
 .ot-burst i { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: var(--ot-key-on-dark); animation: ot-spark 0.6s var(--ot-ease-emph) forwards; }
 .ot-burst i:nth-child(even) { width: 3px; height: 3px; background: currentColor; }
@@ -75,17 +76,17 @@
 }
 
 /* The mobile dock's selection slides between tabs instead of jumping. */
-.ot-dock-pill { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 5); translate: calc(var(--i) * 100%) 0; border-radius: 28px; background: var(--navSidebarSelectedState); transition: translate 0.45s var(--ot-ease-spring), opacity 0.2s; pointer-events: none; }
+.ot-dock-pill { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px) / 5); translate: calc(var(--i) * 100%) 0; border-radius: 28px; background: var(--navSidebarSelectedState); transition: translate 0.34s var(--ot-ease-settle), opacity 0.2s; pointer-events: none; }
 .ot-dock-pill[data-none] { opacity: 0; }
 
 /* Full player: a touch drag pulls the whole sheet down with the finger. */
 [data-full-screen][data-dragging] { transition: none; }
-[data-full-screen][data-settling] { transition: translate 0.32s var(--ot-ease-spring), scale 0.32s var(--ot-ease-spring), border-radius 0.32s; }
+[data-full-screen][data-settling] { transition: translate 0.32s var(--ot-ease-settle), scale 0.32s var(--ot-ease-settle), border-radius 0.32s; }
 
 :root[data-motion='false'] .ot-wave-line { display: none; }
 :root[data-motion='false'] .ot-wave-flat { opacity: 1 !important; }
 @media (prefers-reduced-motion: reduce) {
-  .ot-page, .ot-shelf > li, .ot-swap-in, .ot-cover-in, .ot-morph > svg, .ot-fav svg, .ot-burst { animation: none !important; }
+  .ot-page, .ot-shelf, .ot-swap-in, .ot-cover-in, .ot-morph > svg, .ot-fav svg, .ot-burst { animation: none !important; }
   .ot-wave-line { display: none; }
   .ot-wave-flat { opacity: 1 !important; }
 }

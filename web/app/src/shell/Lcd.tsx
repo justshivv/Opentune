@@ -189,7 +189,8 @@ const time =
 function Progress() {
   const { bar, elapsed, remaining, dragging, handlers } = useScrubber();
   return (
-    // The hit area: taller than the 2px line it carries.
+    // The hit area: taller than the 2px line it carries. The line is drawn 4px and scaled
+    // to half, so hovering thickens it without a layout per frame.
     <div
       className="group/scrub absolute inset-x-0 bottom-0 h-3.5 cursor-pointer touch-none"
       data-scrubber
@@ -199,7 +200,7 @@ function Progress() {
       <span ref={elapsed} className={`${time} left-0`} />
       <span ref={remaining} className={`${time} right-0`} />
       <div
-        className="absolute inset-x-0 bottom-1.5 h-0.5 overflow-hidden rounded-[1px] bg-quaternary transition-[height,left,right] duration-100 ease-in group-hover/scrub:bottom-[5px] group-hover/scrub:h-1 group-data-dragging/scrub:bottom-[5px] group-data-dragging/scrub:h-1"
+        className="absolute inset-x-0 bottom-[5px] h-1 scale-y-50 overflow-hidden rounded-[2px] bg-quaternary transition-[scale] duration-150 ease-(--ot-ease-emph) group-hover/scrub:scale-y-100 group-data-dragging/scrub:scale-y-100"
         aria-hidden="true"
       >
         <div ref={bar} className="size-full origin-left scale-x-(--progress) bg-secondary [--progress:0]" />

@@ -1,8 +1,8 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import '@/together/room';
 import { useDiscordPresence } from '@/playback/discordPresence';
 import { startHistoryReporting } from '@/playback/historyReporting';
-import { Outlet, useLocation } from 'react-router';
+import { Outlet, useLocation, useNavigationType } from 'react-router';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { config } from '@/config';
 import { useExtension } from '@/extension/useExtension';
@@ -27,6 +27,59 @@ const mobile = isMobileBrowser();
 const FullScreenPlayer = lazy(() => import('./FullScreenPlayer').then((m) => ({ default: m.FullScreenPlayer })));
 
 /**
+ * Where the page scrolls on navigation. A new page opens at its top instead of
+ * wherever the last one was left; Back and Forward return to the place the
+ * page was left at, waiting for content that loads after it to reach it.
+ * Typing a search (the same page, a new query) keeps its place.
+ */
+function usePageScroll() {
+  const location = useLocation();
+  const navigation = useNavigationType();
+  const places = useRef(new Map<string, number>());
+  const shown = useRef(location);
+
+  // Where each history entry was left, kept as it scrolls: by the time the next
+  // page renders, the old one's height is gone and its scrollTop with it.
+  useEffect(() => {
+    const page = document.getElementById('scrollable-page');
+    if (!page) return;
+    const keep = () => places.current.set(shown.current.key, page.scrollTop);
+    page.addEventListener('scroll', keep, { passive: true });
+    return () => page.removeEventListener('scroll', keep);
+  }, []);
+
+  useLayoutEffect(() => {
+    const before = shown.current;
+    shown.current = location;
+    const page = document.getElementById('scrollable-page');
+    if (!page || before.key === location.key) return;
+    if (before.pathname === location.pathname && navigation !== 'POP') return;
+    const target = navigation === 'POP' ? (places.current.get(location.key) ?? 0) : 0;
+    page.scrollTop = target;
+    if (page.scrollTop >= target - 1) return;
+    // Coming back to a page whose content is still loading: follow it down as it grows,
+    // until the place is reachable, the reader scrolls, or a second and a half passes.
+    const content = page.firstElementChild;
+    if (!content) return;
+    const growing = new ResizeObserver(() => {
+      page.scrollTop = target;
+      if (page.scrollTop >= target - 1) stop();
+    });
+    const stop = () => {
+      growing.disconnect();
+      clearTimeout(timer);
+      page.removeEventListener('wheel', stop);
+      page.removeEventListener('touchstart', stop);
+    };
+    const timer = setTimeout(stop, 1500);
+    page.addEventListener('wheel', stop, { passive: true });
+    page.addEventListener('touchstart', stop, { passive: true });
+    growing.observe(content);
+    return stop;
+  }, [location, navigation]);
+}
+
+/**
  * The app frame (report §1): glass sidebar, the scrolling page, the floating
  * player pill, the side panel, and the bottom band when there is one.
  */
@@ -34,6 +87,7 @@ export function AppShell() {
   const runtime = useRemoteConfig(s => s.config.data);
   useKeyboardShortcuts();
   useDiscordPresence();
+  usePageScroll();
   // Plays into the account's YouTube Music history (Settings › Share Listening Activity).
   useEffect(() => startHistoryReporting(), []);
   // The sources the owner publishes ("Added by admin"), folded into the listener's list.

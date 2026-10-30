@@ -62,7 +62,7 @@ export default function HomePage() {
     <PrefetchLink className="ot-circle-button" to="/settings" aria-label="Settings"><Settings size={20} /></PrefetchLink>
   </div></header>;
   const banners = runtime.banners.filter(b => b.enabled && b.platforms.includes('web')).map(b => (
-    <section className="ot-community" key={b.id} aria-label={b.title}><h2>{b.title}</h2><p>{b.body}</p><div><a href={b.url} target="_blank" rel="noreferrer">{b.action} ↗</a></div></section>
+    <section className="ot-banner" key={b.id} aria-label={b.title}><h2>{b.title}</h2><p>{b.body}</p><div><a href={b.url} target="_blank" rel="noreferrer">{b.action} ↗</a></div></section>
   ));
   if (missing) {
     return (
@@ -81,7 +81,7 @@ export default function HomePage() {
       </>
     );
   }
-  if (!home.data) return <>{heading}{banners}<HomeSkeleton /></>;
+  if (!home.data) return <>{heading}{banners}<HomeSkeleton heading={false} /></>;
 
   // YouTube's feed can carry its own, older Recently Played; the history wins, as on the phone.
   const shelves = home.data.pages

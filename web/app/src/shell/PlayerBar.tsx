@@ -91,14 +91,15 @@ export function PlayerBar() {
   const [volumeOpen, setVolumeOpen] = useState(false);
 
   return (
-    // The side panel overlays the page; the pill re-centres in what's left.
+    // The side panel overlays the page; the pill re-centres in what's left. It slides there
+    // (translate, on the compositor) rather than the row's padding growing under it.
     <div
-      className="pointer-events-none absolute right-0 bottom-(--player-bottom-offset) left-(--web-navigation-width) z-[calc(var(--z-web-chrome)-1)] flex justify-center px-5 transition-[padding-inline-end] duration-(--duration-panel) ease-panel data-[panel-open=true]:pe-[calc(var(--side-panel-width)+20px)] max-sm:hidden"
+      className="group/bar pointer-events-none absolute right-0 bottom-(--player-bottom-offset) left-(--web-navigation-width) z-[calc(var(--z-web-chrome)-1)] flex justify-center px-5 max-sm:hidden"
       data-panel-open={sidePanel !== null}
     >
       <div
         data-player-origin
-        className="glass-pill group/pill pointer-events-auto relative grid h-(--player-pill-height) w-[min(668px,100%)] grid-cols-[184px_minmax(180px,427px)_minmax(57px,auto)] items-center rounded-pill px-4"
+        className="glass-pill group/pill pointer-events-auto relative grid h-(--player-pill-height) w-[min(668px,100%)] grid-cols-[184px_minmax(180px,427px)_minmax(57px,auto)] items-center rounded-pill px-4 transition-[translate] duration-(--duration-panel) ease-(--ot-ease-emph) group-data-[panel-open=true]/bar:w-[min(668px,100%-var(--side-panel-width)-20px)] group-data-[panel-open=true]/bar:-translate-x-[calc((var(--side-panel-width)+20px)/2)]"
         role="region"
         aria-label="Player"
       >

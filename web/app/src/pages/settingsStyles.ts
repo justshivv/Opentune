@@ -5,22 +5,24 @@
 
 const row = 'relative flex items-center justify-between px-4 py-[13px] type-title-3 hairline-[16px]';
 const integration = 'relative grid items-center gap-x-3 px-4 py-[13px] type-title-3 hairline-[56px]';
-const field = 'w-[220px] max-w-[50%] flex-none rounded-[10px] border-0 bg-quaternary px-3 py-1.5 type-body text-primary';
+const fieldBase = 'max-w-[50%] flex-none rounded-[10px] border-0 bg-quaternary px-3 py-[7px] type-body-reduced text-primary outline-offset-2 placeholder:text-tertiary';
+const field = `w-[220px] ${fieldBase}`;
 
 export const settingsUi = {
   /** The page title and its rows as one column, centred in the page. */
   centered: 'mx-auto max-w-[calc(640px+2*var(--body-gutter))]',
   body: 'mx-(--body-gutter) mt-5 mb-[120px] max-w-[640px]',
   group: 'overflow-hidden rounded-[18px] bg-quinary',
-  sectionHeader: 'mx-4 mt-8 mb-2.5 type-subhead-emphasized text-secondary',
-  footer: 'mx-4 mt-2 type-callout text-secondary',
+  sectionHeader: 'mx-4 mt-7 mb-2 type-body-emphasized text-secondary',
+  footer: 'mx-4 mt-2 max-w-[64ch] type-body-tall text-secondary text-pretty',
 
   row,
   /** A row holding a switch, a select or a field: the whole row is its label. */
   controlRow: `${row} cursor-pointer gap-4`,
   rowText: 'flex flex-col gap-0.5',
   rowDetail: 'type-callout text-secondary',
-  value: 'inline-flex items-center gap-1.5 text-right type-body-reduced text-secondary',
+  // A long value gives way before the row's name does: it truncates within 45% of the page.
+  value: 'inline-flex min-w-0 max-w-[45cqw] items-center justify-self-end gap-1.5 text-right type-body-reduced text-secondary [&>span]:truncate [&>button]:flex-none',
   dot: 'size-2 rounded-full bg-green',
 
   /** Download rows: browser logo, title and detail, chevron. */
@@ -48,8 +50,9 @@ export const settingsUi = {
   switch: [
     // The app's switch: the accent colour when on, the knob growing a touch as it does.
     'relative h-[26px] w-[44px] flex-none cursor-pointer appearance-none rounded-[13px] bg-quaternary transition-[background-color] duration-200 checked:bg-key-bg',
-    'after:absolute after:top-[3px] after:left-[3px] after:size-5 after:rounded-full after:bg-white after:shadow-[0_1px_3px_rgb(0_0_0/0.3)] after:transition-[translate,scale] after:duration-300 after:ease-[cubic-bezier(0.34,1.4,0.64,1)] checked:after:translate-x-[18px] active:after:scale-x-110',
+    'after:absolute after:top-[3px] after:left-[3px] after:size-5 after:rounded-full after:bg-white after:shadow-[0_1px_3px_rgb(0_0_0/0.3)] after:transition-[translate,scale] after:duration-250 after:ease-(--ot-ease-settle) checked:after:translate-x-[18px] active:after:scale-x-110',
   ].join(' '),
-  select: field,
+  /** A native select with the chevron drawn by .ot-select, the same in every browser. */
+  select: `${fieldBase} ot-select min-w-[132px] cursor-pointer appearance-none pe-8`,
   input: field,
 };

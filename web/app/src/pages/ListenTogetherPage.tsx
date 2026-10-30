@@ -33,7 +33,7 @@ export default function ListenTogetherPage() {
   const invite = parseCode(params.code);
   return (
     <div className={settingsUi.centered}>
-      <PageHeader title="Listen Together" />
+      <PageHeader title="Listen Together" back={{ to: '/settings', label: 'Settings' }} />
       <div className={settingsUi.body}>
         {view ? <Room view={view} /> : <StartOrJoin invite={invite} />}
       </div>
