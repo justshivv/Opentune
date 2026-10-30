@@ -160,7 +160,10 @@ object AddonResolver {
                             if (info == null || !LosslessSource.durationMatches(durationMs, info.durationMs)) {
                                 report("${manifest.name}: FLAC header or duration did not match"); continue
                             }
-                            stream.copy(bits = info.bits, sampleRate = info.sampleRate)
+                            // FLAC has no fixed bitrate and most add-ons don't state one: its average is the
+                            // file's size over its length (bytes × 8 ÷ ms is kbit/s).
+                            val average = AddonHttp.lengthOf(stream.url)?.takeIf { info.durationMs > 0 }?.let { (it * 8 / info.durationMs).toInt() }
+                            stream.copy(bits = info.bits, sampleRate = info.sampleRate, kbps = stream.kbps ?: average)
                         } else {
                             val prefix = probe(stream.url, 65536, true)
                             if (stream.transport != null) {

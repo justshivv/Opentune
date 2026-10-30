@@ -53,6 +53,14 @@ object AddonHttp {
         } }
     }
 
+    /** Whole-file lengths the servers stated while only the start was read, by address asked. */
+    private val lengths = object : LinkedHashMap<String, Long>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?) = size > 64
+    }
+
+    /** The full length of [url]'s file, as its server stated it when the start was read; null when it didn't. */
+    fun lengthOf(url: String): Long? = synchronized(lengths) { lengths[url] }
+
     private suspend fun fetch(url: String, limit: Int, prefix: Boolean, agent: String?): ByteArray {
         var address = AddonProtocol.url(url)
         repeat(5) {
@@ -62,7 +70,10 @@ object AddonHttp {
             if (FirstPartyAddonAuth.protects(address)) outgoing = FirstPartyAddonAuth.authorize(outgoing)
             val response = request(outgoing, limit, prefix)
             if (response.redirect != null) { address = AddonProtocol.url(address.resolve(response.redirect)?.toString() ?: error("Invalid redirect")) }
-            else return response.bytes
+            else {
+                response.total?.let { total -> synchronized(lengths) { lengths[url] = total } }
+                return response.bytes
+            }
         }
         throw IOException("Too many add-on redirects")
     }
@@ -104,7 +115,8 @@ object AddonHttp {
     }
     private const val RATE_BACKOFF_MS = 500L
     private const val RATE_WAIT_CAP_MS = 8_000L
-    private data class Reply(val bytes: ByteArray, val redirect: String? = null)
+    /** [total]: the whole file's length, for a read of its start, where the server says it. */
+    private data class Reply(val bytes: ByteArray, val redirect: String? = null, val total: Long? = null)
     private suspend fun request(request: Request, limit: Int, prefix: Boolean): Reply = suspendCancellableCoroutine { continuation ->
         val call = client.newCall(request).apply {
             timeout().timeout(com.opentune.data.config.RemoteConfig.current.timeoutMs, TimeUnit.MILLISECONDS)
@@ -124,7 +136,10 @@ object AddonHttp {
                             val source = it.body?.source() ?: throw IOException("Empty add-on response")
                             source.request(limit.toLong() + if (prefix) 0 else 1)
                             if (!prefix && source.buffer.size > limit) throw IOException("Add-on response too large")
-                            Reply(source.readByteArray(minOf(limit.toLong(), source.buffer.size)))
+                            val total = if (!prefix) null
+                                else if (it.code == 206) it.header("Content-Range")?.substringAfterLast('/')?.toLongOrNull()
+                                else it.body?.contentLength()?.takeIf { length -> length > 0 }
+                            Reply(source.readByteArray(minOf(limit.toLong(), source.buffer.size)), total = total)
                         }
                     }
                     continuation.resume(result)
