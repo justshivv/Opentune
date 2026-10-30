@@ -114,6 +114,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
@@ -514,6 +515,14 @@ private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier =
                                 this, layoutDirection, androidx.compose.ui.graphics.Canvas(small),
                                 androidx.compose.ui.geometry.Size(COVER_BLUR_PX.toFloat(), COVER_BLUR_PX.toFloat()),
                             ) { with(painter) { draw(size) } }
+                            // Softened in place too, so even a cover split hard in two comes out as one
+                            // gradual fade, whether or not the blur effect below is there to help.
+                            small.asAndroidBitmap().let { b ->
+                                val px = IntArray(COVER_BLUR_PX * COVER_BLUR_PX)
+                                b.getPixels(px, 0, COVER_BLUR_PX, 0, 0, COVER_BLUR_PX, COVER_BLUR_PX)
+                                softenSquare(px, COVER_BLUR_PX, radius = 5, passes = 3)
+                                b.setPixels(px, 0, COVER_BLUR_PX, 0, 0, COVER_BLUR_PX, COVER_BLUR_PX)
+                            }
                         }
                         val side = maxOf(size.width, size.height)
                         onDrawBehind {
@@ -534,6 +543,31 @@ private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier =
                 Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.12f), 0.5f to Color.Black.copy(alpha = 0.3f), 1f to Color.Black.copy(alpha = 0.58f)),
             ),
         )
+    }
+}
+
+/**
+ * A box blur run [passes] times over a [side] by [side] image of ARGB [px],
+ * along rows then columns, edges held: three passes come close to a
+ * Gaussian. For Cover blur's tiny image, where it costs next to nothing.
+ */
+internal fun softenSquare(px: IntArray, side: Int, radius: Int, passes: Int) {
+    val tmp = IntArray(px.size)
+    fun pass(src: IntArray, dst: IntArray, step: Int, line: Int) {
+        for (l in 0 until side) for (i in 0 until side) {
+            var a = 0; var r = 0; var g = 0; var b = 0
+            for (k in -radius..radius) {
+                val j = (i + k).coerceIn(0, side - 1)
+                val c = src[l * line + j * step]
+                a += c ushr 24; r += (c shr 16) and 0xFF; g += (c shr 8) and 0xFF; b += c and 0xFF
+            }
+            val n = radius * 2 + 1
+            dst[l * line + i * step] = ((a / n) shl 24) or ((r / n) shl 16) or ((g / n) shl 8) or (b / n)
+        }
+    }
+    repeat(passes) {
+        pass(px, tmp, step = 1, line = side) // along each row
+        pass(tmp, px, step = side, line = 1) // down each column
     }
 }
 

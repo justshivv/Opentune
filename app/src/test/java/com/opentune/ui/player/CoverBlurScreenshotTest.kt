@@ -57,8 +57,8 @@ class CoverBlurScreenshotTest {
         fun lum(y: Int) = Color(bitmap.getPixel(x, y)).luminance()
         var jump = 0f
         for (y in 1 until bitmap.height) jump = maxOf(jump, kotlin.math.abs(lum(y) - lum(y - 1)))
-        // The cover's hard edge is gone: no sudden step anywhere down the screen.
-        assertTrue("brightest row-to-row step $jump", jump < 0.01f)
+        // The cover's hard edge is gone: no step anywhere down the screen (an edge reads about 0.013).
+        assertTrue("brightest row-to-row step $jump", jump < 0.007f)
         // The dark half still carries some of the song's tone rather than going black.
         assertTrue("lower third ${lum(bitmap.height * 2 / 3)}", lum(bitmap.height * 2 / 3) > 0.004f)
     }
