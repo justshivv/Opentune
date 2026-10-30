@@ -14,10 +14,12 @@ export interface Appearance {
   playerBackground: 'mesh' | 'gradient' | 'echo';
   playerStyle: typeof PLAYER_STYLES[number];
   motion: boolean;
+  /** The floating pills bend what's behind them (Chromium only; frosted elsewhere). */
+  liquidGlass: boolean;
 }
 export const DEFAULT_APPEARANCE: Appearance = {
   mode: 'system', accent: '#e53935', pureBlack: true, artworkColors: true,
-  playerBackground: 'mesh', playerStyle: 'classic', motion: true,
+  playerBackground: 'mesh', playerStyle: 'classic', motion: true, liquidGlass: true,
 };
 export function appearanceOf(value: unknown): Appearance {
   const v = (value && typeof value === 'object' ? value : {}) as Partial<Appearance>;
@@ -29,6 +31,7 @@ export function appearanceOf(value: unknown): Appearance {
     playerBackground: ['mesh', 'gradient', 'echo'].includes(v.playerBackground ?? '') ? v.playerBackground! : 'mesh',
     playerStyle: PLAYER_STYLES.includes(v.playerStyle!) ? v.playerStyle! : 'classic',
     motion: typeof v.motion === 'boolean' ? v.motion : true,
+    liquidGlass: typeof v.liquidGlass === 'boolean' ? v.liquidGlass : true,
   };
 }
 const KEY = 'opentune:appearance';

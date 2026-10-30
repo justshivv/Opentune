@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react';
+import { liquidGlassSupported } from '@/lib/liquidGlass';
 import { ACCENTS, PLAYER_STYLES, useAppearance } from '@/state/appearance';
 import { Toggle } from './IntegrationSettings';
 import { settingsUi } from './settingsStyles';
@@ -26,6 +27,12 @@ export function AppearanceSettings() {
       <section className={settingsUi.group} aria-label="Appearance">
         <Segmented title="Theme" value={a.mode} options={[['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]} onChange={(mode) => a.update({ mode })} />
         <Toggle label="Pure black" detail="True black surfaces in dark mode." checked={a.pureBlack} onChange={(pureBlack) => a.update({ pureBlack })} />
+        <Toggle
+          label="Liquid Glass"
+          detail={liquidGlassSupported() ? 'The player and floating buttons bend what’s behind them, like a lens.' : 'Needs Chrome or Edge. This browser keeps frosted glass.'}
+          checked={a.liquidGlass && liquidGlassSupported()}
+          onChange={(liquidGlass) => a.update({ liquidGlass })}
+        />
         <Toggle label="Colors from artwork" detail="Let the playing song color OpenTune." checked={a.artworkColors} onChange={(artworkColors) => a.update({ artworkColors })} />
         <fieldset className="ot-accent-picker hairline-[16px]">
           <legend>

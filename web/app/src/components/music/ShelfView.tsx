@@ -4,6 +4,7 @@ import { PrefetchLink } from '@/components/PrefetchLink';
 import { shelfHeader, shelfKinds, shelfList, shelfSection, type ShelfKind } from '@/components/shelf';
 import type { MusicItem, Shelf, Track } from '@/data/music/types';
 import type { QueueSource } from '@/playback/queue/timeline';
+import { useLiquidGlass } from '@/lib/liquidGlass';
 import { browseHref } from './links';
 import { CircleLockup, SquareLockup, TrackLockup, VideoLockup } from './Lockups';
 import { playList } from './play';
@@ -32,6 +33,8 @@ function renderItem(shelf: Shelf, item: MusicItem): ReactNode {
 export function ShelfScroller({ kind, children }: { kind: ShelfKind; children: ReactNode }) {
   const list = useRef<HTMLUListElement>(null);
   const [edges, setEdges] = useState({ start: true, end: true });
+  const back = useLiquidGlass<HTMLButtonElement>(14, 12);
+  const forward = useLiquidGlass<HTMLButtonElement>(14, 12);
 
   const measure = useCallback(() => {
     const el = list.current;
@@ -59,6 +62,7 @@ export function ShelfScroller({ kind, children }: { kind: ShelfKind; children: R
   return (
     <div className="group/shelf relative">
       <button
+        ref={back}
         className={`${arrow} left-3`}
         aria-label="Previous Page"
         disabled={edges.start}
@@ -70,6 +74,7 @@ export function ShelfScroller({ kind, children }: { kind: ShelfKind; children: R
         {children}
       </ul>
       <button
+        ref={forward}
         className={`${arrow} right-3`}
         aria-label="Next Page"
         disabled={edges.end}
