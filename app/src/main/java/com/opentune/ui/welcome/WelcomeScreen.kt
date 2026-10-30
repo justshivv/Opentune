@@ -150,8 +150,8 @@ internal const val MIN_PICKS = 1
 @Composable
 fun WelcomeScreen(
     onDone: () -> Unit,
-    /** The starting grid: the charts' top artists for the phone's country, as Explore and Radio read it. */
-    loadPopular: suspend () -> List<ExploreFeed.Artist> = { MusicRepository.chartArtists(Locale.getDefault().country.takeIf { it.length == 2 }) },
+    /** The starting grid; by default the charts' top artists for the listener's country ([UserCountry]). */
+    loadPopular: (suspend () -> List<ExploreFeed.Artist>)? = null,
     /** Artists like a picked one, to place after it. */
     loadSimilar: suspend (String) -> List<ExploreFeed.Artist> = ArtistChain::load,
 ) {
@@ -171,6 +171,29 @@ fun WelcomeScreen(
     val followedHere = rememberSaveable(saver = idSetSaver) { mutableStateListOf() }
     var signingIn by rememberSaveable { mutableStateOf(false) }
     val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    // The suggestions start from the charts where the listener is, so approximate location is
+    // asked for first; whatever the answer, the artists load after it (from the network's country
+    // when it's declined). A device without location (a TV) isn't asked.
+    var locationAnswered by rememberSaveable {
+        mutableStateOf(
+            com.opentune.data.radio.ApproxLocation.granted(context) ||
+                !context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LOCATION),
+        )
+    }
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { locationAnswered = true }
+    var asked by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!locationAnswered && !asked) {
+            asked = true
+            runCatching { askLocation.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION) }.onFailure { locationAnswered = true }
+        }
+    }
+    var country by rememberSaveable { mutableStateOf<String?>(null) }
+    val popular: suspend () -> List<ExploreFeed.Artist> = loadPopular ?: {
+        val found = com.opentune.data.UserCountry.detect(context)
+        country = found
+        MusicRepository.chartArtists(found)
+    }
 
     fun finish() {
         Welcome.finish()
@@ -253,7 +276,9 @@ fun WelcomeScreen(
                         growing = growing,
                         broughtBy = broughtBy,
                         reduceMotion = ui.reduceAnimation,
-                        loadPopular = loadPopular,
+                        loadPopular = popular,
+                        ready = locationAnswered,
+                        country = country,
                         onPicked = { artist ->
                             if (artist.browseId !in grown) {
                                 grown += artist.browseId
@@ -410,14 +435,18 @@ private fun ArtistsStep(
     broughtBy: Map<String, String>,
     reduceMotion: Boolean,
     loadPopular: suspend () -> List<ExploreFeed.Artist>,
+    /** False while the location question is still on screen: the grid waits for its answer. */
+    ready: Boolean,
+    /** The country the grid came from, named under the title once known. */
+    country: String?,
     onPicked: (ExploreFeed.Artist) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var attempt by remember { mutableIntStateOf(0) }
     // The grid starts from the charts; once it has anything, it only grows.
     var failed by remember { mutableStateOf(false) }
-    LaunchedEffect(attempt) {
-        if (grid.isNotEmpty()) return@LaunchedEffect
+    LaunchedEffect(attempt, ready) {
+        if (grid.isNotEmpty() || !ready) return@LaunchedEffect
         failed = false
         val popular = runCatching { loadPopular() }.getOrDefault(emptyList())
         if (grid.isEmpty()) grid.addAll(picks.filter { p -> popular.none { it.browseId == p.browseId } } + popular)
@@ -460,9 +489,11 @@ private fun ArtistsStep(
 
     Column(Modifier.fillMaxSize().imePadding()) {
         Spacer(Modifier.height(topInset()))
+        val place = country?.let { runCatching { Locale.Builder().setRegion(it).build().displayCountry }.getOrNull()?.takeIf(String::isNotBlank) }
         StepTitle(
             "Pick artists you like",
-            "Each one you pick brings in more like them. Keep going as long as you like, then tap Done.",
+            (if (place != null) "Starting with what's popular in $place. " else "") +
+                "Each one you pick brings in more like them. Keep going as long as you like, then tap Done.",
         )
         TextField(
             value = query,
