@@ -396,7 +396,7 @@ internal fun SearchPage(query: String, onQuery: (String) -> Unit, searches: Int,
                 if (recentSearches.isNotEmpty()) item(key = "recent") { RecentSearches(recentSearches) { onQuery(it); onSearch() } }
                 if (moods.isNotEmpty()) item(key = "browse") {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Browse all", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp))
+                        Text("Browse all", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = GUTTER))
                         BrowseTiles(moods) { onOpenAny(MoodKey(it.title, it.browseId, it.params)) }
                     }
                 }
@@ -406,7 +406,7 @@ internal fun SearchPage(query: String, onQuery: (String) -> Unit, searches: Int,
             else -> {
                 item(key = "top") { TopResult(found) }
                 item(key = "all-head") {
-                    Text("Songs", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+                    Text("Songs", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = GUTTER, vertical = 4.dp))
                 }
                 tracks(found)
             }
@@ -421,7 +421,7 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, onSearch: () -
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val shape = RoundedCornerShape(16.dp)
     Row(
-        Modifier.padding(horizontal = 24.dp).widthIn(max = 720.dp).fillMaxWidth().height(56.dp)
+        Modifier.padding(horizontal = GUTTER).widthIn(max = 720.dp).fillMaxWidth().height(56.dp)
             .glass(shape, onSurface.copy(alpha = 0.08f)).padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -453,7 +453,7 @@ private fun TopResult(found: List<Song>) {
     val colour = rememberCoverColor(top.thumbnailUrl, base)
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
-    Row(Modifier.padding(horizontal = 24.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+    Row(Modifier.padding(horizontal = GUTTER).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.width(400.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Top result", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Box(
@@ -507,7 +507,7 @@ private fun TopResult(found: List<Song>) {
 private fun BrowseTiles(moods: List<com.opentune.data.model.MoodGenre>, onOpen: (com.opentune.data.model.MoodGenre) -> Unit) {
     val palette = listOf(0xFF2E7D32, 0xFF1565C0, 0xFF6A1B9A, 0xFFC62828, 0xFFEF6C00, 0xFF00838F, 0xFFAD1457, 0xFF4E342E, 0xFF283593, 0xFF9E9D24)
     androidx.compose.foundation.layout.FlowRow(
-        Modifier.padding(horizontal = 24.dp).fillMaxWidth(),
+        Modifier.padding(horizontal = GUTTER).fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         moods.forEach { m ->
@@ -527,11 +527,11 @@ private fun BrowseTiles(moods: List<com.opentune.data.model.MoodGenre>, onOpen: 
 @Composable
 private fun RecentSearches(queries: List<String>, onPick: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = GUTTER), verticalAlignment = Alignment.CenterVertically) {
             Text("Recent searches", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             TextButton(onClick = AppSettings::clearRecentSearches) { Text("Clear") }
         }
-        androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = GUTTER), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             queries.forEach { q ->
                 val hover = remember { MutableInteractionSource() }
                 val hovered by hover.collectIsHoveredAsState()
@@ -574,7 +574,7 @@ internal fun LibraryPage(shelf: Shelf, onShelf: (Shelf) -> Unit, onPlaylist: (St
             )
         }
         Shelf.PLAYLISTS -> Column(Modifier.fillMaxSize().padding(top = 28.dp)) {
-            Text("Playlists", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+            Text("Playlists", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = GUTTER, vertical = 4.dp))
             PlaylistGrid(onOpen = onPlaylist)
         }
         Shelf.SERVER -> if (server != null) ServerShelf() else Message("No music server connected", "Connect one in Settings.")

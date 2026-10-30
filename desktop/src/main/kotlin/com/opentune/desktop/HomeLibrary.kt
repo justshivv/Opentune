@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,11 +51,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.opentune.data.history.DailyMixes
 import com.opentune.data.history.PlayRecord
 import com.opentune.data.history.SpeedDial
@@ -142,6 +145,7 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
     val mixes = remember(history) { DailyMixes.build(history) }
     val loaded = shelves
     ScrollPage("Home", greeting(), state = list) {
+        recent.firstOrNull()?.let { last -> item(key = "hero") { JumpBackIn(last, recent) } }
         if (mixes.isNotEmpty() || speedDial.isNotEmpty()) item(key = "picks") {
             Section("Top picks for you") { TopPicks(mixes, speedDial.take(8), onOpenMix = { onOpenAny(it) }) }
         }
@@ -187,14 +191,14 @@ private fun Section(title: String, subtitle: String? = null, onShowAll: (() -> U
 
 @Composable
 private fun SectionHeader(title: String, subtitle: String? = null, onShowAll: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = GUTTER), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp)
+            subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp)) }
         }
         if (onShowAll != null) {
             Text(
-                "Show all", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+                "Show all  ›", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onShowAll).padding(horizontal = 10.dp, vertical = 4.dp),
             )
@@ -207,7 +211,7 @@ private fun SectionHeader(title: String, subtitle: String? = null, onShowAll: ((
 internal fun ShelfRow(shelf: Pages.Shelf, onOpen: (ShelfItem) -> Unit) {
     Section(shelf.title) {
         val songs = remember(shelf) { shelf.items.mapNotNull(Pages::songOf) }
-        LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        HRow(16.dp) {
             items(shelf.items) { item ->
                 Card(item) {
                     val song = Pages.songOf(item)
@@ -222,69 +226,14 @@ internal fun ShelfRow(shelf: Pages.Shelf, onOpen: (ShelfItem) -> Unit) {
 @Composable
 internal fun ShelfPlaceholder() {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Placeholder(Modifier.padding(horizontal = 24.dp).width(180.dp).height(22.dp), RoundedCornerShape(8.dp))
-        Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Placeholder(Modifier.padding(horizontal = GUTTER).width(180.dp).height(22.dp), RoundedCornerShape(8.dp))
+        Row(Modifier.padding(horizontal = GUTTER), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             repeat(6) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Placeholder(Modifier.size(160.dp), MaterialTheme.shapes.medium)
                     Placeholder(Modifier.width(120.dp).height(12.dp), RoundedCornerShape(6.dp))
                     Placeholder(Modifier.width(80.dp).height(10.dp), RoundedCornerShape(5.dp))
                 }
-            }
-        }
-    }
-}
-
-/** Moods and genres as a row of pills. */
-@Composable
-private fun MoodChips(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
-    LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(moods, key = { it.title }) { m ->
-            val hover = remember { MutableInteractionSource() }
-            val hovered by hover.collectIsHoveredAsState()
-            val onSurface = MaterialTheme.colorScheme.onSurface
-            val fill by animateColorAsState(onSurface.copy(alpha = if (hovered) 0.16f else 0.08f), tween(140), label = "chip")
-            Text(
-                m.title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clip(RoundedCornerShape(50)).background(fill).hoverable(hover)
-                    .clickable(interactionSource = hover, indication = null) { onOpen(m) }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
-    }
-}
-
-/**
- * Speed dial: three rows of covers that scroll sideways, the name on each,
- * as the phone's Home starts. Click one to play it, with the rest after it.
- */
-@Composable
-private fun SpeedDialGrid(items: List<ShelfItem>) {
-    val songs = remember(items) { items.mapNotNull(Pages::songOf) }
-    val side = 132.dp
-    LazyHorizontalGrid(
-        GridCells.Fixed(3),
-        Modifier.fillMaxWidth().height(side * 3 + 20.dp),
-        contentPadding = PaddingValues(horizontal = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        items(items) { item ->
-            val hover = remember { MutableInteractionSource() }
-            Box(
-                Modifier.size(side).hoverLift(hover, 1.04f).clip(RoundedCornerShape(14.dp))
-                    .clickable(interactionSource = hover, indication = null) {
-                        val at = songs.indexOfFirst { it.videoId == item.videoId }
-                        if (at >= 0) Player.playAll(songs, at)
-                    },
-            ) {
-                Cover(item.thumbnailUrl, side, RoundedCornerShape(14.dp))
-                Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.72f))))
-                Text(
-                    item.title, color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
-                )
             }
         }
     }
@@ -297,12 +246,8 @@ internal fun SongGrid(title: String, songs: List<Song>, rows: Int = 4) {
     val index by Player.index.collectAsState()
     val playingId = queue.getOrNull(index)?.videoId
     Section(title) {
-        LazyHorizontalGrid(
-            GridCells.Fixed(rows.coerceAtMost(songs.size).coerceAtLeast(1)),
-            Modifier.fillMaxWidth().height(64.dp * rows.coerceAtMost(songs.size).coerceAtLeast(1) - 4.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+        val shownRows = rows.coerceAtMost(songs.size).coerceAtLeast(1)
+        HGrid(shownRows, 64.dp * shownRows - 4.dp, spacing = 8.dp) {
             items(songs) { song ->
                 val hover = remember { MutableInteractionSource() }
                 Row(
@@ -327,13 +272,44 @@ internal fun SongGrid(title: String, songs: List<Song>, rows: Int = 4) {
 }
 
 /**
+ * The banner Home opens with: the last song you played, its cover large and
+ * lifted on a wide card over a soft blur of itself in its own colours, with
+ * Play to carry on and Shuffle for everything you played lately.
+ */
+@Composable
+private fun JumpBackIn(song: Song, recent: List<Song>) {
+    val accent = coverAccent(song.thumbnailUrl)
+    val shape = RoundedCornerShape(24.dp)
+    val hover = remember { MutableInteractionSource() }
+    Box(
+        Modifier.padding(horizontal = GUTTER).fillMaxWidth().height(250.dp).hoverLift(hover, 1.005f)
+            .shadow(24.dp, shape, ambientColor = accent, spotColor = accent).clip(shape).hoverable(hover),
+    ) {
+        SoftBackdrop(song.thumbnailUrl, Modifier.fillMaxSize())
+        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.55f), 0.6f to accent.copy(alpha = 0.25f), 1f to Color.Black.copy(alpha = 0.15f))))
+        Row(Modifier.fillMaxSize().padding(28.dp), verticalAlignment = Alignment.CenterVertically) {
+            Cover(song.thumbnailUrl, 194.dp, RoundedCornerShape(16.dp), Modifier.shadow(28.dp, RoundedCornerShape(16.dp)))
+            Column(Modifier.padding(start = 28.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("JUMP BACK IN", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.75f), letterSpacing = 1.2.sp)
+                Text(song.title, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(song.artist, style = MaterialTheme.typography.titleMedium, color = Color.White.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PrimaryButton("Play", Icons.Rounded.PlayArrow) { Player.playAll(recent, 0) }
+                    SecondaryButton("Shuffle recents", androidx.compose.material.icons.Icons.Rounded.Shuffle) { Player.playAll(recent.shuffled(), 0) }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Top picks: tall cards, your daily mixes as a burst of colour with three
  * of their covers in circles, then the songs you play most as full covers.
  */
 @Composable
 private fun TopPicks(mixes: List<DailyMixes.Mix>, most: List<ShelfItem>, onOpenMix: (DailyMixes.Mix) -> Unit) {
     val songs = remember(most) { most.mapNotNull(Pages::songOf) }
-    LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    HRow(14.dp) {
         items(mixes, key = { "mix" + it.id }) { mix -> PickCard(label = "Made for you", title = mix.title, line = mix.subtitle, colourOf = mix.covers.firstOrNull(), onClick = { onOpenMix(mix) }) {
             MixCircles(mix.covers.filterNotNull())
         } }
@@ -384,11 +360,7 @@ private fun MixCircles(covers: List<String>) {
 @Composable
 private fun MoodTiles(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
     val palette = listOf(0xFF2E7D32, 0xFF1565C0, 0xFF6A1B9A, 0xFFC62828, 0xFFEF6C00, 0xFF00838F, 0xFFAD1457, 0xFF4E342E, 0xFF283593, 0xFF9E9D24)
-    LazyHorizontalGrid(
-        GridCells.Fixed(2), Modifier.fillMaxWidth().height(176.dp),
-        contentPadding = PaddingValues(horizontal = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    HGrid(2, 176.dp, spacing = 12.dp, rowSpacing = 12.dp) {
         items(moods, key = { it.title }) { m ->
             val hover = remember { MutableInteractionSource() }
             val colour = Color(palette[(m.title.hashCode() and 0x7fffffff) % palette.size])
@@ -495,7 +467,7 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
     ScrollPage("Library") {
         item(key = "year") { YearCard(year) }
         item(key = "shortcuts") {
-            LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            HRow(12.dp) {
                 item { Shortcut(Icons.Rounded.Favorite, "Liked songs", songCount(liked.size), heart = true) { onShelf(Shelf.LIKED) } }
                 item { Shortcut(Icons.Rounded.History, "Recently played", if (recent.isEmpty()) "Nothing yet" else "${recent.size} songs") { onShelf(Shelf.RECENT) } }
                 if (server != null) item { Shortcut(Icons.Rounded.Storage, "Your server", server!!.url.substringAfter("://").substringBefore('/')) { onShelf(Shelf.SERVER) } }
@@ -508,10 +480,10 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
                     Text(
                         "Playlists you make show here. Add songs to one with the playlist button on any song.",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 24.dp),
+                        modifier = Modifier.padding(horizontal = GUTTER),
                     )
                 } else {
-                    LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    HRow(16.dp) {
                         items(playlists, key = { it.id }) { p ->
                             val hover = remember { MutableInteractionSource() }
                             Column(Modifier.width(170.dp).hoverLift(hover).clip(MaterialTheme.shapes.medium).clickable(interactionSource = hover, indication = null) { onPlaylist(p.id) }) {
@@ -526,7 +498,7 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
         }
         if (mixes.isNotEmpty()) item(key = "mixes") {
             Section("Your mixes", "Made fresh each day from what you play") {
-                LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                HRow(16.dp) {
                     items(mixes, key = { it.id }) { mix -> MixCard(mix, onOpen = { onOpenAny(mix) }) }
                 }
             }
@@ -543,7 +515,7 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
         }
         if (month.topArtists.isNotEmpty()) item(key = "top-artists") {
             Section("Your top artists", "This month") {
-                LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                HRow(20.dp) {
                     items(month.topArtists.take(12), key = { it.title }) { a ->
                         Column(Modifier.width(120.dp).clip(RoundedCornerShape(16.dp)).clickable { a.song?.let { Player.playAll(listOf(it), 0) } }, horizontalAlignment = Alignment.CenterHorizontally) {
                             Cover(a.thumbnailUrl, 120.dp, CircleShape)
@@ -584,7 +556,7 @@ private fun YearCard(summary: Wrapped.Summary) {
     val colour = rememberCoverColor(top?.thumbnailUrl, base)
     val shape = RoundedCornerShape(22.dp)
     Box(
-        Modifier.padding(horizontal = 24.dp).fillMaxWidth().clip(shape)
+        Modifier.padding(horizontal = GUTTER).fillMaxWidth().clip(shape)
             .background(Brush.linearGradient(listOf(tint(colour, base, 0.55f), tint(colour, base, 0.18f)))),
     ) {
         Row(Modifier.padding(22.dp), verticalAlignment = Alignment.CenterVertically) {

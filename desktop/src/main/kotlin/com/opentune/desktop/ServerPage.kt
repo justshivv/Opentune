@@ -48,7 +48,7 @@ internal fun ServerShelf() {
     }
     open?.let { a -> return ServerAlbum(a, onBack = { open = null }) }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.padding(horizontal = 24.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.padding(horizontal = GUTTER, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ORDERS.forEach { o -> FilterChip(order == o, { order = o }, label = { Text(o.second) }) }
         }
         val found = albums
@@ -90,7 +90,7 @@ private fun ServerAlbum(album: Subsonic.Album, onBack: () -> Unit) {
     val found = songs
     Column(Modifier.fillMaxSize()) {
         GlassCircle(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack, Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp))
-        Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = GUTTER, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Cover(album.cover, 132.dp, MaterialTheme.shapes.medium)
             Column(Modifier.padding(start = 20.dp).width(520.dp)) {
                 Text(album.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)

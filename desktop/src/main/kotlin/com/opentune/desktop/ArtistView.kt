@@ -123,7 +123,7 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
             items(loaded.sections.filter { it.items.isNotEmpty() }) { shelf -> ShelfRow(Pages.Shelf(shelf.title, shelf.items), onOpen) }
             loaded.description?.takeIf { it.isNotBlank() }?.let { story ->
                 item(key = "about") {
-                    Column(Modifier.padding(horizontal = 24.dp).widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.padding(horizontal = GUTTER).widthIn(max = 820.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("About", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         var open by remember { mutableStateOf(false) }
                         Text(

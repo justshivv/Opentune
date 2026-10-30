@@ -86,7 +86,7 @@ internal fun ScrollPage(
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = state, contentPadding = PaddingValues(top = 28.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(spacing)) {
             item(key = "page-title") {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.Bottom) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = GUTTER), verticalAlignment = Alignment.Bottom) {
                     Column(Modifier.weight(1f)) {
                         Text(title, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
                         subtitle?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -111,7 +111,7 @@ internal fun BoxScope.TitleBar(title: String, shown: Boolean) {
     ) {
         Box(
             Modifier.fillMaxWidth().height(54.dp + DesktopWindow.topInset).glass(RoundedCornerShape(0.dp), MaterialTheme.colorScheme.background.copy(alpha = 0.62f))
-                .padding(top = DesktopWindow.topInset, start = 24.dp),
+                .padding(top = DesktopWindow.topInset, start = GUTTER),
             contentAlignment = Alignment.CenterStart,
         ) { Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
@@ -150,7 +150,7 @@ internal fun CollectionHero(
             // A little darker at the top for the window's bar, richer in the cover's colour below.
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.25f), 1f to colour.copy(alpha = 0.35f))))
         }
-        Row(Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = 40.dp + DesktopWindow.topInset, bottom = 24.dp), verticalAlignment = Alignment.Bottom) {
+        Row(Modifier.fillMaxWidth().padding(start = GUTTER, end = GUTTER, top = 44.dp + DesktopWindow.topInset, bottom = 28.dp), verticalAlignment = Alignment.Bottom) {
             cover(Modifier.size(228.dp).shadow(36.dp, shape, ambientColor = colour, spotColor = colour).clip(shape))
             Column(Modifier.padding(start = 28.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(kind.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
@@ -245,8 +245,8 @@ internal fun SecondaryButton(label: String, icon: ImageVector, enabled: Boolean 
 /** The column heads over a track list: number, title, length. */
 @Composable
 internal fun TrackHeader() {
-    Column(Modifier.padding(horizontal = 20.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.padding(horizontal = GUTTER - 12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("#", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(36.dp))
             Text("Title", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
             Icon(Icons.Rounded.Schedule, "Length", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 92.dp).size(16.dp))
@@ -278,9 +278,9 @@ internal fun TrackRow(i: Int, song: Song, songs: List<Song>, onRemove: ((Song) -
     var adding by remember { mutableStateOf(false) }
     val tools by animateFloatAsState(if (hovered || isLiked || adding) 1f else 0f, tween(140), label = "row tools")
     Row(
-        Modifier.padding(horizontal = 20.dp).fillMaxWidth().hoverWash(hover, RoundedCornerShape(10.dp))
+        Modifier.padding(horizontal = GUTTER - 12.dp).fillMaxWidth().hoverWash(hover, RoundedCornerShape(10.dp))
             .clickable(interactionSource = hover, indication = null) { Player.playAll(songs, i) }
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(36.dp)) {
