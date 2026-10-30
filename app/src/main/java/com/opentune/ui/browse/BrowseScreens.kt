@@ -78,6 +78,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -276,7 +279,7 @@ internal fun HeaderBackdrop(
 ) {
     if (url.isNullOrBlank()) return
     val background = into
-    Box(modifier.clipToBounds()) {
+    Box(modifier.clipToBounds().fadeOutAtFoot()) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Artwork(
                 url,
@@ -298,26 +301,57 @@ internal fun HeaderBackdrop(
     }
 }
 
-/** The page's colour taken from a cover: its own colour laid lightly over the background. */
+/**
+ * Fades what it's on out to nothing over its last stretch, so a header melts
+ * into the page's wash behind it. Ending on a solid colour drew a hard line
+ * across the page wherever the header stopped, because the wash behind it is
+ * pinned to the screen and is a different shade at every height.
+ */
+internal fun Modifier.fadeOutAtFoot(): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(
+            Brush.verticalGradient(0.55f to Color.Black, 1f to Color.Transparent),
+            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+        )
+    }
+
+/**
+ * The page's colour taken from a cover: its own colour laid lightly over the
+ * background. A dark cover's colour is lifted to a mid tone first, and a
+ * black-and-white one (which has no colour to read) gets a soft grey, so
+ * neither leaves the page plain black.
+ */
 @Composable
 internal fun rememberCoverTint(url: String?): Color {
     val background = MaterialTheme.colorScheme.background
     val seed = com.opentune.ui.theme.rememberArtworkSeed(url)
+    val loaded = !url.isNullOrBlank()
     val tint by androidx.compose.animation.animateColorAsState(
-        seed?.let { androidx.compose.ui.graphics.lerp(background, it, 0.26f) } ?: background, label = "coverTint",
+        if (loaded) androidx.compose.ui.graphics.lerp(background, coverTone(seed, background.luminance() < 0.5f), 0.32f) else background,
+        label = "coverTint",
     )
     return tint
 }
 
+/** [seed] at a tone that reads on the page: a mid tone on a dark page, a light one on a light page; grey without a seed. */
+internal fun coverTone(seed: Color?, dark: Boolean): Color {
+    val hct = com.materialkolor.hct.Hct.fromInt((seed ?: Color(0xFF808080)).toArgb())
+    val tone = if (dark) hct.tone.coerceIn(42.0, 62.0) else hct.tone.coerceIn(70.0, 88.0)
+    return Color(com.materialkolor.hct.Hct.from(hct.hue, if (seed == null) 0.0 else hct.chroma, tone).toInt())
+}
+
 /**
  * The cover's colour behind the whole page, not just its header: even down the
- * top half of the screen, where the header fades into it, then fading out to
+ * top half of the screen, where the header fades into it, then easing toward
  * the plain background at the foot.
  */
 @Composable
 internal fun Modifier.coverWash(tint: Color): Modifier {
     val background = MaterialTheme.colorScheme.background
-    return this.background(Brush.verticalGradient(0f to tint, 0.5f to tint, 1f to background))
+    // Down to the foot it keeps most of the colour, rather than ending in the plain background.
+    return this.background(Brush.verticalGradient(0f to tint, 0.5f to tint, 1f to androidx.compose.ui.graphics.lerp(tint, background, 0.3f)))
 }
 
 /** The orders a list's songs can be shown in. */
