@@ -152,10 +152,15 @@
 .ot-quality[data-lossless='true'] { color: #fff3ed; }
 .ot-quality[data-lossless='true'] span { background: linear-gradient(110deg, #ffffff88 25%, #fff 45%, #ffffff88 65%); background-size: 250% 100%; background-clip: text; color: transparent; animation: ot-beam 5s linear infinite; }
 @keyframes ot-beam { to { background-position: -250% 0; } }
-.ot-audio-details { position: fixed; inset: auto max(20px, calc((100vw - 560px)/2)) 24px; z-index: 10005; background: #292321; color: #f6ede9; border: 1px solid #ffffff28; border-radius: 28px; padding: 28px; margin: 0; width: auto; max-height: 80dvh; overflow: auto; }
-.ot-audio-details h2 { font-size: 25px; font-weight: 700; margin-bottom: 18px; }
+.ot-audio-details { position: fixed; inset: auto max(20px, calc((100vw - 560px)/2)) 24px; z-index: 10005; background: #292321; color: #f6ede9; border: 1px solid #ffffff28; border-radius: 28px; padding: 0; margin: 0; width: auto; max-height: min(80dvh, calc(100dvh - 48px)); overflow: hidden; }
+.ot-audio-details[open] { display: flex; flex-direction: column; }
+.ot-audio-details header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 22px 22px 6px 28px; }
+.ot-audio-details h2 { font-size: 25px; font-weight: 700; }
+.ot-audio-details .ot-audio-close { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #ffffff14; color: #f6ede9; }
+.ot-audio-details .ot-audio-close:hover { background: #ffffff24; }
+.ot-audio-details .ot-audio-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 0 28px; }
 .ot-audio-details p { margin: 14px 0; overflow-wrap: anywhere; }
-.ot-audio-details button { padding: 15px; border-radius: 30px; width: 100%; background: var(--ot-key-on-dark); color: #26110d; font-weight: 700; }
+.ot-audio-details .ot-audio-done { flex: none; margin: 8px 28px 28px; padding: 15px; border-radius: 30px; background: var(--ot-key-on-dark); color: #26110d; font-weight: 700; }
 .ot-playing-from { position: absolute; top: 22px; left: 25%; right: 25%; text-align: center; text-transform: uppercase; font-size: 10px; letter-spacing: .14em; color: #ffffff99; }
 .ot-playing-from strong { display: inline-block; margin-top: 3px; text-transform: none; letter-spacing: 0; font-size: 13px; color: #ffffffdd; }
 .ot-player-backdrop { position: absolute; inset: 0; z-index: -1; background: linear-gradient(155deg, var(--cover-color), #100d0c 95%); }

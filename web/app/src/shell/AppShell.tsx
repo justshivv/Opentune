@@ -30,7 +30,8 @@ const FullScreenPlayer = lazy(() => import('./FullScreenPlayer').then((m) => ({ 
  * Where the page scrolls on navigation. A new page opens at its top instead of
  * wherever the last one was left; Back and Forward return to the place the
  * page was left at, waiting for content that loads after it to reach it.
- * Typing a search (the same page, a new query) keeps its place.
+ * Typing a search (the same page, a new query) keeps its place, and a link to
+ * the page already open glides back up to its top.
  */
 function usePageScroll() {
   const location = useLocation();
@@ -53,7 +54,13 @@ function usePageScroll() {
     shown.current = location;
     const page = document.getElementById('scrollable-page');
     if (!page || before.key === location.key) return;
-    if (before.pathname === location.pathname && navigation !== 'POP') return;
+    if (navigation !== 'POP' && before.pathname === location.pathname) {
+      // Typing a search changes only the query: keep the place.
+      if (before.search !== location.search) return;
+      // A link to the page already open (an artist's name on their own page): glide up to its top.
+      page.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      return;
+    }
     const target = navigation === 'POP' ? (places.current.get(location.key) ?? 0) : 0;
     page.scrollTop = target;
     if (page.scrollTop >= target - 1) return;
