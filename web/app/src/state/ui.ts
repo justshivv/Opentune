@@ -13,12 +13,25 @@ interface UiState {
   /** The sidebar as a drawer, below 484px where it's otherwise hidden. */
   drawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
+  /** The sidebar folded to a rail of icons, on screens wide enough to show it; kept in this browser. */
+  sidebarCollapsed: boolean;
+  toggleSidebar: () => void;
   /** The extension install banner, dismissed for this tab only. */
   installBannerDismissed: boolean;
   dismissInstallBanner: () => void;
 }
 
 const BANNER_KEY = 'opentune:install-banner-dismissed';
+const SIDEBAR_KEY = 'opentune:sidebar-collapsed';
+
+// Storage can throw (blocked site data); the sidebar then just starts open and isn't remembered.
+function remembered(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export const useUi = create<UiState>()((set) => ({
   sidePanel: null,
@@ -28,6 +41,17 @@ export const useUi = create<UiState>()((set) => ({
   setFullScreen: (fullScreen) => set({ fullScreen }),
   drawerOpen: false,
   setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
+  sidebarCollapsed: remembered(SIDEBAR_KEY),
+  toggleSidebar: () =>
+    set((s) => {
+      const sidebarCollapsed = !s.sidebarCollapsed;
+      try {
+        localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? '1' : '0');
+      } catch {
+        // Not remembered; it still folds for now.
+      }
+      return { sidebarCollapsed };
+    }),
   installBannerDismissed: sessionStorage.getItem(BANNER_KEY) === '1',
   dismissInstallBanner: () => {
     sessionStorage.setItem(BANNER_KEY, '1');

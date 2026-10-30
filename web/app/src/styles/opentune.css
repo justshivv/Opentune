@@ -295,3 +295,19 @@
 .ot-accent-picker button { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; outline-offset: 2px; transition: scale .2s var(--ot-ease-settle); }
 .ot-accent-picker button:hover { scale: 1.08; }
 .ot-accent-picker button[aria-pressed='true'] { outline: 2px solid var(--systemPrimary); }
+
+
+/* The sidebar folded to a rail of icons (the button at its top). Phones keep the full drawer.
+   Labels stay in the page for screen readers; the tooltips name each icon for everyone else. */
+@media (min-width: 484px) {
+  .ot-side[data-folded='true'] .ot-side-top { justify-content: center; padding: 0; }
+  .ot-side[data-folded='true'] .ot-side-scroll, .ot-side[data-folded='true'] .ot-side-bottom { padding-inline: 12px; }
+  .ot-side[data-folded='true'] .ot-side-scroll a, .ot-side[data-folded='true'] .ot-side-bottom > a { justify-content: center; }
+  .ot-side[data-folded='true'] .ot-side-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ot-side[data-folded='true'] :is(.ot-side-wordmark, .ot-side-extra, .ot-side-full, .ot-side-android) { display: none; }
+  .ot-side[data-folded='true'] .ot-side-compact { display: flex; }
+  .ot-side[data-folded='true'] .ot-side-foot { justify-content: center; }
+  /* Section names become a hairline between the groups of icons. */
+  .ot-side[data-folded='true'] .ot-side-header { height: 0.5px; margin: 12px 8px; padding: 0; overflow: hidden; color: transparent; background: var(--labelDivider); }
+  .ot-side[data-folded='true'] .ot-side-badge { position: absolute; top: 5px; right: 9px; width: 8px; height: 8px; padding: 0; border-radius: 50%; font-size: 0; }
+}

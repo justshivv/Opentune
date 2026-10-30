@@ -27,7 +27,8 @@ function focusSearch(navigate: ReturnType<typeof useNavigate>) {
 /**
  * The web player's shortcuts, which OpenTune matches (report §8): Space
  * play/pause; ⌘/Ctrl+→ / ← next/previous; ⌘/Ctrl+↑ / ↓ volume; ⌘/Ctrl+F or
- * "/" focuses search; Esc closes the full-screen player, else the side panel.
+ * "/" focuses search; ⌘/Ctrl+\ folds the sidebar; Esc closes the full-screen
+ * player, else the side panel.
  */
 export function useKeyboardShortcuts() {
   const navigate = useNavigate();
@@ -40,6 +41,11 @@ export function useKeyboardShortcuts() {
       if (command && (event.key === 'f' || event.key === 'F')) {
         event.preventDefault();
         return focusSearch(navigate);
+      }
+      // Folds the sidebar to its rail and back; no browser uses this one.
+      if (command && event.key === '\\') {
+        event.preventDefault();
+        return useUi.getState().toggleSidebar();
       }
       if (typing(event.target)) return;
 

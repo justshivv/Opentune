@@ -151,6 +151,13 @@
   }
 }
 
+/* The sidebar folded to its rail of icons (Sidebar's fold button). Phones keep the drawer. */
+@media (min-width: 484px) {
+  :root[data-sidebar='collapsed'] {
+    --web-navigation-width: 72px;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
