@@ -455,6 +455,10 @@ export class RoomSession {
         else if (msg.action === 'next') p.skipNext();
         else if (msg.action === 'prev') p.skipPrevious();
         this.playerChanged();
+        // What a guest did to the room's music shows in its activity, as a song they add does. Seeks
+        // come many to a drag, so they aren't listed.
+        const did = ({ play: 'resumed the music', pause: 'paused the music', next: 'skipped to the next song', prev: 'went back a song' } as Record<string, string>)[msg.action];
+        if (did) this.system(`${who} ${did}`);
         break;
       }
       case 'chat':

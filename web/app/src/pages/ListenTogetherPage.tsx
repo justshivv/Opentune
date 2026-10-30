@@ -4,6 +4,7 @@ import { useParams } from 'react-router';
 import { PageHeader } from '@/components/PageHeader';
 import { approve, createRoom, dismissEnded, joinRoom, leaveRoom, parseCode, reject, removeMember, savedName, say, setAskToJoin, setOpen, useRoom } from '@/together/room';
 import type { RoomView } from '@/together/session';
+import { usePlayer } from '@/state/player';
 import { Toggle } from './IntegrationSettings';
 import { settingsUi } from './settingsStyles';
 
@@ -83,6 +84,7 @@ function StartOrJoin({ invite }: { invite: string | null }) {
 }
 
 function Room({ view }: { view: RoomView }) {
+  const autoplay = usePlayer((s) => s.autoplay);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const copy = (what: 'code' | 'link') => {
     const text = what === 'code' ? pretty(view.code) : `https://justshivv.github.io/Opentune/together/#code=${view.code}`;
@@ -148,6 +150,7 @@ function Room({ view }: { view: RoomView }) {
           <section className={settingsUi.group}>
             <Toggle label="Ask to join" detail="People with the code wait until you let them in." checked={view.askToJoin} onChange={setAskToJoin} />
             <Toggle label="Let everyone control playback" detail="Guests can play, pause, seek and skip for the whole room." checked={view.open} onChange={setOpen} />
+            <Toggle label="AutoPlay" detail="When the queue runs out, keep the room going with similar music." checked={autoplay} onChange={usePlayer.getState().setAutoplay} />
           </section>
         </>
       )}
