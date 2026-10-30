@@ -49,23 +49,18 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * A newer release: what changed, and a button that downloads the APK for
- * this phone and opens Android's installer. Falls back to the release page
- * when the release has no APK to offer.
+ * Downloading a release's APK and handing it to Android's installer, with the
+ * progress and the error to show: the update dialog's and the update lock's.
  */
-@Composable
-fun UpdateDialog(found: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: (UpdateCheck.Release) -> Unit = { onDismiss() }) {
-    val context = LocalContext.current
-    // Swapped for a newer release if one came out since [found] was.
-    var release by remember(found) { mutableStateOf(found) }
-    val scope = rememberCoroutineScope()
-    var progress by remember { mutableStateOf<Float?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var job by remember { mutableStateOf<Job?>(null) }
-    val apk = release.apk
-    var kept by remember { mutableStateOf(Updater.cachedBytes(context)) }
+internal class UpdateInstall(private val context: android.content.Context, private val scope: kotlinx.coroutines.CoroutineScope, found: UpdateCheck.Release) {
+    /** Swapped for a newer release if one came out since it was found. */
+    var release by mutableStateOf(found)
+    var progress by mutableStateOf<Float?>(null)
+    var error by mutableStateOf<String?>(null)
+    var kept by mutableStateOf(Updater.cachedBytes(context))
+    private var job: Job? = null
 
-    fun start() {
+    fun start(onHandedOver: () -> Unit = {}) {
         if (!Updater.canInstall(context)) {
             runCatching { context.startActivity(Updater.allowInstallsIntent(context)) }
             error = "Allow OpenTune to install apps, then tap Update again."
@@ -79,7 +74,7 @@ fun UpdateDialog(found: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: (U
                 val file = Updater.download(context, release) { p -> progress = p }
                 // Off the main thread: it copies the whole APK into the installer, which froze the screen.
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Updater.install(context, file) }
-                onDismiss()
+                onHandedOver()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -90,6 +85,36 @@ fun UpdateDialog(found: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: (U
             }
         }
     }
+
+    fun cancel() { job?.cancel() }
+
+    fun openReleasePage() {
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, release.page.toUri())) }
+    }
+}
+
+@Composable
+internal fun rememberUpdateInstall(found: UpdateCheck.Release): UpdateInstall {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    return remember(found) { UpdateInstall(context, scope, found) }
+}
+
+/**
+ * A newer release: what changed, and a button that downloads the APK for
+ * this phone and opens Android's installer. Falls back to the release page
+ * when the release has no APK to offer.
+ */
+@Composable
+fun UpdateDialog(found: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: (UpdateCheck.Release) -> Unit = { onDismiss() }) {
+    val context = LocalContext.current
+    val install = rememberUpdateInstall(found)
+    val release = install.release
+    val progress = install.progress
+    val error = install.error
+    val kept = install.kept
+    val apk = release.apk
+    fun start() = install.start(onHandedOver = onDismiss)
 
     FloatingCard(
         onDismiss = onDismiss,
@@ -106,7 +131,7 @@ fun UpdateDialog(found: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: (U
                     Text(if (progress != null) "Downloading…" else if (apk == null) "Open release page" else "Update OpenTune")
                 }
                 TextButton(onClick = {
-                    if (progress != null) job?.cancel() else onNotNow(release)
+                    if (progress != null) install.cancel() else onNotNow(release)
                 }, modifier = Modifier.fillMaxWidth()) { Text(if (progress != null) "Cancel download" else "Not now") }
             }
         },
@@ -132,7 +157,7 @@ fun UpdateDialog(found: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: (U
                         LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth())
                         Text("Downloading · ${(p * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
                     }
-                    if (progress == null && kept > 0) TextButton(onClick = { Updater.deleteCached(context); kept = 0 }) {
+                    if (progress == null && kept > 0) TextButton(onClick = { Updater.deleteCached(context); install.kept = 0 }) {
                         Text("Remove saved update (${Formatter.formatShortFileSize(context, kept)})")
                     }
                 }

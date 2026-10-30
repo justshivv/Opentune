@@ -57,6 +57,7 @@ object Core {
             com.opentune.data.addons.AddonRefreshWorker.schedule(app)
             com.opentune.data.releases.NewReleases.init(app)
             com.opentune.data.UpdateCheck.init(app)
+            com.opentune.data.UpdateLock.init(app)
             com.opentune.data.UpdateCheck.schedule(app)
             com.opentune.data.Usage.init(app)
         }

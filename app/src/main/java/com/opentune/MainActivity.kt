@@ -19,6 +19,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.opentune.data.account.AccountStore
 import androidx.compose.animation.togetherWith
 import com.opentune.data.settings.AppSettings
@@ -87,6 +88,11 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     // Some TVs crop the picture's edges: keep pages and buttons inside the safe area.
                     androidx.compose.foundation.layout.Box(if (tv) Modifier.padding(horizontal = 28.dp, vertical = 16.dp) else Modifier) {
+                    // More than two releases behind, the app is only its update screen until it's updated.
+                    val required by com.opentune.data.UpdateLock.required.collectAsState()
+                    val behind by com.opentune.data.UpdateLock.behind.collectAsState()
+                    LaunchedEffect(required) { if (required != null && vm.isPlaying.value) vm.togglePlayPause() }
+                    if (required != null) com.opentune.ui.settings.UpdateRequiredScreen(required!!, behind) else
                     // A fresh install's welcome comes first; Home, built after it, starts from the picks.
                     androidx.compose.animation.AnimatedContent(
                         ui.welcome == WelcomeState.DUE,
@@ -121,6 +127,8 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launchWhenStarted {
             com.opentune.data.addons.AddonRefresh.refresh()
         }
+        // Whether this version is still allowed to run (UpdateLock), at most once an hour.
+        lifecycleScope.launch { com.opentune.data.UpdateLock.refresh(this@MainActivity) }
         // Playlist changes that couldn't reach YouTube Music last time try again.
         if (com.opentune.data.library.PlaylistSync.pending.value.isNotEmpty()) com.opentune.data.library.PlaylistSync.flush()
     }
