@@ -213,6 +213,10 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                 val roomForPanel = maxWidth >= 1100.dp
                 val panelShown = panel != null && song != null && roomForPanel
                 val folded = maxWidth < 900.dp
+                val haze = rememberHazeState()
+                // Behind the whole window, so the see-through sidebar and side column take its colour
+                // as well as the page; a source for the top bar's blur under the page's own.
+                Box(Modifier.fillMaxSize().hazeSource(haze, zIndex = 0f)) { WindowBackdrop(song?.thumbnailUrl) }
                 Row(Modifier.fillMaxSize()) {
                     Sidebar(sideSelected, folded = folded) { key ->
                         when (key) {
@@ -221,7 +225,6 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                             is PlaylistKey -> go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, key))
                         }
                     }
-                    val haze = rememberHazeState()
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         // The page is what the frosted player bar blurs; every page starts below it.
                         CompositionLocalProvider(
@@ -229,8 +232,7 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                             LocalPageBottom provides 40.dp,
                             com.opentune.ui.components.LocalHazeState provides haze.takeIf { !ui.reduceBlur },
                         ) {
-                            Box(Modifier.fillMaxSize().hazeSource(haze)) {
-                                PageBackdrop(song?.thumbnailUrl)
+                            Box(Modifier.fillMaxSize().hazeSource(haze, zIndex = 1f)) {
                                 Pages(
                                     page = page,
                                     still = ui.reduceAnimation,

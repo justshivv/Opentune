@@ -71,6 +71,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -216,18 +218,47 @@ internal fun Segment(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * Behind the page, the playing cover's colour as a soft wash from the top,
- * easing to a new song's, so the window takes a little of the music's colour
- * while the chrome stays grey.
+ * Behind the whole window, sidebar and top bar included: the playing cover
+ * blown up and blurred into a soft field of its colours across the top, under
+ * a wash of its main colour that eases into the page colour further down.
+ * The see-through chrome takes its colour from this rather than standing
+ * beside the page as a grey slab. A new song's cover fades in over the old.
  */
 @Composable
-internal fun PageBackdrop(cover: String?) {
+internal fun WindowBackdrop(cover: String?) {
     val theme by AppSettings.theme.collectAsState()
-    // "Colour from artwork" off: the page stays plain grey.
+    val ui by AppSettings.ui.collectAsState()
+    // "Colour from artwork" off: the window stays plain grey.
     if (!theme.colorFromArtwork) return
     val base = MaterialTheme.colorScheme.background
     val seed = rememberCoverColor(cover, base)
-    val wash by animateColorAsState(if (cover == null) base else tint(seed, base, 0.22f), tween(800), label = "page wash")
-    // Eased toward the page colour, so there's no line where the wash ends.
-    Box(Modifier.fillMaxWidth().height(520.dp).background(Brush.verticalGradient(0f to wash, 0.45f to androidx.compose.ui.graphics.lerp(wash, base, 0.6f), 1f to base)))
+    val wash by animateColorAsState(if (cover == null) base else tint(seed, base, 0.22f), tween(800), label = "window wash")
+    Box(Modifier.fillMaxWidth().height(BACKDROP_HEIGHT)) {
+        // The picture itself only where blur is welcome; the wash alone carries the colour otherwise.
+        if (cover != null && !ui.reduceBlur) {
+            androidx.compose.animation.Crossfade(cover, animationSpec = tween(800), label = "window cover") { url ->
+                coil3.compose.AsyncImage(
+                    url, null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                        .graphicsLayer { alpha = COVER_ALPHA }
+                        .blur(COVER_BLUR, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle),
+                )
+            }
+        }
+        // Thin over the picture at the top, the page colour by the foot, so there's no line where it ends.
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.verticalGradient(
+                    0f to wash.copy(alpha = 0.3f),
+                    0.5f to androidx.compose.ui.graphics.lerp(wash, base, 0.6f).copy(alpha = 0.8f),
+                    1f to base,
+                ),
+            ),
+        )
+    }
 }
+
+private val BACKDROP_HEIGHT = 560.dp
+private val COVER_BLUR = 110.dp
+private const val COVER_ALPHA = 0.75f

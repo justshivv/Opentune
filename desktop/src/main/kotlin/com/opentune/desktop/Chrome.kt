@@ -64,6 +64,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -104,6 +105,8 @@ internal val SIDEBAR_FOLDED = 72.dp
 internal val PANEL_WIDTH = 320.dp
 /** How tall the player bar across the top of the page is, under the window's own title bar. */
 internal val TOP_BAR_HEIGHT = 64.dp
+/** How much of the sidebar's and side column's own colour covers the window's backdrop behind them. */
+private const val CHROME_ALPHA = 0.74f
 
 /** The colour that marks the page showing: the theme's own accent. */
 @Composable
@@ -127,7 +130,8 @@ internal fun Sidebar(selected: Any?, folded: Boolean, onPick: (Any) -> Unit) {
     Row(Modifier.fillMaxHeight()) {
         Column(
             Modifier.width(if (folded) SIDEBAR_FOLDED else SIDEBAR_WIDTH).fillMaxHeight()
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                // See-through, so the window's backdrop colours it as it does the page.
+                .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = CHROME_ALPHA))
                 .padding(top = DesktopWindow.topInset + 12.dp, bottom = 10.dp),
         ) {
             if (folded) {
@@ -242,16 +246,24 @@ internal fun TopBar(
     val shuffled by Player.shuffled.collectAsState()
     val repeat by Player.repeat.collectAsState()
     val has = song != null
-    androidx.compose.foundation.layout.BoxWithConstraints(
-        modifier.fillMaxWidth().height(TOP_BAR_HEIGHT + DesktopWindow.topInset)
-            // Frosted over the page sliding under it; solid with blur turned off.
-            .glass(RectangleShape, MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
-            .padding(top = DesktopWindow.topInset),
-    ) {
+    val frost = MaterialTheme.colorScheme.background.copy(alpha = 0.7f)
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth().height(TOP_BAR_HEIGHT + DesktopWindow.topInset)) {
+        // Frosted over the page sliding under it; solid with blur turned off. Drawn a hair past the
+        // bar's top and sides, so the glass's hairline shows only along its foot, where the page meets it.
+        Box(
+            Modifier.matchParentSize().layout { measurable, constraints ->
+                val over = 1.dp.roundToPx()
+                val glass = measurable.measure(
+                    constraints.copy(minWidth = constraints.maxWidth + 2 * over, maxWidth = constraints.maxWidth + 2 * over, minHeight = constraints.maxHeight + over, maxHeight = constraints.maxHeight + over),
+                )
+                layout(constraints.maxWidth, constraints.maxHeight) { glass.place(-over, -over) }
+            }.glass(RectangleShape, frost),
+        )
         // The song keeps its room as the bar narrows (a column open beside the page, a small
         // window): first the volume folds to its speaker, then shuffle and repeat step aside.
         val roomy = maxWidth >= 900.dp
         val full = maxWidth >= 700.dp
+        Box(Modifier.fillMaxSize().padding(top = DesktopWindow.topInset)) {
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             HoverIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", enabled = canGoBack, size = 34.dp, iconSize = 20.dp, onClick = onBack)
             Spacer(Modifier.width(8.dp))
@@ -284,7 +296,7 @@ internal fun TopBar(
                 HoverIcon(if (panel == SidePanel.NOW) Icons.Rounded.Info else Icons.Outlined.Info, "Now playing", enabled = has, lit = panel == SidePanel.NOW, size = 32.dp, iconSize = 18.dp) { onPanel(SidePanel.NOW) }
             }
         }
-        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
+        }
     }
 }
 
@@ -338,7 +350,7 @@ private fun NowBox(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier) {
 internal fun RightPanel(panel: SidePanel, song: Song, queue: List<Song>, index: Int, onPanel: (SidePanel?) -> Unit, onOpenArtist: (ShelfItem) -> Unit) {
     Row(Modifier.width(PANEL_WIDTH).fillMaxHeight()) {
         Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow).padding(top = DesktopWindow.topInset)) {
+        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = CHROME_ALPHA)).padding(top = DesktopWindow.topInset)) {
             Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     SidePanel.entries.forEach { p -> Segment(p.label, p == panel) { onPanel(p) } }

@@ -263,7 +263,9 @@ compose.desktop {
     application {
         mainClass = "com.opentune.desktop.MainKt"
         nativeDistributions {
-            targetFormats(TargetFormat.Msi, TargetFormat.Dmg, TargetFormat.Deb)
+            // What each system's own installer tools make; the AppImage and the portable zip are wrapped
+            // around createDistributable's app image by CI (see packaging/appimage.sh).
+            targetFormats(TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Dmg, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = "OpenTune"
             // Installers need MAJOR.MINOR.BUILD with MAJOR above 0; the app's own version shows inside.
             packageVersion = "1.0.$appVersionCode"
@@ -283,6 +285,7 @@ compose.desktop {
             linux {
                 iconFile.set(project.file("packaging/icons/AppIcon.png"))
                 debMaintainer = "78946189+justshivv@users.noreply.github.com"
+                rpmLicenseType = "GPL-3.0"
             }
         }
     }
