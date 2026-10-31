@@ -77,7 +77,7 @@ jobs:
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
-          DISCORD_APP_ID: ${{ vars.DISCORD_APP_ID }}
+          DISCORD_APP_ID: ${{ vars.DISCORD_APP_ID || secrets.DISCORD_APP_ID }}
           OPENTUNE_KEYSTORE_PASSWORD: ${{ secrets.OPENTUNE_KEYSTORE_PASSWORD }}
           OPENTUNE_KEY_ALIAS: ${{ secrets.OPENTUNE_KEY_ALIAS }}
           OPENTUNE_KEY_PASSWORD: ${{ secrets.OPENTUNE_KEY_PASSWORD }}

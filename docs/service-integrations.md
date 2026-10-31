@@ -33,7 +33,7 @@ To set it up once:
    (`docs/logo.png`).
 2. Copy its **Application ID** (a 17 to 20 digit number; it isn't a secret).
 3. In the repository's **Settings → Secrets and variables → Actions → Variables**,
-   add a variable `DISCORD_APP_ID` with that number. CI, release and the website
+   add a variable `DISCORD_APP_ID` with that number (a secret of that name works too). CI, release and the website
    build read it, so the desktop app and the browser extension carry it.
 
 A desktop build without one asks for the id in **Settings → Discord and Last.fm**
