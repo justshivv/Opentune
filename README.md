@@ -41,7 +41,7 @@ documented in [service integrations](docs/service-integrations.md).
 ## See it
 
 <p align="center">
-  <a href="docs/media/opentune-reel.mp4"><img src="docs/media/preview.jpg" alt="OpenTune in 40 seconds" width="300" height="533"></a>
+  <a href="docs/media/opentune-reel.mp4"><img src="docs/media/preview.gif" alt="OpenTune in 40 seconds" width="300" height="533"></a>
   <br>
   <sub><a href="docs/media/opentune-reel.mp4">Watch the 40-second video</a> (MP4, with sound)</sub>
 </p>
