@@ -45,6 +45,7 @@ object Core {
         com.opentune.data.addons.AddonStore.onChanged = com.opentune.data.lossless.ExternalStreams::retryLookups
         History.init(app)
         com.opentune.data.history.ListenedCollections.init(app)
+        com.opentune.data.covers.ArtistPhotos.init(app)
         LoudnessStore.init(app)
         UpgradedTracks.init(app)
         QueueStore.init(app)

@@ -1,6 +1,7 @@
 package com.opentune.ui.browse
 
 import com.opentune.ui.components.pinnedToTop
+import com.opentune.data.covers.ArtistPhotos
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -172,16 +173,26 @@ internal fun ArtistPageView(
     onShowAll: (HomeShelf) -> Unit,
 ) {
     val listState = rememberLazyListState()
-    // One portrait per page visit. Fetch better artwork for the next visit rather than
-    // replacing a visible face and leaving its palette tied to the previous one.
+    // One portrait per artist for a day (see ArtistPhotos), so going back or coming again shows
+    // the picture already in the image cache. Better artwork is downloaded for a later visit
+    // rather than replacing a visible face and leaving its palette tied to the previous one.
     val photo = remember(browseId, page?.name) {
-        page?.name?.let { com.opentune.data.covers.AppleArtistArtRepository.cached(it)?.heroUrl }
+        ArtistPhotos.pinned(browseId)
+            ?: page?.name?.let { com.opentune.data.covers.AppleArtistArtRepository.cached(it)?.heroUrl }
             ?: page?.thumbnailUrl.artworkAt(ARTIST_PHOTO_PX)
     }
-    androidx.compose.runtime.LaunchedEffect(page?.name) {
-        page?.name?.let { com.opentune.data.covers.AppleArtistArtRepository.artFor(it) }
-    }
     val context = LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(photo, page?.name) {
+        val name = page?.name ?: return@LaunchedEffect
+        photo?.let { ArtistPhotos.pin(browseId, it) }
+        val hero = com.opentune.data.covers.AppleArtistArtRepository.artFor(name)?.heroUrl
+        if (hero == null || hero == photo || ArtistPhotos.pinned(browseId) == hero) return@LaunchedEffect
+        val ready = coil3.SingletonImageLoader.get(context).execute(
+            coil3.request.ImageRequest.Builder(context).data(hero).size(ARTWORK_PREFETCH_PX)
+                .memoryCachePolicy(coil3.request.CachePolicy.DISABLED).build(),
+        )
+        if (ready is coil3.request.SuccessResult) ArtistPhotos.upgrade(browseId, hero)
+    }
     ArtistTint(photo) {
         GlassPage(
             Modifier.fillMaxSize(),
@@ -315,7 +326,8 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
                     drawRect(PHOTO_FADE, blendMode = BlendMode.DstIn)
                 },
         ) {
-            if (page == null) {
+            // A photo kept from an earlier visit shows before the rest of the page is back.
+            if (page == null && shown == null) {
                 Placeholder(Modifier.fillMaxSize(), RectangleShape)
             } else {
                 Artwork(
@@ -661,6 +673,9 @@ fun ArtistItemsScreen(
 
 /** The artist photo is drawn edge to edge, so it's asked for at about a phone's full width. */
 private const val ARTIST_PHOTO_PX = 1080
+
+/** Decoded this small while it downloads for later: the file on disk is what matters, not the picture. */
+private const val ARTWORK_PREFETCH_PX = 64
 
 /** How far the photo drifts for each pixel scrolled. */
 private const val PARALLAX = 0.4f
