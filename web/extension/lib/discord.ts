@@ -567,56 +567,124 @@ export async function openConnectPage(): Promise<void> {
 }
 
 /**
- * DiscordLoginScreen.TOKEN_SNIPPET: Discord takes `localStorage` away from its
- * window once the app boots, but a fresh same-origin iframe still sees it.
- * Runs in the page's own world, only on the user's "Connect Discord".
+ * The account's token, from a discord.com page, in the page's own world. Discord takes
+ * `localStorage` away from its window once the app boots, so after looking there it tries a fresh
+ * same-origin iframe, which still sees it (DiscordLoginScreen.TOKEN_SNIPPET); and failing both, asks
+ * Discord's own module that hands the token to its requests. Empty when the tab isn't signed in.
+ * Runs only on the user's "Connect Discord", and must stand alone: it's serialised into the tab.
  */
 function readToken(): string {
+  const unquote = (raw: string | null | undefined) => (raw ? raw.replace(/^"|"$/g, '') : '');
+  try {
+    const direct = unquote(window.localStorage?.getItem('token'));
+    if (direct) return direct;
+  } catch {
+    // Taken away already.
+  }
   try {
     const frame = document.createElement('iframe');
     frame.style.display = 'none';
     document.body.appendChild(frame);
     const raw = frame.contentWindow?.localStorage.getItem('token') ?? null;
     frame.remove();
-    return raw ? raw.slice(1, -1) : '';
+    if (raw) return unquote(raw);
+  } catch {
+    // No body yet, or no storage there either.
+  }
+  try {
+    type Module = { exports?: Record<string, unknown> };
+    const chunks = (window as unknown as { webpackChunkdiscord_app?: unknown[] & { push: (x: unknown) => unknown } }).webpackChunkdiscord_app;
+    if (!chunks) return '';
+    let found = '';
+    chunks.push([
+      [Symbol('opentune')],
+      {},
+      (require: { c: Record<string, Module> }) => {
+        for (const id in require.c) {
+          try {
+            const exports = require.c[id]?.exports;
+            for (const candidate of [exports?.default, exports]) {
+              const getToken = (candidate as { getToken?: () => unknown } | undefined)?.getToken;
+              if (typeof getToken === 'function') {
+                const token = getToken.call(candidate);
+                if (typeof token === 'string' && token) {
+                  found = token;
+                  return;
+                }
+              }
+            }
+          } catch {
+            // A module that can't be looked at.
+          }
+        }
+      },
+    ]);
+    chunks.pop();
+    return found;
   } catch {
     return '';
   }
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
- * Reads the token from a signed-in discord.com tab, opening one if there is
- * none, and keeps it once Discord confirms who it belongs to. Polls for two
- * minutes, which covers signing in from scratch in that tab.
+ * Reads the token from a signed-in discord.com tab, opening one if there is none, and keeps it once
+ * Discord confirms who it belongs to. A tab the browser has put to sleep is woken first, since nothing
+ * runs in it until then. One that still gives nothing after a few seconds (another Discord page, or one
+ * that hasn't loaded) is left be, and a fresh discord.com/app tab is read instead. Gives up after two
+ * minutes, which covers signing in from scratch, and says what it's waiting for along the way.
  */
 export async function connectFromTab(onProgress: (message: string) => void): Promise<DiscordState> {
-  let [tab] = await browser.tabs.query({ url: 'https://discord.com/*' });
+  const tabs = await browser.tabs.query({ url: 'https://discord.com/*' });
+  let tab = tabs.find((t) => /^https:\/\/discord\.com\/(app|channels)/.test(t.url ?? '')) ?? tabs[0];
   let opened = false;
-  if (!tab?.id) {
+  const openFresh = async () => {
     tab = await browser.tabs.create({ url: 'https://discord.com/app', active: true });
     opened = true;
+  };
+  if (!tab?.id) {
+    await openFresh();
     onProgress('Sign in to Discord in the tab that opened. This page will notice.');
   } else {
     onProgress('Reading your Discord session…');
+    if (tab.discarded || tab.status === 'unloaded') await browser.tabs.reload(tab.id).catch(() => undefined);
   }
-  const deadline = Date.now() + 120_000;
-  while (Date.now() < deadline) {
+
+  const started = Date.now();
+  let problem = '';
+  while (Date.now() - started < 120_000) {
     try {
-      const [result] = await browser.scripting.executeScript({ target: { tabId: tab.id! }, func: readToken, world: 'MAIN' });
+      const [result] = await browser.scripting.executeScript({ target: { tabId: tab!.id! }, func: readToken, world: 'MAIN' });
       const token = typeof result?.result === 'string' ? result.result : '';
       if (token) {
+        onProgress('Checking the session with Discord…');
         const user = await userInfo(token);
         await browser.storage.local.set({ [ACCOUNT_KEY]: { token, user } satisfies Account, [ENABLED_KEY]: true });
         gatewayProblem = null;
-        if (opened) await browser.tabs.remove(tab.id!).catch(() => undefined);
+        if (opened) await browser.tabs.remove(tab!.id!).catch(() => undefined);
         await announce();
         return discordState();
       }
-    } catch {
-      // The tab is still loading, or navigating between sign-in pages.
+      problem = 'signed out';
+    } catch (error) {
+      // Still loading, between sign-in pages, or a page scripts can't run in.
+      problem = error instanceof Error ? error.message : String(error);
     }
-    await new Promise((r) => setTimeout(r, 1000));
+    const waited = Date.now() - started;
+    if (!opened && waited > 6_000) {
+      await openFresh();
+      onProgress('Opened Discord in a new tab to read your session there. Sign in if it asks.');
+      continue;
+    }
+    if (waited > 15_000) {
+      onProgress(problem === 'signed out' ? 'Waiting for you to sign in to Discord in its tab…' : `Still trying to read the Discord tab (${problem}).`);
+    }
+    await sleep(1000);
   }
-  throw new Error('No Discord session turned up. Sign in at discord.com and try again.');
+  throw new Error(
+    problem === 'signed out'
+      ? 'Discord shows as signed out in its tab. Sign in at discord.com, then press Connect again.'
+      : `Couldn’t read your Discord session (${problem}). Reload discord.com and press Connect again.`,
+  );
 }
-
