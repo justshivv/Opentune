@@ -35,7 +35,15 @@ class WindowsFrameTest {
             window.setBounds(120, 120, 900, 600)
             window.isVisible = true
         }
-        Thread.sleep(1_500)
+        val robot = Robot()
+        val start = IntArray(4).also { u.GetWindowRect(Pointer(window.windowHandle), it) }
+        fun middle() = robot.getPixelColor((start[0] + start[2]) / 2, (start[1] + start[3]) / 2)
+        // Wait for the first frame. Whether this machine's screen shows what the window draws at
+        // all (a machine without a display adapter may not) is the baseline for the checks below.
+        var before = middle()
+        repeat(50) { if (!near(before.rgb, FILL.toInt())) { Thread.sleep(100); before = middle() } }
+        val shows = near(before.rgb, FILL.toInt())
+        println("middle pixel before the frame: $before (the screen shows the window: $shows)")
         val handle = window.windowHandle
         var installed = false
         SwingUtilities.invokeAndWait { installed = WindowsFrame.install(handle) }
@@ -63,10 +71,9 @@ class WindowsFrameTest {
             assertEquals("corner", WindowsFrame.HTBOTTOMRIGHT, hit(outer[2] - 2, outer[3] - 2))
             assertEquals("middle is the app's", WindowsFrame.HTCLIENT, hit(midX, midY))
 
-            val robot = Robot()
             val middle = robot.getPixelColor(midX, midY)
-            println("middle pixel $middle")
-            assertTrue("the app still draws: $middle", near(middle.rgb, FILL.toInt()))
+            println("middle pixel with the frame: $middle")
+            if (shows) assertTrue("the app still draws: $middle", near(middle.rgb, FILL.toInt()))
 
             assertTrue(WindowsFrame.toggleMaximize())
             Thread.sleep(1_500)
@@ -78,7 +85,7 @@ class WindowsFrameTest {
             // The work area's corner is the app's, not a frame or something behind it.
             val corner = robot.getPixelColor(screen.x + insets.left + 3, screen.y + insets.top + 3)
             println("work area corner pixel $corner")
-            assertTrue("maximised onto the work area: $corner", near(corner.rgb, FILL.toInt()))
+            if (shows) assertTrue("maximised onto the work area: $corner", near(corner.rgb, FILL.toInt()))
             assertTrue(WindowsFrame.toggleMaximize())
             Thread.sleep(1_500)
             assertFalse("restored", u.IsZoomed(h))
