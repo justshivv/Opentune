@@ -1,0 +1,8 @@
+• Fixes a crash in the blurred cover behind the player.
+• Smoother lyrics, and player buttons that match the theme.
+• Artist, album and playlist pages keep their picture at the top when pulled down.
+• Artist photos stay cached for a day, so going back doesn't load them again.
+• Artist signatures (beta), with fewer wrong matches.
+• Library playlists as tiles or a list, in Settings.
+• Settings rearranged so each page holds what you'd look for.
+• Last.fm scrobbling.
