@@ -160,7 +160,7 @@ import kotlinx.coroutines.launch
 /** The sidebar's pages; an opened album, playlist or artist goes over them. */
 internal enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
     HOME("Home", Icons.Outlined.Home, Icons.Rounded.Home),
-    NEW("New", Icons.Rounded.GridView, Icons.Rounded.GridView),
+    NEW("Explore", Icons.Rounded.GridView, Icons.Rounded.GridView),
     SEARCH("Search", Icons.Rounded.Search, Icons.Rounded.Search),
     LIBRARY("Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
     QUEUE("Up next", Icons.AutoMirrored.Outlined.QueueMusic, Icons.AutoMirrored.Rounded.QueueMusic),
@@ -174,11 +174,11 @@ internal data class PlaylistKey(val id: String)
 private data class Page(val tab: Tab, val shelf: Shelf? = null, val opened: Any? = null)
 
 /**
- * The window, as BitChord's desktop lays it out: an icon rail down the left,
- * the page, Now playing (or the lyrics, or the queue) in a column on the
- * right when asked ([startPanel] opens with one, for pictures), and the
- * player floating as a pill over the bottom of the page. Clicking the song
- * in the pill opens the full player.
+ * The window, as BitChord's desktop lays it out: a sidebar down the left
+ * (pages, history, your playlists, Settings), the page with the player bar
+ * frosted across its top, and Now playing (or the lyrics, or the queue) in a
+ * column on the right when asked ([startPanel] opens with one, for
+ * pictures). Clicking the song in the bar opens the full player.
  */
 @Composable
 fun DesktopApp(startPanel: SidePanel? = null) {
@@ -200,19 +200,8 @@ fun DesktopApp(startPanel: SidePanel? = null) {
         page = to
     }
     val back: () -> Unit = { history.removeLastOrNull()?.let { page = it } }
-    val groups = remember {
-        listOf(
-            listOf(Tab.HOME, Tab.NEW, Tab.SEARCH, Tab.LIBRARY).map { RailItem(it, it.selectedIcon, it.label) },
-            listOf(
-                RailItem(Shelf.RECENT, Icons.Rounded.History, "Recently played"),
-                RailItem(Shelf.LIKED, Icons.Rounded.Favorite, "Liked songs"),
-                RailItem(Shelf.PLAYLISTS, Icons.AutoMirrored.Rounded.QueueMusic, "Playlists"),
-            ),
-            listOf(RailItem(Tab.QUEUE, Icons.AutoMirrored.Rounded.PlaylistPlay, "Up next")),
-        )
-    }
-    val railSelected: Any? = when {
-        page.opened is PlaylistKey -> Shelf.PLAYLISTS
+    val sideSelected: Any? = when {
+        page.opened is PlaylistKey -> page.opened
         page.opened != null -> null
         page.tab == Tab.LIBRARY -> page.shelf ?: Tab.LIBRARY
         else -> page.tab
@@ -221,55 +210,50 @@ fun DesktopApp(startPanel: SidePanel? = null) {
     DesktopTheme(artworkSeed = rememberArtworkSeed(song?.thumbnailUrl)) {
         Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                val roomForPanel = maxWidth >= 1000.dp
+                val roomForPanel = maxWidth >= 1100.dp
                 val panelShown = panel != null && song != null && roomForPanel
+                val folded = maxWidth < 900.dp
                 Row(Modifier.fillMaxSize()) {
-                    Rail(
-                        groups, railSelected, canGoBack = history.isNotEmpty(), onBack = back,
-                        settings = RailItem(Tab.SETTINGS, Icons.Rounded.Settings, "Settings"),
-                    ) { key ->
+                    Sidebar(sideSelected, folded = folded) { key ->
                         when (key) {
                             is Tab -> go(Page(key))
                             is Shelf -> go(Page(Tab.LIBRARY, key))
+                            is PlaylistKey -> go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, key))
                         }
                     }
                     val haze = rememberHazeState()
                     Box(Modifier.weight(1f).fillMaxHeight()) {
-                        // The page is what the frosted bars and the floating player blur.
+                        // The page is what the frosted player bar blurs; every page starts below it.
                         CompositionLocalProvider(
-                            LocalPageBottom provides if (song != null) PILL_ROOM else 32.dp,
+                            LocalPageTop provides TOP_BAR_HEIGHT + DesktopWindow.topInset,
+                            LocalPageBottom provides 40.dp,
                             com.opentune.ui.components.LocalHazeState provides haze.takeIf { !ui.reduceBlur },
                         ) {
-                        Box(Modifier.fillMaxSize().hazeSource(haze)) {
-                        PageBackdrop(song?.thumbnailUrl)
-                            Pages(
-                                page = page,
-                                still = ui.reduceAnimation,
-                                queue = queue,
-                                index = index,
-                                query = query,
-                                onQuery = { query = it },
-                                searches = searches,
-                                onSearch = { searches++ },
-                                onOpen = { go(page.copy(opened = it)) },
-                                onOpenAny = { go(page.copy(opened = it)) },
-                                onShelf = { go(Page(Tab.LIBRARY, it)) },
-                                onPlaylist = { go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, PlaylistKey(it))) },
-                                onBack = { back() },
-                            )
-                        }
-                        // The player floats over the foot of the page.
-                        val pill = rememberLast(song)
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = song != null,
-                            enter = fadeIn(tween(220)) + slideInVertically(Motion.soft()) { it / 2 },
-                            exit = fadeOut(tween(160)) + slideOutVertically(tween(200)) { it / 2 },
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 18.dp),
-                        ) {
-                            pill?.let {
-                                PlayerPill(it, panel.takeIf { panelShown }, onPanel = { p -> panel = if (panel == p && panelShown) null else p }, onOpenPlayer = { playerOpen = true })
+                            Box(Modifier.fillMaxSize().hazeSource(haze)) {
+                                PageBackdrop(song?.thumbnailUrl)
+                                Pages(
+                                    page = page,
+                                    still = ui.reduceAnimation,
+                                    queue = queue,
+                                    index = index,
+                                    query = query,
+                                    onQuery = { query = it },
+                                    searches = searches,
+                                    onSearch = { searches++ },
+                                    onOpen = { go(page.copy(opened = it)) },
+                                    onOpenAny = { go(page.copy(opened = it)) },
+                                    onShelf = { go(Page(Tab.LIBRARY, it)) },
+                                    onPlaylist = { go(Page(Tab.LIBRARY, Shelf.PLAYLISTS, PlaylistKey(it))) },
+                                    onBack = { back() },
+                                )
                             }
-                        }
+                            TopBar(
+                                song, canGoBack = history.isNotEmpty(), onBack = back,
+                                panel = panel.takeIf { panelShown },
+                                onPanel = { p -> panel = if (panel == p && panelShown) null else p },
+                                onOpenPlayer = { playerOpen = true },
+                                modifier = Modifier.align(Alignment.TopCenter),
+                            )
                         }
                     }
                     val shown = rememberLast(panel)
@@ -357,6 +341,8 @@ internal fun <T> rememberLast(value: T?): T? {
 
 /** Room under each page's last row, clear of whatever floats over the bottom of the window. */
 internal val LocalPageBottom = staticCompositionLocalOf { 32.dp }
+/** Room every page keeps clear at its top, under the frosted player bar. */
+internal val LocalPageTop = staticCompositionLocalOf { 0.dp }
 
 // ---- Pages -------------------------------------------------------------------
 
@@ -573,11 +559,13 @@ internal fun LibraryPage(shelf: Shelf, onShelf: (Shelf) -> Unit, onPlaylist: (St
                 coverUrl = played.firstOrNull()?.thumbnailUrl, kind = "History", title = "Recently played", subtitle = "The last songs you played here", songs = played,
             )
         }
-        Shelf.PLAYLISTS -> Column(Modifier.fillMaxSize().padding(top = 28.dp)) {
+        Shelf.PLAYLISTS -> Column(Modifier.fillMaxSize().padding(top = LocalPageTop.current + 28.dp)) {
             Text("Playlists", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = GUTTER, vertical = 4.dp))
             PlaylistGrid(onOpen = onPlaylist)
         }
-        Shelf.SERVER -> if (server != null) ServerShelf() else Message("No music server connected", "Connect one in Settings.")
+        Shelf.SERVER -> Box(Modifier.fillMaxSize().padding(top = LocalPageTop.current + 12.dp)) {
+            if (server != null) ServerShelf() else Message("No music server connected", "Connect one in Settings.")
+        }
     }
 }
 

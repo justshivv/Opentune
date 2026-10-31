@@ -381,7 +381,7 @@ private fun MoodTiles(moods: List<MoodGenre>, onOpen: (MoodGenre) -> Unit) {
 @Composable
 internal fun NewPage(onOpen: (ShelfItem) -> Unit) {
     val shelves by produceState<List<Pages.Shelf>?>(null) { value = runCatching { Pages.moreForHome() }.getOrDefault(emptyList()) }
-    ScrollPage("New", "New releases and what's climbing the charts") {
+    ScrollPage("Explore", "New releases and what's climbing the charts") {
         when (val loaded = shelves) {
             null -> items(3) { ShelfPlaceholder() }
             else -> if (loaded.isEmpty()) item { Message("Nothing new could be loaded", "Check your connection and try again.") }

@@ -65,14 +65,6 @@ import androidx.compose.ui.unit.dp
 import com.opentune.data.model.Song
 import com.opentune.ui.components.glass
 
-/** How far a page's title has to scroll away before the frosted bar takes its place. */
-private const val TITLE_GONE_PX = 90
-
-/**
- * A page that scrolls under a frosted bar: [title] big at the top of the
- * list, and once it has scrolled away, small in a glass bar across the top
- * that blurs what slides under it, as a Mac app's toolbar does.
- */
 @Composable
 internal fun ScrollPage(
     title: String,
@@ -82,9 +74,8 @@ internal fun ScrollPage(
     trailing: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
-    val bar by remember { derivedStateOf { state.firstVisibleItemIndex > 0 || state.firstVisibleItemScrollOffset > TITLE_GONE_PX } }
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(state = state, contentPadding = PaddingValues(top = 28.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(spacing)) {
+        LazyColumn(state = state, contentPadding = PaddingValues(top = LocalPageTop.current + 28.dp, bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(spacing)) {
             item(key = "page-title") {
                 Row(Modifier.fillMaxWidth().padding(horizontal = GUTTER), verticalAlignment = Alignment.Bottom) {
                     Column(Modifier.weight(1f)) {
@@ -96,24 +87,6 @@ internal fun ScrollPage(
             }
             content()
         }
-        TitleBar(title, bar)
-    }
-}
-
-/** The small frosted bar a page's title moves into as it scrolls away. */
-@Composable
-internal fun BoxScope.TitleBar(title: String, shown: Boolean) {
-    AnimatedVisibility(
-        shown,
-        enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { -it / 2 },
-        exit = fadeOut(tween(140)) + slideOutVertically(tween(180)) { -it / 2 },
-        modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
-    ) {
-        Box(
-            Modifier.fillMaxWidth().height(54.dp + DesktopWindow.topInset).glass(RoundedCornerShape(0.dp), MaterialTheme.colorScheme.background.copy(alpha = 0.62f))
-                .padding(top = DesktopWindow.topInset, start = GUTTER),
-            contentAlignment = Alignment.CenterStart,
-        ) { Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
 }
 
@@ -150,7 +123,7 @@ internal fun CollectionHero(
             // A little darker at the top for the window's bar, richer in the cover's colour below.
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.25f), 1f to colour.copy(alpha = 0.35f))))
         }
-        Row(Modifier.fillMaxWidth().padding(start = GUTTER, end = GUTTER, top = 44.dp + DesktopWindow.topInset, bottom = 28.dp), verticalAlignment = Alignment.Bottom) {
+        Row(Modifier.fillMaxWidth().padding(start = GUTTER, end = GUTTER, top = LocalPageTop.current + 24.dp, bottom = 28.dp), verticalAlignment = Alignment.Bottom) {
             cover(Modifier.size(228.dp).shadow(36.dp, shape, ambientColor = colour, spotColor = colour).clip(shape))
             Column(Modifier.padding(start = 28.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(kind.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
@@ -341,7 +314,6 @@ internal fun CollectionLayout(
     hero: @Composable () -> Unit,
 ) {
     val state = rememberLazyListState()
-    val bar by remember { derivedStateOf { state.firstVisibleItemIndex > 0 } }
     val base = MaterialTheme.colorScheme.background
     val accent = coverAccent(coverUrl)
     // The whole page in the cover's colour: strong at the top, deepening to a dark, tinted ground.
@@ -358,7 +330,6 @@ internal fun CollectionLayout(
                 }
             }
         }
-        TitleBar(title, bar)
     }
 }
 

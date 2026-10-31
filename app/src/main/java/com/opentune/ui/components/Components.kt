@@ -78,6 +78,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import com.opentune.data.model.BrowseType
@@ -689,7 +691,12 @@ fun MessageState(
     }
 }
 
-/** Single-line text that scrolls when it doesn't fit, as on a car stereo. */
+/**
+ * Single-line text that scrolls when it doesn't fit, as on a car stereo. A
+ * third of its width of space runs between the end and the start coming
+ * round again, and both edges fade, so the two never read as one line
+ * running into the next; text that fits sits still, unfaded.
+ */
 @Composable
 fun MarqueeText(
     text: String,
@@ -697,14 +704,39 @@ fun MarqueeText(
     style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
     color: Color = Color.Unspecified,
 ) {
-    Text(
-        text,
-        style = style,
-        color = color,
-        maxLines = 1,
-        modifier = modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_500),
-    )
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        val textWidth = remember(text, style) { measurer.measure(text, style, maxLines = 1, softWrap = false).size.width }
+        val overflows = constraints.hasBoundedWidth && textWidth > constraints.maxWidth
+        val fade = with(androidx.compose.ui.platform.LocalDensity.current) { MARQUEE_FADE.toPx() }
+        Text(
+            text,
+            style = style,
+            color = color,
+            maxLines = 1,
+            modifier = if (!overflows) Modifier else Modifier
+                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    val edge = (fade / size.width).coerceIn(0f, 0.5f)
+                    drawRect(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            0f to Color.Transparent, edge to Color.Black, 1f - edge to Color.Black, 1f to Color.Transparent,
+                        ),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                    )
+                }
+                .basicMarquee(
+                    iterations = Int.MAX_VALUE,
+                    initialDelayMillis = 1_500,
+                    spacing = androidx.compose.foundation.MarqueeSpacing.fractionOfContainer(1f / 3f),
+                ),
+        )
+    }
 }
+
+/** How far in from each edge scrolling text fades. */
+private val MARQUEE_FADE = 14.dp
 
 /**
  * combinedClickable for an item whose long press opens a menu. A tap ripples as usual;

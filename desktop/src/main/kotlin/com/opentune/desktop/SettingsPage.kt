@@ -58,6 +58,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.horizontalScroll
+import dev.chrisbanes.haze.hazeSource
 import com.opentune.core.BuildConfig
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.EQ_BANDS_HZ
@@ -69,25 +71,31 @@ import kotlinx.coroutines.launch
 private enum class Group(val label: String) { LOOK("Look"), PLAYBACK("Playback"), SOURCES("Sources"), SOUND("Equalizer"), LYRICS("Lyrics"), ACCOUNTS("Accounts"), SERVER("Your server"), ABOUT("About") }
 
 /**
- * Settings, grouped into cards down the page with a bar of the groups
- * across the top that glides to each; the bar stays in reach, frosted, as
- * the page scrolls under it.
+ * Settings, grouped into cards down a centred column, with a bar of the
+ * groups that glides to each. The bar sits under the window's player bar
+ * and is frosted over the cards sliding under it: it blurs a layer of its
+ * own, since glass can't blur the layer it's drawn in.
  */
 @Composable
 internal fun SettingsPage() {
     val list = androidx.compose.foundation.lazy.rememberLazyListState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val at by androidx.compose.runtime.remember { androidx.compose.runtime.derivedStateOf { (list.firstVisibleItemIndex - 1).coerceIn(0, Group.entries.lastIndex) } }
+    val top = LocalPageTop.current
+    val haze = dev.chrisbanes.haze.rememberHazeState()
+    val blur = !AppSettings.ui.collectAsState().value.reduceBlur
     Box(Modifier.fillMaxSize()) {
         androidx.compose.foundation.lazy.LazyColumn(
             state = list,
-            contentPadding = PaddingValues(top = 28.dp + 64.dp, bottom = LocalPageBottom.current),
+            contentPadding = PaddingValues(top = top + GROUP_BAR + 24.dp, bottom = LocalPageBottom.current),
             verticalArrangement = Arrangement.spacedBy(18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize().then(if (blur) Modifier.hazeSource(haze) else Modifier),
         ) {
-            item { Text("Settings", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp)) }
+            item { Column(Modifier.column()) { Text("Settings", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold) } }
             Group.entries.forEach { g ->
                 item(key = g) {
-                    Box(Modifier.padding(horizontal = 24.dp).widthIn(max = 820.dp)) {
+                    Box(Modifier.column()) {
                         when (g) {
                             Group.LOOK -> AppearanceSection()
                             Group.PLAYBACK -> PlaybackSection()
@@ -108,20 +116,33 @@ internal fun SettingsPage() {
                 }
             }
         }
-        // The groups, frosted over the page, each gliding to its card.
-        Row(
-            Modifier.fillMaxWidth().height(64.dp + DesktopWindow.topInset)
-                .glass(androidx.compose.foundation.shape.RoundedCornerShape(0.dp), MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
-                .padding(top = DesktopWindow.topInset, start = 20.dp, end = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Group.entries.forEachIndexed { i, g ->
-                Segment(g.label, at == i) { scope.launch { list.animateScrollToItem(i + 1, -72) } }
+        // The groups, frosted over the cards, each gliding to its card.
+        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalHazeState provides haze.takeIf { blur }) {
+            Box(
+                Modifier.padding(top = top).fillMaxWidth().height(GROUP_BAR)
+                    .glass(androidx.compose.ui.graphics.RectangleShape, MaterialTheme.colorScheme.background.copy(alpha = 0.72f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    Modifier.column().horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Group.entries.forEachIndexed { i, g ->
+                        Segment(g.label, at == i) { scope.launch { list.animateScrollToItem(i + 1, 0) } }
+                    }
+                }
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)))
             }
         }
     }
 }
+
+/** How tall the bar of setting groups is. */
+private val GROUP_BAR = 56.dp
+
+/** The settings column: as wide as the page allows, up to a comfortable reading width, in the middle. */
+private fun Modifier.column(): Modifier = this.padding(horizontal = 32.dp).widthIn(max = 880.dp).fillMaxWidth()
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {

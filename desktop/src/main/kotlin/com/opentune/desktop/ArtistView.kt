@@ -87,7 +87,6 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
     val loaded = page
     val songs = loaded?.songs.orEmpty()
     val list = androidx.compose.foundation.lazy.rememberLazyListState()
-    val bar by remember { androidx.compose.runtime.derivedStateOf { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > 380 } }
     Box(Modifier.fillMaxSize()) {
     LazyColumn(state = list, contentPadding = PaddingValues(bottom = LocalPageBottom.current), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item(key = "hero") {
@@ -136,7 +135,6 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
             }
         }
     }
-    TitleBar(name, bar)
     }
 }
 

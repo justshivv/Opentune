@@ -73,6 +73,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.foundation.lazy.items
 import com.opentune.ui.components.glass
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.innertube.InnertubeParser
@@ -84,161 +96,222 @@ import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
 import kotlinx.coroutines.delay
 
-/** How wide the icon rail down the left is, and the column on the right. */
-internal val RAIL_WIDTH = 68.dp
+/** How wide the sidebar is (folded to icons on a narrow window), and the column on the right. */
+internal val SIDEBAR_WIDTH = 248.dp
+internal val SIDEBAR_FOLDED = 72.dp
 internal val PANEL_WIDTH = 320.dp
-/** Room the floating player keeps clear under every page. */
-internal val PILL_ROOM = 104.dp
+/** How tall the player bar across the top of the page is, under the window's own title bar. */
+internal val TOP_BAR_HEIGHT = 64.dp
 
-/** The colour that marks the page showing in the rail: the theme's own accent. */
+/** The colour that marks the page showing: the theme's own accent. */
 @Composable
 internal fun railAccent(): Color {
     val theme by AppSettings.theme.collectAsState()
     return Color(theme.seedColor)
 }
 
-// ---- The rail ----------------------------------------------------------------
-
-/** One place the rail leads to. */
-internal data class RailItem(val key: Any, val icon: ImageVector, val label: String)
+// ---- The sidebar -------------------------------------------------------------
 
 /**
- * Down the left: the logo, then the pages as icons, grouped by dividers,
- * with Settings at the foot. The page showing has a short bar in the accent
- * at the rail's edge and its icon in the accent; hovering an icon names it.
+ * Down the left, as BitChord's desktop has it: a search box, the main pages,
+ * then History, Liked songs and Up next, your playlists by name, and
+ * Settings at the foot. The page showing sits on a soft fill. On a narrow
+ * window it folds to the icons alone.
  */
 @Composable
-internal fun Rail(groups: List<List<RailItem>>, selected: Any?, canGoBack: Boolean, onBack: () -> Unit, settings: RailItem, onPick: (Any) -> Unit) {
-    val divider = MaterialTheme.colorScheme.outlineVariant
+internal fun Sidebar(selected: Any?, folded: Boolean, onPick: (Any) -> Unit) {
+    val playlists by Library.playlists.collectAsState()
+    val divider = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
     Row(Modifier.fillMaxHeight()) {
         Column(
-            Modifier.width(RAIL_WIDTH).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .padding(top = DesktopWindow.topInset + 14.dp, bottom = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            Modifier.width(if (folded) SIDEBAR_FOLDED else SIDEBAR_WIDTH).fillMaxHeight()
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .padding(top = DesktopWindow.topInset + 12.dp, bottom = 10.dp),
         ) {
-            Image(rememberLogo(Logo.MARK), "OpenTune", Modifier.size(28.dp))
-            Spacer(Modifier.height(10.dp))
-            // Back, quiet until there's somewhere to go back to.
-            RailButton(RailItem("back", Icons.AutoMirrored.Rounded.ArrowBack, "Back"), selected = false, enabled = canGoBack) { onBack() }
-            groups.forEachIndexed { i, group ->
-                if (i > 0) HorizontalDivider(color = divider, modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp))
-                else Spacer(Modifier.height(10.dp))
-                group.forEach { item -> RailButton(item, selected == item.key) { onPick(item.key) } }
+            if (folded) {
+                SideRow(Icons.Rounded.Search, "Search", selected == Tab.SEARCH, folded) { onPick(Tab.SEARCH) }
+            } else {
+                // A box that looks like a field and opens Search, where the typing happens.
+                val hover = remember { MutableInteractionSource() }
+                Row(
+                    Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(40.dp).clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                        .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                        .hoverWash(hover, RoundedCornerShape(10.dp))
+                        .clickable(interactionSource = hover, indication = null) { onPick(Tab.SEARCH) }
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Search", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-            Spacer(Modifier.weight(1f))
-            RailButton(settings, selected == settings.key) { onPick(settings.key) }
+            Spacer(Modifier.height(12.dp))
+            SideRow(Icons.Rounded.Home, "Home", selected == Tab.HOME, folded) { onPick(Tab.HOME) }
+            SideRow(Icons.Rounded.Explore, "Explore", selected == Tab.NEW, folded) { onPick(Tab.NEW) }
+            SideRow(Icons.Rounded.LibraryMusic, "Library", selected == Tab.LIBRARY, folded) { onPick(Tab.LIBRARY) }
+            if (!folded) SideRow(Icons.Rounded.Search, "Search", selected == Tab.SEARCH, folded) { onPick(Tab.SEARCH) }
+            HorizontalDivider(color = divider, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+            SideRow(Icons.Rounded.History, "History", selected == Shelf.RECENT, folded) { onPick(Shelf.RECENT) }
+            SideRow(Icons.Rounded.Favorite, "Liked songs", selected == Shelf.LIKED, folded) { onPick(Shelf.LIKED) }
+            SideRow(Icons.AutoMirrored.Rounded.PlaylistPlay, "Up next", selected == Tab.QUEUE, folded) { onPick(Tab.QUEUE) }
+            HorizontalDivider(color = divider, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+            // Your playlists by name, scrolling on their own between the pages and Settings.
+            LazyColumn(Modifier.weight(1f)) {
+                items(playlists, key = { it.id }) { p ->
+                    SideRow(Icons.AutoMirrored.Rounded.QueueMusic, p.name, selected == PlaylistKey(p.id), folded) { onPick(PlaylistKey(p.id)) }
+                }
+                item(key = "all") {
+                    SideRow(Icons.Rounded.Add, if (playlists.isEmpty()) "Make a playlist" else "All playlists", selected == Shelf.PLAYLISTS, folded, quiet = true) { onPick(Shelf.PLAYLISTS) }
+                }
+            }
+            HorizontalDivider(color = divider, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            SideRow(Icons.Rounded.Settings, "Settings", selected == Tab.SETTINGS, folded) { onPick(Tab.SETTINGS) }
         }
         Box(Modifier.width(1.dp).fillMaxHeight().background(divider))
     }
 }
 
+/** One line of the sidebar: an icon and its name, on a soft fill when it's the page showing. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RailButton(item: RailItem, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
-    val accent = railAccent()
+private fun SideRow(icon: ImageVector, label: String, selected: Boolean, folded: Boolean, quiet: Boolean = false, onClick: () -> Unit) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
     val onSurface = MaterialTheme.colorScheme.onSurface
     val fill by animateColorAsState(
-        when { selected -> accent.copy(alpha = 0.16f); hovered && enabled -> onSurface.copy(alpha = 0.08f); else -> Color.Transparent }, tween(160), label = "rail fill",
+        when { selected -> onSurface.copy(alpha = 0.10f); hovered -> onSurface.copy(alpha = 0.05f); else -> Color.Transparent }, tween(160), label = "side fill",
     )
-    val ink by animateColorAsState(
-        when { selected -> accent; !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f); else -> MaterialTheme.colorScheme.onSurfaceVariant }, tween(160), label = "rail ink",
-    )
-    val bar by animateDpAsState(if (selected) 18.dp else 0.dp, Motion.soft(), label = "rail bar")
-    TooltipArea(
+    val ink = if (selected) onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (quiet) 0.75f else 1f)
+    val row = @Composable {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 1.dp).fillMaxWidth().height(38.dp).clip(RoundedCornerShape(10.dp)).background(fill)
+                .hoverable(hover).clickable(interactionSource = hover, indication = null, onClick = onClick)
+                .padding(horizontal = if (folded) 0.dp else 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = if (folded) Arrangement.Center else Arrangement.Start,
+        ) {
+            Icon(icon, label, tint = if (selected) railAccent() else ink, modifier = Modifier.size(20.dp))
+            if (!folded) {
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    label, style = MaterialTheme.typography.bodyLarge, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
+        }
+    }
+    if (!folded) row() else TooltipArea(
         tooltip = {
             Text(
-                item.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface,
+                label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.shadow(6.dp, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest).padding(horizontal = 10.dp, vertical = 6.dp),
             )
         },
         delayMillis = 450,
         tooltipPlacement = TooltipPlacement.ComponentRect(Alignment.CenterEnd, Alignment.CenterEnd, DpOffset(8.dp, 0.dp)),
-    ) {
-        Box(Modifier.width(RAIL_WIDTH).height(46.dp), contentAlignment = Alignment.Center) {
-            // The bar at the rail's edge, growing in when the page is chosen.
-            Box(Modifier.align(Alignment.CenterStart).width(3.dp).height(bar).clip(RoundedCornerShape(topEnd = 3.dp, bottomEnd = 3.dp)).background(accent))
-            Box(
-                Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(fill).hoverable(hover)
-                    .clickable(enabled = enabled, interactionSource = hover, indication = null, onClick = onClick),
-                contentAlignment = Alignment.Center,
-            ) { Icon(item.icon, item.label, tint = ink, modifier = Modifier.size(21.dp)) }
-        }
-    }
+    ) { row() }
 }
 
-// ---- The floating player -----------------------------------------------------
+// ---- The player bar ----------------------------------------------------------
 
 /**
- * The player as a pill floating over the bottom of the page: shuffle,
- * previous, play, next and repeat; the song, with a thin seekable line along
- * the pill's foot (click the song for the full player); then the lyrics,
- * queue and Now playing columns and the volume.
+ * Across the top of the page, frosted over what scrolls under it: back, then
+ * shuffle, previous, play, next and repeat; the song in a box in the middle
+ * with a thin seekable line along its foot (click it for the full player);
+ * then the volume and the lyrics, queue and Now playing columns.
  */
 @Composable
-internal fun PlayerPill(song: Song, panel: SidePanel?, onPanel: (SidePanel) -> Unit, onOpenPlayer: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TopBar(
+    song: Song?,
+    canGoBack: Boolean,
+    onBack: () -> Unit,
+    panel: SidePanel?,
+    onPanel: (SidePanel) -> Unit,
+    onOpenPlayer: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val playing by Player.playing.collectAsState()
     val loading by Player.loading.collectAsState()
     val shuffled by Player.shuffled.collectAsState()
     val repeat by Player.repeat.collectAsState()
-    val error by Player.error.collectAsState()
-    val shape = RoundedCornerShape(18.dp)
-    val progress = rememberProgress(song)
+    val has = song != null
     Box(
-        modifier.widthIn(max = 860.dp).fillMaxWidth().height(62.dp)
-            .shadow(28.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
-            // Frosted glass over the page sliding under it; solid with blur turned off.
-            .glass(shape, MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.66f)),
+        modifier.fillMaxWidth().height(TOP_BAR_HEIGHT + DesktopWindow.topInset)
+            // Frosted over the page sliding under it; solid with blur turned off.
+            .glass(RectangleShape, MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
+            .padding(top = DesktopWindow.topInset),
     ) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            HoverIcon(Icons.Rounded.Shuffle, if (shuffled) "Shuffle on" else "Shuffle", lit = shuffled, size = 32.dp, iconSize = 17.dp, onClick = Player::toggleShuffle)
-            HoverIcon(Icons.Rounded.SkipPrevious, "Previous", size = 34.dp, iconSize = 22.dp, onClick = Player::previous)
+        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            HoverIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", enabled = canGoBack, size = 34.dp, iconSize = 20.dp, onClick = onBack)
+            Spacer(Modifier.width(8.dp))
+            HoverIcon(Icons.Rounded.Shuffle, if (shuffled) "Shuffle on" else "Shuffle", enabled = has, lit = shuffled, size = 32.dp, iconSize = 18.dp, onClick = Player::toggleShuffle)
+            HoverIcon(Icons.Rounded.SkipPrevious, "Previous", enabled = has, size = 34.dp, iconSize = 22.dp, onClick = Player::previous)
             Box(
-                Modifier.padding(horizontal = 4.dp).size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface).clickable(onClick = Player::toggle),
+                Modifier.padding(horizontal = 4.dp).size(36.dp).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (has) 1f else 0.3f))
+                    .clickable(enabled = has, onClick = Player::toggle),
                 contentAlignment = Alignment.Center,
             ) {
-                if (loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.surface)
-                else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", tint = MaterialTheme.colorScheme.surface, modifier = Modifier.size(24.dp))
+                if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.surface)
+                else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", tint = MaterialTheme.colorScheme.surface, modifier = Modifier.size(22.dp))
             }
-            HoverIcon(Icons.Rounded.SkipNext, "Next", size = 34.dp, iconSize = 22.dp, onClick = Player::next)
+            HoverIcon(Icons.Rounded.SkipNext, "Next", enabled = has, size = 34.dp, iconSize = 22.dp, onClick = Player::next)
             HoverIcon(
                 if (repeat == Player.Repeat.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                 when (repeat) { Player.Repeat.OFF -> "Repeat off"; Player.Repeat.ALL -> "Repeat all"; Player.Repeat.ONE -> "Repeat this song" },
-                lit = repeat != Player.Repeat.OFF, size = 32.dp, iconSize = 17.dp, onClick = Player::cycleRepeat,
+                enabled = has, lit = repeat != Player.Repeat.OFF, size = 32.dp, iconSize = 18.dp, onClick = Player::cycleRepeat,
             )
-            Box(Modifier.padding(horizontal = 10.dp).width(1.dp).height(28.dp).background(MaterialTheme.colorScheme.outlineVariant))
-            val hover = remember { MutableInteractionSource() }
-            Row(
-                Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).hoverWash(hover, RoundedCornerShape(10.dp))
-                    .clickable(interactionSource = hover, indication = null, onClick = onOpenPlayer).padding(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AnimatedContent(song.thumbnailUrl, transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(160)) }, label = "pill cover") { url ->
-                    Artwork(url, Modifier.size(42.dp), RoundedCornerShape(8.dp))
-                }
-                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                    Text(song.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        error ?: song.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            // The song, centred in what's left between the controls either side.
+            Box(Modifier.weight(1f).padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                NowBox(song, onOpenPlayer, Modifier.widthIn(max = 640.dp).fillMaxWidth())
+            }
+            VolumeControl(slider = true)
+            Spacer(Modifier.width(6.dp))
+            HoverIcon(Icons.Rounded.Lyrics, "Lyrics", enabled = has, lit = panel == SidePanel.LYRICS, size = 32.dp, iconSize = 18.dp) { onPanel(SidePanel.LYRICS) }
+            HoverIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Up next", enabled = has, lit = panel == SidePanel.QUEUE, size = 32.dp, iconSize = 19.dp) { onPanel(SidePanel.QUEUE) }
+            HoverIcon(if (panel == SidePanel.NOW) Icons.Rounded.Info else Icons.Outlined.Info, "Now playing", enabled = has, lit = panel == SidePanel.NOW, size = 32.dp, iconSize = 18.dp) { onPanel(SidePanel.NOW) }
+        }
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
+    }
+}
+
+/** The song in the middle of the player bar: cover, names and time, the line along its foot; a quiet note when nothing plays. */
+@Composable
+private fun NowBox(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier) {
+    val shape = RoundedCornerShape(10.dp)
+    val error by Player.error.collectAsState()
+    val hover = remember { MutableInteractionSource() }
+    Box(
+        modifier.height(46.dp).clip(shape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+            .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f), shape)
+            .hoverWash(hover, shape)
+            .clickable(enabled = song != null, interactionSource = hover, indication = null, onClick = onOpenPlayer),
+    ) {
+        if (song == null) {
+            Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.Center).size(20.dp))
+            return@Box
+        }
+        val progress = rememberProgress(song)
+        Row(Modifier.fillMaxSize().padding(start = 5.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            AnimatedContent(song.thumbnailUrl, transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(160)) }, label = "bar cover") { url ->
+                Artwork(url, Modifier.size(36.dp), RoundedCornerShape(7.dp))
+            }
+            Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                Text(song.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    "${Time.format(progress.positionMs)} / ${Time.format(progress.durationMs)}",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 6.dp),
+                    error ?: song.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Box(Modifier.padding(horizontal = 8.dp).width(1.dp).height(28.dp).background(MaterialTheme.colorScheme.outlineVariant))
-            HoverIcon(Icons.Rounded.Lyrics, "Lyrics", lit = panel == SidePanel.LYRICS, size = 32.dp, iconSize = 18.dp) { onPanel(SidePanel.LYRICS) }
-            HoverIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Up next", lit = panel == SidePanel.QUEUE, size = 32.dp, iconSize = 19.dp) { onPanel(SidePanel.QUEUE) }
-            HoverIcon(if (panel == SidePanel.NOW) Icons.Rounded.Info else Icons.Outlined.Info, "Now playing", lit = panel == SidePanel.NOW, size = 32.dp, iconSize = 18.dp) { onPanel(SidePanel.NOW) }
-            Spacer(Modifier.width(4.dp))
-            VolumeControl(slider = true)
-            Spacer(Modifier.width(4.dp))
+            Text(
+                "${Time.format(progress.positionMs)} / ${Time.format(progress.durationMs)}",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        SeekLine(progress, Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 18.dp))
+        SeekLine(progress, Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 8.dp))
     }
 }
 
@@ -264,7 +337,7 @@ internal fun RightPanel(panel: SidePanel, song: Song, queue: List<Song>, index: 
                 when (p) {
                     SidePanel.NOW -> NowPlayingCards(song, queue, index, onLyrics = { onPanel(SidePanel.LYRICS) }, onOpenArtist = onOpenArtist)
                     SidePanel.LYRICS -> LyricsPane(song, Modifier.fillMaxSize().padding(horizontal = 14.dp))
-                    SidePanel.QUEUE -> androidx.compose.runtime.CompositionLocalProvider(LocalPageBottom provides PILL_ROOM) {
+                    SidePanel.QUEUE -> androidx.compose.runtime.CompositionLocalProvider(LocalPageBottom provides 32.dp) {
                         if (queue.isEmpty()) Message("The queue is empty.", null)
                         else SongList(queue, current = index) { _, i -> Player.playAt(i) }
                     }
@@ -281,7 +354,7 @@ private fun NowPlayingCards(song: Song, queue: List<Song>, index: Int, onLyrics:
     val liked by Library.liked.collectAsState()
     val isLiked = liked.any { it.videoId == song.videoId }
     LazyColumn(
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = PILL_ROOM),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item(key = "cover") {
