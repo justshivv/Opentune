@@ -245,6 +245,7 @@ export function DiscordSettings() {
                 <input
                   className={settingsUi.input}
                   placeholder="Listen on YouTube Music"
+                  maxLength={32}
                   value={options.button1Text}
                   onChange={(e) => set({ button1Text: e.currentTarget.value })}
                 />
@@ -257,6 +258,7 @@ export function DiscordSettings() {
                 <input
                   className={settingsUi.input}
                   placeholder="Visit OpenTune"
+                  maxLength={32}
                   value={options.button2Text}
                   onChange={(e) => set({ button2Text: e.currentTarget.value })}
                 />
@@ -267,7 +269,8 @@ export function DiscordSettings() {
       </section>
       <p className={settingsUi.footer}>
         This uses your Discord account’s own token, which Discord’s terms don’t allow. Button text can use {'{song_name}'},{' '}
-        {'{artist_name}'} and {'{album_name}'}.
+        {'{artist_name}'} and {'{album_name}'}, up to 32 characters: Discord drops a card with a longer label. A web address as the
+        OpenTune button’s text makes the button open it.
       </p>
     </>
   );

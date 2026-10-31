@@ -406,23 +406,43 @@ function resolveVariables(text: string, track: DiscordNowPlaying): string {
 
 const ACTIVITY_TYPES = { playing: 0, listening: 2, watching: 3, competing: 5 } as const;
 
+/**
+ * Discord's limits on a card: a button label up to 32 characters, the name and the two lines up
+ * to 128 and at least 2. A card that breaks any of them is dropped whole, without a word back, so
+ * everything is fitted here rather than trusted to be short.
+ */
+const LABEL_MAX = 32;
+const TEXT_MAX = 128;
+const fit = (text: string, max: number) => {
+  const t = text.trim();
+  const clipped = t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+  return clipped.padEnd(2, '\u00a0');
+};
+const isLink = (text: string) => /^https?:\/\/\S+$/i.test(text.trim());
+/** A button's label: the text given, or the usual one when it's empty or is a web address. */
+const label = (text: string, fallback: string) => fit(!text.trim() || isLink(text) ? fallback : text, LABEL_MAX);
+
 export async function buildPresence(token: string, track: DiscordNowPlaying, options: DiscordPresenceOptions): Promise<Presence> {
   const now = Date.now();
   const rate = track.playbackRate > 0 ? track.playbackRate : 1;
   const watchUrl = `https://music.youtube.com/watch?v=${track.videoId}`;
   const buttons: [string, string][] = [];
-  if (options.button1Visible) buttons.push([resolveVariables(options.button1Text || DEFAULT_BUTTON_1, track), watchUrl]);
-  if (options.button2Visible) buttons.push([resolveVariables(options.button2Text || DEFAULT_BUTTON_2, track), PROJECT_URL]);
+  if (options.button1Visible) buttons.push([label(resolveVariables(options.button1Text, track), DEFAULT_BUTTON_1), watchUrl]);
+  // A web address given as the second button's text is where the button goes.
+  if (options.button2Visible) {
+    const text = options.button2Text.trim();
+    buttons.push([label(resolveVariables(text, track), DEFAULT_BUTTON_2), isLink(text) ? text : PROJECT_URL]);
+  }
   const art = track.artworkUrl?.startsWith('http') ? track.artworkUrl : null;
   // An unreachable mirror keeps the raw URL, as RpcImage.ExternalImage does.
   const largeImage = art ? ((await externalAsset(token, art)) ?? art) : null;
   return {
     activities: [
       {
-        name: options.activityName.trim() || APP_NAME,
-        details: rate !== 1 ? `${track.title} [${rate.toFixed(2)}x]` : track.title,
+        name: fit(options.activityName.trim() || APP_NAME, TEXT_MAX),
+        details: fit(rate !== 1 ? `${track.title} [${rate.toFixed(2)}x]` : track.title, TEXT_MAX),
         details_url: watchUrl,
-        state: track.artist,
+        state: fit(track.artist || 'Unknown artist', TEXT_MAX),
         state_url: null,
         type: ACTIVITY_TYPES[options.activityType] ?? 2,
         status_display_type: options.useDetails ? 2 : 1,
