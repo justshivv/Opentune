@@ -6,11 +6,11 @@ on:
   push:
     branches: [main]
     paths: ["web/**", "site/**", "usage-api/dashboard/**", ".github/workflows/pages.yml", "scripts/prepare-usage-assets.py", "scripts/check-published-usage.py"]
-  # After every release, so the download buttons name the new build without the
-  # page being edited. A release made by the Release workflow's own token doesn't
+  # After every release, and after its desktop downloads are attached, so the download
+  # buttons name the new build without the page being edited. A release made by the Release workflow's own token doesn't
   # send a release event, hence workflow_run as well.
   workflow_run:
-    workflows: ["Release", "iOS"]
+    workflows: ["Release", "iOS", "Desktop release"]
     types: [completed]
   release:
     types: [published]
