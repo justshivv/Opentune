@@ -59,13 +59,6 @@ class DesktopShots {
         shoot("desktop-wide-lyrics", 1700, 1000, 9_000) { DesktopApp(startPanel = SidePanel.LYRICS) }
         shoot("desktop-wide-queue", 1700, 1000, 6_000) { DesktopApp(startPanel = SidePanel.QUEUE) }
         shoot("desktop-player", 640, 1000, 6_000) { DesktopTheme { NowPlaying(song, docked = false, onClose = {}) } }
-        shoot("desktop-settings", 1600, 1000, 4_000) {
-            DesktopTheme {
-                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
-                    androidx.compose.runtime.CompositionLocalProvider(LocalPageTop provides TOP_BAR_HEIGHT) { SettingsPage() }
-                }
-            }
-        }
         shoot("desktop-sources", 900, 1100) {
             DesktopTheme {
                 Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
@@ -113,8 +106,12 @@ class DesktopShots {
         shoot("desktop-search", 1400, 1000, 10_000) {
             DesktopTheme { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { SearchPage("", {}, 0, {}, {}) } }
         }
-        shoot("desktop-settings", 1400, 1000, 4_000) {
-            DesktopTheme { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { SettingsPage() } }
+        shoot("desktop-settings", 1600, 1000, 4_000) {
+            DesktopTheme {
+                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+                    androidx.compose.runtime.CompositionLocalProvider(LocalPageTop provides TOP_BAR_HEIGHT) { SettingsPage() }
+                }
+            }
         }
         shoot("desktop-liked", 1400, 1000, 6_000) {
             DesktopTheme { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { LibraryPage(Shelf.LIKED, {}, {}) } }

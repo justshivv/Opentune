@@ -193,7 +193,7 @@ internal fun PrimaryButton(label: String, icon: ImageVector, enabled: Boolean = 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = ink, modifier = Modifier.size(20.dp))
-        Text(label, color = ink, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+        Text(label, color = ink, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp))
     }
 }
 
@@ -211,7 +211,7 @@ internal fun SecondaryButton(label: String, icon: ImageVector, enabled: Boolean 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = onSurface.copy(alpha = if (enabled) 1f else 0.4f), modifier = Modifier.size(19.dp))
-        Text(label, color = onSurface.copy(alpha = if (enabled) 1f else 0.4f), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
+        Text(label, color = onSurface.copy(alpha = if (enabled) 1f else 0.4f), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp))
     }
 }
 

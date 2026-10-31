@@ -281,21 +281,24 @@ private fun JumpBackIn(song: Song, recent: List<Song>) {
     val accent = coverAccent(song.thumbnailUrl)
     val shape = RoundedCornerShape(24.dp)
     val hover = remember { MutableInteractionSource() }
-    Box(
+    androidx.compose.foundation.layout.BoxWithConstraints(
         Modifier.padding(horizontal = GUTTER).fillMaxWidth().height(250.dp).hoverLift(hover, 1.005f)
             .shadow(24.dp, shape, ambientColor = accent, spotColor = accent).clip(shape).hoverable(hover),
     ) {
+        // The cover gives way first as the card narrows, so the words and buttons never squeeze.
+        val cover = when { maxWidth >= 620.dp -> 194.dp; maxWidth >= 440.dp -> 140.dp; else -> null }
+        val roomy = maxWidth >= 540.dp
         SoftBackdrop(song.thumbnailUrl, Modifier.fillMaxSize())
         Box(Modifier.matchParentSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.55f), 0.6f to accent.copy(alpha = 0.25f), 1f to Color.Black.copy(alpha = 0.15f))))
         Row(Modifier.fillMaxSize().padding(28.dp), verticalAlignment = Alignment.CenterVertically) {
-            Cover(song.thumbnailUrl, 194.dp, RoundedCornerShape(16.dp), Modifier.shadow(28.dp, RoundedCornerShape(16.dp)))
-            Column(Modifier.padding(start = 28.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("JUMP BACK IN", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.75f), letterSpacing = 1.2.sp)
+            cover?.let { Cover(song.thumbnailUrl, it, RoundedCornerShape(16.dp), Modifier.shadow(28.dp, RoundedCornerShape(16.dp))) }
+            Column(Modifier.padding(start = if (cover != null) 28.dp else 0.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("JUMP BACK IN", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.75f), letterSpacing = 1.2.sp, maxLines = 1, softWrap = false)
                 Text(song.title, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(song.artist, style = MaterialTheme.typography.titleMedium, color = Color.White.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PrimaryButton("Play", Icons.Rounded.PlayArrow) { Player.playAll(recent, 0) }
-                    SecondaryButton("Shuffle recents", androidx.compose.material.icons.Icons.Rounded.Shuffle) { Player.playAll(recent.shuffled(), 0) }
+                    SecondaryButton(if (roomy) "Shuffle recents" else "Shuffle", androidx.compose.material.icons.Icons.Rounded.Shuffle) { Player.playAll(recent.shuffled(), 0) }
                 }
             }
         }

@@ -208,6 +208,7 @@ internal fun Segment(label: String, selected: Boolean, onClick: () -> Unit) {
     val ink by animateColorAsState(if (selected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurfaceVariant, tween(160), label = "segment ink")
     Text(
         label, color = ink, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+        maxLines = 1, softWrap = false,
         modifier = Modifier.clip(RoundedCornerShape(50)).background(fill).hoverable(hover)
             .clickable(interactionSource = hover, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),

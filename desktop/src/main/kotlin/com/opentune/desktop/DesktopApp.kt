@@ -253,6 +253,7 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                                 onPanel = { p -> panel = if (panel == p && panelShown) null else p },
                                 onOpenPlayer = { playerOpen = true },
                                 modifier = Modifier.align(Alignment.TopCenter),
+                                panelRoom = roomForPanel,
                             )
                         }
                     }

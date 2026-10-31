@@ -73,6 +73,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Settings
@@ -232,22 +234,28 @@ internal fun TopBar(
     onPanel: (SidePanel) -> Unit,
     onOpenPlayer: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Whether the window has room for the column beside the page; without it, its switches aren't shown. */
+    panelRoom: Boolean = true,
 ) {
     val playing by Player.playing.collectAsState()
     val loading by Player.loading.collectAsState()
     val shuffled by Player.shuffled.collectAsState()
     val repeat by Player.repeat.collectAsState()
     val has = song != null
-    Box(
+    androidx.compose.foundation.layout.BoxWithConstraints(
         modifier.fillMaxWidth().height(TOP_BAR_HEIGHT + DesktopWindow.topInset)
             // Frosted over the page sliding under it; solid with blur turned off.
             .glass(RectangleShape, MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
             .padding(top = DesktopWindow.topInset),
     ) {
+        // The song keeps its room as the bar narrows (a column open beside the page, a small
+        // window): first the volume folds to its speaker, then shuffle and repeat step aside.
+        val roomy = maxWidth >= 900.dp
+        val full = maxWidth >= 700.dp
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             HoverIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", enabled = canGoBack, size = 34.dp, iconSize = 20.dp, onClick = onBack)
             Spacer(Modifier.width(8.dp))
-            HoverIcon(Icons.Rounded.Shuffle, if (shuffled) "Shuffle on" else "Shuffle", enabled = has, lit = shuffled, size = 32.dp, iconSize = 18.dp, onClick = Player::toggleShuffle)
+            if (full) HoverIcon(Icons.Rounded.Shuffle, if (shuffled) "Shuffle on" else "Shuffle", enabled = has, lit = shuffled, size = 32.dp, iconSize = 18.dp, onClick = Player::toggleShuffle)
             HoverIcon(Icons.Rounded.SkipPrevious, "Previous", enabled = has, size = 34.dp, iconSize = 22.dp, onClick = Player::previous)
             Box(
                 Modifier.padding(horizontal = 4.dp).size(36.dp).clip(CircleShape)
@@ -259,20 +267,22 @@ internal fun TopBar(
                 else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", tint = MaterialTheme.colorScheme.surface, modifier = Modifier.size(22.dp))
             }
             HoverIcon(Icons.Rounded.SkipNext, "Next", enabled = has, size = 34.dp, iconSize = 22.dp, onClick = Player::next)
-            HoverIcon(
+            if (full) HoverIcon(
                 if (repeat == Player.Repeat.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                 when (repeat) { Player.Repeat.OFF -> "Repeat off"; Player.Repeat.ALL -> "Repeat all"; Player.Repeat.ONE -> "Repeat this song" },
                 enabled = has, lit = repeat != Player.Repeat.OFF, size = 32.dp, iconSize = 18.dp, onClick = Player::cycleRepeat,
             )
             // The song, centred in what's left between the controls either side.
-            Box(Modifier.weight(1f).padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f).padding(horizontal = if (roomy) 16.dp else 8.dp), contentAlignment = Alignment.Center) {
                 NowBox(song, onOpenPlayer, Modifier.widthIn(max = 640.dp).fillMaxWidth())
             }
-            VolumeControl(slider = true)
+            VolumeControl(slider = roomy)
             Spacer(Modifier.width(6.dp))
-            HoverIcon(Icons.Rounded.Lyrics, "Lyrics", enabled = has, lit = panel == SidePanel.LYRICS, size = 32.dp, iconSize = 18.dp) { onPanel(SidePanel.LYRICS) }
-            HoverIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Up next", enabled = has, lit = panel == SidePanel.QUEUE, size = 32.dp, iconSize = 19.dp) { onPanel(SidePanel.QUEUE) }
-            HoverIcon(if (panel == SidePanel.NOW) Icons.Rounded.Info else Icons.Outlined.Info, "Now playing", enabled = has, lit = panel == SidePanel.NOW, size = 32.dp, iconSize = 18.dp) { onPanel(SidePanel.NOW) }
+            if (panelRoom) {
+                HoverIcon(Icons.Rounded.Lyrics, "Lyrics", enabled = has, lit = panel == SidePanel.LYRICS, size = 32.dp, iconSize = 18.dp) { onPanel(SidePanel.LYRICS) }
+                HoverIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Up next", enabled = has, lit = panel == SidePanel.QUEUE, size = 32.dp, iconSize = 19.dp) { onPanel(SidePanel.QUEUE) }
+                HoverIcon(if (panel == SidePanel.NOW) Icons.Rounded.Info else Icons.Outlined.Info, "Now playing", enabled = has, lit = panel == SidePanel.NOW, size = 32.dp, iconSize = 18.dp) { onPanel(SidePanel.NOW) }
+            }
         }
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
     }
@@ -284,7 +294,7 @@ private fun NowBox(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier) {
     val shape = RoundedCornerShape(10.dp)
     val error by Player.error.collectAsState()
     val hover = remember { MutableInteractionSource() }
-    Box(
+    androidx.compose.foundation.layout.BoxWithConstraints(
         modifier.height(46.dp).clip(shape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
             .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f), shape)
             .hoverWash(hover, shape)
@@ -292,8 +302,10 @@ private fun NowBox(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier) {
     ) {
         if (song == null) {
             Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.Center).size(20.dp))
-            return@Box
+            return@BoxWithConstraints
         }
+        // Too narrow for the time as well: the names keep the room.
+        val timed = maxWidth >= 340.dp
         val progress = rememberProgress(song)
         Row(Modifier.fillMaxSize().padding(start = 5.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             AnimatedContent(song.thumbnailUrl, transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(160)) }, label = "bar cover") { url ->
@@ -306,7 +318,7 @@ private fun NowBox(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier) {
                     color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(
+            if (timed) Text(
                 "${Time.format(progress.positionMs)} / ${Time.format(progress.durationMs)}",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -328,7 +340,7 @@ internal fun RightPanel(panel: SidePanel, song: Song, queue: List<Song>, index: 
         Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow).padding(top = DesktopWindow.topInset)) {
             Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     SidePanel.entries.forEach { p -> Segment(p.label, p == panel) { onPanel(p) } }
                 }
                 HoverIcon(Icons.Rounded.Close, "Close", size = 30.dp, iconSize = 17.dp) { onPanel(null) }
