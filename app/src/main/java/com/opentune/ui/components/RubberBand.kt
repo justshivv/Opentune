@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasureResult
@@ -29,6 +30,29 @@ import kotlinx.coroutines.launch
  * the end gives a small bounce. Replaces Android's stretch effect app-wide
  * through [LocalOverscrollFactory].
  */
+/** One rubber band of its own, for a page that draws something against how far it's pulled (see [pinnedToTop]). */
+@androidx.compose.runtime.Composable
+fun rememberRubberBand(): RubberBandOverscroll = androidx.compose.runtime.remember { RubberBandOverscroll() }
+
+/**
+ * Keeps a page's header picture fixed to the top of the screen as the page
+ * is pulled down past its top, instead of riding down with it and leaving a
+ * gap above: the picture grows down from the top to fill the room, so pulling
+ * moves the name and everything under it down over more of the picture.
+ * Goes on the picture inside the first item of a list using [band].
+ */
+fun Modifier.pinnedToTop(band: RubberBandOverscroll?): Modifier = if (band == null) this else this.graphicsLayer {
+    val pull = band.pull
+    if (pull > 0f && size.height > 0f) {
+        val grow = (size.height + pull) / size.height
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+        // Back up by what the list moved it down, then stretch to reach where its foot now is.
+        translationY = -pull
+        scaleX = grow
+        scaleY = grow
+    }
+}
+
 object RubberBandOverscrollFactory : OverscrollFactory {
     override fun createOverscrollEffect(): OverscrollEffect = RubberBandOverscroll()
     override fun hashCode(): Int = 7
@@ -42,9 +66,12 @@ object RubberBandOverscrollFactory : OverscrollFactory {
  * follows the finger straight back instead of the finger first having to
  * undo a long hidden pull.
  */
-private class RubberBandOverscroll : OverscrollEffect {
+class RubberBandOverscroll : OverscrollEffect {
     private var offsetX by mutableFloatStateOf(0f)
     private var offsetY by mutableFloatStateOf(0f)
+
+    /** How far the content has been pulled down past its top, in pixels; 0 otherwise. Read while drawing. */
+    val pull: Float get() = offsetY.coerceAtLeast(0f)
     private var width = 0f
     private var height = 0f
     private var settling: Job? = null

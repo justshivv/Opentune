@@ -1,5 +1,6 @@
 package com.opentune.ui.library
 
+import com.opentune.ui.components.pinnedToTop
 import com.opentune.ui.components.menuClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -1039,11 +1040,12 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         }
     }) {
     val tint = com.opentune.ui.browse.rememberCoverTint((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(CARD_ART_PX))
+    val band = com.opentune.ui.components.rememberRubberBand()
     LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding,
-        modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search)) {
+        modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search), overscrollEffect = band) {
         if (!searching) item(key = "header") {
             Box {
-                com.opentune.ui.browse.HeaderBackdrop((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(HEADER_ART_PX), Modifier.matchParentSize(), into = tint)
+                com.opentune.ui.browse.HeaderBackdrop((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
                 Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     com.opentune.ui.browse.PlaylistHeading(playlist.name,
                         if (playlist.spotifyId != null) "Spotify" else if (playlist.synced) "YouTube Music" else "On this phone",

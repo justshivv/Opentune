@@ -1,5 +1,6 @@
 package com.opentune.ui.browse
 
+import com.opentune.ui.components.pinnedToTop
 import com.opentune.ui.components.GlassPage
 import com.opentune.ui.components.LocalHazeState
 import androidx.compose.ui.layout.layout
@@ -598,10 +599,11 @@ fun CollectionScreen(
             else -> {
                 val c = (s as? UiState.Success)?.data
                 val tint = rememberCoverTint(c?.thumbnailUrl.artworkAt(CARD_ART_PX))
-                LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search)) {
+                val band = com.opentune.ui.components.rememberRubberBand()
+                LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search), overscrollEffect = band) {
                     if (!searching) item(key = "header") {
                         Box {
-                            HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize(), into = tint)
+                            HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
                             Column(
                                 Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,

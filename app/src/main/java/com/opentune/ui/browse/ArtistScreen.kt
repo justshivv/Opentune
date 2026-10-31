@@ -1,5 +1,6 @@
 package com.opentune.ui.browse
 
+import com.opentune.ui.components.pinnedToTop
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -195,8 +196,9 @@ internal fun ArtistPageView(
                 }
             },
         ) {
-            LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-                item(key = "hero", contentType = "hero") { ArtistHero(browseId, page, photo, listState, actions) }
+            val band = com.opentune.ui.components.rememberRubberBand()
+            LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize(), overscrollEffect = band) {
+                item(key = "hero", contentType = "hero") { ArtistHero(browseId, page, photo, listState, actions, band) }
                 if (page == null) {
                     item(key = "latest-placeholder") {
                         Placeholder(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(LATEST_CARD_HEIGHT), MaterialTheme.shapes.large)
@@ -281,7 +283,7 @@ private fun ArtistTint(photoUrl: String?, content: @Composable () -> Unit) {
  * scroll, so it slides away slower than the page, unless animation is reduced.
  */
 @Composable
-private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, listState: LazyListState, actions: SongActions) {
+private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, listState: LazyListState, actions: SongActions, band: com.opentune.ui.components.RubberBandOverscroll? = null) {
     val ui by AppSettings.ui.collectAsState()
     val still = ui.reduceAnimation
     val background = MaterialTheme.colorScheme.background
@@ -300,6 +302,9 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
         val photoHeight = min(maxWidth, MAX_PHOTO_HEIGHT)
         Box(
             Modifier
+                // Pulled down at the top, the photo stays at the top of the screen and grows to
+                // fill the room; the name and buttons move down over more of it.
+                .pinnedToTop(band)
                 .fillMaxWidth()
                 .height(photoHeight)
                 .clipToBounds()
@@ -341,7 +346,7 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
         }
         // Keeps the status bar readable over a bright photo, in whichever way the theme draws it.
         Box(
-            Modifier.fillMaxWidth().height(120.dp)
+            Modifier.graphicsLayer { translationY = -(band?.pull ?: 0f) }.fillMaxWidth().height(120.dp)
                 .background(Brush.verticalGradient(listOf(background.copy(alpha = 0.5f), background.copy(alpha = 0f)))),
         )
         Column(
