@@ -108,12 +108,31 @@ object Http {
     }
     // ---- End temporary instrumentation ----------------------------------
 
+    /**
+     * Wikimedia (artist signatures, some artist photos) answers 403 to a
+     * generic client: its policy asks every client to name itself and say
+     * where to reach whoever runs it. Only its hosts are given this name; every
+     * other request keeps the headers its caller set, YouTube's above all.
+     */
+    private val WIKIMEDIA_AGENT = "OpenTune (https://github.com/justshivv/opentune) okhttp/${okhttp3.OkHttp.VERSION}"
+    private val namedForWikimedia = okhttp3.Interceptor { chain ->
+        val request = chain.request()
+        val host = request.url.host
+        val wikimedia = host == "wikimedia.org" || host.endsWith(".wikimedia.org") || host.endsWith(".wikipedia.org")
+        if (wikimedia && request.header("User-Agent") == null) {
+            chain.proceed(request.newBuilder().header("User-Agent", WIKIMEDIA_AGENT).build())
+        } else {
+            chain.proceed(request)
+        }
+    }
+
     val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .dispatcher(Dispatcher().apply { maxRequestsPerHost = 16 })
         .connectionPool(ConnectionPool(16, 5, TimeUnit.MINUTES))
+        .addInterceptor(namedForWikimedia)
         .apply { if (USAGE_LOGGING_ENABLED) addNetworkInterceptor(usageInterceptor) }
         .build()
 }
