@@ -101,7 +101,7 @@ fun RingtoneDialog(song: Song, onDismiss: () -> Unit) {
                 if (Ringtones.allowed(context)) {
                     proceed()
                 } else {
-                    systemSettings.launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, "package:${context.packageName}".toUri()))
+                    systemSettings.launchSafely(context, Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, "package:${context.packageName}".toUri()))
                 }
             })
         },

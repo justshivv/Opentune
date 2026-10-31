@@ -1,6 +1,7 @@
 package com.opentune.ui.settings
 
 import android.content.Context
+import com.opentune.ui.components.launchSafely
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Build
@@ -1425,10 +1426,10 @@ private fun settingsSections(
                     NavRow("Wrapped", onOpenWrapped, summary = "Your listening as an animated story", icon = Icons.Rounded.AutoAwesome)
                 },
                 Entry("Export data", "backup json") {
-                    NavRow("Export data", { exporter.launch("opentune-backup.json") }, summary = "Settings, history, likes and playlists, as one JSON file", icon = Icons.Rounded.Upload)
+                    NavRow("Export data", { exporter.launchSafely(context, "opentune-backup.json") }, summary = "Settings, history, likes and playlists, as one JSON file", icon = Icons.Rounded.Upload)
                 },
                 Entry("Import data", "restore json") {
-                    NavRow("Import data", { importer.launch(arrayOf("application/json")) }, summary = "Replaces the settings, history, likes and playlists on this device", icon = Icons.Rounded.Download)
+                    NavRow("Import data", { importer.launchSafely(context, arrayOf("application/json")) }, summary = "Replaces the settings, history, likes and playlists on this device", icon = Icons.Rounded.Download)
                 },
                 Entry("Clear listening history", "delete history") {
                     NavRow("Clear listening history", { History.clear(); com.opentune.data.history.ListenedCollections.clear(); message = "Listening history cleared." }, summary = "Removes Recents and Replay data", icon = Icons.Rounded.DeleteSweep)

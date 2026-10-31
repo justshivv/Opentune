@@ -1,6 +1,7 @@
 package com.opentune.ui.spotify
 
 import android.content.ClipboardManager
+import com.opentune.ui.components.launchSafely
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -236,7 +237,7 @@ fun ImportScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("Paste link")
                 }
-                OutlinedButton(onClick = { csvPicker.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "*/*")) }) {
+                OutlinedButton(onClick = { csvPicker.launchSafely(context, arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "*/*")) }) {
                     Icon(Icons.Rounded.Description, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("CSV file")

@@ -76,7 +76,7 @@ object UpdateLock {
             .filter { r -> r.bool("draft") != true && r.bool("prerelease") != true }
             .mapNotNull { r -> UpdateCheck.parse(r, Build.SUPPORTED_ABIS.toList())?.let { it to r } }
             // Only Android releases count: a tag with no APK (the iPhone build's) isn't one.
-            .filter { (release, _) -> release.apk != null && release.version.first().isDigit() }
+            .filter { (release, _) -> release.apk != null && release.version.firstOrNull()?.isDigit() == true }
         if (releases.isEmpty()) return@withContext
         val versions = releases.map { it.first.version }
         val newest = releases.maxWithOrNull { a, b -> if (UpdateCheck.isNewer(a.first.version, b.first.version)) 1 else -1 }!!

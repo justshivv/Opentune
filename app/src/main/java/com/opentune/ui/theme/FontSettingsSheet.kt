@@ -1,6 +1,7 @@
 package com.opentune.ui.theme
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import com.opentune.ui.components.launchSafely
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -62,7 +63,7 @@ fun FontSettingsSheet(onDismiss: () -> Unit) {
                     Text("Your next favorite is one play away.", style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            Button(onClick = { picker.launch(arrayOf("*/*")) }, enabled = !importing, modifier = Modifier.fillMaxWidth()) { Text(if (importing) "Importing…" else "Import a font file") }
+            Button(onClick = { picker.launchSafely(context, arrayOf("*/*")) }, enabled = !importing, modifier = Modifier.fillMaxWidth()) { Text(if (importing) "Importing…" else "Import a font file") }
             Text("TrueType (.ttf) or OpenType (.otf), up to 8 MB. Saved on this device.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
             if (theme.customFontId.isNotEmpty()) TextButton(onClick = {
                 val previous = theme.customFontId

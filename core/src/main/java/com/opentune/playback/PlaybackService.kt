@@ -489,6 +489,8 @@ class PlaybackService : MediaLibraryService() {
         val items = saved.songs.mapIndexed { i, ref ->
             ref.toSong().copy(queueTier = saved.tiers?.getOrNull(i) ?: QueueTier.CONTEXT).toMediaItem()
         }
+        // A saved queue with no songs in it has no index to start at.
+        if (items.isEmpty()) return
         player.setMediaItems(items, saved.index.coerceIn(items.indices), saved.positionMs.coerceAtLeast(0))
         player.shuffleModeEnabled = saved.shuffle
         player.repeatMode = saved.repeat

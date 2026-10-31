@@ -245,7 +245,9 @@ private fun Badge(kind: Pills.Kind, fill: Color, ink: Color, drawn: () -> Float)
 private class RevealShape(private val width: Float) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
         val r = size.height / 2f
-        return Outline.Rounded(RoundRect(0f, 0f, width.coerceIn(size.height, size.width), size.height, CornerRadius(r)))
+        // No narrower than round ends need, unless the layer itself is narrower than it is tall
+        // (its first frame): a range whose low end passed its high end would throw.
+        return Outline.Rounded(RoundRect(0f, 0f, width.coerceIn(minOf(size.height, size.width), size.width), size.height, CornerRadius(r)))
     }
 }
 

@@ -345,7 +345,7 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
                 .background(Brush.verticalGradient(listOf(background.copy(alpha = 0.5f), background.copy(alpha = 0f)))),
         )
         Column(
-            Modifier.fillMaxWidth().padding(top = photoHeight - NAME_OVERLAP),
+            Modifier.fillMaxWidth().padding(top = (photoHeight - NAME_OVERLAP).coerceAtLeast(0.dp)),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (page == null) {
