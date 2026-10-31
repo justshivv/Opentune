@@ -262,6 +262,8 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     val doneCount = finished.size
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val rows = rememberPlaylistRows(nav)
+    // In the list, which sources show all their playlists rather than the first few.
+    val openGroups = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
     // The pinned ones, then the most played; Show all has the rest.
     val top = remember(rows, libraryUi.pinnedPlaylists) {
         val pinned = rows.filter { it.pin in libraryUi.pinnedPlaylists }
@@ -329,11 +331,31 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                             else Icon(Icons.Rounded.Refresh, "Refresh YouTube Music playlists", Modifier.size(20.dp))
                         }
                     }
-                    TextButton(onClick = nav.allPlaylists) { Text("Show all", fontWeight = FontWeight.SemiBold) }
+                    TextButton(onClick = nav.allPlaylists) { Text(if (libraryUi.playlistList) "View all" else "Show all", fontWeight = FontWeight.SemiBold) }
                 }
             })
         }
-        item(key = "playlist-tiles") {
+        if (libraryUi.playlistList) {
+            // The list, as Library had it before the tiles: new and import first, then the
+            // pinned ones and each source's own, five of each until "Show more".
+            item(key = "playlist-new") { ActionLine(Icons.Rounded.Add, "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
+            item(key = "playlist-import") {
+                ActionLine(null, "Import a playlist", "From a Spotify or YouTube Music link", onClick = nav.importPlaylist, picture = {
+                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(30.dp))
+                })
+            }
+            playlistGroups(rows, libraryUi.pinnedPlaylists).forEach { (group, inGroup) ->
+                item(key = "group:$group") { GroupLabel(group) }
+                val open = group == PINNED || openGroups[group] == true
+                val visible = if (open) inGroup else inGroup.take(LIST_FOLD)
+                items(visible, key = { "$group:${it.key}" }) { row -> PlaylistLine(row, Modifier.animateItem()) }
+                if (group != PINNED && inGroup.size > LIST_FOLD) item(key = "fold:$group") {
+                    TextButton(onClick = { openGroups[group] = !open }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (open) "Show less" else "Show more (${inGroup.size - LIST_FOLD})")
+                    }
+                }
+            }
+        } else item(key = "playlist-tiles") {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -387,7 +409,8 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
         val top = rows.filter { it.pin in pinned }
         top + order.sort(rows.filter { it !in top })
     }
-    val full = androidx.compose.foundation.lazy.grid.GridItemSpan(2)
+    val asList = AppSettings.ui.collectAsState().value.playlistList
+    val full = androidx.compose.foundation.lazy.grid.GridItemSpan(if (asList) 1 else 2)
     val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     // Behind it all, the cover of the first playlist in view, blurred across the top and running
     // down into its colour; as the page scrolls, both follow the playlists on screen.
@@ -410,11 +433,12 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
     coverUrl?.let { CoverWash(it, accent, Modifier.fillMaxWidth().height(440.dp)) }
     androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
         state = grid,
-        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+        // Two tiles to a row, or one playlist to a line when Library shows them as a list.
+        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(if (asList) 1 else 2),
         contentPadding = contentPadding,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(if (asList) 0.dp else 10.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = if (asList) 0.dp else 10.dp),
     ) {
         item(key = "header", span = { full }) {
             PageHeader(com.opentune.ui.theme.tr("Playlists"), onBack = onBack, actions = {
@@ -439,9 +463,15 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
                 }
             })
         }
-        item(key = "new") { NewPlaylistTile(signedIn, { naming = true }) }
-        item(key = "liked") { LikedTile(liked.size, nav.liked) }
-        items(shown.size, key = { shown[it].key }) { i -> PlaylistTile(shown[i], Modifier.animateItem()) }
+        if (asList) {
+            item(key = "new") { ActionLine(Icons.Rounded.Add, "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
+            item(key = "liked") { ActionLine(Icons.Rounded.Favorite, "Liked songs", "${liked.size} songs", onClick = nav.liked) }
+            items(shown.size, key = { shown[it].key }) { i -> PlaylistLine(shown[i], Modifier.animateItem()) }
+        } else {
+            item(key = "new") { NewPlaylistTile(signedIn, { naming = true }) }
+            item(key = "liked") { LikedTile(liked.size, nav.liked) }
+            items(shown.size, key = { shown[it].key }) { i -> PlaylistTile(shown[i], Modifier.animateItem()) }
+        }
     }
     }
 }
@@ -565,6 +595,57 @@ private fun PlaylistRow(
         }
     }
 }
+
+/** A playlist as a line of the list: cover, name, where it's from; held down, it can be pinned. */
+@Composable
+private fun PlaylistLine(row: LibraryPlaylistRow, modifier: Modifier = Modifier) {
+    PinnableRow(row.pin, modifier) { onLongClick ->
+        PlaylistRow(
+            row.url, row.title, row.subtitle, row.onClick,
+            from = row.source.takeIf { it == "Spotify" },
+            onLongClick = onLongClick,
+            cover = if (row.local != null && row.url == null) ({
+                com.opentune.ui.components.PlaylistCover(row.local.name, row.local.songs.map { it.thumbnailUrl }, Modifier.size(56.dp))
+            }) else null,
+        )
+    }
+}
+
+/** A line of the list that does something rather than open a playlist: an icon in a square, a name and a line under it. */
+@Composable
+private fun ActionLine(icon: ImageVector?, title: String, subtitle: String, picture: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+    PlaylistRow(null, title, subtitle, onClick, cover = {
+        Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
+            if (picture != null) picture() else if (icon != null) Icon(icon, null, Modifier.size(26.dp))
+        }
+    })
+}
+
+/** A source's name over its playlists in the list. */
+@Composable
+private fun GroupLabel(name: String) {
+    Text(
+        name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
+    )
+}
+
+/** Playlists in the list's groups: the pinned ones first, in the order pinned, then each source's, in [rows]' order. */
+private fun playlistGroups(rows: List<LibraryPlaylistRow>, pinned: List<String>): List<Pair<String, List<LibraryPlaylistRow>>> {
+    val pins = pinned.mapNotNull { key -> rows.firstOrNull { it.pin == key } }
+    val rest = rows.filter { it !in pins }
+    return buildList {
+        if (pins.isNotEmpty()) add(PINNED to pins)
+        listOf("Spotify", "YouTube Music", "On this phone").forEach { source ->
+            rest.filter { it.source == source }.takeIf { it.isNotEmpty() }?.let { add(source to it) }
+        }
+    }
+}
+
+private const val PINNED = "Pinned"
+/** How many of a source's playlists the list shows before "Show more". */
+private const val LIST_FOLD = 5
 
 /** A playlist as a tile, for the sideways rows; held down, it can be pinned. */
 @Composable

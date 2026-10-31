@@ -75,7 +75,7 @@ class TvRemoteTest {
         compose.onNode(isFocused()).assertExists()
 
         // From the first row, down until Appearance is focused, then OK opens it.
-        compose.onNode(hasText("Accounts") and isFocusable()).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNode(hasText("Accounts and services") and isFocusable()).performSemanticsAction(SemanticsActions.RequestFocus)
         compose.waitForIdle()
         save("tv-settings-focused")
         var presses = 0

@@ -340,6 +340,8 @@ val DEFAULT_SPONSORBLOCK_CATEGORIES = setOf("music_offtopic", "sponsor", "selfpr
 @Serializable
 data class InterfaceSettings(
     val playlistGrid: Boolean = false,
+    /** Playlists on Library as a list down the page, grouped by where they're from, rather than a row of tiles. */
+    val playlistList: Boolean = false,
     /** Playlists pinned to the top of Library, first pinned first: a local playlist's id, or a YouTube Music browse id. */
     val pinnedPlaylists: List<String> = emptyList(),
     /** On a TV, the heavy effects have been turned down once; they can be turned back on by hand. */

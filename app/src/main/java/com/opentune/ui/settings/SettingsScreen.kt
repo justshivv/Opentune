@@ -1508,6 +1508,11 @@ private fun settingsSections(
         Section(
             "Miscellaneous",
             listOf(
+                Entry("Playlists in Library", "playlists library tiles list grid view rows layout show all view all") {
+                    SettingRow("Playlists in Library", summary = "Tiles in a sideways row, or a list down the page by where they're from, each with View all", icon = Icons.AutoMirrored.Rounded.QueueMusic, below = {
+                        PillSegmented(listOf(false, true), ui.playlistList, { if (it) "List" else "Tiles" }, { v -> AppSettings.updateUi { it.copy(playlistList = v) } })
+                    })
+                },
                 Entry("Swipe songs to queue them", "gesture swipe queue play next add to queue") {
                     ToggleRow("Swipe songs to queue them", pb.swipeToQueue, { v -> AppSettings.updatePlayback { it.copy(swipeToQueue = v) } }, summary = "Swipe a song right to play it next, or left to add it to the end of the queue", icon = Icons.AutoMirrored.Rounded.PlaylistPlay)
                 },
