@@ -308,23 +308,43 @@
 .ot-accent-picker button[aria-pressed='true'] { outline: 2px solid var(--systemPrimary); }
 
 
-/* The sidebar folded to a rail of icons (the button at its top). Phones keep the full drawer.
+/* The sidebar folded to a rail of icons (the button at its top), and back, as one smooth movement.
+   The width eases (--web-navigation-width is registered in tokens.css, so the page and the player pill
+   slide with it); every icon keeps its place, 36px from the left edge, the middle of the 72px rail;
+   names fade and the rows that only the open sidebar has fold away. Phones keep the full drawer.
    Labels stay in the page for screen readers; the tooltips name each icon for everyone else. */
 @media (min-width: 484px) {
-  .ot-side[data-folded='true'] .ot-side-top { justify-content: center; padding: 0; }
-  .ot-side[data-folded='true'] .ot-side-scroll, .ot-side[data-folded='true'] .ot-side-bottom { padding-inline: 12px; }
-  .ot-side[data-folded='true'] .ot-side-scroll a, .ot-side[data-folded='true'] .ot-side-bottom > a { justify-content: center; }
-  .ot-side[data-folded='true'] .ot-side-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .ot-side[data-folded='true'] :is(.ot-side-wordmark, .ot-side-extra, .ot-side-full, .ot-side-android) { display: none; }
-  .ot-side[data-folded='true'] .ot-side-compact { display: flex; }
-  .ot-side[data-folded='true'] .ot-side-foot { justify-content: center; }
+  .ot-side { overflow: hidden; }
+  .ot-side-top, .ot-side-scroll, .ot-side-bottom { transition: padding .38s var(--ot-ease-settle); }
+  .ot-side-wordmark, .ot-side-android { min-width: 0; flex-shrink: 1; overflow: hidden; white-space: nowrap; }
+  .ot-side-wordmark, .ot-side-android, .ot-side-label { transition: opacity .22s ease .14s, visibility 0s linear 0s; }
+  .ot-side-header { height: 24px; overflow: hidden; white-space: nowrap; transition: height .38s var(--ot-ease-settle), margin .38s var(--ot-ease-settle), padding .38s var(--ot-ease-settle), color .2s ease .1s, background-color .2s ease; }
+  .ot-side-extra, .ot-side-full, .ot-side-compact { overflow: hidden; transition: max-height .38s var(--ot-ease-settle), opacity .22s ease .1s; }
+  .ot-side-extra { max-height: 40px; }
+  .ot-side-full { max-height: 80px; }
+  .ot-side-compact { display: flex; max-height: 0; opacity: 0; }
+
+  .ot-side[data-folded='true'] .ot-side-top { padding-left: 20px; padding-right: 20px; }
+  .ot-side[data-folded='true'] .ot-side-scroll, .ot-side[data-folded='true'] .ot-side-bottom { padding-left: 20px; padding-right: 20px; }
+  /* The names only fade: they stay readable to screen readers. The wordmark and the app link go out of
+     reach as well, so the keyboard doesn't land on something that isn't there. */
+  .ot-side[data-folded='true'] .ot-side-label { opacity: 0; transition: opacity .12s ease; }
+  .ot-side[data-folded='true'] :is(.ot-side-wordmark, .ot-side-android) { opacity: 0; visibility: hidden; transition: opacity .12s ease, visibility 0s linear .12s; }
   /* Section names become a hairline between the groups of icons. */
-  .ot-side[data-folded='true'] .ot-side-header { height: 0.5px; margin: 12px 8px; padding: 0; overflow: hidden; color: transparent; background: var(--labelDivider); }
+  .ot-side[data-folded='true'] .ot-side-header { height: 1px; margin: 12px 4px; padding: 0; color: transparent; background: var(--labelDivider); transition: height .38s var(--ot-ease-settle), margin .38s var(--ot-ease-settle), padding .38s var(--ot-ease-settle), color .1s ease, background-color .2s ease .15s; }
+  .ot-side[data-folded='true'] :is(.ot-side-extra, .ot-side-full) { max-height: 0; opacity: 0; transition: max-height .38s var(--ot-ease-settle), opacity .12s ease; }
+  .ot-side[data-folded='true'] .ot-side-compact { max-height: 48px; opacity: 1; }
   .ot-side[data-folded='true'] .ot-side-badge { position: absolute; top: 5px; right: 9px; width: 8px; height: 8px; padding: 0; border-radius: 50%; font-size: 0; }
 }
+:root[data-motion='false'] { transition: none !important; }
+@media (prefers-reduced-motion: reduce) { :root { transition: none !important; } .ot-side * { transition: none !important; } }
 /* A switch-like button that is on (shuffle, repeat, lyrics, Up Next): a fill of its own colour behind the
    icon and a dot under it, so the state reads at a glance and not only as a slightly brighter glyph. */
-.ot-toggle { position: relative; transition: background-color .2s ease, color .2s ease, scale .1s ease-in; }
+/* Relative only for toggles that aren't placed already: this sheet is outside Tailwind's layers, so a
+   plain position here beat the `absolute` on the full-screen player's corner toggles (Lyrics, Up Next),
+   and dropped them into the flow under the player, off the bottom of the screen. */
+.ot-toggle { transition: background-color .2s ease, color .2s ease, scale .1s ease-in; }
+.ot-toggle:not(.absolute, .fixed) { position: relative; }
 .ot-toggle[aria-pressed='true'] { background-color: color-mix(in srgb, currentColor 20%, transparent); }
 .ot-toggle::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: currentColor; opacity: 0; scale: .2; transition: opacity .2s ease, scale .25s var(--ot-ease-settle); }
 .ot-toggle[aria-pressed='true']::after { opacity: 1; scale: 1; }

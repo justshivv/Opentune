@@ -1,6 +1,7 @@
 import { ArrowUpRight, ListMusic, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-react';
 import { useEffect } from 'react';
 import { MdOutlineExtension } from 'react-icons/md';
+import { SiSpotify } from 'react-icons/si';
 import { PrefetchLink, PrefetchNavLink } from '@/components/PrefetchLink';
 import { LogoMark } from '@/components/icons/LogoMark';
 import {
@@ -120,7 +121,10 @@ function SpotifyNav({ onNavigate }: { onNavigate: () => void }) {
       <ul className={list}>
         <li>
           <PrefetchNavLink to="/spotify" end className={item} onClick={onNavigate} title={tip('All Spotify Playlists')}>
-            <AllPlaylistsIcon size={24} className={icon} />
+            {/* Spotify's own mark, so it reads apart from All Playlists above it, folded or not. */}
+            <span className={icon}>
+              <SiSpotify size={20} />
+            </span>
             <span className={navLabel}>All Spotify Playlists</span>
           </PrefetchNavLink>
         </li>

@@ -25,33 +25,71 @@ export default defineContentScript({
   include: ['firefox'],
   runAt: 'document_start',
   main() {
-    window.addEventListener('message', (event: MessageEvent) => {
+    // Updating or reloading the extension leaves this copy of the script in the open page, cut off from
+    // the extension: every call into it then throws "Extension context invalidated". So each call checks
+    // first, and once the extension is gone this copy stops listening and stops reconnecting, quietly. The
+    // page's requests meanwhile get an answer that says what happened, rather than no answer at all.
+    const alive = () => {
+      try {
+        return !!browser.runtime?.id;
+      } catch {
+        return false;
+      }
+    };
+    const GONE = 'OpenTune Extension was updated or reloaded. Reload this page to reconnect to it.';
+    let port: Browser.runtime.Port | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+
+    const onMessage = (event: MessageEvent) => {
       if (event.source !== window || event.origin !== location.origin) return;
       if (!isBridgeRequest(event.data)) return;
       const request = event.data;
-      browser.runtime
-        .sendMessage(request)
-        .then((response: BridgeResponse) => window.postMessage(response, location.origin))
-        .catch((error: unknown) =>
-          window.postMessage(errorResponse(request.id, 'internal', String(error)), location.origin),
-        );
-    });
+      if (!alive()) {
+        window.postMessage(errorResponse(request.id, 'internal', GONE), location.origin);
+        return stop();
+      }
+      try {
+        browser.runtime
+          .sendMessage(request)
+          .then((response: BridgeResponse) => window.postMessage(response, location.origin))
+          .catch((error: unknown) =>
+            window.postMessage(errorResponse(request.id, 'internal', alive() ? String(error) : GONE), location.origin),
+          );
+      } catch {
+        window.postMessage(errorResponse(request.id, 'internal', GONE), location.origin);
+        stop();
+      }
+    };
 
-    let port: Browser.runtime.Port | null = null;
     const connect = () => {
       if (port || document.hidden) return;
-      port = browser.runtime.connect({ name: EVENTS_PORT });
+      if (!alive()) return stop();
+      try {
+        port = browser.runtime.connect({ name: EVENTS_PORT });
+      } catch {
+        return stop();
+      }
       port.onMessage.addListener((payload: BridgeEvent) => {
         const message: BridgeEventMessage = { channel: BRIDGE_CHANNEL, direction: 'event', payload };
         window.postMessage(message, location.origin);
       });
       port.onDisconnect.addListener(() => {
         port = null;
-        setTimeout(connect, RECONNECT_MS);
+        // A dropped port is retried; one dropped because the extension went away is not.
+        if (alive()) retry = setTimeout(connect, RECONNECT_MS);
+        else stop();
       });
     };
+
+    function stop() {
+      clearTimeout(retry);
+      port = null;
+      window.removeEventListener('message', onMessage);
+      document.removeEventListener('visibilitychange', connect);
+    }
+
+    window.addEventListener('message', onMessage);
     document.addEventListener('visibilitychange', connect);
     connect();
   },
 });
-

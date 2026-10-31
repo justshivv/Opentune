@@ -151,8 +151,18 @@
   }
 }
 
-/* The sidebar folded to its rail of icons (Sidebar's fold button). Phones keep the drawer. */
+/* The sidebar folded to its rail of icons (Sidebar's fold button). Phones keep the drawer.
+   The width is a registered length so it can ease between the two, and the page, the player pill
+   and the scroll edge, which all take their left edge from it, move with the sidebar. */
+@property --web-navigation-width {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 260px;
+}
 @media (min-width: 484px) {
+  :root {
+    transition: --web-navigation-width .38s var(--ot-ease-settle);
+  }
   :root[data-sidebar='collapsed'] {
     --web-navigation-width: 72px;
   }

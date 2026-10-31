@@ -1,0 +1,141 @@
+# Builds the desktop app for Windows, macOS and Linux and attaches the installers to a GitHub
+# release, next to the Android APKs. It follows each successful Release on main (that workflow
+# publishes the release, and a release it makes sends no release event of its own), and can be run
+# by hand for a release that's already out: Actions > Desktop release > Run workflow, with its tag.
+#
+# Each file is named for the release and the system it's for, e.g.
+#   OpenTune-v1.0.4-windows-x64-setup.exe   OpenTune-v1.0.4-macos-arm64.dmg
+#   OpenTune-v1.0.4-linux-x86_64.AppImage   OpenTune-v1.0.4-linux-amd64.deb
+# Running again for the same tag replaces them.
+name: Desktop release
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to attach the desktop downloads to, e.g. v1.0.4
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.event.inputs.tag || github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  # Which release, and the commit it was built from.
+  release:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.find.outputs.tag }}
+      ref: ${{ steps.find.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.event.inputs.tag }}
+          fetch-depth: 0
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-v$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -n 1)}"
+          if ! gh release view "$tag" > /dev/null 2>&1; then
+            echo "::notice::No release $tag to attach desktop downloads to."
+            exit 0
+          fi
+          # Release also runs on later pushes to main, skipping a version already out. Those don't
+          # rebuild a release's desktop files; running this by hand does, and replaces them.
+          if [ -z "$INPUT_TAG" ] && gh release view "$tag" --json assets -q '.assets[].name' | grep -q -- '-windows-x64-setup\.exe$'; then
+            echo "::notice::$tag already has its desktop downloads."
+            exit 0
+          fi
+          git fetch --tags --force --quiet
+          # Built from the commit the release's tag points at, so the desktop app is that version's.
+          ref="$(git rev-list -n 1 "$tag")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "Desktop downloads for $tag from ${ref:0:7}"
+
+  desktop:
+    needs: release
+    if: needs.release.outputs.tag != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            tasks: :desktop:packageDeb :desktop:packageRpm
+          - os: windows-latest
+            tasks: :desktop:packageMsi :desktop:packageExe
+          - os: macos-latest
+            tasks: :desktop:packageDmg
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      # The build includes the Android modules, which need the SDK to configure.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-37.0 build-tools;36.0.0
+      - uses: gradle/actions/setup-gradle@v4
+      - name: RPM tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - name: Installers
+        shell: bash
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
+          DISCORD_APP_ID: ${{ vars.DISCORD_APP_ID || secrets.DISCORD_APP_ID }}
+        run: ./gradlew --no-daemon ${{ matrix.tasks }} :desktop:createDistributable
+      # The packaged app on its own trimmed runtime: FFmpeg, GraalJS and SQLite must load there too.
+      - name: Packaged app self-check
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          app=desktop/build/compose/binaries/main/app
+          if [ -d "$app/OpenTune.app" ]; then "$app/OpenTune.app/Contents/MacOS/OpenTune" --self-check; else "$app/OpenTune/bin/OpenTune" --self-check; fi
+      - name: Name the files for the release
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/desktop" && mkdir -p "$out"
+          bin=desktop/build/compose/binaries/main
+          case "$RUNNER_OS" in
+            Linux)
+              cp "$bin"/deb/*.deb "$out/OpenTune-$TAG-linux-amd64.deb"
+              cp "$bin"/rpm/*.rpm "$out/OpenTune-$TAG-linux-x86_64.rpm"
+              desktop/packaging/appimage.sh "$bin/app/OpenTune" "$out/OpenTune-$TAG-linux-x86_64.AppImage"
+              ;;
+            Windows)
+              cp "$bin"/msi/*.msi "$out/OpenTune-$TAG-windows-x64.msi"
+              cp "$bin"/exe/*.exe "$out/OpenTune-$TAG-windows-x64-setup.exe"
+              pwsh -NoProfile -Command "Compress-Archive -Path '$bin/app/OpenTune' -DestinationPath '$out/OpenTune-$TAG-windows-x64-portable.zip'"
+              ;;
+            macOS)
+              cp "$bin"/dmg/*.dmg "$out/OpenTune-$TAG-macos-$(uname -m | sed 's/x86_64/x64/').dmg"
+              ;;
+          esac
+          ls -la "$out"
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$RUNNER_TEMP"/desktop/* --clobber --repo "${{ github.repository }}"

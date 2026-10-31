@@ -62,3 +62,6 @@ export const useUi = create<UiState>()((set) => ({
 // For browser-driven tests, next to __bcPlayer.
 if (import.meta.env.DEV) Object.assign(window, { __bcUi: useUi });
 
+// A sidebar folded last time is folded before the first paint, so it doesn't ease shut on every load
+// (the width eases between the two; see tokens.css). Sidebar keeps the attribute in step after that.
+if (useUi.getState().sidebarCollapsed) document.documentElement.dataset.sidebar = 'collapsed';
