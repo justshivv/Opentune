@@ -32,6 +32,8 @@ class ArtistSignaturesTest {
         val sig = ArtistSignatures.parse("""{"signatures":[$jpg,$svg]}""", "The Weeknd")!!
         assertEquals("https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/The_Weeknd_signature.svg/960px-The_Weeknd_signature.svg.png", sig.imageUrl)
         assertEquals(556f / 885f, sig.aspect, 0.001f)
+        // The vector itself, for a loader that can draw it.
+        assertEquals("https://upload.wikimedia.org/wikipedia/commons/a/ab/The_Weeknd_signature.svg?utm_source=x", sig.svgUrl)
     }
 
     @Test fun onlyAFileNamedForThisArtistIsTaken() {
@@ -69,11 +71,22 @@ class ArtistSignaturesTest {
         val px = IntArray(w * h) { i -> val g = 120 + (i * 7919 % 21) - 10; (0xFF shl 24) or (g shl 16) or (g shl 8) or g }
         px[0] = 0xFF000000.toInt()
         for (x in 5 until 55) px[10 * w + x] = 0xFF282828.toInt()
-        val ink = ArtistSignatures.whiteInk(px, w, h)
+        val ink = ArtistSignatures.whiteInk(px, w, h)!!
         assertTrue((ink[10 * w + 30] ushr 24) > 230)
         val paper = (0 until w * h).filter { it / w != 10 && it != 0 }.maxOf { ink[it] ushr 24 }
         assertTrue("paper left at alpha $paper", paper < 8)
         assertEquals(0x00FFFFFF, ink[10 * w + 30] and 0x00FFFFFF)
+    }
+
+    @Test fun aPhotographIsNotTakenForInk() {
+        // Light paper round the edge, a big dark subject filling the middle: far more "ink" than writing has.
+        val w = 40; val h = 40
+        val px = IntArray(w * h) { i ->
+            val x = i % w; val y = i / w
+            val g = if (x in 6 until 34 && y in 6 until 34) 40 else 220
+            (0xFF shl 24) or (g shl 16) or (g shl 8) or g
+        }
+        assertNull(ArtistSignatures.whiteInk(px, w, h))
     }
 
     @Test fun anAmbiguousNameOrNoAnswerIsNone() {

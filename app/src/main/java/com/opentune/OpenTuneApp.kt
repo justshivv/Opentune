@@ -24,6 +24,7 @@ class OpenTuneApp : Application(), SingletonImageLoader.Factory {
         ImageLoader.Builder(context)
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = { Http.client }))
+                add(coil3.svg.SvgDecoder.Factory())
                 add(coil3.map.Mapper<String, String> { data, _ -> com.opentune.data.library.LibraryArtwork.local(data) })
                 // A cover on your own server is stored without credentials; sign it here.
                 add(coil3.map.Mapper<String, String> { data, _ -> if (Subsonic.isCoverRef(data)) Subsonic.resolveCover(data) else null })

@@ -198,7 +198,8 @@ internal fun whiteInk(input: org.jetbrains.skia.Bitmap): org.jetbrains.skia.Bitm
         ((bytes[i * 4 + 3].toInt() and 0xFF) shl 24) or ((bytes[i * 4].toInt() and 0xFF) shl 16) or
             ((bytes[i * 4 + 1].toInt() and 0xFF) shl 8) or (bytes[i * 4 + 2].toInt() and 0xFF)
     }
-    val ink = ArtistSignatures.whiteInk(argb, w, h)
+    // A photograph, not writing: the name stays in its place.
+    val ink = ArtistSignatures.whiteInk(argb, w, h) ?: return null
     for (i in 0 until w * h) {
         bytes[i * 4] = -1; bytes[i * 4 + 1] = -1; bytes[i * 4 + 2] = -1
         bytes[i * 4 + 3] = (ink[i] ushr 24).toByte()

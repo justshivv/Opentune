@@ -349,7 +349,7 @@ private fun AppearanceSection() {
         if (!ui.reduceBlur) Choices("Glass", com.opentune.data.settings.GlassStyle.entries.filter { it != com.opentune.data.settings.GlassStyle.LIQUID }, ui.glassStyle, { it.label }) { v -> AppSettings.updateUi { it.copy(glassStyle = v) } }
         SwitchRow("Smooth motion", "Pages glide in, covers lift under the pointer, rows rise into place", !ui.reduceAnimation) { on -> AppSettings.updateUi { it.copy(reduceAnimation = !on) } }
         SwitchRow("Colour from the song", "A soft wash of the playing cover's colour behind the pages", theme.colorFromArtwork) { on -> AppSettings.updateTheme { it.copy(colorFromArtwork = on) } }
-        SwitchRow("Artist signatures", "An artist's handwritten signature over their photo, in place of their name, when there's one", ui.artistSignatures) { on ->
+        SwitchRow("Artist signatures (beta)", "An artist's handwritten signature over their photo, in place of their name, when there's one", ui.artistSignatures) { on ->
             AppSettings.updateUi { it.copy(artistSignatures = on) }
         }
         if (ui.artistSignatures) SignatureServiceRow(ui.signatureApi)

@@ -10,8 +10,12 @@ import kotlinx.coroutines.withContext
 import okhttp3.Request
 import org.json.JSONObject
 
-/** An artist's handwritten signature: an image of ink, and how wide it is for its height. */
-data class ArtistSignature(val imageUrl: String, val aspect: Float)
+/**
+ * An artist's handwritten signature: an image of ink, and how wide it is for
+ * its height. [svgUrl] is the original vector when it came as one, for a
+ * loader that can draw SVG; [imageUrl] is always a raster.
+ */
+data class ArtistSignature(val imageUrl: String, val aspect: Float, val svgUrl: String? = null)
 
 /**
  * Artists' signatures from an artist-signature service, the kind BitChord
@@ -108,7 +112,7 @@ object ArtistSignatures {
             val score = named * 1000 + licence * 100 + verified * 10 + kind * 3 + if (aspect >= 1.2f) 1 else 0
             if (score > bestScore) {
                 bestScore = score
-                best = ArtistSignature(url, aspect)
+                best = ArtistSignature(url, aspect, svgUrl = raw.takeIf { format == "svg" })
             }
         }
         return best
@@ -170,8 +174,12 @@ object ArtistSignatures {
      * read from the same band, and only what stands clear of that grain, on the
      * ink's side of the paper (darker on light paper, lighter on dark), is ink.
      * Faint ink fades in smoothly up to the tone most of the strokes have.
+     *
+     * Null when what's left isn't writing: a pen line covers a small part of
+     * its page, and when over [MOST_INK] of it comes out as ink it's a
+     * photograph or a filled shape, better shown as the artist's name.
      */
-    fun whiteInk(argb: IntArray, width: Int, height: Int): IntArray {
+    fun whiteInk(argb: IntArray, width: Int, height: Int): IntArray? {
         val n = width * height
         if (n == 0 || argb.size < n) return argb
         val clear = (0 until n).count { (argb[it] ushr 24) < 16 }
@@ -197,12 +205,17 @@ object ArtistSignatures {
         val low = percentile(grain, 0.9f) + 10
         val high = maxOf(percentile(all, 0.97f), low + 40)
 
-        return IntArray(n) { i ->
+        val out = IntArray(n) { i ->
             val t = ((lift(argb[i]) - low).toFloat() / (high - low)).coerceIn(0f, 1f)
             val a = (t * t * (3 - 2 * t) * (argb[i] ushr 24)).toInt()
             (a shl 24) or 0x00FFFFFF
         }
+        val inked = out.count { (it ushr 24) >= 128 }
+        return out.takeIf { inked <= n * MOST_INK }
     }
+
+    /** The most of an image that can be ink and still be a signature. */
+    private const val MOST_INK = 0.35f
 
     private fun luma(c: Int): Int =
         ((0.2126f * ((c shr 16) and 0xFF) + 0.7152f * ((c shr 8) and 0xFF) + 0.0722f * (c and 0xFF)) + 0.5f).toInt().coerceIn(0, 255)

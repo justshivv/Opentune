@@ -98,9 +98,12 @@ internal fun ArtistNameOrSignature(name: String) {
 @Composable
 private fun SignatureImage(sig: ArtistSignature, name: String, onDrawn: () -> Unit, onFailed: () -> Unit, shown: Boolean) {
     val context = LocalContext.current
-    val request = remember(sig.imageUrl) {
+    // The vector when the signature came as one, drawn at the size it's shown; Wikimedia's
+    // raster of it if the vector won't load.
+    var vector by remember(sig) { mutableStateOf(sig.svgUrl != null) }
+    val request = remember(sig, vector) {
         ImageRequest.Builder(context)
-            .data(sig.imageUrl)
+            .data(if (vector) sig.svgUrl else sig.imageUrl)
             // A signature is wide and thin; it never needs more than this across.
             .size(Size(1200, 600))
             .allowHardware(false)
@@ -114,7 +117,7 @@ private fun SignatureImage(sig: ArtistSignature, name: String, onDrawn: () -> Un
         contentDescription = "$name's signature",
         contentScale = ContentScale.Fit,
         onSuccess = { onDrawn() },
-        onError = { onFailed() },
+        onError = { if (vector) vector = false else onFailed() },
         alpha = if (shown) 1f else 0f,
         modifier = Modifier.padding(horizontal = 40.dp).widthIn(max = 420.dp).fillMaxWidth().height(if (shown) height else 1.dp),
     )
@@ -122,14 +125,16 @@ private fun SignatureImage(sig: ArtistSignature, name: String, onDrawn: () -> Un
 
 /** A signature as white ink on clear, the paper of a scan dropped away ([ArtistSignatures.whiteInk]). */
 internal object WhiteInk : Transformation() {
-    override val cacheKey = "opentune.whiteInk.v2"
+    override val cacheKey = "opentune.whiteInk.v3"
 
     override suspend fun transform(input: Bitmap, size: Size): Bitmap {
         val w = input.width
         val h = input.height
         val px = IntArray(w * h)
         input.getPixels(px, 0, w, 0, 0, w, h)
-        return Bitmap.createBitmap(ArtistSignatures.whiteInk(px, w, h), w, h, Bitmap.Config.ARGB_8888)
+        // A photograph, not writing: failing here leaves the artist's name in its place.
+        val ink = ArtistSignatures.whiteInk(px, w, h) ?: throw IllegalStateException("Not a signature")
+        return Bitmap.createBitmap(ink, w, h, Bitmap.Config.ARGB_8888)
     }
 }
 
@@ -146,6 +151,7 @@ internal fun ArtistSignatureSettings() {
         "Artist signatures", ui.artistSignatures, { v -> AppSettings.updateUi { it.copy(artistSignatures = v) } },
         summary = "An artist's handwritten signature over their photo, in place of their name, when there's one",
         icon = androidx.compose.material.icons.Icons.Rounded.Draw,
+        beta = true,
     )
     if (ui.artistSignatures) {
         com.opentune.ui.components.SettingRow(

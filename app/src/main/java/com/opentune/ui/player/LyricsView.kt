@@ -371,8 +371,20 @@ private fun SyncedLyrics(
     }
     // The line the view is centred on, whether a line or the gap after it is lit.
     val activeLine by remember(rows) { derivedStateOf { (rows.getOrNull(activeRow) as? LyricRow.Line)?.index ?: (rows.getOrNull(activeRow) as? LyricRow.Gap)?.gap?.afterIndex ?: -1 } }
+    // Where the list is heading: the next row, from a moment before it's due. The glide
+    // takes that moment, so a line arrives in place as it's sung rather than chasing it.
+    val leadRow by remember(rows) {
+        derivedStateOf {
+            val current = activeRow
+            val next = rows.getOrNull(current + 1)
+            if (next == null) current
+            else if (pos() + LINE_LEAD_MS + glideMs(rows, current) >= next.startMs) current + 1
+            else current
+        }
+    }
     var following by remember { mutableStateOf(true) }
-    val glide = remember { GlideSpeed() }
+    var glideRun by remember(rows) { mutableStateOf<GlideRun?>(null) }
+    val elapsed = remember(rows) { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     // A drag means the listener wants to look around. Watching drags rather
     // than any scrolling tells theirs from the glide below, even when a drag
@@ -392,15 +404,28 @@ private fun SyncedLyrics(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The current line sits near the top, leaving room for just the line before it.
         val anchor = maxHeight * LINE_ANCHOR
-        val waveMaxPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
-        val waveRowPx = with(androidx.compose.ui.platform.LocalDensity.current) { WAVE_ROW.toPx() }
-        LaunchedEffect(activeRow, following, reduced) {
+        LaunchedEffect(leadRow, following, reduced) {
             if (!following) {
-                glide.pxPerS = 0f
+                // A hand on the list stops the glide where it is; its trail goes with it.
+                glideRun = null
                 return@LaunchedEffect
             }
             // +1 for the intro item ahead of the first line.
-            glideTo(listState, (activeRow + 1).coerceAtLeast(0), reduced, glide)
+            val index = (leadRow + 1).coerceAtLeast(0)
+            val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+            if (reduced || item == null) {
+                // Off screen (a seek, a long scroll away) or motion off: straight there.
+                glideRun = null
+                listState.scrollToItem(index)
+                return@LaunchedEffect
+            }
+            if (abs(item.offset) < 1) return@LaunchedEffect
+            // A run cut short by this one hands over the trail it had, which this one closes.
+            val previous = glideRun?.takeIf { elapsed.floatValue < it.spanMs }?.trimmed(2)
+            val next = GlideRun(item.offset.toFloat(), glideMs(rows, leadRow - 1).toFloat(), index, previous, elapsed.floatValue)
+            elapsed.floatValue = 0f
+            glideRun = next
+            glide(listState, next, elapsed)
         }
 
         LazyColumn(
@@ -416,10 +441,9 @@ private fun SyncedLyrics(
             itemsIndexed(rows, key = { _, row -> row.key }) { r, row ->
                 Box(
                     Modifier.graphicsLayer {
-                        // How far below the anchor this row is right now, in rows: it changes as smoothly
-                        // as the list moves, so a new line starting mid-glide doesn't jolt the rows under it.
-                        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == r + 1 }
-                        translationY = if (item == null) 0f else waveLag(item.offset / waveRowPx, glide.pxPerS, waveMaxPx)
+                        // The rows after the one the list is heading for set off a little after
+                        // one another, so the gaps open as it leaves and close as it lands.
+                        translationY = glideRun?.let { trailOf(it, r + 1, elapsed.floatValue) } ?: 0f
                     },
                 ) {
                 when (row) {
@@ -523,41 +547,112 @@ private fun Modifier.softEdges(top: androidx.compose.ui.unit.Dp, bottom: android
 private val EDGE_FADE_TOP = 18.dp
 private val EDGE_FADE_BOTTOM = 96.dp
 
-/** The glide's speed, read frame by frame by each line's lag (see [waveLag]). */
-private class GlideSpeed { var pxPerS by androidx.compose.runtime.mutableFloatStateOf(0f) }
-
 /**
- * How far a row [rowsBelow] under the current one trails the list while it
- * glides at [pxPerS]: each row follows the one above a moment later, so the
- * gaps open as the lines move and close as they settle, a soft wave rather
- * than one rigid block. Rows at or above the current one don't trail.
+ * One move of the list to the next line: how far ([delta] px, positive when the
+ * words move up), over how long, to which item, and the move it cut short (with
+ * how far into that one it was), whose trail this one closes.
  */
-private fun waveLag(rowsBelow: Float, pxPerS: Float, maxPx: Float): Float {
-    if (rowsBelow <= 0f) return 0f
-    val lag = pxPerS * WAVE_STEP_S * rowsBelow.coerceAtMost(WAVE_ROWS.toFloat())
-    return lag.coerceIn(-maxPx, maxPx)
+private class GlideRun(
+    val delta: Float,
+    val durationMs: Float,
+    val target: Int,
+    val previous: GlideRun?,
+    val handOffMs: Float,
+) {
+    /** The last trailing row lands this long after the list sets off. */
+    val spanMs get() = durationMs * (1f + TRAIL_STEP * TRAIL_ROWS)
+
+    /** This run with at most [depth] cut-short runs behind it: lines coming fast can't pile them up. */
+    fun trimmed(depth: Int): GlideRun = GlideRun(delta, durationMs, target, if (depth <= 0) null else previous?.trimmed(depth - 1), handOffMs)
 }
 
-/** A row's height, for counting how many rows below the anchor a line is. */
-private val WAVE_ROW = 56.dp
+/**
+ * How far behind the list item [index] runs, [elapsedMs] into [run]. Each row
+ * after the target sets off [TRAIL_STEP] of the move later than the one before,
+ * on the same curve as the list, so it trails by the difference between the
+ * two and is exactly back in place when its own curve ends. A cut-short run's
+ * trail fades out over this one on the same curve.
+ */
+private fun trailOf(run: GlideRun, index: Int, elapsedMs: Float): Float {
+    val behind = (if (run.delta >= 0f) index - run.target else run.target - index).coerceIn(0, TRAIL_ROWS)
+    val own = if (behind == 0) 0f else {
+        val late = behind * TRAIL_STEP * run.durationMs
+        run.delta * (GLIDE_EASING.transform((elapsedMs / run.durationMs).coerceIn(0f, 1f)) -
+            GLIDE_EASING.transform(((elapsedMs - late) / run.durationMs).coerceIn(0f, 1f)))
+    }
+    val handed = run.previous?.let { trailOf(it, index, run.handOffMs) } ?: 0f
+    return own + handed * (1f - GLIDE_EASING.transform((elapsedMs / run.durationMs).coerceIn(0f, 1f)))
+}
 
-/** Each row trails the one above by this much of the glide's motion. */
-private const val WAVE_STEP_S = 0.035f
-/** Rows further down trail no more than this many rows' worth. */
-private const val WAVE_ROWS = 6
+/**
+ * How long the move after row [current] takes: the quiet between its end and the
+ * next row's start, kept between [GLIDE_MIN_MS] and [GLIDE_MAX_MS]. A held breath
+ * gets a quick move, a long pause an unhurried one, and neither snaps nor drifts.
+ */
+private fun glideMs(rows: List<LyricRow>, current: Int): Long {
+    val row = rows.getOrNull(current) ?: return GLIDE_MIN_MS
+    val next = rows.getOrNull(current + 1) ?: return GLIDE_MIN_MS
+    val end = if (row.endMs > row.startMs) row.endMs else next.startMs
+    return (next.startMs - end).coerceIn(GLIDE_MIN_MS, GLIDE_MAX_MS)
+}
+
+/**
+ * Moves the list along [run] on [GLIDE_EASING], publishing how far into it it is
+ * for the rows' trail. Each frame aims at where the target item actually is, so
+ * a row changing height mid-move (a break folding away) can't leave it short;
+ * the curve's shape is kept and it lands exactly as the time runs out.
+ */
+private suspend fun glide(state: LazyListState, run: GlideRun, elapsed: androidx.compose.runtime.MutableFloatState) {
+    val start = withFrameNanos { it }
+    var done = 0f
+    state.scroll {
+        while (true) {
+            val t = (withFrameNanos { it } - start) / 1e6f
+            elapsed.floatValue = t
+            val item = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == run.target } ?: break
+            val progress = GLIDE_EASING.transform((t / run.durationMs).coerceIn(0f, 1f))
+            // The share of what's left that the curve covers this frame.
+            val share = if (done >= 1f) 1f else ((progress - done) / (1f - done)).coerceIn(0f, 1f)
+            done = progress
+            val step = item.offset * share
+            // Short of the step: the list is at its end.
+            if (abs(scrollBy(step)) + 0.5f < abs(step) || t >= run.durationMs) break
+        }
+    }
+    // The trailing rows finish their own curves.
+    while (elapsed.floatValue < run.spanMs) elapsed.floatValue = (withFrameNanos { it } - start) / 1e6f
+}
+
+/** How long a line takes to brighten, dim or change size as the list moves to the next. */
+private const val LINE_SETTLE_MS = 420
+
+/** A quick start and a long, soft landing: the list leaves briskly and settles without a bump. */
+private val GLIDE_EASING = androidx.compose.animation.core.CubicBezierEasing(0.33f, 0f, 0.1f, 1f)
+/** A move never takes less than this, however close the next line… */
+private const val GLIDE_MIN_MS = 320L
+/** …or more than this, however long the pause before it. */
+private const val GLIDE_MAX_MS = 520L
+/** Each trailing row sets off this share of the move after the one above it… */
+private const val TRAIL_STEP = 0.07f
+/** …for this many rows; the rest move with the last of them. */
+private const val TRAIL_ROWS = 4
 
 /** One row of the synced list: a sung line, or the instrumental break after one. */
 private sealed interface LyricRow {
     val startMs: Long
+    /** When its singing (or its break) ends; at or before [startMs] when the source doesn't say. */
+    val endMs: Long
     val key: String
 
     class Line(val index: Int, val line: LyricLine) : LyricRow {
         override val startMs get() = line.startMs
+        override val endMs get() = line.endMs
         override val key get() = "$index:${line.startMs}"
     }
 
     class Gap(val gap: LyricGap) : LyricRow {
         override val startMs get() = gap.startMs
+        override val endMs get() = gap.endMs
         override val key get() = "gap:${gap.afterIndex}:${gap.startMs}"
     }
 }
@@ -608,54 +703,6 @@ private fun GapDots(visible: Boolean, progress: () -> Float) {
     }
 }
 
-/**
- * Scroll [index] to the top of the content area (the anchor), smoothly when
- * it's near. The glide is a spring that doesn't overshoot, aimed afresh each
- * frame (so the intro dots folding away mid-glide don't throw it off) and
- * starting from the speed the last one had: lines that come quickly no
- * longer stop and restart the list at each change.
- */
-private suspend fun glideTo(state: LazyListState, index: Int, reduced: Boolean, speed: GlideSpeed) {
-    if (reduced || state.layoutInfo.visibleItemsInfo.none { it.index == index }) {
-        speed.pxPerS = 0f
-        state.scrollToItem(index)
-        return
-    }
-    state.scroll {
-        var last = withFrameNanos { it }
-        while (true) {
-            val item = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: break
-            val left = item.offset.toFloat()
-            if (abs(left) < 0.5f && abs(speed.pxPerS) < 20f) {
-                scrollBy(left)
-                break
-            }
-            val now = withFrameNanos { it }
-            val dt = ((now - last) / 1e9f).coerceIn(0f, 0.05f)
-            last = now
-            speed.pxPerS += (GLIDE_STIFFNESS * left - GLIDE_DAMPING * speed.pxPerS) * dt
-            val step = speed.pxPerS * dt
-            // Short of the step: the list is at its end.
-            if (abs(scrollBy(step)) + 0.5f < abs(step)) break
-        }
-    }
-    // The rows' trail settles rather than snapping flat, even when the list
-    // stopped short at its end while still moving.
-    var last = withFrameNanos { it }
-    while (abs(speed.pxPerS) > 1f) {
-        val now = withFrameNanos { it }
-        speed.pxPerS *= kotlin.math.exp(-((now - last) / 1e9f).coerceIn(0f, 0.05f) * SETTLE_RATE)
-        last = now
-    }
-    speed.pxPerS = 0f
-}
-
-/** How fast the trail eases away once the list has stopped, per second. */
-private const val SETTLE_RATE = 14f
-
-/** About half a second to settle, like BitChord's; critically damped (damping = 2·√stiffness), so it never overshoots. */
-private const val GLIDE_STIFFNESS = 80f
-private const val GLIDE_DAMPING = 17.89f
 
 /** How one [LyricsAnimation] treats lines: sizes, blur per line away, and glow. */
 /** How far, as a share of a row's height, a letter can reach past its row's box. */
@@ -702,8 +749,8 @@ internal fun LyricLineView(
     val picking = selected != null
     val scale by animateFloatAsState(
         if (isActive || picking) motion.activeScale else motion.inactiveScale,
-        // Critically damped: the line settles into size without overshooting, which read as a bounce.
-        spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow),
+        // On the glide's own curve and time, so the size, the fade and the move are one motion.
+        tween(LINE_SETTLE_MS, easing = GLIDE_EASING),
         label = "lineScale",
     )
     val alpha by animateFloatAsState(
@@ -712,7 +759,7 @@ internal fun LyricLineView(
             isActive -> 1f
             else -> (motion.inactiveAlpha - 0.06f * (minOf(abs(distance), 5) - 1) - if (distance < 0) 0.1f else 0f).coerceAtLeast(0.18f)
         },
-        tween(if (animation == LyricsAnimation.MINIMAL) 200 else 400),
+        tween(if (animation == LyricsAnimation.MINIMAL) 200 else LINE_SETTLE_MS, easing = GLIDE_EASING),
         label = "lineAlpha",
     )
     // Set, not animated, and read only while drawing (below): an animated blur was worked

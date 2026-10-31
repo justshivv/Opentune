@@ -134,6 +134,8 @@ dependencies {
     // ---- Images ----
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
+    // Artist signatures that come as SVG are drawn from the vector, crisp at any size.
+    implementation("io.coil-kt.coil3:coil-svg:3.0.4")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")
