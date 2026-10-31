@@ -143,6 +143,7 @@ import kotlin.math.sin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
+import coil3.request.allowHardware
 
 /**
  * The full player's backdrop, in the style chosen in settings. With
@@ -490,8 +491,10 @@ private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier =
     Box(modifier.background(lerp(scheme.surface, scheme.primaryContainer, 0.7f)).clipToBounds()) {
         androidx.compose.animation.Crossfade(artworkUrl, animationSpec = tween(900), label = "coverBlur") { url ->
             val context = androidx.compose.ui.platform.LocalContext.current
+            // Drawn below into a small bitmap through a software canvas, which can't read a
+            // hardware bitmap (Coil's default), so this one is decoded as an ordinary one.
             val painter = coil3.compose.rememberAsyncImagePainter(
-                remember(url) { coil3.request.ImageRequest.Builder(context).data(url.artworkAt(120)).size(96).build() },
+                remember(url) { coil3.request.ImageRequest.Builder(context).data(url.artworkAt(120)).size(96).allowHardware(false).build() },
             )
             Box(
                 Modifier.fillMaxSize()
