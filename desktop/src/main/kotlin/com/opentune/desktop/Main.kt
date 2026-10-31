@@ -39,9 +39,22 @@ fun main(args: Array<String>) {
             title = "OpenTune",
             icon = rememberLogo(Logo.APP),
             state = rememberWindowState(size = DpSize(1180.dp, 760.dp)),
+            // On Windows the app draws its own title bar (see WindowsFrame), and on Windows 11 the
+            // window is see-through for Mica or Acrylic to show. Both are fixed when it's made.
+            undecorated = WindowsFrame.drawn,
+            transparent = WindowsFrame.transparent,
         ) {
             window.minimumSize = java.awt.Dimension(760, 520)
             DesktopWindow.style(window)
+            DesktopWindow.window = window
+            DesktopWindow.close = ::exitApplication
+            if (WindowsFrame.drawn) androidx.compose.runtime.LaunchedEffect(Unit) {
+                // The handle exists once the window is on screen.
+                repeat(20) {
+                    if (window.isDisplayable && window.windowHandle != 0L && WindowsFrame.install(window.windowHandle)) return@LaunchedEffect
+                    kotlinx.coroutines.delay(100)
+                }
+            }
             DesktopApp()
         }
     }

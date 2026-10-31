@@ -50,6 +50,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
@@ -377,6 +378,25 @@ private fun AppearanceSection() {
         Choices("Player background", com.opentune.data.settings.PlayerBackground.entries, theme.playerBackground, { it.label }) { v -> AppSettings.updateTheme { it.copy(playerBackground = v) } }
         Choices("Player buttons", com.opentune.data.settings.ControlStyle.entries, ui.controlStyle, { it.label }) { v -> AppSettings.updateUi { it.copy(controlStyle = v) } }
         Choices("Player opens", com.opentune.data.settings.PlayerMotion.entries, ui.playerMotion, { it.label }) { v -> AppSettings.updateUi { it.copy(playerMotion = v) } }
+        if (WindowsFrame.isWindows) WindowRows()
+    }
+}
+
+/** Windows only: the title bar OpenTune draws, and Windows 11's material behind the window. */
+@Composable
+private fun WindowRows() {
+    val own by WindowsFrame.ownFrame.collectAsState()
+    SwitchRow(
+        "OpenTune's own title bar",
+        "Close, minimise and zoom at the head of the sidebar, and the window is moved by the empty parts of the bars." +
+            if (own != WindowsFrame.drawn) " Takes effect when OpenTune next opens." else "",
+        own,
+    ) { WindowsFrame.setOwnFrame(it) }
+    // A material needs the window made see-through, which happens only with the app's own title bar on Windows 11.
+    if (WindowsFrame.transparent) {
+        val material by WindowsFrame.material.collectAsState()
+        val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+        Choices("Window material", WindowsFrame.Material.entries, material, { it.label }) { WindowsFrame.setMaterial(it, dark) }
     }
 }
 

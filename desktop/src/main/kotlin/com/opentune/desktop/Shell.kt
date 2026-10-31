@@ -225,14 +225,16 @@ internal fun Segment(label: String, selected: Boolean, onClick: () -> Unit) {
  * beside the page as a grey slab. A new song's cover fades in over the old.
  */
 @Composable
-internal fun WindowBackdrop(cover: String?) {
+internal fun WindowBackdrop(cover: String?, clear: Boolean = false) {
     val theme by AppSettings.theme.collectAsState()
     val ui by AppSettings.ui.collectAsState()
     // "Colour from artwork" off: the window stays plain grey.
     if (!theme.colorFromArtwork) return
-    val base = MaterialTheme.colorScheme.background
-    val seed = rememberCoverColor(cover, base)
-    val wash by animateColorAsState(if (cover == null) base else tint(seed, base, 0.22f), tween(800), label = "window wash")
+    val page = MaterialTheme.colorScheme.background
+    val seed = rememberCoverColor(cover, page)
+    // Over Windows' material the wash fades out to nothing, leaving the material below it.
+    val base = if (clear) page.copy(alpha = 0f) else page
+    val wash by animateColorAsState(if (cover == null) base else tint(seed, page, 0.22f), tween(800), label = "window wash")
     Box(Modifier.fillMaxWidth().height(BACKDROP_HEIGHT)) {
         // The picture itself only where blur is welcome; the wash alone carries the colour otherwise.
         if (cover != null && !ui.reduceBlur) {
@@ -251,7 +253,7 @@ internal fun WindowBackdrop(cover: String?) {
             Modifier.matchParentSize().background(
                 Brush.verticalGradient(
                     0f to wash.copy(alpha = 0.3f),
-                    0.5f to androidx.compose.ui.graphics.lerp(wash, base, 0.6f).copy(alpha = 0.8f),
+                    0.5f to androidx.compose.ui.graphics.lerp(wash, page, 0.6f).copy(alpha = if (clear) 0.35f else 0.8f),
                     1f to base,
                 ),
             ),

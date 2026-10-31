@@ -162,6 +162,8 @@ internal fun NowPlaying(song: Song, docked: Boolean, onClose: () -> Unit) {
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
         Box(Modifier.fillMaxSize().clickable(interactionSource = null, indication = null) {}) {
             PlayerBackdrop(theme.playerBackground, song.thumbnailUrl, playing, Modifier.matchParentSize())
+            // Over the sidebar's head too, so the window can still be moved with the player open.
+            if (!docked) Box(Modifier.fillMaxWidth().height(36.dp).windowDrag())
             BoxWithConstraints(Modifier.fillMaxSize().padding(top = if (docked) 8.dp else DesktopWindow.topInset)) {
                 val beside = !docked && maxWidth >= 900.dp && maxWidth > maxHeight
                 if (beside) {

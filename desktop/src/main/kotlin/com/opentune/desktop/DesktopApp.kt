@@ -113,6 +113,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -208,7 +209,13 @@ fun DesktopApp(startPanel: SidePanel? = null) {
     }
 
     DesktopTheme(artworkSeed = rememberArtworkSeed(song?.thumbnailUrl)) {
-        Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        // Windows 11's Mica or Acrylic behind the window, when it's on: the page lets it through.
+        val material by WindowsFrame.activeMaterial.collectAsState()
+        val chosenMaterial by WindowsFrame.material.collectAsState()
+        val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+        androidx.compose.runtime.LaunchedEffect(dark, chosenMaterial) { WindowsFrame.applyMaterial(dark) }
+        val clear = material != WindowsFrame.Material.OFF
+        Surface(color = MaterialTheme.colorScheme.background.copy(alpha = if (clear) MATERIAL_PAGE_ALPHA else 1f), modifier = Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val roomForPanel = maxWidth >= 1100.dp
                 val panelShown = panel != null && song != null && roomForPanel
@@ -216,7 +223,7 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                 val haze = rememberHazeState()
                 // Behind the whole window, so the see-through sidebar and side column take its colour
                 // as well as the page; a source for the top bar's blur under the page's own.
-                Box(Modifier.fillMaxSize().hazeSource(haze, zIndex = 0f)) { WindowBackdrop(song?.thumbnailUrl) }
+                Box(Modifier.fillMaxSize().hazeSource(haze, zIndex = 0f)) { WindowBackdrop(song?.thumbnailUrl, clear) }
                 Row(Modifier.fillMaxSize()) {
                     Sidebar(sideSelected, folded = folded) { key ->
                         when (key) {
@@ -230,7 +237,8 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                         CompositionLocalProvider(
                             LocalPageTop provides TOP_BAR_HEIGHT + DesktopWindow.topInset,
                             LocalPageBottom provides 40.dp,
-                            com.opentune.ui.components.LocalHazeState provides haze.takeIf { !ui.reduceBlur },
+                            // Over a material the bar is a tint on it: blurring the page would paint over the material.
+                            com.opentune.ui.components.LocalHazeState provides haze.takeIf { !ui.reduceBlur && !clear },
                         ) {
                             Box(Modifier.fillMaxSize().hazeSource(haze, zIndex = 1f)) {
                                 Pages(
@@ -346,6 +354,9 @@ internal fun <T> rememberLast(value: T?): T? {
 internal val LocalPageBottom = staticCompositionLocalOf { 32.dp }
 /** Room every page keeps clear at its top, under the frosted player bar. */
 internal val LocalPageTop = staticCompositionLocalOf { 0.dp }
+
+/** How much of the page colour lies over Windows' material, keeping text on it readable. */
+private const val MATERIAL_PAGE_ALPHA = 0.45f
 
 // ---- Pages -------------------------------------------------------------------
 

@@ -105,8 +105,15 @@ internal val SIDEBAR_FOLDED = 72.dp
 internal val PANEL_WIDTH = 320.dp
 /** How tall the player bar across the top of the page is, under the window's own title bar. */
 internal val TOP_BAR_HEIGHT = 64.dp
-/** How much of the sidebar's and side column's own colour covers the window's backdrop behind them. */
-private const val CHROME_ALPHA = 0.74f
+/** How much of the sidebar's and side column's own colour covers the window's backdrop: less over Windows' material. */
+@Composable
+private fun chromeAlpha(): Float {
+    val material by WindowsFrame.activeMaterial.collectAsState()
+    return if (material == WindowsFrame.Material.OFF) 0.74f else 0.32f
+}
+
+/** How tall the sidebar's head is where it stands in for the window's title bar. */
+private val CAPTION_HEIGHT = 40.dp
 
 /** The colour that marks the page showing: the theme's own accent. */
 @Composable
@@ -131,9 +138,17 @@ internal fun Sidebar(selected: Any?, folded: Boolean, onPick: (Any) -> Unit) {
         Column(
             Modifier.width(if (folded) SIDEBAR_FOLDED else SIDEBAR_WIDTH).fillMaxHeight()
                 // See-through, so the window's backdrop colours it as it does the page.
-                .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = CHROME_ALPHA))
-                .padding(top = DesktopWindow.topInset + 12.dp, bottom = 10.dp),
+                .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = chromeAlpha()))
+                .padding(top = DesktopWindow.topInset + if (DesktopWindow.drawsFrame) 0.dp else 12.dp, bottom = 10.dp),
         ) {
+            // Where the app draws the window's title bar, the sidebar's head is it: the window's
+            // buttons, and room to take hold of the window by.
+            if (DesktopWindow.drawsFrame) {
+                Box(Modifier.fillMaxWidth().height(CAPTION_HEIGHT)) {
+                    Box(Modifier.matchParentSize().windowDrag())
+                    WindowButtons(Modifier.align(if (folded) Alignment.Center else Alignment.CenterStart).padding(start = if (folded) 0.dp else 10.dp))
+                }
+            }
             if (folded) {
                 SideRow(Icons.Rounded.Search, "Search", selected == Tab.SEARCH, folded) { onPick(Tab.SEARCH) }
             } else {
@@ -263,6 +278,8 @@ internal fun TopBar(
         // window): first the volume folds to its speaker, then shuffle and repeat step aside.
         val roomy = maxWidth >= 900.dp
         val full = maxWidth >= 700.dp
+        // Its empty parts move the window, where the app draws the title bar.
+        Box(Modifier.matchParentSize().windowDrag())
         Box(Modifier.fillMaxSize().padding(top = DesktopWindow.topInset)) {
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             HoverIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", enabled = canGoBack, size = 34.dp, iconSize = 20.dp, onClick = onBack)
@@ -350,7 +367,7 @@ private fun NowBox(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier) {
 internal fun RightPanel(panel: SidePanel, song: Song, queue: List<Song>, index: Int, onPanel: (SidePanel?) -> Unit, onOpenArtist: (ShelfItem) -> Unit) {
     Row(Modifier.width(PANEL_WIDTH).fillMaxHeight()) {
         Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = CHROME_ALPHA)).padding(top = DesktopWindow.topInset)) {
+        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = chromeAlpha())).padding(top = DesktopWindow.topInset)) {
             Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     SidePanel.entries.forEach { p -> Segment(p.label, p == panel) { onPanel(p) } }

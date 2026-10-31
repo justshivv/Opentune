@@ -225,6 +225,8 @@ dependencies {
     implementation("org.json:json:20240303")
     implementation("org.jflac:jflac-codec:1.5.2")
     implementation("com.google.zxing:core:3.5.4")
+    // Windows' own frame and materials under the title bar the app draws: user32 and dwmapi, from Kotlin.
+    implementation("net.java.dev.jna:jna:5.17.0")
 
     // The phone's colour engine (schemes from a seed or the cover) and the blur behind its glass.
     implementation("com.materialkolor:material-kolor:4.0.0")
