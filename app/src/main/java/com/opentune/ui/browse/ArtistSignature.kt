@@ -120,36 +120,17 @@ private fun SignatureImage(sig: ArtistSignature, name: String, onDrawn: () -> Un
     )
 }
 
-/**
- * Makes a signature white ink on clear, whatever it came as: dark or light
- * strokes on transparency keep their shape and become white; strokes on a
- * solid background (a scan) take their alpha from how far each pixel is
- * from the background's tone, so the paper drops away.
- */
+/** A signature as white ink on clear, the paper of a scan dropped away ([ArtistSignatures.whiteInk]). */
 internal object WhiteInk : Transformation() {
-    override val cacheKey = "opentune.whiteInk.v1"
+    override val cacheKey = "opentune.whiteInk.v2"
 
     override suspend fun transform(input: Bitmap, size: Size): Bitmap {
         val w = input.width
         val h = input.height
         val px = IntArray(w * h)
         input.getPixels(px, 0, w, 0, 0, w, h)
-        val clear = px.count { (it ushr 24) < 16 }
-        if (clear * 5 >= px.size) {
-            // Already on transparency: white where there's ink, its alpha as it was.
-            for (i in px.indices) px[i] = (px[i] and 0xFF000000.toInt()) or 0x00FFFFFF
-        } else {
-            val bg = listOf(px[0], px[w - 1], px[(h - 1) * w], px[h * w - 1]).map(::luma).average().toFloat()
-            for (i in px.indices) {
-                val ink = kotlin.math.abs(luma(px[i]) - bg) / maxOf(bg, 255f - bg).coerceAtLeast(1f)
-                val a = (ink.coerceIn(0f, 1f) * ((px[i] ushr 24) / 255f) * 255f).toInt()
-                px[i] = (a shl 24) or 0x00FFFFFF
-            }
-        }
-        return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
+        return Bitmap.createBitmap(ArtistSignatures.whiteInk(px, w, h), w, h, Bitmap.Config.ARGB_8888)
     }
-
-    private fun luma(c: Int): Float = 0.2126f * ((c shr 16) and 0xFF) + 0.7152f * ((c shr 8) and 0xFF) + 0.0722f * (c and 0xFF)
 }
 
 /**

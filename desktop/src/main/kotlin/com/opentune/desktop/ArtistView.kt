@@ -186,27 +186,22 @@ private fun RoundButton(icon: ImageVector, label: String, size: androidx.compose
 }
 
 /**
- * A signature as white ink on clear, whatever it came as: strokes on
- * transparency keep their shape and turn white; strokes on paper take their
- * alpha from how far each pixel is from the paper's tone. Null when the
- * pixels can't be read.
+ * A signature as white ink on clear, the paper of a scan dropped away
+ * ([ArtistSignatures.whiteInk]). Null when the pixels can't be read.
  */
 internal fun whiteInk(input: org.jetbrains.skia.Bitmap): org.jetbrains.skia.Bitmap? {
     val w = input.width
     val h = input.height
     val info = org.jetbrains.skia.ImageInfo(w, h, org.jetbrains.skia.ColorType.RGBA_8888, org.jetbrains.skia.ColorAlphaType.UNPREMUL)
     val bytes = input.readPixels(info, w * 4, 0, 0) ?: return null
-    var clear = 0
-    for (i in 0 until w * h) if ((bytes[i * 4 + 3].toInt() and 0xFF) < 16) clear++
-    fun luma(i: Int) = 0.2126f * (bytes[i * 4].toInt() and 0xFF) + 0.7152f * (bytes[i * 4 + 1].toInt() and 0xFF) + 0.0722f * (bytes[i * 4 + 2].toInt() and 0xFF)
-    val onPaper = clear * 5 < w * h
-    val paper = if (onPaper) listOf(0, w - 1, (h - 1) * w, h * w - 1).map(::luma).average().toFloat() else 0f
-    val span = maxOf(paper, 255f - paper).coerceAtLeast(1f)
+    val argb = IntArray(w * h) { i ->
+        ((bytes[i * 4 + 3].toInt() and 0xFF) shl 24) or ((bytes[i * 4].toInt() and 0xFF) shl 16) or
+            ((bytes[i * 4 + 1].toInt() and 0xFF) shl 8) or (bytes[i * 4 + 2].toInt() and 0xFF)
+    }
+    val ink = ArtistSignatures.whiteInk(argb, w, h)
     for (i in 0 until w * h) {
-        val alpha = bytes[i * 4 + 3].toInt() and 0xFF
-        val a = if (onPaper) ((kotlin.math.abs(luma(i) - paper) / span).coerceIn(0f, 1f) * alpha).toInt() else alpha
         bytes[i * 4] = -1; bytes[i * 4 + 1] = -1; bytes[i * 4 + 2] = -1
-        bytes[i * 4 + 3] = a.toByte()
+        bytes[i * 4 + 3] = (ink[i] ushr 24).toByte()
     }
     val out = org.jetbrains.skia.Bitmap()
     out.allocPixels(info)

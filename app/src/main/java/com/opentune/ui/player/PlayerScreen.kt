@@ -1044,9 +1044,11 @@ fun PlayerLayout(
                                                 // Faded per draw, not through a buffer the size of the pane,
                                                 // which would cut the blurred lines off at the page margin.
                                                 compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
-                                                // Coming in from below; going out, lifting a little.
-                                                val arriving = shown == list
-                                                translationY = if (arriving) size.height * 0.22f * (1f - inView) else -size.height * 0.06f * (1f - inView)
+                                                // The queue sits below the lyrics: going to it, the lyrics lift a
+                                                // little as the queue rises in; coming back, the reverse. Placed by
+                                                // the one value both share, so a switch mid-slide turns back
+                                                // smoothly from wherever they are.
+                                                translationY = if (queueSide) size.height * 0.18f * (1f - q) else -size.height * 0.06f * q
                                             },
                                     ) {
                                     if (shown == Pane.LYRICS) {
@@ -1427,7 +1429,7 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
     Spacer(Modifier.width(10.dp))
     Box(
         Modifier.size(46.dp).clip(CircleShape)
-            .background(if (apple) Color.White.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerHigh)
+            .background(if (apple) Color.White.copy(alpha = 0.14f) else LocalContentColor.current.copy(alpha = PLAYER_BUTTON_TINT))
             .clickable(onClick = onMore),
         contentAlignment = Alignment.Center,
     ) {
@@ -1514,6 +1516,9 @@ private fun StarButton(liked: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** How strongly the like and more buttons beside the title tint what's behind them. */
+private const val PLAYER_BUTTON_TINT = 0.14f
+
 /** The heart pops when tapped on. */
 @Composable
 private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
@@ -1539,7 +1544,8 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
     Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier.size(46.dp).graphicsLayer { scaleX = scale; scaleY = scale }
-                .clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                // A wash of the player's own ink, so the song's colour shows through rather than a grey disc.
+                .clip(CircleShape).background(LocalContentColor.current.copy(alpha = PLAYER_BUTTON_TINT))
                 .clickable(interactionSource = interactions, indication = com.opentune.ui.components.FocusRing(CircleShape)) {
                     haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE)
                     if (!liked && !still) bursts++

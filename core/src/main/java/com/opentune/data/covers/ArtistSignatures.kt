@@ -54,7 +54,7 @@ object ArtistSignatures {
                 }
             }.onFailure { DebugLog.w(TAG, "Lookup for $artist failed", it) }.getOrNull()
         } ?: return null
-        val found = parse(body)
+        val found = parse(body, artist)
         cache[key] = Optional(found)
         return found
     }
@@ -70,9 +70,11 @@ object ArtistSignatures {
 
     fun clear() = cache.clear()
 
-    internal fun parse(body: String): ArtistSignature? {
+    internal fun parse(body: String, artist: String): ArtistSignature? {
         val root = runCatching { JSONObject(body) }.getOrNull() ?: return null
         val list = root.optJSONArray("signatures") ?: return null
+        val wanted = words(artist).filter { it !in SIGNATURE_WORDS }.ifEmpty { words(artist) }
+        if (wanted.isEmpty()) return null
         var best: ArtistSignature? = null
         var bestScore = Int.MIN_VALUE
         for (i in 0 until list.length()) {
@@ -81,14 +83,19 @@ object ArtistSignatures {
             val raw = asset?.optString("url")?.takeIf { it.startsWith("https://") }
                 ?: sig.optJSONObject("source")?.optString("original_url")?.takeIf { it.startsWith("https://") }
                 ?: continue
+            // The service matches names loosely: "Drake" brings Nick Drake's, "Sia" a photo of a
+            // charter signed at the SIA. Only a file named for this artist is theirs.
+            val named = nameMatch(fileWords(raw), wanted) ?: continue
             val format = (asset?.optString("format").orEmpty().ifBlank { raw.substringBefore('?').substringAfterLast('.', "") }).lowercase(Locale.ROOT)
             val url = drawable(raw, format) ?: continue
             val w = asset?.optInt("width") ?: 0
             val h = asset?.optInt("height") ?: 0
             val aspect = if (w > 0 && h > 0) w.toFloat() / h else 2.5f
-            val licence = when (sig.optJSONObject("license")?.optString("status")?.lowercase(Locale.ROOT)) {
-                "known" -> 2
-                "requires_review" -> 1
+            val license = sig.optJSONObject("license")
+            val licence = when {
+                license?.optString("name").orEmpty().equals("PD-signature", ignoreCase = true) -> 3
+                license?.optString("status")?.lowercase(Locale.ROOT) == "known" -> 2
+                license?.optString("status")?.lowercase(Locale.ROOT) == "requires_review" -> 1
                 else -> 0
             }
             val verified = when (sig.optString("verification").lowercase(Locale.ROOT)) {
@@ -96,15 +103,50 @@ object ArtistSignatures {
                 "verified" -> 1
                 else -> 0
             }
-            // A raster as served beats a rendered SVG, which beats nothing; wide reads as a whole signature.
-            val kind = if (format == "svg") 1 else 2
-            val score = licence * 100 + verified * 10 + kind * 3 + if (aspect >= 1.4f) 1 else 0
+            // Wikimedia's SVGs render as clean ink on transparency; a JPEG is a scan with its paper.
+            val kind = when (format) { "svg" -> 3; "png", "webp", "gif" -> 2; else -> 1 }
+            val score = named * 1000 + licence * 100 + verified * 10 + kind * 3 + if (aspect >= 1.2f) 1 else 0
             if (score > bestScore) {
                 bestScore = score
                 best = ArtistSignature(url, aspect)
             }
         }
         return best
+    }
+
+    /** Words that only say the file is a signature, not whose it is. */
+    private val SIGNATURE_WORDS = setOf("signature", "signatures", "sig", "sign", "signed", "autograph", "autographe", "firma", "unterschrift", "handtekening", "of", "by", "s", "the")
+
+    private val SIGNATURE_SUFFIXES = listOf("signature", "autograph", "sig")
+
+    /** The words of [text], lower case and without accents. */
+    private fun words(text: String): List<String> =
+        Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "")
+            .split(Regex("[^\\p{L}\\p{N}]+"))
+            .filter { it.isNotEmpty() && it != "the" }
+
+    /** The words of the file's own name at the end of [url], without its extension or signature words. */
+    internal fun fileWords(url: String): List<String> {
+        val file = java.net.URLDecoder.decode(url.substringBefore('?').substringAfterLast('/').replace("+", "%2B"), "UTF-8")
+        return words(file.substringBeforeLast('.')).filter { it !in SIGNATURE_WORDS }
+    }
+
+    /**
+     * How well a file's name words match the artist's: 2 for the name itself
+     * ("Taylor_Swift_signature", "Ladygaga_sig"), 1 for the name and one more
+     * word after it (a surname: "Sia_Furler_signature"), null for anyone else
+     * (a word before the name, "Nick_Drake_sig", or more than one after it).
+     */
+    internal fun nameMatch(file: List<String>, artist: List<String>): Int? {
+        if (file.isEmpty()) return null
+        val joined = file.joinToString("")
+        val name = artist.joinToString("")
+        // Run together, signature word and all: "Kanyewestsignature".
+        val bare = SIGNATURE_SUFFIXES.firstOrNull { joined.endsWith(it) && joined.length > it.length }?.let { joined.removeSuffix(it) }
+        if (file == artist || joined == name || bare == name) return 2
+        if (file.size == artist.size + 1 && file.subList(0, artist.size) == artist) return 1
+        return null
     }
 
     /**
@@ -117,6 +159,65 @@ object ArtistSignatures {
         val m = Regex("""^https://upload\.wikimedia\.org/wikipedia/commons/([0-9a-f])/([0-9a-f]{2})/([^?]+\.svg)""").find(url) ?: return null
         val (a, ab, file) = m.destructured
         return "https://upload.wikimedia.org/wikipedia/commons/thumb/$a/$ab/$file/${RENDER_WIDTH}px-$file.png"
+    }
+
+    /**
+     * A signature as white ink on clear, as ARGB pixels [width] by [height].
+     *
+     * Strokes on transparency keep their shape and alpha and turn white. A scan
+     * on paper loses the paper: its tone is the median of a band all round the
+     * edge (a stray mark in one corner doesn't move it), how grainy it is is
+     * read from the same band, and only what stands clear of that grain, on the
+     * ink's side of the paper (darker on light paper, lighter on dark), is ink.
+     * Faint ink fades in smoothly up to the tone most of the strokes have.
+     */
+    fun whiteInk(argb: IntArray, width: Int, height: Int): IntArray {
+        val n = width * height
+        if (n == 0 || argb.size < n) return argb
+        val clear = (0 until n).count { (argb[it] ushr 24) < 16 }
+        if (clear * 5 >= n) return IntArray(n) { (argb[it] and 0xFF000000.toInt()) or 0x00FFFFFF }
+
+        // The paper: the median tone of a band all round the edge.
+        val band = maxOf(1, minOf(width, height) / 25)
+        val edge = IntArray(256)
+        for (y in 0 until height) for (x in 0 until width) {
+            if (x < band || y < band || x >= width - band || y >= height - band) edge[luma(argb[y * width + x])]++
+        }
+        val paper = percentile(edge, 0.5f)
+        val darkInk = paper >= 110
+        fun lift(c: Int) = (if (darkInk) paper - luma(c) else luma(c) - paper).coerceIn(0, 255)
+
+        // How grainy the paper is, and the tone most of the ink reaches.
+        val grain = IntArray(256)
+        for (y in 0 until height) for (x in 0 until width) {
+            if (x < band || y < band || x >= width - band || y >= height - band) grain[lift(argb[y * width + x])]++
+        }
+        val all = IntArray(256)
+        for (i in 0 until n) all[lift(argb[i])]++
+        val low = percentile(grain, 0.9f) + 10
+        val high = maxOf(percentile(all, 0.97f), low + 40)
+
+        return IntArray(n) { i ->
+            val t = ((lift(argb[i]) - low).toFloat() / (high - low)).coerceIn(0f, 1f)
+            val a = (t * t * (3 - 2 * t) * (argb[i] ushr 24)).toInt()
+            (a shl 24) or 0x00FFFFFF
+        }
+    }
+
+    private fun luma(c: Int): Int =
+        ((0.2126f * ((c shr 16) and 0xFF) + 0.7152f * ((c shr 8) and 0xFF) + 0.0722f * (c and 0xFF)) + 0.5f).toInt().coerceIn(0, 255)
+
+    /** The value [share] of the way up a histogram of 0..255. */
+    private fun percentile(histogram: IntArray, share: Float): Int {
+        val total = histogram.sum()
+        if (total == 0) return 0
+        val wanted = share * total
+        var seen = 0
+        for (v in histogram.indices) {
+            seen += histogram[v]
+            if (seen >= wanted) return v
+        }
+        return 255
     }
 
     private fun key(artist: String, api: String) = api + "\n" +

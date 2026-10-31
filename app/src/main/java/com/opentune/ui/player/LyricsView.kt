@@ -393,6 +393,7 @@ private fun SyncedLyrics(
         // The current line sits near the top, leaving room for just the line before it.
         val anchor = maxHeight * LINE_ANCHOR
         val waveMaxPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
+        val waveRowPx = with(androidx.compose.ui.platform.LocalDensity.current) { WAVE_ROW.toPx() }
         LaunchedEffect(activeRow, following, reduced) {
             if (!following) {
                 glide.pxPerS = 0f
@@ -413,7 +414,14 @@ private fun SyncedLyrics(
                 IntroDots(visible = waiting)
             }
             itemsIndexed(rows, key = { _, row -> row.key }) { r, row ->
-                Box(Modifier.graphicsLayer { translationY = waveLag(r - activeRow, glide.pxPerS, waveMaxPx) }) {
+                Box(
+                    Modifier.graphicsLayer {
+                        // How far below the anchor this row is right now, in rows: it changes as smoothly
+                        // as the list moves, so a new line starting mid-glide doesn't jolt the rows under it.
+                        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == r + 1 }
+                        translationY = if (item == null) 0f else waveLag(item.offset / waveRowPx, glide.pxPerS, waveMaxPx)
+                    },
+                ) {
                 when (row) {
                     is LyricRow.Line -> {
                         val i = row.index
@@ -524,11 +532,14 @@ private class GlideSpeed { var pxPerS by androidx.compose.runtime.mutableFloatSt
  * gaps open as the lines move and close as they settle, a soft wave rather
  * than one rigid block. Rows at or above the current one don't trail.
  */
-private fun waveLag(rowsBelow: Int, pxPerS: Float, maxPx: Float): Float {
-    if (rowsBelow <= 0) return 0f
-    val lag = pxPerS * WAVE_STEP_S * rowsBelow.coerceAtMost(WAVE_ROWS)
+private fun waveLag(rowsBelow: Float, pxPerS: Float, maxPx: Float): Float {
+    if (rowsBelow <= 0f) return 0f
+    val lag = pxPerS * WAVE_STEP_S * rowsBelow.coerceAtMost(WAVE_ROWS.toFloat())
     return lag.coerceIn(-maxPx, maxPx)
 }
+
+/** A row's height, for counting how many rows below the anchor a line is. */
+private val WAVE_ROW = 56.dp
 
 /** Each row trails the one above by this much of the glide's motion. */
 private const val WAVE_STEP_S = 0.035f
@@ -628,8 +639,19 @@ private suspend fun glideTo(state: LazyListState, index: Int, reduced: Boolean, 
             if (abs(scrollBy(step)) + 0.5f < abs(step)) break
         }
     }
+    // The rows' trail settles rather than snapping flat, even when the list
+    // stopped short at its end while still moving.
+    var last = withFrameNanos { it }
+    while (abs(speed.pxPerS) > 1f) {
+        val now = withFrameNanos { it }
+        speed.pxPerS *= kotlin.math.exp(-((now - last) / 1e9f).coerceIn(0f, 0.05f) * SETTLE_RATE)
+        last = now
+    }
     speed.pxPerS = 0f
 }
+
+/** How fast the trail eases away once the list has stopped, per second. */
+private const val SETTLE_RATE = 14f
 
 /** About half a second to settle, like BitChord's; critically damped (damping = 2·√stiffness), so it never overshoots. */
 private const val GLIDE_STIFFNESS = 80f
