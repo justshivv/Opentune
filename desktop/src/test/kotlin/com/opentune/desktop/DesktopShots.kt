@@ -55,6 +55,9 @@ class DesktopShots {
         )
         Player.cue(listOf(song, song.copy(videoId = "XXYlFuWEuKI", title = "Save Your Tears")), 0)
         shoot("desktop-wide-song", 1440, 900, 9_000) { DesktopApp() }
+        // As over Windows 11's Mica: the page see-through, its text still light.
+        WindowsFrame.pretendMaterial(WindowsFrame.Material.MICA)
+        try { shoot("desktop-wide-mica", 1440, 900, 9_000) { DesktopApp() } } finally { WindowsFrame.pretendMaterial(WindowsFrame.Material.OFF) }
         shoot("desktop-narrow-song", 640, 900, 9_000) { DesktopApp() }
         shoot("desktop-wide-lyrics", 1700, 1000, 9_000) { DesktopApp(startPanel = SidePanel.LYRICS) }
         shoot("desktop-wide-queue", 1700, 1000, 6_000) { DesktopApp(startPanel = SidePanel.QUEUE) }

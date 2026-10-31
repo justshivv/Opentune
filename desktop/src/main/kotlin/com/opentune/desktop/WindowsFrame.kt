@@ -55,6 +55,9 @@ internal object WindowsFrame {
     /** The material actually behind the window: off until Windows has taken it. */
     val activeMaterial: StateFlow<Material> = _activeMaterial.asStateFlow()
 
+    /** Draws the app as if [m] were behind the window, for pictures of it taken off Windows. */
+    internal fun pretendMaterial(m: Material) { _activeMaterial.value = m }
+
     fun setOwnFrame(on: Boolean) { _ownFrame.value = on; save() }
 
     fun setMaterial(m: Material, dark: Boolean) {

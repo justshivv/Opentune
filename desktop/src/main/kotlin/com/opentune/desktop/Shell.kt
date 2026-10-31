@@ -75,6 +75,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -238,7 +239,17 @@ internal fun WindowBackdrop(cover: String?, clear: Boolean = false) {
     Box(Modifier.fillMaxWidth().height(BACKDROP_HEIGHT)) {
         // The picture itself only where blur is welcome; the wash alone carries the colour otherwise.
         if (cover != null && !ui.reduceBlur) {
-            androidx.compose.animation.Crossfade(cover, animationSpec = tween(800), label = "window cover") { url ->
+            // The picture fades out on its own before the foot of the box, so it never ends on a
+            // line, even over Windows' material where the wash on top fades to nothing.
+            androidx.compose.animation.Crossfade(
+                cover, animationSpec = tween(800), label = "window cover",
+                modifier = Modifier.fillMaxSize()
+                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(COVER_FADE, blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                    },
+            ) { url ->
                 coil3.compose.AsyncImage(
                     url, null,
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
@@ -264,3 +275,5 @@ internal fun WindowBackdrop(cover: String?, clear: Boolean = false) {
 private val BACKDROP_HEIGHT = 560.dp
 private val COVER_BLUR = 110.dp
 private const val COVER_ALPHA = 0.75f
+/** Full strength over the top half of the box, gone by its foot. */
+private val COVER_FADE = Brush.verticalGradient(0f to Color.Black, 0.45f to Color.Black, 1f to Color.Transparent)

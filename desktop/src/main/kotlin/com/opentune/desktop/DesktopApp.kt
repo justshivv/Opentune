@@ -215,7 +215,13 @@ fun DesktopApp(startPanel: SidePanel? = null) {
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
         androidx.compose.runtime.LaunchedEffect(dark, chosenMaterial) { WindowsFrame.applyMaterial(dark) }
         val clear = material != WindowsFrame.Material.OFF
-        Surface(color = MaterialTheme.colorScheme.background.copy(alpha = if (clear) MATERIAL_PAGE_ALPHA else 1f), modifier = Modifier.fillMaxSize()) {
+        // The ink named outright: Surface works it out from its colour only when that is the
+        // theme's own, and the see-through page over a material isn't, which left text black.
+        Surface(
+            color = MaterialTheme.colorScheme.background.copy(alpha = if (clear) MATERIAL_PAGE_ALPHA else 1f),
+            contentColor = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.fillMaxSize(),
+        ) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val roomForPanel = maxWidth >= 1100.dp
                 val panelShown = panel != null && song != null && roomForPanel
@@ -237,8 +243,7 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                         CompositionLocalProvider(
                             LocalPageTop provides TOP_BAR_HEIGHT + DesktopWindow.topInset,
                             LocalPageBottom provides 40.dp,
-                            // Over a material the bar is a tint on it: blurring the page would paint over the material.
-                            com.opentune.ui.components.LocalHazeState provides haze.takeIf { !ui.reduceBlur && !clear },
+                            com.opentune.ui.components.LocalHazeState provides haze.takeIf { !ui.reduceBlur },
                         ) {
                             Box(Modifier.fillMaxSize().hazeSource(haze, zIndex = 1f)) {
                                 Pages(

@@ -324,8 +324,9 @@ private fun NowBox(song: Song?, onOpenPlayer: () -> Unit, modifier: Modifier) {
     val error by Player.error.collectAsState()
     val hover = remember { MutableInteractionSource() }
     androidx.compose.foundation.layout.BoxWithConstraints(
-        modifier.height(46.dp).clip(shape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-            .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f), shape)
+        // A box of its own colour, so it reads as one over whatever the bar shows through it.
+        modifier.height(46.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.72f))
+            .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape)
             .hoverWash(hover, shape)
             .clickable(enabled = song != null, interactionSource = hover, indication = null, onClick = onOpenPlayer),
     ) {
