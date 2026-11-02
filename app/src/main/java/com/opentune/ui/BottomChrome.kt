@@ -72,12 +72,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.BlurEffect
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Constraints
@@ -525,14 +529,75 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
     // The lens rests where it last was while Search is open, faded out.
     var resting by remember { mutableIntStateOf(shown ?: 0) }
     if (shown != null) resting = shown
+    // Press-and-drag across the dock: while a finger scrubs, the lens follows
+    // the tab under it, and letting go on a tab opens it. A plain tap never
+    // gets here — it stays with the items' own clicks — and [suppressTap]
+    // swallows the one click a finished drag would otherwise leave behind.
+    var dragTarget by remember { mutableStateOf<Int?>(null) }
+    var suppressTap by remember { mutableStateOf(false) }
+    val currentShown by rememberUpdatedState(shown)
+    val currentContent by rememberUpdatedState(c)
     Box(
         modifier
             .dockShadow(pill)
             .glass(pill, tint = ink.film ?: MaterialTheme.colorScheme.surfaceContainerHigh)
             .dockHighlight(pill)
-            .clip(pill),
+            .clip(pill)
+            .pointerInput(c.tabs.size, folded, slot) {
+                // Folded, the overlay inside owns every touch (it expands the dock).
+                if (!folded) {
+                    val slotPx = slot.toPx()
+                    val insetPx = DOCK_INSET.toPx()
+                    val strayPx = 48.dp.toPx()
+                    fun slotAt(x: Float): Int =
+                        ((x - insetPx) / slotPx).toInt().coerceIn(0, currentContent.tabs.size - 1)
+                    awaitEachGesture {
+                        // The initial pass watches the press before the items
+                        // see it, but touches nothing unless it turns into a
+                        // real scrub — taps pass through completely untouched.
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        suppressTap = false
+                        var dragging = false
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) {
+                                    if (dragging) {
+                                        change.consume()
+                                        suppressTap = true
+                                        val target = dragTarget
+                                        val strayed = kotlin.math.abs(change.position.y - down.position.y) > strayPx
+                                        if (target != null && !strayed && target != currentShown) {
+                                            haptics.tick()
+                                            currentContent.onSelect(target)
+                                        }
+                                    }
+                                    break
+                                }
+                                if (!dragging) {
+                                    if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                                        dragging = true
+                                        dragTarget = slotAt(change.position.x)
+                                        if (dragTarget != currentShown) haptics.tick()
+                                    }
+                                } else {
+                                    change.consume()
+                                    val s = slotAt(change.position.x)
+                                    if (s != dragTarget) {
+                                        dragTarget = s
+                                        haptics.tick()
+                                    }
+                                }
+                            }
+                        } finally {
+                            dragTarget = null
+                        }
+                    }
+                }
+            },
     ) {
-        val (left, right) = rememberStretchingLens(resting, slot, c.lens)
+        val (left, right) = rememberStretchingLens(dragTarget ?: resting, slot, c.lens)
         val lensAlpha by animateFloatAsState(if (shown != null) 1f else 0f, tween(260, easing = FastOutSlowInEasing), label = "lensAlpha")
         Box(
             Modifier
@@ -573,8 +638,14 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
                         collapse = fold,
                         roomy = c.tabs.size <= ROOMY_TABS,
                     ) {
-                        if (i != shown) haptics.tick()
-                        c.onSelect(i)
+                        if (suppressTap) {
+                            // The release that ended a drag: its selection
+                            // already happened in the drag handler above.
+                            suppressTap = false
+                        } else {
+                            if (i != shown) haptics.tick()
+                            c.onSelect(i)
+                        }
                     }
                 }
             }
