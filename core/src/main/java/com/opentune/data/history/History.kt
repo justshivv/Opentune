@@ -50,6 +50,14 @@ data class ReplaySummary(
     val topSongs: List<TopEntry>,
     val topArtists: List<TopEntry>,
     val topAlbums: List<TopEntry>,
+    /** Time listened in each hour of the day, midnight first, in the phone's time zone. */
+    val byHour: List<Long> = List(24) { 0L },
+    /** Time listened on each day of the week, Monday first. */
+    val byWeekday: List<Long> = List(7) { 0L },
+    /** Days with any listening. */
+    val activeDays: Int = 0,
+    /** The day with the most listening (its start, in ms) and how long it was. */
+    val biggestDay: Pair<Long, Long>? = null,
 )
 
 /**
@@ -109,6 +117,13 @@ object History {
 
     fun replay(list: List<PlayRecord>, sinceMs: Long): ReplaySummary {
         val window = list.filter { it.playedAt >= sinceMs }
+        val clock = java.util.Calendar.getInstance()
+        val byDay = window.groupBy { r ->
+            clock.timeInMillis = r.playedAt
+            clock.set(java.util.Calendar.HOUR_OF_DAY, 0); clock.set(java.util.Calendar.MINUTE, 0)
+            clock.set(java.util.Calendar.SECOND, 0); clock.set(java.util.Calendar.MILLISECOND, 0)
+            clock.timeInMillis
+        }.mapValues { (_, plays) -> plays.sumOf { it.listenedMs } }
         fun top(group: (PlayRecord) -> String?, title: (List<PlayRecord>) -> Pair<String, String>, songOf: Boolean): List<TopEntry> =
             window.groupBy { group(it) ?: "" }
                 .filterKeys { it.isNotBlank() }
@@ -127,6 +142,19 @@ object History {
             topSongs = top({ it.videoId }, { p -> p.first().title to p.first().artist }, songOf = true),
             topArtists = top({ Wrapped.mainArtist(it.artist) }, { p -> Wrapped.mainArtist(p.first().artist) to "" }, songOf = true),
             topAlbums = top({ it.albumName }, { p -> (p.first().albumName ?: "") to p.first().artist }, songOf = false),
+            byHour = clock.let { c ->
+                val hours = LongArray(24)
+                window.forEach { r -> c.timeInMillis = r.playedAt; hours[c.get(java.util.Calendar.HOUR_OF_DAY)] += r.listenedMs }
+                hours.toList()
+            },
+            byWeekday = clock.let { c ->
+                val days = LongArray(7)
+                // Calendar counts Sunday as 1; Monday first here.
+                window.forEach { r -> c.timeInMillis = r.playedAt; days[(c.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7] += r.listenedMs }
+                days.toList()
+            },
+            activeDays = byDay.size,
+            biggestDay = byDay.maxByOrNull { it.value }?.toPair(),
         )
     }
 
