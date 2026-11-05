@@ -554,7 +554,7 @@ object MusicRepository {
     /** A mix read as the player's queue for it, or null when that has no songs either. */
     private suspend fun mixCollection(browseId: String, playlistId: String): Collection? {
         val response = Innertube.mixQueue(playlistId)
-        val songs = ContentFilter.songs(InnertubeParser.parseWatchQueue(response))
+        val songs = ContentFilter.songs(InnertubeParser.parseWatchQueue(response, songsOnly = com.opentune.data.settings.AppSettings.playback.value.songsOnly))
         if (songs.isEmpty()) return null
         val title = InnertubeParser.mixTitle(response)
         return Collection(
@@ -645,9 +645,16 @@ object MusicRepository {
      * is always kept, even when hidden, since it was asked for.
      */
     suspend fun watchQueue(videoId: String): List<Song> = io {
-        val queue = InnertubeParser.parseWatchQueue(Innertube.next(videoId))
-        queue.filter { it.videoId == videoId } +
-            com.opentune.data.library.LibraryStore.hidden.value.songs(ContentFilter.songs(queue.filter { it.videoId != videoId }))
+        val response = Innertube.next(videoId)
+        val queue = InnertubeParser.parseWatchQueue(response, songsOnly = com.opentune.data.settings.AppSettings.playback.value.songsOnly)
+        // The song asked for is kept as it is, whichever version it was.
+        val asked = queue.filter { it.videoId == videoId }.ifEmpty {
+            InnertubeParser.parseWatchQueue(response, allVersions = true).filter { it.videoId == videoId }
+        }
+        asked +
+            com.opentune.data.library.LibraryStore.hidden.value.songs(ContentFilter.songs(
+                com.opentune.data.reco.SongIdentity.distinct(queue.filter { it.videoId != videoId }, asked),
+            ))
     }
 
     /**
@@ -656,7 +663,7 @@ object MusicRepository {
      * for the name.
      */
     suspend fun artistIdFor(song: Song): String? = song.artistId ?: io {
-        runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId)).firstOrNull { it.videoId == song.videoId }?.artistId }
+        runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId), allVersions = true).firstOrNull { it.videoId == song.videoId }?.artistId }
             .getOrNull()
             ?: runCatching {
                 val name = song.artist.split(", ", " & ").first().trim()
@@ -699,7 +706,7 @@ object MusicRepository {
         song.albumId?.let { return it }
         synchronized(albumIds) { albumIds[song.videoId] }?.let { return it }
         val found = io {
-            runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId)).firstOrNull { it.videoId == song.videoId }?.albumId }
+            runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId), allVersions = true).firstOrNull { it.videoId == song.videoId }?.albumId }
                 .getOrNull()
                 ?: runCatching {
                     val first = song.artist.split(", ", " & ").first().trim()

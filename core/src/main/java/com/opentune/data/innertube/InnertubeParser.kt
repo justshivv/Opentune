@@ -1079,13 +1079,68 @@ object InnertubeParser {
             ?: panel.o("title").runs().takeIf { it.isNotBlank() }
     }
 
-    /** Tracks of a watch queue (`next` response) — the AutoPlay radio mix. */
-    fun parseWatchQueue(root: JsonElement): List<Song> {
+    /**
+     * The rows of a watch queue, each with its other version when it has one.
+     * YouTube Music lists a song that has both a catalogue track and a music
+     * video once, as a wrapper holding the version it plays and the other
+     * ("counterpart"), which its Song/Video switch flips to. Read as two rows,
+     * both versions were queued, one straight after the other.
+     */
+    private fun watchRows(root: JsonElement): List<Pair<JsonObject, JsonObject?>> {
+        val out = mutableListOf<Pair<JsonObject, JsonObject?>>()
+        fun walk(node: JsonElement) {
+            when (node) {
+                is JsonObject -> {
+                    val wrapper = node["playlistPanelVideoWrapperRenderer"] as? JsonObject
+                    val row = node["playlistPanelVideoRenderer"] as? JsonObject
+                    if (wrapper != null) {
+                        val primary = wrapper.o("primaryRenderer").o("playlistPanelVideoRenderer")
+                        val other = wrapper.a("counterpart").orEmpty().firstNotNullOfOrNull {
+                            (it as? JsonObject).o("counterpartRenderer").o("playlistPanelVideoRenderer")
+                        }
+                        if (primary != null) out += primary to other
+                    }
+                    if (row != null) out += row to null
+                    node.forEach { (key, value) ->
+                        if (key != "playlistPanelVideoWrapperRenderer" && key != "playlistPanelVideoRenderer") walk(value)
+                    }
+                }
+                is JsonArray -> node.forEach(::walk)
+                else -> Unit
+            }
+        }
+        walk(root)
+        return out
+    }
+
+    /**
+     * Tracks of a watch queue (`next` response) — the AutoPlay radio mix. One
+     * version of each song: the one YouTube Music would play, or with
+     * [songsOnly] the catalogue track over its music video when it has one.
+     */
+    fun parseWatchQueue(root: JsonElement, songsOnly: Boolean = false, allVersions: Boolean = false): List<Song> {
         val out = LinkedHashMap<String, Song>()
-        collectRenderers(root, "playlistPanelVideoRenderer").forEach { renderer ->
-            val videoId = renderer.s("videoId") ?: return@forEach
+        watchRows(root).forEach { (primary, other) ->
+            val song = watchSong(primary) ?: return@forEach
+            val alt = other?.let(::watchSong)
+            // Looking a track up by its id: either version may be the one asked about.
+            if (allVersions) {
+                out.putIfAbsent(song.videoId, song)
+                alt?.let { out.putIfAbsent(it.videoId, it) }
+                return@forEach
+            }
+            val chosen = if (songsOnly && song.isVideo && alt != null && !alt.isVideo) alt else song
+            if (alt != null && (alt.videoId in out)) return@forEach
+            out.putIfAbsent(chosen.videoId, chosen)
+        }
+        return out.values.toList()
+    }
+
+    private fun watchSong(renderer: JsonObject): Song? {
+        run {
+            val videoId = renderer.s("videoId") ?: return null
             val title = renderer.o("title").runs()
-            if (title.isBlank()) return@forEach
+            if (title.isBlank()) return null
             // The byline packs artist, views and likes into one run list; only
             // the leading runs before the first bullet are the credit.
             val bylineRuns = renderer.o("longBylineText").a("runs").orEmpty()
@@ -1095,7 +1150,7 @@ object InnertubeParser {
             // Those same runs link out to the artist and album pages, which is
             // how a track started from the queue knows where it came from.
             val credits = creditsOf(bylineRuns + renderer.o("shortBylineText").a("runs").orEmpty())
-            out[videoId] = Song(
+            return Song(
                 videoId = videoId,
                 title = title,
                 artist = com.opentune.data.model.preferredArtist(artist, shortArtist, credits.artistName),
@@ -1110,7 +1165,6 @@ object InnertubeParser {
                 isExplicit = renderer.hasExplicitBadge(),
             )
         }
-        return out.values.toList()
     }
 
     /**

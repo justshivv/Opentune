@@ -1133,6 +1133,21 @@ class PlaybackService : MediaLibraryService() {
 
     private fun finishListen(report: Boolean = true) {
         val heard = listenedSoFar()
+        // What AutoPlay chose and how it went, for the taste model: let play, or skipped early.
+        listenSong?.takeIf { it.queueTier == QueueTier.AUTOPLAY && heard > 0 }?.let { song ->
+            val length = listenDuration
+            val through = length != null && heard >= minOf(length * 6 / 10, 120_000L)
+            val skipped = heard < com.opentune.data.reco.TasteModel.SKIP_MS
+            if (through || skipped) {
+                val records = History.records.value
+                scope.launch(Dispatchers.Default) {
+                    com.opentune.data.reco.TasteModel.learn(
+                        song, through,
+                        com.opentune.data.reco.TasteModel.Taste(records, LibraryStore.liked.value.mapTo(HashSet()) { it.videoId }),
+                    )
+                }
+            }
+        }
         listenRecord?.let { History.updateListened(it, heard) }
         listenRecord = null
         val session = youtubeListen
@@ -2407,7 +2422,10 @@ class PlaybackService : MediaLibraryService() {
                 Log.i(TAG, "No radio for $seed yet (round ${round + 1}), asking again shortly")
             }
             if (ready.all { it.isEmpty() }) return@launch
-            val radio = Autoplay.blend(ready, queue)
+            // The radios blended, then put in the order this listener most likely plays
+            // through (learned on the phone), with no artist twice in a row where it can be helped.
+            val taste = com.opentune.data.reco.TasteModel.Taste(History.records.value, LibraryStore.liked.value.mapTo(HashSet()) { it.videoId })
+            val radio = Autoplay.spreadArtists(com.opentune.data.reco.TasteModel.rank(Autoplay.blend(ready, queue), taste))
             if (!AppSettings.playback.value.autoplay || AppSettings.playback.value.recommender != engine ||
                 player.repeatMode != Player.REPEAT_MODE_OFF) return@launch
             // The queue may have been replaced while the request was out; radio
@@ -2419,8 +2437,12 @@ class PlaybackService : MediaLibraryService() {
             // Disliked and hidden songs and artists are never queued on their own.
             val liked = LibraryStore.hidden.value.songs(radio.filterNot { LibraryStore.isDisliked(it.videoId) })
             // Songs already heard this session are skipped when asked, unless that leaves nothing to play.
-            val additions = Autoplay.newTracks(if (AppSettings.playback.value.noRepeatInSession) queued + sessionIds else queued, liked)
+            val fresh = Autoplay.newTracks(if (AppSettings.playback.value.noRepeatInSession) queued + sessionIds else queued, liked)
                 .ifEmpty { Autoplay.newTracks(queued, liked) }
+            // Not the same song again in another version (its video, a lyric video, a live take,
+            // a cover) of one already in the queue or another in this batch.
+            val queuedSongs = (0 until count).map { player.getMediaItemAt(it).toSong() }
+            val additions = com.opentune.data.reco.SongIdentity.distinct(fresh, queuedSongs)
             if (additions.isEmpty()) {
                 exhaustedSeeds += seed
                 return@launch

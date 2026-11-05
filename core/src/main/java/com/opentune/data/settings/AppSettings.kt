@@ -292,6 +292,12 @@ data class PlaybackSettings(
     val autoplay: Boolean = true,
     /** Autoplay won't add anything already played or queued this session. */
     val noRepeatInSession: Boolean = false,
+    /**
+     * Radio and mixes play the song, not its music video, when YouTube Music
+     * has both: its own Song/Video switch, set to Song. Never a guessed match:
+     * only the version YouTube Music pairs with the video.
+     */
+    val songsOnly: Boolean = true,
     /** Whose suggestions autoplay and Home's "Because you played" follow. */
     val recommender: Recommender = Recommender.YOUTUBE,
     val listeningHistoryTarget: com.opentune.data.history.ListeningHistoryTarget = com.opentune.data.history.ListeningHistoryTarget.YOUTUBE_MUSIC,

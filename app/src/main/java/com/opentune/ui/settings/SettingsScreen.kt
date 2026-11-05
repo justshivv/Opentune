@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Animation
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.RoundedCorner
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BarChart
@@ -946,6 +947,11 @@ private fun settingsSections(
                 },
                 Entry("Don't repeat songs in current session", "autoplay duplicates") {
                     ToggleRow("Don't repeat songs in current session", pb.noRepeatInSession, { v -> AppSettings.updatePlayback { it.copy(noRepeatInSession = v) } }, summary = "Autoplay won't add a song already played or queued this session", icon = Icons.Rounded.History)
+                },
+                Entry("Songs, not music videos", "audio only music video version omv atv song video switch") {
+                    ToggleRow("Songs, not music videos", pb.songsOnly, { v -> AppSettings.updatePlayback { it.copy(songsOnly = v) } },
+                        summary = "Radio and mixes play the song where YouTube Music also has its video, so the same song never comes twice in two versions",
+                        icon = Icons.Rounded.MusicNote)
                 },
                 Entry("Smart shuffle", "shuffle similar songs mix recommendations playlist album sparkle") {
                     ToggleRow("Smart shuffle", pb.smartShuffle, { v -> AppSettings.updatePlayback { it.copy(smartShuffle = v) } }, summary = "Mixes a similar song in after every four. Tap the player's shuffle button twice, or long-press Shuffle on a playlist or album", icon = Icons.Rounded.AutoAwesome)
