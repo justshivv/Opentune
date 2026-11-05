@@ -58,6 +58,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.opentune.data.model.ROW_ART_PX
@@ -908,7 +909,14 @@ fun AppRoot(vm: PlayerViewModel) {
                 // Once the player is fully over the page, the chrome under it is
                 // taken out: no second position loop or glass redrawn behind it.
                 var still by remember { mutableStateOf(true) }
-                LaunchedEffect(settled, still) { playerCovers = settled && still }
+                LaunchedEffect(settled, still, sheetOpen) {
+                    // A drag down uncovers the bottom row bit by bit, so the chrome has to be
+                    // back underneath from the first pull — otherwise it pops in whole at the let-go.
+                    // sheetOpen leads: the settled report lags a frame behind the close, and in
+                    // that frame the drag is already zeroed, which would blink the chrome out.
+                    snapshotFlow { sheetOpen && settled && still && com.opentune.ui.components.PlayerMorph.sheetDrag <= 0f }
+                        .collect { playerCovers = it }
+                }
                 DisposableEffect(Unit) { onDispose { playerCovers = false } }
                 PlayerScreen(
                     vm,
