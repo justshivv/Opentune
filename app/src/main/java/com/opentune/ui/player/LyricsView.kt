@@ -430,8 +430,22 @@ private fun SyncedLyrics(
 
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(top = anchor, bottom = maxHeight * 0.6f),
-            modifier = Modifier.fillMaxSize().softEdges(top = EDGE_FADE_TOP, bottom = EDGE_FADE_BOTTOM),
+            contentPadding = PaddingValues(top = anchor, bottom = maxHeight * 0.6f, start = SIDE_BLEED, end = SIDE_BLEED),
+            // Drawn SIDE_BLEED wider than the room it's given on each side, the lines held back
+            // by as much: the faded edges are drawn into a layer the list's size, and at the
+            // list's own width a blurred line and the sung line's glow were cut off in a straight
+            // edge down the left, which showed as a shadow. The lines sit where they did.
+            modifier = Modifier
+                .layout { measurable, constraints ->
+                    val bleed = SIDE_BLEED.roundToPx()
+                    val p = measurable.measure(constraints.copy(
+                        minWidth = constraints.minWidth + bleed * 2,
+                        maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth + bleed * 2 else constraints.maxWidth,
+                    ))
+                    layout((p.width - bleed * 2).coerceAtLeast(0), p.height) { p.place(-bleed, 0) }
+                }
+                .fillMaxSize()
+                .softEdges(top = EDGE_FADE_TOP, bottom = EDGE_FADE_BOTTOM),
         ) {
             item(key = "intro") {
                 val firstStart = lines.firstOrNull()?.startMs ?: 0L
@@ -544,6 +558,8 @@ private fun Modifier.softEdges(top: androidx.compose.ui.unit.Dp, bottom: android
             )
         }
 
+/** How far a line's blur and glow may spread past the lyrics' sides. */
+private val SIDE_BLEED = 24.dp
 private val EDGE_FADE_TOP = 18.dp
 private val EDGE_FADE_BOTTOM = 96.dp
 
