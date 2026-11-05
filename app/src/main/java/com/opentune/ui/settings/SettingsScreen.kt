@@ -945,6 +945,12 @@ private fun settingsSections(
                         summary = "Pause sending new listens to YouTube Music. Your local history, listening stats and personal recommendations keep updating. Paused listens are never sent later; likes and connected scrobblers keep their own settings.",
                         icon = Icons.Rounded.History)
                 },
+                Entry("Listens from YouTube Music", "import sync history youtube music other apps outside recents") {
+                    ToggleRow("Listens from YouTube Music", pb.importAccountHistory,
+                        { v -> AppSettings.updatePlayback { it.copy(importAccountHistory = v) }; if (v) com.opentune.data.history.AccountHistory.syncSoon(force = true) },
+                        summary = "What you play in YouTube Music or other apps on your account shows in your history, Recents and Replay here",
+                        icon = Icons.Rounded.History)
+                },
                 Entry("Don't repeat songs in current session", "autoplay duplicates") {
                     ToggleRow("Don't repeat songs in current session", pb.noRepeatInSession, { v -> AppSettings.updatePlayback { it.copy(noRepeatInSession = v) } }, summary = "Autoplay won't add a song already played or queued this session", icon = Icons.Rounded.History)
                 },

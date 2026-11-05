@@ -126,6 +126,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         com.opentune.ui.components.GlassPerformance.watch(this)
+        com.opentune.data.history.AccountHistory.syncSoon()
         // The process may have started in the background, offline (after an update, say).
         AccountStore.ensureProfile()
         lifecycleScope.launchWhenStarted {

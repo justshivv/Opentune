@@ -128,7 +128,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "history", "Listening history", "Replay, Wrapped, syncing and clearing what you've played", Icons.Rounded.History,
         listOf(
             "Your year" to listOf("Replay", "Wrapped"),
-            "Syncing" to listOf("Sync listening history", "Pause account sync"),
+            "Syncing" to listOf("Sync listening history", "Pause account sync", "Listens from YouTube Music"),
             "Clear" to listOf("Clear listening history"),
         ),
     ),

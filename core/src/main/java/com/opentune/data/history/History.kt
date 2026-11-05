@@ -3,6 +3,7 @@ package com.opentune.data.history
 import android.content.Context
 import com.opentune.data.DebugLog as Log
 import com.opentune.data.model.Song
+import com.opentune.data.model.durationMillis
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,8 @@ data class PlayRecord(
     val listenedMs: Long = 0,
     val explicit: Boolean? = null,
     val artistId: String? = null,
+    /** A listen made elsewhere on the account (YouTube Music, another app), brought in from its history. */
+    val fromAccount: Boolean = false,
 ) {
     fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit, artistId = artistId)
 }
@@ -101,6 +104,49 @@ object History {
         val r = PlayRecord(song.videoId, song.title, song.artist, song.thumbnailUrl, song.durationText, song.albumName, now, listenedMs, song.isExplicit, song.artistId)
         _records.value = (listOf(r) + _records.value).take(MAX_RECORDS)
         return now
+    }
+
+    /**
+     * Brings in listens from the account's own history: [sections] as YouTube
+     * Music groups it ("Today", "Yesterday", "This week"), newest first. A song
+     * already in this history on that day (played here, and so reported there,
+     * or brought in before) isn't added again. YouTube Music doesn't say when in
+     * the day, so each is placed in order through its day.
+     */
+    fun mergeAccount(sections: List<Pair<String, List<Song>>>, now: Long = System.currentTimeMillis()) {
+        val added = accountListens(_records.value, sections, now)
+        if (added.isEmpty()) return
+        _records.value = (_records.value + added).sortedByDescending { it.playedAt }.take(MAX_RECORDS)
+    }
+
+    internal fun accountListens(existing: List<PlayRecord>, sections: List<Pair<String, List<Song>>>, now: Long): List<PlayRecord> {
+        val day = 24 * 3_600_000L
+        val clock = java.util.Calendar.getInstance().apply { timeInMillis = now }
+        clock.set(java.util.Calendar.HOUR_OF_DAY, 0); clock.set(java.util.Calendar.MINUTE, 0)
+        clock.set(java.util.Calendar.SECOND, 0); clock.set(java.util.Calendar.MILLISECOND, 0)
+        val today = clock.timeInMillis
+        val out = mutableListOf<PlayRecord>()
+        for ((title, songs) in sections) {
+            // The window the section covers, and where in it to place its songs.
+            val (from, to) = when (title.trim().lowercase()) {
+                "today" -> today to now
+                "yesterday" -> today - day to today
+                "this week" -> today - 6 * day to today - day
+                else -> continue
+            }
+            val step = ((to - from) / (songs.size + 1)).coerceIn(1_000L, 10 * 60_000L)
+            songs.forEachIndexed { i, song ->
+                val known = (existing + out).any { it.videoId == song.videoId && it.playedAt in from - day..now }
+                if (known) return@forEachIndexed
+                val length = song.durationText.durationMillis() ?: 180_000L
+                out += PlayRecord(
+                    song.videoId, song.title, song.artist, song.thumbnailUrl, song.durationText, song.albumName,
+                    playedAt = (to - (i + 1) * step).coerceAtLeast(from), listenedMs = length,
+                    explicit = song.isExplicit, artistId = song.artistId, fromAccount = true,
+                )
+            }
+        }
+        return out
     }
 
     fun updateListened(playedAt: Long, listenedMs: Long) {

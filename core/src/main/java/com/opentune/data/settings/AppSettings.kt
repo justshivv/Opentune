@@ -302,6 +302,8 @@ data class PlaybackSettings(
     val recommender: Recommender = Recommender.YOUTUBE,
     val listeningHistoryTarget: com.opentune.data.history.ListeningHistoryTarget = com.opentune.data.history.ListeningHistoryTarget.YOUTUBE_MUSIC,
     val pauseListeningHistory: Boolean = false,
+    /** Listens made in YouTube Music or other apps on the account come into OpenTune's history. */
+    val importAccountHistory: Boolean = true,
     /**
      * Smart shuffle can be chosen: the player's shuffle button gets a third
      * state, and a long press on a playlist or album's Shuffle starts it.

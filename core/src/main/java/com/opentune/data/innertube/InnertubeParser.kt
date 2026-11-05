@@ -1086,6 +1086,13 @@ object InnertubeParser {
      * ("counterpart"), which its Song/Video switch flips to. Read as two rows,
      * both versions were queued, one straight after the other.
      */
+    /** The account's listening history page (`FEmusic_history`), by its sections: "Today", "Yesterday"... */
+    fun parseHistory(root: JsonElement): List<Pair<String, List<Song>>> =
+        collectRenderers(root, "musicShelfRenderer").mapNotNull { shelf ->
+            val title = shelf.o("title").runs().takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            title to collectRenderers(shelf, "musicResponsiveListItemRenderer").mapNotNull { parseResponsiveListItem(it) }.distinctBy { it.videoId }
+        }
+
     private fun watchRows(root: JsonElement): List<Pair<JsonObject, JsonObject?>> {
         val out = mutableListOf<Pair<JsonObject, JsonObject?>>()
         fun walk(node: JsonElement) {
