@@ -2353,9 +2353,21 @@ class PlaybackService : MediaLibraryService() {
      * a one-track queue is already "near the end". With repeat on the queue
      * never ends, so there is nothing to extend.
      */
+    /**
+     * Whether the queue should be carried on with radio. A song started on its own
+     * (from search, or Start radio) always gets its radio, as in YouTube Music: with
+     * AutoPlay off it otherwise played alone and stopped, with an empty queue. AutoPlay
+     * decides whether music carries on after an album or playlist that was chosen.
+     */
+    private fun radioWanted(player: Player): Boolean {
+        if (AppSettings.playback.value.autoplay) return true
+        val chosen = (0 until player.mediaItemCount).count { player.getMediaItemAt(it).queueTier != QueueTier.AUTOPLAY }
+        return chosen == 1
+    }
+
     private fun extendQueueIfNeeded() {
         val player = mediaSession?.player ?: return
-        if (!AppSettings.playback.value.autoplay || player.repeatMode != Player.REPEAT_MODE_OFF) return
+        if (!radioWanted(player) || player.repeatMode != Player.REPEAT_MODE_OFF) return
         val remaining = player.upcomingPlayOrder().size - 1
         if (!Autoplay.shouldExtend(remaining, player.mediaItemCount)) return
         val seedItem = player.getMediaItemAt(player.mediaItemCount - 1)
@@ -2416,7 +2428,7 @@ class PlaybackService : MediaLibraryService() {
             for ((round, pause) in RADIO_AGAIN_MS.withIndex()) {
                 if (pause > 0) delay(pause)
                 val count = player.mediaItemCount
-                if (!AppSettings.playback.value.autoplay || count == 0 || player.getMediaItemAt(count - 1).mediaId != seed) return@launch
+                if (!radioWanted(player) || count == 0 || player.getMediaItemAt(count - 1).mediaId != seed) return@launch
                 ready = Autoplay.readyRadios(ask(), ::usable)
                 if (ready.any { it.isNotEmpty() }) break
                 Log.i(TAG, "No radio for $seed yet (round ${round + 1}), asking again shortly")
@@ -2426,7 +2438,7 @@ class PlaybackService : MediaLibraryService() {
             // through (learned on the phone), with no artist twice in a row where it can be helped.
             val taste = com.opentune.data.reco.TasteModel.Taste(History.records.value, LibraryStore.liked.value.mapTo(HashSet()) { it.videoId })
             val radio = Autoplay.spreadArtists(com.opentune.data.reco.TasteModel.rank(Autoplay.blend(ready, queue), taste))
-            if (!AppSettings.playback.value.autoplay || AppSettings.playback.value.recommender != engine ||
+            if (!radioWanted(player) || AppSettings.playback.value.recommender != engine ||
                 player.repeatMode != Player.REPEAT_MODE_OFF) return@launch
             // The queue may have been replaced while the request was out; radio
             // for a track that's no longer last doesn't belong at the end.

@@ -130,7 +130,9 @@ fun QueuePane(
     /** Apple Music's words for what comes after the queue. */
     appleWords: Boolean = false,
 ) {
-    val autoplay = AppSettings.playback.collectAsState().value.autoplay
+    // A song started on its own carries on with its radio even with AutoPlay off (see PlaybackService.radioWanted).
+    val autoplay = AppSettings.playback.collectAsState().value.autoplay ||
+        queue.count { it.queueTier != com.opentune.data.model.QueueTier.AUTOPLAY } == 1
     val haptics = com.opentune.ui.components.rememberHaptics()
     val rowPx = with(LocalDensity.current) { QUEUE_ROW.toPx() }
     // A local copy of the upcoming order, so a drag can move rows before the player hears of it.
