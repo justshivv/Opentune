@@ -258,9 +258,9 @@ fun HomeScreen(
                     in 17..21 -> "Good evening"
                     else -> "Late night"
                 }
-                // A name only when there really is one: the signed-in account's, or the
-                // one entered for Listen together. Otherwise the greeting stands alone.
-                val firstName = (account?.name ?: com.opentune.data.together.Together.savedName)
+                // A name only when signed in, the account's. The name typed for Listen
+                // together stays in that room; otherwise the greeting stands alone.
+                val firstName = account?.name.orEmpty()
                     .substringBefore(' ').trim().takeIf { it.isNotBlank() }
                 Column(
                     Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)

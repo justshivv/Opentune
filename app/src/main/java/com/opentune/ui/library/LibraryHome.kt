@@ -286,7 +286,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         item {
             // This year's listening, a card each for the minutes and the top song, artist and album; opens Replay.
             val since = remember(records) { memberSince(records.lastOrNull()?.playedAt) }
-            ReplayCards(summary, ReplayRange.YEAR, account?.name ?: com.opentune.data.together.Together.savedName.takeIf { it.isNotBlank() } ?: "You",
+            ReplayCards(summary, ReplayRange.YEAR, account?.name ?: "You",
                 since, onClick = nav.replay, modifier = Modifier.padding(vertical = 8.dp))
         }
         item {

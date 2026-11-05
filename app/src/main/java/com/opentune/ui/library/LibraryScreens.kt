@@ -164,7 +164,7 @@ fun ReplayScreen(contentPadding: PaddingValues, actions: SongActions, onBack: ()
     var story by rememberSaveable { mutableStateOf(false) }
     if (sharing) ReplayShareSheet(summary, range.heading(), onDismiss = { sharing = false })
     if (story) ReplayStory(summary, range, onDismiss = { story = false })
-    val name = account?.name ?: com.opentune.data.together.Together.savedName.takeIf { it.isNotBlank() } ?: "You"
+    val name = account?.name ?: "You"
     val since = remember(records) { memberSince(records.lastOrNull()?.playedAt) }
     // The page takes the colour of the card in front.
     var card by remember { androidx.compose.runtime.mutableIntStateOf(0) }
