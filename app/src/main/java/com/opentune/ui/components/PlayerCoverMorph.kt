@@ -247,6 +247,12 @@ internal fun MorphBox(
     artworkMotion: ArtworkMotion? = null,
     /** Drawn over the cover as it flies: the animated cover, so the still one doesn't show through. */
     overlay: (@Composable androidx.compose.foundation.layout.BoxScope.() -> Unit)? = null,
+    /**
+     * How much of the still cover shows at full size. Under a Spotify Canvas the big
+     * cover is the video itself and the still one is hidden there, so it's 0: the
+     * flying cover appears only as it shrinks into the header, and goes as it grows.
+     */
+    bigAlpha: Float = 1f,
 ) {
     val big = if (from.width >= to.width) from else to
     val small = if (big === from) to else from
@@ -285,7 +291,8 @@ internal fun MorphBox(
                 shape = RoundedCornerShape(lerp(startCorner, endCorner) / scaleX.coerceAtLeast(0.01f))
                 clip = true
                 // Deepest at full size, none on the small cover.
-                shadowElevation = if (fullBleed) 0f else shadowPx * grownAt(t)
+                shadowElevation = if (fullBleed || bigAlpha < 1f) 0f else shadowPx * grownAt(t)
+                if (bigAlpha < 1f) alpha = bigAlpha + (1f - bigAlpha) * (1f - grownAt(t)).let { it * it * (3 - 2 * it) }
             }
             .then(
                 if (!fullBleed) Modifier

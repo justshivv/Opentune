@@ -20,6 +20,7 @@ import com.opentune.data.discord.DiscordRpc
 import kotlinx.coroutines.launch
 
 private const val DISCORD_LOGIN = "https://discord.com/login"
+private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 private const val DISCORD_DESTROY_AFTER_MS = 1_500L
 private val DiscordBlurple = Color(0xFF5865F2)
 
@@ -113,6 +114,19 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
                 view.apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
+                    settings.databaseEnabled = true
+                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.setSupportMultipleWindows(false)
+                    // Discord's site, opened in an app's WebView, tried to hand the sign-in to the
+                    // Discord app (an intent:// link the WebView can't follow) and drew nothing. As a
+                    // desktop browser it shows its own sign-in page, laid out to fit the phone.
+                    settings.userAgentString = DESKTOP_UA
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                    settings.builtInZoomControls = false
+                    // The captcha Discord sometimes asks for is served from another site.
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                    webChromeClient = android.webkit.WebChromeClient()
                     fun check(view: WebView, url: String?) {
                         if (gone.get() || taken.get()) return
                         val path = url?.let { runCatching { android.net.Uri.parse(it).path }.getOrNull() }.orEmpty()
@@ -132,6 +146,12 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
                         }
                     }
                     webViewClient = object : WebViewClient() {
+                        // Links out to the Discord app or the Play Store stay on the page.
+                        override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
+                            val scheme = request.url.scheme?.lowercase()
+                            return scheme != "https" && scheme != "http"
+                        }
+
                         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                             if (!gone.get()) loading = true
                         }
@@ -152,6 +172,10 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
                     }
                     loadUrl(DISCORD_LOGIN)
                     web.set(this)
+                    // Still nothing after a while (no connection to Discord, an old WebView): say so.
+                    main.postDelayed({
+                        if (!gone.get() && !taken.get() && loading) problem = "Discord's page is taking a while. Check the connection, or update Android System WebView in the Play Store."
+                    }, 20_000)
                 }
             },
             onRelease = { view ->

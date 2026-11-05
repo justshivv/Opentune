@@ -1269,6 +1269,9 @@ fun PlayerLayout(
                         artworkMotion = artworkMotion.takeIf { state.ui.movingCover && !state.ui.reduceAnimation },
                         // The animated cover flies too, on the same player as the cover it leaves or
                         // lands on, so the still cover never shows for a moment on the way.
+                        // With a Spotify Canvas behind, the big cover is the video: the still cover
+                        // flies in only as it shrinks, so it never covers the Canvas on the way.
+                        bigAlpha = if (state.canvasVideo != null) 0f else 1f,
                         overlay = state.coverVideo?.takeIf { state.canvasVideo == null && !fullStyle }?.let { video ->
                             {
                                 val quality = state.ui.motionQuality
