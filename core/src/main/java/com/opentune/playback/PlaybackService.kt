@@ -437,12 +437,20 @@ class PlaybackService : MediaLibraryService() {
                     )
                     .build()
                 tailDsp.lowCutHz = 0f
-                // Its own audio session, so the next song's loudness gain, set on the main
-                // player's session as it starts, doesn't change the level of this one.
+                // Its own audio session, with the loudness gain of the song it carries in: the
+                // same gain the main player gives that song, so the level holds at the hand-over.
                 val session = androidx.media3.common.util.Util.generateAudioSessionIdV21(context)
                 tail.setAudioSessionId(session)
-                val enhancer = appliedLoudnessMb?.let { mb ->
-                    runCatching { LoudnessEnhancer(session).apply { setTargetGain(mb); enabled = true } }.getOrNull()
+                var enhancer: LoudnessEnhancer? = null
+                val level = {
+                    val mb = tail.currentMediaItem?.let(::loudnessMbFor)
+                    if (mb != null) {
+                        val e = enhancer ?: runCatching { LoudnessEnhancer(session) }.getOrNull()?.also { enhancer = it }
+                        e?.let { runCatching { it.setTargetGain(mb); it.enabled = true } }
+                    } else {
+                        enhancer?.let { runCatching { it.enabled = false } }
+                    }
+                    Unit
                 }
                 val effects = AppSettings.playback.value.systemEffects && effectSession != C.AUDIO_SESSION_ID_UNSET
                 if (effects) sendBroadcast(
@@ -451,7 +459,7 @@ class PlaybackService : MediaLibraryService() {
                         .putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName)
                         .putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC),
                 )
-                Crossfade.Tail(tail, lowCut = { tailDsp.lowCutHz = it }) {
+                Crossfade.Tail(tail, lowCut = { tailDsp.lowCutHz = it }, level = level) {
                     tail.release()
                     tailDsp.lowCutHz = 0f
                     runCatching { enhancer?.release() }
@@ -484,6 +492,7 @@ class PlaybackService : MediaLibraryService() {
             mainLowCut = { dsp.lowCutHz = it },
             busy = { upgradeJob?.isActive == true || swapRamping || swappingTo != null },
             silentMs = { dsp.meterRate.takeIf { it > 0 }?.let { rate -> dsp.silentFrames * 1000 / rate } ?: 0L },
+            levelled = { a, b -> loudnessMbFor(a) != null && loudnessMbFor(b) != null },
         ).also { it.start() }
         dsp.meter = true
         // Casting: the device follows this player while one is connected.
@@ -1262,6 +1271,22 @@ class PlaybackService : MediaLibraryService() {
     private var loudnessRetry: Job? = null
     /** The loudness gain on the playing song, for a crossfade tail playing it out. */
     private var appliedLoudnessMb: Int? = null
+
+    /**
+     * The loudness gain, in millibels, normalization gives [item] when it plays, or null
+     * when it gets none (normalization off, bit-perfect, a lossless file, or YouTube's
+     * figure for it not known yet). The same reckoning as [applyLoudness].
+     */
+    private fun loudnessMbFor(item: MediaItem): Int? {
+        val pb = AppSettings.playback.value
+        if (!pb.loudnessNormalization || BitPerfectUsb.active) return null
+        val lossless = item.localConfiguration?.uri?.let(::selectedUri)?.let(::externalStreamKeyOf) != null
+        if (lossless) return null
+        val id = item.mediaId
+        val db = StreamResolver.loudnessDbFor(id) ?: Downloads.loudnessFor(id) ?: return null
+        val speakerHold = !pb.normalizeOnSpeaker && onPhoneSpeaker()
+        return (loudnessGainDb(db, pb.volumeLevel, speakerHold) * 100).roundToInt().coerceIn(MIN_LOUDNESS_GAIN_MB, MAX_LOUDNESS_GAIN_MB)
+    }
 
     private fun applyLoudness() {
         val player = mediaSession?.player as? ExoPlayer ?: return

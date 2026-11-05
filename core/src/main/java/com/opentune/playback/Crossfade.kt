@@ -16,6 +16,7 @@ import com.opentune.playback.mix.automixPlan
 import com.opentune.playback.mix.bassCuts
 import com.opentune.playback.mix.blendGains
 import com.opentune.playback.mix.crossfadePlan
+import com.opentune.playback.mix.levelTrims
 import com.opentune.playback.mix.stepCorrection
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
@@ -66,9 +67,15 @@ internal class Crossfade(
     private val busy: () -> Boolean,
     /** How long the main player's sound has been silent, as it's decoded (see DspAudioProcessor.meter). */
     private val silentMs: () -> Long = { 0L },
+    /** True when loudness normalization already brings both songs to one level, so a mix needn't. */
+    private val levelled: (MediaItem, MediaItem) -> Boolean = { _, _ -> false },
 ) {
-    /** A second player and what to do when it's finished with. */
-    class Tail(val player: ExoPlayer, val lowCut: (Float) -> Unit, val release: () -> Unit)
+    /**
+     * A second player and what to do when it's finished with. [level] gives it the
+     * loudness gain of the song it has loaded, the same the main player will give
+     * that song, so nothing jumps when the main player takes it over.
+     */
+    class Tail(val player: ExoPlayer, val lowCut: (Float) -> Unit, val level: () -> Unit = {}, val release: () -> Unit)
 
     /** Where a transition is: the next song loading, the two blending, or the main player taking it over. */
     private enum class Phase { IDLE, LOADING, BLENDING, HANDOVER }
@@ -232,6 +239,8 @@ internal class Crossfade(
         tp.setMediaItem(next, p.inFromMs)
         tp.prepare()
         val playing = main.currentMediaItemIndex
+        // Levelled here only when loudness normalization isn't doing it already.
+        val matchLevels = p.levelDb != 0f && main.currentMediaItem?.let { !levelled(it, next) } == true
         mix = scope.launch {
             try {
                 // 1. Loading, until it's due.
@@ -243,7 +252,8 @@ internal class Crossfade(
                     tp.playerError?.let { Log.w(TAG, "The next song didn't load", it); return@launch }
                     delay(FRAME_MS * 2)
                 }
-                // 2. In, silent, on the beat.
+                // 2. In, silent, on the beat, at its own loudness gain.
+                runCatching { t.level() }.onFailure { Log.w(TAG, "Couldn't set the next song's level", it) }
                 phase = Phase.BLENDING
                 MixState.start(label())
                 tp.playWhenReady = main.playWhenReady
@@ -254,11 +264,12 @@ internal class Crossfade(
                 val length = if (urgent) minOf(p.blendMs, URGENT_BLEND_MS) else minOf(p.blendMs, left)
                 ramp(length, stop = { main.currentMediaItemIndex != playing }) { q ->
                     MixState.progress(q * 0.92f)
-                    val (out, inc) = blendGains(q)
-                    main.volume = out
-                    tp.volume = inc
+                    val (out, inc) = blendGains(q, p.outFades && !urgent)
+                    val (outTrim, inTrim) = if (matchLevels) levelTrims(p.levelDb, q) else 1f to 1f
+                    main.volume = out * outTrim
+                    tp.volume = inc * inTrim
                     if (p.bassSwap) {
-                        val (outCut, inCut) = bassCuts(q)
+                        val (outCut, inCut) = bassCuts(q, p.swapAt, p.swapWidth)
                         mainLowCut(outCut)
                         t.lowCut(inCut)
                     }
@@ -465,8 +476,9 @@ internal class Crossfade(
         const val MAX_DRIFT_MS = 35L
         const val CROSSOVER_MS = 80L
         const val STEP_TRIES = 2
-        const val TEMPO_STEPS = 8
-        const val TEMPO_STEP_MS = 150L
+        /** The next song eases back to its own tempo over four seconds, too slowly to hear as a change. */
+        const val TEMPO_STEPS = 40
+        const val TEMPO_STEP_MS = 100L
         const val SEEK_LEAD_MS = 80L
         const val IN_STEP_MS = 15L
         const val BAIL_MS = 150L

@@ -84,7 +84,11 @@ internal fun AutomixSheet(onDismiss: () -> Unit) {
                 listOfNotNull(
                     "Blends over ${"%.1f".format(p.plan.blendMs / 1000.0)} s",
                     if (p.plan.outSpeed != 1f) "tempo matched (${"%+.1f".format((p.plan.outSpeed - 1f) * 100)}%)" else null,
-                    if (p.plan.beatMs != null) "kept on the beat" else null,
+                    when {
+                        p.plan.beatMs == null -> null
+                        p.plan.alignBeats >= 4 -> "bar lined up with bar"
+                        else -> "kept on the beat"
+                    },
                     if (p.plan.bassSwap) "the bass traded over" else null,
                     if (p.plan.inFromMs > 300) "next song's silent start skipped" else null,
                 ).joinToString(", "),

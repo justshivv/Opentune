@@ -33,6 +33,8 @@ class Features(
     val powerDb: FloatArray,
     /** How sharply the sound rose at each hop: drum hits, plucked notes. */
     val onset: FloatArray,
+    /** How sharply the bass rose at each hop (kick drums), for where bars start; the onset when not measured. */
+    val bass: FloatArray = onset,
 ) {
     val size: Int get() = powerDb.size
     val endMs: Long get() = timeOf(size.toDouble())
@@ -51,9 +53,11 @@ class Features(
             val n = energy.size
             val powerDb = FloatArray(n) { db(energy[it]) }
             val raw = FloatArray(n)
+            val bass = FloatArray(n)
             for (i in 1 until n) {
                 val dl = compress(low[i]) - compress(low[i - 1])
                 val df = compress(energy[i]) - compress(energy[i - 1])
+                bass[i] = max(0f, dl)
                 raw[i] = max(0f, dl) * 1.5f + max(0f, df)
             }
             val w = max(1, (ONSET_MEAN_MS / hopMs).roundToInt())
@@ -67,7 +71,7 @@ class Features(
                 val mean = (prefix[b] - prefix[a]) / (b - a)
                 onset[i] = max(0.0, raw[i] - mean).toFloat()
             }
-            return Features(startMs, hopMs, powerDb, onset)
+            return Features(startMs, hopMs, powerDb, onset, bass)
         }
 
         private fun compress(e: Float): Float = ln(1f + 1000f * e)
@@ -96,10 +100,34 @@ internal fun percentile(values: FloatArray, from: Int, to: Int, q: Float): Float
     return s[((s.size - 1) * q).roundToInt().coerceIn(0, s.size - 1)]
 }
 
-/** A steady beat: one every [periodMs], one of them at [anchorMs]. */
-data class Beat(val periodMs: Double, val anchorMs: Double, val confidence: Float) {
+/**
+ * A steady beat: one every [periodMs], one of them at [anchorMs]. When the beats
+ * clearly come in groups (bars of four, or at least the kick-snare pairs of two),
+ * [downbeatMs] is a beat that starts a group and [groupBeats] the beats in one.
+ */
+data class Beat(
+    val periodMs: Double,
+    val anchorMs: Double,
+    val confidence: Float,
+    val downbeatMs: Double? = null,
+    val groupBeats: Int = 1,
+) {
     val bpm: Double get() = 60_000.0 / periodMs
     val sure: Boolean get() = confidence >= SURE
+
+    /** The start of the group of [beats] nearest to [ms]; just the nearest beat when the groups aren't known. */
+    fun groupNearest(ms: Long, beats: Int = groupBeats): Long {
+        val d = downbeatMs ?: return nearest(ms)
+        val g = periodMs * beats
+        return (d + Math.round((ms - d) / g) * g).roundToLong()
+    }
+
+    /** The first start of a group of [beats] at or after [ms]; the first beat when the groups aren't known. */
+    fun groupAtOrAfter(ms: Long, beats: Int = groupBeats): Long {
+        val d = downbeatMs ?: return atOrAfter(ms)
+        val g = periodMs * beats
+        return (d + kotlin.math.ceil((ms - d) / g - 1e-6) * g).roundToLong()
+    }
 
     /** The beat nearest to [ms]. */
     fun nearest(ms: Long): Long = (anchorMs + Math.round((ms - anchorMs) / periodMs) * periodMs).roundToLong()
@@ -197,6 +225,47 @@ fun beatGrid(f: Features, fromMs: Long = f.startMs, toMs: Long = f.endMs): Beat?
     return Beat(period * f.hopMs, f.startMs + (a + phase) * f.hopMs, confidence)
 }
 
+/**
+ * [beat] with where its groups start, found between [fromMs] and [toMs]: the
+ * kick lands hardest on the one of each bar, so of each four beats the one
+ * whose bass hits are clearly strongest starts the bar. Where beats one and
+ * three hit alike (kick on both, snare between), the beats still pair up, and
+ * pairs are kept in line instead. Unchanged when no beat stands out.
+ */
+fun withDownbeat(f: Features, beat: Beat, fromMs: Long, toMs: Long): Beat {
+    val sums = DoubleArray(4)
+    val counts = IntArray(4)
+    val from = max(fromMs, f.startMs)
+    var t = beat.anchorMs + kotlin.math.ceil((from - beat.anchorMs) / beat.periodMs - 1e-6) * beat.periodMs
+    val first = t
+    var k = 0
+    val to = min(toMs, f.endMs)
+    while (t < to) {
+        val i = f.indexOf(t.roundToLong())
+        var m = 0f
+        for (j in i - 2..i + 2) if (j in 0 until f.size) m = max(m, f.bass[j] + 0.5f * f.onset[j])
+        sums[k % 4] += m.toDouble()
+        counts[k % 4]++
+        k++
+        t += beat.periodMs
+    }
+    if (counts.any { it < MIN_BARS }) return beat
+    val bar = DoubleArray(4) { sums[it] / counts[it] }
+    val order = (0..3).sortedByDescending { bar[it] }
+    if (bar[order[0]] >= bar[order[1]] * DOWNBEAT_SURE) {
+        return beat.copy(downbeatMs = first + order[0] * beat.periodMs, groupBeats = 4)
+    }
+    val pair = doubleArrayOf((sums[0] + sums[2]) / (counts[0] + counts[2]), (sums[1] + sums[3]) / (counts[1] + counts[3]))
+    val strong = if (pair[0] >= pair[1]) 0 else 1
+    if (pair[strong] >= pair[1 - strong] * DOWNBEAT_SURE) {
+        return beat.copy(downbeatMs = first + strong * beat.periodMs, groupBeats = 2)
+    }
+    return beat
+}
+
+/** How loud the body of [f] is between hops [from] and [to]: the level it holds most of the time, in dB. */
+internal fun bodyLevel(f: Features, from: Int = 0, to: Int = f.size): Float = percentile(smoothedDb(f, 400.0), from, to, 0.8f)
+
 /** How a song ends: where its sound stops, where its outro starts, and its beat there. */
 data class Ending(
     /** Where the music stops; anything after is silence or near it. */
@@ -207,6 +276,8 @@ data class Ending(
     /** The stretch read, as a loudness picture for showing the mix. */
     val wave: Wave? = null,
     val key: Key? = null,
+    /** How loud the song is before its outro, in dB. */
+    val levelDb: Float? = null,
 ) {
     val outroLengthMs: Long get() = endMs - outroMs
 }
@@ -239,6 +310,8 @@ data class Opening(
     val beat: Beat?,
     val wave: Wave? = null,
     val key: Key? = null,
+    /** How loud the song's body is, in dB. */
+    val levelDb: Float? = null,
 )
 
 /** [f] covers the last stretch of a song [durationMs] long. */
@@ -256,8 +329,10 @@ fun analyzeEnding(f: Features, durationMs: Long, chroma: FloatArray? = null): En
     var k = last
     while (k > 0 && s[k] < body - OUTRO_BELOW_DB) k--
     val outro = min(end, f.timeOf(k.toDouble()))
-    val beat = beatGrid(f, max(f.startMs, outro - BEAT_SPAN_MS), outro.coerceAtLeast(f.startMs + BEAT_SPAN_MS / 2))
-    return Ending(end, outro, beat, Wave.of(f), estimateKey(chroma))
+    val from = max(f.startMs, outro - BEAT_SPAN_MS)
+    val to = outro.coerceAtLeast(f.startMs + BEAT_SPAN_MS / 2)
+    val beat = beatGrid(f, from, to)?.let { withDownbeat(f, it, from, to) }
+    return Ending(end, outro, beat, Wave.of(f), estimateKey(chroma), bodyLevel(f, 0, max(1, (f.size * 0.6).toInt())))
 }
 
 /** [f] covers the first stretch of a song. */
@@ -277,8 +352,8 @@ fun analyzeOpening(f: Features, chroma: FloatArray? = null): Opening? {
     var power = 0.0
     for (i in a until b) power += 10.0.pow(intro[i] / 10.0)
     val introDb = db((power / max(1, b - a)).toFloat())
-    val beat = beatGrid(f, start, start + BEAT_SPAN_MS)
-    return Opening(start, introDb <= body - QUIET_INTRO_DB, beat, Wave.of(f), estimateKey(chroma))
+    val beat = beatGrid(f, start, start + BEAT_SPAN_MS)?.let { withDownbeat(f, it, start, start + BEAT_SPAN_MS) }
+    return Opening(start, introDb <= body - QUIET_INTRO_DB, beat, Wave.of(f), estimateKey(chroma), bodyLevel(f))
 }
 
 /**
@@ -306,6 +381,18 @@ data class MixPlan(
      * the incoming one's (pitch kept); 1 for no change.
      */
     val outSpeed: Float = 1f,
+    /**
+     * How many beats are kept in line: 4 puts the incoming song's bars on the outgoing
+     * one's, 2 its kick-snare pairs, 1 just its beats.
+     */
+    val alignBeats: Int = 1,
+    /** The outgoing song fades out on its own; the blend leaves the fade to it until late. */
+    val outFades: Boolean = false,
+    /** Where through the blend the bass changes hands (a bar line near the middle), and over how much of it. */
+    val swapAt: Float = 0.5f,
+    val swapWidth: Float = 0.25f,
+    /** How much louder the incoming song is than the outgoing one, in dB, for levelling the two through the blend. */
+    val levelDb: Float = 0f,
 )
 
 /** A plain crossfade of [fadeMs], without the silence at either end. */
@@ -343,7 +430,9 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
         val bar = outBeat.periodMs * 4
         val bars = listOf(1, 2, 4, 8).minBy { abs(ln(it * bar / blend)) }
         blend = (bars * bar).roundToLong().coerceIn(MIN_AUTOMIX_MS / 2, MAX_AUTOMIX_MS + 2_000)
-        mixAt = outBeat.nearest(end - blend)
+        // On the one of a bar where the bars are known, so the blend runs bar line to bar line.
+        mixAt = outBeat.groupNearest(end - blend)
+        if (mixAt > end - MIN_BLEND_MS) mixAt -= (outBeat.periodMs * outBeat.groupBeats).roundToLong()
         blend = min(blend, end - mixAt)
         if (inBeat != null && abs(inBeat.periodMs / outBeat.periodMs - 1) <= TEMPO_MATCH) beatMs = outBeat.periodMs
     }
@@ -353,13 +442,25 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
     if (clash && outro < FADE_OUT_MS) {
         val bar = outBeat?.periodMs?.times(4)
         blend = minOf(blend, bar?.let { (it * 2).roundToLong() } ?: CLASH_BLEND_MS)
-        mixAt = (outBeat?.nearest(end - blend) ?: (end - blend)).coerceAtMost(end - MIN_BLEND_MS)
+        mixAt = (outBeat?.groupNearest(end - blend) ?: (end - blend)).coerceAtMost(end - MIN_BLEND_MS)
     }
     mixAt = mixAt.coerceIn(end / 2, end - MIN_BLEND_MS)
     blend = (end - mixAt).coerceAtMost(blend).coerceAtLeast(MIN_BLEND_MS)
-    val inFrom = opening?.startMs ?: 0L
+    // Both songs' bars known: bar on bar (or pair on pair), the incoming song cued to the one of its first bar.
+    val align = if (beatMs != null && outBeat?.downbeatMs != null && inBeat?.downbeatMs != null &&
+        mixAt == outBeat.groupNearest(mixAt)) min(outBeat.groupBeats, inBeat.groupBeats) else 1
+    val start = opening?.startMs ?: 0L
+    val inFrom = if (align > 1) inBeat!!.groupAtOrAfter(start, align) else start
     // Tempos close but not the same: the outgoing song is eased to the incoming one's tempo.
     val speed = if (beatMs != null && inBeat != null) (outBeat!!.periodMs / inBeat.periodMs).toFloat() else 1f
+    // The bass changes hands on the bar line nearest the middle, over about two beats.
+    val beatLength = outBeat?.periodMs
+    val swapAt = beatLength?.let { b ->
+        val bar = b * 4
+        ((Math.round(blend / 2.0 / bar) * bar) / blend).toFloat().coerceIn(0.3f, 0.7f)
+    } ?: 0.5f
+    val swapWidth = beatLength?.let { (it * 2 / blend).toFloat().coerceIn(0.08f, 0.3f) } ?: 0.25f
+    val level = if (ending?.levelDb != null && opening?.levelDb != null) (opening.levelDb - ending.levelDb).coerceIn(-MAX_LEVEL_DB, MAX_LEVEL_DB) else 0f
     return MixPlan(
         mixAtMs = mixAt,
         outEndMs = end,
@@ -367,21 +468,28 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
         blendMs = blend,
         beatMs = beatMs,
         outBeatMs = mixAt,
-        inBeatMs = inBeat?.atOrAfter(inFrom) ?: inFrom,
+        inBeatMs = if (align > 1) inFrom else inBeat?.atOrAfter(inFrom) ?: inFrom,
         bassSwap = true,
         inBeatPeriodMs = if (beatMs != null) inBeat?.periodMs else null,
         outSpeed = if (abs(speed - 1f) < 0.004f) 1f else speed,
+        alignBeats = align,
+        outFades = outro >= FADE_OUT_MS,
+        swapAt = swapAt,
+        swapWidth = swapWidth,
+        levelDb = level,
     )
 }
 
 /**
  * How far to move the incoming song to put it in step with the outgoing one,
- * in ms between −beat/2 and +beat/2. Zero for a plan without a beat.
+ * in ms between −beat/2 and +beat/2 (a bar, or a pair of beats, when the plan
+ * keeps those in line). Zero for a plan without a beat.
  */
 fun stepCorrection(plan: MixPlan, outPositionMs: Long, inPositionMs: Long): Long {
-    val outBeat = plan.beatMs ?: return 0L
-    val inBeat = plan.inBeatPeriodMs ?: outBeat
-    // Where each song is within its own beat, 0..1; the incoming one is moved to match.
+    val group = plan.alignBeats.coerceAtLeast(1)
+    val outBeat = (plan.beatMs ?: return 0L) * group
+    val inBeat = (plan.inBeatPeriodMs ?: plan.beatMs) * group
+    // Where each song is within its own beat (or bar), 0..1; the incoming one is moved to match.
     val outPhase = ((outPositionMs - plan.outBeatMs) / outBeat).let { it - kotlin.math.floor(it) }
     val inPhase = ((inPositionMs - plan.inBeatMs) / inBeat).let { it - kotlin.math.floor(it) }
     var e = inPhase - outPhase
@@ -390,17 +498,38 @@ fun stepCorrection(plan: MixPlan, outPositionMs: Long, inPositionMs: Long): Long
     return (-e * inBeat).roundToLong()
 }
 
-/** Gains for the outgoing and incoming songs at [p] of the way through a blend: equal power, so the level holds. */
-fun blendGains(p: Float): Pair<Float, Float> {
+/**
+ * Gains for the outgoing and incoming songs at [p] of the way through a blend:
+ * equal power, so the level holds. A song that [outFades] on its own is left at
+ * full level for the first third and faded over the rest, so its fade isn't
+ * doubled and it doesn't drop away before the next song is there.
+ */
+fun blendGains(p: Float, outFades: Boolean = false): Pair<Float, Float> {
     val q = p.coerceIn(0f, 1f)
-    return kotlin.math.cos(q * Math.PI / 2).toFloat() to kotlin.math.sin(q * Math.PI / 2).toFloat()
+    val qo = if (outFades) smoothstep(0.35f, 1f, q) else q
+    return kotlin.math.cos(qo * Math.PI / 2).toFloat() to kotlin.math.sin(q * Math.PI / 2).toFloat()
 }
 
-/** The bass cut on each song at [p] through a bass swap: outgoing rises from none, incoming falls to none. */
-fun bassCuts(p: Float): Pair<Float, Float> {
-    val out = BASS_CUT_HZ * smoothstep(0.25f, 0.6f, p)
-    val inc = BASS_CUT_HZ * (1f - smoothstep(0.35f, 0.7f, p))
-    return out to inc
+/**
+ * The bass cut on each song at [p] through a bass swap: the outgoing song's bass
+ * goes as the incoming song's comes in, both over the same short stretch around
+ * [swapAt], so the two basslines are never heard together and never both gone.
+ */
+fun bassCuts(p: Float, swapAt: Float = 0.5f, width: Float = 0.25f): Pair<Float, Float> {
+    val w = smoothstep(swapAt - width / 2, swapAt + width / 2, p)
+    return BASS_CUT_HZ * w to BASS_CUT_HZ * (1f - w)
+}
+
+/**
+ * Gain trims that level two songs [levelDb] apart through a blend, as factors for
+ * the outgoing and incoming songs at [p]. Only ever down: a louder incoming song
+ * comes in at the outgoing one's level and rises to its own by the end; a louder
+ * outgoing one is brought down to the incoming one's as it goes.
+ */
+fun levelTrims(levelDb: Float, p: Float): Pair<Float, Float> {
+    val q = p.coerceIn(0f, 1f)
+    fun gain(db: Float) = 10.0.pow(db / 20.0).toFloat()
+    return if (levelDb > 0f) 1f to gain(-levelDb * (1f - q)) else gain(levelDb * q) to 1f
 }
 
 private fun smoothstep(a: Float, b: Float, x: Float): Float {
@@ -435,6 +564,12 @@ private const val TEMPO_MATCH = 0.08
 private const val KEY_SURE = 0.02f
 private const val CLASH_BLEND_MS = 2_500L
 private const val BASS_CUT_HZ = 200f
+/** The one of a bar must hit this much harder than any other beat of it to be called. */
+private const val DOWNBEAT_SURE = 1.15
+/** Bars needed to tell where they start. */
+private const val MIN_BARS = 3
+/** Songs further apart than this are levelled only this far. */
+private const val MAX_LEVEL_DB = 9f
 
 
 // ---- Key -------------------------------------------------------------------------
