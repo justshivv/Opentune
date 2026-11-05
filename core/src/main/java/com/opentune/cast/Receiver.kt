@@ -50,6 +50,13 @@ data class RemoteStatus(
     val volume: Float? = null,
     /** Which song the report is about, when the receiver says. */
     val mediaId: String? = null,
+    /**
+     * Whether [positionMs] can be believed. Some renderers (a Denon/HEOS amplifier
+     * among them) report 0:00 or nothing for the whole song; taking that as where
+     * the song was, the phone was pulled back to the start again and again, and the
+     * seek bar and the lyrics stood still.
+     */
+    val positionKnown: Boolean = true,
 ) {
     fun positionNow(now: Long = SystemClock.elapsedRealtime()): Long =
         if (state == RemoteState.PLAYING) positionMs + (now - at).coerceAtLeast(0) else positionMs

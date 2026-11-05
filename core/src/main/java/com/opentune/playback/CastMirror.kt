@@ -34,6 +34,7 @@ class CastMirror(private val context: Context, private val player: Player, priva
     private var following = false
     /** When a command last went to the device; its reports lag behind for a moment after. */
     private var commandAt = 0L
+    private var stuckJob: Job? = null
 
     val active: Boolean get() = receiver != null
 
@@ -76,7 +77,14 @@ class CastMirror(private val context: Context, private val player: Player, priva
                 return@launch
             }
             r.load(media, positionMs, play)
+            // The next song's stream is looked up now, so skipping to it doesn't wait for that.
+            nextItem()?.let { Cast.warm(it) }
         }
+    }
+
+    private fun nextItem(): MediaItem? {
+        val i = player.nextMediaItemIndex
+        return if (i == androidx.media3.common.C.INDEX_UNSET) null else player.getMediaItemAt(i)
     }
 
     private fun send(block: suspend Receiver.() -> Unit) {
@@ -121,11 +129,28 @@ class CastMirror(private val context: Context, private val player: Player, priva
         if (s.mediaId != null && s.mediaId != current) return
         val settling = SystemClock.elapsedRealtime() - commandAt < SETTLE_MS
         when (s.state) {
-            RemoteState.LOADING, RemoteState.BUFFERING -> if (player.playWhenReady) {
-                waiting = true
-                follow { player.pause() }
+            RemoteState.LOADING, RemoteState.BUFFERING -> {
+                if (player.playWhenReady) {
+                    waiting = true
+                    follow { player.pause() }
+                }
+                // A song the device never starts (a format it can't play, a stream it won't fetch)
+                // left the phone waiting for good; after a while it's taken as failed and skipped.
+                if (waiting && stuckJob?.isActive != true) {
+                    val song = current
+                    stuckJob = scope.launch {
+                        kotlinx.coroutines.delay(STUCK_MS)
+                        val now = receiver?.status?.value ?: return@launch
+                        if (waiting && player.currentMediaItem?.mediaId == song && now.state in listOf(RemoteState.LOADING, RemoteState.BUFFERING)) {
+                            Cast.say("${r.name} couldn't play ${player.mediaMetadata.title ?: "this song"}")
+                            waiting = false
+                            if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.play() } else follow { player.pause() }
+                        }
+                    }
+                }
             }
             RemoteState.PLAYING -> {
+                stuckJob?.cancel()
                 if (waiting || (!player.playWhenReady && !settling)) {
                     waiting = false
                     follow { player.play() }
@@ -133,7 +158,9 @@ class CastMirror(private val context: Context, private val player: Player, priva
                 val drift = player.currentPosition - s.positionNow()
                 // A station has no place to keep in step with.
                 val live = current?.let(com.opentune.data.radio.Radio::isRadio) == true
-                if (!settling && !live && kotlin.math.abs(drift) > DRIFT_MS) follow { player.seekTo(s.positionNow()) }
+                // Only a position the device has shown it keeps: one that says 0:00 throughout would
+                // pull the phone, and its seek bar and lyrics, back to the start over and over.
+                if (!settling && !live && s.positionKnown && kotlin.math.abs(drift) > DRIFT_MS) follow { player.seekTo(s.positionNow()) }
             }
             // Paused on the device itself, by its remote.
             RemoteState.PAUSED -> if (player.playWhenReady && !settling && !waiting) follow { player.pause() }
@@ -153,5 +180,7 @@ class CastMirror(private val context: Context, private val player: Player, priva
         const val SETTLE_MS = 2_500L
         /** How far apart the phone and the device may get before the phone moves. */
         const val DRIFT_MS = 1_500L
+        /** How long a song may sit loading on the device before it's taken as one it can't play. */
+        const val STUCK_MS = 15_000L
     }
 }

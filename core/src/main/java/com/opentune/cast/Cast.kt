@@ -196,10 +196,21 @@ object Cast {
         media(CastServer.publish(CastServer.Source.Web(type) { fresh -> youtube(id, fresh).first.let { it to StreamResolver.mediaHeadersFor(it) } }, host), type)
     }
 
+    /** Looks up [item]'s stream ahead of time, when it's a YouTube song, so casting it starts at once. */
+    suspend fun warm(item: MediaItem) = withContext(Dispatchers.IO) {
+        val id = item.mediaId
+        if (Radio.isRadio(id) || LocalMusic.isLocal(id) || Subsonic.isSubsonic(id) || Downloads.fileFor(id) != null) return@withContext
+        runCatching { youtube(id, fresh = false) }
+        Unit
+    }
+
     /** A YouTube song's stream address and type, preferring AAC; held until it stops working. */
     private suspend fun youtube(id: String, fresh: Boolean): Pair<String, String> {
         if (!fresh) streams[id]?.let { return it }
+        // AAC in MP4 plays on every receiver; WebM/Opus doesn't on many amplifiers (a Denon among
+        // them), so AAC is asked for twice before settling for WebM.
         val found = runCatching { StreamResolver.resolveForDownload(id, maxKbps = 320, requireM4a = true).url to "audio/mp4" }
+            .recoverCatching { StreamResolver.resolveForDownload(id, maxKbps = 320, requireM4a = true).url to "audio/mp4" }
             .getOrElse { StreamResolver.resolve(id) to "audio/webm" }
         streams[id] = found
         return found
