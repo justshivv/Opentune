@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        com.opentune.ui.components.GlassPerformance.unwatch(this)
         // Off the screen, the app can be closed at any moment: a like or a playlist change made
         // just before was still waiting for its save, and was lost.
         Thread { com.opentune.data.Core.flush() }.start()
@@ -51,6 +52,7 @@ class MainActivity : ComponentActivity() {
         }.getOrNull() ?: android.content.res.Resources.getSystem().configuration.locales[0].country.takeIf { it.length == 2 }
         java.util.Locale.setDefault(resources.configuration.locales[0])
         enableEdgeToEdge()
+        com.opentune.ui.components.GlassPerformance.init(this)
         if (savedInstanceState == null) receive(intent)
         tv = com.opentune.ui.tv.Tv.isTv(this)
         if (tv) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
@@ -123,6 +125,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        com.opentune.ui.components.GlassPerformance.watch(this)
         // The process may have started in the background, offline (after an update, say).
         AccountStore.ensureProfile()
         lifecycleScope.launchWhenStarted {

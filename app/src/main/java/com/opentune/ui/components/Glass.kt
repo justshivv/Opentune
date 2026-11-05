@@ -118,6 +118,14 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     val look = glassLook(ui.glassStyle)
     // A caller's own see-through tint wins; otherwise the style colours the glass.
     val colour = if (tint.alpha < 1f) tint else styleTint(ui.glassStyle, tint, MaterialTheme.colorScheme.primary, dark)
+    // On a phone whose frames ran late under Liquid Glass, its two costliest touches are left out.
+    val lite = GlassPerformance.lite
+    if (backdrop != null && liquidGlassOn()) {
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            GlassPerformance.glassShowing++
+            onDispose { GlassPerformance.glassShowing-- }
+        }
+    }
     if (backdrop != null && liquidGlassOn() && ui.glassStyle == GlassStyle.LIQUID) {
         // Apple's material: what's behind is softly frosted, so colours read
         // as glowing fields rather than detail; a deep lens at the edges that
@@ -137,11 +145,11 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
                 // past the middle of a short pill, where the top and bottom bands
                 // would meet in a hard line across it.
                 val depth = lensDepth(30.dp.toPx(), size.minDimension)
-                lens(depth, 62.dp.toPx() * depth / 30.dp.toPx(), depthEffect = true, chromaticAberration = true)
+                lens(depth, 62.dp.toPx() * depth / 30.dp.toPx(), depthEffect = true, chromaticAberration = !lite)
             },
             highlight = { Highlight.Default },
             shadow = { Shadow.Default },
-            innerShadow = { InnerShadow.Default },
+            innerShadow = if (lite) null else ({ InnerShadow.Default }),
             onDrawSurface = { drawRect(film) },
         ).border(
             1.1.dp,
@@ -174,7 +182,7 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
                 colorControls(saturation = look.saturation)
                 blur(look.liquidBlur.toPx())
                 val depth = lensDepth(24.dp.toPx(), size.minDimension)
-                lens(depth, depth, depthEffect = true, chromaticAberration = true)
+                lens(depth, depth, depthEffect = true, chromaticAberration = !lite)
             },
             highlight = { Highlight.Default },
             shadow = { Shadow.Default },

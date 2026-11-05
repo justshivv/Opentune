@@ -1251,6 +1251,15 @@ private fun settingsSections(
                 Entry("Reduce dynamic blur", "glass frosted performance") {
                     ToggleRow("Reduce dynamic blur", ui.reduceBlur, { v -> AppSettings.updateUi { it.copy(reduceBlur = v) } }, summary = "Swaps frosted glass for solid fills across the app", icon = Icons.Rounded.BlurOff)
                 },
+                Entry("Lighter Liquid Glass", "glass performance lag smooth slow phone frame") {
+                    ToggleRow(
+                        "Lighter Liquid Glass",
+                        com.opentune.ui.components.GlassPerformance.lite,
+                        { v -> com.opentune.ui.components.GlassPerformance.choose(v) },
+                        summary = "Leaves out the colour fringe and inner shade, which slower phones can't draw every frame. Turns on by itself when frames run late",
+                        icon = Icons.Rounded.Speed,
+                    )
+                },
                 Entry("Haptic feedback", "vibration haptics strength tap buzz intensity") {
                     val haptics = com.opentune.ui.components.rememberHaptics()
                     SettingRow(
