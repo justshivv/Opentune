@@ -33,11 +33,11 @@ class AutomixScreenshotTest {
     })
 
     @Test fun transition() {
-        val plan = MixPlan(mixAtMs = 230_000, outEndMs = 238_000, inFromMs = 400, blendMs = 7_500, beatMs = 468.75, outBeatMs = 230_000, inBeatMs = 400, bassSwap = true)
+        val plan = MixPlan(mixAtMs = 230_000, outEndMs = 238_000, inFromMs = 400, blendMs = 7_500, beatMs = 468.75, outBeatMs = 230_000, inBeatMs = 400, bassSwap = true, inBeatPeriodMs = 444.4, outSpeed = 1.055f)
         MixState.picture(
             MixState.Picture(
-                MixState.Side("Live It Up", "Jennifer Lopez", null, 243_000, 128.0, wave(198_000, 243_000, 0.75f)),
-                MixState.Side("Whatever It Takes", "Imagine Dragons", null, 201_000, 135.0, wave(0, 30_000, 2f)),
+                MixState.Side("Live It Up", "Jennifer Lopez", null, 243_000, 128.0, wave(198_000, 243_000, 0.75f), "10A"),
+                MixState.Side("Whatever It Takes", "Imagine Dragons", null, 201_000, 135.0, wave(0, 30_000, 2f), "5A"),
                 plan, automix = true,
             ),
         )

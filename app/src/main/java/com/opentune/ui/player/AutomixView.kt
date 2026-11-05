@@ -83,6 +83,7 @@ internal fun AutomixSheet(onDismiss: () -> Unit) {
             Text(
                 listOfNotNull(
                     "Blends over ${"%.1f".format(p.plan.blendMs / 1000.0)} s",
+                    if (p.plan.outSpeed != 1f) "tempo matched (${"%+.1f".format((p.plan.outSpeed - 1f) * 100)}%)" else null,
                     if (p.plan.beatMs != null) "kept on the beat" else null,
                     if (p.plan.bassSwap) "the bass traded over" else null,
                     if (p.plan.inFromMs > 300) "next song's silent start skipped" else null,
@@ -103,9 +104,16 @@ private fun SongLine(side: MixState.Side) {
         }
         Column(horizontalAlignment = Alignment.End) {
             side.bpm?.let { Text("${it.roundToInt()} bpm", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold) }
-            side.durationMs?.takeIf { it > 0 }?.let {
-                val s = it / 1000
-                Text("%02d:%02d".format(s / 60, s % 60), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // The key on the Camelot wheel, in its colour there, as DJs mark it.
+                side.key?.let { key ->
+                    Text(key, Modifier.clip(RoundedCornerShape(6.dp)).background(camelotColor(key)).padding(horizontal = 6.dp, vertical = 1.dp),
+                        style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFF1B1B24))
+                }
+                side.durationMs?.takeIf { it > 0 }?.let {
+                    val s = it / 1000
+                    Text("%02d:%02d".format(s / 60, s % 60), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
@@ -184,4 +192,12 @@ private fun DrawScope.wave(
         )
         x += step
     }
+}
+
+/** The Camelot wheel's colour for a key: hue round the wheel by its number, lighter for majors. */
+private fun camelotColor(key: String): Color {
+    val n = key.dropLast(1).toIntOrNull() ?: 1
+    val major = key.endsWith("B")
+    val hue = ((n - 1) * 30f + 150f) % 360f
+    return Color.hsl(hue, 0.55f, if (major) 0.78f else 0.72f)
 }

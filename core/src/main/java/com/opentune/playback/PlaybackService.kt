@@ -245,7 +245,7 @@ class PlaybackService : MediaLibraryService() {
         // The main player and the bridge decode the same way: the bridge used to
         // take the phone's default FLAC decoder, which some phones can't play
         // add-on FLAC with, so the swap to it failed and the song stayed on YouTube.
-        fun renderersFor(effects: DspAudioProcessor, exclusive: Boolean) = object : DefaultRenderersFactory(context) {
+        fun renderersFor(effects: DspAudioProcessor, exclusive: Boolean, allowFloat: Boolean = true) = object : DefaultRenderersFactory(context) {
             init {
                 setEnableDecoderFallback(true)
                 setMediaCodecSelector { mime, secure, tunneling ->
@@ -282,7 +282,7 @@ class PlaybackService : MediaLibraryService() {
                 // silence and nudges a listening room's sync only on 16-bit output, and on float
                 // it quietly plays at normal speed. The effects still run on float before that.
                 floatWanted = { source ->
-                    !stretching() && (
+                    allowFloat && !stretching() && (
                         AppSettings.playback.value.floatOutput ||
                             ((BitPerfectUsb.wanted || com.opentune.playback.nativeout.NativeOutputProvider.mode.let {
                                 it == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT || it == com.opentune.data.settings.BitPerfectOutput.BUILT_IN
@@ -428,7 +428,8 @@ class PlaybackService : MediaLibraryService() {
             scope = scope,
             main = player,
             newTail = {
-                val tail = ExoPlayer.Builder(context, renderersFor(tailDsp, exclusive = false))
+                // 16-bit, so the tempo matching a mix asks of it is heard (float output ignores speed).
+                val tail = ExoPlayer.Builder(context, renderersFor(tailDsp, exclusive = false, allowFloat = false))
                     .setMediaSourceFactory(qualitySources)
                     .setAudioAttributes(
                         AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),

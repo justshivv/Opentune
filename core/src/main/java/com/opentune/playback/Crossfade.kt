@@ -183,7 +183,10 @@ internal class Crossfade(
         val p = if (settings.automix) automixPlan(duration, ending, opening)
             else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, ending, opening)
         Log.d(TAG, "Plan for ${item.mediaId} → ${next.mediaId}: $p")
-        MixState.picture(MixState.Picture(MixState.Side.of(item, duration, ending?.beat, ending?.wave), MixState.Side.of(next, null, opening?.beat, opening?.wave), p, settings.automix))
+        MixState.picture(MixState.Picture(
+            MixState.Side.of(item, duration, ending?.beat, ending?.wave, ending?.key),
+            MixState.Side.of(next, null, opening?.beat, opening?.wave, opening?.key), p, settings.automix,
+        ))
         return p
     }
 
@@ -273,7 +276,8 @@ internal class Crossfade(
                     main.volume = 1f
                     return@launch
                 }
-                // 6. In step with the old song's beat, when the plan has one.
+                // 6. The old song eased to the new one's tempo (pitch kept), then the new one put on its beat.
+                if (p.outSpeed != 1f) matchTempo(tp, p.outSpeed)
                 if (p.beatMs != null) keepInStep(tp, p, outLeft)
                 // 7. The blend, over what's left of the old song, at most the planned length.
                 val length = minOf(p.blendMs, outLeft()).coerceAtLeast(MIN_LEFT_MS)
@@ -332,6 +336,19 @@ internal class Crossfade(
         }
         readings.sort()
         return readings[readings.size / 2]
+    }
+
+    /**
+     * Eases the outgoing song's speed to [speed] in small steps over about a second, so
+     * the change is heard as the tempo drifting to meet the next song, not a jump.
+     */
+    private suspend fun matchTempo(tp: ExoPlayer, speed: Float) {
+        val from = tp.playbackParameters.speed
+        for (i in 1..TEMPO_STEPS) {
+            val s = from + (speed - from) * i / TEMPO_STEPS
+            tp.playbackParameters = androidx.media3.common.PlaybackParameters(s, 1f)
+            delay(TEMPO_STEP_MS)
+        }
     }
 
     /** Moves the incoming song (still silent) so its beats fall on the outgoing song's. */
@@ -448,6 +465,8 @@ internal class Crossfade(
         const val MAX_DRIFT_MS = 35L
         const val CROSSOVER_MS = 80L
         const val STEP_TRIES = 2
+        const val TEMPO_STEPS = 8
+        const val TEMPO_STEP_MS = 150L
         const val SEEK_LEAD_MS = 80L
         const val IN_STEP_MS = 15L
         /** Not worth stepping the incoming song when the old one is this close to ending. */
@@ -467,15 +486,17 @@ object MixState {
     data class Side(
         val title: String, val artist: String, val artworkUrl: String?, val durationMs: Long?,
         val bpm: Double?, val wave: com.opentune.playback.mix.Wave?,
+        /** The song's key on the Camelot wheel ("10A"), when it's clear. */
+        val key: String? = null,
     ) {
         companion object {
-            fun of(item: MediaItem, durationMs: Long?, beat: com.opentune.playback.mix.Beat?, wave: com.opentune.playback.mix.Wave?): Side {
+            fun of(item: MediaItem, durationMs: Long?, beat: com.opentune.playback.mix.Beat?, wave: com.opentune.playback.mix.Wave?, key: com.opentune.playback.mix.Key? = null): Side {
                 val m = item.mediaMetadata
                 return Side(
                     m.title?.toString().orEmpty(), m.artist?.toString().orEmpty(),
                     m.extras?.getString(EXTRA_THUMB) ?: m.artworkUri?.toString(),
                     durationMs ?: item.mediaMetadata.durationMs,
-                    beat?.takeIf { it.sure }?.bpm, wave,
+                    beat?.takeIf { it.sure }?.bpm, wave, key?.camelot,
                 )
             }
         }

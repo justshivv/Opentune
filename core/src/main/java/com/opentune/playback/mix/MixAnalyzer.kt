@@ -46,8 +46,8 @@ internal class MixAnalyzer(
         val key = "$uri@$durationMs"
         synchronized(endings) { if (endings.containsKey(key)) return endings[key] }
         val from = max(0L, durationMs - ENDING_SPAN_MS)
-        val f = features(uri, from, durationMs, network = false)
-        val result = f?.let { analyzeEnding(it, durationMs) }
+        val d = features(uri, from, durationMs, network = false)
+        val result = d?.let { analyzeEnding(it.features, durationMs, it.chroma) }
         Log.d(TAG, "Ending of $uri: $result")
         synchronized(endings) { endings[key] = result }
         return result
@@ -56,14 +56,17 @@ internal class MixAnalyzer(
     suspend fun opening(uri: Uri): Opening? {
         val key = uri.toString()
         synchronized(openings) { if (openings.containsKey(key)) return openings[key] }
-        val f = features(uri, 0L, OPENING_SPAN_MS, network = true)
-        val result = f?.let(::analyzeOpening)
+        val d = features(uri, 0L, OPENING_SPAN_MS, network = true)
+        val result = d?.let { analyzeOpening(it.features, it.chroma) }
         Log.d(TAG, "Opening of $uri: $result")
         synchronized(openings) { openings[key] = result }
         return result
     }
 
-    private suspend fun features(uri: Uri, fromMs: Long, toMs: Long, network: Boolean): Features? = withContext(Dispatchers.Default) {
+    /** A stretch of a song read: its loudness and onsets, and how much of each note it holds (for its key). */
+    private class Decoded(val features: Features, val chroma: FloatArray?)
+
+    private suspend fun features(uri: Uri, fromMs: Long, toMs: Long, network: Boolean): Decoded? = withContext(Dispatchers.Default) {
         for (factory in reader(uri, network)) {
             val f = runCatching { decode(factory, uri, fromMs, toMs) }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
@@ -74,7 +77,7 @@ internal class MixAnalyzer(
     }
 
     /** Decodes [fromMs]..[toMs] of [uri] to one loudness and bass loudness per ~10 ms. */
-    private suspend fun decode(factory: DataSource.Factory, uri: Uri, fromMs: Long, toMs: Long): Features? {
+    private suspend fun decode(factory: DataSource.Factory, uri: Uri, fromMs: Long, toMs: Long): Decoded? {
         val media = DataSourceMedia(factory, uri)
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
@@ -101,9 +104,14 @@ internal class MixAnalyzer(
             val low = FloatArrayList()
             var hop = 0
             var alpha = 0f
+            // A low-rate copy of the sound (about 11 kHz), for the notes it holds.
+            var decimate = 1
+            val slow = FloatArrayList()
+            var slowSum = 0f; var slowCount = 0
             fun tune() {
                 hop = max(1, (rate * HOP_MS / 1000.0).roundToInt())
                 alpha = (1 - exp(-2 * PI * LOW_HZ / rate)).toFloat()
+                decimate = max(1, (rate / KEY_RATE).roundToInt())
             }
             tune()
             var lp1 = 0f; var lp2 = 0f
@@ -161,6 +169,9 @@ internal class MixAnalyzer(
                             x += if (isFloat) data.getFloat(at) else data.getShort(at) / 32768f
                         }
                         x /= channels
+                        // Averaged down: a plain low-pass, enough for notes below 2 kHz.
+                        slowSum += x
+                        if (++slowCount >= decimate) { slow.add(slowSum / slowCount); slowSum = 0f; slowCount = 0 }
                         lp1 += alpha * (x - lp1)
                         lp2 += alpha * (lp1 - lp2)
                         sumSq += x * x
@@ -177,7 +188,8 @@ internal class MixAnalyzer(
                 if (info.presentationTimeUs > toUs) break
             }
             if (energy.size < MIN_HOPS || firstUs < 0) return null
-            return Features.of(firstUs / 1000, hop * 1000.0 / rate, energy.toArray(), low.toArray())
+            val notes = runCatching { chroma(slow.raw(), slow.size, rate / decimate) }.getOrNull()
+            return Decoded(Features.of(firstUs / 1000, hop * 1000.0 / rate, energy.toArray(), low.toArray()), notes)
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
@@ -197,6 +209,8 @@ internal class MixAnalyzer(
             data[size++] = v
         }
         fun toArray(): FloatArray = data.copyOf(size)
+        /** The backing array, valid up to [size]; no copy. */
+        fun raw(): FloatArray = data
     }
 
     /** A Media3 [DataSource] as the platform's [MediaDataSource], reading on from where it left off. */
@@ -251,6 +265,7 @@ internal class MixAnalyzer(
         const val KEEP = 12
         const val HOP_MS = 10.0
         const val LOW_HZ = 150.0
+        const val KEY_RATE = 11_025.0
         const val WAIT_US = 5_000L
         const val MIN_HOPS = 300
         /** The last stretch of a song looked at: room for a long fade-out and the beat before it. */

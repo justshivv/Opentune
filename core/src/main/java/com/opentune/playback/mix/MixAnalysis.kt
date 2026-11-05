@@ -1,5 +1,6 @@
 package com.opentune.playback.mix
 
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.ln
@@ -205,6 +206,7 @@ data class Ending(
     val beat: Beat?,
     /** The stretch read, as a loudness picture for showing the mix. */
     val wave: Wave? = null,
+    val key: Key? = null,
 ) {
     val outroLengthMs: Long get() = endMs - outroMs
 }
@@ -236,10 +238,11 @@ data class Opening(
     val quietIntro: Boolean,
     val beat: Beat?,
     val wave: Wave? = null,
+    val key: Key? = null,
 )
 
 /** [f] covers the last stretch of a song [durationMs] long. */
-fun analyzeEnding(f: Features, durationMs: Long): Ending? {
+fun analyzeEnding(f: Features, durationMs: Long, chroma: FloatArray? = null): Ending? {
     if (f.size < 100) return null
     val s = smoothedDb(f, 400.0)
     // The song's body: loud hops in the part before the end.
@@ -254,11 +257,11 @@ fun analyzeEnding(f: Features, durationMs: Long): Ending? {
     while (k > 0 && s[k] < body - OUTRO_BELOW_DB) k--
     val outro = min(end, f.timeOf(k.toDouble()))
     val beat = beatGrid(f, max(f.startMs, outro - BEAT_SPAN_MS), outro.coerceAtLeast(f.startMs + BEAT_SPAN_MS / 2))
-    return Ending(end, outro, beat, Wave.of(f))
+    return Ending(end, outro, beat, Wave.of(f), estimateKey(chroma))
 }
 
 /** [f] covers the first stretch of a song. */
-fun analyzeOpening(f: Features): Opening? {
+fun analyzeOpening(f: Features, chroma: FloatArray? = null): Opening? {
     if (f.size < 100) return null
     val s = smoothedDb(f, 200.0)
     val body = percentile(s, 0, f.size, 0.8f)
@@ -275,7 +278,7 @@ fun analyzeOpening(f: Features): Opening? {
     for (i in a until b) power += 10.0.pow(intro[i] / 10.0)
     val introDb = db((power / max(1, b - a)).toFloat())
     val beat = beatGrid(f, start, start + BEAT_SPAN_MS)
-    return Opening(start, introDb <= body - QUIET_INTRO_DB, beat, Wave.of(f))
+    return Opening(start, introDb <= body - QUIET_INTRO_DB, beat, Wave.of(f), estimateKey(chroma))
 }
 
 /**
@@ -296,6 +299,13 @@ data class MixPlan(
     val inBeatMs: Long = inFromMs,
     /** Trade the bass over: the outgoing song's falls away as the incoming song's comes in. */
     val bassSwap: Boolean = false,
+    /** The incoming song's own beat, when it differs from [beatMs] (the outgoing one's). */
+    val inBeatPeriodMs: Double? = beatMs,
+    /**
+     * The speed the outgoing song is eased to as the blend begins, so its tempo meets
+     * the incoming one's (pitch kept); 1 for no change.
+     */
+    val outSpeed: Float = 1f,
 )
 
 /** A plain crossfade of [fadeMs], without the silence at either end. */
@@ -337,9 +347,19 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
         blend = min(blend, end - mixAt)
         if (inBeat != null && abs(inBeat.periodMs / outBeat.periodMs - 1) <= TEMPO_MATCH) beatMs = outBeat.periodMs
     }
+    // Two keys that clash can't overlap long without sounding wrong: a short blend.
+    val clash = ending?.key != null && opening?.key != null && ending.key.distance(opening.key) > 1 &&
+        minOf(ending.key.confidence, opening.key.confidence) > KEY_SURE
+    if (clash && outro < FADE_OUT_MS) {
+        val bar = outBeat?.periodMs?.times(4)
+        blend = minOf(blend, bar?.let { (it * 2).roundToLong() } ?: CLASH_BLEND_MS)
+        mixAt = (outBeat?.nearest(end - blend) ?: (end - blend)).coerceAtMost(end - MIN_BLEND_MS)
+    }
     mixAt = mixAt.coerceIn(end / 2, end - MIN_BLEND_MS)
     blend = (end - mixAt).coerceAtMost(blend).coerceAtLeast(MIN_BLEND_MS)
     val inFrom = opening?.startMs ?: 0L
+    // Tempos close but not the same: the outgoing song is eased to the incoming one's tempo.
+    val speed = if (beatMs != null && inBeat != null) (outBeat!!.periodMs / inBeat.periodMs).toFloat() else 1f
     return MixPlan(
         mixAtMs = mixAt,
         outEndMs = end,
@@ -349,6 +369,8 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
         outBeatMs = mixAt,
         inBeatMs = inBeat?.atOrAfter(inFrom) ?: inFrom,
         bassSwap = true,
+        inBeatPeriodMs = if (beatMs != null) inBeat?.periodMs else null,
+        outSpeed = if (abs(speed - 1f) < 0.004f) 1f else speed,
     )
 }
 
@@ -357,13 +379,15 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
  * in ms between −beat/2 and +beat/2. Zero for a plan without a beat.
  */
 fun stepCorrection(plan: MixPlan, outPositionMs: Long, inPositionMs: Long): Long {
-    val beat = plan.beatMs ?: return 0L
-    // How much further into its song the incoming one is than the beat grid wants.
-    val ahead = (inPositionMs - plan.inBeatMs) - (outPositionMs - plan.outBeatMs)
-    var e = ahead.toDouble() % beat
-    if (e > beat / 2) e -= beat
-    if (e < -beat / 2) e += beat
-    return (-e).roundToLong()
+    val outBeat = plan.beatMs ?: return 0L
+    val inBeat = plan.inBeatPeriodMs ?: outBeat
+    // Where each song is within its own beat, 0..1; the incoming one is moved to match.
+    val outPhase = ((outPositionMs - plan.outBeatMs) / outBeat).let { it - kotlin.math.floor(it) }
+    val inPhase = ((inPositionMs - plan.inBeatMs) / inBeat).let { it - kotlin.math.floor(it) }
+    var e = inPhase - outPhase
+    if (e > 0.5) e -= 1.0
+    if (e < -0.5) e += 1.0
+    return (-e * inBeat).roundToLong()
 }
 
 /** Gains for the outgoing and incoming songs at [p] of the way through a blend: equal power, so the level holds. */
@@ -407,5 +431,127 @@ private const val EASED_AUTOMIX_MS = 6_000L
 private const val HARD_STOP_AUTOMIX_MS = 3_500L
 private const val MIN_BLEND_MS = 1_500L
 /** Tempos within this of each other are close enough to keep in step without stretching. */
-private const val TEMPO_MATCH = 0.03
+private const val TEMPO_MATCH = 0.08
+private const val KEY_SURE = 0.02f
+private const val CLASH_BLEND_MS = 2_500L
 private const val BASS_CUT_HZ = 200f
+
+
+// ---- Key -------------------------------------------------------------------------
+
+/** A musical key: [tonic] 0 (C) to 11 (B), major or minor, and how clearly the music says it. */
+data class Key(val tonic: Int, val minor: Boolean, val confidence: Float) {
+    /** The Camelot wheel's name for it, as DJs mark keys: "8B" is C major, "8A" A minor. */
+    val camelot: String get() = "${camelotNumber}${if (minor) "A" else "B"}"
+    val camelotNumber: Int get() {
+        val major = if (minor) (tonic + 3) % 12 else tonic
+        return ((major * 7) % 12 + 7) % 12 + 1
+    }
+    val name: String get() = NOTES[tonic] + if (minor) " minor" else " major"
+
+    /**
+     * Steps between two keys round the Camelot wheel: 0 the same key or its relative,
+     * 1 a neighbour; those blend without clashing. More is a clash.
+     */
+    fun distance(other: Key): Int {
+        val d = kotlin.math.abs(camelotNumber - other.camelotNumber).let { minOf(it, 12 - it) }
+        return if (minor == other.minor) d else if (d == 0) 0 else d + 1
+    }
+
+    companion object {
+        private val NOTES = listOf("C", "D\u266d", "D", "E\u266d", "E", "F", "F\u266f", "G", "A\u266d", "A", "B\u266d", "B")
+    }
+}
+
+// Krumhansl and Kessler's key profiles: how much each step of the scale is heard in music in that key.
+private val MAJOR_PROFILE = doubleArrayOf(6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88)
+private val MINOR_PROFILE = doubleArrayOf(6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17)
+
+/** The key whose profile best matches [chroma] (12 pitch-class weights, C first); null when it's unclear. */
+fun estimateKey(chroma: FloatArray?): Key? {
+    if (chroma == null || chroma.size != 12 || chroma.all { it <= 0f }) return null
+    var best = -2.0; var second = -2.0; var bestTonic = 0; var bestMinor = false
+    for (minor in listOf(false, true)) {
+        val profile = if (minor) MINOR_PROFILE else MAJOR_PROFILE
+        for (tonic in 0 until 12) {
+            val r = correlation(DoubleArray(12) { chroma[(it + tonic) % 12].toDouble() }, profile)
+            if (r > best) { second = best; best = r; bestTonic = tonic; bestMinor = minor } else if (r > second) second = r
+        }
+    }
+    if (best < 0.5) return null
+    return Key(bestTonic, bestMinor, (best - second).toFloat())
+}
+
+private fun correlation(a: DoubleArray, b: DoubleArray): Double {
+    val ma = a.average(); val mb = b.average()
+    var num = 0.0; var da = 0.0; var db = 0.0
+    for (i in a.indices) { val x = a[i] - ma; val y = b[i] - mb; num += x * y; da += x * x; db += y * y }
+    return if (da <= 0 || db <= 0) 0.0 else num / sqrt(da * db)
+}
+
+/**
+ * How much of each of the 12 pitch classes [samples] (mono, at [rate] Hz) holds:
+ * short-time spectra (4096-point FFT, half overlapping), each bin from about 55 Hz
+ * to 1.8 kHz given to the note it's nearest, its weight compressed so loud
+ * moments don't swamp the rest. C first.
+ */
+fun chroma(samples: FloatArray, count: Int, rate: Int): FloatArray? {
+    val n = 4096
+    if (count < n * 4 || rate <= 0) return null
+    val out = DoubleArray(12)
+    val window = DoubleArray(n) { 0.5 - 0.5 * kotlin.math.cos(2 * PI * it / (n - 1)) }
+    val re = DoubleArray(n); val im = DoubleArray(n)
+    // The note each useful bin belongs to, worked out once.
+    val lo = (55.0 * n / rate).toInt().coerceAtLeast(1)
+    val hi = (1_800.0 * n / rate).toInt().coerceAtMost(n / 2 - 1)
+    val noteOf = IntArray(hi + 1) { k ->
+        if (k < lo) -1 else {
+            val f = k.toDouble() * rate / n
+            val midi = 69 + 12 * log2(f / 440.0)
+            ((Math.round(midi).toInt() % 12) + 12) % 12
+        }
+    }
+    var start = 0
+    while (start + n <= count) {
+        for (i in 0 until n) { re[i] = samples[start + i] * window[i]; im[i] = 0.0 }
+        fft(re, im)
+        for (k in lo..hi) {
+            val mag = sqrt(re[k] * re[k] + im[k] * im[k])
+            out[noteOf[k]] += sqrt(mag)
+        }
+        start += n / 2
+    }
+    val top = out.maxOrNull() ?: return null
+    if (top <= 0) return null
+    return FloatArray(12) { (out[it] / top).toFloat() }
+}
+
+/** In-place radix-2 FFT; [re].size a power of two. */
+private fun fft(re: DoubleArray, im: DoubleArray) {
+    val n = re.size
+    var j = 0
+    for (i in 1 until n) {
+        var bit = n shr 1
+        while (j and bit != 0) { j = j xor bit; bit = bit shr 1 }
+        j = j xor bit
+        if (i < j) { var t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t }
+    }
+    var len = 2
+    while (len <= n) {
+        val ang = -2 * PI / len
+        val wr = kotlin.math.cos(ang); val wi = kotlin.math.sin(ang)
+        var i = 0
+        while (i < n) {
+            var cr = 1.0; var ci = 0.0
+            for (k in 0 until len / 2) {
+                val ar = re[i + k + len / 2] * cr - im[i + k + len / 2] * ci
+                val ai = re[i + k + len / 2] * ci + im[i + k + len / 2] * cr
+                re[i + k + len / 2] = re[i + k] - ar; im[i + k + len / 2] = im[i + k] - ai
+                re[i + k] += ar; im[i + k] += ai
+                val nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr
+            }
+            i += len
+        }
+        len = len shl 1
+    }
+}
