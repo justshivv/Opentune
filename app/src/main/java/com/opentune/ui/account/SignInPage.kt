@@ -59,6 +59,8 @@ internal fun SignInPage(
     hint: String? = null,
     /** The service's own logo, in its own colours, shown instead of [icon] on [brand]. */
     logo: Int? = null,
+    /** Shown under the hint: another way to sign in, when the page itself won't. */
+    extra: (@Composable () -> Unit)? = null,
     web: @Composable (Modifier) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -115,6 +117,7 @@ internal fun SignInPage(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
         }
+        extra?.invoke()
         val card = RoundedCornerShape(24.dp)
         Box(
             Modifier

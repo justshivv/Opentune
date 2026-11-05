@@ -15,12 +15,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.opentune.data.discord.DiscordRpc
 import kotlinx.coroutines.launch
 
 private const val DISCORD_LOGIN = "https://discord.com/login"
-private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
 private const val DISCORD_DESTROY_AFTER_MS = 1_500L
 private val DiscordBlurple = Color(0xFF5865F2)
 
@@ -78,6 +81,9 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var unavailable by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    var pageError by remember { mutableStateOf<String?>(null) }
+    var stuck by remember { mutableStateOf(false) }
+    var tokenDialog by remember { mutableStateOf(false) }
     val gone = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val taken = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val left = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
@@ -91,6 +97,7 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
         if (page != null && !left.get() && page.canGoBack()) page.goBack() else leave()
     }
 
+    if (tokenDialog) DiscordTokenDialog(onDismiss = { tokenDialog = false }, onSignedIn = { tokenDialog = false; main.post { leave() } })
     SignInPage(
         service = "Discord",
         brand = DiscordBlurple,
@@ -99,6 +106,11 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
         loading = loading,
         onBack = leave,
         hint = problem,
+        extra = if (stuck) ({
+            androidx.compose.material3.TextButton(onClick = { tokenDialog = true }, modifier = Modifier.padding(horizontal = 16.dp)) {
+                androidx.compose.material3.Text("Sign in with a token instead")
+            }
+        }) else null,
         unavailable = if (unavailable) "Signing in needs Android System WebView, which isn't working on this device." else null,
     ) { webModifier ->
         AndroidView(
@@ -117,16 +129,21 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
                     settings.databaseEnabled = true
                     settings.javaScriptCanOpenWindowsAutomatically = true
                     settings.setSupportMultipleWindows(false)
-                    // Discord's site, opened in an app's WebView, tried to hand the sign-in to the
-                    // Discord app (an intent:// link the WebView can't follow) and drew nothing. As a
-                    // desktop browser it shows its own sign-in page, laid out to fit the phone.
-                    settings.userAgentString = DESKTOP_UA
-                    settings.useWideViewPort = true
-                    settings.loadWithOverviewMode = true
-                    settings.builtInZoomControls = false
+                    // As Chrome on this phone: the WebView's own identity with the marks of an app's
+                    // WebView taken out ("; wv", "Version/4.0"), the browser Discord's site supports.
+                    settings.userAgentString = settings.userAgentString
+                        .replace("; wv)", ")").replace(Regex("""Version/[\d.]+ """), "")
                     // The captcha Discord sometimes asks for is served from another site.
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                    webChromeClient = android.webkit.WebChromeClient()
+                    webChromeClient = object : android.webkit.WebChromeClient() {
+                        // The first error the page's own scripts hit, to say if the page never appears.
+                        override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
+                            if (message.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR && pageError == null) {
+                                pageError = message.message().take(160)
+                            }
+                            return super.onConsoleMessage(message)
+                        }
+                    }
                     fun check(view: WebView, url: String?) {
                         if (gone.get() || taken.get()) return
                         val path = url?.let { runCatching { android.net.Uri.parse(it).path }.getOrNull() }.orEmpty()
@@ -170,12 +187,23 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
                             for (wait in listOf(1_500L, 4_000L)) main.postDelayed({ if (!gone.get()) check(view, view.url) }, wait)
                         }
                     }
+                    // A fresh start on discord.com: what an earlier, failed visit left in the page's
+                    // storage can keep its app from loading. Only Discord's; other sign-ins are kept.
+                    android.webkit.WebStorage.getInstance().deleteOrigin("https://discord.com")
                     loadUrl(DISCORD_LOGIN)
                     web.set(this)
-                    // Still nothing after a while (no connection to Discord, an old WebView): say so.
+                    // Discord's page still empty after a while: say so, with what went wrong if the page
+                    // said, and offer the other way in.
                     main.postDelayed({
-                        if (!gone.get() && !taken.get() && loading) problem = "Discord's page is taking a while. Check the connection, or update Android System WebView in the Play Store."
-                    }, 20_000)
+                        if (gone.get() || taken.get()) return@postDelayed
+                        evaluateJavascript("(document.body && document.body.innerText || '').trim().length") { n ->
+                            if (gone.get() || taken.get()) return@evaluateJavascript
+                            if ((n?.toIntOrNull() ?: 0) == 0) {
+                                stuck = true
+                                problem = "Discord's page didn't appear" + (pageError?.let { ": $it" } ?: ". Update Android System WebView in the Play Store, or sign in with a token below.")
+                            }
+                        }
+                    }, 15_000)
                 }
             },
             onRelease = { view ->
@@ -191,4 +219,46 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
             },
         )
     }
+}
+
+/**
+ * Signing in with the account's token, for when Discord's page won't show. The token
+ * is checked with Discord before it's kept, and kept encrypted, as a page sign-in is.
+ */
+@Composable
+private fun DiscordTokenDialog(onDismiss: () -> Unit, onSignedIn: () -> Unit) {
+    var token by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { androidx.compose.material3.Text("Sign in with a token") },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                androidx.compose.material3.Text(
+                    "Your Discord token, from Discord in a computer's browser (Developer tools, Application, Local Storage, token). It's checked with Discord and kept encrypted on this phone. Anyone with it can use your account, so never share it.",
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                )
+                androidx.compose.material3.OutlinedTextField(
+                    value = token, onValueChange = { token = it; error = null }, singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    label = { androidx.compose.material3.Text("Token") },
+                    isError = error != null,
+                    supportingText = error?.let { e -> { androidx.compose.material3.Text(e) } },
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(enabled = token.isNotBlank() && !busy, onClick = {
+                busy = true
+                scope.launch {
+                    DiscordRpc.signIn(token).onSuccess { onSignedIn() }.onFailure { error = it.message ?: "Discord didn't accept that token" }
+                    busy = false
+                }
+            }) { androidx.compose.material3.Text(if (busy) "Checking…" else "Sign in") }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { androidx.compose.material3.Text("Cancel") } },
+    )
 }
