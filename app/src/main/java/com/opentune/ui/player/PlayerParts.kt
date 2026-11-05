@@ -617,6 +617,8 @@ fun ArtworkPane(
      * keeping its place, so the clip shows and swipes and taps on it still work.
      */
     canvasShowing: Boolean = false,
+    /** How round the cover's corners are. */
+    corner: androidx.compose.ui.unit.Dp = 28.dp,
 ) {
     val coverShown by animateFloatAsState(if (canvasShowing) 0f else 1f, tween(450), label = "coverOverCanvas")
     val scale by animateFloatAsState(
@@ -670,12 +672,12 @@ fun ArtworkPane(
                         translationX = offsetX.value
                         rotationZ = offsetX.value / 90f
                         shadowElevation = 28.dp.toPx()
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(corner)
                         clip = true
                         // Hidden under the morphing cover while it grows in or shrinks away.
                         alpha = if (com.opentune.ui.components.PlayerMorph.coverAway) 0f else 1f
                     },
-                shape = MaterialTheme.shapes.extraLarge,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(corner),
                 imageModifier = Modifier.livingArt(isPlaying, moving, artworkMotion),
             ) {
                 // Only on the playing song's cover, not on one leaving as the song changes.
@@ -1239,6 +1241,7 @@ fun NerdStatsLine(format: AudioFormatInfo?) {
         parts.joinToString(" · ").ifEmpty { "Waiting for stream…" },
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
     )
 }

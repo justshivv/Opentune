@@ -321,6 +321,12 @@ data class PlaybackSettings(
     val qobuzRelayUrl: String = "",
     /** Overlap the end of a song with the start of the next; 0 is off. */
     val crossfadeSeconds: Int = 0,
+    /**
+     * Automix: read the end of each song and the start of the next, and blend
+     * them where and for as long as suits the two, on the beat when there is
+     * one. Takes over from [crossfadeSeconds] while on.
+     */
+    val automix: Boolean = false,
     /** Bit-perfect output to a USB DAC (Android 14+): no mixing, effects or resampling. */
     val bitPerfectUsb: Boolean = false,
     /** Let the phone's own effects (Dolby, SoundAlive, system EQ) process playback. */
@@ -352,6 +358,8 @@ data class InterfaceSettings(
     /** Solid fills instead of frosted glass. */
     val reduceBlur: Boolean = false,
     val fullScreenCover: Boolean = false,
+    /** How round the player's cover is, in dp: 0 is a square with sharp corners. Not used with [fullScreenCover]. */
+    val coverCornerDp: Int = 28,
     val hideVolumeBar: Boolean = false,
     val hideSongStatus: Boolean = false,
     /** Show the current lyric above the controls, independently of the player layout. */

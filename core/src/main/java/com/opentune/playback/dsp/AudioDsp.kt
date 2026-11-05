@@ -22,6 +22,41 @@ import kotlin.math.sqrt
 import kotlin.math.tanh
 
 /** One second-order IIR section, transposed direct form II, double precision state. */
+/** A second-order high-pass (Butterworth) whose corner can move without clearing its state. */
+class SweepHighPass {
+    private var b0 = 1.0
+    private var b1 = 0.0
+    private var b2 = 0.0
+    private var a1 = 0.0
+    private var a2 = 0.0
+    private var z1 = 0.0
+    private var z2 = 0.0
+
+    fun tune(freq: Double, sampleRate: Double) {
+        val w0 = 2 * PI * freq.coerceIn(10.0, sampleRate * 0.45) / sampleRate
+        val alpha = sin(w0) / (2 * 0.7071)
+        val cw = cos(w0)
+        val a0 = 1 + alpha
+        b0 = (1 + cw) / 2 / a0
+        b1 = -(1 + cw) / a0
+        b2 = (1 + cw) / 2 / a0
+        a1 = -2 * cw / a0
+        a2 = (1 - alpha) / a0
+    }
+
+    fun process(x: Double): Double {
+        val y = b0 * x + z1
+        z1 = b1 * x - a1 * y + z2
+        z2 = b2 * x - a2 * y
+        return y
+    }
+
+    fun reset() {
+        z1 = 0.0
+        z2 = 0.0
+    }
+}
+
 class Biquad(
     private val b0: Double,
     private val b1: Double,
@@ -242,6 +277,17 @@ class DspAudioProcessor : BaseAudioProcessor() {
     @Volatile
     var params: DspParams = DspParams()
 
+    /**
+     * A low cut moved by a mix while one song blends into the next, so the two
+     * basslines aren't heard on top of each other; 0 is off. It moves smoothly:
+     * the filter is retuned each buffer and keeps its state.
+     */
+    @Volatile
+    var lowCutHz: Float = 0f
+
+    private var cut: Array<SweepHighPass> = emptyArray()
+    private var cutAt = 0f
+
     private var applied: DspParams? = null
     private var channels = 0
     private var sampleRate = 0
@@ -265,6 +311,8 @@ class DspAudioProcessor : BaseAudioProcessor() {
         isFloat = enc == C.ENCODING_PCM_FLOAT
         frame = FloatArray(channels)
         ns = FloatArray(channels)
+        cut = Array(channels) { SweepHighPass() }
+        cutAt = 0f
         space = if (sampleRate > 0) Space3D(sampleRate) else null
         applied = null
         return inputAudioFormat
@@ -303,7 +351,13 @@ class DspAudioProcessor : BaseAudioProcessor() {
             return
         }
         val gain = masterGain
-        if (p.isNeutral || channels == 0) {
+        val lowCut = lowCutHz
+        if (lowCut != cutAt) {
+            if (lowCut > 0f && sampleRate > 0) cut.forEach { it.tune(lowCut.toDouble(), sampleRate.toDouble()) }
+            if (cutAt <= 0f) cut.forEach { it.reset() }
+            cutAt = lowCut
+        }
+        if ((p.isNeutral && lowCut <= 0f) || channels == 0) {
             if (gain >= 0.999f || channels == 0) {
                 out.put(inputBuffer)
             } else if (isFloat) {
@@ -377,6 +431,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
         for (c in 0 until channels) {
             var x = (frame[c] * pre).toDouble()
             for (f in filters[c]) x = f.process(x)
+            if (cutAt > 0f) x = cut[c].process(x)
             frame[c] = x.toFloat()
         }
         if (channels == 2) {
@@ -445,6 +500,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
 
     override fun onFlush() {
         filters.forEach { ch -> ch.forEach { it.reset() } }
+        cut.forEach { it.reset() }
         space?.reset()
         com.opentune.playback.AudioLevels.flush()
     }

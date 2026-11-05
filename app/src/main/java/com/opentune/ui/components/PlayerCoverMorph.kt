@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -347,6 +348,9 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
         val top = 150.dp.toPx()
         Rect(24.dp.toPx(), top, 24.dp.toPx() + side, top + side)
     }
+    // The player cover's own corner, as set in Appearance (the full-screen cover keeps the usual one).
+    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    val coverCorner = if (ui.fullScreenCover) 28f else ui.coverCornerDp.toFloat()
     fun roundStart(from: Rect) = if (PlayerMorph.round()) with(density) { from.width.toDp().value / 2f } else 12f
     // Only whether a finger is on it decides what's drawn; how far it has gone
     // is read in the layer alone, so a swipe doesn't recompose this every frame.
@@ -356,22 +360,22 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
         PlayerMorph.expanding -> {
             val from = PlayerMorph.openFrom() ?: return
             val to = (PlayerMorph.playerCover ?: PlayerMorph.lastPlayerCover)?.let(PlayerMorph::scaled) ?: guess
-            MorphBox(url, smallUrl, from, to, { openT.value }, startCornerDp = roundStart(from), endCornerDp = 28f)
+            MorphBox(url, smallUrl, from, to, { openT.value }, startCornerDp = roundStart(from), endCornerDp = coverCorner)
         }
         PlayerMorph.collapsing -> {
             val from = PlayerMorph.closeFrom() ?: return
             val to = PlayerMorph.miniCover ?: return
-            MorphBox(url, smallUrl, from, to, { closeT.value }, startCornerDp = 28f, endCornerDp = 12f)
+            MorphBox(url, smallUrl, from, to, { closeT.value }, startCornerDp = coverCorner, endCornerDp = 12f)
         }
         pulled -> {
             val from = PlayerMorph.miniCover ?: return
             val to = PlayerMorph.lastPlayerCover?.let(PlayerMorph::scaled) ?: guess
-            MorphBox(url, smallUrl, from, to, { PlayerMorph.pulling }, startCornerDp = roundStart(from), endCornerDp = 28f)
+            MorphBox(url, smallUrl, from, to, { PlayerMorph.pulling }, startCornerDp = roundStart(from), endCornerDp = coverCorner)
         }
         dragged -> {
             val from = PlayerMorph.dragRest() ?: return
             val to = PlayerMorph.miniCover ?: return
-            MorphBox(url, smallUrl, from, to, { PlayerMorph.dragging }, startCornerDp = 28f, endCornerDp = 12f)
+            MorphBox(url, smallUrl, from, to, { PlayerMorph.dragging }, startCornerDp = coverCorner, endCornerDp = 12f)
         }
     }
 }

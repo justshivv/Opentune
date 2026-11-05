@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Animation
+import androidx.compose.material.icons.rounded.RoundedCorner
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.BatteryChargingFull
@@ -871,10 +872,25 @@ private fun settingsSections(
                 Entry("Upgrade quality while playing", "better stream premium 256 opus swap") {
                     ToggleRow("Upgrade quality while playing", pb.qualityUpgrade, { v -> AppSettings.updatePlayback { it.copy(qualityUpgrade = v) } }, summary = "If a clearly better stream turns up a few seconds in, switch to it without stopping", icon = Icons.Rounded.HighQuality, beta = true)
                 },
+                Entry("Automix", "auto mix dj blend beat transition seamless") {
+                    ToggleRow(
+                        "Automix",
+                        pb.automix,
+                        { v -> AppSettings.updatePlayback { it.copy(automix = v) } },
+                        summary = if (pb.automix) "Each song blends into the next where it suits them: across a fade-out, on the beat, trading the bass over"
+                        else "Off: songs end and start as set below",
+                        icon = Icons.Rounded.AutoAwesome,
+                        beta = true,
+                    )
+                },
                 Entry("Crossfade", "fade blend transition overlap") {
                     SettingRow(
                         "Crossfade",
-                        summary = if (pb.crossfadeSeconds == 0) "Off: songs play back to back" else "Blend each song into the next over ${pb.crossfadeSeconds} s",
+                        summary = when {
+                            pb.automix -> "Automix is choosing how long each blend lasts"
+                            pb.crossfadeSeconds == 0 -> "Off: songs play back to back"
+                            else -> "Blend each song into the next over ${pb.crossfadeSeconds} s"
+                        },
                         icon = Icons.Rounded.Animation,
                         below = {
                             Slider(
@@ -882,6 +898,7 @@ private fun settingsSections(
                                 onValueChange = { v -> AppSettings.updatePlayback { it.copy(crossfadeSeconds = v.toInt()) } },
                                 valueRange = 0f..12f,
                                 steps = 11,
+                                enabled = !pb.automix,
                             )
                         },
                     )
@@ -1085,6 +1102,26 @@ private fun settingsSections(
                 },
                 Entry("Full-screen cover art", "artwork edge") {
                     ToggleRow("Full-screen cover art", ui.fullScreenCover, { v -> AppSettings.updateUi { it.copy(fullScreenCover = v) } }, summary = "Runs the cover to the edges of the player instead of a square sleeve", icon = Icons.Rounded.Fullscreen)
+                },
+                Entry("Cover corners", "artwork corner radius round square sharp shape thumbnail") {
+                    SettingRow(
+                        "Cover corners",
+                        summary = when {
+                            ui.fullScreenCover -> "Turn off Full-screen cover art to shape the cover"
+                            ui.coverCornerDp == 0 -> "Square, with sharp corners"
+                            else -> "Rounded by ${ui.coverCornerDp} dp"
+                        },
+                        icon = Icons.Rounded.RoundedCorner,
+                        below = {
+                            Slider(
+                                value = ui.coverCornerDp.toFloat(),
+                                onValueChange = { v -> AppSettings.updateUi { it.copy(coverCornerDp = (v / 4).roundToInt() * 4) } },
+                                valueRange = 0f..40f,
+                                steps = 9,
+                                enabled = !ui.fullScreenCover,
+                            )
+                        },
+                    )
                 },
                 Entry("Wavy seek bar", "wave progress slider") {
                     ToggleRow("Wavy seek bar", ui.wavySeekbar, { v -> AppSettings.updateUi { it.copy(wavySeekbar = v) } }, summary = "The played part of the bar ripples while music plays", icon = Icons.Rounded.Waves)

@@ -1,0 +1,389 @@
+package com.opentune.playback.mix
+
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.ln
+import kotlin.math.log10
+import kotlin.math.log2
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlin.math.roundToLong
+import kotlin.math.sqrt
+
+/*
+ * What a transition needs to know about two songs, worked out from their
+ * sound: where the outgoing one really ends (not where its file does, which
+ * is often seconds of silence later), whether it fades out, where the
+ * incoming one really starts, and the beat of each, so a blend can start on
+ * a beat and last whole bars.
+ *
+ * Everything here works on [Features], a loudness and an onset value for each
+ * ~10 ms of sound, so it runs on plain arrays and is tested without a decoder.
+ */
+
+/** A stretch of a song as one loudness and one onset strength per hop. */
+class Features(
+    /** Song time of the first hop. */
+    val startMs: Long,
+    val hopMs: Double,
+    /** Mean power of each hop, in dB below full scale. */
+    val powerDb: FloatArray,
+    /** How sharply the sound rose at each hop: drum hits, plucked notes. */
+    val onset: FloatArray,
+) {
+    val size: Int get() = powerDb.size
+    val endMs: Long get() = timeOf(size.toDouble())
+
+    fun timeOf(index: Double): Long = startMs + (index * hopMs).roundToLong()
+    fun indexOf(ms: Long): Int = ((ms - startMs) / hopMs).roundToInt().coerceIn(0, max(0, size - 1))
+
+    companion object {
+        /**
+         * From the mean square of each hop, over the whole band and below about
+         * 150 Hz. The onset curve is the rise in each, log-compressed so a quiet
+         * hit counts as well as a loud one, with the bass rise (kick drums)
+         * weighted up and the local average taken off.
+         */
+        fun of(startMs: Long, hopMs: Double, energy: FloatArray, low: FloatArray): Features {
+            val n = energy.size
+            val powerDb = FloatArray(n) { db(energy[it]) }
+            val raw = FloatArray(n)
+            for (i in 1 until n) {
+                val dl = compress(low[i]) - compress(low[i - 1])
+                val df = compress(energy[i]) - compress(energy[i - 1])
+                raw[i] = max(0f, dl) * 1.5f + max(0f, df)
+            }
+            val w = max(1, (ONSET_MEAN_MS / hopMs).roundToInt())
+            val onset = FloatArray(n)
+            // Centred moving mean.
+            val prefix = DoubleArray(n + 1)
+            for (i in 0 until n) prefix[i + 1] = prefix[i] + raw[i]
+            for (i in 0 until n) {
+                val a = max(0, i - w)
+                val b = min(n, i + w + 1)
+                val mean = (prefix[b] - prefix[a]) / (b - a)
+                onset[i] = max(0.0, raw[i] - mean).toFloat()
+            }
+            return Features(startMs, hopMs, powerDb, onset)
+        }
+
+        private fun compress(e: Float): Float = ln(1f + 1000f * e)
+        private const val ONSET_MEAN_MS = 250.0
+    }
+}
+
+internal fun db(power: Float): Float = if (power <= 1e-12f) -120f else 10f * log10(power)
+
+/** Power averaged over [windowMs] around each hop, in dB: loudness as heard, not hit by hit. */
+internal fun smoothedDb(f: Features, windowMs: Double): FloatArray {
+    val n = f.size
+    val w = max(0, (windowMs / f.hopMs / 2).roundToInt())
+    val prefix = DoubleArray(n + 1)
+    for (i in 0 until n) prefix[i + 1] = prefix[i] + 10.0.pow(f.powerDb[i] / 10.0)
+    return FloatArray(n) { i ->
+        val a = max(0, i - w)
+        val b = min(n, i + w + 1)
+        db(((prefix[b] - prefix[a]) / (b - a)).toFloat())
+    }
+}
+
+internal fun percentile(values: FloatArray, from: Int, to: Int, q: Float): Float {
+    if (to <= from) return -120f
+    val s = values.copyOfRange(from, to).sorted()
+    return s[((s.size - 1) * q).roundToInt().coerceIn(0, s.size - 1)]
+}
+
+/** A steady beat: one every [periodMs], one of them at [anchorMs]. */
+data class Beat(val periodMs: Double, val anchorMs: Double, val confidence: Float) {
+    val bpm: Double get() = 60_000.0 / periodMs
+    val sure: Boolean get() = confidence >= SURE
+
+    /** The beat nearest to [ms]. */
+    fun nearest(ms: Long): Long = (anchorMs + Math.round((ms - anchorMs) / periodMs) * periodMs).roundToLong()
+
+    /** The first beat at or after [ms]. */
+    fun atOrAfter(ms: Long): Long = (anchorMs + kotlin.math.ceil((ms - anchorMs) / periodMs - 1e-6) * periodMs).roundToLong()
+
+    companion object {
+        /** Beats this clear stand well out of the music between them. */
+        const val SURE = 1.8f
+    }
+}
+
+/**
+ * The beat in [f] between [fromMs] and [toMs], or null when nothing in it
+ * repeats steadily enough to call a beat (speech, ambient pads, rubato).
+ *
+ * The period is the autocorrelation peak of the onset curve between 70 and
+ * 180 BPM, leaning towards 120 so a song isn't heard at half or double its
+ * speed, then refined with a comb over the whole stretch: the period and
+ * phase whose ticks land on the strongest onsets. The confidence is how much
+ * stronger the onsets on the ticks are than the onsets overall.
+ */
+fun beatGrid(f: Features, fromMs: Long = f.startMs, toMs: Long = f.endMs): Beat? {
+    val a = f.indexOf(fromMs)
+    val b = min(f.size, f.indexOf(toMs) + 1)
+    val n = b - a
+    val o = f.onset
+    val minLag = (60_000.0 / MAX_BPM / f.hopMs).toInt()
+    val maxLag = (60_000.0 / MIN_BPM / f.hopMs).toInt() + 1
+    if (n < maxLag * 6) return null
+    var mean = 0.0
+    for (i in a until b) mean += o[i]
+    mean /= n
+    if (mean <= 1e-6) return null
+
+    // 1. Autocorrelation, weighted towards a moderate tempo.
+    var bestLag = -1
+    var bestScore = 0.0
+    val r = DoubleArray(maxLag + 2)
+    for (lag in minLag..maxLag + 1) {
+        var s = 0.0
+        for (i in a until b - lag) s += o[i] * o[i + lag]
+        r[lag] = s / (n - lag)
+    }
+    for (lag in minLag..maxLag) {
+        val bpm = 60_000.0 / (lag * f.hopMs)
+        val lean = exp(-0.5 * (log2(bpm / LEAN_BPM) / LEAN_OCTAVES).pow(2))
+        val score = r[lag] * lean
+        if (score > bestScore) { bestScore = score; bestLag = lag }
+    }
+    if (bestLag < 0) return null
+    // Between hops, by the parabola through the peak and its neighbours.
+    val y0 = r[bestLag - 1]; val y1 = r[bestLag]; val y2 = r[bestLag + 1]
+    val curve = y0 - 2 * y1 + y2
+    val lag = bestLag + if (curve < 0) (0.5 * (y0 - y2) / curve).coerceIn(-0.5, 0.5) else 0.0
+
+    // 2. Comb: period within 2 % of that, and the phase, by onsets landing on the ticks.
+    var best = Triple(lag, 0.0, -1.0)
+    var step = -20
+    while (step <= 20) {
+        val period = lag * (1 + step / 1000.0)
+        var phase = 0.0
+        while (phase < period) {
+            var sum = 0.0
+            var count = 0
+            var t = a + phase
+            while (t < b) {
+                val i = t.roundToInt()
+                // A tick may fall a hop either side of where the hit was measured.
+                var m = o[i.coerceIn(a, b - 1)]
+                if (i - 1 >= a) m = max(m, o[i - 1])
+                if (i + 1 < b) m = max(m, o[i + 1])
+                sum += m
+                count++
+                t += period
+            }
+            val score = sum / max(1, count)
+            if (score > best.third) best = Triple(period, phase, score)
+            phase += 1.0
+        }
+        step += 1
+    }
+    val (period, phase, score) = best
+    // The ticks are checked a hop either side, so compare with the onsets taken the same way.
+    var spread = 0.0
+    for (i in a until b) {
+        var m = o[i]
+        if (i - 1 >= a) m = max(m, o[i - 1])
+        if (i + 1 < b) m = max(m, o[i + 1])
+        spread += m
+    }
+    spread /= n
+    val confidence = (score / max(1e-9, spread)).toFloat()
+    return Beat(period * f.hopMs, f.startMs + (a + phase) * f.hopMs, confidence)
+}
+
+/** How a song ends: where its sound stops, where its outro starts, and its beat there. */
+data class Ending(
+    /** Where the music stops; anything after is silence or near it. */
+    val endMs: Long,
+    /** Where the song starts to fall away from its body (a fade-out or quiet coda); equal to [endMs] for a hard stop. */
+    val outroMs: Long,
+    val beat: Beat?,
+) {
+    val outroLengthMs: Long get() = endMs - outroMs
+}
+
+/** How a song starts: where its sound begins, whether it eases in, and its beat. */
+data class Opening(
+    /** Where the music starts; anything before is silence. */
+    val startMs: Long,
+    /** The first seconds are clearly quieter than the song: an intro to blend over. */
+    val quietIntro: Boolean,
+    val beat: Beat?,
+)
+
+/** [f] covers the last stretch of a song [durationMs] long. */
+fun analyzeEnding(f: Features, durationMs: Long): Ending? {
+    if (f.size < 100) return null
+    val s = smoothedDb(f, 400.0)
+    // The song's body: loud hops in the part before the end.
+    val body = percentile(s, 0, max(1, (f.size * 0.6).toInt()), 0.8f)
+    if (body < -60f) return null
+    val floor = max(body - SILENCE_BELOW_DB, -65f)
+    var last = f.size - 1
+    while (last > 0 && s[last] < floor) last--
+    if (last <= 0) return null
+    val end = min(durationMs, f.timeOf(last + 1.0) + END_MARGIN_MS)
+    var k = last
+    while (k > 0 && s[k] < body - OUTRO_BELOW_DB) k--
+    val outro = min(end, f.timeOf(k.toDouble()))
+    val beat = beatGrid(f, max(f.startMs, outro - BEAT_SPAN_MS), outro.coerceAtLeast(f.startMs + BEAT_SPAN_MS / 2))
+    return Ending(end, outro, beat)
+}
+
+/** [f] covers the first stretch of a song. */
+fun analyzeOpening(f: Features): Opening? {
+    if (f.size < 100) return null
+    val s = smoothedDb(f, 200.0)
+    val body = percentile(s, 0, f.size, 0.8f)
+    if (body < -60f) return null
+    val floor = max(body - SILENCE_BELOW_DB, -65f)
+    var first = 0
+    while (first < f.size && f.powerDb[first] < floor) first++
+    if (first >= f.size) return null
+    val start = max(0L, f.timeOf(first.toDouble()) - START_MARGIN_MS)
+    val intro = smoothedDb(f, 1000.0)
+    val a = f.indexOf(start)
+    val b = min(f.size, f.indexOf(start + INTRO_SPAN_MS) + 1)
+    var power = 0.0
+    for (i in a until b) power += 10.0.pow(intro[i] / 10.0)
+    val introDb = db((power / max(1, b - a)).toFloat())
+    val beat = beatGrid(f, start, start + BEAT_SPAN_MS)
+    return Opening(start, introDb <= body - QUIET_INTRO_DB, beat)
+}
+
+/**
+ * When and how one song hands over to the next.
+ *
+ * At [mixAtMs] in the outgoing song the incoming one starts from [inFromMs];
+ * the two then blend for [blendMs], and the outgoing song stops by [outEndMs].
+ * With a [beatMs], the incoming song is kept in step: its beats at
+ * [inBeatMs] + k·beat fall on the outgoing song's at [outBeatMs] + k·beat.
+ */
+data class MixPlan(
+    val mixAtMs: Long,
+    val outEndMs: Long,
+    val inFromMs: Long,
+    val blendMs: Long,
+    val beatMs: Double? = null,
+    val outBeatMs: Long = mixAtMs,
+    val inBeatMs: Long = inFromMs,
+    /** Trade the bass over: the outgoing song's falls away as the incoming song's comes in. */
+    val bassSwap: Boolean = false,
+)
+
+/** A plain crossfade of [fadeMs], without the silence at either end. */
+fun crossfadePlan(durationMs: Long, fadeMs: Long, ending: Ending?, opening: Opening?): MixPlan {
+    val end = ending?.endMs?.coerceAtMost(durationMs) ?: durationMs
+    val blend = min(fadeMs, end / 3)
+    return MixPlan(mixAtMs = end - blend, outEndMs = end, inFromMs = opening?.startMs ?: 0L, blendMs = blend)
+}
+
+/**
+ * Automix: a blend shaped by the two songs.
+ *
+ * A song that fades out is blended across its fade; one that stops dead gets
+ * a short blend just before the stop, longer when the next song eases in.
+ * When the outgoing beat is clear the blend starts on a beat and lasts whole
+ * bars, and when both songs have a clear beat at nearly the same tempo the
+ * incoming song is kept in step with the outgoing one. The bass is traded
+ * over rather than doubled.
+ */
+fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
+    val end = ending?.endMs?.coerceAtMost(durationMs) ?: durationMs
+    val outro = ending?.outroLengthMs ?: 0L
+    var blend = when {
+        ending == null -> DEFAULT_AUTOMIX_MS
+        outro >= FADE_OUT_MS -> outro.coerceIn(MIN_AUTOMIX_MS, MAX_AUTOMIX_MS)
+        opening?.quietIntro == true -> EASED_AUTOMIX_MS
+        else -> HARD_STOP_AUTOMIX_MS
+    }
+    val outBeat = ending?.beat?.takeIf { it.sure }
+    val inBeat = opening?.beat?.takeIf { it.sure }
+    var mixAt = end - blend
+    var beatMs: Double? = null
+    if (outBeat != null) {
+        // Whole bars of four: one, two, four or eight, whichever is nearest.
+        val bar = outBeat.periodMs * 4
+        val bars = listOf(1, 2, 4, 8).minBy { abs(ln(it * bar / blend)) }
+        blend = (bars * bar).roundToLong().coerceIn(MIN_AUTOMIX_MS / 2, MAX_AUTOMIX_MS + 2_000)
+        mixAt = outBeat.nearest(end - blend)
+        blend = min(blend, end - mixAt)
+        if (inBeat != null && abs(inBeat.periodMs / outBeat.periodMs - 1) <= TEMPO_MATCH) beatMs = outBeat.periodMs
+    }
+    mixAt = mixAt.coerceIn(end / 2, end - MIN_BLEND_MS)
+    blend = (end - mixAt).coerceAtMost(blend).coerceAtLeast(MIN_BLEND_MS)
+    val inFrom = opening?.startMs ?: 0L
+    return MixPlan(
+        mixAtMs = mixAt,
+        outEndMs = end,
+        inFromMs = inFrom,
+        blendMs = blend,
+        beatMs = beatMs,
+        outBeatMs = mixAt,
+        inBeatMs = inBeat?.atOrAfter(inFrom) ?: inFrom,
+        bassSwap = true,
+    )
+}
+
+/**
+ * How far to move the incoming song to put it in step with the outgoing one,
+ * in ms between −beat/2 and +beat/2. Zero for a plan without a beat.
+ */
+fun stepCorrection(plan: MixPlan, outPositionMs: Long, inPositionMs: Long): Long {
+    val beat = plan.beatMs ?: return 0L
+    // How much further into its song the incoming one is than the beat grid wants.
+    val ahead = (inPositionMs - plan.inBeatMs) - (outPositionMs - plan.outBeatMs)
+    var e = ahead.toDouble() % beat
+    if (e > beat / 2) e -= beat
+    if (e < -beat / 2) e += beat
+    return (-e).roundToLong()
+}
+
+/** Gains for the outgoing and incoming songs at [p] of the way through a blend: equal power, so the level holds. */
+fun blendGains(p: Float): Pair<Float, Float> {
+    val q = p.coerceIn(0f, 1f)
+    return kotlin.math.cos(q * Math.PI / 2).toFloat() to kotlin.math.sin(q * Math.PI / 2).toFloat()
+}
+
+/** The bass cut on each song at [p] through a bass swap: outgoing rises from none, incoming falls to none. */
+fun bassCuts(p: Float): Pair<Float, Float> {
+    val out = BASS_CUT_HZ * smoothstep(0.25f, 0.6f, p)
+    val inc = BASS_CUT_HZ * (1f - smoothstep(0.35f, 0.7f, p))
+    return out to inc
+}
+
+private fun smoothstep(a: Float, b: Float, x: Float): Float {
+    val t = ((x - a) / (b - a)).coerceIn(0f, 1f)
+    return t * t * (3 - 2 * t)
+}
+
+/** Root mean square of [x] around zero; for tests. */
+internal fun rms(x: FloatArray): Float = sqrt(x.fold(0.0) { s, v -> s + v * v } / max(1, x.size)).toFloat()
+
+private const val MIN_BPM = 70.0
+private const val MAX_BPM = 180.0
+private const val LEAN_BPM = 120.0
+private const val LEAN_OCTAVES = 1.0
+private const val SILENCE_BELOW_DB = 32f
+private const val OUTRO_BELOW_DB = 6f
+private const val QUIET_INTRO_DB = 7f
+private const val END_MARGIN_MS = 150L
+private const val START_MARGIN_MS = 30L
+private const val INTRO_SPAN_MS = 5_000L
+private const val BEAT_SPAN_MS = 20_000L
+/** An outro at least this long is a fade-out to blend across. */
+private const val FADE_OUT_MS = 2_500L
+private const val MIN_AUTOMIX_MS = 4_000L
+private const val MAX_AUTOMIX_MS = 12_000L
+private const val DEFAULT_AUTOMIX_MS = 6_000L
+private const val EASED_AUTOMIX_MS = 6_000L
+private const val HARD_STOP_AUTOMIX_MS = 3_500L
+private const val MIN_BLEND_MS = 1_500L
+/** Tempos within this of each other are close enough to keep in step without stretching. */
+private const val TEMPO_MATCH = 0.03
+private const val BASS_CUT_HZ = 200f

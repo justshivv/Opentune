@@ -980,6 +980,7 @@ fun PlayerLayout(
                                             glow = state.ui.coverGlow && !state.ui.reduceAnimation && !amoled && !apple,
                                             video = state.coverVideo,
                                             canvasShowing = state.canvasVideo != null,
+                                            corner = state.ui.coverCornerDp.dp,
                                         )
                                 }
                                 }
@@ -1174,7 +1175,7 @@ fun PlayerLayout(
                 } else null
                 SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation && !apple, playing = state.isPlaying, lyricAt = lyricAt, marks = marks, quality = { if (state.ui.sourcePill) SourceQualityBadge(current.videoId, state.audioFormat, onClick = { showSignal = true }) })
                 if (state.ui.statsForNerds) {
-                    Box(Modifier.clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
+                    Box(Modifier.fillMaxWidth().clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
                 }
                 PlayerControls(
                     isPlaying = state.isPlaying,
