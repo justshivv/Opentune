@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.GridView
@@ -105,6 +106,8 @@ fun HomeScreen(
 ) {
     val platform = if (com.opentune.ui.tv.LocalIsTv.current) "tv" else "android"
     val runtime by com.opentune.data.config.RemoteConfig.state.collectAsState()
+    val closedBanners by com.opentune.data.config.HomeDismissals.banners.collectAsState()
+    val closedPlaylists by com.opentune.data.config.HomeDismissals.playlists.collectAsState()
     val playback by AppSettings.playback.collectAsState()
     val loader = rememberLoader("home:${playback.recommender.name}") { MusicRepository.home() }
     val state by loader.state.collectAsState()
@@ -297,7 +300,7 @@ fun HomeScreen(
                 }
             }
             item(key = "festival") { FestivalCard() }
-            itemsIndexed(runtime.banners.filter { platform in it.platforms }, key = { _, banner -> "remote-banner:${banner.id}" }) { _, banner ->
+            itemsIndexed(runtime.banners.filter { platform in it.platforms && it.id !in closedBanners }, key = { _, banner -> "remote-banner:${banner.id}" }) { _, banner ->
                 RemoteBannerCard(banner)
             }
             for (section in runtime.sections.filter { it.enabled }) when (section.id) {
@@ -328,10 +331,15 @@ fun HomeScreen(
                     MixesShelf(spotifyMixes, actions, "Spotify's mixes for you, from your likes and listening there",
                         title = runtime.title(section.id, "Made for you on Spotify"))
                 }
-                "featured-playlists" -> if (runtime.playlists.isNotEmpty()) item(key = "featured-playlists") {
+                "featured-playlists" -> if (com.opentune.data.config.HomeDismissals.showsPlaylists(runtime.playlists.map { it.id }, closedPlaylists)) item(key = "featured-playlists") {
                     HomeShelfView(HomeShelf(runtime.title(section.id, "From the community"), runtime.playlists.map {
                         ShelfItem(it.title, "OpenTune picks", it.artwork, null, it.browseId)
-                    }), onItemClick, songRows = false, covers = covers, coverKey = "featured-playlists")
+                    }), onItemClick, songRows = false, covers = covers, coverKey = "featured-playlists", action = {
+                        // Closed until a playlist is added that wasn't there now.
+                        IconButton(onClick = { com.opentune.data.config.HomeDismissals.dismissPlaylists(runtime.playlists.map { it.id }) }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Rounded.Close, "Dismiss", Modifier.size(22.dp))
+                        }
+                    })
                 }
                 "recommendations" -> {
                     when (val s = state) {
@@ -456,19 +464,22 @@ internal fun arrangeHomeShelves(shelves: List<HomeShelf>): HomeSections {
  * [covers], its song and album cards can move their covers, under [coverKey].
  */
 @Composable
-fun HomeShelfView(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, modifier: Modifier = Modifier, songRows: Boolean = true, covers: MovingCovers? = null, coverKey: String = "") {
+fun HomeShelfView(
+    shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, modifier: Modifier = Modifier, songRows: Boolean = true, covers: MovingCovers? = null, coverKey: String = "",
+    action: (@Composable () -> Unit)? = null,
+) {
     Box(modifier) {
         if (songRows && shelf.isQuickPicks()) {
             QuickPicks(shelf, onItemClick)
         } else {
             if (covers == null) {
-                Shelf(title = shelf.title, subtitle = shelf.subtitle, items = shelf.items) { item ->
+                Shelf(title = shelf.title, subtitle = shelf.subtitle, items = shelf.items, action = action) { item ->
                     ItemCard(item.title, item.subtitle, item.thumbnailUrl, item.type(), onClick = { onItemClick(item) }, explicit = item.explicit, menu = item.cardMenu())
                 }
             } else {
                 // By place in the shelf, since a shelf can hold the same item twice.
                 val indexed = remember(shelf.items) { shelf.items.withIndex().toList() }
-                Shelf(title = shelf.title, subtitle = shelf.subtitle, items = indexed) { (i, item) ->
+                Shelf(title = shelf.title, subtitle = shelf.subtitle, items = indexed, action = action) { (i, item) ->
                     val type = item.type()
                     val motion = rememberCoverMotion(
                         covers,

@@ -245,6 +245,8 @@ internal fun MorphBox(
     fullBleed: Boolean = false,
     contentModifier: Modifier = Modifier,
     artworkMotion: ArtworkMotion? = null,
+    /** Drawn over the cover as it flies: the animated cover, so the still one doesn't show through. */
+    overlay: (@Composable androidx.compose.foundation.layout.BoxScope.() -> Unit)? = null,
 ) {
     val big = if (from.width >= to.width) from else to
     val small = if (big === from) to else from
@@ -301,6 +303,7 @@ internal fun MorphBox(
         // The mini player's own copy underneath, already loaded, so it never shows empty.
         if (smallUrl != null) Artwork(smallUrl, Modifier.matchParentSize(), RectangleShape)
         Artwork(url, Modifier.matchParentSize(), RectangleShape, imageModifier = Modifier.livingArt(true, artworkMotion != null, artworkMotion) { grownAt(p()) })
+        overlay?.invoke(this)
     }
 }
 

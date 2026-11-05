@@ -525,10 +525,11 @@ fun <T> Shelf(
     title: String,
     items: List<T>,
     subtitle: String? = null,
+    action: (@Composable () -> Unit)? = null,
     card: @Composable (T) -> Unit,
 ) {
     Column {
-        SectionHeader(title, subtitle = subtitle)
+        SectionHeader(title, subtitle = subtitle, action = action)
         LazyRow(
             contentPadding = PaddingValues(horizontal = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),

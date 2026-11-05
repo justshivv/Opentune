@@ -924,7 +924,10 @@ fun SeekBar(
             val f = fraction()
             if (focused) drawRoundRect(focusRing, Offset(-3.dp.toPx(), y - 3.dp.toPx()), Size(size.width + 6.dp.toPx(), h + 6.dp.toPx()), CornerRadius(h / 2 + 3.dp.toPx()), style = Stroke(2.dp.toPx()))
             val b = if (durationMs > 0) (buffered().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-            drawRoundRect(inactive, Offset(0f, y), Size(size.width, h), r)
+            // Under the wave, the straight track starts where the played part ends: drawn the
+            // whole way along, it showed as a flat line behind the wave.
+            val trackFrom = if (amplitude > 0f && sweep == null) (size.width * f + h * 1.5f * amplitude).coerceAtMost(size.width) else 0f
+            if (trackFrom < size.width) drawRoundRect(inactive, Offset(trackFrom, y), Size(size.width - trackFrom, h), r)
             if (sweep != null) {
                 val at = sweep.value * size.width
                 val band = size.width * 0.25f
@@ -934,7 +937,8 @@ fun SeekBar(
                 )
                 return@Canvas
             }
-            drawRoundRect(bufferedColor, Offset(0f, y), Size(size.width * maxOf(b, f), h), r)
+            val bufferedTo = size.width * maxOf(b, f)
+            if (bufferedTo > trackFrom) drawRoundRect(bufferedColor, Offset(trackFrom, y), Size(bufferedTo - trackFrom, h), r)
             if (amplitude > 0f) {
                 // Played part as a sine wave, a stroke as thick as the track.
                 val amp = h * 0.9f * amplitude

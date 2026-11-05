@@ -1267,6 +1267,14 @@ fun PlayerLayout(
                         fullBleed = fullStyle,
                         contentModifier = Modifier.testTag("pane-cover-flight"),
                         artworkMotion = artworkMotion.takeIf { state.ui.movingCover && !state.ui.reduceAnimation },
+                        // The animated cover flies too, on the same player as the cover it leaves or
+                        // lands on, so the still cover never shows for a moment on the way.
+                        overlay = state.coverVideo?.takeIf { state.canvasVideo == null && !fullStyle }?.let { video ->
+                            {
+                                val quality = state.ui.motionQuality
+                                LoopingVideo(video.url, state.isPlaying, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl, maxPx = quality.maxPx, maxBitrate = quality.maxBitrate)
+                            }
+                        },
                     )
                     // Drawn outside the player's own colours, so given them here: the title and
                     // its buttons changed colour as they flew.
