@@ -136,6 +136,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         listOf(
             "Updates" to listOf("What's new", "Check for updates", "Check for updates automatically"),
             "Community" to listOf("OpenTune community", "Support OpenTune", "Star on GitHub", "Source code"),
+            "Developers" to listOf("justshivv", "aerluc"),
             "Help" to listOf("Show the welcome again", "Count this phone in usage numbers", "Export diagnostics"),
         ),
     ),
