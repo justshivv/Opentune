@@ -258,7 +258,8 @@ internal fun MorphBox(
     val small = if (big === from) to else from
     if (big.width <= 0f || big.height <= 0f) return
     val density = LocalDensity.current
-    val shadowPx = with(density) { 28.dp.toPx() }
+    // As light as the player cover's own, so the cover lands without its shadow changing.
+    val shadowPx = with(density) { 16.dp.toPx() }
     val startCorner = with(density) { startCornerDp.dp.toPx() }
     val endCorner = with(density) { endCornerDp.dp.toPx() }
     // Where the player's own fade to the page begins, as a share of the art's height.
@@ -292,6 +293,8 @@ internal fun MorphBox(
                 clip = true
                 // Deepest at full size, none on the small cover.
                 shadowElevation = if (fullBleed || bigAlpha < 1f) 0f else shadowPx * grownAt(t)
+                ambientShadowColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.22f)
+                spotShadowColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.16f)
                 if (bigAlpha < 1f) alpha = bigAlpha + (1f - bigAlpha) * (1f - grownAt(t)).let { it * it * (3 - 2 * it) }
             }
             .then(

@@ -681,7 +681,12 @@ fun ArtworkPane(
                         scaleY = scale
                         translationX = offsetX.value
                         rotationZ = offsetX.value / 90f
-                        shadowElevation = 28.dp.toPx()
+                        // A soft, light shadow: Android casts an elevation shadow from a light
+                        // above the screen, and at full strength under a cover this size its lower
+                        // edge showed as a dark curve below the bottom corners.
+                        shadowElevation = 16.dp.toPx()
+                        ambientShadowColor = Color.Black.copy(alpha = 0.22f)
+                        spotShadowColor = Color.Black.copy(alpha = 0.16f)
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(corner)
                         clip = true
                         // Hidden under the morphing cover while it grows in or shrinks away.
