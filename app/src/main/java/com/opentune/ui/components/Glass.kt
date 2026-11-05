@@ -215,7 +215,11 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     }
     val base = this.clip(shape)
     val filled = if (haze == null || ui.reduceBlur) {
-        base.background(if (tint.alpha < 1f) tint else colour.copy(alpha = 0.96f))
+        // Nothing blurred behind (Lite mode, blur reduced): a see-through tint, meant to sit on
+        // frosted glass, is laid over the solid surface instead, so the mini player and the dock
+        // have a body rather than letting the page show through them.
+        val face = if (tint.alpha < 1f) lerp(MaterialTheme.colorScheme.surfaceContainerHigh, tint.copy(alpha = 1f), tint.alpha) else colour
+        base.background(face)
     } else {
         base.hazeEffect(
             state = haze,
