@@ -490,9 +490,17 @@ class PlaybackService : MediaLibraryService() {
                 }
             },
             mainLowCut = { dsp.lowCutHz = it },
-            busy = { upgradeJob?.isActive == true || swapRamping || swappingTo != null },
+            // Only a swap under way holds a mix back; a search for a better stream doesn't.
+            busy = { swapRamping || swappingTo != null },
             silentMs = { dsp.meterRate.takeIf { it > 0 }?.let { rate -> dsp.silentFrames * 1000 / rate } ?: 0L },
             levelled = { a, b -> loudnessMbFor(a) != null && loudnessMbFor(b) != null },
+            durationOf = { it.toSong().durationMillis() },
+            beforeMix = {
+                if (upgradeJob?.isActive == true && !swapRamping && swappingTo == null) {
+                    upgradeJob?.cancel()
+                    NerdStats.onUpgrade(null)
+                }
+            },
         ).also { it.start() }
         dsp.meter = true
         // Casting: the device follows this player while one is connected.

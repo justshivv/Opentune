@@ -69,6 +69,10 @@ internal class Crossfade(
     private val silentMs: () -> Long = { 0L },
     /** True when loudness normalization already brings both songs to one level, so a mix needn't. */
     private val levelled: (MediaItem, MediaItem) -> Boolean = { _, _ -> false },
+    /** A song's length from its details, for a stream that doesn't say how long it is. */
+    private val durationOf: (MediaItem) -> Long? = { null },
+    /** Called as a mix starts: a search for a better stream for the ending song is called off, as it can't help now. */
+    private val beforeMix: () -> Unit = {},
 ) {
     /**
      * A second player and what to do when it's finished with. [level] gives it the
@@ -84,6 +88,9 @@ internal class Crossfade(
     private var tail: Tail? = null
     private var mix: Job? = null
     private var lastMixed: Pair<Int, String>? = null
+    /** Tries at a transition for the song in [triesFor]: a next song that didn't load gets another go. */
+    private var tries = 0
+    private var triesFor: Pair<Int, String>? = null
     /** True while this class moves the main player itself, so its own seeks aren't read as the listener's. */
     private var handingOver = false
     @Volatile private var phase = Phase.IDLE
@@ -153,9 +160,10 @@ internal class Crossfade(
         }
         if (!enabled || BitPerfectUsb.active) return POLL_MS
         if (!main.isPlaying || !main.hasNextMediaItem() || main.repeatMode == Player.REPEAT_MODE_ONE) return POLL_MS
-        val duration = main.duration
-        if (duration == C.TIME_UNSET || duration < MIN_SONG_MS) return POLL_MS
         val item = main.currentMediaItem ?: return POLL_MS
+        // Some streams (a FLAC sent as it's read) don't say how long they are; the song's details do.
+        val duration = main.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: durationOf(item) ?: return POLL_MS
+        if (duration < MIN_SONG_MS) return POLL_MS
         val key = main.currentMediaItemIndex to item.mediaId
         if (key == lastMixed) return POLL_MS
         val position = main.currentPosition
@@ -179,7 +187,10 @@ internal class Crossfade(
         val p = plan ?: if (silent || left <= quickPlanLeft()) quickPlan(duration).also { plan = it; planning?.cancel() } else return SOON_MS
         if (!silent && position < p.mixAtMs - PREP_MS) return ((p.mixAtMs - PREP_MS - position) / 2).coerceIn(SOON_MS, POLL_MS)
         if (busy()) return SOON_MS
+        if (triesFor != key) { triesFor = key; tries = 0 }
+        tries++
         lastMixed = key
+        beforeMix()
         begin(p, now = silent)
         return POLL_MS
     }
@@ -241,6 +252,9 @@ internal class Crossfade(
         val playing = main.currentMediaItemIndex
         // Levelled here only when loudness normalization isn't doing it already.
         val matchLevels = p.levelDb != 0f && main.currentMediaItem?.let { !levelled(it, next) } == true
+        val playingKey = main.currentMediaItemIndex to (main.currentMediaItem?.mediaId ?: "")
+        // Set once the next song is heard; a transition that ends before then may be tried again.
+        var started = false
         mix = scope.launch {
             try {
                 // 1. Loading, until it's due.
@@ -249,7 +263,7 @@ internal class Crossfade(
                     val ready = tp.playbackState == Player.STATE_READY && (tp.bufferedPosition - tp.currentPosition >= READY_AHEAD_MS || tp.isLoading.not())
                     val due = urgent || main.currentPosition >= p.mixAtMs
                     if (ready && due) break
-                    tp.playerError?.let { Log.w(TAG, "The next song didn't load", it); return@launch }
+                    tp.playerError?.let { Log.w(TAG, "The next song didn't load (try $tries)", it); return@launch }
                     delay(FRAME_MS * 2)
                 }
                 // 2. In, silent, on the beat, at its own loudness gain.
@@ -257,7 +271,11 @@ internal class Crossfade(
                 phase = Phase.BLENDING
                 MixState.start(label())
                 tp.playWhenReady = main.playWhenReady
-                if (!sounding(tp, START_TIMEOUT_MS)) return@launch
+                if (!sounding(tp, START_TIMEOUT_MS)) {
+                    Log.w(TAG, "The next song didn't start sounding (try $tries)")
+                    return@launch
+                }
+                started = true
                 if (p.beatMs != null && !urgent) putOnBeat(tp, p)
                 // 3. The blend, over what's left of the playing song.
                 val left = (p.outEndMs - main.currentPosition).coerceAtLeast(MIN_LEFT_MS)
@@ -293,6 +311,9 @@ internal class Crossfade(
                     mainLowCut(0f)
                     main.volume = 1f
                     releaseTail()
+                    // The next song never came in, and the playing one still has time: another go.
+                    val stillOn = main.currentMediaItemIndex to (main.currentMediaItem?.mediaId ?: "")
+                    if (!started && tries < MAX_TRIES && stillOn == playingKey) lastMixed = null
                 }
             }
         }
@@ -482,6 +503,8 @@ internal class Crossfade(
         const val SEEK_LEAD_MS = 80L
         const val IN_STEP_MS = 15L
         const val BAIL_MS = 150L
+        /** A transition whose next song won't load is tried this many times in all. */
+        const val MAX_TRIES = 2
     }
 }
 
