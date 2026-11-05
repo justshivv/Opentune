@@ -65,8 +65,9 @@ object GlassPerformance {
         val t = thread ?: HandlerThread("glass-frames").also { it.start(); thread = it }
         val handler = Handler(t.looper)
         @Suppress("DEPRECATION")
-        val hz = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) activity.display?.refreshRate else activity.windowManager.defaultDisplay.refreshRate)
-            ?.takeIf { it > 1f } ?: 60f
+        val hz = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) activity.display?.refreshRate else activity.windowManager.defaultDisplay.refreshRate
+        }.getOrNull()?.takeIf { it > 1f } ?: 60f
         // A frame more than half again its budget was a dropped one.
         val lateNs = (1_000_000_000L / hz * 1.5f).toLong()
         val window = FrameWindow(SAMPLE, SLOW_SHARE)
