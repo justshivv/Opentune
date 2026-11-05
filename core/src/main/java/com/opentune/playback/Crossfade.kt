@@ -70,11 +70,18 @@ internal class Crossfade(
     /** A second player and what to do when it's finished with. */
     class Tail(val player: ExoPlayer, val lowCut: (Float) -> Unit, val release: () -> Unit)
 
+    /** Where a transition is: the next song loading, the two blending, or the main player taking it over. */
+    private enum class Phase { IDLE, LOADING, BLENDING, HANDOVER }
+
+    /** The second player, carrying the next song in from its first moment until the main player takes it. */
     private var tail: Tail? = null
     private var mix: Job? = null
     private var lastMixed: Pair<Int, String>? = null
     /** True while this class moves the main player itself, so its own seeks aren't read as the listener's. */
     private var handingOver = false
+    @Volatile private var phase = Phase.IDLE
+    /** The playing song went silent while the next one loaded: start now rather than at the mix point. */
+    @Volatile private var urgent = false
 
     // The plan for the playing song, worked out once it's near its end.
     private var plan: MixPlan? = null
@@ -89,21 +96,25 @@ internal class Crossfade(
 
     private val listener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            if (!handingOver && tail != null) bail()
+            if (handingOver || tail == null) return
+            // The old song ran to its end under the blend: the main player is on the next one now,
+            // which the second player is already playing; it stays silent until the hand-over.
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && phase == Phase.BLENDING) {
+                main.volume = 0f
+                return
+            }
+            bail()
         }
 
         override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
             if (reason == Player.DISCONTINUITY_REASON_SEEK && !handingOver && tail != null) bail()
         }
 
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            val t = tail?.player ?: return
-            if (!main.playWhenReady) t.pause() else t.play()
-        }
-
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             val t = tail?.player ?: return
-            if (playWhenReady) t.play() else t.pause()
+            // Loading, the next song waits paused at its cue point whatever the player does.
+            if (phase == Phase.LOADING) return
+            t.playWhenReady = playWhenReady
         }
     }
 
@@ -128,7 +139,12 @@ internal class Crossfade(
 
     /** Looks at where the song is and starts what's due; returns how long to wait before looking again. */
     private fun check(): Long {
-        if (!enabled || tail != null || BitPerfectUsb.active) return POLL_MS
+        if (tail != null) {
+            // The next song is loading and the playing one has gone silent near its end: go now.
+            if (phase == Phase.LOADING && silentMs() >= SILENCE_SKIP_MS) urgent = true
+            return SOON_MS
+        }
+        if (!enabled || BitPerfectUsb.active) return POLL_MS
         if (!main.isPlaying || !main.hasNextMediaItem() || main.repeatMode == Player.REPEAT_MODE_ONE) return POLL_MS
         val duration = main.duration
         if (duration == C.TIME_UNSET || duration < MIN_SONG_MS) return POLL_MS
@@ -138,14 +154,6 @@ internal class Crossfade(
         val position = main.currentPosition
         val left = duration - position
         if (left > ANALYZE_AHEAD_MS) return POLL_MS
-        // The song has gone silent near its end (a long fade to nothing, seconds of silence
-        // before the file stops, a gap before a hidden track): the next song starts now.
-        // Seen as the sound is decoded, so it works whether or not the song could be read ahead.
-        if (left in MIN_LEFT_MS..SILENCE_WINDOW_MS && position > duration / 2 && silentMs() >= SILENCE_SKIP_MS && !busy()) {
-            lastMixed = key
-            skipSilence(plan?.inFromMs ?: 0L)
-            return POLL_MS
-        }
 
         val next = main.getMediaItemAt(main.nextMediaItemIndex)
         // Planned again if the next song changes (the queue was edited).
@@ -156,17 +164,16 @@ internal class Crossfade(
             planning?.cancel()
             planning = scope.launch { plan = makePlan(item, next, duration) }
         }
+        // The song has gone silent near its end (a long fade to nothing, silence before the file
+        // stops): the next song is loaded and started straight away. Seen as the sound is decoded,
+        // so it works whether or not the song could be read ahead.
+        val silent = left in MIN_LEFT_MS..SILENCE_WINDOW_MS && position > duration / 2 && silentMs() >= SILENCE_SKIP_MS
         // Still reading the songs: plan without them if time is short.
-        val p = plan ?: if (left <= quickPlanLeft()) quickPlan(duration).also { plan = it; planning?.cancel() } else return SOON_MS
-        if (position > p.mixAtMs - MIN_PREP_MS) {
-            // Too late to line the tail up (a seek near the end): back to back this time.
-            lastMixed = key
-            return POLL_MS
-        }
-        if (position < p.mixAtMs - PREP_MS) return ((p.mixAtMs - PREP_MS - position) / 2).coerceIn(SOON_MS, POLL_MS)
+        val p = plan ?: if (silent || left <= quickPlanLeft()) quickPlan(duration).also { plan = it; planning?.cancel() } else return SOON_MS
+        if (!silent && position < p.mixAtMs - PREP_MS) return ((p.mixAtMs - PREP_MS - position) / 2).coerceIn(SOON_MS, POLL_MS)
         if (busy()) return SOON_MS
         lastMixed = key
-        begin(item, p)
+        begin(p, now = silent)
         return POLL_MS
     }
 
@@ -190,111 +197,87 @@ internal class Crossfade(
         return p
     }
 
-    /** Past a silent ending into the next song, which rises in so it doesn't start with a click. */
-    private fun skipSilence(inFromMs: Long) {
-        Log.d(TAG, "Silent ending: on to the next song")
-        mix = scope.launch {
-            try {
-                MixState.start(label())
-                main.volume = 0f
-                handingOver = true
-                try { main.seekTo(main.nextMediaItemIndex, inFromMs) } finally { handingOver = false }
-                sounding(main, START_TIMEOUT_MS * 2)
-                ramp(SILENCE_RISE_MS) { q -> main.volume = q; MixState.progress(q) }
-            } finally {
-                main.volume = 1f
-                MixState.end()
-            }
-        }
-    }
-
-    /**
-     * The tail couldn't be lined up with the song: no blend of two copies, but no hard cut
-     * either. The song fades out, the next one starts and fades in.
-     */
-    private suspend fun fadeThrough(p: MixPlan) {
-        try {
-            val out = (p.outEndMs - main.currentPosition).coerceIn(MIN_LEFT_MS, FADE_THROUGH_MS)
-            ramp(out) { q -> main.volume = 1f - q; MixState.progress(q * 0.5f) }
-            handingOver = true
-            try { main.seekTo(main.nextMediaItemIndex, p.inFromMs) } finally { handingOver = false }
-            sounding(main, START_TIMEOUT_MS * 2)
-            ramp(FADE_THROUGH_MS) { q -> main.volume = q; MixState.progress(0.5f + q * 0.5f) }
-        } finally {
-            // However it ends (a skip mid-fade), the music is left at full level.
-            main.volume = 1f
-        }
-    }
-
     private fun label() = if (settings.automix) "Automix" else "Crossfade"
 
-    private fun begin(item: MediaItem, p: MixPlan) {
-        val stream = sameStream(item) ?: return
-        val t = runCatching { newTail() }.onFailure { Log.w(TAG, "Couldn't make the tail player", it) }.getOrNull() ?: return
+    /**
+     * One transition, start to finish:
+     *
+     * 1. The next song loads on the second player, paused at its cue point, while the
+     *    playing song carries on: by the mix point it's buffered and starts at once.
+     * 2. At the mix point (or straight away, when the playing song has gone silent) it
+     *    starts, silent, at the playing song's tempo, and is put on its beat.
+     * 3. The two blend, the bass traded over, until the playing song's end.
+     * 4. The next song eases back to its own tempo.
+     * 5. The main player moves to the same stream of the next song, silently, lines up
+     *    with the second player, and takes the sound over in a crossover of two copies of
+     *    the same moment, which can't be heard.
+     *
+     * If the next song can't load before the playing one ends, nothing is blended and the
+     * songs play back to back as without a crossfade.
+     */
+    private fun begin(p: MixPlan, now: Boolean) {
+        val nextIndex = main.nextMediaItemIndex
+        if (nextIndex == C.INDEX_UNSET) return
+        val next = main.getMediaItemAt(nextIndex)
+        val t = runCatching { newTail() }.onFailure { Log.w(TAG, "Couldn't make the second player", it) }.getOrNull() ?: return
         tail = t
+        urgent = now
+        phase = Phase.LOADING
         val tp = t.player
         tp.volume = 0f
-        tp.playbackParameters = main.playbackParameters
-        tp.setMediaItem(stream, main.currentPosition + TAIL_LEAD_MS)
+        tp.playWhenReady = false
+        // While they blend, the next song runs at the playing one's tempo; it eases back after.
+        val inSpeed = if (p.outSpeed != 1f) 1f / p.outSpeed else 1f
+        tp.playbackParameters = androidx.media3.common.PlaybackParameters(inSpeed, 1f)
+        tp.setMediaItem(next, p.inFromMs)
         tp.prepare()
-        tp.playWhenReady = main.playWhenReady
-        val index = main.currentMediaItemIndex
+        val playing = main.currentMediaItemIndex
         mix = scope.launch {
             try {
-                // 1. The tail plays, silent, lined up with the song as it is heard now.
-                val lined = lineUp(tp)
-                // 2. Up to the mix point.
-                while (main.currentPosition < p.mixAtMs - CROSSOVER_MS) {
-                    if (main.currentMediaItemIndex != index) return@launch
-                    delay(FRAME_MS)
+                // 1. Loading, until it's due.
+                while (true) {
+                    if (main.currentMediaItemIndex != playing) return@launch
+                    val ready = tp.playbackState == Player.STATE_READY && (tp.bufferedPosition - tp.currentPosition >= READY_AHEAD_MS || tp.isLoading.not())
+                    val due = urgent || main.currentPosition >= p.mixAtMs
+                    if (ready && due) break
+                    tp.playerError?.let { Log.w(TAG, "The next song didn't load", it); return@launch }
+                    delay(FRAME_MS * 2)
                 }
-                val drift = if (lined) drift(tp) else Long.MAX_VALUE
-                if (abs(drift) > MAX_DRIFT_MS) {
-                    Log.w(TAG, "Tail ${if (lined) "drifted $drift ms" else "didn't line up"} for ${item.mediaId}; fading through instead")
-                    releaseTail()
-                    MixState.start(label())
-                    fadeThrough(p)
-                    return@launch
-                }
+                // 2. In, silent, on the beat.
+                phase = Phase.BLENDING
                 MixState.start(label())
-                // 3. The sound moves onto the tail: two copies of the same moment, crossed in a breath.
-                ramp(CROSSOVER_MS) { q ->
-                    main.volume = 1f - q
-                    tp.volume = q
-                }
-                // 4. The main player, silent, moves on to the next song.
-                handingOver = true
-                try {
-                    main.seekTo(main.nextMediaItemIndex, p.inFromMs)
-                } finally {
-                    handingOver = false
-                }
-                // 5. Wait until the next song is really sounding; the tail plays on at full level meanwhile.
-                val outLeft = { (p.outEndMs - tp.currentPosition).coerceAtLeast(0L) }
-                if (!sounding(main, outLeft())) {
-                    Log.w(TAG, "Next song didn't start before the old one ran out")
-                    main.volume = 1f
-                    return@launch
-                }
-                // 6. The old song eased to the new one's tempo (pitch kept), then the new one put on its beat.
-                if (p.outSpeed != 1f) matchTempo(tp, p.outSpeed)
-                if (p.beatMs != null) keepInStep(tp, p, outLeft)
-                // 7. The blend, over what's left of the old song, at most the planned length.
-                val length = minOf(p.blendMs, outLeft()).coerceAtLeast(MIN_LEFT_MS)
-                ramp(length, stop = { tp.playbackState == Player.STATE_ENDED }) { q ->
-                    MixState.progress(q)
+                tp.playWhenReady = main.playWhenReady
+                if (!sounding(tp, START_TIMEOUT_MS)) return@launch
+                if (p.beatMs != null && !urgent) putOnBeat(tp, p)
+                // 3. The blend, over what's left of the playing song.
+                val left = (p.outEndMs - main.currentPosition).coerceAtLeast(MIN_LEFT_MS)
+                val length = if (urgent) minOf(p.blendMs, URGENT_BLEND_MS) else minOf(p.blendMs, left)
+                ramp(length, stop = { main.currentMediaItemIndex != playing }) { q ->
+                    MixState.progress(q * 0.92f)
                     val (out, inc) = blendGains(q)
-                    tp.volume = out
-                    main.volume = inc
+                    main.volume = out
+                    tp.volume = inc
                     if (p.bassSwap) {
                         val (outCut, inCut) = bassCuts(q)
-                        t.lowCut(outCut)
-                        mainLowCut(inCut)
+                        mainLowCut(outCut)
+                        t.lowCut(inCut)
                     }
                 }
+                main.volume = 0f
+                tp.volume = 1f
+                mainLowCut(0f)
+                t.lowCut(0f)
+                // 4. Back to its own tempo.
+                if (inSpeed != 1f) easeSpeed(tp, 1f)
+                // 5. The main player takes the next song over.
+                phase = Phase.HANDOVER
+                handOver(tp, next, nextIndex)
+                MixState.progress(1f)
             } finally {
                 MixState.end()
-                // However it ended, the main player is left at full level. A bail has taken the tail already.
+                phase = Phase.IDLE
+                urgent = false
+                // However it ended, the main player is left at full level. A bail has taken the second player already.
                 if (tail === t) {
                     mainLowCut(0f)
                     main.volume = 1f
@@ -305,72 +288,86 @@ internal class Crossfade(
     }
 
     /**
-     * Brings the tail to the main player's position, to within [ALIGNED_MS].
-     * The tail's position counts from when its sound is heard, as the main
-     * player's does, so once it's been playing a moment the two can be
-     * compared directly; a seek puts it right, and its start-up delay is
-     * learned from the first try.
+     * The main player, silent, onto the next song at the second player's place, on the very
+     * stream the second player chose (so the two are the same recording), lined up with it,
+     * then a crossover in a breath.
      */
-    private suspend fun lineUp(tp: ExoPlayer): Boolean {
-        var lead = TAIL_LEAD_MS
-        repeat(ALIGN_TRIES) {
-            if (!sounding(tp, START_TIMEOUT_MS)) return false
-            // Positions settle once each output has reported a timestamp or two.
-            delay(SETTLE_MS)
-            val drift = drift(tp)
-            if (abs(drift) <= ALIGNED_MS) return true
-            lead = (lead - drift).coerceIn(0L, 1_500L)
-            tp.seekTo(main.currentPosition + lead)
+    private suspend fun handOver(tp: ExoPlayer, next: MediaItem, nextIndex: Int) {
+        val chosen = tp.currentMediaItem?.let(sameStream)
+        handingOver = true
+        try {
+            val index = if (main.currentMediaItemIndex == nextIndex || main.currentMediaItem?.mediaId == next.mediaId) main.currentMediaItemIndex else nextIndex
+            if (chosen != null && index < main.mediaItemCount && main.getMediaItemAt(index).mediaId == chosen.mediaId) {
+                main.replaceMediaItem(index, chosen.buildUpon().setMediaMetadata(main.getMediaItemAt(index).mediaMetadata).build())
+            }
+            main.seekTo(index, tp.currentPosition + TAIL_LEAD_MS)
+        } finally {
+            handingOver = false
         }
-        if (!sounding(tp, START_TIMEOUT_MS)) return false
-        delay(SETTLE_MS)
-        return abs(drift(tp)) <= ALIGNED_MS
+        lineUp(follower = main, leader = tp)
+        val d = drift(follower = main, leader = tp)
+        // Two copies of one moment, crossed; a wider cross if they couldn't be brought closer.
+        ramp(if (abs(d) <= MAX_DRIFT_MS) CROSSOVER_MS else WIDE_CROSSOVER_MS) { q ->
+            tp.volume = 1f - q
+            main.volume = q
+        }
     }
 
-    /** How far the tail is ahead of the song, the middle of a few readings so one odd reading doesn't count. */
-    private suspend fun drift(tp: ExoPlayer): Long {
-        val readings = LongArray(DRIFT_READINGS)
-        for (i in readings.indices) {
-            readings[i] = tp.currentPosition - main.currentPosition
-            if (i < readings.lastIndex) delay(DRIFT_GAP_MS)
-        }
-        readings.sort()
-        return readings[readings.size / 2]
-    }
-
-    /**
-     * Eases the outgoing song's speed to [speed] in small steps over about a second, so
-     * the change is heard as the tempo drifting to meet the next song, not a jump.
-     */
-    private suspend fun matchTempo(tp: ExoPlayer, speed: Float) {
+    /** Eases [tp]'s speed to [speed] in small steps, so a tempo change is heard as a drift, not a jump. */
+    private suspend fun easeSpeed(tp: ExoPlayer, speed: Float) {
         val from = tp.playbackParameters.speed
         for (i in 1..TEMPO_STEPS) {
-            val s = from + (speed - from) * i / TEMPO_STEPS
-            tp.playbackParameters = androidx.media3.common.PlaybackParameters(s, 1f)
+            tp.playbackParameters = androidx.media3.common.PlaybackParameters(from + (speed - from) * i / TEMPO_STEPS, 1f)
             delay(TEMPO_STEP_MS)
         }
     }
 
-    /** Moves the incoming song (still silent) so its beats fall on the outgoing song's. */
-    private suspend fun keepInStep(tp: ExoPlayer, p: MixPlan, outLeft: () -> Long) {
-        // A seek restarts the sound a little after the moment asked for, so the
-        // song comes back that much late; learned from each try.
+    /** Moves the next song (still all but silent) so its beats fall on the playing song's. */
+    private suspend fun putOnBeat(tp: ExoPlayer, p: MixPlan) {
+        // A seek restarts the sound a little after the moment asked for; learned from each try.
         var lead = SEEK_LEAD_MS
         delay(SETTLE_MS)
         repeat(STEP_TRIES) {
-            if (outLeft() < MIN_STEP_LEFT_MS) return
-            val fix = stepCorrection(p, tp.currentPosition, main.currentPosition)
+            val fix = stepCorrection(p, main.currentPosition, tp.currentPosition)
             if (abs(fix) <= IN_STEP_MS) return
-            handingOver = true
-            try {
-                main.seekTo((main.currentPosition + fix + lead).coerceAtLeast(0L))
-            } finally {
-                handingOver = false
-            }
-            if (!sounding(main, outLeft())) return
+            tp.seekTo((tp.currentPosition + fix + lead).coerceAtLeast(0L))
+            if (!sounding(tp, START_TIMEOUT_MS)) return
             delay(SETTLE_MS)
-            lead += stepCorrection(p, tp.currentPosition, main.currentPosition).coerceIn(-200L, 200L)
+            lead += stepCorrection(p, main.currentPosition, tp.currentPosition).coerceIn(-200L, 200L)
         }
+    }
+
+    /**
+     * Brings [follower] to [leader]'s place in the same song, to within [ALIGNED_MS].
+     * Each position counts from when its sound is heard, so once both have been playing a
+     * moment they can be compared directly; a seek puts the follower right, and its
+     * start-up delay is learned from each try.
+     */
+    private suspend fun lineUp(follower: ExoPlayer, leader: ExoPlayer): Boolean {
+        var lead = TAIL_LEAD_MS
+        repeat(ALIGN_TRIES) {
+            if (!sounding(follower, START_TIMEOUT_MS * 2)) return false
+            delay(SETTLE_MS)
+            val d = drift(follower, leader)
+            if (abs(d) <= ALIGNED_MS) return true
+            lead = (lead - d).coerceIn(0L, 1_500L)
+            handingOver = true
+            try { follower.seekTo(leader.currentPosition + lead) } finally { handingOver = false }
+        }
+        if (!sounding(follower, START_TIMEOUT_MS)) return false
+        delay(SETTLE_MS)
+        return abs(drift(follower, leader)) <= ALIGNED_MS
+    }
+
+    /** How far [follower] is ahead of [leader], the middle of a few readings so one odd reading doesn't count. */
+    private suspend fun drift(follower: ExoPlayer, leader: ExoPlayer): Long {
+        val readings = LongArray(DRIFT_READINGS)
+        for (i in readings.indices) {
+            readings[i] = follower.currentPosition - leader.currentPosition
+            if (i < readings.lastIndex) delay(DRIFT_GAP_MS)
+        }
+        readings.sort()
+        return readings[readings.size / 2]
     }
 
     /** Waits until [p] is playing and its position is moving, i.e. its sound is being heard. */
@@ -387,7 +384,7 @@ internal class Crossfade(
         var last = SystemClock.elapsedRealtime()
         while (true) {
             val now = SystemClock.elapsedRealtime()
-            if (main.isPlaying) done += now - last
+            if (main.isPlaying || tail?.player?.isPlaying == true) done += now - last
             last = now
             val q = if (stop()) 1f else (done.toFloat() / ms).coerceIn(0f, 1f)
             step(q)
@@ -396,14 +393,16 @@ internal class Crossfade(
         }
     }
 
-    /** The listener moved on mid-blend: drop the old song's tail quickly. */
+    /** The listener moved on mid-transition: the second player's song fades out quickly. */
     private fun bail() {
         mix?.cancel()
         val t = tail ?: return
         // The tail is this fade's now; the cancelled mix leaves it alone.
         tail = null
-        // Still silent: the blend hadn't started, so this song may blend again (a seek back).
+        // The next song hadn't come in yet: this song may blend again (a seek back).
         if (t.player.volume == 0f) lastMixed = null
+        phase = Phase.IDLE
+        urgent = false
         main.volume = 1f
         mainLowCut(0f)
         mix = scope.launch {
@@ -444,15 +443,16 @@ internal class Crossfade(
         /** The longest blend a plan made without reading the songs uses. */
         const val MAX_QUICK_MS = 6_000L
         /** The tail starts this long before the mix point, to line up in time. */
-        const val PREP_MS = 6_000L
-        /** Less than this before the mix point and there isn't time to line up. */
-        const val MIN_PREP_MS = 2_000L
+        const val PREP_MS = 15_000L
         /** Silence this long near a song's end, as it's decoded, and the next song starts. */
         const val SILENCE_SKIP_MS = 1_500L
         /** Only this near the end does silence count as the song's ending. */
         const val SILENCE_WINDOW_MS = 40_000L
-        const val SILENCE_RISE_MS = 600L
-        const val FADE_THROUGH_MS = 1_800L
+        /** A silent ending's blend: the next song comes in quickly, over nothing. */
+        const val URGENT_BLEND_MS = 1_200L
+        /** Buffered this far ahead, the next song can start without stopping to load. */
+        const val READY_AHEAD_MS = 3_000L
+        const val WIDE_CROSSOVER_MS = 300L
         const val DRIFT_READINGS = 5
         const val DRIFT_GAP_MS = 25L
         const val MIN_LEFT_MS = 400L
@@ -469,8 +469,6 @@ internal class Crossfade(
         const val TEMPO_STEP_MS = 150L
         const val SEEK_LEAD_MS = 80L
         const val IN_STEP_MS = 15L
-        /** Not worth stepping the incoming song when the old one is this close to ending. */
-        const val MIN_STEP_LEFT_MS = 2_500L
         const val BAIL_MS = 150L
     }
 }
