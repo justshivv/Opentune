@@ -72,6 +72,14 @@ class MainActivity : ComponentActivity() {
                 openingAnimation = false,
             )
         }
+        // A TV, an older Android or a phone short of memory: Lite mode, once, before the first frame.
+        if (!AppSettings.ui.value.liteChecked) {
+            val memory = getSystemService(android.app.ActivityManager::class.java)
+            val info = android.app.ActivityManager.MemoryInfo().also { memory?.getMemoryInfo(it) }
+            val slow = tv || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q ||
+                memory?.isLowRamDevice == true || info.totalMem in 1 until LITE_MEMORY_BYTES
+            AppSettings.updateUi { (if (slow) com.opentune.data.settings.liteModeApplied(it, true) else it).copy(liteChecked = true) }
+        }
         setContent {
             val vm: PlayerViewModel = viewModel()
             val theme by AppSettings.theme.collectAsState()
@@ -174,3 +182,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+/** Phones with less memory than this start in Lite mode: about 3 GB, the low end today. */
+private const val LITE_MEMORY_BYTES = 3_300_000_000L

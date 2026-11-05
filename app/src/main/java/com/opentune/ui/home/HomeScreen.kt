@@ -349,7 +349,7 @@ fun HomeScreen(
                         }
                         is UiState.Success -> {
                             if (section.title.isNotBlank()) item(key = "recommendations-title") { SectionHeader(section.title) }
-                            itemsIndexed(feed.cards, key = { i, shelf -> "shelf:$i:${shelf.title}" }, contentType = { _, _ -> "cards" }) { i, shelf ->
+                            itemsIndexed(if (ui.liteMode) feed.cards.take(LITE_SHELVES) else feed.cards, key = { i, shelf -> "shelf:$i:${shelf.title}" }, contentType = { _, _ -> "cards" }) { i, shelf ->
                                 HomeShelfView(shelf, onItemClick, songRows = false, covers = covers, coverKey = "shelf:$i")
                             }
                         }
@@ -638,3 +638,6 @@ private fun LocalActivityLifecycle(): androidx.lifecycle.Lifecycle? {
     while (c is android.content.ContextWrapper && c !is androidx.lifecycle.LifecycleOwner) c = c.baseContext
     return (c as? androidx.lifecycle.LifecycleOwner)?.lifecycle
 }
+
+/** Home's recommendation shelves in Lite mode: enough to choose from, few enough to stay quick. */
+private const val LITE_SHELVES = 5

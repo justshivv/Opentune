@@ -360,6 +360,14 @@ data class InterfaceSettings(
     val pinnedPlaylists: List<String> = emptyList(),
     /** On a TV, the heavy effects have been turned down once; they can be turned back on by hand. */
     val tvTuned: Boolean = false,
+    /**
+     * Lite mode: the same pages and layout, without the effects a TV or an older phone
+     * can't draw smoothly (glass, blur, glows, moving and animated covers, canvases),
+     * and fewer shelves on Home. Turned on once by itself on those devices.
+     */
+    val liteMode: Boolean = false,
+    /** Lite mode has been offered on this device (turned on if it suited), after which it's the listener's. */
+    val liteChecked: Boolean = false,
     val reduceAnimation: Boolean = false,
     /** The mark's dive into the app when it starts. */
     val openingAnimation: Boolean = true,
@@ -898,3 +906,18 @@ object AppSettings {
     private const val K_STATE = "state_v2"
 }
 
+
+
+/** [ui] as Lite mode sets it ([on]) or as it's set without it. */
+fun liteModeApplied(ui: InterfaceSettings, on: Boolean): InterfaceSettings {
+    val d = InterfaceSettings()
+    return if (on) ui.copy(
+        liteMode = true, reduceBlur = true, liquidGlass = false, frostedTopEdge = false, coverGlow = false,
+        movingCover = false, homeMovingCovers = false, blurLyrics = false, wavySeekbar = false, openingAnimation = false,
+        animatedCovers = false, spotifyCanvas = false,
+    ) else ui.copy(
+        liteMode = false, reduceBlur = d.reduceBlur, liquidGlass = d.liquidGlass, frostedTopEdge = d.frostedTopEdge, coverGlow = d.coverGlow,
+        movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics, openingAnimation = d.openingAnimation,
+        animatedCovers = d.animatedCovers, spotifyCanvas = d.spotifyCanvas,
+    )
+}

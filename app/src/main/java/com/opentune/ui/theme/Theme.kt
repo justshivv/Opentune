@@ -118,7 +118,9 @@ fun OpenTuneTheme(
 @Composable
 internal fun TvRipples(content: @Composable () -> Unit) {
     CompositionLocalProvider(
-        androidx.compose.foundation.LocalIndication provides com.opentune.ui.components.FocusRing(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+        // The focus itself is marked once for the whole screen (TvRemoteSurface); controls keep
+        // a plain press response, so the mark isn't drawn twice.
+        androidx.compose.foundation.LocalIndication provides androidx.compose.material3.ripple(),
         // Material's own buttons draw focus as a tint, not the ring: in the accent, and strong
         // enough to find from across a room. The faint grey was easy to lose on a light page.
         androidx.compose.material3.LocalRippleConfiguration provides androidx.compose.material3.RippleConfiguration(

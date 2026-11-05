@@ -24,6 +24,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.onFocusedBoundsChanged
+import kotlinx.coroutines.launch
 import com.opentune.ui.ChromeTab
 import com.opentune.ui.components.FocusRing
 
@@ -55,7 +58,16 @@ internal fun Modifier.tvMediaKeys(onAction: (TvMediaAction) -> Unit): Modifier =
     }
 }
 
-/** First focus on launch; returning from another window preserves the existing focus. */
+/**
+ * First focus on launch; returning from another window preserves the existing focus.
+ *
+ * Every focusable thing on the screen gets the same clear mark from across the room:
+ * a bright outline, with a soft glow, that glides from one control to the next. It's
+ * drawn here, over the page, from wherever the focus is, so a card, a row, a Material
+ * button or a slider all show it the same way, rather than each control drawing (or
+ * not drawing) its own faint tint.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun TvRemoteSurface(content: @Composable () -> Unit) {
     val requester = remember { FocusRequester() }
@@ -65,7 +77,66 @@ internal fun TvRemoteSurface(content: @Composable () -> Unit) {
         withFrameNanos { }
         requester.requestFocus()
     }
-    Box(Modifier.fillMaxSize().focusRequester(requester).focusRestorer().focusGroup()) { content() }
+    var root by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    var focused by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    Box(
+        Modifier.fillMaxSize()
+            .onGloballyPositioned { root = it }
+            .onFocusedBoundsChanged { c ->
+                val r = root
+                focused = if (c != null && c.isAttached && r != null && r.isAttached) r.localBoundingBoxOf(c, clipBounds = true) else null
+            }
+            .focusRequester(requester).focusRestorer().focusGroup(),
+    ) {
+        content()
+        FocusHighlight(focused, root?.size)
+    }
+}
+
+/** The outline round the focused control, gliding as the focus moves. */
+@Composable
+private fun FocusHighlight(target: androidx.compose.ui.geometry.Rect?, screen: androidx.compose.ui.unit.IntSize?) {
+    // A whole page or list taking the focus isn't a control to point at.
+    val shown = target != null && screen != null && target.width > 0f && target.height > 0f &&
+        target.width * target.height < screen.width * screen.height * 0.6f
+    val alpha by androidx.compose.animation.core.animateFloatAsState(if (shown) 1f else 0f, androidx.compose.animation.core.tween(160), label = "focusAlpha")
+    val spec = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.86f, stiffness = 700f)
+    val left = remember { androidx.compose.animation.core.Animatable(0f) }
+    val top = remember { androidx.compose.animation.core.Animatable(0f) }
+    val right = remember { androidx.compose.animation.core.Animatable(0f) }
+    val bottom = remember { androidx.compose.animation.core.Animatable(0f) }
+    var placed by remember { mutableStateOf(false) }
+    LaunchedEffect(target, shown) {
+        if (!shown || target == null) return@LaunchedEffect
+        if (!placed) {
+            left.snapTo(target.left); top.snapTo(target.top); right.snapTo(target.right); bottom.snapTo(target.bottom)
+            placed = true
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.coroutineScope {
+            launch { left.animateTo(target.left, spec) }
+            launch { top.animateTo(target.top, spec) }
+            launch { right.animateTo(target.right, spec) }
+            launch { bottom.animateTo(target.bottom, spec) }
+        }
+    }
+    val ring = MaterialTheme.colorScheme.primary
+    val inner = MaterialTheme.colorScheme.onPrimary
+    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+        if (alpha <= 0f) return@Canvas
+        val pad = 4.dp.toPx()
+        val topLeft = androidx.compose.ui.geometry.Offset(left.value - pad, top.value - pad)
+        val size = androidx.compose.ui.geometry.Size(right.value - left.value + pad * 2, bottom.value - top.value + pad * 2)
+        val radius = androidx.compose.ui.geometry.CornerRadius(minOf(16.dp.toPx(), size.minDimension / 2))
+        // A soft glow, then the outline, then a hairline inside it so it reads on any colour.
+        drawRoundRect(ring.copy(alpha = 0.22f * alpha), topLeft - androidx.compose.ui.geometry.Offset(3.dp.toPx(), 3.dp.toPx()),
+            androidx.compose.ui.geometry.Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx()),
+            androidx.compose.ui.geometry.CornerRadius(radius.x + 3.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(6.dp.toPx()))
+        drawRoundRect(ring.copy(alpha = alpha), topLeft, size, radius, style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
+        drawRoundRect(inner.copy(alpha = 0.6f * alpha), topLeft + androidx.compose.ui.geometry.Offset(2.5f.dp.toPx(), 2.5f.dp.toPx()),
+            androidx.compose.ui.geometry.Size(size.width - 5.dp.toPx(), size.height - 5.dp.toPx()),
+            androidx.compose.ui.geometry.CornerRadius((radius.x - 2.5f.dp.toPx()).coerceAtLeast(0f)), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+    }
 }
 
 /** Set when the rail opened a page: the remote's focus stays on the rail then. */

@@ -1263,6 +1263,15 @@ private fun settingsSections(
                 Entry("Reduce dynamic blur", "glass frosted performance") {
                     ToggleRow("Reduce dynamic blur", ui.reduceBlur, { v -> AppSettings.updateUi { it.copy(reduceBlur = v) } }, summary = "Swaps frosted glass for solid fills across the app", icon = Icons.Rounded.BlurOff)
                 },
+                Entry("Lite mode", "performance tv old phone lag smooth light simple fast low end") {
+                    ToggleRow(
+                        "Lite mode",
+                        ui.liteMode,
+                        { v -> AppSettings.updateUi { com.opentune.data.settings.liteModeApplied(it, v) } },
+                        summary = "The same app without glass, blur, glows, moving and animated covers, and fewer shelves on Home. On by itself on TVs and older phones",
+                        icon = Icons.Rounded.Speed,
+                    )
+                },
                 Entry("Lighter Liquid Glass", "glass performance lag smooth slow phone frame") {
                     ToggleRow(
                         "Lighter Liquid Glass",
