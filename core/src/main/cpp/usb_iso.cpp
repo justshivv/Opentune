@@ -23,6 +23,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/resource.h>
+#include <unistd.h>
 #include <time.h>
 
 #include <algorithm>
@@ -190,6 +192,9 @@ struct Stream {
 
     /** Each finished transfer is filled again and sent straight back. */
     void pump() {
+        // Audio priority, as Android's own audio threads run: the queue holds only a few
+        // milliseconds, so this thread must get the processor when a transfer comes back.
+        setpriority(PRIO_PROCESS, static_cast<id_t>(gettid()), -19);
         while (running.load()) {
             usbdevfs_urb* done = nullptr;
             if (ioctl(fd, USBDEVFS_REAPURB, &done) < 0) {
