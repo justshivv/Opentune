@@ -54,6 +54,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -78,8 +80,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Pick one of a few options, in a [FloatingCard]. Each option is a tile
- * with its name and, after " · " in [label], a line about it. A tinted lens marks the current choice; tapping
+ * Pick one of a few options, in a [FloatingCard]. The options sit in one rimmed
+ * tray, each with a ring at its start, its name and, after " · " in [label], a
+ * line about it. A filled lens marks the current choice; tapping
  * another slides the lens there on a spring, pops a check in and closes a
  * moment later, so the change is seen to land.
  */
@@ -119,6 +122,7 @@ fun <T> ChoiceSheet(
 @Composable
 private fun <T> Options(options: List<T>, picked: T, label: (T) -> String, still: Boolean, onPick: (T) -> Unit) {
     val density = LocalDensity.current
+    val scheme = MaterialTheme.colorScheme
     val tops = remember { mutableStateMapOf<Int, Float>() }
     val heights = remember { mutableStateMapOf<Int, Float>() }
     val lensTop = remember { Animatable(0f) }
@@ -137,20 +141,39 @@ private fun <T> Options(options: List<T>, picked: T, label: (T) -> String, still
             launch { lensHeight.animateTo(height, spring(dampingRatio = 0.9f, stiffness = 420f)) }
         }
     }
-    Box(Modifier.heightIn(max = 470.dp).verticalScroll(rememberScrollState())) {
+    // The options sit together in one rimmed tray; the choice is a filled lens inside it.
+    val tray = RoundedCornerShape(28.dp)
+    Box(
+        Modifier
+            .padding(horizontal = 14.dp)
+            .padding(bottom = 4.dp)
+            .clip(tray)
+            .background(scheme.onSurface.copy(alpha = 0.05f))
+            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.03f))), tray)
+            .heightIn(max = 470.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(5.dp),
+    ) {
         if (placed) {
             Box(
                 Modifier
                     .offset { IntOffset(0, lensTop.value.roundToInt()) }
                     .fillMaxWidth()
                     .height(with(density) { lensHeight.value.toDp() })
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
-                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), RoundedCornerShape(22.dp)),
+                    .clip(RoundedCornerShape(23.dp))
+                    .background(Brush.horizontalGradient(listOf(scheme.primary.copy(alpha = 0.30f), scheme.primary.copy(alpha = 0.14f)))),
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column {
             options.forEachIndexed { i, o ->
+                // A hairline between two rows, hidden where the lens is next to it.
+                if (i > 0) {
+                    val near = i == index || i - 1 == index
+                    Box(
+                        Modifier.padding(start = 62.dp, end = 18.dp).fillMaxWidth().height(1.dp)
+                            .background(scheme.onSurface.copy(alpha = if (near) 0f else 0.07f)),
+                    )
+                }
                 OptionRow(
                     text = label(o),
                     selected = o == picked,
@@ -181,6 +204,7 @@ private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolea
     }
     val check by animateFloatAsState(if (selected) 1f else 0f, if (still) snap() else spring(dampingRatio = 0.5f, stiffness = 520f), label = "check")
     val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(23.dp)
     Row(
         modifier
             .fillMaxWidth()
@@ -190,37 +214,18 @@ private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolea
                 scaleX = press
                 scaleY = press
             }
-            .clip(RoundedCornerShape(22.dp))
-            .clickable(interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(RoundedCornerShape(22.dp)), onClick = onClick)
+            .clip(shape)
+            .clickable(interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(shape), onClick = onClick)
             .semantics { role = Role.RadioButton; this.selected = selected }
-            .heightIn(min = 60.dp)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .heightIn(min = 58.dp)
+            .padding(start = 14.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = if (selected) scheme.primary else scheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (about != null) {
-                Text(
-                    about,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (selected) scheme.onSurface.copy(alpha = 0.8f) else scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        // An empty ring that fills with the accent and a check as it's chosen.
-        Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
+        // A ring that fills with the accent and a check as it's chosen, at the start of the row.
+        Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
             Box(
                 Modifier.matchParentSize().clip(CircleShape)
-                    .border(2.dp, scheme.onSurfaceVariant.copy(alpha = 0.45f * (1f - check)), CircleShape),
+                    .border(2.dp, scheme.onSurfaceVariant.copy(alpha = 0.4f * (1f - check)), CircleShape),
             )
             Box(
                 Modifier.matchParentSize()
@@ -231,7 +236,26 @@ private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolea
                 Icon(
                     Icons.Rounded.Check, null,
                     tint = scheme.onPrimary,
-                    modifier = Modifier.size(17.dp).graphicsLayer { rotationZ = (1f - check) * -40f },
+                    modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = (1f - check) * -40f },
+                )
+            }
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = scheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (about != null) {
+                Text(
+                    about,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (selected) scheme.onSurface.copy(alpha = 0.78f) else scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
         }
