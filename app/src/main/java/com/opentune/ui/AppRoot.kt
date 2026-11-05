@@ -687,7 +687,11 @@ fun AppRoot(vm: PlayerViewModel) {
                             onOpenDownloads = { nav.navigate("downloads") },
                             onOpenSpotify = { nav.navigate("import") },
                             onOpenDevices = { nav.navigate("devices") },
+                            onOpenDiscord = { nav.navigate("discord-login") },
                         )
+                    }
+                    page("discord-login") { entry ->
+                        com.opentune.ui.account.DiscordLoginScreen(onDone = { if (nav.currentBackStackEntry == entry) nav.popBackStack() })
                     }
                     page("devices") {
                         com.opentune.ui.settings.LinkDeviceScreen(

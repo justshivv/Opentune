@@ -1,6 +1,7 @@
 package com.opentune.playback
 
 import com.opentune.data.lossless.ExternalStreams
+import com.opentune.data.model.artworkAt
 import com.opentune.data.model.durationMillis
 import kotlinx.coroutines.ensureActive
 
@@ -134,6 +135,34 @@ class PlaybackService : MediaLibraryService() {
     private val tailDsp = DspAudioProcessor()
     private var audioManager: AudioManager? = null
     private val startupSelections = ConcurrentHashMap<String, StartupSelection>()
+
+    private var discordJob: Job? = null
+
+    /** Shortly after the player settles (a skip fires several events at once), the card is brought up to date. */
+    private fun tellDiscord(p: Player) {
+        if (com.opentune.data.discord.DiscordRpc.account.value == null) return
+        discordJob?.cancel()
+        discordJob = scope.launch {
+            delay(DISCORD_SETTLE_MS)
+            val item = p.currentMediaItem
+            val song = item?.toSong()
+            com.opentune.data.discord.DiscordRpc.update(
+                song?.let {
+                    com.opentune.data.discord.DiscordRpc.NowPlaying(
+                        videoId = it.videoId,
+                        title = it.title,
+                        artist = it.artist,
+                        album = it.albumName,
+                        artworkUrl = it.thumbnailUrl.artworkAt(com.opentune.data.model.CARD_ART_PX),
+                        durationMs = p.duration.takeIf { d -> d > 0 } ?: 0L,
+                        positionMs = p.currentPosition,
+                        rate = p.playbackParameters.speed,
+                        playing = p.isPlaying,
+                    )
+                },
+            )
+        }
+    }
 
     private fun selectedUri(uri: Uri): Uri = startupToken(uri)?.let { startupSelections[it]?.selected } ?: uri
 
@@ -380,6 +409,16 @@ class PlaybackService : MediaLibraryService() {
         scope.launch {
             AppSettings.playback.map { it.systemEffects }.distinctUntilChanged().collect { openEffectSession(player.audioSessionId) }
         }
+        // The Discord card follows the song, its place and whether it's playing.
+        player.addListener(object : Player.Listener {
+            override fun onEvents(p: Player, events: Player.Events) {
+                if (events.containsAny(
+                        Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_IS_PLAYING_CHANGED, Player.EVENT_POSITION_DISCONTINUITY,
+                        Player.EVENT_PLAYBACK_PARAMETERS_CHANGED, Player.EVENT_MEDIA_METADATA_CHANGED,
+                    )
+                ) tellDiscord(p)
+            }
+        })
         crossfade = Crossfade(
             scope = scope,
             main = player,
@@ -2724,6 +2763,7 @@ class PlaybackService : MediaLibraryService() {
 
         /** How much of the next track ExoPlayer buffers ahead of time. */
         const val PRELOAD_US = 10_000_000L
+        const val DISCORD_SETTLE_MS = 800L
 
         /** Tracks ahead of the current one whose stream URLs are resolved early. */
         const val WARM_AHEAD = 2

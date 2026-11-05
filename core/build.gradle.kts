@@ -34,6 +34,11 @@ android {
         buildConfigField("int", "VERSION_CODE", appVersionCode)
         buildConfigField("String", "LASTFM_API_KEY", lastFmCredential("LASTFM_API_KEY"))
         buildConfigField("String", "LASTFM_API_SECRET", lastFmCredential("LASTFM_API_SECRET"))
+        // OpenTune's Discord application (named "OpenTune"), which heads the phone's Discord card.
+        buildConfigField("String", "DISCORD_APP_ID", providers.environmentVariable("DISCORD_APP_ID").orNull.orEmpty().trim().let { id ->
+            require(id.isEmpty() || id.matches(Regex("[0-9]{17,20}"))) { "DISCORD_APP_ID must be a Discord application id" }
+            "\"$id\""
+        })
         consumerProguardFiles("consumer-rules.pro")
     }
     compileOptions {

@@ -227,13 +227,14 @@ fun SettingsScreen(
     onOpenDownloads: () -> Unit = {},
     onOpenSpotify: () -> Unit = {},
     onOpenDevices: () -> Unit = {},
+    onOpenDiscord: () -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var openKey by rememberSaveable { mutableStateOf<String?>(null) }
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val updatePending = com.opentune.ui.components.updatePending()
-    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onOpenWrapped, onSignIn, onOpenDownloads, onOpenSpotify, onOpenDevices)
+    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onOpenWrapped, onSignIn, onOpenDownloads, onOpenSpotify, onOpenDevices, onOpenDiscord)
     val placed = remember(sections) { place(sections) }
     val open = SETTINGS_CATEGORIES.firstOrNull { it.key == openKey }
     androidx.activity.compose.BackHandler(enabled = open != null) { openKey = null }
@@ -423,7 +424,12 @@ private fun settingsSections(
     onOpenDownloads: () -> Unit,
     onOpenSpotify: () -> Unit,
     onOpenDevices: () -> Unit,
+    onOpenDiscord: () -> Unit,
 ): List<Section> {
+    val discord by com.opentune.data.discord.DiscordRpc.account.collectAsState()
+    val discordOn by com.opentune.data.discord.DiscordRpc.enabled.collectAsState()
+    val discordStatus by com.opentune.data.discord.DiscordRpc.status.collectAsState()
+    val discordProblem by com.opentune.data.discord.DiscordRpc.problem.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val accounts by AccountStore.accounts.collectAsState()
@@ -1491,6 +1497,34 @@ private fun settingsSections(
                 },
                 if (musicServer != null) Entry("Disconnect server", "sign out subsonic") {
                     SettingRow("Disconnect server", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { Subsonic.disconnect() })
+                } else null,
+            ),
+        ),
+        Section(
+            "Discord",
+            listOfNotNull(
+                Entry("Show on Discord", "discord rich presence status listening activity profile") {
+                    val who = discord
+                    if (who == null) {
+                        NavRow("Connect Discord", onOpenDiscord, summary = "Show the song you play on your Discord profile", icon = Icons.Rounded.Headphones)
+                    } else {
+                        ToggleRow(
+                            "Show on Discord",
+                            discordOn,
+                            { v -> com.opentune.data.discord.DiscordRpc.setEnabled(v) },
+                            summary = when {
+                                !discordOn -> "Off: nothing shows on ${who.name}'s profile"
+                                discordProblem != null -> discordProblem!!
+                                discordStatus == com.opentune.data.discord.DiscordRpc.Status.Ready -> "Showing what you play on ${who.name}'s profile"
+                                else -> "Shows what you play on ${who.name}'s profile while music plays"
+                            },
+                            icon = Icons.Rounded.Headphones,
+                        )
+                    }
+                },
+                if (discord != null) Entry("Disconnect Discord", "sign out discord") {
+                    SettingRow("Disconnect Discord", summary = "Forgets the sign-in on this phone", icon = Icons.AutoMirrored.Rounded.Logout,
+                        onClick = { com.opentune.data.discord.DiscordRpc.signOut() })
                 } else null,
             ),
         ),

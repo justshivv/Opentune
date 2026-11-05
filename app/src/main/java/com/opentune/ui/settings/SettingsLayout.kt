@@ -39,11 +39,12 @@ internal val FOLDED_GROUPS = mapOf("Seek bar" to 2)
  */
 internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
-        "account", "Accounts and services", "YouTube Music, Spotify, scrobbling and your other devices", Icons.Rounded.Person,
+        "account", "Accounts and services", "YouTube Music, Spotify, scrobbling, Discord and your other devices", Icons.Rounded.Person,
         listOf(
             "YouTube Music" to listOf("YouTube Music account", "Add another account", "Sign out"),
             "Spotify" to listOf("Spotify account", "Spotify"),
             "Scrobbling" to listOf("Last.fm scrobbling", "Disconnect Last.fm", "ListenBrainz", "Disconnect ListenBrainz"),
+            "Discord" to listOf("Show on Discord", "Disconnect Discord"),
             "Your music server" to listOf("Music server", "Disconnect server"),
             "Other devices" to listOf("Link a device"),
         ),
@@ -165,6 +166,7 @@ internal val SECTION_HOME = mapOf(
     "Your data" to "data",
     "Your music server" to "account",
     "Last.fm (optional)" to "account",
+    "Discord" to "account",
     "ListenBrainz (optional)" to "account",
     "Import" to "library",
     "Miscellaneous" to "player",
