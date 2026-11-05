@@ -56,6 +56,7 @@ object Core {
         com.opentune.data.discord.DiscordRpc.init(app)
         com.opentune.data.config.HomeDismissals.init(app)
         com.opentune.data.reco.TasteModel.init(app)
+        com.opentune.data.audiobooks.Audiobooks.init(app)
         com.opentune.data.radio.Radio.init(app)
         if (phone) {
             com.opentune.data.addons.AddonRefreshWorker.schedule(app)

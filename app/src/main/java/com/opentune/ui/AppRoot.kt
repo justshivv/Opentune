@@ -644,7 +644,14 @@ fun AppRoot(vm: PlayerViewModel) {
                         ExploreScreen(content, onMoodClick = openMood, onItemClick = openItem, onOpenSettings = { nav.navigate("settings") })
                     }
                     page(Tab.PODCASTS.route) {
-                        com.opentune.ui.podcasts.PodcastsScreen(content, actions, onOpenShow = { id -> nav.navigate("podcast/${Uri.encode(id)}") }, onOpenSettings = { nav.navigate("settings") })
+                        com.opentune.ui.podcasts.PodcastsScreen(content, actions, onOpenShow = { id -> nav.navigate("podcast/${Uri.encode(id)}") }, onOpenSettings = { nav.navigate("settings") },
+                            onOpenAudiobooks = { nav.navigate("audiobooks") })
+                    }
+                    page("audiobooks") {
+                        com.opentune.ui.podcasts.AudiobooksScreen(content, onBack = { nav.popBackStack() }, onOpenBook = { id -> nav.navigate("audiobook/${Uri.encode(id)}") })
+                    }
+                    page("audiobook/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                        com.opentune.ui.podcasts.AudiobookScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                     }
                     page("podcast/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         com.opentune.ui.podcasts.PodcastShowScreen(

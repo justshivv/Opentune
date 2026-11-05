@@ -975,7 +975,7 @@ class PlaybackService : MediaLibraryService() {
             }
             watchSegments(mediaItem)
             // A podcast episode, or anything else much longer than a song, picks up where it was left.
-            mediaItem?.mediaId?.let { Podcasts.resumeAt(it) ?: com.opentune.data.library.ResumePoints.resumeAt(it) }?.let { at ->
+            mediaItem?.mediaId?.let { com.opentune.data.audiobooks.Audiobooks.resumeAt(it) ?: Podcasts.resumeAt(it) ?: com.opentune.data.library.ResumePoints.resumeAt(it) }?.let { at ->
                 mediaSession?.player?.takeIf { it.currentPosition < RESUME_SLACK_MS }?.seekTo(at)
             }
             // The same song on a better stream is not a new listen.
@@ -1163,7 +1163,10 @@ class PlaybackService : MediaLibraryService() {
     private fun saveEpisodePosition(player: Player) {
         val id = player.currentMediaItem?.mediaId ?: return
         val duration = player.duration.takeIf { it > 0 } ?: 0L
-        if (Podcasts.isEpisode(id)) Podcasts.savePosition(id, player.currentPosition, duration)
+        if (com.opentune.data.audiobooks.Audiobooks.isChapter(id)) {
+            val meta = player.currentMediaItem?.mediaMetadata
+            com.opentune.data.audiobooks.Audiobooks.save(id, player.currentPosition, meta?.albumTitle?.toString().orEmpty(), meta?.artist?.toString().orEmpty())
+        } else if (Podcasts.isEpisode(id)) Podcasts.savePosition(id, player.currentPosition, duration)
         else com.opentune.data.library.ResumePoints.save(id, player.currentPosition, duration)
     }
 
@@ -2374,7 +2377,7 @@ class PlaybackService : MediaLibraryService() {
         val seed = seedItem.mediaId
         // Radio is a YouTube feature; a local file has none. A song on your own
         // server carries on with more of the server's songs, picked at random.
-        if (LocalMusic.isLocal(seed) || Radio.isRadio(seed)) return
+        if (LocalMusic.isLocal(seed) || Radio.isRadio(seed) || com.opentune.data.audiobooks.Audiobooks.isChapter(seed)) return
         if (seed in exhaustedSeeds) return
         if (radioJob?.isActive == true && radioSeed == seed) return
 
