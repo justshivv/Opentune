@@ -59,7 +59,8 @@ internal fun rememberEchoPhase(running: Boolean, periodMillis: Int): State<Float
 internal fun EchoGlowBackground(running: Boolean, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val colors = listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.inversePrimary)
-    val phase = rememberEchoPhase(running, 20_000)
+    // A slow turn, so the light drifts rather than sweeps.
+    val phase = rememberEchoPhase(running, 32_000)
     val strength = if (scheme.surface.luminance() > 0.5f) 0.25f else 0.55f
     Canvas(modifier) {
         val p = phase.value
@@ -82,5 +83,12 @@ internal fun EchoGlowBackground(running: Boolean, modifier: Modifier = Modifier)
             center = Offset(size.width * oscillate(1f, 0f, 0.2f), size.height * oscillate(0.5f, 1f, 0.3f)),
             radius = size.width.coerceAtLeast(1f),
         ))
+        // A third, fainter light low down, out of step with the others, so the glow never sits still in one shape.
+        drawRect(Brush.radialGradient(
+            *com.opentune.ui.components.glowStops(color(2), strength * 0.6f, shape = 1.8f),
+            center = Offset(size.width * oscillate(0.15f, 0.85f, 0.55f), size.height * oscillate(0.7f, 1.05f, 0.8f)),
+            radius = size.width.coerceAtLeast(1f) * 0.9f,
+        ))
+        with(com.opentune.ui.components.Dither) { drawDither() }
     }
 }

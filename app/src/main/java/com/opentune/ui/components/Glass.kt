@@ -150,7 +150,15 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
             highlight = { Highlight.Default },
             shadow = { Shadow.Default },
             innerShadow = if (lite) null else ({ InnerShadow.Default }),
-            onDrawSurface = { drawRect(film) },
+            onDrawSurface = {
+                drawRect(film)
+                // Light falling across the top of the glass, fading out by its middle: the
+                // sheen that makes Apple's glass read as a solid, curved piece.
+                drawRect(Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = if (dark) 0.10f else 0.18f),
+                    0.5f to Color.Transparent,
+                ))
+            },
         ).border(
             1.1.dp,
             // A lit rim, brightest where light would catch it (top left and bottom

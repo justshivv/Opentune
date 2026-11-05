@@ -420,14 +420,15 @@ private fun MeshGradient(artworkUrl: String?, animate: Boolean, modifier: Modifi
     }
     // Each colour eases into the next song's rather than jumping.
     val colors = wanted.mapIndexed { i, c -> animateColorAsState(c, tween(1_200), label = "mesh$i").value }
-    // One drift takes 40 s, so a dozen steps a second can't be told from
-    // every frame. It matters: the mesh is what the player's Liquid Glass
-    // samples, and each step makes every glass control blur and bend again.
-    val t by produceState(0.15f, animate) {
+    // Every frame, so the colours flow rather than step. On a phone that can't keep up
+    // (Lite mode, or glass that has gone lighter), a dozen steps a second: the mesh is
+    // what the player's Liquid Glass samples, and each step makes it blur and bend again.
+    val smooth = smoothBackdrop()
+    val t by produceState(0.15f, animate, smooth) {
         if (!animate) return@produceState
-        val start = withFrameNanos { it } - (0.15f * MESH_CYCLE_NS).toLong()
+        val start = withFrameNanos { it } - (value * MESH_CYCLE_NS).toLong()
         while (true) {
-            delay(MESH_STEP_MS)
+            if (!smooth) delay(MESH_STEP_MS)
             value = ((withFrameNanos { it } - start) % MESH_CYCLE_NS).toFloat() / MESH_CYCLE_NS
         }
     }
@@ -462,7 +463,16 @@ private fun MeshGradient(artworkUrl: String?, animate: Boolean, modifier: Modifi
                 1f to Color.Black.copy(alpha = 0.5f),
             ),
         )
+        // Fine grain, so the wide soft fields don't show as bands.
+        with(com.opentune.ui.components.Dither) { drawDither() }
     }
+}
+
+/** Whether animated backgrounds can move every frame on this phone. */
+@Composable
+internal fun smoothBackdrop(): Boolean {
+    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    return !ui.liteMode && !com.opentune.ui.components.GlassPerformance.lite
 }
 
 /**
@@ -477,13 +487,13 @@ private fun MeshGradient(artworkUrl: String?, animate: Boolean, modifier: Modifi
 @Composable
 private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
-    // Stepped like the mesh: a slow drift needs only a dozen steps a second, and each step
-    // makes the player's glass blur and bend again.
-    val t by produceState(0f, moving) {
+    // Every frame where the phone keeps up, stepped like the mesh where it doesn't.
+    val smooth = smoothBackdrop()
+    val t by produceState(0f, moving, smooth) {
         if (!moving) return@produceState
         val start = withFrameNanos { it } - (value * 1e9f).toLong()
         while (true) {
-            delay(MESH_STEP_MS)
+            if (!smooth) delay(MESH_STEP_MS)
             value = (withFrameNanos { it } - start) / 1e9f
         }
     }
@@ -544,7 +554,7 @@ private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier =
         Box(
             Modifier.matchParentSize().background(
                 Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.12f), 0.5f to Color.Black.copy(alpha = 0.3f), 1f to Color.Black.copy(alpha = 0.58f)),
-            ),
+            ).drawWithContent { drawContent(); with(com.opentune.ui.components.Dither) { drawDither() } },
         )
     }
 }
