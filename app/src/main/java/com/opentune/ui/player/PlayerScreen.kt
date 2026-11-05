@@ -437,14 +437,15 @@ fun PlayerLayout(
     // On its side the player has its own layout.
     val landscape = !docked && (television || LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE)
     // Full-screen cover only fits the layouts built around a plain square cover.
-    val fullCover = !landscape && !amoled && (apple || state.ui.fullScreenCover) && pane == Pane.COVER && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    // The Full-screen cover art switch decides, in the Apple-inspired style too (choosing that style turns it on).
+    val fullCover = !landscape && !amoled && state.ui.fullScreenCover && pane == Pane.COVER && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     // Where the cover area ends, measured from the top of the player, so a
     // full-screen cover can run down to the title on any screen height.
     var playerCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     var coverBottomPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     // The plain cover flies, square or edge to edge; the vinyl, cassette and other designs just change view.
-    val fullStyle = !landscape && !amoled && (apple || state.ui.fullScreenCover) && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    val fullStyle = !landscape && !amoled && state.ui.fullScreenCover && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     val flies = !state.ui.reduceAnimation && !docked && !landscape &&
         style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
         style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST

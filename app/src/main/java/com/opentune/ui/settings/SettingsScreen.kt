@@ -557,7 +557,8 @@ private fun settingsSections(
             options = PlayerStyle.entries,
             selected = ui.playerStyle,
             label = { "${it.label} · ${it.summary}" },
-            onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v) } },
+            // The Apple-inspired style is edge-to-edge artwork, so choosing it turns that on; it can be turned off after.
+            onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v, fullScreenCover = it.fullScreenCover || v == PlayerStyle.APPLE_MUSIC) } },
             onDismiss = { playerStyleDialog = false },
         )
     }
