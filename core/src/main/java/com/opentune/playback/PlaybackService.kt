@@ -62,6 +62,7 @@ import com.opentune.data.model.QueueTier
 import com.opentune.data.model.Song
 import com.opentune.data.reco.Recommendations
 import com.opentune.data.settings.AppSettings
+import com.opentune.data.settings.bitPerfectMode
 import com.opentune.playback.dsp.DspAudioProcessor
 import com.opentune.playback.dsp.DspParams
 import java.util.concurrent.ConcurrentHashMap
@@ -268,8 +269,10 @@ class PlaybackService : MediaLibraryService() {
                     .apply {
                         // Only the main player takes the DAC exclusively: the bridge opening its
                         // own output would switch the DAC under the song that's playing.
-                        if (exclusive) setAudioOutputProvider(ExclusiveUsbOutputProvider(
-                            androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider.Builder(context).build()))
+                        // OpenTune's own bit-perfect outputs first (USB driver, exclusive built-in DAC),
+                        // then Android 14's USB path, then Android's usual output.
+                        if (exclusive) setAudioOutputProvider(com.opentune.playback.nativeout.NativeOutputProvider(ExclusiveUsbOutputProvider(
+                            androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider.Builder(context).build())))
                     }
                     .build(),
                 effects,
@@ -281,7 +284,9 @@ class PlaybackService : MediaLibraryService() {
                 floatWanted = { source ->
                     !stretching() && (
                         AppSettings.playback.value.floatOutput ||
-                            (BitPerfectUsb.wanted && source != C.ENCODING_PCM_16BIT && source != C.ENCODING_PCM_8BIT)
+                            ((BitPerfectUsb.wanted || com.opentune.playback.nativeout.NativeOutputProvider.mode.let {
+                                it == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT || it == com.opentune.data.settings.BitPerfectOutput.BUILT_IN
+                            }) && source != C.ENCODING_PCM_16BIT && source != C.ENCODING_PCM_8BIT)
                         )
                 },
             )
@@ -530,13 +535,14 @@ class PlaybackService : MediaLibraryService() {
 
         audioManager = getSystemService(AudioManager::class.java)?.also { am ->
             BitPerfectUsb.init(am)
+            com.opentune.playback.nativeout.UsbDirect.init(this)
             am.registerAudioDeviceCallback(deviceCallback, null)
         }
         scope.launch {
             AppSettings.playback.map { it.preferUsbDac }.distinctUntilChanged().collect { applyPreferredDevice() }
         }
         scope.launch {
-            AppSettings.playback.map { it.bitPerfectUsb to it.floatOutput }.distinctUntilChanged().collect { applyBitPerfect(reopen = true) }
+            AppSettings.playback.map { Triple(it.bitPerfectUsb, it.bitPerfectOutput, it.floatOutput) }.distinctUntilChanged().collect { applyBitPerfect(reopen = true) }
         }
         scope.launch {
             // Speed or pitch moved off normal (or back), skip silence turned on or off, a room joined
@@ -2278,7 +2284,7 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private var exclusiveWas: Boolean? = null
+    private var exclusiveWas: com.opentune.data.settings.BitPerfectOutput? = null
 
     /**
      * Turns exclusive USB output on or off. With [reopen], a song already
@@ -2287,13 +2293,16 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun applyBitPerfect(reopen: Boolean = false) {
         val pb = AppSettings.playback.value
-        BitPerfectUsb.setWanted(pb.bitPerfectUsb)
+        val mode = pb.bitPerfectMode
+        com.opentune.playback.nativeout.NativeOutputProvider.mode = mode
+        BitPerfectUsb.setWanted(mode == com.opentune.data.settings.BitPerfectOutput.USB_ANDROID)
+        com.opentune.playback.nativeout.UsbDirect.setWanted(mode == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT)
         applyLoudness()
         val player = mediaSession?.player as? ExoPlayer ?: return
         openEffectSession(player.audioSessionId)
-        val changed = exclusiveWas != null && exclusiveWas != pb.bitPerfectUsb
-        exclusiveWas = pb.bitPerfectUsb
-        if (reopen && (changed || pb.bitPerfectUsb)) reopenOutput(player)
+        val changed = exclusiveWas != null && exclusiveWas != mode
+        exclusiveWas = mode
+        if (reopen && (changed || mode != com.opentune.data.settings.BitPerfectOutput.OFF)) reopenOutput(player)
     }
 
     private fun stretching(): Boolean = isStretched(
@@ -2308,7 +2317,7 @@ class PlaybackService : MediaLibraryService() {
     private fun rebuildOutput() {
         val player = mediaSession?.player as? ExoPlayer ?: return
         val pb = AppSettings.playback.value
-        if (!pb.floatOutput && !pb.bitPerfectUsb) return
+        if (!pb.floatOutput && !pb.bitPerfectUsb && pb.bitPerfectOutput == com.opentune.data.settings.BitPerfectOutput.OFF) return
         if (player.currentMediaItem == null) return
         if (player.playbackState != Player.STATE_READY && player.playbackState != Player.STATE_BUFFERING) return
         val at = player.currentPosition

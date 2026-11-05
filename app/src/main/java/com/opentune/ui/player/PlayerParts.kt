@@ -554,7 +554,7 @@ private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier =
         Box(
             Modifier.matchParentSize().background(
                 Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.12f), 0.5f to Color.Black.copy(alpha = 0.3f), 1f to Color.Black.copy(alpha = 0.58f)),
-            ).drawWithContent { drawContent(); with(com.opentune.ui.components.Dither) { drawDither() } },
+            ),
         )
     }
 }

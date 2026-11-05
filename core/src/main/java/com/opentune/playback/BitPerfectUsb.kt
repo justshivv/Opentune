@@ -203,6 +203,16 @@ object BitPerfectUsb {
         return (-62f + 62f * v.pow(0.75f)).coerceAtMost(0f)
     }
 
+    /**
+     * What OpenTune's own outputs (the USB driver, the exclusive built-in DAC)
+     * report as they open a song, so the rest of the app treats it as bit-perfect:
+     * effects off, no crossfade, the volume applied by the app. Null when none is
+     * in use.
+     */
+    fun reportNative(status: Status?) {
+        _status.value = status ?: if (wanted) _status.value.takeUnless { it is Status.Active } ?: Status.Off else Status.Off
+    }
+
     private const val TAG = "BitPerfectUsb"
     const val SILENT_DB = -120f
 }

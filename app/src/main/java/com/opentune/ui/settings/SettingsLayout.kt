@@ -57,7 +57,7 @@ internal val SETTINGS_CATEGORIES = listOf(
             "Audio add-ons" to listOf("Audio add-ons", "Lossless streaming", "Unmetered networks only"),
             "Loudness" to listOf("Loudness normalization", "Volume level", "Normalize on the phone speaker"),
             "Effects" to listOf("Equalizer", "Clarity", "Spatial audio", "System audio effects"),
-            "Output" to listOf("Output precision", "Prefer USB DAC", "Bit-perfect USB output"),
+            "Output" to listOf("Output precision", "Prefer USB DAC", "Bit-perfect output"),
         ),
     ),
     SettingsCategory(

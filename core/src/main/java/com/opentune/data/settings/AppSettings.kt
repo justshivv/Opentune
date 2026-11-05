@@ -42,6 +42,19 @@ enum class PaletteStyleOption(val label: String) {
     Monochrome("Monochrome"),
 }
 
+/** How music reaches the DAC unchanged. */
+@Serializable
+enum class BitPerfectOutput(val label: String, val summary: String) {
+    OFF("Off", "Audio goes through Android's mixer and OpenTune's effects"),
+    USB_ANDROID("USB DAC", "Android 14 opens the DAC at each track's own rate and bit depth, without mixing or resampling"),
+    USB_DIRECT("USB DAC (direct driver)", "OpenTune drives the DAC itself, on any Android version, at each track's own rate. Asks for USB permission"),
+    BUILT_IN("Built-in DAC (exclusive)", "For phones and players with their own DAC: the headphone or line output opened exclusively at each track's rate. Not every device allows it"),
+}
+
+/** The bit-perfect path in use: the chosen one, or the Android 14 switch from before there was a choice. */
+val PlaybackSettings.bitPerfectMode: BitPerfectOutput
+    get() = if (bitPerfectOutput != BitPerfectOutput.OFF) bitPerfectOutput else if (bitPerfectUsb) BitPerfectOutput.USB_ANDROID else BitPerfectOutput.OFF
+
 @Serializable
 enum class PlayerBackground(val label: String) {
     /** The cover itself, blurred smooth and drifting slowly, as the album and playlist pages' headers. */
@@ -337,6 +350,8 @@ data class PlaybackSettings(
     val automix: Boolean = false,
     /** Bit-perfect output to a USB DAC (Android 14+): no mixing, effects or resampling. */
     val bitPerfectUsb: Boolean = false,
+    /** Which bit-perfect path, if any (see [BitPerfectOutput]); [bitPerfectUsb] is the Android 14 one. */
+    val bitPerfectOutput: BitPerfectOutput = BitPerfectOutput.OFF,
     /** Let the phone's own effects (Dolby, SoundAlive, system EQ) process playback. */
     val systemEffects: Boolean = true,
     /** Carry on playing when headphones are plugged in or a Bluetooth device connects. */

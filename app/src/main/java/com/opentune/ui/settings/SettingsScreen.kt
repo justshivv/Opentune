@@ -55,6 +55,7 @@ import androidx.compose.material.icons.rounded.BlurOff
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Check
+import com.opentune.data.settings.bitPerfectMode
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
@@ -437,6 +438,7 @@ private fun settingsSections(
     val done by Downloads.done.collectAsState(Downloads.doneNow())
     var downloadQualityDialog by remember { mutableStateOf(false) }
     var lyricsSourcesDialog by remember { mutableStateOf(false) }
+    var bitPerfectSheet by remember { mutableStateOf(false) }
     var lastFmDialog by remember { mutableStateOf(false) }
     var serverDialog by remember { mutableStateOf(false) }
     var listenBrainzDialog by remember { mutableStateOf(false) }
@@ -817,23 +819,27 @@ private fun settingsSections(
                 Entry("Audio add-ons", "source URL manifest order priority lossless flac high res") {
                     SettingRow("Audio add-ons", icon = Icons.Rounded.HighQuality, summary = "Add service URLs and choose source priority", onClick = { audioAddons = true })
                 },
-                Entry("Bit-perfect USB output", "dac exclusive mode usb audio player pro hiby passthrough hi-fi audiophile mixer bypass sample rate switching") {
+                Entry("Bit-perfect output", "dac exclusive mode usb audio player pro hiby passthrough hi-fi audiophile mixer bypass sample rate switching direct driver aaudio built-in") {
                     val usb by BitPerfectUsb.status.collectAsState()
-                    ToggleRow(
-                        "Exclusive USB output",
-                        pb.bitPerfectUsb,
-                        { v -> AppSettings.updatePlayback { it.copy(bitPerfectUsb = v) } },
-                        summary = if (!BitPerfectUsb.supported) "Needs Android 14 or newer"
-                        else when (val s = usb) {
-                            is BitPerfectUsb.Status.Active -> "Exclusive on ${s.device}: ${s.format.ifEmpty { "${s.bits}-bit" }} at ${s.sampleRate / 1000.0} kHz, bit for bit"
-                            is BitPerfectUsb.Status.NoMatch -> "On. The DAC lists no bit-perfect mode for ${s.sampleRate / 1000.0} kHz, so this song goes through Android's mixer"
-                            BitPerfectUsb.Status.NoDac -> "On. Plug in a USB DAC and the music moves to it"
-                            else -> "The DAC plays only OpenTune, switched to each song's own sample rate and bit depth: no mixing, resampling or effects. Volume is applied by the app; at full volume the signal is bit-exact"
+                    val direct by com.opentune.playback.nativeout.UsbDirect.status.collectAsState()
+                    val mode = pb.bitPerfectMode
+                    NavRow(
+                        "Bit-perfect output",
+                        { bitPerfectSheet = true },
+                        summary = when (val s = usb) {
+                            is BitPerfectUsb.Status.Active -> "${s.device}: ${s.format.ifEmpty { "${s.bits}-bit" }} at ${s.sampleRate / 1000.0} kHz, bit for bit"
+                            is BitPerfectUsb.Status.NoMatch -> "The DAC has no bit-perfect mode for ${s.sampleRate / 1000.0} kHz, so this song goes through Android's mixer"
+                            else -> when (val d = direct) {
+                                is com.opentune.playback.nativeout.UsbDirect.Status.NeedsPermission -> "Tap to allow ${d.device}"
+                                is com.opentune.playback.nativeout.UsbDirect.Status.Failed -> "${d.device}: ${d.why}"
+                                com.opentune.playback.nativeout.UsbDirect.Status.NoDac -> "Plug in a USB DAC and the music moves to it"
+                                else -> mode.summary
+                            }
                         },
                         icon = Icons.Rounded.Usb,
-                        enabled = BitPerfectUsb.supported,
-                        beta = true,
+                        value = mode.label,
                     )
+                    if (bitPerfectSheet) BitPerfectSheet(mode, onDismiss = { bitPerfectSheet = false })
                 },
                 Entry("System audio effects", "dolby atmos soundalive equalizer device effects") {
                     ToggleRow("System audio effects", pb.systemEffects, { v -> AppSettings.updatePlayback { it.copy(systemEffects = v) } }, summary = "Let the phone's own effects (Dolby, SoundAlive, system equalizer) process playback", icon = Icons.Rounded.SurroundSound)
@@ -1711,4 +1717,49 @@ private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 10
 private fun SpotifyMark() {
     // Spotify's own mark, in its own colours.
     androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), "Spotify", Modifier.size(40.dp))
+}
+
+/** The four bit-perfect paths, each with what it does, and USB access for the direct driver. */
+@Composable
+private fun BitPerfectSheet(mode: com.opentune.data.settings.BitPerfectOutput, onDismiss: () -> Unit) {
+    val direct by com.opentune.playback.nativeout.UsbDirect.status.collectAsState()
+    com.opentune.ui.components.FloatingCard(onDismiss = onDismiss, title = "Bit-perfect output") {
+        Column {
+            com.opentune.data.settings.BitPerfectOutput.entries.forEach { option ->
+                val available = when (option) {
+                    com.opentune.data.settings.BitPerfectOutput.USB_ANDROID -> BitPerfectUsb.supported
+                    else -> true
+                }
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clickable(enabled = available) {
+                            AppSettings.updatePlayback {
+                                it.copy(bitPerfectOutput = option, bitPerfectUsb = option == com.opentune.data.settings.BitPerfectOutput.USB_ANDROID)
+                            }
+                            if (option == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT) com.opentune.playback.nativeout.UsbDirect.requestPermission()
+                        }
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(option.label, style = MaterialTheme.typography.titleMedium,
+                            color = if (available) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (available) option.summary else "Needs Android 14 or newer", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (option == mode) Icon(Icons.Rounded.Check, "Chosen", tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+            if (mode == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT && direct is com.opentune.playback.nativeout.UsbDirect.Status.NeedsPermission) {
+                androidx.compose.material3.Button(
+                    onClick = { com.opentune.playback.nativeout.UsbDirect.requestPermission() },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                ) { Text("Allow USB access") }
+            }
+            Text(
+                "Sends the track to the DAC unchanged. The equalizer, loudness normalization, crossfade, Automix and playback speed are bypassed; the volume is set by the app.",
+                Modifier.padding(20.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }

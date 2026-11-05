@@ -26,10 +26,19 @@ fun lastFmCredential(name: String): String {
 
 android {
     namespace = "com.opentune.core"
+    ndkVersion = "27.2.12479018"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
     compileSdk = 37
 
     defaultConfig {
         minSdk = 26
+        // OpenTune's own bit-perfect outputs (src/main/cpp): the USB driver and exclusive AAudio.
+        externalNativeBuild { cmake { cppFlags += "-std=c++17" } }
         buildConfigField("String", "VERSION_NAME", "\"$appVersionName\"")
         buildConfigField("int", "VERSION_CODE", appVersionCode)
         buildConfigField("String", "LASTFM_API_KEY", lastFmCredential("LASTFM_API_KEY"))
