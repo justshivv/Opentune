@@ -482,7 +482,9 @@ class PlaybackService : MediaLibraryService() {
             },
             mainLowCut = { dsp.lowCutHz = it },
             busy = { upgradeJob?.isActive == true || swapRamping || swappingTo != null },
+            silentMs = { dsp.meterRate.takeIf { it > 0 }?.let { rate -> dsp.silentFrames * 1000 / rate } ?: 0L },
         ).also { it.start() }
+        dsp.meter = true
         // Casting: the device follows this player while one is connected.
         castMirror = CastMirror(context, player, scope)
         scope.launch {

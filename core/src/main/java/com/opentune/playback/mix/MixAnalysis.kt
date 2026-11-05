@@ -203,8 +203,29 @@ data class Ending(
     /** Where the song starts to fall away from its body (a fade-out or quiet coda); equal to [endMs] for a hard stop. */
     val outroMs: Long,
     val beat: Beat?,
+    /** The stretch read, as a loudness picture for showing the mix. */
+    val wave: Wave? = null,
 ) {
     val outroLengthMs: Long get() = endMs - outroMs
+}
+
+/** A song's loudness over a stretch of it, [values] 0..1 evenly from [startMs] to [endMs], for drawing. */
+class Wave(val startMs: Long, val endMs: Long, val values: FloatArray) {
+    companion object {
+        /** [f]'s loudness at [points] places: the loudest moment in each slice, on a 60 dB scale. */
+        fun of(f: Features, points: Int = 240): Wave {
+            val out = FloatArray(points)
+            val per = f.size.toDouble() / points
+            for (i in 0 until points) {
+                val a = (i * per).toInt()
+                val b = ((i + 1) * per).toInt().coerceAtMost(f.size).coerceAtLeast(a + 1)
+                var top = -120f
+                for (k in a until b) top = max(top, f.powerDb[k])
+                out[i] = ((top + 60f) / 60f).coerceIn(0f, 1f)
+            }
+            return Wave(f.startMs, f.endMs, out)
+        }
+    }
 }
 
 /** How a song starts: where its sound begins, whether it eases in, and its beat. */
@@ -214,6 +235,7 @@ data class Opening(
     /** The first seconds are clearly quieter than the song: an intro to blend over. */
     val quietIntro: Boolean,
     val beat: Beat?,
+    val wave: Wave? = null,
 )
 
 /** [f] covers the last stretch of a song [durationMs] long. */
@@ -232,7 +254,7 @@ fun analyzeEnding(f: Features, durationMs: Long): Ending? {
     while (k > 0 && s[k] < body - OUTRO_BELOW_DB) k--
     val outro = min(end, f.timeOf(k.toDouble()))
     val beat = beatGrid(f, max(f.startMs, outro - BEAT_SPAN_MS), outro.coerceAtLeast(f.startMs + BEAT_SPAN_MS / 2))
-    return Ending(end, outro, beat)
+    return Ending(end, outro, beat, Wave.of(f))
 }
 
 /** [f] covers the first stretch of a song. */
@@ -253,7 +275,7 @@ fun analyzeOpening(f: Features): Opening? {
     for (i in a until b) power += 10.0.pow(intro[i] / 10.0)
     val introDb = db((power / max(1, b - a)).toFloat())
     val beat = beatGrid(f, start, start + BEAT_SPAN_MS)
-    return Opening(start, introDb <= body - QUIET_INTRO_DB, beat)
+    return Opening(start, introDb <= body - QUIET_INTRO_DB, beat, Wave.of(f))
 }
 
 /**

@@ -64,6 +64,8 @@ internal class Crossfade(
     private val mainLowCut: (Float) -> Unit,
     /** True while something else (a quality swap) is moving the main player. */
     private val busy: () -> Boolean,
+    /** How long the main player's sound has been silent, as it's decoded (see DspAudioProcessor.meter). */
+    private val silentMs: () -> Long = { 0L },
 ) {
     /** A second player and what to do when it's finished with. */
     class Tail(val player: ExoPlayer, val lowCut: (Float) -> Unit, val release: () -> Unit)
@@ -136,6 +138,14 @@ internal class Crossfade(
         val position = main.currentPosition
         val left = duration - position
         if (left > ANALYZE_AHEAD_MS) return POLL_MS
+        // The song has gone silent near its end (a long fade to nothing, seconds of silence
+        // before the file stops, a gap before a hidden track): the next song starts now.
+        // Seen as the sound is decoded, so it works whether or not the song could be read ahead.
+        if (left in MIN_LEFT_MS..SILENCE_WINDOW_MS && position > duration / 2 && silentMs() >= SILENCE_SKIP_MS && !busy()) {
+            lastMixed = key
+            skipSilence(plan?.inFromMs ?: 0L)
+            return POLL_MS
+        }
 
         val next = main.getMediaItemAt(main.nextMediaItemIndex)
         // Planned again if the next song changes (the queue was edited).
@@ -173,8 +183,47 @@ internal class Crossfade(
         val p = if (settings.automix) automixPlan(duration, ending, opening)
             else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, ending, opening)
         Log.d(TAG, "Plan for ${item.mediaId} → ${next.mediaId}: $p")
+        MixState.picture(MixState.Picture(MixState.Side.of(item, duration, ending?.beat, ending?.wave), MixState.Side.of(next, null, opening?.beat, opening?.wave), p, settings.automix))
         return p
     }
+
+    /** Past a silent ending into the next song, which rises in so it doesn't start with a click. */
+    private fun skipSilence(inFromMs: Long) {
+        Log.d(TAG, "Silent ending: on to the next song")
+        mix = scope.launch {
+            try {
+                MixState.start(label())
+                main.volume = 0f
+                handingOver = true
+                try { main.seekTo(main.nextMediaItemIndex, inFromMs) } finally { handingOver = false }
+                sounding(main, START_TIMEOUT_MS * 2)
+                ramp(SILENCE_RISE_MS) { q -> main.volume = q; MixState.progress(q) }
+            } finally {
+                main.volume = 1f
+                MixState.end()
+            }
+        }
+    }
+
+    /**
+     * The tail couldn't be lined up with the song: no blend of two copies, but no hard cut
+     * either. The song fades out, the next one starts and fades in.
+     */
+    private suspend fun fadeThrough(p: MixPlan) {
+        try {
+            val out = (p.outEndMs - main.currentPosition).coerceIn(MIN_LEFT_MS, FADE_THROUGH_MS)
+            ramp(out) { q -> main.volume = 1f - q; MixState.progress(q * 0.5f) }
+            handingOver = true
+            try { main.seekTo(main.nextMediaItemIndex, p.inFromMs) } finally { handingOver = false }
+            sounding(main, START_TIMEOUT_MS * 2)
+            ramp(FADE_THROUGH_MS) { q -> main.volume = q; MixState.progress(0.5f + q * 0.5f) }
+        } finally {
+            // However it ends (a skip mid-fade), the music is left at full level.
+            main.volume = 1f
+        }
+    }
+
+    private fun label() = if (settings.automix) "Automix" else "Crossfade"
 
     private fun begin(item: MediaItem, p: MixPlan) {
         val stream = sameStream(item) ?: return
@@ -190,20 +239,21 @@ internal class Crossfade(
         mix = scope.launch {
             try {
                 // 1. The tail plays, silent, lined up with the song as it is heard now.
-                if (!lineUp(tp)) {
-                    Log.w(TAG, "Tail didn't line up with ${item.mediaId}; no blend this time")
-                    return@launch
-                }
-                // 2. Up to the mix point, keeping in step.
+                val lined = lineUp(tp)
+                // 2. Up to the mix point.
                 while (main.currentPosition < p.mixAtMs - CROSSOVER_MS) {
                     if (main.currentMediaItemIndex != index) return@launch
                     delay(FRAME_MS)
                 }
-                val drift = tp.currentPosition - main.currentPosition
+                val drift = if (lined) drift(tp) else Long.MAX_VALUE
                 if (abs(drift) > MAX_DRIFT_MS) {
-                    Log.w(TAG, "Tail drifted ${drift} ms from ${item.mediaId}; no blend this time")
+                    Log.w(TAG, "Tail ${if (lined) "drifted $drift ms" else "didn't line up"} for ${item.mediaId}; fading through instead")
+                    releaseTail()
+                    MixState.start(label())
+                    fadeThrough(p)
                     return@launch
                 }
+                MixState.start(label())
                 // 3. The sound moves onto the tail: two copies of the same moment, crossed in a breath.
                 ramp(CROSSOVER_MS) { q ->
                     main.volume = 1f - q
@@ -228,6 +278,7 @@ internal class Crossfade(
                 // 7. The blend, over what's left of the old song, at most the planned length.
                 val length = minOf(p.blendMs, outLeft()).coerceAtLeast(MIN_LEFT_MS)
                 ramp(length, stop = { tp.playbackState == Player.STATE_ENDED }) { q ->
+                    MixState.progress(q)
                     val (out, inc) = blendGains(q)
                     tp.volume = out
                     main.volume = inc
@@ -238,6 +289,7 @@ internal class Crossfade(
                     }
                 }
             } finally {
+                MixState.end()
                 // However it ended, the main player is left at full level. A bail has taken the tail already.
                 if (tail === t) {
                     mainLowCut(0f)
@@ -259,15 +311,27 @@ internal class Crossfade(
         var lead = TAIL_LEAD_MS
         repeat(ALIGN_TRIES) {
             if (!sounding(tp, START_TIMEOUT_MS)) return false
+            // Positions settle once each output has reported a timestamp or two.
             delay(SETTLE_MS)
-            val drift = tp.currentPosition - main.currentPosition
+            val drift = drift(tp)
             if (abs(drift) <= ALIGNED_MS) return true
             lead = (lead - drift).coerceIn(0L, 1_500L)
             tp.seekTo(main.currentPosition + lead)
         }
         if (!sounding(tp, START_TIMEOUT_MS)) return false
         delay(SETTLE_MS)
-        return abs(tp.currentPosition - main.currentPosition) <= ALIGNED_MS
+        return abs(drift(tp)) <= ALIGNED_MS
+    }
+
+    /** How far the tail is ahead of the song, the middle of a few readings so one odd reading doesn't count. */
+    private suspend fun drift(tp: ExoPlayer): Long {
+        val readings = LongArray(DRIFT_READINGS)
+        for (i in readings.indices) {
+            readings[i] = tp.currentPosition - main.currentPosition
+            if (i < readings.lastIndex) delay(DRIFT_GAP_MS)
+        }
+        readings.sort()
+        return readings[readings.size / 2]
     }
 
     /** Moves the incoming song (still silent) so its beats fall on the outgoing song's. */
@@ -363,18 +427,26 @@ internal class Crossfade(
         /** The longest blend a plan made without reading the songs uses. */
         const val MAX_QUICK_MS = 6_000L
         /** The tail starts this long before the mix point, to line up in time. */
-        const val PREP_MS = 3_000L
+        const val PREP_MS = 6_000L
         /** Less than this before the mix point and there isn't time to line up. */
-        const val MIN_PREP_MS = 900L
+        const val MIN_PREP_MS = 2_000L
+        /** Silence this long near a song's end, as it's decoded, and the next song starts. */
+        const val SILENCE_SKIP_MS = 1_500L
+        /** Only this near the end does silence count as the song's ending. */
+        const val SILENCE_WINDOW_MS = 40_000L
+        const val SILENCE_RISE_MS = 600L
+        const val FADE_THROUGH_MS = 1_800L
+        const val DRIFT_READINGS = 5
+        const val DRIFT_GAP_MS = 25L
         const val MIN_LEFT_MS = 400L
         /** The tail is started this far ahead to cover its start-up; corrected after. */
         const val TAIL_LEAD_MS = 150L
         const val START_TIMEOUT_MS = 1_500L
-        const val SETTLE_MS = 150L
-        const val ALIGN_TRIES = 3
-        const val ALIGNED_MS = 12L
-        const val MAX_DRIFT_MS = 30L
-        const val CROSSOVER_MS = 50L
+        const val SETTLE_MS = 250L
+        const val ALIGN_TRIES = 5
+        const val ALIGNED_MS = 20L
+        const val MAX_DRIFT_MS = 35L
+        const val CROSSOVER_MS = 80L
         const val STEP_TRIES = 2
         const val SEEK_LEAD_MS = 80L
         const val IN_STEP_MS = 15L
@@ -382,4 +454,45 @@ internal class Crossfade(
         const val MIN_STEP_LEFT_MS = 2_500L
         const val BAIL_MS = 150L
     }
+}
+
+/**
+ * Whether two songs are blending now, and how far through, for the player to
+ * show "Automix" where the quality badge sits while it happens.
+ */
+object MixState {
+    data class Mix(val label: String, val progress: Float)
+
+    /** One song of a transition as the transition view shows it. */
+    data class Side(
+        val title: String, val artist: String, val artworkUrl: String?, val durationMs: Long?,
+        val bpm: Double?, val wave: com.opentune.playback.mix.Wave?,
+    ) {
+        companion object {
+            fun of(item: MediaItem, durationMs: Long?, beat: com.opentune.playback.mix.Beat?, wave: com.opentune.playback.mix.Wave?): Side {
+                val m = item.mediaMetadata
+                return Side(
+                    m.title?.toString().orEmpty(), m.artist?.toString().orEmpty(),
+                    m.extras?.getString(EXTRA_THUMB) ?: m.artworkUri?.toString(),
+                    durationMs ?: item.mediaMetadata.durationMs,
+                    beat?.takeIf { it.sure }?.bpm, wave,
+                )
+            }
+        }
+    }
+
+    /** The next transition, as planned: the two songs, where and how they meet. */
+    data class Picture(val out: Side, val into: Side, val plan: MixPlan, val automix: Boolean)
+
+    private val _picture = kotlinx.coroutines.flow.MutableStateFlow<Picture?>(null)
+    val upcoming: kotlinx.coroutines.flow.StateFlow<Picture?> = _picture
+
+    fun picture(p: Picture?) { _picture.value = p }
+
+    private val _now = kotlinx.coroutines.flow.MutableStateFlow<Mix?>(null)
+    val now: kotlinx.coroutines.flow.StateFlow<Mix?> = _now
+
+    internal fun start(label: String) { _now.value = Mix(label, 0f) }
+    internal fun progress(p: Float) { _now.value?.let { _now.value = it.copy(progress = p.coerceIn(0f, 1f)) } }
+    internal fun end() { _now.value = null }
 }

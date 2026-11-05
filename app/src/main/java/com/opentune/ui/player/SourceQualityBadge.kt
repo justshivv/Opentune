@@ -43,12 +43,84 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.ui.unit.sp
 import com.opentune.data.NerdStats
 import com.opentune.playback.AudioFormatInfo
 import java.util.Locale
 
 @Composable
 internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    // While two songs blend, "Automix" stands where the quality is, then gives way to it again.
+    val mix by com.opentune.playback.MixState.now.collectAsState()
+    var transition by remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.animation.Crossfade(mix != null, animationSpec = tween(450), label = "mixBadge") { mixing ->
+        if (mixing) MixBadge(modifier, onClick = { transition = true }) else QualityBadge(mediaId, format, onClick, modifier)
+    }
+    if (transition) AutomixSheet(onDismiss = { transition = false })
+}
+
+/**
+ * "Automix" (or "Crossfade") with a beam of light running across it, faster the
+ * further the blend has gone, so the label itself shows the songs moving into each other.
+ */
+@Composable
+private fun MixBadge(modifier: Modifier, onClick: () -> Unit) {
+    val mix by com.opentune.playback.MixState.now.collectAsState()
+    val shown = remember { androidx.compose.runtime.mutableStateOf(mix ?: com.opentune.playback.MixState.Mix("Automix", 0f)) }
+    mix?.let { shown.value = it }
+    val colors = MaterialTheme.colorScheme
+    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+    // The beam's place, moved on each frame by a speed that rises with the blend.
+    val beam = remember { androidx.compose.runtime.mutableFloatStateOf(-0.2f) }
+    androidx.compose.runtime.LaunchedEffect(still) {
+        if (still) return@LaunchedEffect
+        var last = 0L
+        while (true) {
+            androidx.compose.runtime.withFrameNanos { now ->
+                if (last != 0L) {
+                    val p = shown.value.progress
+                    val sweepsPerSecond = 0.45f + 2.6f * p * p
+                    beam.floatValue = ((beam.floatValue + 0.2f + sweepsPerSecond * (now - last) / 1e9f * 1.4f) % 1.4f) - 0.2f
+                }
+                last = now
+            }
+        }
+    }
+    androidx.compose.foundation.layout.Row(
+        modifier.widthIn(max = 280.dp).fillMaxWidth().heightIn(min = 40.dp)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = "${shown.value.label}: blending into the next song. Open the transition" },
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Icon(androidx.compose.material.icons.Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = colors.primary)
+        Spacer(Modifier.width(6.dp))
+        Text(shown.value.label, style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, letterSpacing = 0.6.sp,
+            modifier = Modifier.graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }.drawWithCache {
+                onDrawWithContent {
+                    drawContent()
+                    if (still) return@onDrawWithContent
+                    val x = beam.floatValue * size.width
+                    val half = size.width * 0.22f
+                    // The light, in the accent at its edges and white at its heart, over the letters only.
+                    drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        0f to colors.primary.copy(alpha = 0f),
+                        0.3f to colors.primary.copy(alpha = 0.9f),
+                        0.5f to colors.onSurface,
+                        0.7f to colors.primary.copy(alpha = 0.9f),
+                        1f to colors.primary.copy(alpha = 0f),
+                        startX = x - half, endX = x + half),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+                }
+            })
+    }
+}
+
+@Composable
+private fun QualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val reported by NerdStats.playbackSource.collectAsState()
     val upgrading by NerdStats.upgrading.collectAsState()
     val source = reported?.takeIf { it.mediaId == mediaId }

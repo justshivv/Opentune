@@ -288,6 +288,20 @@ class DspAudioProcessor : BaseAudioProcessor() {
     private var cut: Array<SweepHighPass> = emptyArray()
     private var cutAt = 0f
 
+    /**
+     * Measures, on the main player only, how long the sound has been silent: the
+     * frames in a row whose every sample is below about -54 dBFS. A song's silent
+     * ending is seen as it's decoded, before it's heard, so a mix can skip it.
+     * Stops counting when no sound arrives at all (the end of the file), so the
+     * last loud moment of a song is never taken for silence.
+     */
+    @Volatile var meter = false
+    /** Consecutive silent frames processed; 0 when the last ones carried sound. */
+    @Volatile var silentFrames = 0L
+        private set
+    @Volatile var meterRate = 0
+        private set
+
     private var applied: DspParams? = null
     private var channels = 0
     private var sampleRate = 0
@@ -308,6 +322,8 @@ class DspAudioProcessor : BaseAudioProcessor() {
         }
         channels = inputAudioFormat.channelCount
         sampleRate = inputAudioFormat.sampleRate
+        meterRate = sampleRate
+        silentFrames = 0
         isFloat = enc == C.ENCODING_PCM_FLOAT
         frame = FloatArray(channels)
         ns = FloatArray(channels)
@@ -333,6 +349,7 @@ class DspAudioProcessor : BaseAudioProcessor() {
         val p = params
         if (p !== applied) rebuild(p)
         val size = inputBuffer.remaining()
+        if (meter && channels > 0) measureSilence(inputBuffer)
         // The song's loudness for the on-screen lights, read without moving the buffer.
         if (com.opentune.playback.AudioLevels.listening && channels > 0) {
             val view = inputBuffer.duplicate().order(inputBuffer.order())
@@ -498,7 +515,24 @@ class DspAudioProcessor : BaseAudioProcessor() {
         frame[1] = outR
     }
 
+    private fun measureSilence(input: ByteBuffer) {
+        val view = input.duplicate().order(input.order())
+        val base = view.position()
+        val width = if (isFloat) 4 else 2
+        val samples = view.remaining() / width
+        var loud = false
+        // Every fourth sample is plenty to tell music from silence, and costs little.
+        var i = 0
+        while (i < samples) {
+            val v = if (isFloat) abs(view.getFloat(base + i * 4)) else abs(view.getShort(base + i * 2) / 32768f)
+            if (v > SILENT_LEVEL) { loud = true; break }
+            i += 4
+        }
+        silentFrames = if (loud) 0 else silentFrames + samples / channels
+    }
+
     override fun onFlush() {
+        silentFrames = 0
         filters.forEach { ch -> ch.forEach { it.reset() } }
         cut.forEach { it.reset() }
         space?.reset()
@@ -513,6 +547,9 @@ class DspAudioProcessor : BaseAudioProcessor() {
     companion object {
         /** While true, every processor puts out silence; set while casting. */
         @Volatile var silenced = false
+
+        /** About -54 dBFS: below this, a song's ending is silence. */
+        private const val SILENT_LEVEL = 0.002f
 
         /** A volume the sleep timer turns down as it winds down; 1 the rest of the time. */
         @Volatile var masterGain = 1f
