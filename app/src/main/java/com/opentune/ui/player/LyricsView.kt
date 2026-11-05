@@ -1,5 +1,13 @@
 package com.opentune.ui.player
 
+import androidx.compose.animation.togetherWith
+
+import androidx.compose.foundation.layout.widthIn
+
+import androidx.compose.foundation.border
+
+import androidx.compose.ui.draw.shadow
+
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -224,34 +232,70 @@ fun LyricsView(
     }
 }
 
-/** The bar floating over the lyrics while lines are being picked for a card: Cancel and Share. */
+/**
+ * The pill floating over the lyrics while lines are being picked for a card: a
+ * close button, how many lines are picked (or what to do when none are), and
+ * Share in the accent, lit once there's something to share.
+ */
 @Composable
-private fun SelectionBar(count: Int, onCancel: () -> Unit, onShare: () -> Unit, modifier: Modifier = Modifier) {
+internal fun SelectionBar(count: Int, onCancel: () -> Unit, onShare: () -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val pill = RoundedCornerShape(32.dp)
+    val ready = count > 0
+    val shareFill by androidx.compose.animation.animateColorAsState(
+        if (ready) scheme.primary else Color.White.copy(alpha = 0.12f), tween(220), label = "shareFill",
+    )
+    val shareInk by androidx.compose.animation.animateColorAsState(
+        if (ready) scheme.onPrimary else Color.White.copy(alpha = 0.45f), tween(220), label = "shareInk",
+    )
     Row(
         modifier
-            .clip(RoundedCornerShape(30.dp))
-            .background(Color(0xF0141416))
-            .padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .widthIn(max = 440.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .shadow(24.dp, pill, clip = false, ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.5f))
+            .clip(pill)
+            .background(Color(0xEB16161A))
+            .border(1.dp, androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f))), pill)
+            .padding(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.height(52.dp).width(130.dp).clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onCancel),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Rounded.Close, null, tint = Color.White, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(com.opentune.ui.theme.tr("Cancel"), color = Color.White, style = MaterialTheme.typography.titleMedium)
+        Box(
+            Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f)).clickable(onClick = onCancel),
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Rounded.Close, com.opentune.ui.theme.tr("Cancel"), tint = Color.White, modifier = Modifier.size(22.dp)) }
+        androidx.compose.animation.AnimatedContent(
+            targetState = count,
+            transitionSpec = {
+                val up = targetState > initialState
+                (androidx.compose.animation.slideInVertically { if (up) it / 2 else -it / 2 } + fadeIn(tween(180)))
+                    .togetherWith(androidx.compose.animation.slideOutVertically { if (up) -it / 2 else it / 2 } + fadeOut(tween(140)))
+            },
+            label = "pickedCount",
+            modifier = Modifier.weight(1f).padding(horizontal = 14.dp),
+        ) { n ->
+            Column {
+                Text(
+                    when (n) { 0 -> "Pick lines"; 1 -> "1 line selected"; else -> "$n lines selected" },
+                    color = Color.White, style = MaterialTheme.typography.titleSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1,
+                )
+                Text(
+                    if (n == 0) "Tap the lines to share" else "Tap a line again to leave it out",
+                    color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall, maxLines = 1,
+                )
+            }
         }
         Row(
-            Modifier.height(52.dp).width(130.dp).clip(RoundedCornerShape(24.dp)).background(Color.White).clickable(enabled = count > 0, onClick = onShare),
+            Modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).background(shareFill)
+                .clickable(enabled = ready, onClick = onShare).padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.IosShare, null, tint = Color.Black, modifier = Modifier.size(20.dp))
+            Icon(Icons.Rounded.IosShare, null, tint = shareInk, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
-            Text(com.opentune.ui.theme.tr("Share"), color = Color.Black, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text(com.opentune.ui.theme.tr("Share"), color = shareInk, style = MaterialTheme.typography.titleSmall,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
         }
     }
 }
