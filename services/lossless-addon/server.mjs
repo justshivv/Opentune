@@ -12,7 +12,6 @@ import { withAppVerification } from './auth.mjs';
 import { withAbuseProtection } from './security.mjs';
 import { withMetadataCache } from './cache.mjs';
 import { createPool, memoryCache } from './pool.mjs';
-import { ConfigStore, createControl, isControlPath } from './control.mjs';
 
 const env = {
   VERIFICATION_MODE: process.env.VERIFICATION_MODE || 'strict',
@@ -29,14 +28,21 @@ const MAX_BODY = 100_000;
 
 // ---- Device sessions, challenges and browser pairings (Durable Object stand-in) ----
 mkdirSync(DATA_DIR, { recursive: true });
-const configStore = new ConfigStore(DATA_DIR);
-const control = createControl(configStore);
+// The owner dashboard and the app's remote configuration (control.mjs) are optional: a package
+// without that file runs the add-on alone, and /control/ and /v1/app-config are simply not served.
+const controlModule = await import('./control.mjs').catch(e => {
+  if (e?.code === 'ERR_MODULE_NOT_FOUND' && String(e.message).includes('control.mjs')) return null;
+  throw e;
+});
+const configStore = controlModule ? new controlModule.ConfigStore(DATA_DIR) : null;
+const control = controlModule ? controlModule.createControl(configStore) : async () => null;
+const isControlPath = controlModule ? controlModule.isControlPath : () => false;
 const pool = createPool(Number(process.env.ADDON_WORKERS || 1));
 const sharedCache = memoryCache();
 const handleAddon = withPause(withAbuseProtection(withAppVerification(withMetadataCache(
   request => pool.fetch(request), {cache: () => sharedCache},
 ))));
-// Usage is optional for older installs; the complete Hostinger package includes it.
+// Usage is optional: the complete Hostinger package includes it, the add-on-only package does not.
 const usage = process.env.USAGE_ENABLED === 'true'
   ? (await import('./usage-server.mjs')).createUsageServer(DATA_DIR) : null;
 const db = new DatabaseSync(join(DATA_DIR, 'auth.sqlite'));
@@ -160,5 +166,5 @@ server.listen(PORT, HOST, () => {
 
 for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => {
   server.close();
-  pool.close().finally(() => { configStore.close(); db.close(); process.exit(0); });
+  pool.close().finally(() => { configStore?.close(); db.close(); process.exit(0); });
 });
