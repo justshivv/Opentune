@@ -849,10 +849,36 @@ fun PlayerLayout(
                         }
                     }
                 }
+                // As the player opens, its top comes in after the cover rather than being there from the
+                // first frame: the grab handle slides down a little into place, and "Playing from"
+                // follows from just under it. Both on the sheet's own clock, so they settle with it.
+                // Hidden from its first frame when the player is built as it opens, so it never flashes in first.
+                val headerIn = remember {
+                    androidx.compose.animation.core.Animatable(if (com.opentune.ui.components.PlayerMorph.expanding && !state.ui.reduceAnimation) 0f else 1f)
+                }
+                // Run in the page's own scope: the open's flag clears when the cover lands, a little
+                // before this has finished, and that mustn't cut it short.
+                val headerScope = rememberCoroutineScope()
+                LaunchedEffect(com.opentune.ui.components.PlayerMorph.expanding) {
+                    if (!com.opentune.ui.components.PlayerMorph.expanding) return@LaunchedEffect
+                    headerScope.launch {
+                        if (state.ui.reduceAnimation) { headerIn.snapTo(1f); return@launch }
+                        headerIn.snapTo(0f)
+                        headerIn.animateTo(1f, androidx.compose.animation.core.tween(
+                            com.opentune.ui.components.SHEET_OPEN_MS, delayMillis = com.opentune.ui.components.SHEET_OPEN_MS / 4,
+                            easing = com.opentune.ui.components.SHEET_EASING))
+                    }
+                }
                 // Grab handle. Docked, there's nothing to pull down: a button at the end folds the pane away.
                 Column(Modifier.fillMaxWidth().padding(top = if (docked) 0.dp else 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (!docked) Box(
-                        Modifier.size(width = 40.dp, height = 5.dp).clip(CircleShape)
+                        Modifier
+                            .graphicsLayer {
+                                val p = headerIn.value
+                                alpha = p
+                                translationY = -10.dp.toPx() * (1f - p)
+                            }
+                            .size(width = 40.dp, height = 5.dp).clip(CircleShape)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
                             .clickable(onClick = actions.collapse),
                     )
@@ -1137,8 +1163,10 @@ fun PlayerLayout(
                         Box(
                             Modifier.fillMaxWidth().height(STATUS_ROOM).zIndex(2f).graphicsLayer {
                                 val v = paneProgress()
-                                alpha = (1f - v * 2.2f).coerceIn(0f, 1f)
-                                translationY = -lift * v
+                                // Opening: a beat after the handle, out from just under it.
+                                val opened = ((headerIn.value - 0.3f) / 0.7f).coerceIn(0f, 1f)
+                                alpha = (1f - v * 2.2f).coerceIn(0f, 1f) * opened
+                                translationY = -lift * v - 8.dp.toPx() * (1f - opened)
                             },
                             contentAlignment = Alignment.Center,
                         ) { statusLine() }
