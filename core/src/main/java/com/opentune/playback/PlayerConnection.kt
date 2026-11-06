@@ -482,6 +482,12 @@ class PlayerConnection(private val context: Context) {
         }
     }
 
+    /** Repeats the current track until turned off; a second press goes back to no repeat. */
+    fun toggleRepeatOne() {
+        val controller = controller ?: return
+        controller.repeatMode = if (controller.repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ONE
+    }
+
     /** Queues [song] right after the current track. */
     fun playNext(song: Song) = queueByHand(song, next = true)
 

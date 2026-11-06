@@ -205,6 +205,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** Off, shuffle, then smart shuffle for a queue from a list; returns the new mode. */
     fun cycleShuffle(): com.opentune.playback.ShuffleMode = player.cycleShuffle()
     fun cycleRepeatMode() = player.cycleRepeatMode()
+    fun toggleRepeatOne() = player.toggleRepeatOne()
     fun playQueueItem(index: Int) = player.playQueueItem(index)
     fun removeQueueItem(index: Int) = player.removeQueueItem(index)
     fun moveQueueItem(from: Int, to: Int) = player.moveQueueItem(from, to)
