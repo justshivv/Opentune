@@ -103,7 +103,8 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.
     val bits = format?.bitDepth ?: source?.bits
     val rate = format?.sampleRateHz ?: source?.sampleRate
     val channels = format?.channels
-    val kbps = format?.bitrateKbps ?: source?.kbps
+    val measured by com.opentune.playback.MeasuredBitrate.kbps.collectAsState()
+    val kbps = com.opentune.playback.bestKbps(format, measured, source?.kbps)
     val pcmKbps = if (isLossless && bits != null && rate != null && channels != null) bits.toLong() * rate * channels / 1000 else null
     val trackRate = pipe.outputSampleRateHz ?: rate
     val resampled = trackRate != null && mixerRate != null && trackRate != mixerRate
@@ -529,11 +530,11 @@ private fun StageRow(stage: Stage, last: Boolean, reportNodeY: (LayoutCoordinate
 }
 
 /** Reports the selected media format; output mixer precision is shown separately. */
-internal fun signalQuality(format: AudioFormatInfo?, source: NerdStats.Source?): String {
+internal fun signalQuality(format: AudioFormatInfo?, source: NerdStats.Source?, measured: Int? = null): String {
     val codec = format?.codec
     val bits = format?.bitDepth ?: source?.bits
     val rate = format?.sampleRateHz ?: source?.sampleRate
-    val kbps = format?.bitrateKbps ?: source?.kbps
+    val kbps = com.opentune.playback.bestKbps(format, measured, source?.kbps)
     return listOfNotNull(
         codec,
         bits?.let { "$it-bit" },

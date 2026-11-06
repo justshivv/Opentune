@@ -246,6 +246,20 @@ class PlaybackService : MediaLibraryService() {
         // take the phone's default FLAC decoder, which some phones can't play
         // add-on FLAC with, so the swap to it failed and the song stayed on YouTube.
         fun renderersFor(effects: DspAudioProcessor, exclusive: Boolean, allowFloat: Boolean = true) = object : DefaultRenderersFactory(context) {
+            // The main player measures its song's bitrate from the audio (see MeasuredBitrate); the others don't.
+            override fun buildAudioRenderers(
+                context: Context,
+                extensionRendererMode: Int,
+                mediaCodecSelector: androidx.media3.exoplayer.mediacodec.MediaCodecSelector,
+                enableDecoderFallback: Boolean,
+                audioSink: AudioSink,
+                eventHandler: android.os.Handler,
+                eventListener: androidx.media3.exoplayer.audio.AudioRendererEventListener,
+                out: java.util.ArrayList<androidx.media3.exoplayer.Renderer>,
+            ) {
+                if (!exclusive) return super.buildAudioRenderers(context, extensionRendererMode, mediaCodecSelector, enableDecoderFallback, audioSink, eventHandler, eventListener, out)
+                out.add(MeasuringAudioRenderer(context, codecAdapterFactory, mediaCodecSelector, enableDecoderFallback, eventHandler, eventListener, audioSink))
+            }
             init {
                 setEnableDecoderFallback(true)
                 setMediaCodecSelector { mime, secure, tunneling ->

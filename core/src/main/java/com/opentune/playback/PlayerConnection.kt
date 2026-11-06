@@ -621,6 +621,20 @@ data class AudioFormatInfo(
 )
 
 /**
+ * The playing song's bitrate in kbps, best figure first: measured from the audio as it's
+ * decoded ([measured], see MeasuredBitrate), exact for uncompressed PCM (rate × depth ×
+ * channels), then what the stream or file says, then what the source said.
+ */
+fun bestKbps(info: AudioFormatInfo?, measured: Int?, sourceKbps: Int?): Int? {
+    val pcm = info?.mime == "audio/raw" || info?.codec?.equals("RAW", ignoreCase = true) == true
+    if (pcm) {
+        val bits = info?.bitDepth; val rate = info?.sampleRateHz; val ch = info?.channels
+        if (bits != null && rate != null && ch != null) return (bits.toLong() * rate * ch / 1000).toInt()
+    }
+    return measured?.takeIf { it > 0 } ?: info?.bitrateKbps?.takeIf { it > 0 } ?: sourceKbps?.takeIf { it > 0 }
+}
+
+/**
  * What Dolby format [info] is, as the player names it, or null when it isn't Dolby:
  * Atmos for E-AC-3 with objects (JOC) and for AC-4, Dolby Digital Plus for plain
  * E-AC-3, Dolby Digital for AC-3.

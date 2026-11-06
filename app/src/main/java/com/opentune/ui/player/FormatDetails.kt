@@ -81,7 +81,8 @@ internal fun FormatDetailsDialog(song: Song?, format: AudioFormatInfo?, onDismis
     val lossless = isHighestQuality(source, format)
     val bits = format?.bitDepth ?: source?.bits
     val rate = format?.sampleRateHz ?: source?.sampleRate
-    val kbps = format?.bitrateKbps ?: source?.kbps
+    val measured by com.opentune.playback.MeasuredBitrate.kbps.collectAsState()
+    val kbps = com.opentune.playback.bestKbps(format, measured, source?.kbps)
     val channels = format?.channels
     val trackRate = pipe.outputSampleRateHz ?: rate
     val quality = when {
