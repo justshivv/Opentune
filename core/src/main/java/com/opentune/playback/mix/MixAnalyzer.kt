@@ -128,6 +128,10 @@ internal class MixAnalyzer(
             val toUs = toMs * 1000
             val energy = FloatArrayList()
             val low = FloatArrayList()
+            // The band voices sit in, for where the singing ends (see vocalsEnd).
+            val mid = FloatArrayList()
+            var voice = VoiceBand(rate)
+            var midSq = 0.0
             var hop = 0
             var alpha = 0f
             // A low-rate copy of the sound (about 11 kHz), for the notes it holds.
@@ -174,6 +178,7 @@ internal class MixAnalyzer(
                     channels = out.getIntegerOrNull(MediaFormat.KEY_CHANNEL_COUNT) ?: channels
                     isFloat = out.getIntegerOrNull(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT
                     tune()
+                    voice = VoiceBand(rate)
                     continue
                 }
                 if (o < 0) continue
@@ -202,10 +207,13 @@ internal class MixAnalyzer(
                         lp2 += alpha * (lp1 - lp2)
                         sumSq += x * x
                         lowSq += lp2 * lp2
+                        val v = voice.next(x)
+                        midSq += v * v
                         if (++inHop >= hop) {
                             energy.add((sumSq / inHop).toFloat())
                             low.add((lowSq / inHop).toFloat())
-                            inHop = 0; sumSq = 0.0; lowSq = 0.0
+                            mid.add((midSq / inHop).toFloat())
+                            inHop = 0; sumSq = 0.0; lowSq = 0.0; midSq = 0.0
                         }
                     }
                 }
@@ -216,7 +224,7 @@ internal class MixAnalyzer(
             // A short stretch (the silent end of a song) has few hops; the reading of a whole span needs more.
         if (energy.size < minOf(MIN_HOPS.toLong(), (toMs - fromMs) / 20).toInt().coerceAtLeast(10) || firstUs < 0) return null
             val notes = runCatching { chroma(slow.raw(), slow.size, rate / decimate) }.getOrNull()
-            return Decoded(Features.of(firstUs / 1000, hop * 1000.0 / rate, energy.toArray(), low.toArray()), notes)
+            return Decoded(Features.of(firstUs / 1000, hop * 1000.0 / rate, energy.toArray(), low.toArray(), mid.toArray()), notes)
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }

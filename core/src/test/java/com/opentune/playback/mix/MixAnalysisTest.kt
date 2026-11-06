@@ -29,6 +29,8 @@ class MixAnalysisTest {
         /** The kick on the first beat of every [accentEvery] hits this much harder, as on the one of a bar. */
         accentEvery: Int = 0,
         accent: Double = 1.0,
+        /** A voice (a 1.2 kHz tone in syllables, five a second) singing until this moment. */
+        vocalsUntilMs: Long? = null,
         gain: (Long) -> Double = { 1.0 },
     ): Features {
         val random = Random(seed)
@@ -36,8 +38,9 @@ class MixAnalysisTest {
         val period = bpm?.let { 60_000.0 / it }
         val alpha = (1 - exp(-2 * PI * 150 / rate)).toFloat()
         var lp1 = 0f; var lp2 = 0f
-        val energy = ArrayList<Float>(); val low = ArrayList<Float>()
-        var sum = 0.0; var lowSum = 0.0; var count = 0
+        val energy = ArrayList<Float>(); val low = ArrayList<Float>(); val mid = ArrayList<Float>()
+        var sum = 0.0; var lowSum = 0.0; var midSum = 0.0; var count = 0
+        val voice = VoiceBand(rate)
         for (i in 0 until n) {
             val tMs = startMs + i * 1000.0 / rate
             var x = (random.nextFloat() * 2 - 1) * 0.05
@@ -47,16 +50,22 @@ class MixAnalysisTest {
                 val hit = if (accentEvery > 0 && n % accentEvery == 0L) accent else 1.0
                 if (since < 120) x += 0.6 * hit * exp(-since / 30.0) * sin(2 * PI * 60 * since / 1000.0)
             }
+            if (vocalsUntilMs != null && tMs < vocalsUntilMs) {
+                // On for most of each fifth of a second, as syllables are.
+                val syllable = (tMs % 200.0) < 150.0
+                if (syllable) x += 0.3 * sin(2 * PI * 1_200 * tMs / 1000.0)
+            }
             x *= gain(tMs.toLong())
             val f = x.toFloat()
             lp1 += alpha * (f - lp1); lp2 += alpha * (lp1 - lp2)
-            sum += f * f; lowSum += lp2 * lp2
+            val v = voice.next(f)
+            sum += f * f; lowSum += lp2 * lp2; midSum += v * v
             if (++count == hop) {
-                energy.add((sum / hop).toFloat()); low.add((lowSum / hop).toFloat())
-                sum = 0.0; lowSum = 0.0; count = 0
+                energy.add((sum / hop).toFloat()); low.add((lowSum / hop).toFloat()); mid.add((midSum / hop).toFloat())
+                sum = 0.0; lowSum = 0.0; midSum = 0.0; count = 0
             }
         }
-        return Features.of(startMs, 10.0, energy.toFloatArray(), low.toFloatArray())
+        return Features.of(startMs, 10.0, energy.toFloatArray(), low.toFloatArray(), mid.toFloatArray())
     }
 
     @Test
@@ -289,5 +298,28 @@ class MixAnalysisTest {
         assertTrue(plan.inEases)
         // The quiet intro is up to its own level well before the end of the blend.
         assertEquals(1f, blendGains(0.6f, inEases = true).second, 1e-4f)
+    }
+
+    @Test
+    fun findsWhereTheSingingEnds() {
+        // Sung until 30 s of a 45 s ending, then the band plays on to 44 s.
+        val f = song(0, 45_000, bpm = 120.0, vocalsUntilMs = 30_000) { t -> if (t < 44_000) 1.0 else 0.0 }
+        val end = vocalsEnd(f)
+        assertTrue("vocals end at $end", end != null && end in 29_000..31_500)
+        // No voice at all: nothing to say.
+        assertNull(vocalsEnd(song(0, 45_000, bpm = 120.0)))
+    }
+
+    @Test
+    fun theBlendWaitsForTheVocals() {
+        // A hard stop at 238 s, singing until 233 s: the blend starts a bar (2 s at 120 BPM) after, on a bar line.
+        val beat = Beat(500.0, 0.0, 3f, downbeatMs = 0.0, groupBeats = 4)
+        val plan = automixPlan(240_000, Ending(238_000, 238_000, beat, vocalsEndMs = 233_000), Opening(0, false, null))
+        assertTrue("mix at ${plan.mixAtMs}", plan.mixAtMs >= 235_000)
+        assertEquals(0L, plan.mixAtMs % 2_000)
+        assertEquals(238_000L, plan.mixAtMs + plan.blendMs)
+        // Vocals to the very end: the blend still starts just after them, short.
+        val late = automixPlan(240_000, Ending(238_000, 238_000, null, vocalsEndMs = 237_500), Opening(0, false, null))
+        assertEquals(238_000L - 1_500, late.mixAtMs)
     }
 }

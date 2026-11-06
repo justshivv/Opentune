@@ -35,6 +35,8 @@ class Features(
     val onset: FloatArray,
     /** How sharply the bass rose at each hop (kick drums), for where bars start; the onset when not measured. */
     val bass: FloatArray = onset,
+    /** Power of each hop in the band voices sit in (about 300 Hz to 3.4 kHz), in dB; null when not measured. */
+    val midDb: FloatArray? = null,
 ) {
     val size: Int get() = powerDb.size
     val endMs: Long get() = timeOf(size.toDouble())
@@ -49,7 +51,7 @@ class Features(
          * hit counts as well as a loud one, with the bass rise (kick drums)
          * weighted up and the local average taken off.
          */
-        fun of(startMs: Long, hopMs: Double, energy: FloatArray, low: FloatArray): Features {
+        fun of(startMs: Long, hopMs: Double, energy: FloatArray, low: FloatArray, mid: FloatArray? = null): Features {
             val n = energy.size
             val powerDb = FloatArray(n) { db(energy[it]) }
             val raw = FloatArray(n)
@@ -71,7 +73,7 @@ class Features(
                 val mean = (prefix[b] - prefix[a]) / (b - a)
                 onset[i] = max(0.0, raw[i] - mean).toFloat()
             }
-            return Features(startMs, hopMs, powerDb, onset, bass)
+            return Features(startMs, hopMs, powerDb, onset, bass, mid?.let { m -> FloatArray(m.size) { db(m[it]) } })
         }
 
         private fun compress(e: Float): Float = ln(1f + 1000f * e)
@@ -266,6 +268,70 @@ fun withDownbeat(f: Features, beat: Beat, fromMs: Long, toMs: Long): Beat {
 /** How loud the body of [f] is between hops [from] and [to]: the level it holds most of the time, in dB. */
 internal fun bodyLevel(f: Features, from: Int = 0, to: Int = f.size): Float = percentile(smoothedDb(f, 400.0), from, to, 0.8f)
 
+/**
+ * Splits a signal into the band voices sit in (about 300 Hz to 3.4 kHz): the difference of
+ * two smooth low-passes, cheap enough to run on every sample of a song's ending.
+ */
+class VoiceBand(rate: Int) {
+    private val aLow = (1 - kotlin.math.exp(-2 * PI * 300.0 / rate)).toFloat()
+    private val aHigh = (1 - kotlin.math.exp(-2 * PI * 3_400.0 / rate)).toFloat()
+    private var l1 = 0f; private var l2 = 0f
+    private var h1 = 0f; private var h2 = 0f
+
+    /** The voice band of the next sample [x]. */
+    fun next(x: Float): Float {
+        h1 += aHigh * (x - h1); h2 += aHigh * (h1 - h2)
+        l1 += aLow * (x - l1); l2 += aLow * (l1 - l2)
+        return h2 - l2
+    }
+}
+
+/**
+ * Where the singing ends in [f], or null when it can't be told. The voice band stands out
+ * from the rest of the mix while someone sings (a voice puts most of its power there, and
+ * moves syllable by syllable), and sinks back once only the band plays on. So the voice
+ * band's share of the sound, over a second at a time, is high through the vocals and low
+ * after: the last stretch where it stays above the middle of the two, for at least
+ * [VOCAL_HOLD_MS], is where the vocals end. A song whose share never clearly rises and
+ * falls (an instrumental, or vocals to the very end at one level) gives null.
+ */
+fun vocalsEnd(f: Features, fromMs: Long = f.startMs, toMs: Long = f.endMs): Long? {
+    val mid = f.midDb ?: return null
+    val n = f.size
+    if (n < 200) return null
+    // The voice band's share of the whole, smoothed over a second, in dB.
+    val w = max(1, (500.0 / f.hopMs).roundToInt())
+    val share = FloatArray(n) { mid[it] - f.powerDb[it] }
+    val prefix = DoubleArray(n + 1)
+    for (i in 0 until n) prefix[i + 1] = prefix[i] + share[i]
+    val smooth = FloatArray(n) { i -> val a = max(0, i - w); val b = min(n, i + w + 1); ((prefix[b] - prefix[a]) / (b - a)).toFloat() }
+    // Only where there's sound: silence has no share to speak of.
+    val a = f.indexOf(fromMs); val b = min(n, f.indexOf(toMs) + 1)
+    val body = percentile(f.powerDb, a, b, 0.8f)
+    val heard = (a until b).filter { f.powerDb[it] > body - 25f }
+    if (heard.size < 200) return null
+    val values = FloatArray(heard.size) { smooth[heard[it]] }
+    val high = percentile(values, 0, values.size, 0.85f)
+    val low = percentile(values, 0, values.size, 0.15f)
+    if (high - low < VOCAL_SPREAD_DB) return null
+    val line = (high + low) / 2f
+    // The last stretch above the line that lasts.
+    val hold = max(1, (VOCAL_HOLD_MS / f.hopMs).roundToInt())
+    var run = 0
+    for (i in (b - 1) downTo a) {
+        if (f.powerDb[i] > body - 25f && smooth[i] > line) {
+            run++
+            if (run >= hold) {
+                // Walk forward from that stretch to where it falls below the line.
+                var e = i
+                while (e < b - 1 && smooth[e + 1] > line) e++
+                return f.timeOf(e.toDouble())
+            }
+        } else run = 0
+    }
+    return null
+}
+
 /** How a song ends: where its sound stops, where its outro starts, and its beat there. */
 data class Ending(
     /** Where the music stops; anything after is silence or near it. */
@@ -278,6 +344,8 @@ data class Ending(
     val key: Key? = null,
     /** How loud the song is before its outro, in dB. */
     val levelDb: Float? = null,
+    /** Where the singing ends, when it can be told: the blend waits until after it. */
+    val vocalsEndMs: Long? = null,
 ) {
     val outroLengthMs: Long get() = endMs - outroMs
 }
@@ -334,7 +402,8 @@ fun analyzeEnding(f: Features, durationMs: Long, chroma: FloatArray? = null): En
     val from = max(f.startMs, outro - BEAT_SPAN_MS)
     val to = outro.coerceAtLeast(f.startMs + BEAT_SPAN_MS / 2)
     val beat = beatGrid(f, from, to)?.let { withDownbeat(f, it, from, to) }
-    return Ending(end, outro, beat, Wave.of(f), estimateKey(chroma), bodyLevel(f, 0, max(1, (f.size * 0.6).toInt())))
+    return Ending(end, outro, beat, Wave.of(f), estimateKey(chroma), bodyLevel(f, 0, max(1, (f.size * 0.6).toInt())),
+        vocalsEnd(f, f.startMs, end)?.takeIf { it < end })
 }
 
 /** [f] covers the first stretch of a song. */
@@ -463,6 +532,20 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
     }
     mixAt = mixAt.coerceIn(end / 2, end - MIN_BLEND_MS)
     blend = (end - mixAt).coerceAtMost(blend).coerceAtLeast(MIN_BLEND_MS)
+    // Never over the last words: the blend starts a bar (or a breath) after the singing ends,
+    // on a bar line, so the next song comes in over the band playing out, not over the vocals.
+    val vocals = ending?.vocalsEndMs
+    if (vocals != null && vocals + VOCAL_MARGIN_MS > mixAt) {
+        val margin = outBeat?.let { (it.periodMs * 4).roundToLong() } ?: VOCAL_MARGIN_MS
+        val after = vocals + margin
+        val onBar = outBeat?.groupAtOrAfter(after) ?: after
+        mixAt = when {
+            end - onBar >= MIN_AFTER_VOCALS_MS -> onBar
+            end - (vocals + VOCAL_MARGIN_MS / 3) >= MIN_BLEND_MS -> vocals + VOCAL_MARGIN_MS / 3
+            else -> end - MIN_BLEND_MS
+        }
+        blend = (end - mixAt).coerceAtMost(blend).coerceAtLeast(MIN_BLEND_MS)
+    }
     // Both songs' bars known: bar on bar (or pair on pair), the incoming song cued to the one of its first bar.
     val align = if (beatMs != null && outBeat?.downbeatMs != null && inBeat?.downbeatMs != null &&
         mixAt == outBeat.groupNearest(mixAt)) min(outBeat.groupBeats, inBeat.groupBeats) else 1
@@ -591,6 +674,14 @@ private const val DOWNBEAT_SURE = 1.15
 private const val MIN_BARS = 3
 /** Songs further apart than this are levelled only this far. */
 private const val MAX_LEVEL_DB = 9f
+/** The voice band's share must rise and fall by this much for the vocals to be told apart. */
+private const val VOCAL_SPREAD_DB = 3f
+/** Singing lasts at least this long; a shorter rise is a fill, not a voice. */
+private const val VOCAL_HOLD_MS = 1_500.0
+/** A breath after the last words, where there's no beat to count a bar by. */
+private const val VOCAL_MARGIN_MS = 1_500L
+/** The shortest blend worth placing after the vocals; less, and it starts nearer them. */
+private const val MIN_AFTER_VOCALS_MS = 2_500L
 /** An intro has reached the song's body when it's within this of its level. */
 private const val BODY_REACHED_DB = 3f
 /** The longest intro laid over a song that stops dead. */
