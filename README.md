@@ -139,19 +139,20 @@ lyrics from LRCLIB only.
 
 ### Android TV
 
-The phone APK runs on Android TV too, and shows up in the TV's row of
-apps. You drive it with the remote, and the screen stays on while music
-plays.
+OpenTune for TV is a separate app, made for the remote and a screen across
+the room. Install `OpenTune-TV-<version>.apk` from the
+[releases](https://github.com/justshivv/Opentune/releases) page; it shows
+up in the TV's row of apps. The phone APK doesn't run as a TV app.
 
 Typing a password with a remote is no fun, so you sign the TV in from
 your phone instead:
 
-1. Install the same APK on the TV, from the
-   [releases](https://github.com/justshivv/Opentune/releases) page.
-2. On the TV, open Settings → Account and choose Sign in with your phone.
-3. Scan the QR code with a phone that has OpenTune, on the same Wi-Fi,
-   and approve sharing your YouTube Music session. The code expires after
-   two minutes.
+1. On the TV, open Settings → Account and choose Sign in.
+2. Scan the QR code with a phone that has OpenTune (Settings → Link a
+   device → TV), on the same Wi-Fi, and approve sharing your YouTube
+   Music session. The code expires after two minutes.
+
+More in [docs/android-tv.md](docs/android-tv.md).
 
 The phone and the TV each keep their own local library.
 
@@ -357,10 +358,11 @@ on your own connection with no hosted proxy.
   OpenTune"), and tap a song to play its list from there. Sideloaded
   builds show up in Android Auto once "Unknown sources" is turned on in
   Android Auto's developer settings.
-- **Android TV.** The same APK shows up in the TV's row of apps. The remote
-  moves between rows and buttons with a clear highlight, OK opens or plays,
-  and left and right on the seek bar skip through the song. The screen stays
-  on while music plays.
+- **Android TV.** A separate TV app (`tv/`) with Home, Explore, Library
+  and Search, album and artist pages, and a Now Playing screen with synced
+  lyrics, the queue and the format of what's playing. The remote moves a
+  clear focus ring, OK plays, and left and right on the seek bar skip
+  through the song. You sign in by scanning a code with your phone.
 - **Wear OS.** A separate watch app (`wear/`) that plays on the watch
   itself, over its Wi-Fi or LTE and Bluetooth headphones, with no phone
   needed. Search by voice or keyboard, play your liked and recent songs on

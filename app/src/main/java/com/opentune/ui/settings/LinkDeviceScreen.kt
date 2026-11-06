@@ -98,10 +98,7 @@ fun LinkDeviceScreen(
     onTogether: () -> Unit,
 ) {
     val context = LocalContext.current
-    // On a TV the page opens on the TV, with signing this one in first.
-    val onTv = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) }
     var target by rememberSaveable { mutableStateOf(LinkTarget.TV) }
-    var receiving by remember { mutableStateOf(false) }
     var casting by remember { mutableStateOf(false) }
     var scanning by remember { mutableStateOf(false) }
     // The TV's code read here goes the same way as one scanned with the phone's camera app:
@@ -115,7 +112,6 @@ fun LinkDeviceScreen(
         }
     }
     val signedIn by AccountStore.signedIn.collectAsState()
-    if (receiving) com.opentune.ui.account.ReceiveSessionSheet { receiving = false }
     if (casting) com.opentune.ui.cast.CastSheet { casting = false }
 
     fun open(url: String) {
@@ -155,7 +151,7 @@ fun LinkDeviceScreen(
             ) { shown ->
                 Column(Modifier.padding(top = 20.dp)) {
                     when (shown) {
-                        LinkTarget.TV -> TvSteps(onTv, signedIn, onSignIn, ::camera, { receiving = true }, ::open, ::share)
+                        LinkTarget.TV -> TvSteps(signedIn, onSignIn, ::camera, ::open, ::share)
                         LinkTarget.COMPUTER -> DeviceCard(
                             "In your browser",
                             "Browse, search and listen on a computer. Your library there stays in that browser.",
@@ -212,35 +208,23 @@ fun LinkDeviceScreen(
     }
 }
 
-/** The steps for a TV: the phone signs the TV in, or (on the TV) the TV shows its code. */
+/** The steps for a TV: the TV shows a code and this phone signs it in. */
 @Composable
 private fun TvSteps(
-    onTv: Boolean,
     signedIn: Boolean,
     onSignIn: () -> Unit,
     camera: () -> Unit,
-    showCode: () -> Unit,
     open: (String) -> Unit,
     share: (String) -> Unit,
 ) {
-    if (onTv) {
-        DeviceCard("Sign this TV in", "Use the YouTube Music account on your phone. No typing with the remote.") {
-            Step(1, "Show a code here", "A QR code comes up on this screen.") {
-                Buttons({ SheetButton("Show the code", onClick = showCode, icon = Icons.Rounded.QrCode2, tone = SheetTone.Primary) })
-            }
-            Step(2, "Scan it with your phone", "Use the phone's camera. OpenTune opens on the phone and asks you to approve.", last = true)
-            Note(Icons.Rounded.Lock, "Both on the same Wi-Fi. The code lasts two minutes, and the session goes straight from the phone to this TV, encrypted.")
-        }
-        return
-    }
     DeviceCard("Android TV", "Sign the TV in with this phone's YouTube Music account. No typing with the remote.") {
-        Step(1, "Install OpenTune on the TV", "The same app as this one. Get the universal APK from the latest release.") {
+        Step(1, "Install OpenTune for TV", "A separate app made for the remote. Get OpenTune-TV from the latest release.") {
             Buttons(
                 { SheetButton("Get the app", onClick = { open(RELEASES) }, icon = Icons.Rounded.Download) },
                 { SheetButton("Share", onClick = { share(RELEASES) }, icon = Icons.Rounded.Share) },
             )
         }
-        Step(2, "Show the code on the TV", "On the TV, open Settings, then Link a device, and choose Show the code.")
+        Step(2, "Show the code on the TV", "On the TV, open Settings, then Account, and choose Sign in.")
         Step(3, "Scan it with this phone", "Scan it right here in OpenTune, or with the phone's own camera app, then approve on this phone.", last = true) {
             if (signedIn) {
                 Buttons({ SheetButton("Open the camera", onClick = camera, icon = Icons.Rounded.CameraAlt, tone = SheetTone.Primary) })
@@ -255,9 +239,6 @@ private fun TvSteps(
         }
         Buttons({ SheetButton("TV information", onClick = { open(com.opentune.data.config.RemoteConfig.current.tv) }, icon = Icons.AutoMirrored.Rounded.OpenInNew) })
         Note(Icons.Rounded.Lock, "Both on the same Wi-Fi. The code lasts two minutes, and the session goes straight to the TV, encrypted. Each keeps its own library.")
-    }
-    DeviceCard("Is this the TV?", "Show a code here and scan it from a signed-in phone.", compact = true) {
-        Buttons({ SheetButton("Show a sign-in code", onClick = showCode, icon = Icons.Rounded.QrCode2) })
     }
 }
 

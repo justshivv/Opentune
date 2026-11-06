@@ -104,7 +104,7 @@ fun HomeScreen(
     /** Opens every Speed dial pick on a page of its own. */
     onOpenSpeedDial: () -> Unit = {},
 ) {
-    val platform = if (com.opentune.ui.tv.LocalIsTv.current) "tv" else "android"
+    val platform = "android"
     val runtime by com.opentune.data.config.RemoteConfig.state.collectAsState()
     val closedBanners by com.opentune.data.config.HomeDismissals.banners.collectAsState()
     val closedPlaylists by com.opentune.data.config.HomeDismissals.playlists.collectAsState()

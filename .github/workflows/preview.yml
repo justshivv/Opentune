@@ -47,7 +47,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: OpenTune-preview-signed
-          path: app/build/outputs/apk/release/*.apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+            tv/build/outputs/apk/release/*.apk
           retention-days: 14
       - name: Remove temporary key
         if: always()

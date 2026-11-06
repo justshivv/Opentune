@@ -148,7 +148,6 @@ fun SearchScreen(
     // The sources under the bar, focused from it with the remote: the bar is still in use.
     var sourcesFocused by remember { mutableStateOf(false) }
     val searching = explore == null || focused || sourcesFocused || query.isNotEmpty()
-    val tv = com.opentune.ui.tv.LocalIsTv.current
 
     fun submit(q: String) {
         focus.clearFocus()
@@ -178,21 +177,7 @@ fun SearchScreen(
             onValueChange = vm::onQueryChange,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
                 .focusRequester(field)
-                .onFocusChanged { focused = it.isFocused }
-                // A remote's arrows: up and down leave the bar (to the sources and results), and
-                // left and right do once there's nothing typed. A text field otherwise keeps them all.
-                .then(if (!tv) Modifier else Modifier.onPreviewKeyEvent { e ->
-                    if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    val direction = when (e.key) {
-                        androidx.compose.ui.input.key.Key.DirectionDown -> androidx.compose.ui.focus.FocusDirection.Down
-                        androidx.compose.ui.input.key.Key.DirectionUp -> androidx.compose.ui.focus.FocusDirection.Up
-                        androidx.compose.ui.input.key.Key.DirectionLeft -> androidx.compose.ui.focus.FocusDirection.Left.takeIf { query.isEmpty() }
-                        androidx.compose.ui.input.key.Key.DirectionRight -> androidx.compose.ui.focus.FocusDirection.Right.takeIf { query.isEmpty() }
-                        else -> null
-                    } ?: return@onPreviewKeyEvent false
-                    keyboard?.hide()
-                    focus.moveFocus(direction)
-                }),
+                .onFocusChanged { focused = it.isFocused },
             singleLine = true,
             shape = CircleShape,
             placeholder = { Text(source.placeholder) },
@@ -562,8 +547,7 @@ internal fun SourceBar(selected: SearchSource, onSelect: (SearchSource) -> Unit,
                 Box(
                     Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
                         // Not focusable, so tapping a tab leaves the keyboard and the bar as they are.
-                        .then(if (com.opentune.ui.tv.LocalIsTv.current) Modifier.clickable { onSelect(s) }
-                            else Modifier.pointerInput(s) { detectTapGestures { onSelect(s) } })
+                        .pointerInput(s) { detectTapGestures { onSelect(s) } }
                         .semantics { role = Role.Tab; this.selected = on; contentDescription = s.label },
                     contentAlignment = Alignment.Center,
                 ) {

@@ -70,8 +70,7 @@ fun LyricsSourcesDialog(onDismiss: () -> Unit) {
             // rather than squeezing the last rows. Drag handles still move rows.
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    if (com.opentune.ui.tv.LocalIsTv.current) "Sources are tried in this order. Use Move up and Move down to reorder. The first source with lyrics wins unless word-by-word lyrics are prioritized."
-                    else "Sources are tried in this order. Drag to reorder them. The first source with lyrics wins unless word-by-word lyrics are prioritized.",
+                    "Sources are tried in this order. Drag to reorder them. The first source with lyrics wins unless word-by-word lyrics are prioritized.",
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
@@ -97,7 +96,7 @@ fun LyricsSourcesDialog(onDismiss: () -> Unit) {
                             },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (!com.opentune.ui.tv.LocalIsTv.current) Icon(
+                        Icon(
                             Icons.Rounded.DragHandle,
                             "Drag to reorder",
                             Modifier
@@ -143,10 +142,6 @@ fun LyricsSourcesDialog(onDismiss: () -> Unit) {
                             Modifier.padding(start = 12.dp).size(24.dp),
                             tint = if (entry.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
                         )
-                    }
-                    if (com.opentune.ui.tv.LocalIsTv.current) Row {
-                        androidx.compose.material3.TextButton(onClick = { save(order.toMutableList().apply { add(i - 1, removeAt(i)) }) }, enabled = i > 0) { Text("Move up") }
-                        androidx.compose.material3.TextButton(onClick = { save(order.toMutableList().apply { add(i + 1, removeAt(i)) }) }, enabled = i < order.lastIndex) { Text("Move down") }
                     }
                     HorizontalDivider()
                   }

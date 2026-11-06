@@ -96,8 +96,6 @@ fun OpenTuneTheme(
     }
     val scheme = if (dark && settings.pureBlack) base.toPureBlack() else base
 
-    val context = LocalContext.current
-    val tv = remember { com.opentune.ui.tv.Tv.isTv(context) }
     MaterialTheme(
         colorScheme = scheme.animated(),
         typography = rememberAppTypography(settings),
@@ -105,30 +103,10 @@ fun OpenTuneTheme(
     ) {
         CompositionLocalProvider(
             LocalArtworkSeed provides artworkSeed,
-            com.opentune.ui.tv.LocalIsTv provides tv,
             com.opentune.ui.components.LocalFocusRingColor provides MaterialTheme.colorScheme.primary,
-        ) {
-            // From across the room the usual faint focus tint can't be seen.
-            if (tv) TvRipples(content) else content()
-        }
+            content = content,
+        )
     }
-}
-
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-@Composable
-internal fun TvRipples(content: @Composable () -> Unit) {
-    CompositionLocalProvider(
-        // The focus itself is marked once for the whole screen (TvRemoteSurface); controls keep
-        // a plain press response, so the mark isn't drawn twice.
-        androidx.compose.foundation.LocalIndication provides androidx.compose.material3.ripple(),
-        // Material's own buttons draw focus as a tint, not the ring: in the accent, and strong
-        // enough to find from across a room. The faint grey was easy to lose on a light page.
-        androidx.compose.material3.LocalRippleConfiguration provides androidx.compose.material3.RippleConfiguration(
-            color = MaterialTheme.colorScheme.primary,
-            rippleAlpha = androidx.compose.material.ripple.RippleAlpha(draggedAlpha = 0.16f, focusedAlpha = 0.42f, hoveredAlpha = 0.1f, pressedAlpha = 0.24f),
-        ),
-        content = content,
-    )
 }
 
 /**
@@ -156,8 +134,7 @@ fun PlayerTheme(seed: Color?, settings: ThemeSettings, neutral: Boolean = false,
         typography = rememberAppTypography(settings),
         shapes = AppShapes,
     ) {
-        // MaterialTheme puts the phone ripple back: on a TV the player keeps the focus ring too.
-        if (com.opentune.ui.tv.LocalIsTv.current) TvRipples(content) else content()
+        content()
     }
 }
 

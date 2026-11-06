@@ -74,6 +74,9 @@ jobs:
             wear/build/reports/
             wear/build/test-results/
             wear/build/screenshots/
+            tv/build/reports/
+            tv/build/test-results/
+            tv/build/screenshots/
           if-no-files-found: ignore
 
       - name: APKs
@@ -83,6 +86,7 @@ jobs:
           path: |
             app/build/outputs/apk/release/*.apk
             wear/build/outputs/apk/release/*.apk
+            tv/build/outputs/apk/release/*.apk
 
   # The desktop app: its tests, and an installer for each system.
   desktop:

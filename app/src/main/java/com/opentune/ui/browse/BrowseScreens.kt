@@ -375,10 +375,10 @@ internal fun listMeta(kind: String, songs: List<com.opentune.data.model.Song>): 
     return listOfNotNull(kind, count, length).joinToString(" · ")
 }
 
-/** Whether lists open with their cover across the top of the page (Settings › Full-screen playlist covers); never on a TV. */
+/** Whether lists open with their cover across the top of the page (Settings › Full-screen playlist covers). */
 @Composable
 internal fun fullListCover(): Boolean =
-    com.opentune.data.settings.AppSettings.ui.collectAsState().value.fullScreenListCover && !com.opentune.ui.tv.LocalIsTv.current
+    com.opentune.data.settings.AppSettings.ui.collectAsState().value.fullScreenListCover
 
 /**
  * A list's cover across the top of its page, edge to edge and under the status bar, square,
@@ -412,7 +412,7 @@ internal fun PlaylistHeading(title: String, subtitle: String, thumbnail: String?
     isAlbum: Boolean = false, cover: (@Composable () -> Unit)? = null,
     /** False when the cover is shown across the page above ([FullListCover]). */
     showCover: Boolean = true) {
-    val coverSize = if (com.opentune.ui.tv.LocalIsTv.current) Modifier.size(220.dp) else Modifier.fillMaxWidth(0.76f).aspectRatio(1f)
+    val coverSize = Modifier.fillMaxWidth(0.76f).aspectRatio(1f)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         if (!showCover) Unit
         else if (cover == null) Artwork(

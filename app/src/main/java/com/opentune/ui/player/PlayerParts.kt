@@ -178,8 +178,6 @@ fun PlayerBackdrop(
     fullCoverVisible: Boolean = true,
     artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
 ) {
-    // On a TV the backdrop holds still: redrawn every frame across a big picture, it cost the remote its quickness.
-    val animate = animate && !com.opentune.ui.tv.LocalIsTv.current
     val scheme = MaterialTheme.colorScheme
     if (style == PlayerBackground.AMOLED) {
         Box(modifier.background(Color.Black))
@@ -1473,11 +1471,10 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
     }
     var focused by remember { mutableStateOf(false) }
     val focusInk = MaterialTheme.colorScheme.primary
-    val television = com.opentune.ui.tv.LocalIsTv.current
     val step = if (receiver != null) 0.05f else 1f / max
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.AutoMirrored.Rounded.VolumeDown, "Volume down", tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(if (television) 48.dp else 20.dp).clickable { adjust(-step) })
+            modifier = Modifier.size(20.dp).clickable { adjust(-step) })
         val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
         val fill = MaterialTheme.colorScheme.onSurface
         fun preview(x: Float, width: Int) {
@@ -1489,7 +1486,7 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
             Modifier
                 .weight(1f)
                 .padding(horizontal = 10.dp)
-                .height(if (television) 48.dp else 28.dp)
+                .height(28.dp)
                 .onFocusChanged { focused = it.isFocused }
                 .onKeyEvent { e ->
                     when (e.key) {
@@ -1526,7 +1523,7 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
             drawRoundRect(fill, Offset(0f, y), Size(size.width * f, h), CornerRadius(h / 2))
         }
         Icon(Icons.AutoMirrored.Rounded.VolumeUp, "Volume up", tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(if (television) 48.dp else 20.dp).clickable { adjust(step) })
+            modifier = Modifier.size(20.dp).clickable { adjust(step) })
     }
 }
 

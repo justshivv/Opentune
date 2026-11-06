@@ -1,35 +1,59 @@
-# OpenTune on Android TV and Google TV
+# OpenTune for Android TV and Google TV
 
-The Android APK also runs on Android TV and Google TV. Install the signed APK from
-OpenTune's GitHub release or preview artifact, then open OpenTune from the TV's apps
-row. Google Play availability additionally requires a TV store submission and review;
-the launcher declaration does not publish the app to Google Play.
+OpenTune for TV is an app of its own (`tv/` in the repository), built for a remote
+and a screen across the room. It is not the phone app: the phone APK no longer
+shows up in a TV's apps row. Both run on the same shared code (`core/`), so
+YouTube Music, lyrics, the library, history and the player service behave the same.
 
-TV detection selects landscape, overscan-safe margins, a labeled navigation rail,
-and a two-column full-screen player. It overrides saved phone dock/side-player
-preferences. Layout sizes use density-independent units for HD, Full HD and 4K TVs.
+Install `OpenTune-TV-<version>.apk` from the
+[releases](https://github.com/justshivv/Opentune/releases) page, then open
+OpenTune from the TV's apps row. The package is `com.opentune.tv`, so it installs
+beside the phone app on the same device without replacing it.
+
+## What's in it
+
+- **Home**: the songs you played last, then YouTube Music's rows.
+- **Explore**: artists, new releases, charts, moods and genres.
+- **Library**: Liked songs, playlists made on the TV, your YouTube Music playlists
+  once signed in, and what you played recently.
+- **Search**: type with the TV's own keyboard; results come in as you go.
+- **Album, playlist and artist pages** with Play and Shuffle.
+- **Now Playing**: the cover large, synced lyrics that follow the song, the queue, a
+  seek bar, and the format line (Dolby Atmos, sample rate, bit depth, bitrate).
+- **Settings**: sign in, streaming quality, lossless, even loudness, autoplay, Automix.
 
 ## Using the remote
 
-- Use the arrows to move the visible focus ring. OK activates the focused item.
-- Search opens a text field supported by the TV's installed on-screen keyboard.
-- Search, Home, Library, Settings and Player remain reachable from the navigation rail.
-- In the player, focus starts on Play/Pause. Focus the seek bar and press Left/Right
-  to seek; focus the volume bar to change the active output's volume.
-- Lyrics and Queue have explicit buttons, including when lyrics preview is disabled.
-- Queue entries have Remove and, with shuffle off, Move up/Move down buttons.
-- Back leaves lyrics/queue first, then closes the player, then returns through pages.
-  The player uses a separate focus window so navigation cannot land on hidden pages.
-- Play/Pause, Next, Previous, Fast-forward and Rewind media keys work in the foreground.
-  The existing media session continues handling media keys and playback in the background.
-- Sign in from Settings using the existing phone/QR pairing flow where available.
-  Browsing and playlist actions use the same account and playback service as Android.
+- The arrows move the white focus ring. OK opens or plays.
+- The bar at the top has Home, Explore, Library, Now Playing, Search and Settings.
+  Down from it enters the page; Up from the first row comes back.
+- On Now Playing, focus starts on Play/Pause. Up reaches the seek bar, where
+  Left and Right move ten seconds. The row of buttons holds shuffle, previous, play,
+  next, repeat, like, lyrics and queue.
+- Play/Pause, Next, Previous, Fast-forward and Rewind keys work on the player, and in
+  the background through the media session.
+- Back goes up one page, then to Home, and from Home leaves the app.
+
+## Signing in
+
+Typing a password with a remote is no fun, so the TV is signed in from a phone:
+
+1. On the TV, open Settings, then Account, and choose Sign in. A code comes up.
+2. On a phone with OpenTune, signed in to YouTube Music, open Settings, then Link a
+   device, then TV, and scan the code. Both must be on the same Wi-Fi.
+3. Approve on the phone. The session goes straight from the phone to the TV over the
+   local network, encrypted, and the code stops working after two minutes.
+
+The phone and the TV each keep their own local library.
 
 ## Verification
 
-Automated checks cover TV detection, navigation with arrows and OK, player focus,
-remote seeking, explicit lyrics/queue access, and layout selection at different
-window sizes. Before publishing a TV store release, also test on physical Android TV
-and Google TV devices: cold launch/onboarding, on-screen keyboard, sign-in, dialog
-focus and Back, playlist actions, media keys with the app backgrounded, and resume
-with music playing. Device firmware, IME and HDMI volume behavior vary by TV.
+Automated tests cover the pages (Library, Liked songs, Settings, the player's empty
+state, synced lyrics and the seek bar), focus moving along the top bar with the
+arrows and OK opening a tab, going back through pages, and the small rules behind
+them (time formatting, the format line, how a search is sorted into rows).
+
+Before a TV store release, also test on a physical Android TV and Google TV: first
+launch, the on-screen keyboard in Search, signing in from a phone, Back from every
+page, media keys with the app in the background, and playback resuming. Firmware,
+the keyboard and HDMI volume differ from one TV to the next.

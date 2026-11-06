@@ -43,8 +43,6 @@ import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.foundation.focusGroup
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.material3.Icon
@@ -106,9 +104,6 @@ internal fun LandscapePlayer(
     /** Off while the full lyrics are on the left, so the lines aren't shown twice. */
     showLines: Boolean = true,
 ) {
-    val television = com.opentune.ui.tv.LocalIsTv.current
-    val playFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { if (television) { withFrameNanos { }; playFocus.requestFocus() } }
     val song = state.song
     val scheme = MaterialTheme.colorScheme
     val animate = !state.ui.reduceAnimation
@@ -131,7 +126,7 @@ internal fun LandscapePlayer(
             ArtworkSwipeArea(
                 onSwipeNext = actions.next,
                 onSwipePrevious = actions.previous,
-                modifier = if (television) Modifier.weight(0.9f).aspectRatio(1f) else Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true),
+                modifier = Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true),
             ) {
                 Artwork(
                     song.thumbnailUrl.artworkAt(1080),
@@ -141,10 +136,9 @@ internal fun LandscapePlayer(
             }
         }
         Spacer(Modifier.width(32.dp))
-        BoxWithConstraints(Modifier.weight(if (television) 1.3f else 1f).fillMaxHeight().focusGroup()) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().focusGroup()) {
             // Short screens drop the coming lines first, then the volume.
             val roomy = maxHeight >= 300.dp
-            val previewFits = !television || maxHeight >= 440.dp
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
                 Row(verticalAlignment = Alignment.Top) {
                     // Lyrics or the queue in the cover's place: the cover stays in sight, small, before the title.
@@ -173,24 +167,23 @@ internal fun LandscapePlayer(
                     RoundIcon(Icons.Rounded.MoreHoriz, "More", onMore)
                     RoundIcon(Icons.Rounded.KeyboardArrowDown, "Close player", actions.collapse)
                 }
-                if (television) SeekBar(position, { 0L }, state.durationMs, actions.seekTo)
-                else TimeBar(position, state.durationMs, actions.seekTo)
+                TimeBar(position, state.durationMs, actions.seekTo)
                 if (state.ui.sourcePill) SourceQualityBadge(song.videoId, state.audioFormat, onClick = onSignal, modifier = Modifier.align(Alignment.CenterHorizontally))
                 // The line being sung and the next, together above the controls, in the lyrics' own type.
                 val lines = if (showLines) rememberLyricLines(state.lyrics, lyricsPosition) else null
-                if (lines != null && previewFits) LyricsPeek(lines, next = roomy, animate = animate, onClick = onLyrics)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = if (television) Arrangement.Center else Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    if (!television) RoundIcon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Unlike" else "Like", { haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE); onLike() }, tint = if (liked) scheme.primary else scheme.onSurface)
+                if (lines != null) LyricsPeek(lines, next = roomy, animate = animate, onClick = onLyrics)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    RoundIcon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Unlike" else "Like", { haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE); onLike() }, tint = if (liked) scheme.primary else scheme.onSurface)
                     Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                         Tap("Previous", { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.PREVIOUS); previousRolls++; actions.previous() }) { SkipGlyph(false, previousRolls, scheme.onSurface, animate, Modifier.size(38.dp)) }
-                        Tap(if (state.isPlaying) "Pause" else "Play", { haptics.pattern(if (state.isPlaying) com.opentune.ui.components.Haptics.Pattern.PAUSE else com.opentune.ui.components.Haptics.Pattern.PLAY); actions.togglePlay() }, modifier = if (television) Modifier.focusRequester(playFocus) else Modifier) { PlayPauseGlyph(state.isPlaying, scheme.onSurface, animate, Modifier.size(54.dp)) }
+                        Tap(if (state.isPlaying) "Pause" else "Play", { haptics.pattern(if (state.isPlaying) com.opentune.ui.components.Haptics.Pattern.PAUSE else com.opentune.ui.components.Haptics.Pattern.PLAY); actions.togglePlay() }) { PlayPauseGlyph(state.isPlaying, scheme.onSurface, animate, Modifier.size(54.dp)) }
                         Tap("Next", { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.NEXT); nextRolls++; actions.next() }, enabled = state.hasNext) {
                             SkipGlyph(true, nextRolls, scheme.onSurface.copy(alpha = if (state.hasNext) 1f else 0.35f), animate, Modifier.size(38.dp))
                         }
                     }
                     val context = LocalContext.current
-                    if (!television) RoundIcon(Icons.Rounded.SpeakerGroup, "Choose where it plays", { openOutputSwitcher(context) })
-                    if (!television) RoundIcon(
+                    RoundIcon(Icons.Rounded.SpeakerGroup, "Choose where it plays", { openOutputSwitcher(context) })
+                    RoundIcon(
                         outputRoute.icon,
                         "Audio output",
                         { showOutput = true },
@@ -203,20 +196,12 @@ internal fun LandscapePlayer(
                     )
                     if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
                 }
-                if (television) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    RoundIcon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Unlike" else "Like", onLike)
-                    RoundIcon(outputRoute.icon, "Audio output", { showOutput = true })
-                    RoundIcon(Icons.Rounded.Lyrics, "Lyrics", onLyrics)
-                    RoundIcon(Icons.Rounded.Shuffle, "Shuffle", actions.toggleShuffle, tint = if (state.shuffle) scheme.primary else scheme.onSurface)
-                    RoundIcon(Icons.Rounded.Repeat, "Repeat", actions.cycleRepeat)
-                    RoundIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", onQueue)
-                }
                 if (roomy) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { VolumeBar() }
-                        if (!television) RoundIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", onQueue)
+                        RoundIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", onQueue)
                     }
-                } else if (!television) {
+                } else {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { RoundIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", onQueue) }
                 }
             }
@@ -328,7 +313,7 @@ private fun TimeBar(position: () -> Long, durationMs: Long, onSeek: (Long) -> Un
 
 @Composable
 private fun RoundIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface) {
-    Box(Modifier.size(if (com.opentune.ui.tv.LocalIsTv.current) 48.dp else 44.dp).clip(CircleShape).clickable(interactionSource = remember { MutableInteractionSource() }, indication = com.opentune.ui.components.FocusRing(CircleShape), onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(44.dp).clip(CircleShape).clickable(interactionSource = remember { MutableInteractionSource() }, indication = com.opentune.ui.components.FocusRing(CircleShape), onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, label, Modifier.size(24.dp), tint = tint)
     }
 }
