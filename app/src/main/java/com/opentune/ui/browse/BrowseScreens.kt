@@ -375,13 +375,48 @@ internal fun listMeta(kind: String, songs: List<com.opentune.data.model.Song>): 
     return listOfNotNull(kind, count, length).joinToString(" · ")
 }
 
+/** Whether lists open with their cover across the top of the page (Settings › Full-screen playlist covers); never on a TV. */
+@Composable
+internal fun fullListCover(): Boolean =
+    com.opentune.data.settings.AppSettings.ui.collectAsState().value.fullScreenListCover && !com.opentune.ui.tv.LocalIsTv.current
+
+/**
+ * A list's cover across the top of its page, edge to edge and under the status bar, square,
+ * darkened a little at the top for the status line and fading at its foot into [into], the
+ * page's colour, where the title sits over it. [cover] draws it when it's made of the songs' covers.
+ */
+@Composable
+internal fun FullListCover(url: String?, into: Color, modifier: Modifier = Modifier, cover: (@Composable () -> Unit)? = null) {
+    Box(modifier.fillMaxWidth().aspectRatio(1f).clipToBounds()) {
+        if (cover != null) cover()
+        else Artwork(url, Modifier.matchParentSize(), shape = androidx.compose.ui.graphics.RectangleShape, placeholder = Icons.Filled.Album)
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = 0.4f),
+                    0.18f to Color.Transparent,
+                    0.5f to Color.Transparent,
+                    0.78f to into.copy(alpha = 0.7f),
+                    1f to into,
+                ),
+            ),
+        )
+    }
+}
+
+/** How far down a full cover the title starts, as a share of its height: on its faded foot. */
+internal const val FULL_COVER_TITLE_AT = 0.7f
+
 /** Shared artwork, typography and spacing for YouTube, Spotify and local playlists. */
 @Composable
 internal fun PlaylistHeading(title: String, subtitle: String, thumbnail: String?, songs: List<com.opentune.data.model.Song>,
-    isAlbum: Boolean = false, cover: (@Composable () -> Unit)? = null) {
+    isAlbum: Boolean = false, cover: (@Composable () -> Unit)? = null,
+    /** False when the cover is shown across the page above ([FullListCover]). */
+    showCover: Boolean = true) {
     val coverSize = if (com.opentune.ui.tv.LocalIsTv.current) Modifier.size(220.dp) else Modifier.fillMaxWidth(0.76f).aspectRatio(1f)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        if (cover == null) Artwork(
+        if (!showCover) Unit
+        else if (cover == null) Artwork(
             thumbnail.artworkAt(HEADER_ART_PX),
             coverSize.shadow(24.dp, MaterialTheme.shapes.large),
             shape = MaterialTheme.shapes.large,
@@ -390,10 +425,10 @@ internal fun PlaylistHeading(title: String, subtitle: String, thumbnail: String?
         else Box(coverSize.shadow(24.dp, MaterialTheme.shapes.large)) { cover() }
         Text(
             title,
-            style = MaterialTheme.typography.headlineSmall,
+            style = if (showCover) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineMedium,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 20.dp),
+            modifier = Modifier.padding(top = if (showCover) 20.dp else 0.dp),
         )
         // Who it's by, then what it is: "Playlist · 146 Tracks · 9h 48m".
         if (subtitle.isNotBlank()) {
@@ -602,10 +637,13 @@ fun CollectionScreen(
                 val band = com.opentune.ui.components.rememberRubberBand()
                 LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search), overscrollEffect = band) {
                     if (!searching) item(key = "header") {
-                        Box {
-                            HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
+                        val full = fullListCover()
+                        androidx.compose.foundation.layout.BoxWithConstraints {
+                            if (full) FullListCover(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), tint, Modifier.pinnedToTop(band))
+                            else HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
                             Column(
-                                Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),
+                                if (full) Modifier.fillMaxWidth().padding(top = maxWidth * FULL_COVER_TITLE_AT, start = 24.dp, end = 24.dp)
+                                else Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 if (c == null) {
@@ -613,7 +651,7 @@ fun CollectionScreen(
                                     Placeholder(Modifier.padding(top = 20.dp).width(200.dp).height(24.dp))
                                     Placeholder(Modifier.padding(top = 8.dp).width(140.dp).height(16.dp))
                                 } else {
-                                    PlaylistHeading(c.title, c.subtitle, c.thumbnailUrl, c.songs, isAlbum)
+                                    PlaylistHeading(c.title, c.subtitle, c.thumbnailUrl, c.songs, isAlbum, showCover = !full)
                                 }
                                 val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
                                 val saved = c != null && savedLists.any { it.browseId == c.browseId }

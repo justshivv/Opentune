@@ -37,7 +37,14 @@ import com.opentune.data.model.artworkAt
  * two playlists rarely alike. A large cover carries the name.
  */
 @Composable
-fun PlaylistCover(name: String, covers: List<String?>, modifier: Modifier = Modifier, shape: Shape = RoundedCornerShape(14.dp)) {
+fun PlaylistCover(
+    name: String,
+    covers: List<String?>,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(14.dp),
+    /** False where the name is written just below anyway (a page's full-width cover). */
+    named: Boolean = true,
+) {
     val distinct = remember(covers) { covers.filterNotNull().distinct().take(4) }
     val (from, to) = remember(name) { gradientFor(name) }
     val wave = remember(name) { waveFor(name) }
@@ -85,7 +92,7 @@ fun PlaylistCover(name: String, covers: List<String?>, modifier: Modifier = Modi
                 }
             }
         }
-        if (large) {
+        if (large && named) {
             // A shade at the foot for the name to sit on.
             if (distinct.isNotEmpty()) {
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.72f))))

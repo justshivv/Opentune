@@ -1166,14 +1166,23 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding,
         modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search), overscrollEffect = band) {
         if (!searching) item(key = "header") {
-            Box {
-                com.opentune.ui.browse.HeaderBackdrop((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
-                Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            val full = com.opentune.ui.browse.fullListCover()
+            androidx.compose.foundation.layout.BoxWithConstraints {
+                if (full) com.opentune.ui.browse.FullListCover(playlist.coverUrl.artworkAt(HEADER_ART_PX), tint, Modifier.pinnedToTop(band),
+                    cover = if (playlist.coverUrl == null) ({
+                        com.opentune.ui.components.PlaylistCover(playlist.name, songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape, named = false)
+                    }) else null)
+                else com.opentune.ui.browse.HeaderBackdrop((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
+                Column(
+                    if (full) Modifier.fillMaxWidth().padding(top = maxWidth * com.opentune.ui.browse.FULL_COVER_TITLE_AT, start = 24.dp, end = 24.dp)
+                    else Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                     com.opentune.ui.browse.PlaylistHeading(playlist.name,
                         if (playlist.spotifyId != null) "Spotify" else if (playlist.synced) "YouTube Music" else "On this phone",
                         playlist.coverUrl, songs, cover = if (playlist.coverUrl == null) ({
                             com.opentune.ui.components.PlaylistCover(playlist.name, songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), MaterialTheme.shapes.large)
-                        }) else null)
+                        }) else null, showCover = !full)
                     com.opentune.ui.browse.ListPlayRow(shown.isNotEmpty(), false,
                         onPlay = { actions.playAll(shown, 0, false, playlist.name) },
                         onShuffle = { actions.playAll(shown, 0, true, playlist.name) },

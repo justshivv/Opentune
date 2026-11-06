@@ -58,6 +58,17 @@ class PlaylistToolsScreenshotTest {
 
     @Test fun page() = shoot("playlist/page") { LocalPlaylistScreen(id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {}) }
 
+    /** With Settings › Full-screen playlist covers on, the cover runs across the top of the page. */
+    @Test fun fullCover() {
+        val before = com.opentune.data.settings.AppSettings.ui.value
+        com.opentune.data.settings.AppSettings.updateUi { it.copy(fullScreenListCover = true) }
+        try {
+            shoot("playlist/full-cover") { LocalPlaylistScreen(id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {}) }
+        } finally {
+            com.opentune.data.settings.AppSettings.updateUi { before }
+        }
+    }
+
     @Test fun spotifyUsesTheSamePlaylistLayout() {
         LibraryStore.putSpotifyPlaylist("1234567890123456789012", "Late nights", songs, "revision", null)
         val spotify = LibraryStore.playlists.value.first { it.spotifyId != null }

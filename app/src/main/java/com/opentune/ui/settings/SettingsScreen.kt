@@ -1139,6 +1139,9 @@ private fun settingsSections(
                 Entry("Moving covers on Home", "motion artwork animated cover drift zoom home cards mixes") {
                     ToggleRow("Moving covers on Home", ui.homeMovingCovers, { v -> AppSettings.updateUi { it.copy(homeMovingCovers = v) } }, summary = "Song and album covers on Home drift and zoom slowly, one or two at a time, while you're not scrolling. Off in battery saver", icon = Icons.Rounded.Animation)
                 },
+                Entry("Full-screen playlist covers", "playlist album cover art edge full screen header") {
+                    ToggleRow("Full-screen playlist covers", ui.fullScreenListCover, { v -> AppSettings.updateUi { it.copy(fullScreenListCover = v) } }, summary = "Playlists and albums open with their cover across the top of the page, edge to edge", icon = Icons.Rounded.Fullscreen)
+                },
                 Entry("Full-screen cover art", "artwork edge") {
                     ToggleRow("Full-screen cover art", ui.fullScreenCover, { v -> AppSettings.updateUi { it.copy(fullScreenCover = v) } }, summary = "Runs the cover to the edges of the player instead of a square sleeve", icon = Icons.Rounded.Fullscreen)
                 },

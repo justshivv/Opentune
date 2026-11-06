@@ -403,6 +403,8 @@ data class InterfaceSettings(
     /** Solid fills instead of frosted glass. */
     val reduceBlur: Boolean = false,
     val fullScreenCover: Boolean = false,
+    /** Playlist and album pages open with their cover filling the top of the page, edge to edge. */
+    val fullScreenListCover: Boolean = false,
     /** How round the player's cover is, in dp: 0 is a square with sharp corners. Not used with [fullScreenCover]. */
     val coverCornerDp: Int = 28,
     val hideVolumeBar: Boolean = false,
