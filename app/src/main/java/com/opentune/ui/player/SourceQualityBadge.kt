@@ -167,6 +167,11 @@ private fun QualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () 
 
 internal fun qualityStatusLabel(source: NerdStats.Source?, format: AudioFormatInfo?, upgrading: Boolean): String {
     if (source == null || source.provider.startsWith("Checking highest")) return if (upgrading) "Upgrading quality" else "Preparing audio"
+    // Dolby: its name, and the channels it carries ("Dolby Atmos · 7.1").
+    com.opentune.playback.dolbyName(format)?.let { dolby ->
+        val layout = when (format?.channels) { 6 -> "5.1"; 8 -> "7.1"; 10 -> "7.1.2"; 12 -> "7.1.4"; 16 -> "9.1.6"; else -> null }
+        return listOfNotNull(dolby, layout).joinToString(" · ")
+    }
     val lossless = isHighestQuality(source, format)
     val kbps = format?.bitrateKbps ?: source.kbps ?: 0
     // JioSaavn and YouTube Music streams are named by their tier alone, without the bitrate.

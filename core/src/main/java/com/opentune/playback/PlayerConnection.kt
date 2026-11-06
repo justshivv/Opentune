@@ -161,7 +161,16 @@ class PlayerConnection(private val context: Context) {
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            val dolby = controller?.currentTracks?.groups?.firstOrNull { it.type == C.TRACK_TYPE_AUDIO }?.getTrackFormat(0)?.sampleMimeType
+                ?.let { it in DOLBY_MIMES } == true
             _error.value = when (error.errorCode) {
+                // A Dolby stream (Atmos, Digital Plus) on a phone with no Dolby decoder, and no receiver to pass it to.
+                PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+                PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+                PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+                PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+                -> if (dolby) "This phone can't decode Dolby audio. It plays through a Dolby-capable receiver or TV over HDMI or eARC."
+                    else error.cause?.message ?: error.message
                 PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
                 PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED ->
                     "This audio copy could not be read. Saved downloads will be repaired when connected."
@@ -177,6 +186,7 @@ class PlayerConnection(private val context: Context) {
                 val flac = LosslessAudioPolicy.streamInfo(it)
                 AudioFormatInfo(
                     codec = (it.codecs ?: it.sampleMimeType?.substringAfter('/'))?.uppercase(),
+                    mime = it.sampleMimeType,
                     bitrateKbps = it.bitrate.takeIf { b -> b > 0 }?.div(1000),
                     sampleRateHz = flac?.rate ?: it.sampleRate.takeIf { r -> r > 0 },
                     channels = flac?.channels ?: it.channelCount.takeIf { c -> c > 0 },
@@ -600,7 +610,29 @@ class PlayerConnection(private val context: Context) {
         const val SWITCH_STALL_MS = 2_500L
         const val SWITCH_SETTLE_MS = 3_000L
         const val LOADING_TICK_MS = 250L
+        val DOLBY_MIMES = setOf("audio/ac3", "audio/eac3", "audio/eac3-joc", "audio/ac4")
     }
 }
 
-data class AudioFormatInfo(val codec: String?, val bitrateKbps: Int?, val sampleRateHz: Int?, val channels: Int?, val bitDepth: Int? = null)
+data class AudioFormatInfo(
+    val codec: String?, val bitrateKbps: Int?, val sampleRateHz: Int?, val channels: Int?, val bitDepth: Int? = null,
+    /** The stream's own MIME type, e.g. "audio/eac3-joc" for Dolby Atmos in E-AC-3. */
+    val mime: String? = null,
+)
+
+/**
+ * What Dolby format [info] is, as the player names it, or null when it isn't Dolby:
+ * Atmos for E-AC-3 with objects (JOC) and for AC-4, Dolby Digital Plus for plain
+ * E-AC-3, Dolby Digital for AC-3.
+ */
+fun dolbyName(info: AudioFormatInfo?): String? {
+    val mime = info?.mime?.lowercase().orEmpty()
+    val codec = info?.codec?.lowercase().orEmpty()
+    return when {
+        mime == "audio/eac3-joc" || codec.startsWith("ec+3") || codec.contains("joc") -> "Dolby Atmos"
+        mime == "audio/ac4" || codec.startsWith("ac-4") -> "Dolby Atmos"
+        mime == "audio/eac3" || codec.startsWith("ec-3") || codec == "eac3" -> "Dolby Digital Plus"
+        mime == "audio/ac3" || codec.startsWith("ac-3") || codec == "ac3" -> "Dolby Digital"
+        else -> null
+    }
+}
