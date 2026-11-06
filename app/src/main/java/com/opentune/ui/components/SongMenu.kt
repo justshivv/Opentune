@@ -345,7 +345,7 @@ fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
 
 /** One playlist to pick in [AddToPlaylistDialog]: its cover, its name, how many songs, and a tick if the song is in it. */
 @Composable
-private fun PlaylistPickRow(
+internal fun PlaylistPickRow(
     title: String,
     subtitle: String,
     art: @Composable () -> Unit,

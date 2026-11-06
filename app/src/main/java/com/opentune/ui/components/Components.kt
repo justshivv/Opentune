@@ -288,8 +288,14 @@ fun SongListItem(
      * takes the song out, and toward the end adds it to the queue.
      */
     onSwipeRemove: (() -> Unit)? = null,
+    /** This row's own key in the page's selection (see [LocalSongSelection]); the song's id unless it's in the list twice. */
+    selectKey: String = song.videoId,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
+    // On a page where songs can be picked together: picking, a tap ticks the row instead of playing it.
+    val selection = LocalSongSelection.current
+    val selecting = selection?.active == true
+    val picked = selecting && selection!!.picked.containsKey(selectKey)
     var menuOpen by remember { mutableStateOf(false) }
     // A long press lifts the row out with its menu beside it; the ⋮ opens the full menu.
     var contextOpen by remember { mutableStateOf(false) }
@@ -301,24 +307,27 @@ fun SongListItem(
         .collectAsState(Downloads.entryNow(song.videoId))
     if (menuOpen) SongMenuSheet(song, onDismiss = { menuOpen = false })
     val at = anchor.rect
-    if (contextOpen && at != null) SongContextMenu(song, at, onDismiss = { contextOpen = false }, onRemoveFromPlaylist = onRemoveFromPlaylist) { SongPreview(song) }
+    if (contextOpen && at != null) SongContextMenu(song, at, onDismiss = { contextOpen = false }, onRemoveFromPlaylist = onRemoveFromPlaylist,
+        onSelect = selection?.let { s -> { contextOpen = false; s.start(selectKey, song) } }) { SongPreview(song) }
     val playback by AppSettings.playback.collectAsState()
     // Toward the end of the line plays next, toward the start adds to the queue.
-    val swipes = swipeToQueue && playback.swipeToQueue
+    val swipes = swipeToQueue && playback.swipeToQueue && !selecting
     SwipeToQueueRow(
         title = song.title,
         onPlayNext = onPlayNext.takeIf { swipes },
-        onAddToQueue = onAddToQueue.takeIf { swipes || onSwipeRemove != null },
-        modifier = modifier.fillMaxWidth(),
-        onRemove = onSwipeRemove,
+        onAddToQueue = onAddToQueue.takeIf { (swipes || onSwipeRemove != null) && !selecting },
+        modifier = modifier.fillMaxWidth()
+            .then(if (picked) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) else Modifier),
+        onRemove = onSwipeRemove.takeIf { !selecting },
     ) { swipeActions ->
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(swipeActions)
                 .menuAnchor(anchor, view)
-                .menuClickable(onClick = onClick, onLongClick = {
-                    if (hasMenu) {
+                .menuClickable(onClick = { if (selecting) selection!!.toggle(selectKey, song) else onClick() }, onLongClick = {
+                    if (selecting) selection!!.toggle(selectKey, song)
+                    else if (hasMenu) {
                         haptics.press()
                         if (anchor.rect != null) contextOpen = true else menuOpen = true
                     }
@@ -357,11 +366,15 @@ fun SongListItem(
                     explicit = song.isExplicit == true,
                 )
             }
-            trailing()
-            download?.let { DownloadBadge(it.state, it.progress) }
-            if (hasMenu) {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+            if (selecting) {
+                SelectionTick(picked)
+            } else {
+                trailing()
+                download?.let { DownloadBadge(it.state, it.progress) }
+                if (hasMenu) {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+                    }
                 }
             }
         }

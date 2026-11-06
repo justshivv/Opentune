@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.CheckCircleOutline
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.BookmarkRemove
@@ -324,6 +325,8 @@ fun SongContextMenu(
     onDismiss: () -> Unit,
     /** Inside one of your own playlists: takes this song out of it. */
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    /** On a page where songs can be picked together: starts picking, with this one. */
+    onSelect: (() -> Unit)? = null,
     preview: @Composable () -> Unit,
 ) {
     val actions = LocalSongMenu.current
@@ -343,6 +346,7 @@ fun SongContextMenu(
     // Kept audio, separate from a download: the song cache that makes replays instant.
     val cached = remember(song.videoId) { !local && com.opentune.playback.AudioCache.holds(context, song.videoId) }
     val entries = buildList {
+        onSelect?.let { add(MenuEntry("Select", Icons.Rounded.CheckCircleOutline, 0) { it() }) }
         add(MenuEntry(if (isLiked) "Remove from Liked Music" else "Like", if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, 0) { LibraryStore.setLiked(song, !isLiked) })
         if (actions != null) add(MenuEntry("Dislike", Icons.Rounded.ThumbDownOffAlt, 0) { actions.dislike(song) })
         add(MenuEntry("Add to playlist", Icons.AutoMirrored.Rounded.PlaylistAdd, 0) { next = "playlist" })

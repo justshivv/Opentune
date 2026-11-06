@@ -601,6 +601,9 @@ fun CollectionScreen(
     }
     if (moreOpen && loaded != null) ListMoreSheet(loaded, isAlbum, actions, onRefresh = { loader.reload() }, onDismiss = { moreOpen = false })
 
+    // Songs picked together (long press, then Select): the bar over the top acts on them.
+    val selection = com.opentune.ui.components.rememberSongSelection()
+    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
     GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
         PlaylistSearchHeader(search) {
         CollapsingBar(title, listState, onBack, forceCollapsed = searching, artworkBehind = loaded?.thumbnailUrl != null) {
@@ -628,6 +631,13 @@ fun CollectionScreen(
             }
         }
         }
+        val listed = (state as? UiState.Success)?.data?.songs.orEmpty()
+        com.opentune.ui.components.SongSelectionBar(
+            selection,
+            rows = listed.mapIndexed { i, s -> "$i:${s.videoId}" to s },
+            onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }) {
         when (val s = state) {
             is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
@@ -718,6 +728,7 @@ fun CollectionScreen(
                                 },
                                 onPlayNext = { actions.playNext(song) },
                                 onAddToQueue = { actions.addToQueue(song) },
+                                selectKey = "${c.songs.indexOf(song).takeIf { it >= 0 } ?: i}:${song.videoId}",
                             )
                         }
                     }
@@ -725,5 +736,6 @@ fun CollectionScreen(
                 }
             }
         }
+    }
     }
 }

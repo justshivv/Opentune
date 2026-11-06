@@ -24,6 +24,8 @@ import com.opentune.ui.browse.SongActions
 import com.opentune.ui.theme.OpenTuneTheme
 import java.io.File
 import org.junit.Before
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -54,6 +56,32 @@ class PlaylistToolsScreenshotTest {
         id = LibraryStore.createPlaylist("Late nights")
         LibraryStore.addAllToPlaylist(id, songs.take(2))
         songs.forEach { History.record(it, 200_000) }
+    }
+
+    /** Long press, Select, then a second song: both ticked, the bar over the top saying so; Remove takes both out. */
+    @Test fun pickSeveral() {
+        val songsIn = { LibraryStore.playlist(id)!!.songs.size }
+        LibraryStore.addToPlaylist(id, songs[2])
+        compose.setContent { OpenTuneTheme(ThemeSettings()) { Surface(color = MaterialTheme.colorScheme.background) {
+            LocalPlaylistScreen(id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {})
+        } } }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.onNodeWithText("Husn").performTouchInput { longClick() }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("Select").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("Blinding Lights").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("2 selected").assertExists()
+        compose.waitForIdle()
+        val view = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bitmap))
+        File("build/screenshots/playlist/select.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        compose.onNodeWithText("Remove").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        org.junit.Assert.assertEquals(1, songsIn())
+        org.junit.Assert.assertEquals("Kesariya", LibraryStore.playlist(id)!!.songs.single().title)
     }
 
     @Test fun page() = shoot("playlist/page") { LocalPlaylistScreen(id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {}) }

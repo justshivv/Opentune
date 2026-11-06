@@ -948,6 +948,10 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     val liked by LibraryStore.liked.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     val songs = remember(liked) { liked.map { it.toSong() } }
+    val selection = com.opentune.ui.components.rememberSongSelection()
+    val context = LocalContext.current
+    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader("Liked Music", onBack = onBack) }
         if (signedIn) {
@@ -980,6 +984,20 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 onAddToQueue = { actions.addToQueue(song) },
             )
         }
+    }
+    com.opentune.ui.components.SongSelectionBar(
+        selection,
+        rows = songs.map { it.videoId to it },
+        onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+        modifier = Modifier.align(Alignment.TopCenter),
+        onRemove = { keys ->
+            val gone = songs.filter { it.videoId in keys }
+            gone.forEach { LibraryStore.setLiked(it, false) }
+            com.opentune.data.Pills.done("Removed ${gone.size} from Liked", context)
+        },
+        removeLabel = "Unlike",
+    )
+    }
     }
 }
 
@@ -1140,6 +1158,9 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             )
         })
     }
+    // Songs picked together (long press, then Select): the bar over the top acts on them.
+    val selection = com.opentune.ui.components.rememberSongSelection()
+    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
     com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
         com.opentune.ui.browse.PlaylistSearchHeader(search) {
         com.opentune.ui.browse.CollapsingBar(playlist.name, listState, onBack, forceCollapsed = searching,
@@ -1160,6 +1181,20 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             }
         }
         }
+        val selectKeys = remember(songs) { songKeys(songs) }
+        com.opentune.ui.components.SongSelectionBar(
+            selection,
+            rows = shown.indices.map { i -> selectKeys[matching[i]] to shown[i] },
+            onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+            modifier = Modifier.align(Alignment.TopCenter),
+            // Out of this playlist, from the bottom up so each place still points at its song.
+            onRemove = if (playlist.spotifyId == null) ({ keys ->
+                val at = songs.indices.filter { selectKeys[it] in keys }.sortedDescending()
+                at.forEach { LibraryStore.removeFromPlaylist(id, it) }
+                com.opentune.data.Pills.done("Removed ${at.size} from ${playlist.name}", context)
+            }) else null,
+            removeLabel = "Remove",
+        )
     }) {
     val tint = com.opentune.ui.browse.rememberCoverTint((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(CARD_ART_PX))
     val band = com.opentune.ui.components.rememberRubberBand()
@@ -1217,9 +1252,11 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 onRemoveFromPlaylist = if (playlist.spotifyId == null) ({ removeWithUndo(id, matching[i]) }) else null,
                 // Swipe right to add to the queue, left to take it out of the playlist.
                 onSwipeRemove = if (playlist.spotifyId == null) ({ removeWithUndo(id, matching[i]) }) else null,
+                selectKey = keys[matching[i]],
             )
         }
     }
+}
 }
 }
 
