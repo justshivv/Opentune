@@ -52,6 +52,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Cast
@@ -333,6 +334,7 @@ fun PlayerLayout(
     var showOutput by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
+    var showComments by remember { mutableStateOf(false) }
     var showOffset by remember { mutableStateOf(false) }
     var showLyricsSource by remember { mutableStateOf(false) }
     var showDetails by remember { mutableStateOf(false) }
@@ -1219,6 +1221,8 @@ fun PlayerLayout(
                                     { showOutput = true },
                                     enabled = enabled,
                                 )
+                                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                PillButton(Icons.Rounded.ChatBubbleOutline, "Comments", showComments, { showComments = true }, enabled = enabled)
                                 if (apple) {
                                     val room by Together.room.collectAsState()
                                     Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
@@ -1308,11 +1312,15 @@ fun PlayerLayout(
         )
         if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
         if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })
+        if (showComments) CommentsSheet(current, onDismiss = { showComments = false })
         if (showMenu) {
             SongMenuSheet(
                 current,
                 onDismiss = { showMenu = false },
-                top = { close -> MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() } },
+                top = { close ->
+                    MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
+                    MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }
+                },
                 tools = { close ->
                     MenuRow(Icons.Rounded.HighQuality, "Track details") { close(); showDetails = true }
                     MenuRow(Icons.Rounded.GraphicEq, "Signal path") { close(); showSignal = true }
