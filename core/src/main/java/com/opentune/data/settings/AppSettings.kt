@@ -54,6 +54,38 @@ enum class AutomixPerformance(val label: String, val summary: String, val thread
     PERFORMANCE("Performance", "4 threads · starts sooner and reads the most · warmer and uses more battery", 4),
 }
 
+/**
+ * How much OpenTune spends on smoothness and moving extras, against battery. Choosing one
+ * sets the switches behind it at once ([performanceApplied]); any of them can be changed after.
+ */
+@Serializable
+enum class PerformanceProfile(val label: String, val summary: String) {
+    BATTERY_SAVER("Battery saver", "60 Hz screen, still player backgrounds and covers, no Canvas or animated covers, plain lyrics, and Automix reading one song at a time"),
+    BALANCED("Balanced", "The screen at the phone's own rate, moving backgrounds, animated covers on Wi-Fi only"),
+    PERFORMANCE("High performance", "The fastest refresh rate and everything moving, at the cost of battery"),
+}
+
+/** [ui] and [pb] as [profile] sets them; everything it doesn't touch is kept. */
+fun performanceApplied(ui: InterfaceSettings, pb: PlaybackSettings, profile: PerformanceProfile): Pair<InterfaceSettings, PlaybackSettings> {
+    val d = InterfaceSettings()
+    return when (profile) {
+        PerformanceProfile.BATTERY_SAVER -> ui.copy(
+            performanceProfile = profile, highRefreshRate = false, stillBackdrops = true,
+            animatedCovers = false, spotifyCanvas = false, movingCover = false, homeMovingCovers = false, blurLyrics = false,
+        ) to pb.copy(automixPerformance = AutomixPerformance.EFFICIENT)
+        PerformanceProfile.BALANCED -> ui.copy(
+            performanceProfile = profile, highRefreshRate = false, stillBackdrops = false,
+            animatedCovers = d.animatedCovers, animatedCoversWifiOnly = true, spotifyCanvas = d.spotifyCanvas,
+            movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics,
+        ) to pb.copy(automixPerformance = AutomixPerformance.BALANCED)
+        PerformanceProfile.PERFORMANCE -> ui.copy(
+            performanceProfile = profile, highRefreshRate = true, stillBackdrops = false,
+            animatedCovers = d.animatedCovers, spotifyCanvas = d.spotifyCanvas,
+            movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics,
+        ) to pb.copy(automixPerformance = AutomixPerformance.PERFORMANCE)
+    }
+}
+
 /** How music reaches the DAC unchanged. */
 @Serializable
 enum class BitPerfectOutput(val label: String, val summary: String) {
@@ -499,6 +531,10 @@ data class InterfaceSettings(
     val lyricsGlow: Boolean = false,
     /** High performance mode: ask for a fast refresh rate while the app is open. */
     val highRefreshRate: Boolean = true,
+    /** The profile last chosen (Settings › Performance profile); the switches it set may have been changed since. */
+    val performanceProfile: PerformanceProfile = PerformanceProfile.PERFORMANCE,
+    /** Player backgrounds and their glow hold still instead of drifting (Battery saver). */
+    val stillBackdrops: Boolean = false,
     /** The rate high performance mode asks for, in Hz; 0 for the screen's fastest. */
     val refreshRateHz: Int = 0,
     /** How the full player rises over the page and drops away. */

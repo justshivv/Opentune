@@ -720,7 +720,7 @@ fun PlayerLayout(
                     theme.playerBackground,
                     current.thumbnailUrl,
                     Modifier.fillMaxSize(),
-                    animate = !state.ui.reduceAnimation,
+                    animate = !state.ui.reduceAnimation && !state.ui.stillBackdrops,
                     // While it flies the cover is drawn by the flight, not here as well.
                     fullCover = fullStyle,
                     fullCoverVisible = fullCover && !flight.active,
@@ -750,7 +750,7 @@ fun PlayerLayout(
                 AmbientLights(
                     listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.inversePrimary, scheme.primaryContainer),
                     playing = state.isPlaying,
-                    animate = !state.ui.reduceAnimation,
+                    animate = !state.ui.reduceAnimation && !state.ui.stillBackdrops,
                     modifier = Modifier.fillMaxSize(),
                     field = true,
                 )

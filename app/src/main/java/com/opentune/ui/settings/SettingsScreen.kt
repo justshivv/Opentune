@@ -450,6 +450,7 @@ private fun settingsSections(
     var updateBytes by remember { mutableStateOf(0L) }
     var playerStyleDialog by remember { mutableStateOf(false) }
     var automixPerformanceDialog by remember { mutableStateOf(false) }
+    var profileDialog by remember { mutableStateOf(false) }
     var appIconDialog by remember { mutableStateOf(false) }
     var fontDialog by remember { mutableStateOf(false) }
     var languageDialog by remember { mutableStateOf(false) }
@@ -552,6 +553,26 @@ private fun settingsSections(
     if (hiddenDialog) HiddenDialog(onDismiss = { hiddenDialog = false })
     if (appIconDialog) AppIconDialog { appIconDialog = false }
     if (fontDialog) com.opentune.ui.theme.FontSettingsSheet { fontDialog = false }
+    if (profileDialog) {
+        ChoiceSheet(
+            title = "Performance profile",
+            options = com.opentune.data.settings.PerformanceProfile.entries,
+            selected = ui.performanceProfile,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { profile ->
+                val (newUi, newPb) = com.opentune.data.settings.performanceApplied(AppSettings.ui.value, AppSettings.playback.value, profile)
+                AppSettings.updateUi { newUi }
+                AppSettings.updatePlayback { newPb }
+                // The glass's costlier layers go with Battery saver, and come back with High performance.
+                when (profile) {
+                    com.opentune.data.settings.PerformanceProfile.BATTERY_SAVER -> com.opentune.ui.components.GlassPerformance.choose(true)
+                    com.opentune.data.settings.PerformanceProfile.PERFORMANCE -> com.opentune.ui.components.GlassPerformance.choose(false)
+                    else -> Unit
+                }
+            },
+            onDismiss = { profileDialog = false },
+        )
+    }
     if (automixPerformanceDialog) {
         ChoiceSheet(
             title = "Automix performance",
@@ -1263,6 +1284,9 @@ private fun settingsSections(
                 },
                 Entry("Frosted top edge", "status bar blur fade top scroll glass") {
                     ToggleRow("Frosted top edge", ui.frostedTopEdge, { v -> AppSettings.updateUi { it.copy(frostedTopEdge = v) } }, summary = "Pages blur and fade as they scroll under the status bar", icon = Icons.Rounded.Gradient)
+                },
+                Entry("Performance profile", "battery saver drain power performance profile balanced smooth heat") {
+                    NavRow("Performance profile", { profileDialog = true }, summary = ui.performanceProfile.summary, icon = Icons.Rounded.Speed, value = ui.performanceProfile.label)
                 },
                 Entry("High performance mode", "120hz 90hz smooth fps refresh rate frame rate scrolling performance battery unrestricted lag") {
                     HighPerformanceRows(ui)

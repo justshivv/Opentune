@@ -84,7 +84,11 @@ class MainActivity : ComponentActivity() {
             val vm: PlayerViewModel = viewModel()
             val theme by AppSettings.theme.collectAsState()
             val ui by AppSettings.ui.collectAsState()
-            LaunchedEffect(ui.highRefreshRate, ui.refreshRateHz) { preferRefreshRate(ui.highRefreshRate, ui.refreshRateHz) }
+            // Battery saver holds the screen at 60 Hz while OpenTune is open; otherwise as chosen.
+            val saver = ui.performanceProfile == com.opentune.data.settings.PerformanceProfile.BATTERY_SAVER
+            LaunchedEffect(ui.highRefreshRate, ui.refreshRateHz, saver) {
+                if (saver) preferRefreshRate(true, 60) else preferRefreshRate(ui.highRefreshRate, ui.refreshRateHz)
+            }
             // A TV dims and starts its screensaver after a few minutes without a key press;
             // while music plays from here, the cover and lyrics stay on screen instead.
             val playing by vm.isPlaying.collectAsState()
