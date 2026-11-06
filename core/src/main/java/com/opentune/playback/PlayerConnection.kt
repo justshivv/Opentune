@@ -206,6 +206,8 @@ class PlayerConnection(private val context: Context) {
         _connected.value = true
         connectionWatch?.cancel()
         connectionWatch = scope.launch {
+            // A mix starting or ending changes the song shown.
+            launch { MixState.showing.collect { if (controller === newController) refresh(newController) } }
             while (controller === newController) {
                 refreshLoading(newController)
                 kotlinx.coroutines.delay(1_000)
@@ -223,9 +225,11 @@ class PlayerConnection(private val context: Context) {
 
     private fun refresh(player: Player) {
         _queue.value = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toSong() }
-        _currentIndex.value = player.currentMediaItemIndex
-        _currentSong.value = player.currentMediaItem?.toSong()
-        _upNext.value = player.upcomingPlayOrder().drop(1)
+        // A mix under way shows the song coming in, from the moment it starts.
+        val mixing = MixState.showing.value?.takeIf { it.index in 0 until player.mediaItemCount }
+        _currentIndex.value = mixing?.index ?: player.currentMediaItemIndex
+        _currentSong.value = (mixing?.item ?: player.currentMediaItem)?.toSong()
+        _upNext.value = player.upcomingPlayOrder().drop(1).let { up -> if (mixing != null) up.dropWhile { it != mixing.index }.drop(1) else up }
         _hasNext.value = player.hasNextMediaItem()
         _shuffleEnabled.value = player.shuffleModeEnabled
         publishShuffle(player)
@@ -233,8 +237,8 @@ class PlayerConnection(private val context: Context) {
         // The same song swapped onto another stream (a quality switch, a recovery) has no
         // length until the new one loads; it keeps the one it had, so the seek bar and
         // times don't empty to "--:--" while it plays on.
-        val id = player.currentMediaItem?.mediaId
-        val duration = player.duration.takeIf { it > 0 }
+        val id = mixing?.item?.mediaId ?: player.currentMediaItem?.mediaId
+        val duration = (if (mixing != null) mixing.durationMs().takeIf { it > 0 } else player.duration.takeIf { it > 0 })
             ?: _durationOf.value.takeIf { id != null && it.first == id }?.second
             ?: 0L
         _durationMs.value = duration
@@ -513,12 +517,17 @@ class PlayerConnection(private val context: Context) {
     }
 
     fun skipNext() {
-        controller?.seekToNext()
+        val controller = controller ?: return
+        // Mixing: the song shown is the one coming in, so next is the one after it.
+        MixState.showing.value?.let { controller.seekTo(it.index, 0); controller.seekToNext(); return }
+        controller.seekToNext()
     }
 
     /** Restarts the current track, or goes back one if it has only just begun. */
     fun skipPrevious() {
-        controller?.seekToPrevious()
+        val controller = controller ?: return
+        MixState.showing.value?.let { controller.seekTo(it.index, 0); return }
+        controller.seekToPrevious()
     }
 
     /**
@@ -557,10 +566,13 @@ class PlayerConnection(private val context: Context) {
     }
 
     fun seekTo(positionMs: Long) {
-        controller?.seekTo(positionMs)
+        val controller = controller ?: return
+        // Mixing: a seek is in the song shown, the one coming in.
+        MixState.showing.value?.let { controller.seekTo(it.index, positionMs.coerceAtLeast(0L)); return }
+        controller.seekTo(positionMs)
     }
 
-    fun currentPositionMs(): Long = controller?.currentPosition ?: 0L
+    fun currentPositionMs(): Long = MixState.showing.value?.positionMs?.invoke() ?: controller?.currentPosition ?: 0L
 
     /**
      * Plays at [rate] times the Remix speed, pitch unchanged. Listening

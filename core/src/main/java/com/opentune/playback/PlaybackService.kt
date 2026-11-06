@@ -472,7 +472,7 @@ class PlaybackService : MediaLibraryService() {
             },
             sameStream = ::sameStream,
             analysisUri = ::analysisUri,
-            analyzer = com.opentune.playback.mix.MixAnalyzer { uri, network ->
+            analyzer = com.opentune.playback.mix.MixAnalyzer({ AppSettings.playback.value.automixPerformance }) { uri, network ->
                 val id = videoIdOf(uri)
                 if (id == null) listOf(direct)
                 else buildList {

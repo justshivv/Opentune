@@ -42,6 +42,18 @@ enum class PaletteStyleOption(val label: String) {
     Monochrome("Monochrome"),
 }
 
+/**
+ * How hard Automix works reading songs ahead of a blend: how many songs it reads at
+ * once, how early it starts, and how long a reading may take. More reads sooner and
+ * surer, at the cost of a warmer phone and some battery.
+ */
+@Serializable
+enum class AutomixPerformance(val label: String, val summary: String, val threads: Int) {
+    EFFICIENT("Efficient", "1 thread · lowest heat and battery use · reading a song may take longer", 1),
+    BALANCED("Balanced", "2 threads · reads both songs at once · the recommended balance", 2),
+    PERFORMANCE("Performance", "4 threads · starts sooner and reads the most · warmer and uses more battery", 4),
+}
+
 /** How music reaches the DAC unchanged. */
 @Serializable
 enum class BitPerfectOutput(val label: String, val summary: String) {
@@ -348,6 +360,8 @@ data class PlaybackSettings(
      * one. Takes over from [crossfadeSeconds] while on.
      */
     val automix: Boolean = false,
+    /** How hard Automix works reading the songs ahead of each blend. */
+    val automixPerformance: AutomixPerformance = AutomixPerformance.BALANCED,
     /** Bit-perfect output to a USB DAC (Android 14+): no mixing, effects or resampling. */
     val bitPerfectUsb: Boolean = false,
     /** Which bit-perfect path, if any (see [BitPerfectOutput]); [bitPerfectUsb] is the Android 14 one. */

@@ -52,7 +52,7 @@ import java.util.Locale
 
 @Composable
 internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    // While two songs blend, "Automix" stands where the quality is, then gives way to it again.
+    // While two songs blend, "Mixing" stands where the quality is, then gives way to it again.
     val mix by com.opentune.playback.MixState.now.collectAsState()
     var transition by remember { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.animation.Crossfade(mix != null, animationSpec = tween(450), label = "mixBadge") { mixing ->
@@ -62,13 +62,14 @@ internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onCli
 }
 
 /**
- * "Automix" (or "Crossfade") with a beam of light running across it, faster the
- * further the blend has gone, so the label itself shows the songs moving into each other.
+ * "Mixing" with a beam of light running across it, faster and brighter the
+ * nearer the next song is to taking over, so the label itself shows the songs
+ * moving into each other.
  */
 @Composable
 private fun MixBadge(modifier: Modifier, onClick: () -> Unit) {
     val mix by com.opentune.playback.MixState.now.collectAsState()
-    val shown = remember { androidx.compose.runtime.mutableStateOf(mix ?: com.opentune.playback.MixState.Mix("Automix", 0f)) }
+    val shown = remember { androidx.compose.runtime.mutableStateOf(mix ?: com.opentune.playback.MixState.Mix("Mixing", 0f)) }
     mix?.let { shown.value = it }
     val colors = MaterialTheme.colorScheme
     val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
@@ -81,7 +82,8 @@ private fun MixBadge(modifier: Modifier, onClick: () -> Unit) {
             androidx.compose.runtime.withFrameNanos { now ->
                 if (last != 0L) {
                     val p = shown.value.progress
-                    val sweepsPerSecond = 0.45f + 2.6f * p * p
+                    // Slow as the next song starts coming in, racing as it takes over.
+                    val sweepsPerSecond = 0.5f + 3.6f * p * p
                     beam.floatValue = ((beam.floatValue + 0.2f + sweepsPerSecond * (now - last) / 1e9f * 1.4f) % 1.4f) - 0.2f
                 }
                 last = now
@@ -104,7 +106,8 @@ private fun MixBadge(modifier: Modifier, onClick: () -> Unit) {
                     drawContent()
                     if (still) return@onDrawWithContent
                     val x = beam.floatValue * size.width
-                    val half = size.width * 0.22f
+                    // Narrower and keener as it speeds up.
+                    val half = size.width * (0.26f - 0.1f * shown.value.progress)
                     // The light, in the accent at its edges and white at its heart, over the letters only.
                     drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(
                         0f to colors.primary.copy(alpha = 0f),

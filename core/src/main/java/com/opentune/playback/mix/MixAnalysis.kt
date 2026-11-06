@@ -312,6 +312,8 @@ data class Opening(
     val key: Key? = null,
     /** How loud the song's body is, in dB. */
     val levelDb: Float? = null,
+    /** Where a quiet intro has built up to the song's body: the moment its full sound arrives. */
+    val bodyAtMs: Long? = null,
 )
 
 /** [f] covers the last stretch of a song [durationMs] long. */
@@ -353,7 +355,14 @@ fun analyzeOpening(f: Features, chroma: FloatArray? = null): Opening? {
     for (i in a until b) power += 10.0.pow(intro[i] / 10.0)
     val introDb = db((power / max(1, b - a)).toFloat())
     val beat = beatGrid(f, start, start + BEAT_SPAN_MS)?.let { withDownbeat(f, it, start, start + BEAT_SPAN_MS) }
-    return Opening(start, introDb <= body - QUIET_INTRO_DB, beat, Wave.of(f), estimateKey(chroma), bodyLevel(f))
+    val quiet = introDb <= body - QUIET_INTRO_DB
+    // Where the intro has built up to within a few dB of the body.
+    val bodyAt = if (!quiet) null else {
+        var i = a
+        while (i < f.size && intro[i] < body - BODY_REACHED_DB) i++
+        if (i < f.size) f.timeOf(i.toDouble()) else null
+    }
+    return Opening(start, quiet, beat, Wave.of(f), estimateKey(chroma), bodyLevel(f), bodyAt)
 }
 
 /**
@@ -388,6 +397,8 @@ data class MixPlan(
     val alignBeats: Int = 1,
     /** The outgoing song fades out on its own; the blend leaves the fade to it until late. */
     val outFades: Boolean = false,
+    /** The incoming song eases in on its own (a quiet intro); the blend brings it up sooner. */
+    val inEases: Boolean = false,
     /** Where through the blend the bass changes hands (a bar line near the middle), and over how much of it. */
     val swapAt: Float = 0.5f,
     val swapWidth: Float = 0.25f,
@@ -420,6 +431,12 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
         outro >= FADE_OUT_MS -> outro.coerceIn(MIN_AUTOMIX_MS, MAX_AUTOMIX_MS)
         opening?.quietIntro == true -> EASED_AUTOMIX_MS
         else -> HARD_STOP_AUTOMIX_MS
+    }
+    // Intro over outro: the next song's quiet intro runs under the end of this one, so its full
+    // sound arrives as this one finishes. Longer over a fade-out than over a song that stops dead.
+    val introLength = opening?.bodyAtMs?.let { it - opening.startMs }
+    if (ending != null && introLength != null && introLength >= MIN_AUTOMIX_MS / 2) {
+        blend = introLength.coerceAtMost(if (outro >= FADE_OUT_MS) MAX_AUTOMIX_MS + 4_000 else INTRO_OVER_STOP_MS)
     }
     val outBeat = ending?.beat?.takeIf { it.sure }
     val inBeat = opening?.beat?.takeIf { it.sure }
@@ -474,6 +491,7 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
         outSpeed = if (abs(speed - 1f) < 0.004f) 1f else speed,
         alignBeats = align,
         outFades = outro >= FADE_OUT_MS,
+        inEases = opening?.quietIntro == true,
         swapAt = swapAt,
         swapWidth = swapWidth,
         levelDb = level,
@@ -502,12 +520,15 @@ fun stepCorrection(plan: MixPlan, outPositionMs: Long, inPositionMs: Long): Long
  * Gains for the outgoing and incoming songs at [p] of the way through a blend:
  * equal power, so the level holds. A song that [outFades] on its own is left at
  * full level for the first third and faded over the rest, so its fade isn't
- * doubled and it doesn't drop away before the next song is there.
+ * doubled and it doesn't drop away before the next song is there. One that
+ * [inEases] in (a quiet intro) is at its own level by 60 % of the way.
  */
-fun blendGains(p: Float, outFades: Boolean = false): Pair<Float, Float> {
+fun blendGains(p: Float, outFades: Boolean = false, inEases: Boolean = false): Pair<Float, Float> {
     val q = p.coerceIn(0f, 1f)
     val qo = if (outFades) smoothstep(0.35f, 1f, q) else q
-    return kotlin.math.cos(qo * Math.PI / 2).toFloat() to kotlin.math.sin(q * Math.PI / 2).toFloat()
+    // A quiet intro is soft already: it comes up to its own level over the first part of the blend.
+    val qi = if (inEases) smoothstep(0f, 0.6f, q) else q
+    return kotlin.math.cos(qo * Math.PI / 2).toFloat() to kotlin.math.sin(qi * Math.PI / 2).toFloat()
 }
 
 /**
@@ -570,6 +591,10 @@ private const val DOWNBEAT_SURE = 1.15
 private const val MIN_BARS = 3
 /** Songs further apart than this are levelled only this far. */
 private const val MAX_LEVEL_DB = 9f
+/** An intro has reached the song's body when it's within this of its level. */
+private const val BODY_REACHED_DB = 3f
+/** The longest intro laid over a song that stops dead. */
+private const val INTRO_OVER_STOP_MS = 8_000L
 
 
 // ---- Key -------------------------------------------------------------------------

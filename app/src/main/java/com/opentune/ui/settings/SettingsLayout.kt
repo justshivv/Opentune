@@ -63,7 +63,7 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "playback", "Playback", "Between songs, autoplay, headphones and music videos", Icons.Rounded.PlayCircle,
         listOf(
-            "Between songs" to listOf("Automix", "Crossfade", "Skip silence", "Preload upcoming songs"),
+            "Between songs" to listOf("Automix", "Automix performance", "Crossfade", "Skip silence", "Preload upcoming songs"),
             "Autoplay and suggestions" to listOf("Autoplay", "Recommendations", "Songs, not music videos", "Don't repeat songs in current session", "Smart shuffle"),
             "Headphones and the app" to listOf("Resume when headphones connect", "Pause at zero volume", "Background playback", "Stop music on close from recents"),
             "Music videos" to listOf("SponsorBlock", "SponsorBlock categories"),

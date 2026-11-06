@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +61,11 @@ internal fun AutomixSheet(onDismiss: () -> Unit) {
             )
             return@FloatingCard
         }
+        // Where the playing song is, each frame, for the playhead.
+        var now by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Long?>(null) }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            while (true) androidx.compose.runtime.withFrameMillis { now = MixState.clock?.invoke() }
+        }
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
             SongLine(p.out)
             // Fixed colours, so the two songs never come out alike whatever the theme.
@@ -68,7 +74,7 @@ internal fun AutomixSheet(onDismiss: () -> Unit) {
             val frame = Color(0xFF41A8F2)
             val window = MaterialTheme.colorScheme.surfaceContainerHighest
             Canvas(Modifier.fillMaxWidth().height(280.dp).padding(vertical = 10.dp)) {
-                drawTransition(p, outColor, inColor, frame, window)
+                drawTransition(p, outColor, inColor, frame, window, now)
             }
             val bars = p.plan.beatMs?.let { (p.plan.blendMs / (it * 4)).roundToInt().coerceAtLeast(1) }
                 ?: p.out.bpm?.let { (p.plan.blendMs / (60_000.0 / it * 4)).roundToInt().coerceAtLeast(1) }
@@ -80,6 +86,9 @@ internal fun AutomixSheet(onDismiss: () -> Unit) {
             )
             Box(Modifier.height(12.dp))
             SongLine(p.into)
+            if (p.reading) {
+                Text("Reading both songs…", Modifier.padding(top = 10.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
             Text(
                 listOfNotNull(
                     "Blends over ${"%.1f".format(p.plan.blendMs / 1000.0)} s",
@@ -123,7 +132,7 @@ private fun SongLine(side: MixState.Side) {
     }
 }
 
-private fun DrawScope.drawTransition(p: MixState.Picture, outColor: Color, inColor: Color, frame: Color, window: Color) {
+private fun DrawScope.drawTransition(p: MixState.Picture, outColor: Color, inColor: Color, frame: Color, window: Color, now: Long? = null) {
     val plan = p.plan
     val blend = plan.blendMs.coerceAtLeast(1_000)
     // On the playing song's clock: a little before the blend, to a little after its end.
@@ -174,6 +183,14 @@ private fun DrawScope.drawTransition(p: MixState.Picture, outColor: Color, inCol
     }
     drawPath(curve(0f, rising = false), GainLine, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
     drawPath(curve(size.height - laneH, rising = true), GainLine, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+
+    // Where the music is now, moving through the blend as it plays.
+    if (now != null && now in from..to) {
+        val px = x(now)
+        drawLine(Color.White.copy(alpha = 0.9f), Offset(px, 0f), Offset(px, size.height), 2.dp.toPx(), cap = StrokeCap.Round)
+        drawCircle(Color.White, 5.dp.toPx(), Offset(px, 0f))
+        drawCircle(Color.White, 5.dp.toPx(), Offset(px, size.height))
+    }
 }
 
 /** A song's loudness as mirrored bars along its lane; brighter inside the blend, faint where there's no sound. */

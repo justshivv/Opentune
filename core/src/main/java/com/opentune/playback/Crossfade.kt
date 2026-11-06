@@ -22,6 +22,7 @@ import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -96,6 +97,8 @@ internal class Crossfade(
     @Volatile private var phase = Phase.IDLE
     /** The playing song went silent while the next one loaded: start now rather than at the mix point. */
     @Volatile private var urgent = false
+    /** The plan of the blend under way, for the transition view's clock. */
+    @Volatile private var blendPlan: MixPlan? = null
 
     // The plan for the playing song, worked out once it's near its end.
     private var plan: MixPlan? = null
@@ -134,6 +137,14 @@ internal class Crossfade(
 
     fun start() {
         main.addListener(listener)
+        // The playing song's time for the transition view; through a blend, the song coming in
+        // carries it on, as it's what's heard.
+        MixState.clock = {
+            val bp = blendPlan
+            val t = tail?.player
+            if (bp != null && t != null && phase != Phase.LOADING) bp.mixAtMs + ((t.currentPosition - bp.inFromMs) * bp.outSpeed).toLong()
+            else main.currentPosition
+        }
         scope.launch {
             while (isActive) {
                 val wait = runCatching { check() }.onFailure { Log.w(TAG, "Crossfade check failed", it) }.getOrDefault(POLL_MS)
@@ -144,6 +155,7 @@ internal class Crossfade(
 
     fun release() {
         main.removeListener(listener)
+        MixState.clock = null
         mix?.cancel()
         planning?.cancel()
         releaseTail()
@@ -168,7 +180,7 @@ internal class Crossfade(
         if (key == lastMixed) return POLL_MS
         val position = main.currentPosition
         val left = duration - position
-        if (left > ANALYZE_AHEAD_MS) return POLL_MS
+        if (left > analyzeAhead()) return POLL_MS
 
         val next = main.getMediaItemAt(main.nextMediaItemIndex)
         // Planned again if the next song changes (the queue was edited).
@@ -177,6 +189,11 @@ internal class Crossfade(
             planFor = planKey
             plan = null
             planning?.cancel()
+            // The pair shows in the transition view at once, its waves filled in once read.
+            MixState.picture(MixState.Picture(
+                MixState.Side.of(item, duration, null, null), MixState.Side.of(next, null, null, null),
+                quickPlan(duration), settings.automix, reading = true,
+            ))
             planning = scope.launch { plan = makePlan(item, next, duration) }
         }
         // The song has gone silent near its end (a long fade to nothing, silence before the file
@@ -184,7 +201,11 @@ internal class Crossfade(
         // so it works whether or not the song could be read ahead.
         val silent = left in MIN_LEFT_MS..SILENCE_WINDOW_MS && position > duration / 2 && silentMs() >= SILENCE_SKIP_MS
         // Still reading the songs: plan without them if time is short.
-        val p = plan ?: if (silent || left <= quickPlanLeft()) quickPlan(duration).also { plan = it; planning?.cancel() } else return SOON_MS
+        val p = plan ?: if (silent || left <= quickPlanLeft()) quickPlan(duration).also {
+            plan = it
+            planning?.cancel()
+            MixState.upcoming.value?.let { pic -> MixState.picture(pic.copy(plan = it, reading = false)) }
+        } else return SOON_MS
         if (!silent && position < p.mixAtMs - PREP_MS) return ((p.mixAtMs - PREP_MS - position) / 2).coerceIn(SOON_MS, POLL_MS)
         if (busy()) return SOON_MS
         if (triesFor != key) { triesFor = key; tries = 0 }
@@ -200,11 +221,27 @@ internal class Crossfade(
     private fun quickPlan(duration: Long): MixPlan =
         if (settings.automix) automixPlan(duration, null, null) else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, null, null)
 
-    private suspend fun makePlan(item: MediaItem, next: MediaItem, duration: Long): MixPlan {
+    /** How long before a song's end the two songs are read: sooner the harder Automix is set to work. */
+    private fun analyzeAhead(): Long = when (settings.automixPerformance) {
+        com.opentune.data.settings.AutomixPerformance.EFFICIENT -> ANALYZE_AHEAD_MS
+        com.opentune.data.settings.AutomixPerformance.BALANCED -> ANALYZE_AHEAD_MS + 15_000
+        com.opentune.data.settings.AutomixPerformance.PERFORMANCE -> ANALYZE_AHEAD_MS + 45_000
+    }
+
+    private suspend fun makePlan(item: MediaItem, next: MediaItem, duration: Long): MixPlan = kotlinx.coroutines.coroutineScope {
         val outUri = analysisUri(item)
         val inUri = analysisUri(next)
-        val ending = outUri?.let { runCatching { analyzer.ending(it, duration) }.onFailure { if (it is CancellationException) throw it }.getOrNull() }
-        val opening = inUri?.let { runCatching { analyzer.opening(it) }.onFailure { if (it is CancellationException) throw it }.getOrNull() }
+        suspend fun <T> read(block: suspend () -> T): T? = runCatching { block() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
+        // Both songs at once, unless Automix is set to work one thread at a time.
+        val together = settings.automixPerformance.threads > 1
+        val endingRead = async(start = if (together) kotlinx.coroutines.CoroutineStart.DEFAULT else kotlinx.coroutines.CoroutineStart.LAZY) {
+            outUri?.let { read { analyzer.ending(it, duration) } }
+        }
+        val openingRead = async(start = if (together) kotlinx.coroutines.CoroutineStart.DEFAULT else kotlinx.coroutines.CoroutineStart.LAZY) {
+            inUri?.let { read { analyzer.opening(it) } }
+        }
+        val ending = endingRead.await()
+        val opening = openingRead.await()
         val p = if (settings.automix) automixPlan(duration, ending, opening)
             else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, ending, opening)
         Log.d(TAG, "Plan for ${item.mediaId} → ${next.mediaId}: $p")
@@ -212,10 +249,11 @@ internal class Crossfade(
             MixState.Side.of(item, duration, ending?.beat, ending?.wave, ending?.key),
             MixState.Side.of(next, null, opening?.beat, opening?.wave, opening?.key), p, settings.automix,
         ))
-        return p
+        p
     }
 
-    private fun label() = if (settings.automix) "Automix" else "Crossfade"
+    /** What the player says while two songs blend, in place of the quality badge. */
+    private fun label() = "Mixing"
 
     /**
      * One transition, start to finish:
@@ -269,7 +307,12 @@ internal class Crossfade(
                 // 2. In, silent, on the beat, at its own loudness gain.
                 runCatching { t.level() }.onFailure { Log.w(TAG, "Couldn't set the next song's level", it) }
                 phase = Phase.BLENDING
+                blendPlan = p
                 MixState.start(label())
+                // From here on the player shows the song coming in, with its own time.
+                MixState.show(MixState.Showing(next, nextIndex,
+                    durationMs = { tp.duration.takeIf { it > 0 } ?: durationOf(next) ?: 0L },
+                    positionMs = { tp.currentPosition }))
                 tp.playWhenReady = main.playWhenReady
                 if (!sounding(tp, START_TIMEOUT_MS)) {
                     Log.w(TAG, "The next song didn't start sounding (try $tries)")
@@ -282,7 +325,7 @@ internal class Crossfade(
                 val length = if (urgent) minOf(p.blendMs, URGENT_BLEND_MS) else minOf(p.blendMs, left)
                 ramp(length, stop = { main.currentMediaItemIndex != playing }) { q ->
                     MixState.progress(q * 0.92f)
-                    val (out, inc) = blendGains(q, p.outFades && !urgent)
+                    val (out, inc) = blendGains(q, p.outFades && !urgent, p.inEases && !urgent)
                     val (outTrim, inTrim) = if (matchLevels) levelTrims(p.levelDb, q) else 1f to 1f
                     main.volume = out * outTrim
                     tp.volume = inc * inTrim
@@ -304,6 +347,9 @@ internal class Crossfade(
                 MixState.progress(1f)
             } finally {
                 MixState.end()
+                // That transition is over: the view waits for the next one to be planned.
+                if (started) MixState.picture(null)
+                blendPlan = null
                 phase = Phase.IDLE
                 urgent = false
                 // However it ended, the main player is left at full level. A bail has taken the second player already.
@@ -510,7 +556,7 @@ internal class Crossfade(
 
 /**
  * Whether two songs are blending now, and how far through, for the player to
- * show "Automix" where the quality badge sits while it happens.
+ * show "Mixing" where the quality badge sits while it happens.
  */
 object MixState {
     data class Mix(val label: String, val progress: Float)
@@ -535,8 +581,15 @@ object MixState {
         }
     }
 
-    /** The next transition, as planned: the two songs, where and how they meet. */
-    data class Picture(val out: Side, val into: Side, val plan: MixPlan, val automix: Boolean)
+    /** The next transition, as planned: the two songs, where and how they meet; [reading] while they're still being read. */
+    data class Picture(val out: Side, val into: Side, val plan: MixPlan, val automix: Boolean, val reading: Boolean = false)
+
+    /**
+     * Where the playing song is, on its own clock, for the transition view's playhead; carried
+     * on through the blend by the song coming in. Read on the main thread only.
+     */
+    @Volatile var clock: (() -> Long)? = null
+        internal set
 
     private val _picture = kotlinx.coroutines.flow.MutableStateFlow<Picture?>(null)
     val upcoming: kotlinx.coroutines.flow.StateFlow<Picture?> = _picture
@@ -548,5 +601,17 @@ object MixState {
 
     internal fun start(label: String) { _now.value = Mix(label, 0f) }
     internal fun progress(p: Float) { _now.value?.let { _now.value = it.copy(progress = p.coerceIn(0f, 1f)) } }
-    internal fun end() { _now.value = null }
+    internal fun end() { _now.value = null; _showing.value = null }
+
+    /**
+     * The song a mix is bringing in, for the player to show from the moment the mix starts
+     * rather than once the main player takes it over: which queue entry it is, and its
+     * time, read from the second player. Only ever read on the main thread.
+     */
+    class Showing(val item: MediaItem, val index: Int, val durationMs: () -> Long, val positionMs: () -> Long)
+
+    private val _showing = kotlinx.coroutines.flow.MutableStateFlow<Showing?>(null)
+    val showing: kotlinx.coroutines.flow.StateFlow<Showing?> = _showing
+
+    internal fun show(s: Showing?) { _showing.value = s }
 }

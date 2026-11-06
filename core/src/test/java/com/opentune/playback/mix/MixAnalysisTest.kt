@@ -274,4 +274,20 @@ class MixAnalysisTest {
         assertEquals(200f, outAfter, 0f)
         assertEquals(0f, inAfter, 0f)
     }
+
+    @Test
+    fun aQuietIntroRunsUnderTheEnd() {
+        // Silent for 0.5 s, quiet to 8.5 s, then the song's body.
+        val f = song(0, 30_000, bpm = 120.0) { t -> when { t < 500 -> 0.0; t < 8_500 -> 0.15; else -> 1.0 } }
+        val o = analyzeOpening(f)!!
+        assertTrue(o.quietIntro)
+        assertEquals(8_500.0, o.bodyAtMs!!.toDouble(), 600.0)
+        // Over a fade-out the whole intro runs under it, so the body lands as the fade ends.
+        val plan = automixPlan(240_000, Ending(238_000, 228_000, null), o)
+        assertEquals((o.bodyAtMs!! - o.startMs).toDouble(), plan.blendMs.toDouble(), 1.0)
+        assertEquals(238_000L, plan.mixAtMs + plan.blendMs)
+        assertTrue(plan.inEases)
+        // The quiet intro is up to its own level well before the end of the blend.
+        assertEquals(1f, blendGains(0.6f, inEases = true).second, 1e-4f)
+    }
 }

@@ -449,6 +449,7 @@ private fun settingsSections(
     val pendingUpdate by UpdateCheck.pending.collectAsState()
     var updateBytes by remember { mutableStateOf(0L) }
     var playerStyleDialog by remember { mutableStateOf(false) }
+    var automixPerformanceDialog by remember { mutableStateOf(false) }
     var appIconDialog by remember { mutableStateOf(false) }
     var fontDialog by remember { mutableStateOf(false) }
     var languageDialog by remember { mutableStateOf(false) }
@@ -551,6 +552,16 @@ private fun settingsSections(
     if (hiddenDialog) HiddenDialog(onDismiss = { hiddenDialog = false })
     if (appIconDialog) AppIconDialog { appIconDialog = false }
     if (fontDialog) com.opentune.ui.theme.FontSettingsSheet { fontDialog = false }
+    if (automixPerformanceDialog) {
+        ChoiceSheet(
+            title = "Automix performance",
+            options = com.opentune.data.settings.AutomixPerformance.entries,
+            selected = pb.automixPerformance,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { v -> AppSettings.updatePlayback { it.copy(automixPerformance = v) } },
+            onDismiss = { automixPerformanceDialog = false },
+        )
+    }
     if (playerStyleDialog) {
         ChoiceSheet(
             title = "Player layout",
@@ -897,6 +908,9 @@ private fun settingsSections(
                         beta = true,
                     )
                 },
+                if (pb.automix) Entry("Automix performance", "automix threads analysis speed battery heat efficient balanced performance") {
+                    NavRow("Automix performance", { automixPerformanceDialog = true }, summary = pb.automixPerformance.summary, icon = Icons.Rounded.Speed, value = pb.automixPerformance.label)
+                } else null,
                 Entry("Crossfade", "fade blend transition overlap") {
                     SettingRow(
                         "Crossfade",

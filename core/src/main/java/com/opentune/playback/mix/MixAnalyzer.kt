@@ -32,9 +32,21 @@ import kotlin.coroutines.coroutineContext
  */
 @OptIn(UnstableApi::class)
 internal class MixAnalyzer(
-    /** Sources to try for a song's audio, in order: the cache first, then (for the opening) the network. */
+    /** How hard to work: how many songs are read at once, and how much of each. */
+    private val performance: () -> com.opentune.data.settings.AutomixPerformance = { com.opentune.data.settings.AutomixPerformance.BALANCED },
+    /** Sources to try for a song's audio, in order: the cache first, then the network. */
     private val reader: (uri: Uri, network: Boolean) -> List<DataSource.Factory>,
 ) {
+    private val workers = HashMap<Int, kotlinx.coroutines.CoroutineDispatcher>()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private fun worker(): kotlinx.coroutines.CoroutineDispatcher = synchronized(workers) {
+        val n = performance().threads
+        workers.getOrPut(n) { Dispatchers.Default.limitedParallelism(n) }
+    }
+
+    private val reads get() = performance() == com.opentune.data.settings.AutomixPerformance.PERFORMANCE
+
     private val endings = object : LinkedHashMap<String, Ending?>(8, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Ending?>?) = size > KEEP
     }
@@ -45,8 +57,10 @@ internal class MixAnalyzer(
     suspend fun ending(uri: Uri, durationMs: Long): Ending? {
         val key = "$uri@$durationMs"
         synchronized(endings) { if (endings.containsKey(key)) return endings[key] }
-        val from = max(0L, durationMs - ENDING_SPAN_MS)
-        val d = features(uri, from, durationMs, network = false)
+        val from = max(0L, durationMs - if (reads) LONG_ENDING_SPAN_MS else ENDING_SPAN_MS)
+        // From the cache when the song is all there, else its last stretch from the network:
+        // read from the cache alone, a song only part cached got no reading at all.
+        val d = features(uri, from, durationMs, network = true)
         val result = d?.let { analyzeEnding(it.features, durationMs, it.chroma) }
         Log.d(TAG, "Ending of $uri: $result")
         synchronized(endings) { endings[key] = result }
@@ -56,7 +70,7 @@ internal class MixAnalyzer(
     suspend fun opening(uri: Uri): Opening? {
         val key = uri.toString()
         synchronized(openings) { if (openings.containsKey(key)) return openings[key] }
-        val d = features(uri, 0L, OPENING_SPAN_MS, network = true)
+        val d = features(uri, 0L, if (reads) LONG_OPENING_SPAN_MS else OPENING_SPAN_MS, network = true)
         val result = d?.let { analyzeOpening(it.features, it.chroma) }
         Log.d(TAG, "Opening of $uri: $result")
         synchronized(openings) { openings[key] = result }
@@ -66,7 +80,7 @@ internal class MixAnalyzer(
     /** A stretch of a song read: its loudness and onsets, and how much of each note it holds (for its key). */
     private class Decoded(val features: Features, val chroma: FloatArray?)
 
-    private suspend fun features(uri: Uri, fromMs: Long, toMs: Long, network: Boolean): Decoded? = withContext(Dispatchers.Default) {
+    private suspend fun features(uri: Uri, fromMs: Long, toMs: Long, network: Boolean): Decoded? = withContext(worker()) {
         for (factory in reader(uri, network)) {
             val f = runCatching { decode(factory, uri, fromMs, toMs) }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
@@ -271,7 +285,11 @@ internal class MixAnalyzer(
         /** The last stretch of a song looked at: room for a long fade-out and the beat before it. */
         const val ENDING_SPAN_MS = 45_000L
         const val OPENING_SPAN_MS = 30_000L
-        const val DECODE_LIMIT_MS = 12_000L
+        /** On Performance, more of each: a longer fade or intro and more bars to find the beat in. */
+        const val LONG_ENDING_SPAN_MS = 60_000L
+        const val LONG_OPENING_SPAN_MS = 40_000L
+        /** A reading that takes longer than this is given up (a slow network, a busy phone). */
+        const val DECODE_LIMIT_MS = 25_000L
         const val MAX_BYTES = 40L * 1024 * 1024
     }
 }
