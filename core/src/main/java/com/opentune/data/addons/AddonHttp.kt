@@ -22,7 +22,14 @@ object AddonHttp {
         .cookieJar(CookieJar.NO_COOKIES).authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE)
         .followRedirects(false).followSslRedirects(false)
         .callTimeout(8, TimeUnit.SECONDS).connectTimeout(4, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS)
-        .dns { host -> Dns.SYSTEM.lookup(host).also { addresses -> if (addresses.isEmpty() || addresses.any { !publicAddress(it) }) throw java.net.UnknownHostException("Add-ons must use a public HTTPS address.") } }
+        .dns { host ->
+            Dns.SYSTEM.lookup(host).also { addresses ->
+                // "localhost" is an add-on on this device (an IP address given outright never gets here);
+                // it may only mean this device, and nothing else may be a private address.
+                val allowed = if (AddonProtocol.localHost(host)) addresses.all { it.isLoopbackAddress } else addresses.all(::publicAddress)
+                if (addresses.isEmpty() || !allowed) throw java.net.UnknownHostException("Add-ons must use a public HTTPS address, or http on this device.")
+            }
+        }
         .build() }
     val mediaClient by lazy { client.newBuilder().callTimeout(0, TimeUnit.MILLISECONDS)
         .readTimeout(25, TimeUnit.SECONDS).followRedirects(true)
@@ -39,6 +46,7 @@ object AddonHttp {
         // Every hop, redirects included, must stay on a public address.
         .addNetworkInterceptor { chain ->
             AddonProtocol.url(chain.request().url.toString())
+            if (!AddonProtocol.redirectAllowed(chain.call().request().url, chain.request().url)) throw IOException("An add-on can't send the app to this device's own services")
             chain.proceed(chain.request())
         }.build() }
     private fun publicAddress(a: InetAddress): Boolean = !a.isAnyLocalAddress && !a.isLoopbackAddress && !a.isLinkLocalAddress && !a.isSiteLocalAddress && !a.isMulticastAddress &&
@@ -62,14 +70,18 @@ object AddonHttp {
     fun lengthOf(url: String): Long? = synchronized(lengths) { lengths[url] }
 
     private suspend fun fetch(url: String, limit: Int, prefix: Boolean, agent: String?): ByteArray {
-        var address = AddonProtocol.url(url)
+        val first = AddonProtocol.url(url)
+        var address = first
         repeat(5) {
             var outgoing = Request.Builder().url(address).header("Accept", if (prefix) "*/*" else "application/json")
                 .apply { if (agent != null) header("User-Agent", agent) }
                 .apply { if (prefix) header("Range", "bytes=0-${limit - 1}") }.build()
             if (FirstPartyAddonAuth.protects(address)) outgoing = FirstPartyAddonAuth.authorize(outgoing)
             val response = request(outgoing, limit, prefix)
-            if (response.redirect != null) { address = AddonProtocol.url(address.resolve(response.redirect)?.toString() ?: error("Invalid redirect")) }
+            if (response.redirect != null) {
+                address = AddonProtocol.url(address.resolve(response.redirect)?.toString() ?: error("Invalid redirect"))
+                if (!AddonProtocol.redirectAllowed(first, address)) throw IOException("An add-on can't send the app to this device's own services")
+            }
             else {
                 response.total?.let { total -> synchronized(lengths) { lengths[url] = total } }
                 return response.bytes
