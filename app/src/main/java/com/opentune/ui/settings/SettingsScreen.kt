@@ -1166,7 +1166,11 @@ private fun settingsSections(
                     )
                 },
                 Entry("Wavy seek bar", "wave progress slider") {
-                    ToggleRow("Wavy seek bar", ui.wavySeekbar, { v -> AppSettings.updateUi { it.copy(wavySeekbar = v) } }, summary = "The played part of the bar ripples while music plays", icon = Icons.Rounded.Waves)
+                    // The Apple Music inspired player keeps its bar plain, so there it's shown off and can't be turned on.
+                    val appleStyle = ui.playerStyle == PlayerStyle.APPLE_MUSIC
+                    ToggleRow("Wavy seek bar", ui.wavySeekbar && !appleStyle, { v -> AppSettings.updateUi { it.copy(wavySeekbar = v) } },
+                        summary = if (appleStyle) "Not with the Apple Music inspired player, whose bar stays plain" else "The played part of the bar ripples while music plays",
+                        icon = Icons.Rounded.Waves, enabled = !appleStyle)
                 },
                 Entry("Lyric preview while seeking", "scrub seek bar lyric line preview bubble drag") {
                     ToggleRow("Lyric preview while seeking", ui.lyricScrubPreview, { v -> AppSettings.updateUi { it.copy(lyricScrubPreview = v) } }, summary = "Dragging the seek bar shows the line sung at that point above your finger", icon = Icons.Rounded.Lyrics)
