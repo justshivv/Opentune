@@ -218,8 +218,6 @@ class PlayerActions(
     val moveIndex: (Int, Int) -> Unit = { _, _ -> },
     val openTogether: () -> Unit = {},
     val openEqualizer: () -> Unit = {},
-    /** Repeat the playing song on its own, or stop; the circle beside the queue's modes. */
-    val toggleRepeatOne: () -> Unit = {},
 )
 
 @Composable
@@ -270,7 +268,6 @@ fun PlayerScreen(
             moveIndex = vm::moveQueueItem,
             openTogether = onTogether,
             openEqualizer = onEqualizer,
-            toggleRepeatOne = vm::toggleRepeatOne,
         )
     }
     PlayerLayout(
@@ -1267,16 +1264,6 @@ fun PlayerLayout(
                             ModesPill(state.shuffleMode, state.smartShuffleAvailable, state.repeatMode, actions.toggleShuffle, actions.cycleRepeat, filled = false, enabled = enabled)
                         },
                     )
-                    // Beside the queue's modes, not one of them: repeat just this song, in a circle of its own.
-                    androidx.compose.animation.AnimatedVisibility(
-                        inQueueNow,
-                        enter = if (state.ui.reduceAnimation) androidx.compose.animation.EnterTransition.None
-                        else fadeIn(tween(220, delayMillis = 80)) + androidx.compose.animation.expandHorizontally(tween(260)),
-                        exit = if (state.ui.reduceAnimation) androidx.compose.animation.ExitTransition.None
-                        else fadeOut(tween(120)) + androidx.compose.animation.shrinkHorizontally(tween(220)),
-                    ) {
-                        RepeatSongButton(state.repeatMode, actions.toggleRepeatOne, Modifier.padding(horizontal = 8.dp))
-                    }
                     GlassToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
                 }
                 if (!minimal && roomy) Text(

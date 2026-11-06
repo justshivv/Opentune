@@ -565,34 +565,13 @@ fun ModesPill(
     }
 }
 
-/**
- * Repeat the song that's playing, on its own: a circle of the same glass as the modes pill
- * beside it, lit while it's on. It is the same as stopping on "Repeat one" with the pill's
- * repeat button, without going round off and all to get there.
- */
-@Composable
-fun RepeatSongButton(repeatMode: Int, onToggle: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
-    val haptics = com.opentune.ui.components.rememberHaptics()
-    val on = repeatMode == Player.REPEAT_MODE_ONE
-    Box(modifier.size(52.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
-        PillSegment(
-            Icons.Rounded.RepeatOne,
-            if (on) "Repeating this song" else "Repeat this song",
-            on, SegmentMotion.SPIN, enabled = enabled, width = 52.dp,
-        ) {
-            haptics.pattern(if (on) Haptics.Pattern.OFF else Haptics.Pattern.REPEAT_ONE)
-            onToggle()
-        }
-    }
-}
-
 private enum class SegmentMotion { WIGGLE, SPIN, PULSE }
 
 /** Whether the shuffle button has said, this run, that a second tap gives smart shuffle. */
 private var smartHintShown = false
 
 @Composable
-private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motion: SegmentMotion, badge: ImageVector? = null, enabled: Boolean = true, width: androidx.compose.ui.unit.Dp = 60.dp, onClick: () -> Unit) {
+private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motion: SegmentMotion, badge: ImageVector? = null, enabled: Boolean = true, onClick: () -> Unit) {
     val bg by animateColorAsState(if (active) Color.White.copy(alpha = 0.20f) else Color.Transparent, label = "seg")
     val fg by animateColorAsState(if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, label = "segFg")
     val reduce = AppSettings.ui.collectAsState().value.reduceAnimation
@@ -606,7 +585,7 @@ private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motio
         kick.snapTo(0f)
     }
     Box(
-        Modifier.fillMaxHeight().width(width).background(bg).clickable(enabled = enabled) { taps++; onClick() },
+        Modifier.fillMaxHeight().width(60.dp).background(bg).clickable(enabled = enabled) { taps++; onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
