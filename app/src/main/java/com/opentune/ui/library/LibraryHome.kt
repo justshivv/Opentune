@@ -34,6 +34,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -266,10 +267,12 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     val rows = rememberPlaylistRows(nav)
     // In the list, which sources show all their playlists rather than the first few.
     val openGroups = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
-    // The pinned ones, then the most played; Show all has the rest.
-    val top = remember(rows, libraryUi.pinnedPlaylists) {
-        val pinned = rows.filter { it.pin in libraryUi.pinnedPlaylists }
-        (pinned + rows.filter { it !in pinned }.sortedByDescending { it.plays }).take(5)
+    // The pinned ones, then the most played; Show all has the rest. Spotify's have their own
+    // page (the Spotify row above), so they show here only when pinned.
+    val shownRows = remember(rows, libraryUi.pinnedPlaylists) { rows.filter { it.source != "Spotify" || it.pin in libraryUi.pinnedPlaylists } }
+    val top = remember(shownRows, libraryUi.pinnedPlaylists) {
+        val pinned = shownRows.filter { it.pin in libraryUi.pinnedPlaylists }
+        (pinned + shownRows.filter { it !in pinned }.sortedByDescending { it.plays }).take(5)
     }
 
     val page: @Composable () -> Unit = { LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -321,21 +324,29 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         nav.together,
                         Modifier.weight(1f),
                     )
-                    val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
-                    val spotifyLists by LibraryStore.playlists.collectAsState()
-                    val fromSpotify = remember(spotifyLists) { spotifyLists.count { it.spotifyId != null } }
-                    Shortcut(
-                        Icons.Rounded.LibraryMusic,
-                        "Spotify",
-                        when {
-                            spotifyOn && fromSpotify > 0 -> if (fromSpotify == 1) "1 playlist" else "$fromSpotify playlists"
-                            spotifyOn -> "Your playlists"
-                            else -> "Connect or import"
-                        },
-                        nav.spotify,
-                        Modifier.weight(1f),
-                        logo = com.opentune.R.drawable.ic_spotify,
-                    )
+                }
+                // Spotify: a row of its own, its playlists on their own page.
+                val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+                val spotifyLists by LibraryStore.playlists.collectAsState()
+                val fromSpotify = remember(spotifyLists) { spotifyLists.count { it.spotifyId != null } }
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).pressable(nav.spotify, 0.98f)
+                        .padding(start = 4.dp, end = 2.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(40.dp))
+                    Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                        Text("Spotify", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            when {
+                                fromSpotify > 0 -> if (fromSpotify == 1) "1 playlist" else "$fromSpotify playlists"
+                                spotifyOn -> "Your playlists"
+                                else -> "Connect or import"
+                            },
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -361,7 +372,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(30.dp))
                 })
             }
-            playlistGroups(rows, libraryUi.pinnedPlaylists).forEach { (group, inGroup) ->
+            playlistGroups(shownRows, libraryUi.pinnedPlaylists).forEach { (group, inGroup) ->
                 item(key = "group:$group") { GroupLabel(group) }
                 val open = group == PINNED || openGroups[group] == true
                 val visible = if (open) inGroup else inGroup.take(LIST_FOLD)
@@ -427,8 +438,17 @@ fun AllPlaylistsScreen(
     var sorting by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf(false) }
     if (naming) NewPlaylistDialog(signedIn, onDismiss = { naming = false }) { name, privacy -> naming = false; nav.playlist(LibraryStore.createPlaylist(name, privacy = privacy)) }
-    val rows = rememberPlaylistRows(nav).filter { (it.source == "Spotify") == spotify }
+    // The Spotify page: Spotify's playlists. Show all: the rest, and a Spotify one only when pinned.
+    val rows = rememberPlaylistRows(nav).filter { if (spotify) it.source == "Spotify" else it.source != "Spotify" || it.pin in pinned }
     val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+    // The Spotify page brings Spotify's latest over once as it opens, behind the list already
+    // here, so it shows at once and changes only if Spotify has something new.
+    val spotifySync by com.opentune.data.spotify.SpotifySync.status.collectAsState()
+    if (spotify) LaunchedEffect(spotifyOn) {
+        if (spotifyOn) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true)
+        }
+    }
     val shown = remember(rows, order, pinned) {
         val top = rows.filter { it.pin in pinned }
         top + order.sort(rows.filter { it !in top })
@@ -486,6 +506,10 @@ fun AllPlaylistsScreen(
                     com.opentune.ui.components.AccountButton(nav.settings, plain = true)
                 }
             })
+        }
+        // Bringing Spotify's latest over: a thin bar under the title while it runs.
+        if (spotify && spotifySync.running) item(key = "syncing", span = { full }) {
+            androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(2.dp))
         }
         if (spotify) {
             if (shown.isEmpty()) item(key = "spotify-empty", span = { full }) {

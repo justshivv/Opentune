@@ -623,7 +623,23 @@ object MusicRepository {
     /** The signed-in account's playlists on YouTube Music, without the "New playlist" tile. */
     suspend fun libraryPlaylists(): List<ShelfItem> = io {
         val owner = com.opentune.data.library.LibraryCache.owner()
-        InnertubeParser.parseLibraryItems(Innertube.browse("FEmusic_liked_playlists")).filter { it.browseId != null }
+        // Every page of them: YouTube Music sends a library's playlists a page at a time, and
+        // reading only the first left Show all short of the account's later playlists.
+        val first = InnertubeParser.parseLibraryItemPage(Innertube.browse("FEmusic_liked_playlists"))
+        val all = LinkedHashMap<String, ShelfItem>()
+        first.items.forEach { item -> item.browseId?.let { all.putIfAbsent(it, item) } }
+        var token = first.continuation
+        var pages = 0
+        while (token != null && pages++ < LIBRARY_PAGES) {
+            val page = runCatching { InnertubeParser.parseLibraryItemPage(Innertube.browseContinuation(token!!)) }
+                .onFailure { if (it is CancellationException) throw it }.getOrNull() ?: break
+            val before = all.size
+            page.items.forEach { item -> item.browseId?.let { all.putIfAbsent(it, item) } }
+            // A page with nothing new (or the same token again) is the end.
+            if (all.size == before || page.continuation == token) break
+            token = page.continuation
+        }
+        all.values.toList()
             .also { items ->
                 com.opentune.data.library.LibraryCache.savePlaylists(items, owner)
                 // Fill saved playlists one at a time, without blocking the Library screen.
@@ -741,4 +757,7 @@ object MusicRepository {
     }
 
     private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
+
+    /** The most pages of library playlists read: a few thousand playlists. */
+    private const val LIBRARY_PAGES = 25
 }
