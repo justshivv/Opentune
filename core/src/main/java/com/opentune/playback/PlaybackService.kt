@@ -1889,18 +1889,25 @@ class PlaybackService : MediaLibraryService() {
         item.localConfiguration?.uri?.let(::selectedUri)?.let { beforeSwap = id to it }
         val next = item.buildUpon().setUri(uri).setMimeType(externalStreamKeyOf(uri)?.let { ExternalStreams.get(id, it)?.mimeType }).build()
         loadFailure = null
-        return performUpgradeHandoff(
-            bridge = {
-                if (player.isPlaying && !BitPerfectUsb.active) bridgedSwap(player, index, id, next, superseded)
-                else UpgradeBridgeResult.UNAVAILABLE
-            },
-            stillCurrent = {
-                !superseded() && player.currentMediaItemIndex == index && player.currentMediaItem?.mediaId == id &&
-                    player.currentMediaItem?.localConfiguration?.uri == item.localConfiguration?.uri && crossfade?.blending != true
-            },
-            prebuffer = { prebuffer(player, next, superseded) },
-            replace = { replaceUpgrade(player, index, id, next) },
-        )
+        // The spinner holds off while the stream switches (see PlayerConnection.refreshLoading).
+        PlaybackRequests.switchingStream = true
+        return try {
+            performUpgradeHandoff(
+                bridge = {
+                    if (player.isPlaying && !BitPerfectUsb.active) bridgedSwap(player, index, id, next, superseded)
+                    else UpgradeBridgeResult.UNAVAILABLE
+                },
+                stillCurrent = {
+                    !superseded() && player.currentMediaItemIndex == index && player.currentMediaItem?.mediaId == id &&
+                        player.currentMediaItem?.localConfiguration?.uri == item.localConfiguration?.uri && crossfade?.blending != true
+                },
+                prebuffer = { prebuffer(player, next, superseded) },
+                replace = { replaceUpgrade(player, index, id, next) },
+            )
+        } finally {
+            PlaybackRequests.switchingStream = false
+            PlaybackRequests.switchEndedAt = SystemClock.elapsedRealtime()
+        }
     }
 
     private suspend fun replaceUpgrade(player: ExoPlayer, index: Int, id: String, next: MediaItem): Boolean {

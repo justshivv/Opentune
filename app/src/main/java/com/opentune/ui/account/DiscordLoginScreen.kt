@@ -197,6 +197,7 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
         service = "Discord",
         brand = DiscordBlurple,
         icon = Icons.Rounded.Headphones,
+        logo = com.opentune.R.drawable.ic_discord,
         gives = "The song you play on your Discord profile, as \"Listening to OpenTune\"",
         loading = loading,
         onBack = leave,

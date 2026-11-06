@@ -156,13 +156,13 @@ internal fun ArtistSignatureSettings() {
     if (ui.artistSignatures) {
         com.opentune.ui.components.SettingRow(
             "Signature service",
-            summary = ui.signatureApi.removePrefix("https://").removePrefix("http://"),
+            summary = ArtistSignatures.shown(ui.signatureApi).removePrefix("https://").removePrefix("http://"),
             icon = androidx.compose.material.icons.Icons.Rounded.Link,
             onClick = { editing = true },
         )
     }
     if (editing) {
-        var address by remember { mutableStateOf(ui.signatureApi) }
+        var address by remember { mutableStateOf(ArtistSignatures.shown(ui.signatureApi)) }
         var problem by remember { mutableStateOf<String?>(null) }
         var checking by remember { mutableStateOf(false) }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -178,7 +178,7 @@ internal fun ArtistSignatureSettings() {
                     androidx.compose.material3.OutlinedTextField(
                         address, { address = it; problem = null },
                         singleLine = true,
-                        placeholder = { Text(ArtistSignatures.DEFAULT_API) },
+                        placeholder = { Text("https://") },
                         isError = problem != null,
                         supportingText = problem?.let { p -> { Text(p) } },
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),

@@ -102,6 +102,13 @@ internal class Crossfade(
 
     // The plan for the playing song, worked out once it's near its end.
     private var plan: MixPlan? = null
+    /** Where the playing song's sound stops, as read from it; null when it couldn't be read. */
+    @Volatile private var soundEndsMs: Long? = null
+    /** For a song that couldn't be read: whether the rest of it, from where it went quiet, is silent. */
+    private var restSilent: Boolean? = null
+    private var restCheck: Job? = null
+    private var restCheckFor: Pair<Int, String>? = null
+    private var restCheckFrom = 0L
     private var planFor: Triple<Int, String, String>? = null
     private var planning: Job? = null
 
@@ -166,8 +173,12 @@ internal class Crossfade(
     /** Looks at where the song is and starts what's due; returns how long to wait before looking again. */
     private fun check(): Long {
         if (tail != null) {
-            // The next song is loading and the playing one has gone silent near its end: go now.
-            if (phase == Phase.LOADING && silentMs() >= SILENCE_SKIP_MS) urgent = true
+            // The next song is loading and the playing one's sound has ended for good: go now.
+            if (phase == Phase.LOADING && silentMs() >= SILENCE_SKIP_MS) {
+                val item = main.currentMediaItem
+                val duration = main.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: item?.let(durationOf)
+                if (item != null && duration != null && endedForGood(item, main.currentPosition, duration)) urgent = true
+            }
             return SOON_MS
         }
         if (!enabled || BitPerfectUsb.active) return POLL_MS
@@ -188,6 +199,7 @@ internal class Crossfade(
         if (planFor != planKey) {
             planFor = planKey
             plan = null
+            soundEndsMs = null
             planning?.cancel()
             // The pair shows in the transition view at once, its waves filled in once read.
             MixState.picture(MixState.Picture(
@@ -199,7 +211,8 @@ internal class Crossfade(
         // The song has gone silent near its end (a long fade to nothing, silence before the file
         // stops): the next song is loaded and started straight away. Seen as the sound is decoded,
         // so it works whether or not the song could be read ahead.
-        val silent = left in MIN_LEFT_MS..SILENCE_WINDOW_MS && position > duration / 2 && silentMs() >= SILENCE_SKIP_MS
+        val silent = left in MIN_LEFT_MS..SILENCE_WINDOW_MS && position > duration / 2 && silentMs() >= SILENCE_SKIP_MS &&
+            endedForGood(item, position, duration)
         // Still reading the songs: plan without them if time is short.
         val p = plan ?: if (silent || left <= quickPlanLeft()) quickPlan(duration).also {
             plan = it
@@ -220,6 +233,37 @@ internal class Crossfade(
 
     private fun quickPlan(duration: Long): MixPlan =
         if (settings.automix) automixPlan(duration, null, null) else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, null, null)
+
+    /**
+     * Whether the quiet the playing song has gone into is its end, not a pause in it. Read
+     * from the song: past where its sound stops. Not read: the rest of the file is checked
+     * to be silent first (in the background; false until it's known), and failing that the
+     * quiet has to last [UNSURE_SILENCE_MS]. So a quiet moment before a last chord never
+     * starts the next song early.
+     */
+    private fun endedForGood(item: MediaItem, position: Long, duration: Long): Boolean {
+        soundEndsMs?.let { return position >= it - END_SLACK_MS }
+        val key = main.currentMediaItemIndex to item.mediaId
+        // Sound was still to come after the last quiet spell; a later one is checked again.
+        if (restCheckFor == key && restSilent == false && position - restCheckFrom > RECHECK_MS) restCheckFor = null
+        if (restCheckFor != key) {
+            restCheckFor = key
+            restCheckFrom = position
+            restSilent = null
+            restCheck?.cancel()
+            val uri = analysisUri(item)
+            restCheck = if (uri == null) null else scope.launch {
+                restSilent = runCatching { analyzer.restIsSilent(uri, position, duration) }
+                    .onFailure { if (it is CancellationException) throw it }.getOrNull()
+                Log.d(TAG, "Rest of ${item.mediaId} from ${position}ms silent: $restSilent")
+            }
+        }
+        return when (restSilent) {
+            true -> true
+            false -> false
+            null -> restCheck?.isActive != true && silentMs() >= UNSURE_SILENCE_MS
+        }
+    }
 
     /** How long before a song's end the two songs are read: sooner the harder Automix is set to work. */
     private fun analyzeAhead(): Long = when (settings.automixPerformance) {
@@ -242,6 +286,7 @@ internal class Crossfade(
         }
         val ending = endingRead.await()
         val opening = openingRead.await()
+        soundEndsMs = ending?.endMs
         val p = if (settings.automix) automixPlan(duration, ending, opening)
             else crossfadePlan(duration, settings.crossfadeSeconds * 1000L, ending, opening)
         Log.d(TAG, "Plan for ${item.mediaId} → ${next.mediaId}: $p")
@@ -524,6 +569,11 @@ internal class Crossfade(
         const val PREP_MS = 15_000L
         /** Silence this long near a song's end, as it's decoded, and the next song starts. */
         const val SILENCE_SKIP_MS = 1_500L
+        /** Silence this long counts as the end when the rest of the song couldn't be checked. */
+        const val UNSURE_SILENCE_MS = 4_000L
+        /** A reading of where the sound stops is trusted to within this. */
+        const val END_SLACK_MS = 250L
+        const val RECHECK_MS = 3_000L
         /** Only this near the end does silence count as the song's ending. */
         const val SILENCE_WINDOW_MS = 40_000L
         /** A silent ending's blend: the next song comes in quickly, over nothing. */

@@ -650,7 +650,7 @@ enum class DockMotion(val label: String, val summary: String) {
 enum class CanvasLook(val label: String, val summary: String) {
     TINT("Tint", "From the title down the Canvas fades into the song's own colour"),
     SHADE("Dark", "From the title down the Canvas fades to near black"),
-    FROST("Frosted", "From the title down the Canvas blurs into frosted glass, where the phone can blur video"),
+    FROST("Frosted", "From the title down the Canvas blurs into frosted glass"),
     NONE("Plain", "Only a light darkening behind the controls"),
 }
 

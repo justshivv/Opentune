@@ -31,7 +31,9 @@ data class ArtistSignature(val imageUrl: String, val aspect: Float, val svgUrl: 
  */
 object ArtistSignatures {
     private const val TAG = "ArtistSignatures"
-    const val DEFAULT_API = "https://proud-cascade-1654.de.deplexo.com"
+    const val DEFAULT_API = "https://artistsignature.velixir.run"
+    /** The service's earlier address, moved to [DEFAULT_API]: a setting still on it follows. */
+    private const val OLD_API = "https://proud-cascade-1654.de.deplexo.com"
     /** How wide an SVG from Wikimedia is asked for as a PNG: one of the widths Wikimedia renders. */
     private const val RENDER_WIDTH = 960
 
@@ -70,7 +72,12 @@ object ArtistSignatures {
     }
 
     /** An http(s) address without the slash at its end, or null for anything else. */
-    fun normalize(api: String): String? = api.trim().trimEnd('/').takeIf { it.startsWith("https://") || it.startsWith("http://") }
+    fun normalize(api: String): String? = api.trim().trimEnd('/')
+        .let { if (it == OLD_API) DEFAULT_API else it }
+        .takeIf { it.startsWith("https://") || it.startsWith("http://") }
+
+    /** The address to show for a setting: the earlier default shows as the current one. */
+    fun shown(api: String): String = normalize(api) ?: api
 
     fun clear() = cache.clear()
 

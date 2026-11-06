@@ -160,6 +160,8 @@ internal fun LoopingVideo(
     maxPx: Int = 1080,
     /** The most bits a second worth spending on a silent loop. */
     maxBitrate: Int = 4_000_000,
+    /** Told of the view the picture is drawn in (null once it's gone), for a frost made from its frames. */
+    onView: ((TextureView?) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -208,6 +210,7 @@ internal fun LoopingVideo(
             if (wants) SharedLoops.want(entry, false)
             wants = false
             view?.let { SharedLoops.hide(entry, it) }
+            onView?.invoke(null)
             SharedLoops.release(entry)
         }
     }
@@ -217,6 +220,7 @@ internal fun LoopingVideo(
                 SharedLoops.show(entry, v)
                 v.addOnLayoutChangeListener { l, _, _, _, _, _, _, _, _ -> crop(l as TextureView, entry.size.value, bars) }
                 view = v
+                onView?.invoke(v)
             }
         },
         update = { v -> crop(v, size, bars) },

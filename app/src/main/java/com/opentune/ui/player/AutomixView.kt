@@ -64,7 +64,9 @@ internal fun AutomixSheet(onDismiss: () -> Unit) {
         // Where the playing song is, each frame, for the playhead.
         var now by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Long?>(null) }
         androidx.compose.runtime.LaunchedEffect(Unit) {
-            while (true) androidx.compose.runtime.withFrameMillis { now = MixState.clock?.invoke() }
+            // Nothing playing (no clock): no playhead, and nothing redrawn each frame.
+            val clock = MixState.clock ?: return@LaunchedEffect
+            while (true) androidx.compose.runtime.withFrameMillis { now = clock() }
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
             SongLine(p.out)

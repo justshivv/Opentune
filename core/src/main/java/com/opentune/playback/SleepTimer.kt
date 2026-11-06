@@ -56,6 +56,11 @@ object SleepTimer {
 
 /** Requests from the UI that the service carries out directly (same process). */
 object PlaybackRequests {
+    /** True while a quality upgrade is switching the song onto another stream. */
+    @Volatile var switchingStream = false
+    /** When the last stream switch ended (elapsedRealtime), for the moment after it to settle. */
+    @Volatile var switchEndedAt = 0L
+
     /**
      * While a quality switch has another player sounding the song (or the song
      * silent for a moment between streams), where the song really is; null

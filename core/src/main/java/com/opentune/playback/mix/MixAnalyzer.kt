@@ -77,6 +77,18 @@ internal class MixAnalyzer(
         return result
     }
 
+    /**
+     * Whether [uri] is silent from [fromMs] to its end at [durationMs], read from the file
+     * itself: true when nothing in the rest rises above a whisper, false when there's sound
+     * still to come (a pause, then a last chord), null when it couldn't be read.
+     */
+    suspend fun restIsSilent(uri: Uri, fromMs: Long, durationMs: Long): Boolean? {
+        if (durationMs - fromMs < 300) return true
+        val d = features(uri, fromMs, durationMs, network = true) ?: return null
+        val loudest = d.features.powerDb.maxOrNull() ?: return null
+        return loudest < SILENT_BELOW_DBFS
+    }
+
     /** A stretch of a song read: its loudness and onsets, and how much of each note it holds (for its key). */
     private class Decoded(val features: Features, val chroma: FloatArray?)
 
@@ -201,7 +213,8 @@ internal class MixAnalyzer(
                 if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
                 if (info.presentationTimeUs > toUs) break
             }
-            if (energy.size < MIN_HOPS || firstUs < 0) return null
+            // A short stretch (the silent end of a song) has few hops; the reading of a whole span needs more.
+        if (energy.size < minOf(MIN_HOPS.toLong(), (toMs - fromMs) / 20).toInt().coerceAtLeast(10) || firstUs < 0) return null
             val notes = runCatching { chroma(slow.raw(), slow.size, rate / decimate) }.getOrNull()
             return Decoded(Features.of(firstUs / 1000, hop * 1000.0 / rate, energy.toArray(), low.toArray()), notes)
         } finally {
@@ -276,6 +289,8 @@ internal class MixAnalyzer(
 
     private companion object {
         const val TAG = "Automix"
+        /** Below this, a stretch counts as silent (about the hiss of a quiet recording). */
+        const val SILENT_BELOW_DBFS = -50f
         const val KEEP = 12
         const val HOP_MS = 10.0
         const val LOW_HZ = 150.0

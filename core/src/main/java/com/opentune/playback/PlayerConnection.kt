@@ -96,13 +96,18 @@ class PlayerConnection(private val context: Context) {
     private var connectionWatch: Job? = null
 
     private fun refreshLoading(player: Player) {
-        val buffering = player.playbackState == Player.STATE_BUFFERING && PlaybackRequests.soundingPosition == null
-        val waiting = player.playWhenReady && (buffering || player.playerError != null)
+        val stalled = player.playbackState == Player.STATE_BUFFERING && PlaybackRequests.soundingPosition == null
         val online = AppSettings.isOnline()
         val now = android.os.SystemClock.elapsedRealtime()
-        if (buffering && player.playWhenReady && online) {
+        if (stalled && player.playWhenReady && online) {
             if (bufferingSince == 0L) bufferingSince = now
         } else bufferingSince = 0L
+        // Only a stall that lasts shows: a moment's rebuffer never flashes the spinner. Around a
+        // quality upgrade it has to last longer, as the switch rebuffers the silent player and
+        // this side hears of the player's state a moment late, so the spinner came and went.
+        val switching = PlaybackRequests.switchingStream || now - PlaybackRequests.switchEndedAt < SWITCH_SETTLE_MS
+        val buffering = stalled && bufferingSince != 0L && now - bufferingSince >= if (switching) SWITCH_STALL_MS else STALL_MS
+        val waiting = player.playWhenReady && (buffering || player.playerError != null)
         _isBuffering.value = waiting && buffering && online
         _loadingMessage.value = when {
             waiting && !online -> "Offline · waiting for connection"
@@ -210,7 +215,7 @@ class PlayerConnection(private val context: Context) {
             launch { MixState.showing.collect { if (controller === newController) refresh(newController) } }
             while (controller === newController) {
                 refreshLoading(newController)
-                kotlinx.coroutines.delay(1_000)
+                kotlinx.coroutines.delay(LOADING_TICK_MS)
             }
         }
     }
@@ -587,6 +592,15 @@ class PlayerConnection(private val context: Context) {
     }
 
     fun bufferedPositionMs(): Long = controller?.bufferedPosition ?: 0L
+
+    private companion object {
+        /** How long a stall lasts before the spinner shows. */
+        const val STALL_MS = 600L
+        /** The same during a quality switch and just after it. */
+        const val SWITCH_STALL_MS = 2_500L
+        const val SWITCH_SETTLE_MS = 3_000L
+        const val LOADING_TICK_MS = 250L
+    }
 }
 
 data class AudioFormatInfo(val codec: String?, val bitrateKbps: Int?, val sampleRateHz: Int?, val channels: Int?, val bitDepth: Int? = null)

@@ -117,6 +117,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.toArgb
 import com.materialkolor.hct.Hct
@@ -258,77 +260,62 @@ fun PlayerBackdrop(
 }
 
 /**
- * Spotify's Canvas filling the player, sharp at the top and turning to
- * frosted glass from just above the title down to the bottom, where the
- * title, seek bar and buttons sit, so they read over any clip. The blur
- * comes in gradually over the first stretch rather than starting at a line.
- * With blur reduced (or before Android 12) a darker wash does the same job.
- * The frost can be turned off in Settings, leaving only a light darkening.
+ * Spotify's Canvas filling the player, sharp at the top, with the chosen look
+ * from just above the title down to the bottom, where the title, seek bar and
+ * buttons sit, so they read over any clip. Each look comes in gradually over
+ * the first stretch rather than starting at a line:
+ *
+ * - Tint: the clip fades into the song's own colour.
+ * - Dark: it fades to near black.
+ * - Frosted: frosted glass, the clip blurred behind it with a lit rim along the
+ *   top. The clip is drawn by a TextureView, which a Compose blur can't see, so
+ *   the frost is made from small frames taken from it and drawn soft; it works
+ *   on every phone, blurred further where Android can blur (12 and up).
+ * - Plain: only a light darkening behind the controls.
  */
 @Composable
 private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behindText: Boolean, modifier: Modifier) {
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
-    val haze = dev.chrisbanes.haze.rememberHazeState()
     val look = ui.canvasLook
-    val blur = look == com.opentune.data.settings.CanvasLook.FROST && !ui.reduceBlur
+    val frost = look == com.opentune.data.settings.CanvasLook.FROST && !ui.reduceBlur && !ui.liteMode
+    var video by remember { mutableStateOf<android.view.TextureView?>(null) }
     androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
-        Box(Modifier.matchParentSize().then(if (blur) Modifier.hazeSource(haze) else Modifier)) {
-            // Keyed on the clip, so the next song's starts fresh and fades in over this one's backdrop.
-            androidx.compose.runtime.key(canvas) {
-                LoopingVideo(canvas, playing, Modifier.matchParentSize(), maxPx = 1920, maxBitrate = 8_000_000)
-            }
+        // Keyed on the clip, so the next song's starts fresh and fades in over this one's backdrop.
+        androidx.compose.runtime.key(canvas) {
+            LoopingVideo(canvas, playing, Modifier.matchParentSize(), maxPx = 1920, maxBitrate = 8_000_000,
+                onView = if (frost) ({ v -> video = v }) else null)
         }
         // A light scrim at the top so the status bar and "Playing from" stay readable.
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.18f to Color.Transparent)))
-        // Over lyrics and the queue the frost starts at the very top, moving up there as they open.
-        // The frosted box keeps its full size throughout and only where the frost begins moves,
-        // read while drawing: resizing it every frame re-laid it out and made the blur start
-        // over at a new size each time, which is what stuttered.
+        // Over lyrics and the queue the look starts at the very top, moving up there as they open.
+        // The box keeps its full size throughout and only where the look begins moves, read while
+        // drawing, so nothing is laid out again on each frame.
         val density = androidx.compose.ui.platform.LocalDensity.current
         val toPx = with(density) { ((titleTop ?: (maxHeight * 0.55f)) - CANVAS_FROST_LEAD).coerceIn(0.dp, maxHeight).toPx() }
         val from = androidx.compose.animation.core.animateFloatAsState(toPx, androidx.compose.animation.core.tween(450), label = "canvasFrost")
         val shade = androidx.compose.animation.core.animateFloatAsState(if (behindText) 1f else 0f, androidx.compose.animation.core.tween(450), label = "canvasShade")
         val ramp = with(density) { (CANVAS_FROST_LEAD * 2).toPx() }
-        // Behind lyrics and the queue there's no blur: the clip goes on under a wash of the
-        // song's own colour, deep enough for text to read over any frame. Blurring a moving
-        // video over the whole page cost a fresh blur on every frame, and stuttered.
-        val wash = lerp(MaterialTheme.colorScheme.surface, Color.Black, 0.35f)
-        // Changes once, as the wash settles or lifts, not on each frame of it.
-        val settled by remember(behindText) { androidx.compose.runtime.derivedStateOf { behindText && shade.value >= 0.999f } }
-        val frosted = blur && !settled
+        val scheme = MaterialTheme.colorScheme
+        // Behind lyrics and the queue: a wash of the song's colour, deep enough for text over any frame.
+        val wash = lerp(scheme.surface, Color.Black, 0.35f)
+        // The song's own colour, deep but still clearly a colour (the surface is all but black in a dark theme).
+        val songTone = lerp(lerp(scheme.primaryContainer, scheme.primary, 0.35f), Color.Black, 0.5f)
+        if (frost) {
+            VideoFrost(remember { TextureFrames { video } }, playing, Modifier.matchParentSize(), from, ramp)
+        }
         Box(
             Modifier
                 .matchParentSize()
-                .then(
-                    if (!frosted) Modifier else Modifier.hazeEffect(haze) {
-                        blurRadius = 30.dp
-                        noiseFactor = 0.04f
-                        tints = listOf(dev.chrisbanes.haze.HazeTint(Color.Black.copy(alpha = 0.18f)))
-                        // A blur this soft loses nothing worked out at half size, and costs a quarter.
-                        inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(0.5f)
-                        val start = from.value
-                        progressive = dev.chrisbanes.haze.HazeProgressive.verticalGradient(
-                            easing = androidx.compose.animation.core.EaseInOut,
-                            startY = start,
-                            startIntensity = 0f,
-                            endY = start + ramp,
-                            endIntensity = 1f,
-                        )
-                    },
-                )
-                // From where the title begins down: the chosen look, coming in over the ramp.
-                // Tint and Dark are plain gradients, so they show the same on every phone
-                // and cost nothing per frame; a phone that can't blur video shows Frosted as
-                // its light darkening only.
                 .drawBehind {
                     val start = from.value
                     val span = (size.height - start).coerceAtLeast(1f)
                     val inAt = (ramp / span).coerceIn(0.05f, 0.9f)
                     val (tone, mid, foot) = when (look) {
-                        com.opentune.data.settings.CanvasLook.TINT -> Triple(wash, 0.8f, 0.92f)
-                        com.opentune.data.settings.CanvasLook.SHADE -> Triple(Color.Black, 0.62f, 0.86f)
-                        com.opentune.data.settings.CanvasLook.FROST -> Triple(Color.Black, if (blur) 0.15f else 0.45f, if (blur) 0.45f else 0.8f)
-                        com.opentune.data.settings.CanvasLook.NONE -> Triple(Color.Black, 0.25f, 0.7f)
+                        com.opentune.data.settings.CanvasLook.TINT -> Triple(songTone, 0.78f, 0.94f)
+                        com.opentune.data.settings.CanvasLook.SHADE -> Triple(Color.Black, 0.66f, 0.9f)
+                        // Over the frost, only enough shade for white text on a bright clip.
+                        com.opentune.data.settings.CanvasLook.FROST -> Triple(Color.Black, if (frost) 0.14f else 0.45f, if (frost) 0.4f else 0.8f)
+                        com.opentune.data.settings.CanvasLook.NONE -> Triple(Color.Black, 0.22f, 0.62f)
                     }
                     drawRect(
                         Brush.verticalGradient(
@@ -340,7 +327,6 @@ private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behi
                         ),
                         topLeft = androidx.compose.ui.geometry.Offset(0f, start),
                     )
-                    // Behind lyrics and the queue: the colour wash, a touch lighter at the top.
                     val k = shade.value
                     if (k > 0f) drawRect(
                         Brush.verticalGradient(
@@ -353,6 +339,158 @@ private fun CanvasBackdrop(canvas: String, playing: Boolean, titleTop: Dp?, behi
         )
     }
 }
+
+/**
+ * Frosted glass over the Canvas from [from] down: small frames of the clip from [frames],
+ * taken about 15 times a second (twice a second while paused), drawn scaled up and
+ * blurred, faded in over [ramp], with a soft white sheen and a lit rim along its top
+ * edge, as liquid glass. A frame 1/16 the size is little work, so this
+ * costs far less than blurring the clip at full size.
+ * The frames are blurred as they're taken ([softenFrame]), so the glass is frosted
+ * on every phone.
+ */
+/** Where the frost's frames come from: how big the picture is now, and a copy of it scaled into a bitmap. */
+internal interface FrostFrames {
+    fun size(): androidx.compose.ui.unit.IntSize?
+    fun copyInto(bitmap: android.graphics.Bitmap): Boolean
+}
+
+/** A TextureView's picture, as [FrostFrames]. */
+private class TextureFrames(private val view: () -> android.view.TextureView?) : FrostFrames {
+    override fun size() = view()?.takeIf { it.isAvailable && it.width > 0 && it.height > 0 }?.let { androidx.compose.ui.unit.IntSize(it.width, it.height) }
+    override fun copyInto(bitmap: android.graphics.Bitmap) = runCatching { view()!!.getBitmap(bitmap) }.isSuccess
+}
+
+@Composable
+internal fun VideoFrost(
+    frames: FrostFrames,
+    playing: Boolean,
+    modifier: Modifier,
+    from: androidx.compose.runtime.State<Float>,
+    ramp: Float,
+) {
+    val frame = remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    val tick = remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    LaunchedEffect(playing) {
+        // Two bitmaps in turn, so the one drawn is never the one being filled.
+        val spare = arrayOfNulls<android.graphics.Bitmap>(2)
+        val pixels = FrostPixels()
+        var turn = 0
+        while (true) {
+            val at = frames.size()
+            if (at != null) {
+                val w = (at.width / FROST_SCALE).coerceAtLeast(8)
+                val h = (at.height / FROST_SCALE).coerceAtLeast(8)
+                val target = spare[turn]?.takeIf { it.width == w && it.height == h }
+                    ?: android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888).also { spare[turn] = it }
+                if (frames.copyInto(target)) {
+                    softenFrame(target, pixels)
+                    frame.value = target
+                    tick.intValue++
+                    turn = 1 - turn
+                }
+            }
+            kotlinx.coroutines.delay(if (playing) FROST_FRAME_MS else 500L)
+        }
+    }
+    val paint = remember { android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG) }
+    Box(
+        modifier
+            // The frost fades in from where it starts, drawn into its own layer to be masked.
+            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                val start = from.value
+                drawRect(
+                    Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, startY = start, endY = start + ramp),
+                    blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                )
+            },
+    ) {
+        androidx.compose.foundation.Canvas(
+            Modifier.matchParentSize().blur(FROST_BLUR, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle),
+        ) {
+            tick.intValue
+            val b = frame.value ?: return@Canvas
+            drawIntoCanvas { c ->
+                c.nativeCanvas.drawBitmap(b, null, android.graphics.RectF(0f, 0f, size.width, size.height), paint)
+            }
+            // The glass: a faint white film, lighter towards the top.
+            drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.1f), 1f to Color.White.copy(alpha = 0.03f)))
+        }
+        // Its lit top edge, as light catches the rim of a pane.
+        androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+            val start = from.value + ramp * 0.55f
+            drawRect(
+                Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = 0f),
+                    0.5f to Color.White.copy(alpha = 0.16f),
+                    1f to Color.White.copy(alpha = 0f),
+                    startY = start - 6.dp.toPx(), endY = start + 6.dp.toPx(),
+                ),
+                topLeft = androidx.compose.ui.geometry.Offset(0f, start - 6.dp.toPx()),
+                size = androidx.compose.ui.geometry.Size(size.width, 12.dp.toPx()),
+            )
+            with(com.opentune.ui.components.Dither) { drawDither(0.05f) }
+        }
+    }
+}
+
+/** Working space for [softenFrame], kept between frames. */
+private class FrostPixels {
+    var a = IntArray(0)
+    var b = IntArray(0)
+}
+
+/**
+ * Blurs [bitmap] in place: three box blurs each way, which come out close to a
+ * Gaussian. On a frame 1/16 the clip's size each way this is a few thousand
+ * pixels, and the frost is soft on every phone, not only where Android blurs.
+ */
+private fun softenFrame(bitmap: android.graphics.Bitmap, work: FrostPixels) {
+    val w = bitmap.width
+    val h = bitmap.height
+    val n = w * h
+    if (work.a.size != n) { work.a = IntArray(n); work.b = IntArray(n) }
+    bitmap.getPixels(work.a, 0, w, 0, 0, w, h)
+    repeat(3) {
+        boxPass(work.a, work.b, w, h, FROST_RADIUS, horizontal = true)
+        boxPass(work.b, work.a, w, h, FROST_RADIUS, horizontal = false)
+    }
+    bitmap.setPixels(work.a, 0, w, 0, 0, w, h)
+}
+
+/** One box blur of radius [r] along rows ([horizontal]) or columns, edges held. */
+private fun boxPass(src: IntArray, dst: IntArray, w: Int, h: Int, r: Int, horizontal: Boolean) {
+    val lines = if (horizontal) h else w
+    val len = if (horizontal) w else h
+    val step = if (horizontal) 1 else w
+    val size = 2 * r + 1
+    for (line in 0 until lines) {
+        val base = if (horizontal) line * w else line
+        var sr = 0; var sg = 0; var sb = 0
+        for (k in -r..r) {
+            val c = src[base + k.coerceIn(0, len - 1) * step]
+            sr += (c shr 16) and 0xFF; sg += (c shr 8) and 0xFF; sb += c and 0xFF
+        }
+        for (i in 0 until len) {
+            dst[base + i * step] = (0xFF shl 24) or ((sr / size) shl 16) or ((sg / size) shl 8) or (sb / size)
+            val out = src[base + (i - r).coerceIn(0, len - 1) * step]
+            val inn = src[base + (i + r + 1).coerceIn(0, len - 1) * step]
+            sr += ((inn shr 16) and 0xFF) - ((out shr 16) and 0xFF)
+            sg += ((inn shr 8) and 0xFF) - ((out shr 8) and 0xFF)
+            sb += (inn and 0xFF) - (out and 0xFF)
+        }
+    }
+}
+
+/** The frost's frames are this many times smaller than the clip each way. */
+private const val FROST_SCALE = 16
+/** The blur on those frames, in their pixels: about 3 × 2 × 16 px of the clip. */
+private const val FROST_RADIUS = 2
+private const val FROST_FRAME_MS = 66L
+/** Over the frames' own blur, where Android can blur (12 and up), a little more to smooth the scaling. */
+private val FROST_BLUR = 8.dp
 
 /** How far above the title the Canvas frost starts, and half the stretch it takes to come in fully. */
 private val CANVAS_FROST_LEAD = 56.dp
