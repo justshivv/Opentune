@@ -41,6 +41,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
 
 /** An album or playlist page, ready to show. */
+/** YouTube Music answered a library request as though nobody were signed in on this phone. */
+class LibrarySignedOut : Exception("YouTube Music says this phone isn't signed in")
+
 @Serializable
 data class Collection(
     val browseId: String,
@@ -622,10 +625,14 @@ object MusicRepository {
 
     /** The signed-in account's playlists on YouTube Music, without the "New playlist" tile. */
     suspend fun libraryPlaylists(): List<ShelfItem> = io {
-        val owner = com.opentune.data.library.LibraryCache.owner()
+        // Whose these are is the session that asked. The account's profile (and so its email, which names
+        // the cache) can arrive while this is still running; asking again at the end for who owns the
+        // cache finds the right one, and only a different session in between drops the result.
+        val session = Innertube.cookie
         // Every page of them: YouTube Music sends a library's playlists a page at a time, and
         // reading only the first left Show all short of the account's later playlists.
-        val first = InnertubeParser.parseLibraryItemPage(Innertube.browse("FEmusic_liked_playlists"))
+        val firstJson = Innertube.browse("FEmusic_liked_playlists")
+        val first = InnertubeParser.parseLibraryItemPage(firstJson)
         val all = LinkedHashMap<String, ShelfItem>()
         first.items.forEach { item -> item.browseId?.let { all.putIfAbsent(it, item) } }
         var token = first.continuation
@@ -639,21 +646,40 @@ object MusicRepository {
             if (all.size == before || page.continuation == token) break
             token = page.continuation
         }
-        all.values.toList()
-            .also { items ->
-                com.opentune.data.library.LibraryCache.savePlaylists(items, owner)
-                // Fill saved playlists one at a time, without blocking the Library screen.
-                libraryWarmJob?.cancel()
-                libraryWarmJob = scope.launch {
-                    for (item in items) {
-                        val id = item.browseId ?: continue
-                        if (com.opentune.data.library.LibraryCache.owner() != owner) break
-                        if (!com.opentune.data.library.LibraryCache.fresh(id, owner)) {
-                            try { collection(id) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
-                        }
+        var items = all.values.toList()
+        if (items.isEmpty()) {
+            // Nothing found. Say what the page held, for "Copy log", then try other layouts and pages.
+            DebugLog.w("Library", "No playlists on the library page: " + InnertubeParser.describeLibrary(firstJson))
+            items = InnertubeParser.looseLibraryPlaylists(firstJson)
+            if (items.isEmpty()) {
+                val landing = runCatching { Innertube.browse("FEmusic_library_landing") }
+                    .onFailure { if (it is CancellationException) throw it }.getOrNull()
+                if (landing != null) {
+                    DebugLog.d("Library", "Library landing page: " + InnertubeParser.describeLibrary(landing))
+                    items = InnertubeParser.parseLibraryItemPage(landing).items
+                        .filter { it.browseId?.startsWith("VL") == true }
+                        .ifEmpty { InnertubeParser.looseLibraryPlaylists(landing) }
+                }
+            }
+            if (items.isEmpty() && InnertubeParser.answeredSignedOut(firstJson)) throw LibrarySignedOut()
+            if (items.isNotEmpty()) DebugLog.d("Library", "Found ${items.size} playlists in another layout")
+        }
+        if (Innertube.cookie != session) return@io items
+        val owner = com.opentune.data.library.LibraryCache.owner()
+        items.also {
+            com.opentune.data.library.LibraryCache.savePlaylists(it, owner)
+            // Fill saved playlists one at a time, without blocking the Library screen.
+            libraryWarmJob?.cancel()
+            libraryWarmJob = scope.launch {
+                for (item in it) {
+                    val id = item.browseId ?: continue
+                    if (com.opentune.data.library.LibraryCache.owner() != owner) break
+                    if (!com.opentune.data.library.LibraryCache.fresh(id, owner)) {
+                        try { collection(id) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
                     }
                 }
             }
+        }
     }
 
     /**

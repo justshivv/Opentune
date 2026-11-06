@@ -250,7 +250,12 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 try {
                     val sync = PlaylistSync.refresh()
                     runCatching { MusicRepository.libraryPlaylists() }.onFailure {
-                        com.opentune.data.Pills.error("Couldn't refresh your YouTube Music playlists", context)
+                        if (it is kotlinx.coroutines.CancellationException) throw it
+                        com.opentune.data.Pills.error(
+                            if (it is com.opentune.data.LibrarySignedOut) "YouTube Music says this phone isn't signed in. Sign in again from Settings"
+                            else "Couldn't refresh your YouTube Music playlists",
+                            context,
+                        )
                     }
                     sync.join()
                 } finally {
@@ -441,6 +446,27 @@ fun AllPlaylistsScreen(
     // The Spotify page: Spotify's playlists. Show all: the rest, and a Spotify one only when pinned.
     val rows = rememberPlaylistRows(nav).filter { if (spotify) it.source == "Spotify" else it.source != "Spotify" || it.pin in pinned }
     val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+    // Show all brings the account's YouTube Music playlists up to date as it opens, behind what's
+    // already here, and says so plainly when it can't, rather than leaving the page looking empty.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var library by remember { mutableStateOf<YouTubeLoad>(YouTubeLoad.Idle) }
+    val loadLibrary: () -> Unit = {
+        if (signedIn && !spotify && library != YouTubeLoad.Loading) scope.launch {
+            library = YouTubeLoad.Loading
+            library = try {
+                MusicRepository.libraryPlaylists()
+                YouTubeLoad.Done
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: com.opentune.data.LibrarySignedOut) {
+                YouTubeLoad.Failed("YouTube Music says this phone isn't signed in any more. Sign in again from Settings.")
+            } catch (_: Exception) {
+                YouTubeLoad.Failed("Couldn't reach YouTube Music just now. Check the connection and try again.")
+            }
+        }
+    }
+    LaunchedEffect(signedIn, spotify) { loadLibrary() }
     // The Spotify page brings Spotify's latest over once as it opens, behind the list already
     // here, so it shows at once and changes only if Spotify has something new.
     val spotifySync by com.opentune.data.spotify.SpotifySync.status.collectAsState()
@@ -511,6 +537,28 @@ fun AllPlaylistsScreen(
         if (spotify && spotifySync.running) item(key = "syncing", span = { full }) {
             androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(2.dp))
         }
+        // The same for YouTube Music's: a bar while it loads, and a line with a way to try again when it didn't.
+        if (!spotify && library == YouTubeLoad.Loading) item(key = "yt-loading", span = { full }) {
+            androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(2.dp))
+        }
+        if (!spotify && signedIn && library != YouTubeLoad.Loading) {
+            val ytRows = shown.count { it.source == "YouTube Music" }
+            val problem = (library as? YouTubeLoad.Failed)?.reason
+                ?: if (ytRows == 0 && library == YouTubeLoad.Done) "No YouTube Music playlists were found on this account." else null
+            if (problem != null) item(key = "yt-problem", span = { full }) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(start = 16.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(problem, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    androidx.compose.material3.TextButton(onClick = {
+                        loadLibrary()
+                        if (library is YouTubeLoad.Failed && (library as YouTubeLoad.Failed).reason.contains("signed in")) nav.settings()
+                    }) { Text(if ((library as? YouTubeLoad.Failed)?.reason?.contains("signed in") == true) "Settings" else "Try again") }
+                }
+            }
+        }
         if (spotify) {
             if (shown.isEmpty()) item(key = "spotify-empty", span = { full }) {
                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -536,6 +584,14 @@ fun AllPlaylistsScreen(
         }
     }
     }
+}
+
+/** Where bringing the account's YouTube Music playlists up to date has got to, for the Show all page. */
+private sealed interface YouTubeLoad {
+    data object Idle : YouTubeLoad
+    data object Loading : YouTubeLoad
+    data object Done : YouTubeLoad
+    data class Failed(val reason: String) : YouTubeLoad
 }
 
 /**

@@ -651,6 +651,86 @@ object InnertubeParser {
     }
 
     /**
+     * Whether YouTube answered as though nobody is signed in: its own tracking
+     * parameters carry `logged_in` = 0. False when it says 1, or says nothing, so
+     * a layout change can't be mistaken for a sign-out.
+     */
+    fun answeredSignedOut(root: JsonElement): Boolean {
+        val params = root.o("responseContext").a("serviceTrackingParams").orEmpty()
+            .flatMap { it.a("params").orEmpty() }
+        val loggedIn = params.firstOrNull { it.s("key") == "logged_in" }?.s("value") ?: return false
+        return loggedIn == "0"
+    }
+
+    /**
+     * Playlists on a library page in a layout the card parsers above don't know. Used only
+     * when they found nothing: any playlist page link with a name beside it, in the classic
+     * renderers or in the newer `lockupViewModel` cards (whose id and name sit in different
+     * places). Each playlist once, in page order.
+     */
+    fun looseLibraryPlaylists(root: JsonElement): List<ShelfItem> {
+        val out = LinkedHashMap<String, ShelfItem>()
+        fun playlistId(id: String?): String? = when {
+            id == null -> null
+            id.startsWith("VL") -> id
+            id.startsWith("PL") || id.startsWith("RD") || id.startsWith("OLAK") -> "VL$id"
+            else -> null
+        }
+        fun firstBrowseId(node: JsonElement): String? = when (node) {
+            is JsonObject -> node.o("browseEndpoint").s("browseId")?.let { playlistId(it) }
+                ?: node.values.firstNotNullOfOrNull { firstBrowseId(it) }
+            is JsonArray -> node.firstNotNullOfOrNull { firstBrowseId(it) }
+            else -> null
+        }
+        fun firstThumbnail(node: JsonElement): String? = when (node) {
+            is JsonObject -> (node["thumbnails"] as? JsonArray)?.best()
+                ?: (node["sources"] as? JsonArray)?.lastOrNull().s("url")
+                ?: node.values.firstNotNullOfOrNull { firstThumbnail(it) }
+            is JsonArray -> node.firstNotNullOfOrNull { firstThumbnail(it) }
+            else -> null
+        }
+        fun walk(node: JsonElement) {
+            when (node) {
+                is JsonObject -> {
+                    // The newer card: a lockup, its name under metadata.
+                    (node["lockupViewModel"] as? JsonObject)?.let { lockup ->
+                        val id = playlistId(lockup.s("contentId")) ?: firstBrowseId(lockup)
+                        val meta = lockup.o("metadata").o("lockupMetadataViewModel")
+                        val title = meta.o("title").s("content") ?: meta.o("title").runs().takeIf { it.isNotBlank() }
+                        if (id != null && !title.isNullOrBlank()) {
+                            val subtitle = meta?.findString("content")?.takeIf { it != title }.orEmpty()
+                            out.putIfAbsent(id, ShelfItem(title, subtitle, firstThumbnail(lockup.o("contentImage") ?: lockup), null, id))
+                        }
+                    }
+                    // The classic ones: a name in the same object as a link to a playlist page.
+                    val link = node.o("navigationEndpoint").o("browseEndpoint").s("browseId")?.let { playlistId(it) }
+                    if (link != null) {
+                        val title = node.o("title").runs().ifBlank { node.o("title").s("simpleText").orEmpty() }
+                            .ifBlank { node.a("flexColumns")?.firstOrNull().o("musicResponsiveListItemFlexColumnRenderer").o("text").runs() }
+                        if (title.isNotBlank()) {
+                            val subtitle = node.o("subtitle").runs()
+                            out.putIfAbsent(link, ShelfItem(title, subtitle, firstThumbnail(node), null, link))
+                        }
+                    }
+                    node.values.forEach(::walk)
+                }
+                is JsonArray -> node.forEach(::walk)
+                else -> Unit
+            }
+        }
+        walk(root)
+        return out.values.toList()
+    }
+
+    /** What a library response held, in one line, for the log: how it was answered and what kinds of card it had. */
+    fun describeLibrary(root: JsonElement): String {
+        val keys = (root as? JsonObject)?.keys?.joinToString(",").orEmpty()
+        val counts = listOf("musicTwoRowItemRenderer", "musicResponsiveListItemRenderer", "lockupViewModel", "gridRenderer", "musicShelfRenderer")
+            .joinToString(" ") { "$it=${collectRenderers(root, it).size}" }
+        return "keys=[$keys] $counts signedOut=${answeredSignedOut(root)}"
+    }
+
+    /**
      * Token for the next page of a paged response, or null once it has run out.
      * Both the modern `continuationItemRenderer` and the older `continuations`
      * array are in circulation, sometimes within the same account.

@@ -26,6 +26,8 @@ object LibraryCache {
     private var root: File? = null
     private val _playlists = MutableStateFlow<List<ShelfItem>>(emptyList())
     val playlists = _playlists.asStateFlow()
+    private var lastOwner: String? = null
+    private var lastSession: String? = null
     private val _owned = MutableStateFlow<Map<String, Boolean>>(emptyMap())
 
     /**
@@ -41,9 +43,24 @@ object LibraryCache {
         root = File(context.filesDir, "library-cache").apply { mkdirs() }
         scope.launch {
             AccountStore.account.collectLatest {
+                val key = owner()
+                val session = com.opentune.data.innertube.Innertube.cookie
+                // The same session whose profile has only just arrived (the cache was "unidentified" until the
+                // email was known): what it holds is already this account's, so it stays, and is kept on disk
+                // under the account's name from now on, rather than being cleared and read from a file that
+                // doesn't exist yet.
+                val sameSession = session != null && session == lastSession && lastOwner == "unidentified" && key != "unidentified"
+                lastOwner = key
+                lastSession = session
+                if (sameSession) {
+                    val kept = _playlists.value
+                    if (kept.isNotEmpty() && owner() == key) {
+                        write(file(key, "index"), json.encodeToString(ListSerializer(ShelfItem.serializer()), kept))
+                        return@collectLatest
+                    }
+                }
                 _playlists.value = emptyList()
                 _owned.value = emptyMap()
-                val key = owner()
                 val saved = runCatching {
                     json.decodeFromString(ListSerializer(ShelfItem.serializer()), file(key, "index").readText())
                 }.getOrDefault(emptyList())
