@@ -83,6 +83,7 @@ import com.opentune.data.model.artworkAt
 import com.opentune.ui.components.Artwork
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /** Which stretch of listening Replay covers: this calendar week, month or year, or all of it. */
@@ -128,6 +129,38 @@ private val CardColors = listOf(
 
 /** The colour a page behind card [index] takes. */
 internal fun replayTint(index: Int): Color = CardColors[index.coerceIn(0, CardColors.lastIndex)].first
+
+/**
+ * [summary] with each top artist's own photo in place of a song cover, looked up for the
+ * first dozen ([com.opentune.data.history.ArtistFaces]) all at once and swapped in
+ * together, so the pages change once. Covers stay where no photo is found.
+ */
+@Composable
+private fun rememberArtistFaces(summary: ReplaySummary): ReplaySummary {
+    val faces = remember(summary) {
+        androidx.compose.runtime.mutableStateOf(summary.topArtists.mapNotNull { a -> com.opentune.data.history.ArtistFaces.cached(a.title)?.let { a.key to it } }.toMap())
+    }
+    LaunchedEffect(summary) {
+        val wanted = summary.topArtists.take(FACES_LOOKED_UP).filter { it.key !in faces.value }
+        if (wanted.isEmpty()) return@LaunchedEffect
+        val got = kotlinx.coroutines.coroutineScope {
+            wanted.map { a ->
+                async {
+                    // The song's artist id is theirs only when they're its first-billed artist.
+                    val id = a.song?.takeIf { com.opentune.data.history.Wrapped.mainArtist(it.artist).equals(a.title, ignoreCase = true) }?.artistId
+                    com.opentune.data.history.ArtistFaces.photoFor(a.title, id)?.let { a.key to it }
+                }
+            }.mapNotNull { it.await() }
+        }
+        if (got.isNotEmpty()) faces.value = faces.value + got
+    }
+    val found = faces.value
+    return remember(summary, found) {
+        if (found.isEmpty()) summary else summary.copy(topArtists = summary.topArtists.map { it.copy(thumbnailUrl = found[it.key] ?: it.thumbnailUrl) })
+    }
+}
+
+private const val FACES_LOOKED_UP = 12
 
 private fun minutes(ms: Long) = TimeUnit.MILLISECONDS.toMinutes(ms)
 private fun plays(n: Int) = if (n == 1) "1 Play" else "$n Plays"
@@ -228,7 +261,9 @@ private const val PAGE_MS = 6_000
  */
 @Composable
 internal fun ReplayStory(summary: ReplaySummary, range: ReplayRange, onDismiss: () -> Unit) {
-    val pages = remember(summary, range) { storyPages(summary, range) }
+    // The artists with their own photos, not the cover of a song of theirs, once they're found.
+    val withFaces = rememberArtistFaces(summary)
+    val pages = remember(withFaces, range) { storyPages(withFaces, range) }
     var page by remember { mutableIntStateOf(0) }
     var progress by remember { mutableFloatStateOf(0f) }
     var held by remember { mutableStateOf(false) }
