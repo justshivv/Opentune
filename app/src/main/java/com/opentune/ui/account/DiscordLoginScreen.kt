@@ -30,6 +30,9 @@ import kotlinx.coroutines.launch
 private const val DISCORD_LOGIN = "https://discord.com/login"
 
 private const val DISCORD_DESTROY_AFTER_MS = 1_500L
+/** Chrome on a Samsung phone, for Motorola's WebView, which Discord's page turns away. */
+private const val MOTOROLA_AS_SAMSUNG =
+    "Mozilla/5.0 (Linux; Android 14; SM-S921U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
 private val DiscordBlurple = Color(0xFF5865F2)
 
 /**
@@ -75,17 +78,49 @@ private const val READ_TOKEN = """
 """
 
 /**
- * Discord's own sign-in page in a WebView, the other way in. Once signed in and on
- * Discord's app, the account's token is read from the page and handed to
- * [DiscordRpc], which checks it with Discord and keeps it encrypted.
+ * Discord's own sign-in page in a WebView, the way in people can see is Discord's.
+ * Once signed in and on Discord's app, the account's token is read from the page
+ * and handed to [DiscordRpc], which checks it with Discord and keeps it encrypted.
+ *
+ * When Android takes the page's renderer back to free memory, the page goes blank
+ * (and an unhandled loss takes the whole app with it); that's handled, with a Retry
+ * that builds a fresh page. Motorola's WebView is turned away by Discord with its
+ * own identity, so there it goes as Chrome on a Samsung phone, as SimpMusic does.
  */
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun DiscordWebPage(
     modifier: Modifier,
     onLoading: (Boolean) -> Unit,
     onProblem: (String) -> Unit,
     onSignedIn: () -> Unit,
+) {
+    // A page whose renderer was taken can't be used again: Retry builds a new one.
+    var attempt by remember { mutableStateOf(0) }
+    var rendererGone by remember { mutableStateOf(false) }
+    if (rendererGone) {
+        androidx.compose.foundation.layout.Box(modifier.background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                androidx.compose.material3.Text("Discord's page closed to free memory", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+                androidx.compose.material3.Button(onClick = { rendererGone = false; attempt++ }, modifier = Modifier.padding(top = 12.dp)) {
+                    androidx.compose.material3.Text("Retry")
+                }
+            }
+        }
+        return
+    }
+    androidx.compose.runtime.key(attempt) {
+        DiscordWebPageView(modifier, onLoading, onProblem, onSignedIn, onRendererGone = { rendererGone = true; onLoading(false) })
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun DiscordWebPageView(
+    modifier: Modifier,
+    onLoading: (Boolean) -> Unit,
+    onProblem: (String) -> Unit,
+    onSignedIn: () -> Unit,
+    onRendererGone: () -> Unit,
 ) {
     var pageError by remember { mutableStateOf<String?>(null) }
     val gone = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
@@ -106,6 +141,7 @@ private fun DiscordWebPage(
             view.apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                if (android.os.Build.MANUFACTURER.equals("motorola", ignoreCase = true)) settings.userAgentString = MOTOROLA_AS_SAMSUNG
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                 webChromeClient = object : android.webkit.WebChromeClient() {
                     override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
@@ -149,6 +185,15 @@ private fun DiscordWebPage(
                         check(view, url)
                         for (wait in listOf(1_500L, 4_000L)) main.postDelayed({ if (!gone.get()) check(view, view.url) }, wait)
                     }
+
+                    // The renderer taken to free memory (or crashed): this page is done, the app isn't.
+                    override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                        gone.set(true)
+                        (view.parent as? android.view.ViewGroup)?.removeView(view)
+                        runCatching { view.destroy() }
+                        main.post { onRendererGone() }
+                        return true
+                    }
                 }
                 loadUrl(DISCORD_LOGIN)
                 main.postDelayed({
@@ -156,7 +201,7 @@ private fun DiscordWebPage(
                     evaluateJavascript("(document.body && document.body.innerText || '').trim().length") { n ->
                         if (gone.get() || taken.get()) return@evaluateJavascript
                         if ((n?.toIntOrNull() ?: 0) == 0) {
-                            onProblem("Discord's page didn't appear" + (pageError?.let { ": $it" } ?: ".") + " Sign in above instead.")
+                            onProblem("Discord's page didn't appear" + (pageError?.let { ": $it" } ?: ".") + " Use OpenTune's form or a token above instead.")
                         }
                     }
                 }, 15_000)
@@ -176,17 +221,17 @@ private fun DiscordWebPage(
 }
 
 /**
- * Signing in to Discord for the Discord card. OpenTune's own form sends the email
- * and password straight to Discord ([DiscordLogin]), with Discord's captcha and
- * two-factor steps when it asks for them; it doesn't need Discord's whole web app,
- * which some phones' WebView showed blank. Discord's page and a token stay as
- * other ways in.
+ * Signing in to Discord for the Discord card, on Discord's own page first, so it's
+ * plainly Discord being signed in to. OpenTune's own form (the email and password
+ * straight to Discord, with its captcha and two-factor steps, see [DiscordLogin])
+ * and a token are other ways in, for a phone whose WebView won't show the page.
  */
 @Composable
 fun DiscordLoginScreen(onDone: () -> Unit) {
     var loading by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
-    var onPage by remember { mutableStateOf(false) }
+    // Discord's own page first, so it's plainly Discord being signed in to; the form and a token are other ways in.
+    var onPage by remember { mutableStateOf(true) }
     var tokenDialog by remember { mutableStateOf(false) }
     val left = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val leave = { if (left.compareAndSet(false, true)) onDone() }
@@ -198,7 +243,7 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
         brand = DiscordBlurple,
         icon = Icons.Rounded.Headphones,
         logo = com.opentune.R.drawable.ic_discord,
-        gives = "The song you play on your Discord profile, as \"Listening to OpenTune\"",
+        gives = "The song you play on your Discord profile, as \"Playing on OpenTune\"",
         loading = loading,
         onBack = leave,
         hint = problem,
