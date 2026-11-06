@@ -28,13 +28,15 @@ class NativeOutputProvider(delegate: AudioOutputProvider) : ForwardingAudioOutpu
     override fun getAudioOutput(config: AudioOutputProvider.OutputConfig): AudioOutput {
         val mode = mode
         if (mode != BitPerfectOutput.USB_DIRECT && mode != BitPerfectOutput.BUILT_IN && mode != BitPerfectOutput.HEADPHONE_JACK) return super.getAudioOutput(config)
-        // Stereo only: a decoded Dolby stream (5.1 and up) stays on Android's own output, which can spatialize it.
-        if (config.isOffload || config.isTunneling || config.encoding !in CARRIERS || !NativeAudio.loaded || Integer.bitCount(config.channelMask) > 2) return super.getAudioOutput(config)
+        // Any number of channels: a multichannel file (or decoded Dolby) goes out whole where the DAC takes that many.
+        if (config.isOffload || config.isTunneling || config.encoding !in CARRIERS || !NativeAudio.loaded) return super.getAudioOutput(config)
         val channels = Integer.bitCount(config.channelMask)
         val bits = BitPerfectUsb.bitsOf(BitPerfectUsb.sourceEncoding).coerceIn(16, 32)
         if (mode == BitPerfectOutput.HEADPHONE_JACK) {
             // No headphones in the jack: Android's own output, wherever it plays.
             val jack = BitPerfectUsb.wiredJack() ?: return super.getAudioOutput(config).also { BitPerfectUsb.reportNative(BitPerfectUsb.Status.NoDac) }
+            // The jack is stereo: more channels than that go to Android's output, which folds them down (or spatializes them).
+            if (channels > 2) return super.getAudioOutput(config).also { BitPerfectUsb.reportNative(null) }
             // Android's own bit-perfect mixer for the jack first, where the phone offers it (the
             // provider below sets it up); otherwise the jack itself, opened exclusively.
             if (BitPerfectUsb.jackMixerOffers(config.sampleRate, channels)) return super.getAudioOutput(config)

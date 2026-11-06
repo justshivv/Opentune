@@ -122,11 +122,7 @@ object BitPerfectUsb {
             _status.value = Status.NoDac
             return null
         }
-        val mask = when (channels) {
-            1 -> AudioFormat.CHANNEL_OUT_MONO
-            2 -> AudioFormat.CHANNEL_OUT_STEREO
-            else -> return null.also { clear(am); _status.value = Status.NoMatch(sampleRate, bitsOf(source)) }
-        }
+        val mask = channelMask(channels) ?: return null.also { clear(am); _status.value = Status.NoMatch(sampleRate, bitsOf(source)) }
         val offered = runCatching { am.getSupportedMixerAttributes(dac) }.getOrDefault(emptyList())
             .filter { it.mixerBehavior == AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT && it.format.sampleRate == sampleRate && it.format.channelMask == mask }
         // The first format, in order, that holds the song's samples whole.
@@ -158,6 +154,23 @@ object BitPerfectUsb {
     private fun usbDac(am: AudioManager): AudioDeviceInfo? = if (jack) wiredJack(am) else am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
         .firstOrNull { it.type == AudioDeviceInfo.TYPE_USB_DEVICE || it.type == AudioDeviceInfo.TYPE_USB_HEADSET }
 
+    /**
+     * Android's channel layout for a song with [channels] channels, in the order decoders
+     * give them (front left, front right, centre, LFE, then the rears and sides): mono to
+     * 7.1. Null for a count with no standard layout.
+     */
+    internal fun channelMask(channels: Int): Int? = when (channels) {
+        1 -> AudioFormat.CHANNEL_OUT_MONO
+        2 -> AudioFormat.CHANNEL_OUT_STEREO
+        3 -> AudioFormat.CHANNEL_OUT_STEREO or AudioFormat.CHANNEL_OUT_FRONT_CENTER
+        4 -> AudioFormat.CHANNEL_OUT_QUAD
+        5 -> AudioFormat.CHANNEL_OUT_QUAD or AudioFormat.CHANNEL_OUT_FRONT_CENTER
+        6 -> AudioFormat.CHANNEL_OUT_5POINT1
+        7 -> AudioFormat.CHANNEL_OUT_5POINT1 or AudioFormat.CHANNEL_OUT_BACK_CENTER
+        8 -> AudioFormat.CHANNEL_OUT_7POINT1_SURROUND
+        else -> null
+    }
+
     /** Headphones (or a line out) in the phone's own 3.5 mm jack, when plugged in. */
     fun wiredJack(am: AudioManager? = audioManager): AudioDeviceInfo? = am?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
         ?.firstOrNull { it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_LINE_ANALOG }
@@ -175,7 +188,7 @@ object BitPerfectUsb {
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun jackOffersApi34(am: AudioManager, jack: AudioDeviceInfo, sampleRate: Int, channels: Int): Boolean {
-        val mask = if (channels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO
+        val mask = channelMask(channels) ?: return false
         return am.getSupportedMixerAttributes(jack).any {
             it.mixerBehavior == AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT && it.format.sampleRate == sampleRate && it.format.channelMask == mask
         }
