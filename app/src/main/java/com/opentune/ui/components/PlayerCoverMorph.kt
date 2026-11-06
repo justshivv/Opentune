@@ -335,6 +335,9 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
             val left = 1f - openT.value
             // On the card's own timing and curve (see PlayerSheet), so the cover and the card move as one.
             openT.animateTo(1f, tween((SHEET_OPEN_MS * left).roundToInt().coerceAtLeast(180), easing = SHEET_EASING))
+            // Riding the card (below), it lands when the card does, not before.
+            var waited = 0
+            while (PlayerMorph.sheetMorph && (PlayerMorph.sheetProgress?.invoke() ?: 1f) < 0.999f && waited++ < 60) withFrameNanos { }
         } finally {
             PlayerMorph.endOpen()
         }
@@ -347,6 +350,8 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
             closeT.snapTo(PlayerMorph.closeAt())
             val left = 1f - closeT.value
             closeT.animateTo(1f, tween((SHEET_CLOSE_MS * left).roundToInt().coerceAtLeast(160), easing = SHEET_EASING))
+            var waited = 0
+            while (PlayerMorph.sheetMorph && (PlayerMorph.sheetProgress?.invoke() ?: 0f) > 0.001f && waited++ < 60) withFrameNanos { }
         } finally {
             PlayerMorph.endClose()
         }
@@ -369,16 +374,23 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
     // is read in the layer alone, so a swipe doesn't recompose this every frame.
     val pulled by remember { derivedStateOf { PlayerMorph.pulling > 0f } }
     val dragged by remember { derivedStateOf { PlayerMorph.dragging > 0f } }
+    // While the player grows out of (or folds into) the mini player as a card, the cover rides
+    // the card's own progress rather than a clock of its own: the card runs straight between the
+    // mini player and the screen and the cover straight between the mini cover and the player's,
+    // each inside the other at both ends, so on one progress the cover is always inside the card.
+    // On separate clocks (the card and the cover each wait their own frames to start) the cover
+    // ran ahead of the card and spilled out past its edge.
+    val sheet = PlayerMorph.sheetProgress.takeIf { PlayerMorph.sheetMorph }
     when {
         PlayerMorph.expanding -> {
             val from = PlayerMorph.openFrom() ?: return
             val to = (PlayerMorph.playerCover ?: PlayerMorph.lastPlayerCover)?.let(PlayerMorph::scaled) ?: guess
-            MorphBox(url, smallUrl, from, to, { openT.value }, startCornerDp = roundStart(from), endCornerDp = coverCorner)
+            MorphBox(url, smallUrl, from, to, if (sheet != null) ({ sheet().coerceIn(0f, 1f) }) else ({ openT.value }), startCornerDp = roundStart(from), endCornerDp = coverCorner)
         }
         PlayerMorph.collapsing -> {
             val from = PlayerMorph.closeFrom() ?: return
             val to = PlayerMorph.miniCover ?: return
-            MorphBox(url, smallUrl, from, to, { closeT.value }, startCornerDp = coverCorner, endCornerDp = 12f)
+            MorphBox(url, smallUrl, from, to, if (sheet != null) ({ 1f - sheet().coerceIn(0f, 1f) }) else ({ closeT.value }), startCornerDp = coverCorner, endCornerDp = 12f)
         }
         pulled -> {
             val from = PlayerMorph.miniCover ?: return
