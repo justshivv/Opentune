@@ -53,6 +53,12 @@ object BitPerfectUsb {
     @Volatile var wanted = false
         private set
 
+    /** The phone's own headphone jack instead of a USB DAC (Settings › Bit-perfect output › Headphone jack). */
+    @Volatile var jack = false
+        private set
+
+    fun setJack(on: Boolean) { jack = on }
+
     /**
      * The decoder's own sample format (a [C] PCM encoding) for the song whose
      * output is about to open, so the DAC is asked for a format that holds it whole.
@@ -145,12 +151,35 @@ object BitPerfectUsb {
             appliedKey = key
         }
         val encoding = choice.format.encoding
-        _status.value = Status.Active(dac.productName?.toString()?.takeIf { it.isNotBlank() } ?: "USB DAC", sampleRate, bitsOf(encoding), label(encoding))
+        _status.value = Status.Active(if (jack) "Headphone jack" else dac.productName?.toString()?.takeIf { it.isNotBlank() } ?: "USB DAC", sampleRate, bitsOf(encoding), label(encoding))
         return encoding
     }
 
-    private fun usbDac(am: AudioManager): AudioDeviceInfo? = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+    private fun usbDac(am: AudioManager): AudioDeviceInfo? = if (jack) wiredJack(am) else am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
         .firstOrNull { it.type == AudioDeviceInfo.TYPE_USB_DEVICE || it.type == AudioDeviceInfo.TYPE_USB_HEADSET }
+
+    /** Headphones (or a line out) in the phone's own 3.5 mm jack, when plugged in. */
+    fun wiredJack(am: AudioManager? = audioManager): AudioDeviceInfo? = am?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        ?.firstOrNull { it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_LINE_ANALOG }
+
+    /**
+     * Whether Android offers its bit-perfect mixer on the jack for this song's rate and
+     * channels (Android 14 and up, where the phone's audio setup allows it for the jack).
+     */
+    fun jackMixerOffers(sampleRate: Int, channels: Int): Boolean {
+        if (!supported) return false
+        val am = audioManager ?: return false
+        val jack = wiredJack(am) ?: return false
+        return runCatching { jackOffersApi34(am, jack, sampleRate, channels) }.getOrDefault(false)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    private fun jackOffersApi34(am: AudioManager, jack: AudioDeviceInfo, sampleRate: Int, channels: Int): Boolean {
+        val mask = if (channels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO
+        return am.getSupportedMixerAttributes(jack).any {
+            it.mixerBehavior == AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT && it.format.sampleRate == sampleRate && it.format.channelMask == mask
+        }
+    }
 
     private fun clear(am: AudioManager) {
         val dac = applied ?: return

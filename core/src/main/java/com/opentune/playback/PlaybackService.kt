@@ -285,7 +285,8 @@ class PlaybackService : MediaLibraryService() {
                     allowFloat && !stretching() && (
                         AppSettings.playback.value.floatOutput ||
                             ((BitPerfectUsb.wanted || com.opentune.playback.nativeout.NativeOutputProvider.mode.let {
-                                it == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT || it == com.opentune.data.settings.BitPerfectOutput.BUILT_IN
+                                it == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT || it == com.opentune.data.settings.BitPerfectOutput.BUILT_IN ||
+                                    it == com.opentune.data.settings.BitPerfectOutput.HEADPHONE_JACK
                             }) && source != C.ENCODING_PCM_16BIT && source != C.ENCODING_PCM_8BIT)
                         )
                 },
@@ -2338,7 +2339,9 @@ class PlaybackService : MediaLibraryService() {
         val pb = AppSettings.playback.value
         val mode = pb.bitPerfectMode
         com.opentune.playback.nativeout.NativeOutputProvider.mode = mode
-        BitPerfectUsb.setWanted(mode == com.opentune.data.settings.BitPerfectOutput.USB_ANDROID)
+        // The jack goes the same way as a USB DAC where Android 14 offers its bit-perfect mixer for it.
+        BitPerfectUsb.setJack(mode == com.opentune.data.settings.BitPerfectOutput.HEADPHONE_JACK)
+        BitPerfectUsb.setWanted(mode == com.opentune.data.settings.BitPerfectOutput.USB_ANDROID || mode == com.opentune.data.settings.BitPerfectOutput.HEADPHONE_JACK)
         com.opentune.playback.nativeout.UsbDirect.setWanted(mode == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT)
         applyLoudness()
         val player = mediaSession?.player as? ExoPlayer ?: return

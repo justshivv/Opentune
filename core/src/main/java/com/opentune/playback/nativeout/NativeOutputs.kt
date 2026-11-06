@@ -27,10 +27,21 @@ import java.util.concurrent.CopyOnWriteArraySet
 class NativeOutputProvider(delegate: AudioOutputProvider) : ForwardingAudioOutputProvider(delegate) {
     override fun getAudioOutput(config: AudioOutputProvider.OutputConfig): AudioOutput {
         val mode = mode
-        if (mode != BitPerfectOutput.USB_DIRECT && mode != BitPerfectOutput.BUILT_IN) return super.getAudioOutput(config)
-        if (config.isOffload || config.isTunneling || config.encoding !in CARRIERS || !NativeAudio.loaded) return super.getAudioOutput(config)
+        if (mode != BitPerfectOutput.USB_DIRECT && mode != BitPerfectOutput.BUILT_IN && mode != BitPerfectOutput.HEADPHONE_JACK) return super.getAudioOutput(config)
+        // Stereo only: a decoded Dolby stream (5.1 and up) stays on Android's own output, which can spatialize it.
+        if (config.isOffload || config.isTunneling || config.encoding !in CARRIERS || !NativeAudio.loaded || Integer.bitCount(config.channelMask) > 2) return super.getAudioOutput(config)
         val channels = Integer.bitCount(config.channelMask)
         val bits = BitPerfectUsb.bitsOf(BitPerfectUsb.sourceEncoding).coerceIn(16, 32)
+        if (mode == BitPerfectOutput.HEADPHONE_JACK) {
+            // No headphones in the jack: Android's own output, wherever it plays.
+            val jack = BitPerfectUsb.wiredJack() ?: return super.getAudioOutput(config).also { BitPerfectUsb.reportNative(BitPerfectUsb.Status.NoDac) }
+            // Android's own bit-perfect mixer for the jack first, where the phone offers it (the
+            // provider below sets it up); otherwise the jack itself, opened exclusively.
+            if (BitPerfectUsb.jackMixerOffers(config.sampleRate, channels)) return super.getAudioOutput(config)
+            val opened = runCatching { AAudioExclusiveOutput.open(config, channels, bits, deviceId = jack.id, name = "Headphone jack") }
+                .onFailure { Log.w("NativeOutput", "Couldn't open the headphone jack exclusively", it) }.getOrNull()
+            return opened ?: super.getAudioOutput(config).also { BitPerfectUsb.reportNative(null) }
+        }
         val out = runCatching {
             when (mode) {
                 BitPerfectOutput.USB_DIRECT -> UsbDirect.open(config.sampleRate, channels, bits)?.let { UsbDirectOutput(it, config, channels) }
@@ -216,7 +227,14 @@ internal class AAudioExclusiveOutput private constructor(
          * format that holds its bits (24 and 32-bit integer formats need Android 12).
          * Null when the device won't give it exclusively at that rate and format.
          */
-        fun open(config: AudioOutputProvider.OutputConfig, channels: Int, bits: Int): AAudioExclusiveOutput? {
+        fun open(
+            config: AudioOutputProvider.OutputConfig,
+            channels: Int,
+            bits: Int,
+            /** A particular output (the headphone jack), or 0 for wherever Android routes music. */
+            deviceId: Int = 0,
+            name: String = "Built-in DAC",
+        ): AAudioExclusiveOutput? {
             val modern = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
             val tries = buildList {
                 if (bits <= 16) add(NativeAudio.FORMAT_I16 to C.ENCODING_PCM_16BIT)
@@ -224,15 +242,15 @@ internal class AAudioExclusiveOutput private constructor(
                 if (modern) add(NativeAudio.FORMAT_I32 to C.ENCODING_PCM_32BIT)
             }
             for ((format, encoding) in tries) {
-                val handle = NativeAudio.aaudioOpen(config.sampleRate, channels, format, 0, true)
+                val handle = NativeAudio.aaudioOpen(config.sampleRate, channels, format, deviceId, true)
                 if (handle == 0L) continue
                 val info = NativeAudio.aaudioInfo(handle)
-                // Only what was asked for, exactly: shared or resampled isn't bit-perfect.
-                if (info[0] != NativeAudio.SHARING_EXCLUSIVE || info[1] != format || info[2] != config.sampleRate) {
+                // Only what was asked for, exactly: shared, resampled or routed elsewhere isn't bit-perfect.
+                if (info[0] != NativeAudio.SHARING_EXCLUSIVE || info[1] != format || info[2] != config.sampleRate || (deviceId > 0 && info[5] != deviceId)) {
                     NativeAudio.aaudioClose(handle)
                     continue
                 }
-                BitPerfectUsb.reportNative(BitPerfectUsb.Status.Active("Built-in DAC", config.sampleRate, BitPerfectUsb.bitsOf(encoding), "exclusive"))
+                BitPerfectUsb.reportNative(BitPerfectUsb.Status.Active(name, config.sampleRate, BitPerfectUsb.bitsOf(encoding), "exclusive"))
                 return AAudioExclusiveOutput(handle, config, channels, encoding, info[4].toLong())
             }
             Log.w("NativeOutput", "The phone's DAC wouldn't open exclusively at ${config.sampleRate} Hz")
