@@ -106,13 +106,15 @@ internal fun CommentsSheet(
             else -> "From YouTube"
         },
         expandable = true,
+        // Pulled up (or scrolled), it takes over the page; pulled down it goes back to half, then closes.
+        fullFraction = 1f,
     ) {
         when {
             loading -> Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) { CircularProgressIndicator() }
             failed -> Note("Comments didn't load. Check the connection and try again.")
             thread?.first == null -> Note("Comments are turned off for this song on YouTube.")
             comments.isEmpty() -> Note("No comments yet.")
-            else -> LazyColumn(state = list, modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            else -> LazyColumn(state = list, modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(comments, key = { it.id }) { CommentRow(it) }
                 if (next != null) item(key = "more") {
                     Box(Modifier.fillMaxWidth().padding(12.dp), Alignment.Center) { CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) }

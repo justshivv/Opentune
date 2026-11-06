@@ -126,6 +126,8 @@ fun FloatingCard(
     expandable: Boolean = false,
     /** Opens already at full content height (up to 90% of the screen), so nothing needs scrolling to reach. */
     startExpanded: Boolean = false,
+    /** How much of the screen an [expandable] card takes pulled all the way up: 1 takes over the page. */
+    fullFraction: Float = 0.9f,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val ui by AppSettings.ui.collectAsState()
@@ -210,7 +212,7 @@ fun FloatingCard(
                 // The card's own height with everything shown, measured as it lays out;
                 // an expandable card never grows past it, so a short menu has no empty foot.
                 var naturalPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
-                val fullPx = minOf(with(density) { (maxCard * 0.9f).toPx() }, naturalPx)
+                val fullPx = minOf(with(density) { (maxCard * fullFraction).toPx() }, naturalPx)
                 // Start at full height when asked, so the whole menu shows at once; otherwise half.
                 val halfPx = if (startExpanded || com.opentune.ui.tv.LocalIsTv.current) fullPx else minOf(with(density) { (maxCard * 0.5f).toPx() }, fullPx)
                 val range = (fullPx - halfPx).coerceAtLeast(0f)
@@ -256,17 +258,37 @@ fun FloatingCard(
                         }
 
                         override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                            if (!expandable || source != NestedScrollSource.UserInput || available.y <= 0 || extra <= 0f) return Offset.Zero
+                            if (!expandable || source != NestedScrollSource.UserInput || available.y <= 0) return Offset.Zero
                             settling?.cancel()
+                            if (extra <= 0f) {
+                                // Back at half with the list at its top: the pull carries the card down, to close it.
+                                if (!dismissible) return Offset.Zero
+                                drag += available.y
+                                return Offset(0f, available.y)
+                            }
                             val take = minOf(available.y, extra)
                             extra -= take
                             return Offset(0f, take)
                         }
 
                         override suspend fun onPreFling(available: Velocity): Velocity {
-                            if (!expandable || extra <= 0f || extra >= range) return Velocity.Zero
+                            if (!expandable) return Velocity.Zero
+                            // Carried down from the list: far enough or fast enough closes it, else back up.
+                            if (drag > 0f) {
+                                if (drag > with(density) { 110.dp.toPx() } || available.y > 1400f) card.close() else settle(available.y)
+                                return available
+                            }
+                            if (extra <= 0f || extra >= range) return Velocity.Zero
                             settle(available.y)
                             return available
+                        }
+
+                        override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                            // A slow pull let go of: settles the card back or closes it.
+                            if (expandable && drag > 0f) {
+                                if (drag > with(density) { 110.dp.toPx() }) card.close() else settle(0f)
+                            }
+                            return Velocity.Zero
                         }
                     }
                 }
