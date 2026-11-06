@@ -37,12 +37,14 @@ class SourceQualityBadgeTest {
         assertEquals("Upgrading quality", qualityStatusLabel(null, null, true))
     }
 
-    @Test fun jioSaavnAndYouTubeShowTheirTierWithoutTheBitrate() {
-        assertEquals("High Quality", qualityStatusLabel(NerdStats.Source("JioSaavn", kbps = 320), AudioFormatInfo("MP4A.40.2", 330, 44100, 2), false))
-        assertEquals("Good Quality", qualityStatusLabel(NerdStats.Source("YouTube · InnerTube", kbps = 165), AudioFormatInfo("OPUS", 165, 48000, 2), false))
-        assertEquals("Good Quality · upgrading", qualityStatusLabel(NerdStats.Source("YouTube · InnerTube"), AudioFormatInfo("OPUS", 165, 48000, 2), true))
+    @Test fun jioSaavnAndYouTubeShowTheirTierWithTheBitrate() {
+        assertEquals("High Quality · 330 kbps", qualityStatusLabel(NerdStats.Source("JioSaavn", kbps = 320), AudioFormatInfo("MP4A.40.2", 330, 44100, 2), false))
+        assertEquals("Good Quality · 165 kbps", qualityStatusLabel(NerdStats.Source("YouTube · InnerTube", kbps = 165), AudioFormatInfo("OPUS", 165, 48000, 2), false))
+        // The decoder doesn't say (a WebM stream): the stream's own figure.
+        assertEquals("Good Quality · 160 kbps", qualityStatusLabel(NerdStats.Source("YouTube · InnerTube", kbps = 160), AudioFormatInfo("OPUS", null, 48000, 2), false))
+        assertEquals("Good Quality · 165 kbps · upgrading", qualityStatusLabel(NerdStats.Source("YouTube · InnerTube"), AudioFormatInfo("OPUS", 165, 48000, 2), true))
         // A low data-saving stream still says so.
-        assertEquals("Standard quality", qualityStatusLabel(NerdStats.Source("YouTube · InnerTube", kbps = 48), AudioFormatInfo("OPUS", 48, 48000, 2), false))
+        assertEquals("Standard quality · 48 kbps", qualityStatusLabel(NerdStats.Source("YouTube · InnerTube", kbps = 48), AudioFormatInfo("OPUS", 48, 48000, 2), false))
         assertEquals("Lossless · 16-bit/44.1 kHz", qualityStatusLabel(NerdStats.Source("Lossless Bridge"), AudioFormatInfo("FLAC", null, 44100, 2, 16), false))
     }
 }

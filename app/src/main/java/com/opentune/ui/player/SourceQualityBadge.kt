@@ -193,7 +193,6 @@ internal fun qualityStatusLabel(source: NerdStats.Source?, format: AudioFormatIn
             val rate = format?.sampleRateHz ?: source.sampleRate
             listOfNotNull(bits?.let { "$it-bit" }, rate?.let { khzLabel(it) }).joinToString("/").ifEmpty { null }
         }
-        saavn || youTube -> null
         else -> kbps.takeIf { it > 0 }?.let { "$it kbps" }
     }
     val label = listOfNotNull(tier, detail).joinToString(" · ")

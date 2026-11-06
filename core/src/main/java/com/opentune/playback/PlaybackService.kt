@@ -2134,6 +2134,27 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    /**
+     * The song's average bitrate from its size and length, for a file or stream that
+     * doesn't say (most local files, downloads and cached streams): the file's size on
+     * disk, the media index's for a song on the phone, or the song cache's record of the
+     * stream's length. Null when neither is known.
+     */
+    private fun averageKbps(item: MediaItem, uri: Uri?): Int? = runCatching {
+        val player = mediaSession?.player
+        val ms = player?.duration?.takeIf { it > 0 && player.currentMediaItem?.mediaId == item.mediaId }
+            ?: item.toSong().durationMillis().takeIf { it > 0 } ?: return@runCatching null
+        val bytes: Long? = when {
+            uri?.scheme == "file" -> uri.path?.let { java.io.File(it).length() }?.takeIf { it > 0 }
+            LocalMusic.isLocal(item.mediaId) -> contentResolver.query(LocalMusic.contentUri(item.mediaId), arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) c.getLong(0) else null }?.takeIf { it > 0 }
+            else -> uri?.let { u -> cacheKeyOf(withoutStartup(selectedUri(u))) }?.let { key ->
+                androidx.media3.datasource.cache.ContentMetadata.getContentLength(AudioCache.get(this).getContentMetadata(key))
+            }?.takeIf { it > 0 }
+        }
+        bytes?.let { (it * 8 / ms).toInt() }?.takeIf { it in 8..20_000 }
+    }.getOrNull()
+
     private fun updateExternalStats() {
         val item = mediaSession?.player?.currentMediaItem
         val uri = item?.localConfiguration?.uri?.let(::selectedUri)
@@ -2156,8 +2177,8 @@ class PlaybackService : MediaLibraryService() {
             else -> StreamResolver.engineFor(item.mediaId, uri?.let(::isUpgradedUri) == true)?.let { "YouTube · $it" } ?: "YouTube · cached stream or resolving"
         }
         NerdStats.onPlaybackSource(NerdStats.Source(provider, rendition?.bits ?: downloaded?.bits, rendition?.sampleRate ?: downloaded?.sampleRate,
-            rendition?.kbps ?: if (rendition == null && item != null && uri?.let(::videoIdOf) != null)
-                StreamResolver.bitrateFor(item.mediaId, isUpgradedUri(uri)) else null,
+            rendition?.kbps ?: (if (rendition == null && item != null && uri?.let(::videoIdOf) != null)
+                StreamResolver.bitrateFor(item.mediaId, isUpgradedUri(uri)) else null) ?: item?.let { averageKbps(it, uri) },
             selectionDetail = if (item != null && uri?.let(::videoIdOf) != null && uri.let(::startupToken) == null)
                 ExternalStreams.selectionDetail(item.mediaId) else null, mediaId = item?.mediaId))
     }
