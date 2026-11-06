@@ -5,6 +5,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -144,7 +147,7 @@ private fun PlayerBody(nav: TvNav, song: Song) {
             }
         }
         Spacer(Modifier.height(10.dp))
-        SeekBar(position, duration, onSeekBy = p::seekBy)
+        SeekBar(position, duration, onSeekBy = p::seekBy, onSeekTo = p::seekTo)
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterHorizontally)) {
             TvIconButton(Icons.Rounded.Shuffle, "Shuffle", p::toggleShuffle, active = shuffle)
@@ -189,13 +192,22 @@ private fun mediaKey(e: androidx.compose.ui.input.key.KeyEvent, p: TvPlayer, ste
 
 /** Where the song is: Left and Right on it move ten seconds; Up and Down leave it. */
 @Composable
-internal fun SeekBar(position: Long, duration: Long, onSeekBy: (Long) -> Unit) {
+internal fun SeekBar(position: Long, duration: Long, onSeekBy: (Long) -> Unit, onSeekTo: (Long) -> Unit = {}) {
     var focused by remember { mutableStateOf(false) }
     val fraction = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
     val thick by animateFloatAsState(if (focused) 10f else 5f, tween(120), label = "seekThick")
     Column(Modifier.fillMaxWidth()) {
         Box(
             Modifier.fillMaxWidth().height(24.dp)
+                // A cursor can click or drag along it, as well as the arrows nudging it.
+                .pointerInput(duration) {
+                    detectTapGestures { at -> if (duration > 0) onSeekTo((at.x / size.width * duration).toLong().coerceIn(0, duration)) }
+                }
+                .pointerInput(duration) {
+                    detectHorizontalDragGestures { change, _ ->
+                        if (duration > 0) onSeekTo((change.position.x / size.width * duration).toLong().coerceIn(0, duration))
+                    }
+                }
                 .onFocusChanged { focused = it.isFocused }
                 .onKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) false

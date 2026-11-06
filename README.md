@@ -152,6 +152,11 @@ your phone instead:
    device → TV), on the same Wi-Fi, and approve sharing your YouTube
    Music session. The code expires after two minutes.
 
+Your phone can also be the remote: a trackpad that moves a cursor on the
+TV, with taps, drags, two-finger scrolling and Back and Home gestures, or a
+pad of buttons. Pair it once from the TV's Settings and the phone's Link a
+device page.
+
 More in [docs/android-tv.md](docs/android-tv.md).
 
 The phone and the TV each keep their own local library.

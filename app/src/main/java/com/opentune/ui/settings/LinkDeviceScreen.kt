@@ -96,6 +96,7 @@ fun LinkDeviceScreen(
     onBack: () -> Unit,
     onSignIn: () -> Unit,
     onTogether: () -> Unit,
+    onRemote: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var target by rememberSaveable { mutableStateOf(LinkTarget.TV) }
@@ -151,7 +152,7 @@ fun LinkDeviceScreen(
             ) { shown ->
                 Column(Modifier.padding(top = 20.dp)) {
                     when (shown) {
-                        LinkTarget.TV -> TvSteps(signedIn, onSignIn, ::camera, ::open, ::share)
+                        LinkTarget.TV -> TvSteps(signedIn, onSignIn, ::camera, ::open, ::share, onRemote)
                         LinkTarget.COMPUTER -> DeviceCard(
                             "In your browser",
                             "Browse, search and listen on a computer. Your library there stays in that browser.",
@@ -216,7 +217,11 @@ private fun TvSteps(
     camera: () -> Unit,
     open: (String) -> Unit,
     share: (String) -> Unit,
+    onRemote: () -> Unit,
 ) {
+    DeviceCard("Remote control", "Use this phone as a trackpad and remote for OpenTune on the TV: a cursor you steer with a finger, or a pad of buttons.", compact = true) {
+        Buttons({ SheetButton("Control the TV", onClick = onRemote, icon = Icons.Rounded.Tv, tone = SheetTone.Primary) })
+    }
     DeviceCard("Android TV", "Sign the TV in with this phone's YouTube Music account. No typing with the remote.") {
         Step(1, "Install OpenTune for TV", "A separate app made for the remote. Get OpenTune-TV from the latest release.") {
             Buttons(

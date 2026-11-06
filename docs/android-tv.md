@@ -46,14 +46,52 @@ Typing a password with a remote is no fun, so the TV is signed in from a phone:
 
 The phone and the TV each keep their own local library.
 
+## Using your phone as a remote
+
+A phone with OpenTune can steer the TV app over the home Wi-Fi: a trackpad that moves a
+cursor on the TV's screen, or a pad of buttons, switched with one tap.
+
+**Pairing, once.** On the TV, open Settings, then Pair a phone, and a code comes up. On the
+phone, open Settings, then Link a device, then TV, then Control the TV, and scan it. The code
+lasts two minutes and works for one phone. After that the phone finds the TV by itself, and
+Settings on the TV lists the paired phones, each with Remove.
+
+**Trackpad**
+
+- Slide one finger to move the cursor; faster slides go farther. A tap clicks.
+- Hold a finger still, then slide, to drag (the seek bar, a long list).
+- Slide two fingers to scroll under the cursor. Tap with two fingers for Back, three for Home.
+- Settings (the sliders icon) has cursor speed, natural scrolling, tap to click and whether
+  the phone's volume buttons change the TV's volume.
+
+**Buttons.** Arrows (hold to repeat), OK, previous, rewind, fast-forward and next. Back, Home,
+play/pause, volume, mute and a keyboard that sends a search to the TV are always at the bottom.
+The phone shows what is playing and how far along it is.
+
+**What it can't do.** The cursor and clicks work inside OpenTune on the TV, not across the whole
+TV; the TV's own home screen and other apps need the TV's remote. It works while OpenTune is
+open on the TV: if the TV has gone to another app, open OpenTune there first. Volume changes
+OpenTune's stream, which a TV that fixes its volume ignores.
+
+**How it is kept private.** Pairing gives each phone a key of its own, made on the TV and sent
+only inside the code's one-time exchange. Every message afterwards is encrypted and tied to its
+connection and order, so a recorded message can't be played back, and the TV answers only
+phones that hold a key. Everything stays on your network; nothing goes to a server. Removing a
+phone on the TV cuts it off at once.
+
 ## Verification
 
 Automated tests cover the pages (Library, Liked songs, Settings, the player's empty
 state, synced lyrics and the seek bar), focus moving along the top bar with the
 arrows and OK opening a tab, going back through pages, and the small rules behind
-them (time formatting, the format line, how a search is sorted into rows).
+them (time formatting, the format line, how a search is sorted into rows). For the
+phone remote they cover pairing and control over real sockets, the refusals (a code used
+twice, a removed phone, a wrong key, a replayed or oversized message), the trackpad's
+gestures on the phone and the cursor's clicks, scrolling and dragging on the TV.
 
 Before a TV store release, also test on a physical Android TV and Google TV: first
 launch, the on-screen keyboard in Search, signing in from a phone, Back from every
-page, media keys with the app in the background, and playback resuming. Firmware,
+page, media keys with the app in the background, and playback resuming. For the phone remote:
+pairing, the cursor on the real screen and how fast it feels, and a network that blocks
+discovery (the phone then falls back to the address it last saw the TV at). Firmware,
 the keyboard and HDMI volume differ from one TV to the next.

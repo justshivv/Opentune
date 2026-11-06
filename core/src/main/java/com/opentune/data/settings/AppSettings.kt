@@ -420,6 +420,16 @@ data class InterfaceSettings(
     val playlistList: Boolean = false,
     /** Playlists pinned to the top of Library, first pinned first: a local playlist's id, or a YouTube Music browse id. */
     val pinnedPlaylists: List<String> = emptyList(),
+    /** The phone as a TV remote: how far the TV's cursor moves for a finger's move, 0.5 to 2.5 times. */
+    val remotePointerSpeed: Float = 1f,
+    /** Two fingers drag the page along with them, as on a phone; off, the other way. */
+    val remoteNaturalScroll: Boolean = true,
+    /** A tap on the trackpad clicks. */
+    val remoteTapToClick: Boolean = true,
+    /** The remote opens on the trackpad; off, on the buttons. The last one used is kept. */
+    val remoteStartOnTrackpad: Boolean = true,
+    /** The phone's volume buttons change the TV's volume while the remote is open. */
+    val remoteVolumeKeys: Boolean = true,
     /**
      * Lite mode: the same pages and layout, without the effects a TV or an older phone
      * can't draw smoothly (glass, blur, glows, moving and animated covers, canvases),

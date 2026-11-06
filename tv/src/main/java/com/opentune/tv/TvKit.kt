@@ -6,6 +6,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -74,11 +76,15 @@ fun TvSurface(
     content: @Composable BoxScope.(focused: Boolean) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val grow by animateFloatAsState(if (focused) scale else 1f, tween(140), label = "grow")
-    val fill by animateColorAsState(if (focused) focusedContainer else container, tween(140), label = "fill")
+    // The cursor from a phone's trackpad lights what it is over just as the remote's focus does.
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    val lit = focused || hovered
+    val grow by animateFloatAsState(if (lit) scale else 1f, tween(140), label = "grow")
+    val fill by animateColorAsState(if (lit) focusedContainer else container, tween(140), label = "fill")
     Box(
         modifier
-            .zIndex(if (focused) 1f else 0f)
+            .zIndex(if (lit) 1f else 0f)
             .graphicsLayer { scaleX = grow; scaleY = grow }
             .onFocusChanged { state ->
                 focused = state.isFocused
@@ -86,9 +92,9 @@ fun TvSurface(
             }
             .clip(shape)
             .background(fill, shape)
-            .then(if (focused && ring) Modifier.border(3.dp, FocusRing, shape) else Modifier)
-            .clickable(role = role, onClick = onClick),
-    ) { content(focused) }
+            .then(if (lit && ring) Modifier.border(3.dp, FocusRing, shape) else Modifier)
+            .clickable(interactionSource = source, indication = null, role = role, onClick = onClick),
+    ) { content(lit) }
 }
 
 /** A square of cover art with its title and credit under it. [round] for an artist's face. */

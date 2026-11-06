@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.mutableIntStateOf
+import com.opentune.data.remote.RemoteInvite
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,9 +44,17 @@ fun SettingsScreen(nav: TvNav) {
     val account by AccountStore.account.collectAsState()
     val playback by AppSettings.playback.collectAsState()
     var pairing by remember { mutableStateOf(false) }
+    var pairingPhone by remember { mutableStateOf(false) }
+    val remote = nav.remote
+    val paired by (remote?.phones?.phones ?: MutableStateFlow(emptyList())).collectAsState()
+    val connected by (remote?.controllers ?: MutableStateFlow(emptyList())).collectAsState()
 
     if (pairing) {
         SignInPanel(onClose = { pairing = false })
+        return
+    }
+    if (pairingPhone && remote != null) {
+        PairPhonePanel(remote, onClose = { pairingPhone = false })
         return
     }
 
@@ -88,8 +99,71 @@ fun SettingsScreen(nav: TvNav) {
                 AppSettings.updatePlayback { it.copy(automix = !it.automix) }
             }
         }
+        if (remote != null) {
+            item { Heading("Phone remote") }
+            item {
+                SettingRow(
+                    "Pair a phone", "Use your phone as a trackpad and remote. Scan a code to connect it once.",
+                    "Pair",
+                ) { pairingPhone = true }
+            }
+            items(paired.size) { i ->
+                val phone = paired[i]
+                SettingRow(
+                    phone.name, if (phone.name in connected) "Connected now" else "Paired",
+                    "Remove",
+                ) { remote.forget(phone) }
+            }
+        }
         item { Heading("About") }
         item { SettingRow("OpenTune for TV", "Version ${com.opentune.core.BuildConfig.VERSION_NAME}", null) {} }
+    }
+}
+
+/**
+ * Pairing a phone: a code on the screen that the phone scans once. After that the phone finds
+ * this TV by itself. The code lasts two minutes and works for one phone.
+ */
+@Composable
+private fun PairPhonePanel(remote: TvRemote, onClose: () -> Unit) {
+    var attempt by remember { mutableIntStateOf(0) }
+    var link by remember { mutableStateOf<String?>(null) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    val before = remember { remote.phones.phones.value.size }
+    val phones by remote.phones.phones.collectAsState()
+    val done = phones.size > before
+
+    DisposableEffect(Unit) { onDispose { remote.cancelInvite() } }
+    LaunchedEffect(attempt) {
+        problem = null
+        link = runCatching { remote.invite().link }.onFailure { problem = it.message }.getOrNull()
+        // The code runs out after two minutes; say so instead of leaving a dead one up.
+        if (link != null) { kotlinx.coroutines.delay(RemoteInvite.LIFETIME_MS); link = null }
+    }
+    LaunchedEffect(done) { if (done) { kotlinx.coroutines.delay(1_800); onClose() } }
+
+    Row(Modifier.fillMaxSize().padding(horizontal = TvSafe.Horizontal), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(64.dp)) {
+        Box(Modifier.size(360.dp).background(Color.White, RoundedCornerShape(24.dp)).padding(28.dp), contentAlignment = Alignment.Center) {
+            val code = link
+            if (code != null && !done) QrCode(code, Modifier.fillMaxSize())
+            else Text(if (done) "✓" else "…", style = MaterialTheme.typography.displaySmall, color = Color.Black)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Text("Pair a phone", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                when {
+                    done -> "Paired. Open OpenTune on the phone, then Settings, Link a device, TV, to use it as a remote."
+                    problem != null -> problem!!
+                    link == null -> "That code ran out. Make a new one."
+                    else -> "On your phone, open OpenTune, then Settings, Link a device, TV, Control this TV, and scan this code. Both must be on the same Wi-Fi. It lasts two minutes."
+                },
+                style = MaterialTheme.typography.bodyLarge, color = TvColors.TextDim,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (link == null && !done) TvButton("New code", { attempt++ }, primary = true)
+                TvButton(if (done) "Done" else "Cancel", onClose)
+            }
+        }
     }
 }
 

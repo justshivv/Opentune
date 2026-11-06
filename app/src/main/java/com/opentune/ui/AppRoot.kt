@@ -690,7 +690,11 @@ fun AppRoot(vm: PlayerViewModel) {
                             onBack = { nav.popBackStack() },
                             onSignIn = { nav.navigate("login") },
                             onTogether = { nav.navigate("together") },
+                            onRemote = { nav.navigate("tv-remote") },
                         )
+                    }
+                    page("tv-remote") {
+                        com.opentune.ui.remote.TvRemoteScreen(content, onBack = { nav.popBackStack() })
                     }
                     page("login") { entry ->
                         // Only while it's still the page in front: a late second call mustn't close the one under it.

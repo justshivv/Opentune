@@ -1,6 +1,11 @@
 package com.opentune.tv
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,7 +70,7 @@ sealed interface Dest {
 private val Tabs = listOf(Dest.Home, Dest.Explore, Dest.Library, Dest.NowPlaying)
 
 /** What a screen can ask of the app: open a page, or play something. */
-class TvNav(val stack: SnapshotStateList<Dest>, val player: TvPlayer) {
+class TvNav(val stack: SnapshotStateList<Dest>, val player: TvPlayer, val remote: TvRemote? = null) {
     /** A search to run when the Search page opens: what the viewer said to the TV's voice search. */
     var pendingSearch by mutableStateOf<String?>(null)
 
@@ -106,9 +111,9 @@ fun ShelfItem.asSong(): Song = Song(
 )
 
 @Composable
-fun TvRoot(player: TvPlayer, voice: MutableStateFlow<String?> = MutableStateFlow(null)) {
+fun TvRoot(player: TvPlayer, voice: MutableStateFlow<String?> = MutableStateFlow(null), remote: TvRemote? = null) {
     val stack = remember { mutableStateListOf<Dest>(Dest.Home) }
-    val nav = remember(player) { TvNav(stack, player) }
+    val nav = remember(player, remote) { TvNav(stack, player, remote) }
     val current = stack.last()
     val song by player.currentSong.collectAsState()
     val playing by player.isPlaying.collectAsState()
@@ -120,6 +125,17 @@ fun TvRoot(player: TvPlayer, voice: MutableStateFlow<String?> = MutableStateFlow
     DisposableEffect(awake) {
         view.keepScreenOn = awake
         onDispose { view.keepScreenOn = false }
+    }
+
+    // A paired phone's trackpad and buttons act on this screen; what's playing goes back to it.
+    val activity = LocalContext.current.findActivity()
+    if (remote != null && activity != null) {
+        val input = remember(activity, nav, remote) { TvRemoteInput(activity, remote.pointer, nav) }
+        DisposableEffect(input) { remote.attach(input); onDispose { remote.detach(input) } }
+        val phonesNow by remote.controllers.collectAsState()
+        LaunchedEffect(phonesNow.isNotEmpty(), input) {
+            while (phonesNow.isNotEmpty()) { remote.push(input.now()); delay(NOW_EVERY_MS) }
+        }
     }
 
     // "Play … on OpenTune" from the voice search opens Search with it typed in.
@@ -161,7 +177,17 @@ fun TvRoot(player: TvPlayer, voice: MutableStateFlow<String?> = MutableStateFlow
                 }
             }
         }
+        if (remote != null) TvCursor(remote.pointer)
     }
+}
+
+/** How often the phone is told what's playing, which keeps its progress bar moving. */
+private const val NOW_EVERY_MS = 700L
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 @Composable
