@@ -299,12 +299,19 @@ fun vocalsEnd(f: Features, fromMs: Long = f.startMs, toMs: Long = f.endMs): Long
     val mid = f.midDb ?: return null
     val n = f.size
     if (n < 200) return null
-    // The voice band's share of the whole, smoothed over a second, in dB.
+    // The voice band's share of the whole over a second around each hop, in dB: the band's power
+    // over the whole's, each summed over the second (an average of moment-by-moment shares
+    // let the kick drum's moments swamp it).
     val w = max(1, (500.0 / f.hopMs).roundToInt())
-    val share = FloatArray(n) { mid[it] - f.powerDb[it] }
-    val prefix = DoubleArray(n + 1)
-    for (i in 0 until n) prefix[i + 1] = prefix[i] + share[i]
-    val smooth = FloatArray(n) { i -> val a = max(0, i - w); val b = min(n, i + w + 1); ((prefix[b] - prefix[a]) / (b - a)).toFloat() }
+    val midSum = DoubleArray(n + 1); val allSum = DoubleArray(n + 1)
+    for (i in 0 until n) {
+        midSum[i + 1] = midSum[i] + 10.0.pow(mid[i] / 10.0)
+        allSum[i + 1] = allSum[i] + 10.0.pow(f.powerDb[i] / 10.0)
+    }
+    val smooth = FloatArray(n) { i ->
+        val a = max(0, i - w); val b = min(n, i + w + 1)
+        db(((midSum[b] - midSum[a]) / (allSum[b] - allSum[a]).coerceAtLeast(1e-12)).toFloat())
+    }
     // Only where there's sound: silence has no share to speak of.
     val a = f.indexOf(fromMs); val b = min(n, f.indexOf(toMs) + 1)
     val body = percentile(f.powerDb, a, b, 0.8f)
@@ -539,11 +546,10 @@ fun automixPlan(durationMs: Long, ending: Ending?, opening: Opening?): MixPlan {
         val margin = outBeat?.let { (it.periodMs * 4).roundToLong() } ?: VOCAL_MARGIN_MS
         val after = vocals + margin
         val onBar = outBeat?.groupAtOrAfter(after) ?: after
-        mixAt = when {
-            end - onBar >= MIN_AFTER_VOCALS_MS -> onBar
-            end - (vocals + VOCAL_MARGIN_MS / 3) >= MIN_BLEND_MS -> vocals + VOCAL_MARGIN_MS / 3
-            else -> end - MIN_BLEND_MS
-        }
+        // A bar after, else a beat after, else a breath after: the first that leaves a blend worth having.
+        val onBeat = outBeat?.atOrAfter(vocals + outBeat.periodMs.roundToLong())
+        mixAt = listOfNotNull(onBar, onBeat, vocals + VOCAL_MARGIN_MS / 3).firstOrNull { end - it >= MIN_BLEND_MS }
+            ?: (end - MIN_BLEND_MS)
         blend = (end - mixAt).coerceAtMost(blend).coerceAtLeast(MIN_BLEND_MS)
     }
     // Both songs' bars known: bar on bar (or pair on pair), the incoming song cued to the one of its first bar.
@@ -675,13 +681,11 @@ private const val MIN_BARS = 3
 /** Songs further apart than this are levelled only this far. */
 private const val MAX_LEVEL_DB = 9f
 /** The voice band's share must rise and fall by this much for the vocals to be told apart. */
-private const val VOCAL_SPREAD_DB = 3f
+private const val VOCAL_SPREAD_DB = 2.5f
 /** Singing lasts at least this long; a shorter rise is a fill, not a voice. */
 private const val VOCAL_HOLD_MS = 1_500.0
 /** A breath after the last words, where there's no beat to count a bar by. */
 private const val VOCAL_MARGIN_MS = 1_500L
-/** The shortest blend worth placing after the vocals; less, and it starts nearer them. */
-private const val MIN_AFTER_VOCALS_MS = 2_500L
 /** An intro has reached the song's body when it's within this of its level. */
 private const val BODY_REACHED_DB = 3f
 /** The longest intro laid over a song that stops dead. */
