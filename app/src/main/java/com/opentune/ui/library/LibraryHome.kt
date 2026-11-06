@@ -1203,11 +1203,11 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         if (!searching) item(key = "header") {
             val full = com.opentune.ui.browse.fullListCover()
             androidx.compose.foundation.layout.BoxWithConstraints {
-                if (full) com.opentune.ui.browse.FullListCover(playlist.coverUrl.artworkAt(HEADER_ART_PX), tint, Modifier.pinnedToTop(band),
+                com.opentune.ui.browse.HeaderBackdrop((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
+                if (full) com.opentune.ui.browse.FullListCover(playlist.coverUrl.artworkAt(HEADER_ART_PX), Modifier.pinnedToTop(band),
                     cover = if (playlist.coverUrl == null) ({
                         com.opentune.ui.components.PlaylistCover(playlist.name, songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape, named = false)
                     }) else null)
-                else com.opentune.ui.browse.HeaderBackdrop((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
                 Column(
                     if (full) Modifier.fillMaxWidth().padding(top = maxWidth * com.opentune.ui.browse.FULL_COVER_TITLE_AT, start = 24.dp, end = 24.dp)
                     else Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),

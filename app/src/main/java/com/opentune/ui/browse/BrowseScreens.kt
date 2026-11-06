@@ -382,25 +382,24 @@ internal fun fullListCover(): Boolean =
 
 /**
  * A list's cover across the top of its page, edge to edge and under the status bar, square,
- * darkened a little at the top for the status line and fading at its foot into [into], the
- * page's colour, where the title sits over it. [cover] draws it when it's made of the songs' covers.
+ * darkened a little at the top for the status line and fading out at its foot, so the
+ * blurred wash of its colours behind the header ([HeaderBackdrop]) carries on below it,
+ * down past the title, as on the page without it. [cover] draws it when it's made of the
+ * songs' covers.
  */
 @Composable
-internal fun FullListCover(url: String?, into: Color, modifier: Modifier = Modifier, cover: (@Composable () -> Unit)? = null) {
-    Box(modifier.fillMaxWidth().aspectRatio(1f).clipToBounds()) {
+internal fun FullListCover(url: String?, modifier: Modifier = Modifier, cover: (@Composable () -> Unit)? = null) {
+    Box(
+        modifier.fillMaxWidth().aspectRatio(1f).clipToBounds()
+            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                drawRect(Brush.verticalGradient(0.5f to Color.Black, 1f to Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+            },
+    ) {
         if (cover != null) cover()
         else Artwork(url, Modifier.matchParentSize(), shape = androidx.compose.ui.graphics.RectangleShape, placeholder = Icons.Filled.Album)
-        Box(
-            Modifier.matchParentSize().background(
-                Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = 0.4f),
-                    0.18f to Color.Transparent,
-                    0.5f to Color.Transparent,
-                    0.78f to into.copy(alpha = 0.7f),
-                    1f to into,
-                ),
-            ),
-        )
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.4f), 0.18f to Color.Transparent)))
     }
 }
 
@@ -649,8 +648,8 @@ fun CollectionScreen(
                     if (!searching) item(key = "header") {
                         val full = fullListCover()
                         androidx.compose.foundation.layout.BoxWithConstraints {
-                            if (full) FullListCover(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), tint, Modifier.pinnedToTop(band))
-                            else HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
+                            HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
+                            if (full) FullListCover(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.pinnedToTop(band))
                             Column(
                                 if (full) Modifier.fillMaxWidth().padding(top = maxWidth * FULL_COVER_TITLE_AT, start = 24.dp, end = 24.dp)
                                 else Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),
