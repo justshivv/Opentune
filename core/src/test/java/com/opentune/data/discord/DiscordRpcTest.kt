@@ -19,8 +19,10 @@ class DiscordRpcTest {
         val before = System.currentTimeMillis()
         val p = DiscordRpc.presence("token", now())
         val a = p.getJSONArray("activities").getJSONObject(0)
-        assertEquals(2, a.getInt("type"))
-        assertEquals("OpenTune", a.getString("name"))
+        // Shown as "Playing on OpenTune".
+        assertEquals(0, a.getInt("type"))
+        assertEquals("on OpenTune", a.getString("name"))
+        assertEquals(0, a.getInt("status_display_type"))
         assertEquals("Labon Ko", a.getString("details"))
         assertEquals("Pritam", a.getString("state"))
         val t = a.getJSONObject("timestamps")

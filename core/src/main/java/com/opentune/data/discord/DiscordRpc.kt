@@ -33,7 +33,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * "Listening to OpenTune" on the listener's Discord profile, from the phone.
+ * "Playing on OpenTune" on the listener's Discord profile, from the phone.
  *
  * A phone has no Discord app socket to talk to, as the desktop does, and
  * Discord offers no API for another app to set someone's status. So, as on
@@ -222,11 +222,13 @@ object DiscordRpc {
         val art = now.artworkUrl?.takeIf { it.startsWith("http") }
         val image = art?.let { externalAsset(token, it) ?: it }
         val activity = JSONObject()
-            .put("name", APP_NAME)
-            .put("type", 2) // Listening to
+            // "Playing on OpenTune": Discord puts "Playing" before a type-0 activity's name.
+            .put("name", "on $APP_NAME")
+            .put("type", 0)
             .put("details", fit(if (rate != 1f) "${now.title} [${"%.2f".format(rate)}x]" else now.title, TEXT_MAX))
             .put("state", fit(now.artist.ifBlank { "Unknown artist" }, TEXT_MAX))
-            .put("status_display_type", 1)
+            // The status line under the name in member lists reads the activity's name: "Playing on OpenTune".
+            .put("status_display_type", 0)
             .put("assets", JSONObject().apply {
                 if (image != null) put("large_image", image)
                 now.album?.takeIf { it.isNotBlank() }?.let { put("large_text", fit(it, TEXT_MAX)) }
