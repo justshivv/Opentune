@@ -61,6 +61,8 @@ internal fun SignInPage(
     logo: Int? = null,
     /** Shown under the hint: another way to sign in, when the page itself won't. */
     extra: (@Composable () -> Unit)? = null,
+    /** What's said about the password and what's kept, when it isn't the service's own page. */
+    privacy: String? = null,
     web: @Composable (Modifier) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -104,7 +106,7 @@ internal fun SignInPage(
         ) {
             Icon(Icons.Rounded.Lock, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
             Text(
-                "You sign in on $service's own page. Only the sign-in is kept on this phone; your password never reaches OpenTune.",
+                privacy ?: "You sign in on $service's own page. Only the sign-in is kept on this phone; your password never reaches OpenTune.",
                 style = MaterialTheme.typography.labelMedium,
                 color = scheme.onSurfaceVariant,
             )
