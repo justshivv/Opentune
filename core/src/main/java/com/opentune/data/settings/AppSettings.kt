@@ -442,6 +442,8 @@ data class InterfaceSettings(
     val coverCornerDp: Int = 28,
     val hideVolumeBar: Boolean = false,
     val hideSongStatus: Boolean = false,
+    /** The Comments button in the player (in the pill beside the audio output) and in the song's menu. */
+    val commentsButton: Boolean = true,
     /** Show the current lyric above the controls, independently of the player layout. */
     val lyricsPreview: Boolean = true,
     val syncedLyrics: Boolean = true,

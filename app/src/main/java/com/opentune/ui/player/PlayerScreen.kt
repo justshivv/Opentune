@@ -1249,8 +1249,10 @@ fun PlayerLayout(
                                     { showOutput = true },
                                     enabled = enabled,
                                 )
-                                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
-                                PillButton(Icons.Rounded.ChatBubbleOutline, "Comments", showComments, { showComments = true }, enabled = enabled)
+                                if (state.ui.commentsButton) {
+                                    Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                    PillButton(Icons.Rounded.ChatBubbleOutline, "Comments", showComments, { showComments = true }, enabled = enabled)
+                                }
                                 if (apple) {
                                     val room by Together.room.collectAsState()
                                     Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
@@ -1347,7 +1349,7 @@ fun PlayerLayout(
                 onDismiss = { showMenu = false },
                 top = { close ->
                     MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
-                    MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }
+                    if (state.ui.commentsButton) MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }
                 },
                 tools = { close ->
                     MenuRow(Icons.Rounded.HighQuality, "Track details") { close(); showDetails = true }

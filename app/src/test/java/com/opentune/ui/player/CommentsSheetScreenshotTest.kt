@@ -17,7 +17,6 @@ import com.opentune.data.settings.ThemeSettings
 import com.opentune.ui.theme.OpenTuneTheme
 import java.io.File
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipe
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -69,7 +68,7 @@ class CommentsSheetScreenshotTest {
         File("build/screenshots/player/comments.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    /** Slid up, the sheet takes over the page; slid down, it goes back to half, then closes. */
+    /** The sheet opens taking over the page; slid down, it closes. */
     @Test fun expandsAndCloses() {
         val many = (1..30).map { c("$it", "@listener$it", "Comment number $it, long enough to wrap onto a second line now and then.", "$it days ago", "${it * 3}") }
         var open by androidx.compose.runtime.mutableStateOf(true)
@@ -85,13 +84,10 @@ class CommentsSheetScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(1_500)
         compose.waitForIdle()
-        fun titleTop() = compose.onNodeWithText("Comments").fetchSemanticsNode().boundsInRoot.top
-        val half = titleTop()
-        compose.onNodeWithText("Comment number 2, long enough to wrap onto a second line now and then.").performTouchInput { swipeUp() }
-        compose.mainClock.advanceTimeBy(1_500)
-        compose.waitForIdle()
-        val full = titleTop()
-        org.junit.Assert.assertTrue("grew from $half to $full", full < half - 300)
+        // Opens at full height: the title near the top of the screen.
+        val top = compose.onNodeWithText("Comments").fetchSemanticsNode().boundsInRoot.top
+        val screen = compose.activity.window.decorView.height.toFloat()
+        org.junit.Assert.assertTrue("title at $top of $screen", top < screen * 0.2f)
         // Down: the list to its top, the card back to half, then away.
         repeat(6) {
             if (!open) return@repeat

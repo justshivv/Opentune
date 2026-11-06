@@ -54,6 +54,7 @@ import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.BlurOff
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Check
 import com.opentune.data.settings.bitPerfectMode
 import androidx.compose.material.icons.rounded.Close
@@ -1675,6 +1676,9 @@ private fun settingsSections(
                 Entry("Lyrics preview", "player lyrics line apple music classic theme") {
                     ToggleRow("Lyrics preview", ui.lyricsPreview, { v -> AppSettings.updateUi { it.copy(lyricsPreview = v) } },
                         summary = "Show the current lyric on the player in every theme", icon = Icons.Rounded.Lyrics)
+                },
+                Entry("Comments button", "comments youtube button pill remove hide") {
+                    ToggleRow("Comments button", ui.commentsButton, { v -> AppSettings.updateUi { it.copy(commentsButton = v) } }, summary = "A button in the player that opens the song's comments from YouTube", icon = Icons.Rounded.ChatBubbleOutline)
                 },
                 Entry("Hide song status", "playing from") {
                     ToggleRow("Hide song status", ui.hideSongStatus, { v -> AppSettings.updateUi { it.copy(hideSongStatus = v) } }, summary = "Hides the \"Playing from\" line in the player", icon = Icons.Rounded.VisibilityOff)

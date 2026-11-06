@@ -106,6 +106,8 @@ internal fun CommentsSheet(
             else -> "From YouTube"
         },
         expandable = true,
+        // Open at full height straight away, the comment box at its foot; a slide down closes it.
+        startExpanded = true,
         // Pulled up (or scrolled), it takes over the page; pulled down it goes back to half, then closes.
         fullFraction = 1f,
     ) {
@@ -121,12 +123,17 @@ internal fun CommentsSheet(
                 }
             }
         }
-        val params = createParams
+        // Signed in, the box is always there; YouTube says with its first page whether it takes
+        // comments on this video, and if it didn't, sending says so rather than the box being missing.
         when {
-            params != null -> Composer(onPost = { text ->
-                val r = SongComments.post(params, text)
-                r.onSuccess { posted -> if (posted != null) comments.add(0, posted) }
-                r.exceptionOrNull()?.message ?: if (r.isFailure) "YouTube didn't take the comment" else null
+            signedIn && thread?.first != null -> Composer(onPost = { text ->
+                val params = createParams
+                if (params == null) "YouTube isn't taking comments on this video from here"
+                else {
+                    val r = SongComments.post(params, text)
+                    r.onSuccess { posted -> if (posted != null) comments.add(0, posted) }
+                    r.exceptionOrNull()?.message ?: if (r.isFailure) "YouTube didn't take the comment" else null
+                }
             }, scope = scope)
             !signedIn && thread?.first != null -> Note("Sign in with YouTube Music to add a comment.")
         }
