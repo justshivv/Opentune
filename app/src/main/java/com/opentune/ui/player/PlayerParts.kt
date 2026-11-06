@@ -185,30 +185,41 @@ fun PlayerBackdrop(
         Box(modifier.background(Color.Black))
         return
     }
-    Box(modifier.background(scheme.surface)) {
+    // The cover's own colours, not the scheme's turned ones, so each background looks like the cover.
+    val tones = rememberCoverTones(artworkUrl)
+    Box(modifier.background(tones.base)) {
         when (style) {
             PlayerBackground.AMOLED -> Unit
-            PlayerBackground.ECHO_GLOW -> EchoGlowBackground(animate && playing, Modifier.matchParentSize())
-            PlayerBackground.BLUR -> CoverBlur(artworkUrl, animate && playing, Modifier.matchParentSize())
+            PlayerBackground.ECHO_GLOW -> EchoGlowBackground(animate && playing, Modifier.matchParentSize(), tones.lights, tones.base)
+            PlayerBackground.BLUR -> CoverBlur(artworkUrl, animate && playing, Modifier.matchParentSize(), tones)
             PlayerBackground.MESH -> MeshGradient(artworkUrl, animate, Modifier.matchParentSize())
             PlayerBackground.GRADIENT -> {
-                // Two tones: the cover's own colour at the top, deepening to
-                // the dark surface by the middle, where the controls sit.
-                val top = scheme.primaryContainer
+                // The cover's main colour at the top, its second colour coming in from a corner,
+                // both deepening to the cover's near-black by the controls.
+                val top = tones.deep
                 Box(
-                    Modifier.matchParentSize().background(
-                        Brush.verticalGradient(
-                            0f to top,
-                            0.3f to lerp(top, scheme.surface, 0.35f),
-                            0.62f to lerp(top, scheme.surface, 0.85f),
-                            1f to scheme.surface,
-                        ),
-                    ),
+                    Modifier.matchParentSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0f to top,
+                                0.32f to lerp(top, tones.base, 0.3f),
+                                0.66f to lerp(top, tones.base, 0.82f),
+                                1f to tones.base,
+                            ),
+                        )
+                        .drawBehind {
+                            drawRect(Brush.radialGradient(
+                                *com.opentune.ui.components.glowStops(tones.second, 0.75f, shape = 1.5f),
+                                center = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.08f),
+                                radius = size.width.coerceAtLeast(1f) * 1.1f,
+                            ))
+                            with(com.opentune.ui.components.Dither) { drawDither(0.05f) }
+                        },
                 )
-                // Under the controls, a faint glow in the same colour.
+                // Under the controls, a faint glow in the cover's colours.
                 androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize()) {
                     AmbientLights(
-                        listOf(scheme.primary, scheme.primaryContainer, scheme.inversePrimary),
+                        tones.lights.take(3),
                         playing = playing,
                         animate = animate,
                         modifier = Modifier
@@ -623,7 +634,7 @@ internal fun smoothBackdrop(): Boolean {
  * own, then blurred; before Android 12, which has no blur, the stretch alone does it.
  */
 @Composable
-private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier = Modifier) {
+private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier = Modifier, tones: CoverTones? = null) {
     val scheme = MaterialTheme.colorScheme
     // Every frame where the phone keeps up, stepped like the mesh where it doesn't.
     val smooth = smoothBackdrop()
@@ -636,7 +647,7 @@ private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier =
         }
     }
     val canBlur = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
-    Box(modifier.background(lerp(scheme.surface, scheme.primaryContainer, 0.7f)).clipToBounds()) {
+    Box(modifier.background(tones?.deep ?: lerp(scheme.surface, scheme.primaryContainer, 0.7f)).clipToBounds()) {
         androidx.compose.animation.Crossfade(artworkUrl, animationSpec = tween(900), label = "coverBlur") { url ->
             val context = androidx.compose.ui.platform.LocalContext.current
             // Drawn below into a small bitmap through a software canvas, which can't read a
@@ -688,10 +699,12 @@ private fun CoverBlur(artworkUrl: String?, moving: Boolean, modifier: Modifier =
                     },
             )
         }
-        // Darker toward the bottom so the title and controls stay readable.
+        // Darker toward the bottom so the title and controls stay readable: into the cover's own
+        // near-black rather than grey, so the colours deepen instead of going muddy.
+        val shade = tones?.base ?: Color.Black
         Box(
             Modifier.matchParentSize().background(
-                Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.12f), 0.5f to Color.Black.copy(alpha = 0.3f), 1f to Color.Black.copy(alpha = 0.58f)),
+                Brush.verticalGradient(0f to shade.copy(alpha = 0.1f), 0.5f to shade.copy(alpha = 0.34f), 1f to shade.copy(alpha = 0.66f)),
             ),
         )
     }

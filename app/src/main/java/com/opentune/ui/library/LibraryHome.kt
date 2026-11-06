@@ -137,6 +137,8 @@ class LibraryNav(
     val history: () -> Unit = {},
     /** Every playlist, from Show all. */
     val allPlaylists: () -> Unit = {},
+    /** The playlists brought over from Spotify, on their own page. */
+    val spotify: () -> Unit = {},
     /** An album or playlist downloaded as a whole, by its id. */
     val downloaded: (String) -> Unit = {},
 )
@@ -319,6 +321,21 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         nav.together,
                         Modifier.weight(1f),
                     )
+                    val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+                    val spotifyLists by LibraryStore.playlists.collectAsState()
+                    val fromSpotify = remember(spotifyLists) { spotifyLists.count { it.spotifyId != null } }
+                    Shortcut(
+                        Icons.Rounded.LibraryMusic,
+                        "Spotify",
+                        when {
+                            spotifyOn && fromSpotify > 0 -> if (fromSpotify == 1) "1 playlist" else "$fromSpotify playlists"
+                            spotifyOn -> "Your playlists"
+                            else -> "Connect or import"
+                        },
+                        nav.spotify,
+                        Modifier.weight(1f),
+                        logo = com.opentune.R.drawable.ic_spotify,
+                    )
                 }
             }
         }
@@ -396,7 +413,13 @@ private enum class PlaylistOrder(val label: String) {
 
 /** Every playlist, two to a row, from "Show all" on Library. */
 @Composable
-fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: () -> Unit) {
+fun AllPlaylistsScreen(
+    contentPadding: PaddingValues,
+    nav: LibraryNav,
+    onBack: () -> Unit,
+    /** Only Spotify's playlists, on the Spotify page; otherwise every playlist but Spotify's, which have that page. */
+    spotify: Boolean = false,
+) {
     val liked by LibraryStore.liked.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     val pinned = AppSettings.ui.collectAsState().value.pinnedPlaylists
@@ -404,7 +427,8 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
     var sorting by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf(false) }
     if (naming) NewPlaylistDialog(signedIn, onDismiss = { naming = false }) { name, privacy -> naming = false; nav.playlist(LibraryStore.createPlaylist(name, privacy = privacy)) }
-    val rows = rememberPlaylistRows(nav)
+    val rows = rememberPlaylistRows(nav).filter { (it.source == "Spotify") == spotify }
+    val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
     val shown = remember(rows, order, pinned) {
         val top = rows.filter { it.pin in pinned }
         top + order.sort(rows.filter { it !in top })
@@ -441,7 +465,7 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
         modifier = Modifier.fillMaxSize().padding(horizontal = if (asList) 0.dp else 10.dp),
     ) {
         item(key = "header", span = { full }) {
-            PageHeader(com.opentune.ui.theme.tr("Playlists"), onBack = onBack, actions = {
+            PageHeader(if (spotify) "Spotify" else com.opentune.ui.theme.tr("Playlists"), onBack = onBack, actions = {
                 // Sorting and the account in one glass pill, as on Library.
                 Row(
                     Modifier.height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 5.dp),
@@ -463,7 +487,21 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
                 }
             })
         }
-        if (asList) {
+        if (spotify) {
+            if (shown.isEmpty()) item(key = "spotify-empty", span = { full }) {
+                Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(72.dp))
+                    Text(
+                        if (spotifyOn) "Your Spotify playlists appear here after the next sync." else "Connect Spotify to bring your playlists here, or import one from a link.",
+                        style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                    androidx.compose.material3.Button(onClick = nav.importPlaylist) { Text(if (spotifyOn) "Import a playlist" else "Connect or import") }
+                }
+            }
+            if (asList) items(shown.size, key = { shown[it].key }) { i -> PlaylistLine(shown[i], Modifier.animateItem()) }
+            else items(shown.size, key = { shown[it].key }) { i -> PlaylistTile(shown[i], Modifier.animateItem()) }
+        } else if (asList) {
             item(key = "new") { ActionLine(Icons.Rounded.Add, "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
             item(key = "liked") { ActionLine(Icons.Rounded.Favorite, "Liked songs", "${liked.size} songs", onClick = nav.liked) }
             items(shown.size, key = { shown[it].key }) { i -> PlaylistLine(shown[i], Modifier.animateItem()) }
@@ -541,7 +579,7 @@ private fun TileText(title: String, subtitle: String) {
 
 /** One of the four library shortcuts: an accent badge, a name and a count. */
 @Composable
-private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier) {
+private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier, logo: Int? = null) {
     Row(
         modifier
             .height(72.dp)
@@ -551,7 +589,10 @@ private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(MaterialTheme.colorScheme.primary), Alignment.Center) {
+        if (logo != null) {
+            // A service's own mark, in its own colours.
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(logo), null, Modifier.size(40.dp))
+        } else Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(MaterialTheme.colorScheme.primary), Alignment.Center) {
             Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
         }
         Column(Modifier.padding(start = 12.dp)) {

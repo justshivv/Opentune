@@ -56,9 +56,16 @@ internal fun rememberEchoPhase(running: Boolean, periodMillis: Int): State<Float
  * light/dark surface to retain readable controls, without image blur passes.
  */
 @Composable
-internal fun EchoGlowBackground(running: Boolean, modifier: Modifier = Modifier) {
+internal fun EchoGlowBackground(
+    running: Boolean,
+    modifier: Modifier = Modifier,
+    /** The lights' colours, the cover's own where known; the scheme's otherwise. */
+    lights: List<Color>? = null,
+    /** What they glow over. */
+    base: Color? = null,
+) {
     val scheme = MaterialTheme.colorScheme
-    val colors = listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.inversePrimary)
+    val colors = lights?.takeIf { it.isNotEmpty() } ?: listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.inversePrimary)
     // A slow turn, so the light drifts rather than sweeps.
     val phase = rememberEchoPhase(running, 32_000)
     val strength = if (scheme.surface.luminance() > 0.5f) 0.25f else 0.55f
@@ -71,7 +78,7 @@ internal fun EchoGlowBackground(running: Boolean, modifier: Modifier = Modifier)
         }
         fun oscillate(min: Float, max: Float, offset: Float): Float =
             min + (max - min) * ((sin(2f * PI.toFloat() * (p + offset)) + 1f) / 2f)
-        drawRect(scheme.surface)
+        drawRect(base ?: scheme.surface)
         // Soft falloffs in their own colour: a straight fade to transparent black left a dark rim.
         drawRect(Brush.radialGradient(
             *com.opentune.ui.components.glowStops(color(0), strength, shape = 1.6f),

@@ -33,7 +33,11 @@ class BackdropShotsTest {
 
     private fun shot(style: PlayerBackground) {
         val cover = Bitmap.createBitmap(120, 120, Bitmap.Config.ARGB_8888).apply {
-            for (y in 0 until 120) for (x in 0 until 120) setPixel(x, y, if (x < 60) 0xFF6B3A1A.toInt() else 0xFFD9A15A.toInt())
+            // Teal with an orange disc in the middle, as many single covers are.
+            for (y in 0 until 120) for (x in 0 until 120) {
+                val d = (x - 60) * (x - 60) + (y - 60) * (y - 60)
+                setPixel(x, y, if (d < 38 * 38) 0xFFF07A1E.toInt() else 0xFF1E9AA8.toInt())
+            }
         }
         val engine = FakeImageLoaderEngine.Builder().apply {
             intercept({ it is String && it.contains("cover") }, android.graphics.drawable.BitmapDrawable(compose.activity.resources, cover).asImage())
