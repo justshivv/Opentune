@@ -530,6 +530,8 @@ data class InterfaceSettings(
     val countUsage: Boolean = true,
     /** How the glass of the dock, buttons and bars looks. */
     val glassStyle: GlassStyle = GlassStyle.LIQUID,
+    /** Whether a list of choices in Settings opens as a page of its own or a popup sheet. */
+    val choiceMenus: ChoiceMenuStyle = ChoiceMenuStyle.SCREEN,
     /** Pages blur and fade out as they scroll under the status bar. */
     val frostedTopEdge: Boolean = true,
     /** How the dock's highlight travels between tabs. */
@@ -610,6 +612,13 @@ enum class GlassStyle(val label: String, val summary: String) {
     TINTED("Tinted", "Glass washed with your accent colour"),
     SMOKE("Smoke", "Dark smoked glass with deep contrast"),
     LIQUID("Liquid", "Apple's Liquid Glass: softly frosted, the edges bend and split the light, with a bright rim (Android 13+)"),
+}
+
+/** How a choice in Settings (quality, glass style, and so on) is picked from a list. */
+@Serializable
+enum class ChoiceMenuStyle(val label: String, val summary: String) {
+    SCREEN("Full screen", "Opens a page of its own to choose from"),
+    POPUP("Popup", "A sheet that slides up over the page"),
 }
 
 /** How the dock's highlight moves to the tab you pick. */

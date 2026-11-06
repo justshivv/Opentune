@@ -76,6 +76,7 @@ import androidx.compose.material.icons.rounded.FormatAlignCenter
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Gradient
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Headphones
@@ -163,6 +164,7 @@ import com.opentune.data.local.LocalMusic
 import com.opentune.data.releases.NewReleases
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
+import com.opentune.data.settings.ChoiceMenuStyle
 import com.opentune.data.settings.ControlStyle
 import com.opentune.data.settings.CoverChange
 import com.opentune.data.settings.DockLens
@@ -456,6 +458,7 @@ private fun settingsSections(
     var dockMotionDialog by remember { mutableStateOf(false) }
     var dockLensDialog by remember { mutableStateOf(false) }
     var glassStyleDialog by remember { mutableStateOf(false) }
+    var choiceMenusDialog by remember { mutableStateOf(false) }
     var pageTransitionDialog by remember { mutableStateOf(false) }
     var playerMotionDialog by remember { mutableStateOf(false) }
     var coverChangeDialog by remember { mutableStateOf(false) }
@@ -645,6 +648,16 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { l -> AppSettings.updateUi { it.copy(dockLens = l) } },
             onDismiss = { dockLensDialog = false },
+        )
+    }
+    if (choiceMenusDialog) {
+        ChoiceSheet(
+            title = "Choice menus",
+            options = ChoiceMenuStyle.entries,
+            selected = ui.choiceMenus,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { m -> AppSettings.updateUi { it.copy(choiceMenus = m) } },
+            onDismiss = { choiceMenusDialog = false },
         )
     }
     if (glassStyleDialog) {
@@ -1270,6 +1283,9 @@ private fun settingsSections(
                 },
                 Entry("Glass style", "glass frosted blur clear heavy tinted smoke theme material") {
                     NavRow("Glass style", { glassStyleDialog = true }, summary = ui.glassStyle.summary, icon = Icons.Rounded.BlurOn, value = ui.glassStyle.label)
+                },
+                Entry("Choice menus", "popup sheet screen page list select choose menu dialog") {
+                    NavRow("Choice menus", { choiceMenusDialog = true }, summary = ui.choiceMenus.summary, icon = Icons.Rounded.Tune, value = ui.choiceMenus.label)
                 },
                 Entry("Frosted top edge", "status bar blur fade top scroll glass") {
                     ToggleRow("Frosted top edge", ui.frostedTopEdge, { v -> AppSettings.updateUi { it.copy(frostedTopEdge = v) } }, summary = "Pages blur and fade as they scroll under the status bar", icon = Icons.Rounded.Gradient)
