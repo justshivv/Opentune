@@ -179,11 +179,17 @@ fun PlayerBackdrop(
     // On a TV the backdrop holds still: redrawn every frame across a big picture, it cost the remote its quickness.
     val animate = animate && !com.opentune.ui.tv.LocalIsTv.current
     val scheme = MaterialTheme.colorScheme
+    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    val seed = rememberArtworkSeed(artworkUrl)
+    // With the setting on, the full-screen cover's own colour is the backdrop:
+    // the cover fades into itself and the player reads as one surface.
+    val matched = if (ui.coverColorBackground && fullCover) seed else null
     if (style == PlayerBackground.AMOLED) {
         Box(modifier.background(Color.Black))
         return
     }
-    Box(modifier.background(scheme.surface)) {
+    Box(modifier.background(matched ?: scheme.surface)) {
+        if (matched == null) {
         when (style) {
             PlayerBackground.AMOLED -> Unit
             PlayerBackground.ECHO_GLOW -> EchoGlowBackground(animate && playing, Modifier.matchParentSize())
@@ -217,6 +223,7 @@ fun PlayerBackdrop(
                     )
                 }
             }
+        }
         }
         if (canvas != null) {
             CanvasBackdrop(canvas, playing, titleTop, canvasBehindText, Modifier.matchParentSize())

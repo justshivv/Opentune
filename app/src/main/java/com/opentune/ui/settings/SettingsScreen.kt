@@ -1086,6 +1086,9 @@ private fun settingsSections(
                 Entry("Full-screen cover art", "artwork edge") {
                     ToggleRow("Full-screen cover art", ui.fullScreenCover, { v -> AppSettings.updateUi { it.copy(fullScreenCover = v) } }, summary = "Runs the cover to the edges of the player instead of a square sleeve", icon = Icons.Rounded.Fullscreen)
                 },
+                Entry("Match background to cover", "background colour seamless") {
+                    ToggleRow("Match background to cover", ui.coverColorBackground, { v -> AppSettings.updateUi { it.copy(coverColorBackground = v) } }, summary = "Paints the player's background in the cover's own colour, so the full-screen cover blends into it", icon = Icons.Rounded.Palette)
+                },
                 Entry("Wavy seek bar", "wave progress slider") {
                     ToggleRow("Wavy seek bar", ui.wavySeekbar, { v -> AppSettings.updateUi { it.copy(wavySeekbar = v) } }, summary = "The played part of the bar ripples while music plays", icon = Icons.Rounded.Waves)
                 },

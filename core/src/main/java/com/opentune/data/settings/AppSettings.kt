@@ -352,6 +352,7 @@ data class InterfaceSettings(
     /** Solid fills instead of frosted glass. */
     val reduceBlur: Boolean = false,
     val fullScreenCover: Boolean = false,
+    val coverColorBackground: Boolean = false,
     val hideVolumeBar: Boolean = false,
     val hideSongStatus: Boolean = false,
     /** Show the current lyric above the controls, independently of the player layout. */
