@@ -52,7 +52,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.Bedtime
@@ -336,7 +335,6 @@ fun PlayerLayout(
     var showMenu by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
-    var tripping by remember { mutableStateOf(false) }
     var showOffset by remember { mutableStateOf(false) }
     var showLyricsSource by remember { mutableStateOf(false) }
     var showDetails by remember { mutableStateOf(false) }
@@ -1343,14 +1341,12 @@ fun PlayerLayout(
         if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
         if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })
         if (showComments) CommentsSheet(current, onDismiss = { showComments = false })
-        if (tripping) TripMode(current.title, current.artist, current.thumbnailUrl, onExit = { tripping = false })
         if (showMenu) {
             SongMenuSheet(
                 current,
                 onDismiss = { showMenu = false },
                 top = { close ->
                     MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
-                    MenuRow(Icons.Rounded.AutoAwesome, "Trip mode") { close(); tripping = true }
                     if (state.ui.commentsButton) MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }
                 },
                 tools = { close ->
