@@ -23,7 +23,6 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +48,6 @@ import com.opentune.data.model.BrowseType
 import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.Song
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Icon
 
 /** Where the TV app can be: one of the tabs, a page opened from one, or the player. */
 sealed interface Dest {

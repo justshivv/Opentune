@@ -16,7 +16,6 @@ import com.opentune.data.remote.RemoteInvite
 import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect

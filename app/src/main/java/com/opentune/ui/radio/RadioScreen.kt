@@ -320,7 +320,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                         }
                     }
                     if (n.area.isNotEmpty()) {
-                        item { SectionHeader(n.areaName?.let { com.opentune.i18n.Tr.f("More in {0}", it) } ?: "More around you", subtitle = "Listed for your area, without a map location") }
+                        item { SectionHeader(n.areaName?.let { com.opentune.i18n.Tr.f("More in {0}", it) } ?: com.opentune.i18n.Tr.t("More around you"), subtitle = "Listed for your area, without a map location") }
                         items(n.area, key = { "a:${it.uuid}" }) {
                             StationRow(it, actions.currentVideoId == it.id, ::play, details = it.nearbyDetails(null))
                         }

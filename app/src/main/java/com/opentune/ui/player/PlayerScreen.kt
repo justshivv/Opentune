@@ -1725,8 +1725,8 @@ private fun TogetherPill(room: Together.Room, onClick: () -> Unit) {
             Text(
                 when {
                     room.hosting -> com.opentune.i18n.Tr.f("Your room · {0} listening", room.members.size)
-                    room.holding -> com.opentune.i18n.Tr.f("Paused for you · {0}", room.hostName ?: "room")
-                    room.phase == Together.Phase.Live -> com.opentune.i18n.Tr.f("With {0} · {1} listening", room.hostName ?: "the host", room.members.size)
+                    room.holding -> com.opentune.i18n.Tr.f("Paused for you · {0}", room.hostName ?: com.opentune.i18n.Tr.t("room"))
+                    room.phase == Together.Phase.Live -> com.opentune.i18n.Tr.f("With {0} · {1} listening", room.hostName ?: com.opentune.i18n.Tr.t("the host"), room.members.size)
                     else -> "Listening together"
                 },
             )

@@ -307,8 +307,9 @@ fun SettingsScreen(
                 }
                 if (q.isNotEmpty()) {
                     val hits = placed.filter {
-                        it.entry.title.contains(q, true) || com.opentune.ui.theme.translated(languageContext, it.entry.title).contains(q, true) || it.entry.summary.contains(q, true) ||
-                            it.group.contains(q, true) || it.category.title.contains(q, true)
+                        // In English and in the app's language, so a search in either finds it.
+                        listOf(it.entry.title, it.entry.summary, it.group, it.category.title)
+                            .any { text -> text.contains(q, true) || com.opentune.i18n.Tr.t(text).contains(q, true) }
                     }
                     if (hits.isEmpty()) {
                         item { Text(com.opentune.i18n.Tr.f("No settings match \"{0}\".", q), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp)) }
@@ -809,7 +810,7 @@ private fun settingsSections(
                         NavRow(
                             "Connect Spotify",
                             { context.startActivity(android.content.Intent(context, com.opentune.ui.spotify.SpotifyConnectActivity::class.java)) },
-                            summary = spotifyProblem?.let { com.opentune.i18n.Tr.f("{0}. Sign in again", it) } ?: "Your playlists in Library, each song's Canvas, and suggestions made for you",
+                            summary = spotifyProblem?.let { com.opentune.i18n.Tr.f("{0}. Sign in again", it) } ?: com.opentune.i18n.Tr.t("Your playlists in Library, each song's Canvas, and suggestions made for you"),
                             leading = { SpotifyMark() },
                         )
                     }

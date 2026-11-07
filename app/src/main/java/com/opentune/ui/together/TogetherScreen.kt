@@ -554,7 +554,7 @@ internal fun RoomView(r: Together.Room, onBack: () -> Unit, contentPadding: Padd
             state = list,
             contentPadding = PaddingValues(bottom = listBottom),
         ) {
-            item { PageHeader(if (r.hosting) "Your room" else com.opentune.i18n.Tr.f("{0}'s room", r.hostName ?: "Friend"), onBack = onBack) }
+            item { PageHeader(if (r.hosting) "Your room" else com.opentune.i18n.Tr.f("{0}'s room", r.hostName ?: com.opentune.i18n.Tr.t("Friend")), onBack = onBack) }
             item { CodeCard(r, onInvite = { inviting = true }, onCopy = { copyCode(context, r.code) }) }
             item { NowInRoom(r) }
             if (r.holding) {
@@ -751,7 +751,7 @@ private fun islandText(r: Together.Room, speaking: Set<String>, open: Boolean, m
     return when {
         r.phase == Together.Phase.Connecting -> "Connecting…" to rest
         r.phase == Together.Phase.FindingHost -> "Looking for the host…" to rest
-        r.phase == Together.Phase.Waiting -> "Waiting to be let in…" to com.opentune.i18n.Tr.f("{0} has to say yes", r.hostName ?: "The host")
+        r.phase == Together.Phase.Waiting -> "Waiting to be let in…" to com.opentune.i18n.Tr.f("{0} has to say yes", r.hostName ?: com.opentune.i18n.Tr.t("The host"))
         r.phase == Together.Phase.LostHost -> "Lost touch with the host" to "Still trying…"
         recording == true -> "You're talking" to "Let go to stop"
         recording == false -> "Recording a voice note" to "Let go to send it"
@@ -977,8 +977,8 @@ private fun LiveStatus(r: Together.Room) {
     val (text, busy) = when (r.phase) {
         Together.Phase.Connecting -> "Connecting…" to true
         Together.Phase.FindingHost -> "Looking for the host…" to true
-        Together.Phase.Waiting -> com.opentune.i18n.Tr.f("Waiting for {0} to let you in…", r.hostName ?: "the host") to true
-        Together.Phase.Live -> (if (r.hosting) com.opentune.i18n.Tr.f("Live · {0} joined", r.members.size - 1) else com.opentune.i18n.Tr.f("In step with {0}", r.hostName ?: "the host")) to false
+        Together.Phase.Waiting -> com.opentune.i18n.Tr.f("Waiting for {0} to let you in…", r.hostName ?: com.opentune.i18n.Tr.t("the host")) to true
+        Together.Phase.Live -> (if (r.hosting) com.opentune.i18n.Tr.f("Live · {0} joined", r.members.size - 1) else com.opentune.i18n.Tr.f("In step with {0}", r.hostName ?: com.opentune.i18n.Tr.t("the host"))) to false
         Together.Phase.LostHost -> "Lost touch with the host. Still trying…" to true
         Together.Phase.Ended -> (r.endedReason ?: "The room has ended") to false
     }
@@ -1080,7 +1080,7 @@ private fun RoomSettings(r: Together.Room) {
                 summary = when {
                     !playNow -> "Off: songs you pick go into the room's queue"
                     r.open -> "On: a song you pick starts for everyone"
-                    else -> com.opentune.i18n.Tr.f("On, once {0} lets guests control playback. Until then songs go into the queue", r.hostName ?: "the host")
+                    else -> com.opentune.i18n.Tr.f("On, once {0} lets guests control playback. Until then songs go into the queue", r.hostName ?: com.opentune.i18n.Tr.t("the host"))
                 },
                 icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
             )

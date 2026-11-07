@@ -1436,7 +1436,7 @@ class PlaybackService : MediaLibraryService() {
         // Asked for from the menu: say how it went, whatever the outcome.
         fun tell(message: String) { if (asked) PlaybackRequests.report(message) }
         fun swapped(ok: Boolean) = tell(
-            if (ok) com.opentune.i18n.Tr.f("Switched to {0}", ExternalStreams.selectionDetail(id) ?: NerdStats.externalSource.value ?: "a better stream")
+            if (ok) com.opentune.i18n.Tr.f("Switched to {0}", ExternalStreams.selectionDetail(id) ?: NerdStats.externalSource.value ?: com.opentune.i18n.Tr.t("a better stream"))
             else "The better stream didn't load in time, so this one keeps playing",
         )
         /**
@@ -2291,7 +2291,7 @@ class PlaybackService : MediaLibraryService() {
                 } else {
                     player.seekTo(segment.endMs)
                 }
-                com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Skipped {0}", SponsorBlock.CATEGORIES[segment.category]?.one ?: "a segment"), this@PlaybackService)
+                com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Skipped {0}", SponsorBlock.CATEGORIES[segment.category]?.one?.let(com.opentune.i18n.Tr::t) ?: com.opentune.i18n.Tr.t("a segment")), this@PlaybackService)
             }
         }
     }

@@ -40,6 +40,13 @@ class TvApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         com.opentune.data.CrashLog.install(this)
         Core.init(this, phone = false)
+        // The words on every screen, in the TV's own language.
+        com.opentune.i18n.Tr.use(this, "")
         MusicRepository.init(this)
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        com.opentune.i18n.Tr.use(this, "")
     }
 }

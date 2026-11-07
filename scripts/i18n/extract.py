@@ -15,7 +15,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from kt_strings import scan, unescape
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SOURCES = ['app/src/main/java', 'core/src/main/java']
+SOURCES = ['app/src/main/java', 'core/src/main/java', 'tv/src/main/java']
 ASSETS = ROOT / 'core/src/main/assets/i18n'
 # Lines whose strings are never shown: logs, JSON and HTTP plumbing, routes.
 SKIPLINE = re.compile(r'\b(Log\.[dwiev]|AppLog\.|DebugLog\.|TrackLog\.|println|Regex\(|toRegex|@Serializable|@SerialName|'

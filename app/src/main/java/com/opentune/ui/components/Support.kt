@@ -142,7 +142,7 @@ fun SupportDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             SheetButton(
-                rupees?.let { com.opentune.i18n.Tr.f("Send ₹{0}", if (it % 1.0 == 0.0) it.toLong().toString() else String.format(Locale.ROOT, "%.2f", it)) } ?: "Send",
+                rupees?.let { com.opentune.i18n.Tr.f("Send ₹{0}", if (it % 1.0 == 0.0) it.toLong().toString() else String.format(Locale.ROOT, "%.2f", it)) } ?: com.opentune.i18n.Tr.t("Send"),
                 enabled = rupees != null,
                 onClick = { rupees?.let { Support.pay(context, it) }; onDismiss() },
             )

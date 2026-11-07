@@ -325,7 +325,7 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
             GroupCard {
                 NavRow("Sort by", { choice = SmartChoice.SORT }, value = rules.sort.label())
                 RowDivider()
-                NavRow("How many", { choice = SmartChoice.LIMIT }, value = rules.limit?.let { com.opentune.i18n.Tr.f("{0} songs", it) } ?: "All")
+                NavRow("How many", { choice = SmartChoice.LIMIT }, value = rules.limit?.let { com.opentune.i18n.Tr.f("{0} songs", it) } ?: com.opentune.i18n.Tr.t("All"))
             }
         }
         item {
@@ -365,7 +365,7 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
         SmartChoice.NOT_PLAYED -> ChoiceSheet("Not played for", listOf(null, 30, 90, 180, 365), rules.notPlayedForDays, ::days, { rules = rules.copy(notPlayedForDays = it) }, { choice = null })
         SmartChoice.NEW_WITHIN -> ChoiceSheet("New to you within", listOf(null, 7, 30, 90), rules.newWithinDays, ::days, { rules = rules.copy(newWithinDays = it) }, { choice = null })
         SmartChoice.SORT -> ChoiceSheet("Sort by", SmartSort.entries, rules.sort, { it.label() }, { rules = rules.copy(sort = it) }, { choice = null })
-        SmartChoice.LIMIT -> ChoiceSheet("How many", listOf(25, 50, 100, 250, null), rules.limit, { it?.let { n -> com.opentune.i18n.Tr.f("{0} songs", n) } ?: "All" }, { rules = rules.copy(limit = it) }, { choice = null })
+        SmartChoice.LIMIT -> ChoiceSheet("How many", listOf(25, 50, 100, 250, null), rules.limit, { it?.let { n -> com.opentune.i18n.Tr.f("{0} songs", n) } ?: com.opentune.i18n.Tr.t("All") }, { rules = rules.copy(limit = it) }, { choice = null })
         null -> {}
     }
 }

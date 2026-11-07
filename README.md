@@ -677,6 +677,12 @@ on your own connection with no hosted proxy.
   feedback switch.
 - **Themes:** light, dark or system, Material You, accent colors, palette
   styles, pure black, color from artwork, and reduced motion and blur.
+- **36 languages, the whole app.** Settings › Appearance › App language (or the
+  phone's own language) changes every screen: buttons, settings, menus,
+  notices, notifications and Android Auto. The TV app follows the TV's
+  language. Translations live in `core/src/main/assets/i18n/`, one file per
+  language keyed by the English text, and `scripts/i18n/extract.py` lists
+  what a language still lacks.
 
 YouTube's audio is lossy, so there's no lossless or Dolby Atmos stream
 option from YouTube. Lossless can come from your own music server or the
@@ -692,7 +698,7 @@ playlists in Library and the personal Spotify suggestions; Spotify's
 terms don't allow that use, so it stays off
 until you connect Spotify yourself.
 
-Not built yet: lyric translation and an in-app language setting.
+Not built yet: lyric translation.
 
 ## Usage counts
 

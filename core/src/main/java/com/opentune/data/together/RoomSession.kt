@@ -558,7 +558,7 @@ internal class RoomSession(
                 follow(msg, fresh = true)
             }
             Msg.End -> if (from == hostKey) {
-                update { it.copy(phase = Phase.Ended, endedReason = com.opentune.i18n.Tr.f("{0} ended the room", it.hostName ?: "The host")) }
+                update { it.copy(phase = Phase.Ended, endedReason = com.opentune.i18n.Tr.f("{0} ended the room", it.hostName ?: com.opentune.i18n.Tr.t("The host"))) }
                 stop(saying = false)
             }
             is Msg.Pong -> if (from == hostKey && msg.to == me) {
@@ -688,7 +688,7 @@ internal class RoomSession(
                     last?.let { follow(it, fresh = true) }
                 }
             }
-            else -> notice(com.opentune.i18n.Tr.f("Only {0} can change the song", r.hostName ?: "the host"))
+            else -> notice(com.opentune.i18n.Tr.f("Only {0} can change the song", r.hostName ?: com.opentune.i18n.Tr.t("the host")))
         }
         return true
     }
@@ -717,7 +717,7 @@ internal class RoomSession(
             }
             now -> {
                 send(Msg.Ask("add", track = t))
-                notice(com.opentune.i18n.Tr.f("Added \"{0}\" to the queue. {1} hasn't let guests control playback", song.title, r.hostName ?: "The host"))
+                notice(com.opentune.i18n.Tr.f("Added \"{0}\" to the queue. {1} hasn't let guests control playback", song.title, r.hostName ?: com.opentune.i18n.Tr.t("The host")))
             }
             else -> {
                 send(Msg.Ask("add", track = t))

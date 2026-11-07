@@ -1499,7 +1499,7 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
                 }
                 .focusable()
                 .semantics {
-                    contentDescription = receiver?.let { com.opentune.i18n.Tr.f("{0} volume", it.name) } ?: "Media volume"
+                    contentDescription = receiver?.let { com.opentune.i18n.Tr.f("{0} volume", it.name) } ?: com.opentune.i18n.Tr.t("Media volume")
                     progressBarRangeInfo = ProgressBarRangeInfo(volume, 0f..1f)
                     setProgress { volume = it.coerceIn(0f, 1f); commit(); true }
                 }
