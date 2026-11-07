@@ -39,10 +39,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.NorthWest
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
@@ -138,6 +138,17 @@ fun SearchScreen(
     var focused by remember { mutableStateOf(false) }
     // The search button tapped again while here: the cursor goes into the bar, keyboard up.
     val field = remember { androidx.compose.ui.focus.FocusRequester() }
+    // The bar's text as the field keeps it, cursor included. The query lives
+    // in the view model as a plain String, which can't say where the cursor
+    // goes: a change from outside (a suggestion filling the bar, the clear
+    // button) lands here with the cursor put at the end of the new text,
+    // where typing carries on. Typing itself never rewrites it.
+    var fieldValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(query, androidx.compose.ui.text.TextRange(query.length))) }
+    androidx.compose.runtime.LaunchedEffect(query) {
+        if (fieldValue.text != query) {
+            fieldValue = androidx.compose.ui.text.input.TextFieldValue(query, androidx.compose.ui.text.TextRange(query.length))
+        }
+    }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     androidx.compose.runtime.LaunchedEffect(Unit) {
         SearchFocus.requests.collect {
@@ -174,8 +185,8 @@ fun SearchScreen(
 
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
         TextField(
-            value = query,
-            onValueChange = vm::onQueryChange,
+            value = fieldValue,
+            onValueChange = { fieldValue = it; vm.onQueryChange(it.text) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
                 .focusRequester(field)
                 .onFocusChanged { focused = it.isFocused }
@@ -322,7 +333,7 @@ private fun Typing(
             items(shownSuggestions, key = { "s:$it" }) { s ->
                 QueryRow(s, Icons.Filled.Search, onClick = { onPick(s) }) {
                     IconButton(onClick = { onFill(s) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, "Use this", modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.NorthWest, "Use this", modifier = Modifier.size(20.dp))
                     }
                 }
             }
