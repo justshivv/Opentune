@@ -1526,7 +1526,10 @@ private fun settingsSections(
                 Entry("Hide song status", "playing from") {
                     ToggleRow("Hide song status", ui.hideSongStatus, { v -> AppSettings.updateUi { it.copy(hideSongStatus = v) } }, summary = "Hides the \"Playing from\" line in the player", icon = Icons.Rounded.VisibilityOff)
                 },
-            ),
+                Entry("Hide output device", "output device name speaker bluetooth headphones") {
+                    ToggleRow("Hide output device", ui.hideOutputDevice, { v -> AppSettings.updateUi { it.copy(hideOutputDevice = v) } }, summary = "Hides the output device's name at the bottom of the player", icon = Icons.Rounded.VisibilityOff)
+                },
+                ),
         ),
         Section(
             "Advanced",

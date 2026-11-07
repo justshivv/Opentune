@@ -766,7 +766,7 @@ fun PlayerLayout(
                 LandscapePlayer(
                     state, position, lyricsPosition, actions,
                     liked = isLiked,
-                    device = sleepLabel ?: device,
+                    device = sleepLabel ?: device.takeIf { !state.ui.hideOutputDevice } ?: "",
                     onLike = { LibraryStore.setLiked(current, !isLiked) },
                     onMore = { showMenu = true },
                     onSignal = { showSignal = true },
@@ -1230,8 +1230,8 @@ fun PlayerLayout(
                     )
                     GlassToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
                 }
-                if (!minimal && roomy) Text(
-                    sleepLabel ?: device,
+                    if (!minimal && roomy && (sleepLabel != null || !state.ui.hideOutputDevice)) Text(
+                        sleepLabel ?: device,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

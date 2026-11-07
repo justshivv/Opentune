@@ -354,6 +354,7 @@ data class InterfaceSettings(
     val fullScreenCover: Boolean = false,
     val hideVolumeBar: Boolean = false,
     val hideSongStatus: Boolean = false,
+    val hideOutputDevice: Boolean = false,
     /** Show the current lyric above the controls, independently of the player layout. */
     val lyricsPreview: Boolean = true,
     val syncedLyrics: Boolean = true,
