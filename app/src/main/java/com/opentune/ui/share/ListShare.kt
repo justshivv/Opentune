@@ -66,7 +66,7 @@ object ListShare {
     }
 
     /** "12 songs", for a card's second line. */
-    fun countLine(count: Int): String = if (count == 1) "1 song" else "$count songs"
+    fun countLine(count: Int): String = if (count == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", count)
 
     private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
 
@@ -78,7 +78,7 @@ object ListShare {
         val urls = covers.filterNotNull().distinct().take(4)
         if (urls.isEmpty()) {
             val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text).putExtra(Intent.EXTRA_SUBJECT, title)
-            runCatching { context.startActivity(Intent.createChooser(intent, "Share $title").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            runCatching { context.startActivity(Intent.createChooser(intent, com.opentune.i18n.Tr.f("Share {0}", title)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             return
         }
         scope.launch {

@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,8 +48,8 @@ fun RingtoneDialog(song: Song, onDismiss: () -> Unit) {
             val result = runCatching { Ringtones.set(context, song, kind) }
             busy = false
             result.fold(
-                { com.opentune.data.Pills.done("${song.title} is your ${kind.label.lowercase()}", context) },
-                { com.opentune.data.Pills.error("Couldn't set it: ${it.message}", context) },
+                { com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("{0} is your {1}", song.title, kind.label.lowercase()), context) },
+                { com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't set it: {0}", it.message), context) },
             )
             onDismiss()
         }

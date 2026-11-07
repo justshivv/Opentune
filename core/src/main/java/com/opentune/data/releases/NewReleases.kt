@@ -176,7 +176,7 @@ object NewReleases {
         if (releases.isEmpty() || !canNotify(context)) return
         val nm = context.getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "New releases", NotificationManager.IMPORTANCE_DEFAULT))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, com.opentune.i18n.Tr.t("New releases"), NotificationManager.IMPORTANCE_DEFAULT))
         }
         val manager = NotificationManagerCompat.from(context)
         releases.take(MAX_NOTIFICATIONS).forEach { r ->
@@ -190,7 +190,7 @@ object NewReleases {
             )
             val notification = NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_opentune)
-                .setContentTitle("New from ${r.artist.name}")
+                .setContentTitle(com.opentune.i18n.Tr.f("New from {0}", r.artist.name))
                 .setContentText(r.item.title + r.item.subtitle.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty())
                 .setContentIntent(open)
                 .setAutoCancel(true)

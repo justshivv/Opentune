@@ -17,7 +17,7 @@ object AddonHttp {
     private val hostSlots = java.util.concurrent.ConcurrentHashMap<String, Semaphore>()
     private const val USER_AGENT = "BitChord/v1.8.1"
     /** [paused]: the add-on said its owner paused it ([retryAfterSeconds] is then how long, up to a day). */
-    class Failure(val status: Int, val retryAfterSeconds: Long = 0, val paused: Boolean = false) : IOException(if (paused) "Add-on paused by its owner" else "Add-on returned HTTP $status")
+    class Failure(val status: Int, val retryAfterSeconds: Long = 0, val paused: Boolean = false) : IOException(if (paused) "Add-on paused by its owner" else com.opentune.i18n.Tr.f("Add-on returned HTTP {0}", status))
     private val client by lazy { Http.client.newBuilder()
         .cookieJar(CookieJar.NO_COOKIES).authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE)
         .followRedirects(false).followSslRedirects(false)

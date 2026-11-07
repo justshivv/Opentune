@@ -21,9 +21,10 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material.icons.rounded.Speaker
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,8 +50,10 @@ import com.opentune.ui.player.rememberOutputRoute
 fun AudioOutputSheet(onDismiss: () -> Unit, onCast: () -> Unit, onPipeline: () -> Unit) {
     val route = rememberOutputRoute()
     val haptics = rememberHaptics()
-    val deviceName = rememberOutputDeviceName()
-        .removePrefix("Playing on ").substringBefore("…").ifBlank { "This phone" }
+    // The device itself, not the line about it: that line is in the app's language.
+    val castSession = com.opentune.cast.Cast.session.collectAsState().value
+    val output = rememberOutputDeviceName()
+    val deviceName = castSession?.target?.name ?: output.ifBlank { "This phone" }
     val casting = castingTo()
     FloatingCard(onDismiss = onDismiss, title = "Audio output", icon = Icons.Rounded.Speaker) {
         Column(Modifier.padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

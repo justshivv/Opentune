@@ -26,11 +26,11 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -121,22 +121,22 @@ private fun days(n: Int?): String = when (n) {
     90 -> "3 months"
     180 -> "6 months"
     365 -> "A year"
-    else -> "$n days"
+    else -> com.opentune.i18n.Tr.f("{0} days", n)
 }
 
 /** The rules in one short line, for under the playlist's name. */
 internal fun smartSummary(rules: SmartRules): String = buildList {
     add(rules.from.label())
-    if (rules.minPlays > 0) add(if (rules.playedWithinDays != null) "played ${rules.minPlays}+ times in ${days(rules.playedWithinDays).lowercase()}" else "played ${rules.minPlays}+ times")
-    else if (rules.playedWithinDays != null) add("played in the last ${days(rules.playedWithinDays).lowercase()}")
-    rules.notPlayedForDays?.let { add("not played for ${days(it).lowercase()}") }
-    rules.newWithinDays?.let { add("new in the last ${days(it).lowercase()}") }
+    if (rules.minPlays > 0) add(if (rules.playedWithinDays != null) com.opentune.i18n.Tr.f("played {0}+ times in {1}", rules.minPlays, days(rules.playedWithinDays).lowercase()) else com.opentune.i18n.Tr.f("played {0}+ times", rules.minPlays))
+    else if (rules.playedWithinDays != null) add(com.opentune.i18n.Tr.f("played in the last {0}", days(rules.playedWithinDays).lowercase()))
+    rules.notPlayedForDays?.let { add(com.opentune.i18n.Tr.f("not played for {0}", days(it).lowercase())) }
+    rules.newWithinDays?.let { add(com.opentune.i18n.Tr.f("new in the last {0}", days(it).lowercase())) }
     if (rules.likedOnly && rules.from != SmartSource.LIKED) add("liked")
     if (rules.downloadedOnly && rules.from != SmartSource.DOWNLOADS) add("downloaded")
     if (rules.losslessOnly) add("lossless")
-    if (rules.artist.isNotBlank()) add("by ${rules.artist.trim()}")
+    if (rules.artist.isNotBlank()) add(com.opentune.i18n.Tr.f("by {0}", rules.artist.trim()))
     add(rules.sort.label().lowercase())
-    rules.limit?.let { add("up to $it") }
+    rules.limit?.let { add(com.opentune.i18n.Tr.f("up to {0}", it)) }
 }.joinToString(" · ")
 
 /** Smart playlists as a row of tiles on Library, with one to make a new one. */
@@ -212,7 +212,7 @@ fun SmartPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         item {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (songs.size == 1) "1 song" else "${songs.size} songs",
+                    if (songs.size == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", songs.size),
                     style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 12.dp).weight(1f),
                 )
@@ -293,7 +293,7 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
             GroupCard {
                 NavRow("Songs from", { choice = SmartChoice.SOURCE }, value = rules.from.label())
                 RowDivider()
-                NavRow("Played at least", { choice = SmartChoice.MIN_PLAYS }, value = if (rules.minPlays <= 0) "Any" else "${rules.minPlays} times")
+                NavRow("Played at least", { choice = SmartChoice.MIN_PLAYS }, value = if (rules.minPlays <= 0) "Any" else com.opentune.i18n.Tr.f("{0} times", rules.minPlays))
                 RowDivider()
                 NavRow("Played within", { choice = SmartChoice.PLAYED_WITHIN }, value = rules.playedWithinDays?.let(::days) ?: "Any time")
                 RowDivider()
@@ -325,7 +325,7 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
             GroupCard {
                 NavRow("Sort by", { choice = SmartChoice.SORT }, value = rules.sort.label())
                 RowDivider()
-                NavRow("How many", { choice = SmartChoice.LIMIT }, value = rules.limit?.let { "$it songs" } ?: "All")
+                NavRow("How many", { choice = SmartChoice.LIMIT }, value = rules.limit?.let { com.opentune.i18n.Tr.f("{0} songs", it) } ?: "All")
             }
         }
         item {
@@ -334,7 +334,7 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
                     null -> "Counting…"
                     0 -> "No songs match right now"
                     1 -> "1 song matches right now"
-                    else -> "$n songs match right now"
+                    else -> com.opentune.i18n.Tr.f("{0} songs match right now", n)
                 },
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
@@ -351,7 +351,7 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
     if (deleting && existing != null) {
         com.opentune.ui.components.FloatingDialog(
             onDismissRequest = { deleting = false },
-            title = { Text("Delete ${existing.name}?") },
+            title = { Text(com.opentune.i18n.Tr.f("Delete {0}?", existing.name)) },
             text = { Text("Only the rules go. Your songs, likes and history stay as they are.") },
             confirmButton = { com.opentune.ui.components.SheetButton("Delete", onClick = { deleting = false; LibraryStore.deleteSmartPlaylist(existing.id); onBack() }) },
             dismissButton = { com.opentune.ui.components.SheetButton("Cancel", onClick = { deleting = false }, closes = true) },
@@ -360,12 +360,12 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
 
     when (choice) {
         SmartChoice.SOURCE -> ChoiceSheet("Songs from", SmartSource.entries, rules.from, { it.label() }, { rules = rules.copy(from = it) }, { choice = null })
-        SmartChoice.MIN_PLAYS -> ChoiceSheet("Played at least", listOf(0, 2, 3, 5, 10, 20), rules.minPlays, { if (it == 0) "Any" else "$it times" }, { rules = rules.copy(minPlays = it) }, { choice = null })
+        SmartChoice.MIN_PLAYS -> ChoiceSheet("Played at least", listOf(0, 2, 3, 5, 10, 20), rules.minPlays, { if (it == 0) "Any" else com.opentune.i18n.Tr.f("{0} times", it) }, { rules = rules.copy(minPlays = it) }, { choice = null })
         SmartChoice.PLAYED_WITHIN -> ChoiceSheet("Played within", listOf(null, 7, 30, 90, 365), rules.playedWithinDays, { it?.let(::days) ?: "Any time" }, { rules = rules.copy(playedWithinDays = it) }, { choice = null })
         SmartChoice.NOT_PLAYED -> ChoiceSheet("Not played for", listOf(null, 30, 90, 180, 365), rules.notPlayedForDays, ::days, { rules = rules.copy(notPlayedForDays = it) }, { choice = null })
         SmartChoice.NEW_WITHIN -> ChoiceSheet("New to you within", listOf(null, 7, 30, 90), rules.newWithinDays, ::days, { rules = rules.copy(newWithinDays = it) }, { choice = null })
         SmartChoice.SORT -> ChoiceSheet("Sort by", SmartSort.entries, rules.sort, { it.label() }, { rules = rules.copy(sort = it) }, { choice = null })
-        SmartChoice.LIMIT -> ChoiceSheet("How many", listOf(25, 50, 100, 250, null), rules.limit, { it?.let { n -> "$n songs" } ?: "All" }, { rules = rules.copy(limit = it) }, { choice = null })
+        SmartChoice.LIMIT -> ChoiceSheet("How many", listOf(25, 50, 100, 250, null), rules.limit, { it?.let { n -> com.opentune.i18n.Tr.f("{0} songs", n) } ?: "All" }, { rules = rules.copy(limit = it) }, { choice = null })
         null -> {}
     }
 }

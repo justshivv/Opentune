@@ -114,7 +114,7 @@ object Cast {
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "couldn't connect to ${target.name}", e)
-                _messages.tryEmit("Couldn't connect to ${target.name}")
+                _messages.tryEmit(com.opentune.i18n.Tr.f("Couldn't connect to {0}", target.name))
                 if (_session.value?.target == target) _session.value = null
                 return@launch
             }
@@ -132,7 +132,7 @@ object Cast {
     /** Called when the device drops the connection on its own. */
     internal fun lost(receiver: Receiver) {
         if (_session.value?.receiver !== receiver) return
-        _messages.tryEmit("Lost the connection to ${receiver.name}")
+        _messages.tryEmit(com.opentune.i18n.Tr.f("Lost the connection to {0}", receiver.name))
         disconnect()
     }
 

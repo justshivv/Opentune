@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -93,8 +93,8 @@ internal fun AutomixSheet(onDismiss: () -> Unit) {
             }
             Text(
                 listOfNotNull(
-                    "Blends over ${"%.1f".format(p.plan.blendMs / 1000.0)} s",
-                    if (p.plan.outSpeed != 1f) "tempo matched (${"%+.1f".format((p.plan.outSpeed - 1f) * 100)}%)" else null,
+                    com.opentune.i18n.Tr.f("Blends over {0} s", "%.1f".format(p.plan.blendMs / 1000.0)),
+                    if (p.plan.outSpeed != 1f) com.opentune.i18n.Tr.f("tempo matched ({0}%)", "%+.1f".format((p.plan.outSpeed - 1f) * 100)) else null,
                     when {
                         p.plan.beatMs == null -> null
                         p.plan.alignBeats >= 4 -> "bar lined up with bar"
@@ -118,7 +118,7 @@ private fun SongLine(side: MixState.Side) {
             Text(side.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Column(horizontalAlignment = Alignment.End) {
-            side.bpm?.let { Text("${it.roundToInt()} bpm", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold) }
+            side.bpm?.let { Text(com.opentune.i18n.Tr.f("{0} bpm", it.roundToInt()), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold) }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 // The key on the Camelot wheel, in its colour there, as DJs mark it.
                 side.key?.let { key ->

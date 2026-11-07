@@ -53,10 +53,10 @@ import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.ThumbDownOffAlt
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -411,7 +411,7 @@ fun CollectionContextMenu(list: MenuList, anchor: Rect, onDismiss: () -> Unit, p
             add(MenuEntry("Play next", Icons.AutoMirrored.Rounded.PlaylistPlay) { actions.playNext(list.browseId) })
             add(MenuEntry("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic) { actions.addToQueue(list.browseId) })
             add(MenuEntry("Download all", Icons.Rounded.Download) { actions.downloadAll(list.browseId) })
-            add(MenuEntry("Open $kind", Icons.AutoMirrored.Rounded.KeyboardArrowRight) { actions.open(list.browseId, list.type) })
+            add(MenuEntry(com.opentune.i18n.Tr.f("Open {0}", kind), Icons.AutoMirrored.Rounded.KeyboardArrowRight) { actions.open(list.browseId, list.type) })
         }
         add(MenuEntry("Share", Icons.Rounded.Share) { com.opentune.ui.share.ListShare.shareList(context, list.title, list.browseId, listOf(list.thumbnailUrl), list.subtitle) })
         add(

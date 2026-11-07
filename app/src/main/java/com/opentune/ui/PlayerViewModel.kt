@@ -209,7 +209,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun removeQueueItem(index: Int) = player.removeQueueItem(index)
     fun moveQueueItem(from: Int, to: Int) = player.moveQueueItem(from, to)
     /** A song on its own; the service follows it with radio. */
-    fun startRadio(song: Song) { if (!toRoom(song)) player.play(song, "${song.title} radio") }
+    fun startRadio(song: Song) { if (!toRoom(song)) player.play(song, com.opentune.i18n.Tr.f("{0} radio", song.title)) }
     fun seekTo(positionMs: Long) { if (!Together.intercept(Together.Control.Seek(positionMs))) player.seekTo(positionMs) }
     fun positionMs(): Long = player.currentPositionMs()
     fun bufferedPositionMs(): Long = player.bufferedPositionMs()

@@ -21,10 +21,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.graphicsLayer
@@ -106,7 +106,7 @@ internal fun SignInPage(
         ) {
             Icon(Icons.Rounded.Lock, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
             Text(
-                privacy ?: "You sign in on $service's own page. Only the sign-in is kept on this phone; your password never reaches OpenTune.",
+                privacy ?: com.opentune.i18n.Tr.f("You sign in on {0}'s own page. Only the sign-in is kept on this phone; your password never reaches OpenTune.", service),
                 style = MaterialTheme.typography.labelMedium,
                 color = scheme.onSurfaceVariant,
             )

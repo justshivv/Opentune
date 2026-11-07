@@ -22,10 +22,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Celebration
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -108,7 +108,7 @@ internal fun FestivalCard() {
         if (today != null) {
             Banner {
                 Column(Modifier.weight(1f)) {
-                    Text("Happy ${today.name}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(com.opentune.i18n.Tr.f("Happy {0}", today.name), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text("Wishing you and your family a joyful day.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
                 }
                 IconButton(onClick = { Festivals.dismiss(context, today); festival = null }) {

@@ -59,11 +59,11 @@ import com.opentune.ui.browse.playlistSearchResults
 import com.opentune.ui.browse.coverWash
 import com.opentune.ui.browse.dismissPlaylistSearch
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -169,7 +169,7 @@ internal object LibraryPins {
     fun toggle(key: String) {
         val pins = AppSettings.ui.value.pinnedPlaylists
         if (key !in pins && pins.size >= MAX) {
-            com.opentune.data.Pills.info("Up to $MAX playlists can be pinned. Unpin one first")
+            com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Up to {0} playlists can be pinned. Unpin one first", MAX))
             return
         }
         AppSettings.updateUi { ui ->
@@ -209,7 +209,7 @@ private fun rememberPlaylistRows(nav: LibraryNav): List<LibraryPlaylistRow> {
         }
         val saved = p.songs.count { downloadEntries[it.videoId]?.state == DownloadState.DONE }
         rows += LibraryPlaylistRow(p.id, p.name,
-            (if (p.songs.size == 1) "1 song" else "${p.songs.size} songs") + if (saved > 0) " · $saved downloaded" else "",
+            (if (p.songs.size == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", p.songs.size)) + if (saved > 0) com.opentune.i18n.Tr.f(" · {0} downloaded", saved) else "",
             p.coverUrl, p, pin = p.id, source = source,
             plays = p.songs.sumOf { playCounts[it.videoId] ?: 0 }, onClick = { nav.playlist(p.id) })
     }
@@ -306,8 +306,8 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Shortcut(Icons.Rounded.Favorite, "Liked", "${liked.size} songs", nav.liked, Modifier.weight(1f))
-                    Shortcut(Icons.Rounded.Download, "Downloads", if (doneCount == 0) "Offline songs" else "$doneCount songs", nav.downloads, Modifier.weight(1f))
+                    Shortcut(Icons.Rounded.Favorite, "Liked", com.opentune.i18n.Tr.f("{0} songs", liked.size), nav.liked, Modifier.weight(1f))
+                    Shortcut(Icons.Rounded.Download, "Downloads", if (doneCount == 0) "Offline songs" else com.opentune.i18n.Tr.f("{0} songs", doneCount), nav.downloads, Modifier.weight(1f))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Shortcut(Icons.Rounded.LibraryMusic, "On this phone", "Local files", nav.local, Modifier.weight(1f))
@@ -329,7 +329,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     Shortcut(
                         Icons.Rounded.Groups,
                         "Listen together",
-                        room?.let { if (it.hosting) "Your room · ${it.members.size} in" else "In ${it.hostName ?: "a friend"}'s room" } ?: "Rooms with friends, in sync",
+                        room?.let { if (it.hosting) com.opentune.i18n.Tr.f("Your room · {0} in", it.members.size) else com.opentune.i18n.Tr.f("In {0}'s room", it.hostName ?: "a friend") } ?: "Rooms with friends, in sync",
                         nav.together,
                         Modifier.weight(1f),
                     )
@@ -348,7 +348,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         Text("Spotify", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(
                             when {
-                                fromSpotify > 0 -> if (fromSpotify == 1) "1 playlist" else "$fromSpotify playlists"
+                                fromSpotify > 0 -> if (fromSpotify == 1) "1 playlist" else com.opentune.i18n.Tr.f("{0} playlists", fromSpotify)
                                 spotifyOn -> "Your playlists"
                                 else -> "Connect or import"
                             },
@@ -388,7 +388,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 items(visible, key = { "$group:${it.key}" }) { row -> PlaylistLine(row, Modifier.animateItem()) }
                 if (group != PINNED && inGroup.size > LIST_FOLD) item(key = "fold:$group") {
                     TextButton(onClick = { openGroups[group] = !open }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (open) "Show less" else "Show more (${inGroup.size - LIST_FOLD})")
+                        Text(if (open) "Show less" else com.opentune.i18n.Tr.f("Show more ({0})", inGroup.size - LIST_FOLD))
                     }
                 }
             }
@@ -580,7 +580,7 @@ fun AllPlaylistsScreen(
             else items(shown.size, key = { shown[it].key }) { i -> PlaylistTile(shown[i], Modifier.animateItem()) }
         } else if (asList) {
             item(key = "new") { ActionLine(Icons.Rounded.Add, "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
-            item(key = "liked") { ActionLine(Icons.Rounded.Favorite, "Liked songs", "${liked.size} songs", onClick = nav.liked) }
+            item(key = "liked") { ActionLine(Icons.Rounded.Favorite, "Liked songs", com.opentune.i18n.Tr.f("{0} songs", liked.size), onClick = nav.liked) }
             items(shown.size, key = { shown[it].key }) { i -> PlaylistLine(shown[i], Modifier.animateItem()) }
         } else {
             item(key = "new") { NewPlaylistTile(signedIn, { naming = true }) }
@@ -649,7 +649,7 @@ private fun NewPlaylistTile(signedIn: Boolean, onClick: () -> Unit, modifier: Mo
 /** Liked songs as a playlist, in purple running into pink. */
 @Composable
 private fun LikedTile(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    ActionTile("Liked Music", if (count == 0) "Auto playlist" else "Auto playlist · $count songs", onClick, modifier,
+    ActionTile("Liked Music", if (count == 0) "Auto playlist" else com.opentune.i18n.Tr.f("Auto playlist · {0} songs", count), onClick, modifier,
         background = Brush.verticalGradient(listOf(Color(0xFF8C6AF0), Color(0xFFF95AAE)))) {
         Icon(Icons.Rounded.ThumbUp, null, Modifier.size(72.dp), tint = Color.White)
     }
@@ -866,7 +866,7 @@ private fun SaveToAccountDialog(name: String, onDismiss: () -> Unit, onSave: (Pl
         title = { Text("Save to YouTube Music") },
         text = {
             Column {
-                Text("Makes a copy of $name on YouTube Music, songs and all. Changes you make here go there too.")
+                Text(com.opentune.i18n.Tr.f("Makes a copy of {0} on YouTube Music, songs and all. Changes you make here go there too.", name))
                 com.opentune.ui.components.PillSegmented(PlaylistPrivacy.entries, privacy, { it.label }, { privacy = it }, Modifier.padding(top = 16.dp))
                 Text(privacy.meaning, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
             }
@@ -893,7 +893,7 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
     if (confirmRemove && saved != null) com.opentune.ui.components.FloatingDialog(
         onDismissRequest = { confirmRemove = false },
         title = { Text("Remove this download?") },
-        text = { Text("Deletes the downloaded songs of ${saved.title} from this phone and takes it out of your library's downloads.") },
+        text = { Text(com.opentune.i18n.Tr.f("Deletes the downloaded songs of {0} from this phone and takes it out of your library's downloads.", saved.title)) },
         confirmButton = { com.opentune.ui.components.SheetButton("Remove", tone = com.opentune.ui.components.SheetTone.Danger, onClick = {
             Downloads.removeAll(context, inList.map { it.song.toSong() })
             com.opentune.data.download.DownloadedLists.remove(saved.id)
@@ -914,7 +914,7 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     if (saved.subtitle.isNotBlank()) Text(saved.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-                    Text("${ready.size} of ${saved.songIds.size} songs downloaded", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(com.opentune.i18n.Tr.f("{0} of {1} songs downloaded", ready.size, saved.songIds.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     TextButton(onClick = { confirmRemove = true }, contentPadding = PaddingValues(0.dp)) { Text("Remove download") }
                 }
             }
@@ -933,7 +933,7 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
                 song = when (e.state) {
                     DownloadState.FAILED -> song.copy(durationText = "Failed · tap to retry")
                     DownloadState.QUEUED -> song.copy(durationText = if (com.opentune.data.download.Downloads.waitingForWifi(context)) "Waiting for Wi-Fi" else "Waiting")
-                    DownloadState.DOWNLOADING -> song.copy(durationText = "Downloading ${(e.progress * 100).toInt()}%")
+                    DownloadState.DOWNLOADING -> song.copy(durationText = com.opentune.i18n.Tr.f("Downloading {0}%", (e.progress * 100).toInt()))
                     else -> song
                 },
                 onClick = {
@@ -987,7 +987,7 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
                     message = "Use Download on a playlist or album page to keep the whole list offline.")
             }
             items(lists, key = { "list:${it.first.id}" }) { (l, have) ->
-                PlaylistRow(l.thumbnailUrl, l.title, "$have of ${l.songIds.size} downloaded · plays offline", { onOpenList(l.id) }, Modifier.animateItem())
+                PlaylistRow(l.thumbnailUrl, l.title, com.opentune.i18n.Tr.f("{0} of {1} downloaded · plays offline", have, l.songIds.size), { onOpenList(l.id) }, Modifier.animateItem())
             }
             return@LazyColumn
         }
@@ -1022,8 +1022,8 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
 private enum class DownloadsTab {
     SONGS, PLAYLISTS;
     fun label(songs: Int, lists: Int) = when (this) {
-        SONGS -> "Songs · $songs"
-        PLAYLISTS -> "Playlists · $lists"
+        SONGS -> com.opentune.i18n.Tr.f("Songs · {0}", songs)
+        PLAYLISTS -> com.opentune.i18n.Tr.f("Playlists · {0}", lists)
     }
 }
 
@@ -1078,7 +1078,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
         onRemove = { keys ->
             val gone = songs.filter { it.videoId in keys }
             gone.forEach { LibraryStore.setLiked(it, false) }
-            com.opentune.data.Pills.done("Removed ${gone.size} from Liked", context)
+            com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Removed {0} from Liked", gone.size), context)
         },
         removeLabel = "Unlike",
     )
@@ -1144,7 +1144,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         var everywhere by remember { mutableStateOf(false) }
         FloatingDialog(
             onDismissRequest = { deleting = false },
-            title = { Text("Delete \"${playlist.name}\"?") },
+            title = { Text(com.opentune.i18n.Tr.f("Delete \"{0}\"?", playlist.name)) },
             text = {
                 Column {
                     Text("The songs stay where they are; only this list goes.")
@@ -1235,7 +1235,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             Text(
                 when {
                     pending.any { it.playlist == id && it.kind == com.opentune.data.library.PlaylistEdit.Kind.CREATE } -> "Saving to YouTube Music…"
-                    waiting > 0 -> "On YouTube Music · ${if (waiting == 1) "1 change" else "$waiting changes"} to send"
+                    waiting > 0 -> com.opentune.i18n.Tr.f("On YouTube Music · {0} to send", if (waiting == 1) "1 change" else "$waiting changes")
                     else -> "On YouTube Music"
                 },
                 style = MaterialTheme.typography.bodyMedium,
@@ -1276,7 +1276,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             onRemove = if (playlist.spotifyId == null) ({ keys ->
                 val at = songs.indices.filter { selectKeys[it] in keys }.sortedDescending()
                 at.forEach { LibraryStore.removeFromPlaylist(id, it) }
-                com.opentune.data.Pills.done("Removed ${at.size} from ${playlist.name}", context)
+                com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Removed {0} from {1}", at.size, playlist.name), context)
             }) else null,
             removeLabel = "Remove",
         )
@@ -1392,7 +1392,7 @@ private fun LocalListMoreSheet(
             com.opentune.ui.components.MenuRow(Icons.Rounded.Download, "Download all") {
                 close()
                 songs.forEach { Downloads.enqueue(context, it) }
-                com.opentune.data.Pills.done("Downloading ${songs.size} songs", context)
+                com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size), context)
             }
             if (!spotify) {
                 com.opentune.ui.components.MenuRow(Icons.Rounded.Add, "Add songs") { close(); onAddSongs() }
@@ -1418,5 +1418,5 @@ internal fun songKeys(songs: List<com.opentune.data.model.Song>): List<String> {
 /** Takes the song at [index] out of playlist [id], with a few seconds to Undo it. */
 private fun removeWithUndo(id: String, index: Int) {
     val removed = LibraryStore.removeUndoably(id, index) ?: return
-    com.opentune.data.Pills.withAction("Removed \"${removed.song.title}\"", "Undo") { LibraryStore.undoRemove(removed) }
+    com.opentune.data.Pills.withAction(com.opentune.i18n.Tr.f("Removed \"{0}\"", removed.song.title), "Undo") { LibraryStore.undoRemove(removed) }
 }

@@ -31,9 +31,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.IosShare
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -163,7 +163,7 @@ private fun rememberArtistFaces(summary: ReplaySummary): ReplaySummary {
 private const val FACES_LOOKED_UP = 12
 
 private fun minutes(ms: Long) = TimeUnit.MILLISECONDS.toMinutes(ms)
-private fun plays(n: Int) = if (n == 1) "1 Play" else "$n Plays"
+private fun plays(n: Int) = if (n == 1) "1 Play" else com.opentune.i18n.Tr.f("{0} Plays", n)
 
 /** "09/26": the month of the first listen kept on this device. */
 internal fun memberSince(firstListen: Long?): String {
@@ -190,8 +190,8 @@ internal fun ReplayCards(
     val faces = buildList {
         add(CardFace("${minutes(summary.listenedMs)}", "MINUTES LISTENED", "${plays(summary.totalPlays)} · ${range.heading()}"))
         summary.topSongs.firstOrNull()?.let { add(CardFace(it.title, "TOP SONG", "${it.subtitle} · ${plays(it.plays)}")) }
-        summary.topArtists.firstOrNull()?.let { add(CardFace(it.title, "TOP ARTIST", "${minutes(it.listenedMs)} min · ${plays(it.plays)}")) }
-        summary.topAlbums.firstOrNull()?.let { add(CardFace(it.title, "TOP ALBUM", "${it.subtitle} · ${minutes(it.listenedMs)} min")) }
+        summary.topArtists.firstOrNull()?.let { add(CardFace(it.title, "TOP ARTIST", com.opentune.i18n.Tr.f("{0} min · {1}", minutes(it.listenedMs), plays(it.plays)))) }
+        summary.topAlbums.firstOrNull()?.let { add(CardFace(it.title, "TOP ALBUM", com.opentune.i18n.Tr.f("{0} · {1} min", it.subtitle, minutes(it.listenedMs)))) }
     }
     val list = rememberLazyListState()
     LaunchedEffect(list) {
@@ -319,7 +319,7 @@ internal fun ReplayStory(summary: ReplaySummary, range: ReplayRange, onDismiss: 
             ) {
                 Column(Modifier.fillMaxSize()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Replay · ${range.heading()}", Modifier.weight(1f), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(com.opentune.i18n.Tr.f("Replay · {0}", range.heading()), Modifier.weight(1f), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Icon(painterResource(com.opentune.R.drawable.ic_launcher_monochrome), null, Modifier.size(30.dp), tint = Color.White)
                         Text("OpenTune", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
@@ -388,7 +388,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Hero(entry: TopEntry,
             if (!round && entry.subtitle.isNotBlank()) Text(entry.subtitle, color = Color.White.copy(alpha = 0.8f), fontSize = 15.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip("$minutes min")
+                Chip(com.opentune.i18n.Tr.f("{0} min", minutes))
                 Chip(plays(plays))
             }
         }
@@ -416,7 +416,7 @@ private fun RunnersUp(list: List<TopEntry>, round: Boolean) {
                     Text(e.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (!round && e.subtitle.isNotBlank()) Text(e.subtitle, color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text("${minutes(e.listenedMs)} min", color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
+                Text(com.opentune.i18n.Tr.f("{0} min", minutes(e.listenedMs)), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
             }
         }
     }
@@ -511,7 +511,7 @@ private fun storyPages(s: ReplaySummary, range: ReplayRange): List<StoryPage> = 
     })
     if (s.totalPlays == 0) return@buildList
     add(StoryPage(Color(0xFF6B1F45), Color(0xFF2A0D1C)) {
-        Heading("You spent " to false, "${minutes(s.listenedMs)} minutes" to true, " with music." to false)
+        Heading("You spent " to false, com.opentune.i18n.Tr.f("{0} minutes", minutes(s.listenedMs)) to true, " with music." to false)
         Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.Center) {
             BigNumber("${minutes(s.listenedMs)}", "MINUTES")
         }
@@ -526,7 +526,7 @@ private fun storyPages(s: ReplaySummary, range: ReplayRange): List<StoryPage> = 
         s.biggestDay?.let { (day, ms) ->
             Spacer(Modifier.height(12.dp))
             val date = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(day))
-            Footnote("Your biggest day was $date, with ${minutes(ms)} minutes.")
+            Footnote(com.opentune.i18n.Tr.f("Your biggest day was {0}, with {1} minutes.", date, minutes(ms)))
         }
     })
     s.topArtists.firstOrNull()?.let { a ->
@@ -538,7 +538,7 @@ private fun storyPages(s: ReplaySummary, range: ReplayRange): List<StoryPage> = 
     }
     s.topSongs.firstOrNull()?.let { t ->
         add(StoryPage(Color(0xFF3D7146), Color(0xFF1B3520)) {
-            Heading("In total, " to false, "${s.songCount} songs" to true, " filled your $word." to false)
+            Heading("In total, " to false, com.opentune.i18n.Tr.f("{0} songs", s.songCount) to true, com.opentune.i18n.Tr.f(" filled your {0}.", word) to false)
             Hero(t, round = false, minutes = minutes(t.listenedMs), plays = t.plays)
             RunnersUp(s.topSongs, round = false)
         })
@@ -551,7 +551,7 @@ private fun storyPages(s: ReplaySummary, range: ReplayRange): List<StoryPage> = 
         })
     }
     add(StoryPage(Color(0xFF7A3A4E), Color(0xFF2E1520)) {
-        Heading("You explored " to false, "${s.songCount} songs" to true, " from " to false, "${s.artistCount} artists" to true, "." to false)
+        Heading("You explored " to false, com.opentune.i18n.Tr.f("{0} songs", s.songCount) to true, " from " to false, com.opentune.i18n.Tr.f("{0} artists", s.artistCount) to true, "." to false)
         // The artists, as a wall of faces.
         val faces = s.topArtists.distinctBy { it.thumbnailUrl ?: it.key }.map { it.thumbnailUrl }.take(12)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {

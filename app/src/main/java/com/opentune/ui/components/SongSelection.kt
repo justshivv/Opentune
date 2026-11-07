@@ -34,10 +34,10 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -149,7 +149,7 @@ fun SongSelectionBar(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { selection.clear() }) { Icon(Icons.Rounded.Close, "Stop selecting") }
-                Text(if (count == 1) "1 selected" else "$count selected", style = MaterialTheme.typography.titleLarge,
+                Text(if (count == 1) "1 selected" else com.opentune.i18n.Tr.f("{0} selected", count), style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 4.dp))
                 val everything = count == rows.size && rows.isNotEmpty()
                 TextButton(onClick = {
@@ -161,13 +161,13 @@ fun SongSelectionBar(
                 val enabled = count > 0
                 BarAction(if (allLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (allLiked) "Unlike" else "Like", enabled) {
                     inOrder.forEach { LibraryStore.setLiked(it, !allLiked) }
-                    com.opentune.data.Pills.done(if (allLiked) "Removed ${inOrder.size} from Liked" else "Liked ${inOrder.size} ${if (inOrder.size == 1) "song" else "songs"}", context)
+                    com.opentune.data.Pills.done(if (allLiked) com.opentune.i18n.Tr.f("Removed {0} from Liked", inOrder.size) else com.opentune.i18n.Tr.f("Liked {0} {1}", inOrder.size, if (inOrder.size == 1) "song" else "songs"), context)
                     selection.clear()
                 }
                 BarAction(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist", enabled) { adding = inOrder }
                 BarAction(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue", enabled) {
                     onAddToQueue(inOrder)
-                    com.opentune.data.Pills.done("Added ${inOrder.size} to the queue", context)
+                    com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added {0} to the queue", inOrder.size), context)
                     selection.clear()
                 }
                 if (onRemove != null) BarAction(Icons.Rounded.RemoveCircleOutline, removeLabel, enabled) {
@@ -177,7 +177,7 @@ fun SongSelectionBar(
                 BarAction(Icons.Rounded.Download, "Download", enabled && inOrder.any { isYouTubeId(it.videoId) }) {
                     val online = inOrder.filter { isYouTubeId(it.videoId) }
                     online.forEach { Downloads.enqueue(context, it) }
-                    com.opentune.data.Pills.done("Downloading ${online.size} ${if (online.size == 1) "song" else "songs"}", context)
+                    com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} {1}", online.size, if (online.size == 1) "song" else "songs"), context)
                     selection.clear()
                 }
             }
@@ -214,12 +214,12 @@ internal fun AddAllToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit, on
         val have = LibraryStore.playlist(id)?.songs?.map { it.videoId }?.toHashSet().orEmpty()
         val fresh = songs.filter { it.videoId !in have }
         if (fresh.isNotEmpty()) LibraryStore.addAllToPlaylist(id, fresh)
-        com.opentune.data.Pills.done(if (fresh.isEmpty()) "Already in $title" else "Added ${fresh.size} to $title", context)
+        com.opentune.data.Pills.done(if (fresh.isEmpty()) com.opentune.i18n.Tr.f("Already in {0}", title) else com.opentune.i18n.Tr.f("Added {0} to {1}", fresh.size, title), context)
         onDone()
     }
     FloatingDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (naming) "New playlist" else "Add ${songs.size} to a playlist") },
+        title = { Text(if (naming) "New playlist" else com.opentune.i18n.Tr.f("Add {0} to a playlist", songs.size)) },
         text = {
             if (naming) androidx.compose.material3.OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("Name") })
             else LazyColumn(Modifier.heightIn(max = 420.dp)) {
@@ -238,7 +238,7 @@ internal fun AddAllToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit, on
                 items(playlists, key = { it.id }) { p ->
                     PlaylistPickRow(
                         title = p.name,
-                        subtitle = if (p.songs.size == 1) "1 song" else "${p.songs.size} songs",
+                        subtitle = if (p.songs.size == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", p.songs.size),
                         art = { PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.fillMaxWidth(), RectangleShape) },
                         onClick = { addTo(p.id, p.name) },
                     )

@@ -453,11 +453,11 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
     private fun foregroundInfo(title: String, progress: Float): ForegroundInfo {
         val nm = applicationContext.getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Downloads", NotificationManager.IMPORTANCE_LOW))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, com.opentune.i18n.Tr.t("Downloads"), NotificationManager.IMPORTANCE_LOW))
         }
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Downloading")
+            .setContentTitle(com.opentune.i18n.Tr.t("Downloading"))
             .setContentText(title)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

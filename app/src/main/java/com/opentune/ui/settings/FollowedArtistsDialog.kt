@@ -13,10 +13,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,7 +55,7 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
                             Artwork(a.thumbnailUrl, Modifier.size(40.dp), CircleShape, placeholder = Icons.Rounded.Person)
                             Spacer(Modifier.width(12.dp))
                             Text(a.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            IconButton(onClick = { NewReleases.unfollow(context, a.browseId) }) { Icon(Icons.Rounded.Close, "Unfollow ${a.name}") }
+                            IconButton(onClick = { NewReleases.unfollow(context, a.browseId) }) { Icon(Icons.Rounded.Close, com.opentune.i18n.Tr.f("Unfollow {0}", a.name)) }
                         }
                     }
                     status?.let { item { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) } }
@@ -71,9 +71,9 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
                         status = runCatching { NewReleases.check() }.fold(
                             { found ->
                                 NewReleases.notify(context, found)
-                                if (found.isEmpty()) "Nothing new since the last check." else "${found.size} new release(s); see your notifications."
+                                if (found.isEmpty()) "Nothing new since the last check." else com.opentune.i18n.Tr.f("{0} new release(s); see your notifications.", found.size)
                             },
-                            { "Couldn't check: ${it.message}" },
+                            { com.opentune.i18n.Tr.f("Couldn't check: {0}", it.message) },
                         )
                     }
                 })

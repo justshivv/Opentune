@@ -15,7 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.Button
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Android
 import com.opentune.ui.components.FloatingCard
@@ -28,7 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -138,7 +138,7 @@ fun UpdateDialog(found: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: (U
     ) {
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
             .padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            ReleaseHero(release.version, "Update available · you have ${BuildConfig.VERSION_NAME}")
+            ReleaseHero(release.version, com.opentune.i18n.Tr.f("Update available · you have {0}", BuildConfig.VERSION_NAME))
             ReleaseNotes(release.notes)
             if (apk != null) {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
@@ -149,16 +149,16 @@ fun UpdateDialog(found: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: (U
                         Icon(Icons.Rounded.Android, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(apk.name, style = MaterialTheme.typography.bodyMedium)
-                            Text(if (apk.bytes > 0) "Android app · ${Formatter.formatShortFileSize(context, apk.bytes)}" else "Android app",
+                            Text(if (apk.bytes > 0) com.opentune.i18n.Tr.f("Android app · {0}", Formatter.formatShortFileSize(context, apk.bytes)) else "Android app",
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     progress?.let { p ->
                         LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth())
-                        Text("Downloading · ${(p * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
+                        Text(com.opentune.i18n.Tr.f("Downloading · {0}%", (p * 100).toInt()), style = MaterialTheme.typography.labelMedium)
                     }
                     if (progress == null && kept > 0) TextButton(onClick = { Updater.deleteCached(context); install.kept = 0 }) {
-                        Text("Remove saved update (${Formatter.formatShortFileSize(context, kept)})")
+                        Text(com.opentune.i18n.Tr.f("Remove saved update ({0})", Formatter.formatShortFileSize(context, kept)))
                     }
                 }
             }

@@ -61,11 +61,11 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.clickable
@@ -1377,7 +1377,7 @@ private fun ProgressRing(progress: () -> Float, color: Color, track: Color, stro
 @Composable
 fun SongStatus(source: String?) {
     Text(
-        if (source.isNullOrBlank()) "Now playing" else "Playing from $source",
+        if (source.isNullOrBlank()) "Now playing" else com.opentune.i18n.Tr.f("Playing from {0}", source),
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
@@ -1398,12 +1398,12 @@ fun NerdStatsLine(format: AudioFormatInfo?) {
     val parts = listOfNotNull(
         format?.codec,
         format?.bitDepth?.takeIf { it > 0 }?.let { "$it-bit" },
-        kbps?.let { "$it kbps" },
+        kbps?.let { com.opentune.i18n.Tr.f("{0} kbps", it) },
         format?.sampleRateHz?.let { "%.1f kHz".format(it / 1000f) },
-        format?.channels?.let { if (it == 2) "stereo" else if (it == 1) "mono" else "$it ch" },
+        format?.channels?.let { if (it == 2) "stereo" else if (it == 1) "mono" else com.opentune.i18n.Tr.f("{0} ch", it) },
         gain?.let { "normalized %+.1f dB".format(it) },
-        startup?.let { "started in $it ms" },
-        (lossless ?: engine)?.let { "via $it" },
+        startup?.let { com.opentune.i18n.Tr.f("started in {0} ms", it) },
+        (lossless ?: engine)?.let { com.opentune.i18n.Tr.f("via {0}", it) },
     )
     Text(
         parts.joinToString(" · ").ifEmpty { "Waiting for stream…" },
@@ -1458,7 +1458,7 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    com.opentune.data.Pills.info("Couldn't change the volume on ${receiver.name}", context)
+                    com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Couldn't change the volume on {0}", receiver.name), context)
                 } finally {
                     pending--
                 }
@@ -1499,7 +1499,7 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
                 }
                 .focusable()
                 .semantics {
-                    contentDescription = receiver?.let { "${it.name} volume" } ?: "Media volume"
+                    contentDescription = receiver?.let { com.opentune.i18n.Tr.f("{0} volume", it.name) } ?: "Media volume"
                     progressBarRangeInfo = ProgressBarRangeInfo(volume, 0f..1f)
                     setProgress { volume = it.coerceIn(0f, 1f); commit(); true }
                 }

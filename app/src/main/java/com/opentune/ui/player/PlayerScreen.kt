@@ -74,11 +74,11 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -1724,9 +1724,9 @@ private fun TogetherPill(room: Together.Room, onClick: () -> Unit) {
         label = {
             Text(
                 when {
-                    room.hosting -> "Your room · ${room.members.size} listening"
-                    room.holding -> "Paused for you · ${room.hostName ?: "room"}"
-                    room.phase == Together.Phase.Live -> "With ${room.hostName ?: "the host"} · ${room.members.size} listening"
+                    room.hosting -> com.opentune.i18n.Tr.f("Your room · {0} listening", room.members.size)
+                    room.holding -> com.opentune.i18n.Tr.f("Paused for you · {0}", room.hostName ?: "room")
+                    room.phase == Together.Phase.Live -> com.opentune.i18n.Tr.f("With {0} · {1} listening", room.hostName ?: "the host", room.members.size)
                     else -> "Listening together"
                 },
             )

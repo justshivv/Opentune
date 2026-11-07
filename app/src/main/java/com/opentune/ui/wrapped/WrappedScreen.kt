@@ -41,8 +41,8 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Icon
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -744,8 +744,8 @@ private fun BoxScope.MinutesSlide(s: Wrapped.Summary, look: Look, still: Boolean
         val hours = s.minutes / 60
         Text(
             when {
-                hours >= 48 -> "That's $hours hours, about ${hours / 24} days."
-                hours >= 2 -> "That's about $hours hours."
+                hours >= 48 -> com.opentune.i18n.Tr.f("That's {0} hours, about {1} days.", hours, hours / 24)
+                hours >= 2 -> com.opentune.i18n.Tr.f("That's about {0} hours.", hours)
                 else -> "A good start."
             },
             style = body(look.ink.copy(alpha = 0.75f)),
@@ -787,7 +787,7 @@ private fun BoxScope.TopArtistSlide(e: Wrapped.Entry, look: Look, still: Boolean
         Spacer(Modifier.height(30.dp))
         Text(e.title, style = display(46.sp, look.ink), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.wipe(b))
         Spacer(Modifier.height(10.dp))
-        Text("${e.plays} plays · ${e.minutes} minutes", style = body(look.ink.copy(alpha = 0.7f)), modifier = Modifier.rise(b))
+        Text(com.opentune.i18n.Tr.f("{0} plays · {1} minutes", e.plays, e.minutes), style = body(look.ink.copy(alpha = 0.7f)), modifier = Modifier.rise(b))
     }
 }
 
@@ -808,7 +808,7 @@ private fun BoxScope.RankSlide(heading: String, line: String, list: List<Wrapped
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(e.title, style = strong(look.ink), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (round) "${e.plays} plays" else "${e.subtitle} · ${e.plays} plays", style = body(look.ink.copy(alpha = 0.6f)).copy(fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (round) com.opentune.i18n.Tr.f("{0} plays", e.plays) else com.opentune.i18n.Tr.f("{0} · {1} plays", e.subtitle, e.plays), style = body(look.ink.copy(alpha = 0.6f)).copy(fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 if (i < list.size.coerceAtMost(5) - 1) Rule(look)
@@ -844,7 +844,7 @@ private fun BoxScope.TopSongSlide(e: Wrapped.Entry, look: Look, still: Boolean, 
         Spacer(Modifier.height(6.dp))
         Text(e.subtitle, style = strong(look.ink.copy(alpha = 0.75f)), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.rise(c))
         Spacer(Modifier.height(4.dp))
-        Text("Played ${e.plays} times", style = body(look.ink.copy(alpha = 0.6f)), modifier = Modifier.rise(c))
+        Text(com.opentune.i18n.Tr.f("Played {0} times", e.plays), style = body(look.ink.copy(alpha = 0.6f)), modifier = Modifier.rise(c))
         Spacer(Modifier.height(22.dp))
         Pill("Play your top songs", Icons.Rounded.PlayArrow, filled = true, look, onPlay, Modifier.rise(c))
     }
@@ -886,9 +886,9 @@ private fun BoxScope.ClockSlide(s: Wrapped.Summary, look: Look, still: Boolean) 
 
 private fun hourName(h: Int): String = when {
     h == 0 -> "12 am"
-    h < 12 -> "$h am"
+    h < 12 -> com.opentune.i18n.Tr.f("{0} am", h)
     h == 12 -> "12 pm"
-    else -> "${h - 12} pm"
+    else -> com.opentune.i18n.Tr.f("{0} pm", h - 12)
 }
 
 @Composable
@@ -901,7 +901,7 @@ private fun BoxScope.MonthsSlide(s: Wrapped.Summary, look: Look, still: Boolean)
     Column(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(top = 24.dp)) {
         Eyebrow("Your year, month by month", look, Modifier.rise(a))
         Spacer(Modifier.height(14.dp))
-        if (best != null && best.second > 0) Text("${best.first} was\nyour month", style = display(48.sp, look.ink), modifier = Modifier.wipe(a))
+        if (best != null && best.second > 0) Text(com.opentune.i18n.Tr.f("{0} was\nyour month", best.first), style = display(48.sp, look.ink), modifier = Modifier.wipe(a))
         Spacer(Modifier.height(28.dp))
         Row(Modifier.fillMaxWidth().height(170.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
             s.months.forEach { (name, minutes) ->
@@ -920,8 +920,8 @@ private fun BoxScope.MonthsSlide(s: Wrapped.Summary, look: Look, still: Boolean)
         Spacer(Modifier.height(28.dp))
         Column(Modifier.rise(c), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             val day = s.busiestDayMs
-            if (day != null) Line("Biggest day", "${SimpleDateFormat("d MMMM", Locale.getDefault()).format(Date(day))} · ${s.busiestDayMinutes} minutes", look)
-            if (s.streakDays >= 2) Line("Longest streak", "${s.streakDays} days in a row", look)
+            if (day != null) Line("Biggest day", com.opentune.i18n.Tr.f("{0} · {1} minutes", SimpleDateFormat("d MMMM", Locale.getDefault()).format(Date(day)), s.busiestDayMinutes), look)
+            if (s.streakDays >= 2) Line("Longest streak", com.opentune.i18n.Tr.f("{0} days in a row", s.streakDays), look)
         }
     }
 }
@@ -948,7 +948,7 @@ private fun BoxScope.RepeatSlide(s: Wrapped.Summary, look: Look, still: Boolean)
                     Artwork(hiRes(e.thumbnailUrl), Modifier.size(120.dp).shadow(16.dp, RoundedCornerShape(10.dp)), RoundedCornerShape(10.dp))
                     Spacer(Modifier.width(18.dp))
                     Column {
-                        Text("${e.plays} times", style = display(44.sp, look.shape))
+                        Text(com.opentune.i18n.Tr.f("{0} times", e.plays), style = display(44.sp, look.shape))
                         Text("in a single day", style = body(look.ink.copy(alpha = 0.7f)))
                     }
                 }
@@ -993,7 +993,7 @@ private fun BoxScope.SummarySlide(title: String, s: Wrapped.Summary, look: Look,
         ) {
             Eyebrow("OpenTune", look)
             Spacer(Modifier.height(8.dp))
-            Text("Your $title Wrapped", style = display(34.sp, look.ink))
+            Text(com.opentune.i18n.Tr.f("Your {0} Wrapped", title), style = display(34.sp, look.ink))
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

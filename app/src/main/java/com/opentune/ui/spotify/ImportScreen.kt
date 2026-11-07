@@ -32,12 +32,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -100,7 +100,7 @@ private sealed interface Found {
     }
 
     data class FromBundle(val playlists: List<ExportedPlaylists.Exported>) : Found {
-        override val name get() = "${playlists.size} playlists"
+        override val name get() = com.opentune.i18n.Tr.f("{0} playlists", playlists.size)
         override val subtitle get() = "From Exportify"
         override val imageUrl: String? get() = null
         override val label get() = "Exported playlists"
@@ -259,7 +259,7 @@ fun ImportScreen(
             is Preview.Loading -> item {
                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
-                    if (p.songs > 0) Text("${p.songs} songs so far…", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                    if (p.songs > 0) Text(com.opentune.i18n.Tr.f("{0} songs so far…", p.songs), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
                 }
             }
             is Preview.Failed -> item {
@@ -275,7 +275,7 @@ fun ImportScreen(
                             Text(f.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             Text(f.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             if (f.subtitle.isNotBlank()) Text(f.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("${f.count} songs", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(com.opentune.i18n.Tr.f("{0} songs", f.count), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -309,7 +309,7 @@ fun ImportScreen(
                                 enabled = !PlaylistImport.running,
                                 onClick = { PlaylistImport.startAll(f.playlists.map { e -> e.name to suspend { e.tracks } }) },
                                 modifier = Modifier.weight(1f),
-                            ) { Text("Import all ${f.playlists.size}") }
+                            ) { Text(com.opentune.i18n.Tr.f("Import all {0}", f.playlists.size)) }
                             f is Found.FromCsv -> Button(
                                 enabled = !PlaylistImport.running,
                                 onClick = { PlaylistImport.start(f.name) { f.tracks } },
@@ -322,7 +322,7 @@ fun ImportScreen(
                     is Found.FromSpotify -> if (f.c.link.kind == Spotify.Kind.TRACK) emptyList() else f.c.tracks.map { it.title to it.artists.joinToString() }
                     is Found.FromYouTube -> f.p.songs.map { it.title to it.artist }
                     is Found.FromCsv -> f.tracks.map { it.title to it.artists.joinToString() }
-                    is Found.FromBundle -> f.playlists.map { it.name to "${it.tracks.size} songs" }
+                    is Found.FromBundle -> f.playlists.map { it.name to com.opentune.i18n.Tr.f("{0} songs", it.tracks.size) }
                 }
                 items(rows.take(300)) { (title, artist) ->
                     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
@@ -331,7 +331,7 @@ fun ImportScreen(
                     }
                 }
                 if (rows.size > 300) item {
-                    Text("…and ${rows.size - 300} more", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
+                    Text(com.opentune.i18n.Tr.f("…and {0} more", rows.size - 300), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
                 }
             }
         }
@@ -348,7 +348,7 @@ private fun CsvHelp(onOpenExportify: () -> Unit) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Big playlists and Liked Songs", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(
-                "A Spotify link brings up to the first ${Spotify.EMBED_LIMIT} songs of a playlist, which is all Spotify shows without signing in. " +
+                com.opentune.i18n.Tr.f("A Spotify link brings up to the first {0} songs of a playlist, which is all Spotify shows without signing in. ", Spotify.EMBED_LIMIT) +
                     "For every song, or your Liked Songs, tap Export from Spotify: Exportify opens here, you sign in with Spotify and tap Export, and the playlist comes straight back ready to import.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -366,7 +366,7 @@ private fun FullPlaylistNote(onOpenExportify: () -> Unit) {
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                "This shows the first ${Spotify.EMBED_LIMIT} songs, Spotify's limit without signing in. Export from Spotify brings every song.",
+                com.opentune.i18n.Tr.f("This shows the first {0} songs, Spotify's limit without signing in. Export from Spotify brings every song.", Spotify.EMBED_LIMIT),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
@@ -392,11 +392,11 @@ private fun ProgressCard(p: PlaylistImport.Progress, actions: SongActions, onOpe
                     LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
                 !p.finished -> {
-                    Text("Finding songs on YouTube Music: ${p.done} of ${p.total}")
+                    Text(com.opentune.i18n.Tr.f("Finding songs on YouTube Music: {0} of {1}", p.done, p.total))
                     LinearProgressIndicator(progress = { p.done.toFloat() / p.total }, modifier = Modifier.fillMaxWidth())
                 }
-                p.matched == p.total -> Text("Saved all ${p.total} songs as a playlist in Library.")
-                else -> Text("Found ${p.matched} of ${p.total} songs. Saved as a playlist in Library.")
+                p.matched == p.total -> Text(com.opentune.i18n.Tr.f("Saved all {0} songs as a playlist in Library.", p.total))
+                else -> Text(com.opentune.i18n.Tr.f("Found {0} of {1} songs. Saved as a playlist in Library.", p.matched, p.total))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (!p.finished) TextButton(onClick = PlaylistImport::cancel) { Text(com.opentune.ui.theme.tr("Cancel")) }
@@ -407,7 +407,7 @@ private fun ProgressCard(p: PlaylistImport.Progress, actions: SongActions, onOpe
                     }) { Text(com.opentune.ui.theme.tr("Play")) }
                     TextButton(onClick = { onOpenPlaylist(id) }) { Text("Open") }
                 }
-                if (p.missed.isNotEmpty()) TextButton(onClick = { showMissed = !showMissed }) { Text(if (showMissed) "Hide missed" else "${p.missed.size} not found") }
+                if (p.missed.isNotEmpty()) TextButton(onClick = { showMissed = !showMissed }) { Text(if (showMissed) "Hide missed" else com.opentune.i18n.Tr.f("{0} not found", p.missed.size)) }
                 if (p.finished) TextButton(onClick = PlaylistImport::dismiss) { Text(com.opentune.ui.theme.tr("Close")) }
             }
             if (showMissed) {

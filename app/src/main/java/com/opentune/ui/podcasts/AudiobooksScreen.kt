@@ -27,10 +27,10 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -159,7 +159,7 @@ private fun BookRow(book: Audiobooks.Book, onClick: () -> Unit) {
         Artwork(book.coverUrl, Modifier.size(64.dp), RoundedCornerShape(10.dp))
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
             Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(book.author, book.runtime?.let { "$it long" }).joinToString(" · "),
+            Text(listOfNotNull(book.author, book.runtime?.let { com.opentune.i18n.Tr.f("{0} long", it) }).joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -209,7 +209,7 @@ fun AudiobookScreen(id: String, contentPadding: PaddingValues, actions: SongActi
                 ) {
                     Icon(Icons.Rounded.PlayArrow, null)
                     Spacer(Modifier.width(6.dp))
-                    Text(if (resumeIndex != null) "Continue: ${p.chapters[resumeIndex].title}" else "Play from the start", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(if (resumeIndex != null) com.opentune.i18n.Tr.f("Continue: {0}", p.chapters[resumeIndex].title) else "Play from the start", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 p.description?.let { text ->
                     Text(
@@ -220,7 +220,7 @@ fun AudiobookScreen(id: String, contentPadding: PaddingValues, actions: SongActi
                 }
             }
         }
-        item { SectionTitle("${p.chapters.size} chapters") }
+        item { SectionTitle(com.opentune.i18n.Tr.f("{0} chapters", p.chapters.size)) }
         itemsIndexed(p.chapters, key = { _, c -> c.id }) { i, c ->
             val playing = actions.currentVideoId == c.id
             Row(
@@ -233,7 +233,7 @@ fun AudiobookScreen(id: String, contentPadding: PaddingValues, actions: SongActi
                     Text(c.title, style = MaterialTheme.typography.bodyLarge, color = if (playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (at?.chapterId == c.id && at.positionMs > 0) {
-                        Text("Left at ${clock(at.positionMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        Text(com.opentune.i18n.Tr.f("Left at {0}", clock(at.positionMs)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
                 if (c.durationMs > 0) Text(clock(c.durationMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

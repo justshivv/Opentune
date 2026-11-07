@@ -23,8 +23,8 @@ import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Icon
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -155,7 +155,7 @@ fun ServerScreen(contentPadding: PaddingValues, actions: SongActions, nav: Serve
                 songRows(found.songs, actions, "Search")
             }
             if (found.albums.isEmpty() && found.artists.isEmpty() && found.songs.isEmpty()) {
-                item { MessageState(Icons.Rounded.Search, "Nothing found", message = "Nothing on your server matches \"$query\".") }
+                item { MessageState(Icons.Rounded.Search, "Nothing found", message = com.opentune.i18n.Tr.f("Nothing on your server matches \"{0}\".", query)) }
             }
             return@LazyColumn
         }
@@ -171,7 +171,7 @@ fun ServerScreen(contentPadding: PaddingValues, actions: SongActions, nav: Serve
                 if (home.playlists.isNotEmpty()) {
                     item(key = "pl-header") { SectionHeader("Playlists") }
                     items(home.playlists, key = { "pl:${it.id}" }) { p ->
-                        ServerRow(Icons.AutoMirrored.Rounded.QueueMusic, p.name, "${p.songCount} songs", p.cover) { nav.playlist(p.id) }
+                        ServerRow(Icons.AutoMirrored.Rounded.QueueMusic, p.name, com.opentune.i18n.Tr.f("{0} songs", p.songCount), p.cover) { nav.playlist(p.id) }
                     }
                 }
             }
@@ -204,7 +204,7 @@ fun ServerAlbumScreen(id: String, contentPadding: PaddingValues, actions: SongAc
                                 modifier = Modifier.clickable(enabled = album.artistId != null) { album.artistId?.let(onArtist) },
                             )
                             Text(
-                                listOfNotNull(album.year?.toString(), "${songs.size} songs").joinToString(" · "),
+                                listOfNotNull(album.year?.toString(), com.opentune.i18n.Tr.f("{0} songs", songs.size)).joinToString(" · "),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -268,7 +268,7 @@ fun ServerArtistScreen(id: String, contentPadding: PaddingValues, nav: ServerNav
                 val (artist, albums) = s.data
                 item { PageHeader(artist.name, onBack = onBack) }
                 items(albums, key = { it.id }) { a ->
-                    ServerRow(null, a.name, listOfNotNull(a.year?.toString(), "${a.songCount} songs").joinToString(" · "), a.cover) { nav.album(a.id) }
+                    ServerRow(null, a.name, listOfNotNull(a.year?.toString(), com.opentune.i18n.Tr.f("{0} songs", a.songCount)).joinToString(" · "), a.cover) { nav.album(a.id) }
                 }
             }
         }
@@ -285,7 +285,7 @@ fun ServerArtistsScreen(contentPadding: PaddingValues, nav: ServerNav, onBack: (
             is UiState.Loading -> items(3) { ShelfPlaceholder() }
             is UiState.Error -> item { ErrorState(s.message, onRetry = { loader.reload() }) }
             is UiState.Success -> items(s.data, key = { it.id }) { a ->
-                ServerRow(Icons.Rounded.Person, a.name, "${a.albumCount} albums", a.cover, round = true) { nav.artist(a.id) }
+                ServerRow(Icons.Rounded.Person, a.name, com.opentune.i18n.Tr.f("{0} albums", a.albumCount), a.cover, round = true) { nav.artist(a.id) }
             }
         }
     }
@@ -314,7 +314,7 @@ private fun AlbumShelf(title: String, albums: List<Subsonic.Album>, nav: ServerN
 @Composable
 private fun ArtistShelf(title: String, artists: List<Subsonic.Artist>, nav: ServerNav) {
     Shelf(title = title, items = artists) { a ->
-        ItemCard(a.name, "${a.albumCount} albums", a.cover, BrowseType.ARTIST, onClick = { nav.artist(a.id) })
+        ItemCard(a.name, com.opentune.i18n.Tr.f("{0} albums", a.albumCount), a.cover, BrowseType.ARTIST, onClick = { nav.artist(a.id) })
     }
 }
 

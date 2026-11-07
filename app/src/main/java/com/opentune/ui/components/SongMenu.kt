@@ -46,10 +46,10 @@ import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.ThumbDownOffAlt
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -246,9 +246,9 @@ fun SongMenuSheet(
                 if (artist.isNotBlank()) {
                     val entry = hidden.artists.firstOrNull { it.key == HiddenList.normalize(artist) }
                     if (entry != null) {
-                        MenuRow(Icons.Rounded.Person, "Suggest $artist again") { LibraryStore.unhideArtist(entry.key); close() }
+                        MenuRow(Icons.Rounded.Person, com.opentune.i18n.Tr.f("Suggest {0} again", artist)) { LibraryStore.unhideArtist(entry.key); close() }
                     } else {
-                        MenuRow(Icons.Rounded.PersonOff, "Don't play $artist") { close(); actions.dontPlayArtist(song) }
+                        MenuRow(Icons.Rounded.PersonOff, com.opentune.i18n.Tr.f("Don't play {0}", artist)) { close(); actions.dontPlayArtist(song) }
                     }
                 }
             }
@@ -436,15 +436,15 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
                         val has = p.songs.any { it.videoId == song.videoId }
                         PlaylistPickRow(
                             title = p.name,
-                            subtitle = if (has) "Already in it" else if (p.songs.size == 1) "1 song" else "${p.songs.size} songs",
+                            subtitle = if (has) "Already in it" else if (p.songs.size == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", p.songs.size),
                             art = { PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), RectangleShape) },
                             added = has,
                             onClick = {
                                 if (has) {
-                                    com.opentune.data.Pills.info("Already in ${p.name}", context)
+                                    com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", p.name), context)
                                 } else {
                                     LibraryStore.addToPlaylist(p.id, song)
-                                    com.opentune.data.Pills.done("Added to ${p.name}", context)
+                                    com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", p.name), context)
                                 }
                                 onDone()
                             },
@@ -468,13 +468,13 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
                                 added = has,
                             ) {
                                 if (has) {
-                                    com.opentune.data.Pills.info("Already in ${p.title}", context)
+                                    com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", p.title), context)
                                     onDone()
                                     return@PlaylistPickRow
                                 }
                                 PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
-                                    if (ok) com.opentune.data.Pills.done("Added to ${p.title}", context)
-                                    else com.opentune.data.Pills.error("Couldn't add it to ${p.title}", context)
+                                    if (ok) com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", p.title), context)
+                                    else com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add it to {0}", p.title), context)
                                 }
                                 onDone()
                             }
@@ -487,7 +487,7 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
             if (naming) {
                 SheetButton("Create", onClick = {
                     LibraryStore.createPlaylist(name, song, privacy.takeIf { online && saveOnline })
-                    com.opentune.data.Pills.done("Added to ${name.trim().ifEmpty { "New playlist" }}", context)
+                    com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", name.trim().ifEmpty { "New playlist" }), context)
                     onDone()
                 })
             }

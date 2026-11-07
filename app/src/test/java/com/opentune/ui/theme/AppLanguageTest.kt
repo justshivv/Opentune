@@ -1,14 +1,10 @@
 package com.opentune.ui.theme
 
-import android.content.res.Configuration
 import androidx.activity.ComponentActivity
-import androidx.compose.material3.Text
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import java.util.Locale
+import com.opentune.i18n.Tr
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,12 +15,12 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35], application = android.app.Application::class)
 class AppLanguageTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @After fun english() = Tr.use(compose.activity, "en")
+
+    /** The app's own Text shows [english] in [tag]'s words, read from that language's file. */
     private fun language(tag: String, expected: String, english: String = "Home") {
-        val configuration = Configuration(compose.activity.resources.configuration).apply { setLocale(Locale.forLanguageTag(tag)) }
-        val context = compose.activity.createConfigurationContext(configuration)
-        compose.setContent {
-            CompositionLocalProvider(LocalContext provides context, LocalConfiguration provides configuration) { Text(tr(english)) }
-        }
+        Tr.use(compose.activity, tag)
+        compose.setContent { Text(english) }
         compose.onNodeWithText(expected).assertExists()
     }
     @Test fun arabicChromeUsesAndroidResources() = language("ar", "الرئيسية")
@@ -38,6 +34,16 @@ class AppLanguageTest {
     @Test fun traditionalChineseIsNotSimplified() = language("zh-TW", "首頁")
     @Test fun ukrainianChromeUsesAndroidResources() = language("uk", "Головна")
     @Test fun portugueseNoLongerFallsBackToEnglish() = language("pt", "Streaming sem perdas", english = "Lossless streaming")
+    @Test fun hindiFillsTheNumberIntoItsOwnSentence() {
+        Tr.use(compose.activity, "hi")
+        compose.setContent { Text(Tr.f("{0} of {1} songs downloaded", 3, 10)) }
+        compose.onNodeWithText("10 में से 3 गाने डाउनलोड हुए").assertExists()
+    }
+    @Test fun englishAndUntranslatedWordsStayAsWritten() {
+        Tr.use(compose.activity, "es")
+        compose.setContent { Text("A song called Home Sweet Home") }
+        compose.onNodeWithText("A song called Home Sweet Home").assertExists()
+    }
 
     /** Every language offered in the app is one Android is told the app has, and the other way round. */
     @Test fun theListMatchesTheLocaleConfig() {

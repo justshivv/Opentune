@@ -239,7 +239,7 @@ object SpotifyWebPlayer {
     internal fun playlistWriteSnapshot(code: Int, text: String): String {
         if (code == 403) throw IOException("Spotify did not allow this change. You need permission to edit this playlist.")
         if (code == 401) throw SignedOut("Reconnect Spotify to edit playlists")
-        if (code !in 200..299) throw IOException("Spotify could not save the song (HTTP $code)")
+        if (code !in 200..299) throw IOException(com.opentune.i18n.Tr.f("Spotify could not save the song (HTTP {0})", code))
         val root = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull()
         return root?.text("snapshot_id")?.takeIf { it.isNotBlank() }
             ?: throw IOException("Spotify did not confirm the playlist change. Refresh before trying again.")

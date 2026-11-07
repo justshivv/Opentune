@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import com.opentune.ui.theme.Text
+import com.opentune.ui.theme.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -34,7 +36,7 @@ fun FontSettingsSheet(onDismiss: () -> Unit) {
                 val previous = AppSettings.theme.value.customFontId
                 AppSettings.updateTheme { it.copy(font = AppFont.CUSTOM, customFontId = id, customFontName = name) }
                 withContext(Dispatchers.IO) { ImportedFonts.remove(context, previous) }
-                message = "Imported $name"
+                message = com.opentune.i18n.Tr.f("Imported {0}", name)
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) { message = if (e is IllegalArgumentException) e.message else "Could not read this font. Try another .ttf or .otf file." }
             finally { importing = false }

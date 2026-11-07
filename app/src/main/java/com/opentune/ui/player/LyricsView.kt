@@ -71,10 +71,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -276,7 +276,7 @@ internal fun SelectionBar(count: Int, onCancel: () -> Unit, onShare: () -> Unit,
         ) { n ->
             Column {
                 Text(
-                    when (n) { 0 -> "Pick lines"; 1 -> "1 line selected"; else -> "$n lines selected" },
+                    when (n) { 0 -> "Pick lines"; 1 -> "1 line selected"; else -> com.opentune.i18n.Tr.f("{0} lines selected", n) },
                     color = Color.White, style = MaterialTheme.typography.titleSmall,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1,
                 )
@@ -1137,7 +1137,7 @@ private fun IntroDots(visible: Boolean) {
 private fun Credit(source: String) {
     Spacer(Modifier.height(24.dp))
     Text(
-        "Lyrics from $source",
+        com.opentune.i18n.Tr.f("Lyrics from {0}", source),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

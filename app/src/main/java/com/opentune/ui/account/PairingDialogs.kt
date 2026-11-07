@@ -4,7 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -55,7 +55,7 @@ fun ConfirmPairing() {
     }
     FloatingCard(onDismiss = { if (!busy) PairingLinks.dismiss() }, title = "Connect your TV") {
         Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Share your YouTube Music session with the device at ${current.host}? Approve only if you just scanned the QR code on your own TV.")
+            Text(com.opentune.i18n.Tr.f("Share your YouTube Music session with the device at {0}? Approve only if you just scanned the QR code on your own TV.", current.host))
             Text(account?.email?.takeIf { it.isNotBlank() } ?: if (signedIn) "Your signed-in YouTube Music account" else "Sign in on this phone first.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             status?.let { Text(it) }
             if (!signedIn) SheetButton("Sign in to YouTube Music", onClick = { login = true }, tone = SheetTone.Primary)

@@ -73,7 +73,7 @@ class CastMirror(private val context: Context, private val player: Player, priva
         loadJob = scope.launch {
             val media = Cast.mediaFor(context, item, r)
             if (media == null) {
-                Cast.say("Can't cast ${item.mediaMetadata.title ?: "this song"}")
+                Cast.say(com.opentune.i18n.Tr.f("Can't cast {0}", item.mediaMetadata.title ?: "this song"))
                 return@launch
             }
             r.load(media, positionMs, play)
@@ -142,7 +142,7 @@ class CastMirror(private val context: Context, private val player: Player, priva
                         kotlinx.coroutines.delay(STUCK_MS)
                         val now = receiver?.status?.value ?: return@launch
                         if (waiting && player.currentMediaItem?.mediaId == song && now.state in listOf(RemoteState.LOADING, RemoteState.BUFFERING)) {
-                            Cast.say("${r.name} couldn't play ${player.mediaMetadata.title ?: "this song"}")
+                            Cast.say(com.opentune.i18n.Tr.f("{0} couldn't play {1}", r.name, player.mediaMetadata.title ?: "this song"))
                             waiting = false
                             if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.play() } else follow { player.pause() }
                         }
@@ -168,7 +168,7 @@ class CastMirror(private val context: Context, private val player: Player, priva
                 if (player.hasNextMediaItem()) player.seekToNextMediaItem() else follow { player.pause() }
             }
             RemoteState.ERROR -> if (!settling) {
-                Cast.say("${r.name} couldn't play ${player.mediaMetadata.title ?: "this song"}")
+                Cast.say(com.opentune.i18n.Tr.f("{0} couldn't play {1}", r.name, player.mediaMetadata.title ?: "this song"))
                 if (player.hasNextMediaItem()) player.seekToNextMediaItem()
             }
             else -> Unit

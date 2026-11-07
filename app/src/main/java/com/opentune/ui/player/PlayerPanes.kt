@@ -46,10 +46,10 @@ import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -625,7 +625,7 @@ fun rememberOutputDeviceName(): String {
         onDispose { am?.unregisterAudioDeviceCallback(cb) }
     }
     val cast by com.opentune.cast.Cast.session.collectAsState()
-    return cast?.let { if (it.receiver == null) "Connecting to ${it.target.name}…" else "Playing on ${it.target.name}" } ?: name
+    return cast?.let { if (it.receiver == null) com.opentune.i18n.Tr.f("Connecting to {0}…", it.target.name) else com.opentune.i18n.Tr.f("Playing on {0}", it.target.name) } ?: name
 }
 
 private fun outputName(context: Context, am: AudioManager?): String {

@@ -473,7 +473,7 @@ object InnertubeParser {
      * subscribers" and is left as it is.
      */
     internal fun subscriberLabel(count: String): String =
-        if (count.matches(BARE_COUNT)) "$count subscribers" else count
+        if (count.matches(BARE_COUNT)) com.opentune.i18n.Tr.f("{0} subscribers", count) else count
 
     /** "3.4M monthly listeners", off the same header as [subscriberCount]. */
     private fun monthlyListeners(header: JsonElement?): String? =

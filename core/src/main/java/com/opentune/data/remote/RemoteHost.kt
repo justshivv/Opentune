@@ -145,7 +145,8 @@ class RemoteHost(
     override fun close() {
         closed = true
         runCatching { server.close() }
-        controllers.toList().forEach(::drop)
+        // Its iterator is a snapshot, so a phone dropping off meanwhile is fine (toList() is not: it reads the size first).
+        controllers.forEach(::drop)
         sender.shutdownNow()
         handlers.shutdownNow()
     }

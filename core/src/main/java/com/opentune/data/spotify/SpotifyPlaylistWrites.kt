@@ -52,13 +52,13 @@ object SpotifyPlaylistWrites {
                     val remaining = accepted.filter { song -> playlist.songs.none { it.videoId == song.videoId } }
                     confirmedIds += accepted.filter { it !in remaining }.map { it.videoId }
                     report(localId, accepted.filter { it !in remaining }, SaveProgress("Added"))
-                    if (remaining.isEmpty()) { Pills.info("Already in ${playlist.name}"); return@withLock }
+                    if (remaining.isEmpty()) { Pills.info(com.opentune.i18n.Tr.f("Already in {0}", playlist.name)); return@withLock }
                     // Spotify accepts up to 100 URIs in a playlist edit. Search each recording,
                     // then submit the batch once instead of one write per track.
                     for (batch in remaining.chunked(100)) {
                         report(localId, batch, SaveProgress("Saving to Spotify…", busy = true))
                         val waiting: (Long) -> Unit = { ms ->
-                            val message = "Spotify is busy · retrying in ${retryLabel(ms)}"
+                            val message = com.opentune.i18n.Tr.f("Spotify is busy · retrying in {0}", retryLabel(ms))
                             report(localId, batch, SaveProgress(message, busy = true))
                             Pills.info(message)
                         }
@@ -66,7 +66,7 @@ object SpotifyPlaylistWrites {
                         val matches = batch.map { song ->
                             val hit = SpotifyWebPlayer.findTrack(song.title, Recommendations.mainArtist(song.artist),
                                 song.albumName, Recommendations.durationMs(song.durationText), cookie, waiting)
-                                ?: throw IOException("Couldn't find the same recording of ${song.title} on Spotify")
+                                ?: throw IOException(com.opentune.i18n.Tr.f("Couldn't find the same recording of {0} on Spotify", song.title))
                             song to hit.uri
                         }
                         val uris = matches.map { it.second }.distinct()
@@ -86,7 +86,7 @@ object SpotifyPlaylistWrites {
                         confirmedIds += matches.map { it.first.videoId }
                         report(localId, batch, SaveProgress("Added on Spotify"))
                     }
-                    Pills.done("Saved to ${playlist.name} on Spotify")
+                    Pills.done(com.opentune.i18n.Tr.f("Saved to {0} on Spotify", playlist.name))
                 }
             } catch (cancelled: CancellationException) {
                 report(localId, accepted.filter { it.videoId !in confirmedIds }, SaveProgress("Save interrupted. Refresh the playlist before retrying.", failed = true))
@@ -94,7 +94,7 @@ object SpotifyPlaylistWrites {
             } catch (failure: Exception) {
                 val detail = failure.message ?: "Couldn't update Spotify. Refresh before retrying."
                 report(localId, accepted.filter { it.videoId !in confirmedIds }, SaveProgress(detail, failed = true))
-                Pills.error(if (confirmed > 0) "$confirmed songs saved. $detail" else detail)
+                Pills.error(if (confirmed > 0) com.opentune.i18n.Tr.f("{0} songs saved. {1}", confirmed, detail) else detail)
             } finally {
                 synchronized(pending) { accepted.forEach { pending.remove(localId to it.videoId) } }
             }

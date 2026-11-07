@@ -11,10 +11,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,7 +43,7 @@ fun HeadphonePickerDialog(onDismiss: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var applying by remember { mutableStateOf<String?>(null) }
     val index by produceState<List<AutoEq.Entry>?>(null) {
-        value = runCatching { AutoEq.index() }.onFailure { error = "Couldn't load AutoEq's list: ${it.message}" }.getOrNull()
+        value = runCatching { AutoEq.index() }.onFailure { error = com.opentune.i18n.Tr.f("Couldn't load AutoEq's list: {0}", it.message) }.getOrNull()
     }
     val results = remember(index, query) { index?.let { AutoEq.search(it, query) }.orEmpty() }
     LaunchedEffect(query) { error = null }
@@ -66,7 +66,7 @@ fun HeadphonePickerDialog(onDismiss: () -> Unit) {
                 )
                 when {
                     index == null && error == null -> CircularProgressIndicator(Modifier.padding(16.dp))
-                    query.isNotBlank() && results.isEmpty() -> Text("No measured model matches \"$query\".", style = MaterialTheme.typography.bodyMedium)
+                    query.isNotBlank() && results.isEmpty() -> Text(com.opentune.i18n.Tr.f("No measured model matches \"{0}\".", query), style = MaterialTheme.typography.bodyMedium)
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
@@ -77,14 +77,14 @@ fun HeadphonePickerDialog(onDismiss: () -> Unit) {
                                 scope.launch {
                                     runCatching { AutoEq.load(entry) }
                                         .onSuccess { eq -> AppSettings.updateEqualizer { it.copy(headphone = eq) }; onDismiss() }
-                                        .onFailure { error = "Couldn't load ${entry.name}: ${it.message}" }
+                                        .onFailure { error = com.opentune.i18n.Tr.f("Couldn't load {0}: {1}", entry.name, it.message) }
                                     applying = null
                                 }
                             }.padding(vertical = 10.dp),
                         ) {
                             Text(entry.name, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                if (applying == entry.path) "Loading…" else "Measured by ${entry.source}",
+                                if (applying == entry.path) "Loading…" else com.opentune.i18n.Tr.f("Measured by {0}", entry.source),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

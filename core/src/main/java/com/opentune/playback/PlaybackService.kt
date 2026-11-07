@@ -938,12 +938,12 @@ class PlaybackService : MediaLibraryService() {
         val shuffle = player?.shuffleModeEnabled == true
         return listOf(
             CommandButton.Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
-                .setDisplayName(if (liked) "Remove from Liked" else "Like")
+                .setDisplayName(com.opentune.i18n.Tr.t(if (liked) "Remove from Liked" else "Like"))
                 .setSessionCommand(LIKE_COMMAND)
                 .setSlots(CommandButton.SLOT_OVERFLOW)
                 .build(),
             CommandButton.Builder(if (shuffle) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF)
-                .setDisplayName(if (shuffle) "Shuffle off" else "Shuffle on")
+                .setDisplayName(com.opentune.i18n.Tr.t(if (shuffle) "Shuffle off" else "Shuffle on"))
                 .setSessionCommand(SHUFFLE_COMMAND)
                 .setSlots(CommandButton.SLOT_OVERFLOW)
                 .build(),
@@ -1436,7 +1436,7 @@ class PlaybackService : MediaLibraryService() {
         // Asked for from the menu: say how it went, whatever the outcome.
         fun tell(message: String) { if (asked) PlaybackRequests.report(message) }
         fun swapped(ok: Boolean) = tell(
-            if (ok) "Switched to ${ExternalStreams.selectionDetail(id) ?: NerdStats.externalSource.value ?: "a better stream"}"
+            if (ok) com.opentune.i18n.Tr.f("Switched to {0}", ExternalStreams.selectionDetail(id) ?: NerdStats.externalSource.value ?: "a better stream")
             else "The better stream didn't load in time, so this one keeps playing",
         )
         /**
@@ -1791,10 +1791,10 @@ class PlaybackService : MediaLibraryService() {
         when (kotlinx.coroutines.withTimeoutOrNull(PING_LIMIT_MS) { com.opentune.data.addons.AddonHttp.bytes(url, PING_BYTES, true).isNotEmpty() }) {
             true -> null
             false -> "its file came back empty"
-            null -> "its server didn't answer in ${PING_LIMIT_MS / 1000} s"
+            null -> com.opentune.i18n.Tr.f("its server didn't answer in {0} s", PING_LIMIT_MS / 1000)
         }
     } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-    catch (e: com.opentune.data.addons.AddonHttp.Failure) { "its server answered HTTP ${e.status}" }
+    catch (e: com.opentune.data.addons.AddonHttp.Failure) { com.opentune.i18n.Tr.f("its server answered HTTP {0}", e.status) }
     catch (_: Exception) { "its server couldn't be reached" }
 
     /** Why each verified source a switch tried didn't take, by provider, for the pipeline report. */
@@ -1809,14 +1809,14 @@ class PlaybackService : MediaLibraryService() {
         if (error != null) {
             var cause: Throwable? = error
             while (cause != null) {
-                if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) return "its server answered HTTP ${cause.responseCode}"
+                if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) return com.opentune.i18n.Tr.f("its server answered HTTP {0}", cause.responseCode)
                 cause = cause.cause
             }
-            return "playback error (${error.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' ')})"
+            return com.opentune.i18n.Tr.f("playback error ({0})", error.errorCodeName.removePrefix("ERROR_CODE_").lowercase().replace('_', ' '))
         }
         if (p.playbackState == Player.STATE_ENDED) return "its stream ended as soon as it started"
         val got = (p.bufferedPosition - from).coerceAtLeast(0L) / 1000
-        return "only ${got}s of audio arrived in ${AUDITION_TIMEOUT_MS / 1000}s"
+        return com.opentune.i18n.Tr.f("only {0}s of audio arrived in {1}s", got, AUDITION_TIMEOUT_MS / 1000)
     }
 
     /** Builds the silent player [prebuffer] loads an upgrade with; set in [onCreate]. */
@@ -2291,7 +2291,7 @@ class PlaybackService : MediaLibraryService() {
                 } else {
                     player.seekTo(segment.endMs)
                 }
-                com.opentune.data.Pills.done("Skipped ${SponsorBlock.CATEGORIES[segment.category]?.one ?: "a segment"}", this@PlaybackService)
+                com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Skipped {0}", SponsorBlock.CATEGORIES[segment.category]?.one ?: "a segment"), this@PlaybackService)
             }
         }
     }

@@ -24,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import com.opentune.ui.theme.Text
+import com.opentune.ui.theme.Icon
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -98,12 +100,12 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(addon.manifest.name, style = MaterialTheme.typography.titleMedium)
                                     Text(com.opentune.ui.theme.tr(if (addon.admin) "Added by admin" else "Your source"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                    Text(com.opentune.ui.theme.tr(if (addon.ownerOff) "Turned off by the admin for now" else if (availability[addon.key] == false) "Service unavailable" else checks[addon.key] ?: if (com.opentune.data.addons.AddonResolver.paused(addon.key)) "Paused by its owner for now" else if (blocked) "Needs a supported wired, USB or HDMI output" else if (!addon.enabled) "Disabled" else "Lossless · ${if (addon.manifest.downloads) "Streaming & downloads" else "Streaming only"}"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(com.opentune.ui.theme.tr(if (addon.ownerOff) "Turned off by the admin for now" else if (availability[addon.key] == false) "Service unavailable" else checks[addon.key] ?: if (com.opentune.data.addons.AddonResolver.paused(addon.key)) "Paused by its owner for now" else if (blocked) "Needs a supported wired, USB or HDMI output" else if (!addon.enabled) "Disabled" else com.opentune.i18n.Tr.f("Lossless · {0}", if (addon.manifest.downloads) "Streaming & downloads" else "Streaming only")), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Switch(addon.enabled && !addon.ownerOff, { AddonStore.enable(addon.key, it) }, enabled = !addon.ownerOff)
                                 Icon(Icons.Rounded.DragHandle, null, Modifier.size(48.dp)
                                     .semantics {
-                                        contentDescription = "Reorder ${addon.manifest.name}"
+                                        contentDescription = com.opentune.i18n.Tr.f("Reorder {0}", addon.manifest.name)
                                         customActions = listOf(
                                             CustomAccessibilityAction("Move up") { AddonStore.move(addon.key, -1); true },
                                             CustomAccessibilityAction("Move down") { AddonStore.move(addon.key, 1); true },
@@ -149,7 +151,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
                                         checks = checks + (addon.key to "Checking…")
                                         try { AddonStore.refreshed(addon.key, AddonClient.forBase(addon.base).manifest()); checks = checks + (addon.key to "Available · recording support varies") }
                                         catch (e: CancellationException) { throw e }
-                                        catch (e: AddonHttp.Failure) { checks = checks + (addon.key to "HTTP ${e.status}") }
+                                        catch (e: AddonHttp.Failure) { checks = checks + (addon.key to com.opentune.i18n.Tr.f("HTTP {0}", e.status)) }
                                         catch (_: Exception) { checks = checks + (addon.key to "Service unavailable") }
                                     } }) { Text("Check") }
                                     if (!addon.admin) TextButton(onClick = { AddonStore.remove(addon.key) }) { Text(com.opentune.ui.theme.tr("Remove")) }
@@ -188,7 +190,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
         working = true; notice = null
         try { val base = AddonProtocol.normalize(input); AddonStore.add(base, AddonClient.forBase(base).manifest()); input = ""; adding = false; notice = "Source added" }
         catch (e: CancellationException) { throw e }
-        catch (e: AddonHttp.Failure) { notice = "Service returned HTTP ${e.status}" }
+        catch (e: AddonHttp.Failure) { notice = com.opentune.i18n.Tr.f("Service returned HTTP {0}", e.status) }
         catch (_: Exception) { notice = "Could not load this manifest. Check the URL and connection." }
         finally { working = false }
     } }) { Text(com.opentune.ui.theme.tr("Add source")) } }, dismissButton = { TextButton(enabled = !working, onClick = { adding = false }) { Text(com.opentune.ui.theme.tr("Cancel")) } })

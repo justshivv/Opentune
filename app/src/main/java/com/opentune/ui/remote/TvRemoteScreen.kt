@@ -53,13 +53,13 @@ import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -165,7 +165,7 @@ private fun TvPicker(vm: TvRemoteViewModel, contentPadding: PaddingValues, onBac
     forgetting?.let { tv ->
         AlertDialog(
             onDismissRequest = { forgetting = null },
-            title = { Text("Forget ${tv.name}?") },
+            title = { Text(com.opentune.i18n.Tr.f("Forget {0}?", tv.name)) },
             text = { Text("This phone stops being able to control it until you pair again.") },
             confirmButton = { TextButton(onClick = { vm.forget(tv); forgetting = null }) { Text("Forget") } },
             dismissButton = { TextButton(onClick = { forgetting = null }) { Text("Cancel") } },
@@ -188,7 +188,7 @@ private fun TvPicker(vm: TvRemoteViewModel, contentPadding: PaddingValues, onBac
             item { Notice(failed.reason, isError = true, onDismiss = vm::dismissPairing) }
         }
         if (pairing is TvRemoteViewModel.Pairing.Working) item { Notice("Pairing with the TV…", working = true) }
-        if (state is RemoteClient.State.Connecting) item { Notice("Connecting to ${(state as RemoteClient.State.Connecting).tv}…", working = true) }
+        if (state is RemoteClient.State.Connecting) item { Notice(com.opentune.i18n.Tr.f("Connecting to {0}…", (state as RemoteClient.State.Connecting).tv), working = true) }
 
         if (paired.isEmpty()) {
             item {
@@ -352,7 +352,7 @@ private fun ModeSwitch(trackpad: Boolean, onChange: (Boolean) -> Unit) {
                 Modifier.weight(1f).clip(CircleShape)
                     .background(if (on) MaterialTheme.colorScheme.primary else Color.Transparent)
                     .clickable { onChange(isTrackpad) }.padding(vertical = 10.dp)
-                    .semantics { contentDescription = "$label mode" },
+                    .semantics { contentDescription = com.opentune.i18n.Tr.f("{0} mode", label) },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(label, style = MaterialTheme.typography.labelLarge, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)

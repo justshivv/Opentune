@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -114,7 +114,7 @@ private fun SignatureImage(sig: ArtistSignature, name: String, onDrawn: () -> Un
     val height = if (sig.aspect >= 1.4f) 120.dp else 150.dp
     AsyncImage(
         request,
-        contentDescription = "$name's signature",
+        contentDescription = com.opentune.i18n.Tr.f("{0}'s signature", name),
         contentScale = ContentScale.Fit,
         onSuccess = { onDrawn() },
         onError = { if (vector) vector = false else onFailed() },

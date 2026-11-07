@@ -16,7 +16,7 @@ internal class SpotifyRateLimit(
     private val wait: suspend (Long) -> Unit = { delay(it) },
 ) {
     data class Reply(val code: Int, val text: String, val retryAfter: String? = null)
-    class Limited(val waitMs: Long) : IOException("Spotify is temporarily limiting requests. Try again in ${retryLabel(waitMs)}.")
+    class Limited(val waitMs: Long) : IOException(com.opentune.i18n.Tr.f("Spotify is temporarily limiting requests. Try again in {0}.", retryLabel(waitMs)))
     private val lane = Mutex()
     private var nextRequestAt: Long? = null
     private var limitedUntil = Long.MIN_VALUE
@@ -61,5 +61,5 @@ internal class SpotifyRateLimit(
     }
 }
 
-internal fun retryLabel(ms: Long): String = if (ms < 60_000) "${(ms + 999) / 1000} seconds"
-    else "${ms / 60_000 + if (ms % 60_000 > 0) 1 else 0} minutes"
+internal fun retryLabel(ms: Long): String = if (ms < 60_000) com.opentune.i18n.Tr.f("{0} seconds", (ms + 999) / 1000)
+    else com.opentune.i18n.Tr.f("{0} minutes", ms / 60_000 + if (ms % 60_000 > 0) 1 else 0)

@@ -129,7 +129,7 @@ object UsbDirect {
             val conn = connection!!
             val desc = described!!
             val setting = UsbAudioDescriptors.choose(desc, channels, bits, rate) ?: run {
-                _status.value = Status.Failed(name(d), "No ${bits}-bit format at ${rate / 1000.0} kHz")
+                _status.value = Status.Failed(name(d), com.opentune.i18n.Tr.f("No {0}-bit format at {1} kHz", bits, rate / 1000.0))
                 return null
             }
             // The control interface too: with Android's own driver still on it, setting the rate is refused.
@@ -190,15 +190,15 @@ object UsbDirect {
             val clock = desc.clockSources.firstOrNull() ?: error("The DAC has no clock to set")
             val index = (clock shl 8) or desc.controlInterface
             val data = byteArrayOf(rate.toByte(), (rate shr 8).toByte(), (rate shr 16).toByte(), (rate shr 24).toByte())
-            check(conn.controlTransfer(0x21, 0x01, 0x0100, index, data, 4, TIMEOUT) == 4) { "The DAC refused ${rate / 1000.0} kHz" }
+            check(conn.controlTransfer(0x21, 0x01, 0x0100, index, data, 4, TIMEOUT) == 4) { com.opentune.i18n.Tr.f("The DAC refused {0} kHz", rate / 1000.0) }
             val back = ByteArray(4)
             if (conn.controlTransfer(0xA1, 0x01, 0x0100, index, back, 4, TIMEOUT) == 4) {
                 val got = (back[0].toInt() and 0xFF) or ((back[1].toInt() and 0xFF) shl 8) or ((back[2].toInt() and 0xFF) shl 16) or ((back[3].toInt() and 0xFF) shl 24)
-                check(got == rate) { "The DAC stayed at ${got / 1000.0} kHz" }
+                check(got == rate) { com.opentune.i18n.Tr.f("The DAC stayed at {0} kHz", got / 1000.0) }
             }
         } else {
             val data = byteArrayOf(rate.toByte(), (rate shr 8).toByte(), (rate shr 16).toByte())
-            check(conn.controlTransfer(0x22, 0x01, 0x0100, s.endpoint, data, 3, TIMEOUT) == 3) { "The DAC refused ${rate / 1000.0} kHz" }
+            check(conn.controlTransfer(0x22, 0x01, 0x0100, s.endpoint, data, 3, TIMEOUT) == 3) { com.opentune.i18n.Tr.f("The DAC refused {0} kHz", rate / 1000.0) }
         }
     }
 

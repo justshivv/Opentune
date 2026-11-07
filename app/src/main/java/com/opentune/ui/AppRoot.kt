@@ -288,9 +288,9 @@ fun AppRoot(vm: PlayerViewModel) {
         com.opentune.ui.components.CollectionMenuActions(
             play = { id, title, shuffle -> withSongs(id) { vm.playAll(it, 0, shuffle, title) } },
             // Last first, so the list plays next in its own order.
-            playNext = { id -> withSongs(id) { songs -> songs.asReversed().forEach(vm::playNext); com.opentune.data.Pills.done("${songs.size} songs play next") } },
-            addToQueue = { id -> withSongs(id) { songs -> songs.forEach(vm::addToQueue); com.opentune.data.Pills.done("${songs.size} songs added to the queue") } },
-            downloadAll = { id -> withSongs(id) { songs -> songs.forEach { com.opentune.data.download.Downloads.enqueue(appContext.applicationContext, it) }; com.opentune.data.Pills.done("Downloading ${songs.size} songs") } },
+            playNext = { id -> withSongs(id) { songs -> songs.asReversed().forEach(vm::playNext); com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("{0} songs play next", songs.size)) } },
+            addToQueue = { id -> withSongs(id) { songs -> songs.forEach(vm::addToQueue); com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("{0} songs added to the queue", songs.size)) } },
+            downloadAll = { id -> withSongs(id) { songs -> songs.forEach { com.opentune.data.download.Downloads.enqueue(appContext.applicationContext, it) }; com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size)) } },
             open = { id, type -> fromPlayer { nav.openBrowse(id, type) } },
         )
     }
@@ -304,22 +304,22 @@ fun AppRoot(vm: PlayerViewModel) {
         dislike = { s ->
             // The player skips it, and its later copies in the queue, itself.
             LibraryStore.dislike(s)
-            com.opentune.data.Pills.done("You won't hear \"${s.title}\" in autoplay again")
+            com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("You won't hear \"{0}\" in autoplay again", s.title))
         },
         notInterested = { s ->
             LibraryStore.hideSong(s)
             vm.player.dropHiddenSmartShuffleSongs()
-            com.opentune.data.Pills.withAction("\"${s.title}\" won't be suggested", "Undo") { LibraryStore.unhideSong(s.videoId) }
+            com.opentune.data.Pills.withAction(com.opentune.i18n.Tr.f("\"{0}\" won't be suggested", s.title), "Undo") { LibraryStore.unhideSong(s.videoId) }
         },
         dontPlayArtist = dontPlay@{ s ->
             val artist = LibraryStore.hideArtist(s) ?: return@dontPlay
             vm.player.dropHiddenSmartShuffleSongs()
-            com.opentune.data.Pills.withAction("Songs by ${artist.name} won't be suggested", "Undo") { LibraryStore.unhideArtist(artist.key) }
+            com.opentune.data.Pills.withAction(com.opentune.i18n.Tr.f("Songs by {0} won't be suggested", artist.name), "Undo") { LibraryStore.unhideArtist(artist.key) }
         },
         keepInPlaylist = { s, id ->
             LibraryStore.addToPlaylist(id, s)
             com.opentune.playback.SmartShuffle.keep(s.videoId)
-            LibraryStore.playlist(id)?.takeIf { it.spotifyId == null }?.let { p -> com.opentune.data.Pills.done("Added to ${p.name}") }
+            LibraryStore.playlist(id)?.takeIf { it.spotifyId == null }?.let { p -> com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", p.name)) }
         },
         progressOf = { s -> if (s.videoId == vm.currentSong.value?.videoId) vm.positionMs() to vm.durationMs.value else null },
         // One artist lookup at a time: a slower earlier one that failed showed its
@@ -329,7 +329,7 @@ fun AppRoot(vm: PlayerViewModel) {
             artistLookup.set(uiScope.launch {
                 val id = MusicRepository.artistIdFor(s)
                 if (id == null) {
-                    com.opentune.data.Pills.error("Couldn't find ${s.artist}'s page")
+                    com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't find {0}'s page", s.artist))
                 } else {
                     fromPlayer { nav.openBrowse(id, BrowseType.ARTIST) }
                 }
@@ -339,7 +339,7 @@ fun AppRoot(vm: PlayerViewModel) {
             artistLookup.get()?.cancel()
             artistLookup.set(uiScope.launch {
                 val id = MusicRepository.albumIdFor(s)
-                if (id == null) com.opentune.data.Pills.error("Couldn't find the album for \"${s.title}\"")
+                if (id == null) com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't find the album for \"{0}\"", s.title))
                 else fromPlayer { nav.openBrowse(id, BrowseType.ALBUM) }
             })
         },
@@ -348,7 +348,7 @@ fun AppRoot(vm: PlayerViewModel) {
             artistLookup.set(uiScope.launch {
                 val id = MusicRepository.artistIdFor(s, name)
                 if (id == null) {
-                    com.opentune.data.Pills.error("Couldn't find $name's page")
+                    com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't find {0}'s page", name))
                 } else {
                     fromPlayer { nav.openBrowse(id, BrowseType.ARTIST) }
                 }
@@ -407,7 +407,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 }
                 when {
                     match != null -> { vm.play(match, "Shared link"); playerOpen = true }
-                    named != null -> com.opentune.data.Pills.error("Couldn't find \"${named.title}\" on YouTube Music")
+                    named != null -> com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't find \"{0}\" on YouTube Music", named.title))
                     else -> com.opentune.data.Pills.error("Couldn't read that link")
                 }
             }
@@ -424,7 +424,7 @@ fun AppRoot(vm: PlayerViewModel) {
                     // YouTube's best match leads the mixed search; autoplay follows it with radio.
                     val match = runCatching { MusicRepository.search(link.query, SearchFilter.ALL) }.getOrDefault(emptyList())
                         .firstNotNullOfOrNull { (it as? SearchResult.TopTrack)?.song ?: (it as? SearchResult.Track)?.song }
-                    if (match != null) vm.play(match, link.query) else com.opentune.data.Pills.error("Nothing found for \"${link.query}\"")
+                    if (match != null) vm.play(match, link.query) else com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Nothing found for \"{0}\"", link.query))
                 }
             }
             null -> return@LaunchedEffect

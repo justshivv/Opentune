@@ -62,7 +62,7 @@ class RemoteClient(private val phoneName: () -> String) : AutoCloseable {
         fun stop() { stopped = true; runCatching { socket?.close() } }
 
         fun run(tv: PairedTv, where: List<Pair<String, Int>>, onReached: (String, Int) -> Unit) {
-            var failure = "Couldn't reach ${tv.name}. Open OpenTune on the TV, on the same Wi-Fi."
+            var failure = com.opentune.i18n.Tr.f("Couldn't reach {0}. Open OpenTune on the TV, on the same Wi-Fi.", tv.name)
             try {
                 val key = PairingCrypto.decode(tv.key)
                 var open: Opened? = null
@@ -70,7 +70,7 @@ class RemoteClient(private val phoneName: () -> String) : AutoCloseable {
                     if (stopped) return
                     try { open = open(host, port, RemoteHandshake.CONTROL, SecureChannel.unhex(tv.id), key); onReached(host, port); break }
                     catch (e: AuthFailure) {
-                        failure = if (e.refused) "${tv.name} doesn't know this phone any more. Pair it again." else "That doesn't look like the TV you paired with."
+                        failure = if (e.refused) com.opentune.i18n.Tr.f("{0} doesn't know this phone any more. Pair it again.", tv.name) else "That doesn't look like the TV you paired with."
                         break
                     }
                     catch (_: Exception) { }
@@ -91,7 +91,7 @@ class RemoteClient(private val phoneName: () -> String) : AutoCloseable {
                     }
                 } finally { writer.interrupt() }
             } catch (_: Exception) {
-                if (!stopped) _state.value = State.Failed(tv.name, "Lost the connection to ${tv.name}.")
+                if (!stopped) _state.value = State.Failed(tv.name, com.opentune.i18n.Tr.f("Lost the connection to {0}.", tv.name))
             } finally {
                 runCatching { socket?.close() }
             }

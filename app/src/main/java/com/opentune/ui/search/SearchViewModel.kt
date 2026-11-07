@@ -176,7 +176,7 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
         val own = store.playlists.value.filter { matches(it.name) }.map { p ->
             LibraryList(
                 "pl:${p.id}", p.name,
-                listOfNotNull(if (p.spotifyId != null) "Spotify" else null, "${p.songs.size} songs").joinToString(" · "),
+                listOfNotNull(if (p.spotifyId != null) "Spotify" else null, com.opentune.i18n.Tr.f("{0} songs", p.songs.size)).joinToString(" · "),
                 p.coverUrl, p.songs.map { it.thumbnailUrl }, playlistId = p.id,
             )
         }

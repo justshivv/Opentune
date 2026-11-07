@@ -12,9 +12,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -81,12 +81,12 @@ private fun describe(answer: Result<Lyrics?>?, durationMs: Long): String {
         is Lyrics.Plain -> "Plain text, not synced"
         is Lyrics.Synced -> {
             val n = l.lines.size
-            if (l.lines.any { it.wordSynced }) "Word by word · $n lines" else "Line by line · $n lines"
+            if (l.lines.any { it.wordSynced }) com.opentune.i18n.Tr.f("Word by word · {0} lines", n) else com.opentune.i18n.Tr.f("Line by line · {0} lines", n)
         }
     }
     // Why the automatic choice passes it over, so picking it is an informed choice.
     val problem = LyricsRepository.problemWith(l, durationMs) ?: return kind
-    return "$kind · Not used: ${problem.replaceFirstChar { it.lowercase() }}"
+    return com.opentune.i18n.Tr.f("{0} · Not used: {1}", kind, problem.replaceFirstChar { it.lowercase() })
 }
 
 @Composable

@@ -100,9 +100,9 @@ private fun DiscordWebPage(
     if (rendererGone) {
         androidx.compose.foundation.layout.Box(modifier.background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow), contentAlignment = androidx.compose.ui.Alignment.Center) {
             androidx.compose.foundation.layout.Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                androidx.compose.material3.Text("Discord's page closed to free memory", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+                com.opentune.ui.theme.Text("Discord's page closed to free memory", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
                 androidx.compose.material3.Button(onClick = { rendererGone = false; attempt++ }, modifier = Modifier.padding(top = 12.dp)) {
-                    androidx.compose.material3.Text("Retry")
+                    com.opentune.ui.theme.Text("Retry")
                 }
             }
         }
@@ -251,10 +251,10 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
         extra = {
             androidx.compose.foundation.layout.Row(Modifier.padding(horizontal = 12.dp)) {
                 androidx.compose.material3.TextButton(onClick = { onPage = !onPage; problem = null; loading = false }) {
-                    androidx.compose.material3.Text(if (onPage) "Use OpenTune's form" else "Use Discord's page")
+                    com.opentune.ui.theme.Text(if (onPage) "Use OpenTune's form" else "Use Discord's page")
                 }
                 androidx.compose.material3.TextButton(onClick = { tokenDialog = true }) {
-                    androidx.compose.material3.Text("Sign in with a token")
+                    com.opentune.ui.theme.Text("Sign in with a token")
                 }
             }
         },
@@ -279,19 +279,19 @@ private fun DiscordTokenDialog(onDismiss: () -> Unit, onSignedIn: () -> Unit) {
     val scope = rememberCoroutineScope()
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { androidx.compose.material3.Text("Sign in with a token") },
+        title = { com.opentune.ui.theme.Text("Sign in with a token") },
         text = {
             androidx.compose.foundation.layout.Column {
-                androidx.compose.material3.Text(
+                com.opentune.ui.theme.Text(
                     "Your Discord token, from Discord in a computer's browser (Developer tools, Application, Local Storage, token). It's checked with Discord and kept encrypted on this phone. Anyone with it can use your account, so never share it.",
                     style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                 )
                 androidx.compose.material3.OutlinedTextField(
                     value = token, onValueChange = { token = it; error = null }, singleLine = true,
                     visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                    label = { androidx.compose.material3.Text("Token") },
+                    label = { com.opentune.ui.theme.Text("Token") },
                     isError = error != null,
-                    supportingText = error?.let { e -> { androidx.compose.material3.Text(e) } },
+                    supportingText = error?.let { e -> { com.opentune.ui.theme.Text(e) } },
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
@@ -303,9 +303,9 @@ private fun DiscordTokenDialog(onDismiss: () -> Unit, onSignedIn: () -> Unit) {
                     DiscordRpc.signIn(token).onSuccess { onSignedIn() }.onFailure { error = it.message ?: "Discord didn't accept that token" }
                     busy = false
                 }
-            }) { androidx.compose.material3.Text(if (busy) "Checking…" else "Sign in") }
+            }) { com.opentune.ui.theme.Text(if (busy) "Checking…" else "Sign in") }
         },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { androidx.compose.material3.Text("Cancel") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { com.opentune.ui.theme.Text("Cancel") } },
     )
 }
 
@@ -345,20 +345,20 @@ private fun DiscordForm(modifier: Modifier, onBusy: (Boolean) -> Unit, onSignedI
     ) {
         when (val s = stage) {
             FormStage.Details -> {
-                androidx.compose.material3.Text("Sign in to Discord", style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+                com.opentune.ui.theme.Text("Sign in to Discord", style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
                 androidx.compose.material3.OutlinedTextField(
                     value = login, onValueChange = { login = it; error = null }, singleLine = true,
-                    label = { androidx.compose.material3.Text("Email or phone number") },
+                    label = { com.opentune.ui.theme.Text("Email or phone number") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 var shown by remember { mutableStateOf(false) }
                 androidx.compose.material3.OutlinedTextField(
                     value = password, onValueChange = { password = it; error = null }, singleLine = true,
-                    label = { androidx.compose.material3.Text("Password") },
+                    label = { com.opentune.ui.theme.Text("Password") },
                     visualTransformation = if (shown) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
                     trailingIcon = {
-                        androidx.compose.material3.TextButton(onClick = { shown = !shown }) { androidx.compose.material3.Text(if (shown) "Hide" else "Show") }
+                        androidx.compose.material3.TextButton(onClick = { shown = !shown }) { com.opentune.ui.theme.Text(if (shown) "Hide" else "Show") }
                     },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
                     modifier = Modifier.fillMaxWidth(),
@@ -370,7 +370,7 @@ private fun DiscordForm(modifier: Modifier, onBusy: (Boolean) -> Unit, onSignedI
                 }
             }
             is FormStage.Captcha -> {
-                androidx.compose.material3.Text("Discord asks you to show you're not a bot", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                com.opentune.ui.theme.Text("Discord asks you to show you're not a bot", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
                 FormError(error)
                 CaptchaView(
                     s.asked,
@@ -383,24 +383,24 @@ private fun DiscordForm(modifier: Modifier, onBusy: (Boolean) -> Unit, onSignedI
                             handle(step, retry = s.retry, onStage = { stage = it }, onError = { error = it }, onSignedIn = onSignedIn) { busy = false; onBusy(false) }
                         }
                     },
-                    onFailed = { error = "The captcha didn't work ($it). Try again." },
+                    onFailed = { error = com.opentune.i18n.Tr.f("The captcha didn't work ({0}). Try again.", it) },
                 )
-                androidx.compose.material3.TextButton(onClick = { stage = FormStage.Details; error = null }) { androidx.compose.material3.Text("Back") }
+                androidx.compose.material3.TextButton(onClick = { stage = FormStage.Details; error = null }) { com.opentune.ui.theme.Text("Back") }
             }
             is FormStage.Code -> {
-                androidx.compose.material3.Text("Two-factor code", style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
-                androidx.compose.material3.Text(
+                com.opentune.ui.theme.Text("Two-factor code", style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+                com.opentune.ui.theme.Text(
                     if (s.bySms) "Enter the code Discord texted you."
                     else "Enter the 6-digit code from your authenticator app" + if (s.step.backup) ", or an 8-digit backup code." else ".",
                     style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant,
                 )
                 androidx.compose.material3.OutlinedTextField(
                     value = code, onValueChange = { code = it.take(12); error = null }, singleLine = true,
-                    label = { androidx.compose.material3.Text("Code") },
+                    label = { com.opentune.ui.theme.Text("Code") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                note?.let { androidx.compose.material3.Text(it, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
+                note?.let { com.opentune.ui.theme.Text(it, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
                 FormError(error)
                 FormButton(if (busy) "Checking…" else "Sign in", enabled = code.count { it.isDigit() || it.isLetter() } >= 6 && !busy) {
                     val c = code; val ticket = s.step.ticket
@@ -412,9 +412,9 @@ private fun DiscordForm(modifier: Modifier, onBusy: (Boolean) -> Unit, onSignedI
                             val why = DiscordLogin.sendSms(s.step.ticket)
                             if (why == null) { stage = s.copy(bySms = true); note = "Discord sent a code to your phone."; code = "" } else error = why
                         }
-                    }) { androidx.compose.material3.Text("Text me a code instead") }
+                    }) { com.opentune.ui.theme.Text("Text me a code instead") }
                 }
-                androidx.compose.material3.TextButton(onClick = { stage = FormStage.Details; code = ""; error = null; note = null }) { androidx.compose.material3.Text("Start again") }
+                androidx.compose.material3.TextButton(onClick = { stage = FormStage.Details; code = ""; error = null; note = null }) { com.opentune.ui.theme.Text("Start again") }
             }
         }
     }
@@ -443,7 +443,7 @@ private suspend fun handle(
 @Composable
 private fun FormError(error: String?) {
     if (error == null) return
-    androidx.compose.material3.Text(error, color = androidx.compose.material3.MaterialTheme.colorScheme.error, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+    com.opentune.ui.theme.Text(error, color = androidx.compose.material3.MaterialTheme.colorScheme.error, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
 }
 
 @Composable
@@ -452,7 +452,7 @@ private fun FormButton(text: String, enabled: Boolean, onClick: () -> Unit) {
         onClick = onClick, enabled = enabled,
         colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = DiscordBlurple, contentColor = Color.White),
         modifier = Modifier.fillMaxWidth().height(52.dp),
-    ) { androidx.compose.material3.Text(text) }
+    ) { com.opentune.ui.theme.Text(text) }
 }
 
 /** Discord's captcha (hCaptcha), on a small page with discord.com as its address so hCaptcha accepts it. */

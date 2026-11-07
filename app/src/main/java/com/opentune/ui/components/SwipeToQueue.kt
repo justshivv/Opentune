@@ -21,9 +21,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -187,9 +187,9 @@ object QueueNotices {
     fun post(action: SwipeAction, title: String) {
         _messages.tryEmit(
             when (action) {
-                SwipeAction.PLAY_NEXT -> "\"$title\" plays next"
-                SwipeAction.ADD_TO_QUEUE -> "Added \"$title\" to the queue"
-                SwipeAction.REMOVE -> "Removed \"$title\" from the playlist"
+                SwipeAction.PLAY_NEXT -> com.opentune.i18n.Tr.f("\"{0}\" plays next", title)
+                SwipeAction.ADD_TO_QUEUE -> com.opentune.i18n.Tr.f("Added \"{0}\" to the queue", title)
+                SwipeAction.REMOVE -> com.opentune.i18n.Tr.f("Removed \"{0}\" from the playlist", title)
             },
         )
     }

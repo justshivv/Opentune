@@ -29,9 +29,9 @@ import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material.icons.rounded.VolumeUp
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -140,27 +140,27 @@ internal fun FormatDetailsDialog(song: Song?, format: AudioFormatInfo?, onDismis
             DetailsCard("Audio specifications") {
                 DetailRow(Icons.Rounded.AudioFile, "Codec / Format", format?.codec ?: "—")
                 DetailRow(Icons.Rounded.GraphicEq, "Resolution", listOfNotNull(bits?.takeIf { lossless }?.let { "$it-bit" }, rate?.let(::kiloHertz)).joinToString(" • ").ifEmpty { "—" })
-                DetailRow(Icons.Rounded.Speed, "Bitrate", kbps?.takeIf { it > 0 }?.let { "$it kbps" } ?: "—")
+                DetailRow(Icons.Rounded.Speed, "Bitrate", kbps?.takeIf { it > 0 }?.let { com.opentune.i18n.Tr.f("{0} kbps", it) } ?: "—")
                 DetailRow(Icons.Rounded.CheckCircle, "Channels", when (channels) {
                     null -> "—"
                     1 -> "Mono (1 Channel)"
                     2 -> "Stereo (2 Channels)"
-                    else -> "$channels Channels"
+                    else -> com.opentune.i18n.Tr.f("{0} Channels", channels)
                 })
             }
             DetailsCard("Output & routing") {
                 DetailRow(if (route == OutputRoute.PHONE) Icons.Rounded.VolumeUp else route.icon, "Active Device", device)
                 DetailRow(Icons.Rounded.Speed, "Hi-Fi Mode", when (val bp = bitPerfect) {
-                    is BitPerfectUsb.Status.Active -> "Exclusive USB · ${bp.format.ifEmpty { "${bp.bits}-bit" }}"
-                    is BitPerfectUsb.Status.NoMatch -> "On · DAC has no bit-perfect ${kiloHertz(bp.sampleRate)}"
+                    is BitPerfectUsb.Status.Active -> com.opentune.i18n.Tr.f("Exclusive USB · {0}", bp.format.ifEmpty { "${bp.bits}-bit" })
+                    is BitPerfectUsb.Status.NoMatch -> com.opentune.i18n.Tr.f("On · DAC has no bit-perfect {0}", kiloHertz(bp.sampleRate))
                     BitPerfectUsb.Status.NoDac -> "On · waiting for a USB DAC"
                     BitPerfectUsb.Status.Unsupported -> "Needs Android 14"
                     BitPerfectUsb.Status.Off -> if (BitPerfectUsb.supported && route == OutputRoute.USB) "Supported on device · off" else "Off"
                 })
                 DetailRow(Icons.Rounded.Info, "Signal Path", when {
-                    bitPerfect is BitPerfectUsb.Status.Active -> "Direct bit-perfect (${kiloHertz((bitPerfect as BitPerfectUsb.Status.Active).sampleRate)})"
-                    trackRate != null && mixerRate != null && trackRate != mixerRate -> "Resampled by Android to ${kiloHertz(mixerRate)}"
-                    trackRate != null -> "Native rate (${kiloHertz(trackRate)})"
+                    bitPerfect is BitPerfectUsb.Status.Active -> com.opentune.i18n.Tr.f("Direct bit-perfect ({0})", kiloHertz((bitPerfect as BitPerfectUsb.Status.Active).sampleRate))
+                    trackRate != null && mixerRate != null && trackRate != mixerRate -> com.opentune.i18n.Tr.f("Resampled by Android to {0}", kiloHertz(mixerRate))
+                    trackRate != null -> com.opentune.i18n.Tr.f("Native rate ({0})", kiloHertz(trackRate))
                     else -> "—"
                 })
                 DetailRow(Icons.Rounded.GraphicEq, "Output Format", pipe.outputEncoding ?: if (pb.floatOutput) "Float32" else "16-bit PCM")
@@ -222,4 +222,4 @@ private fun LocationRow(location: String) {
     }
 }
 
-private fun kiloHertz(hz: Int): String = "${String.format(Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0")} kHz"
+private fun kiloHertz(hz: Int): String = com.opentune.i18n.Tr.f("{0} kHz", String.format(Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0"))

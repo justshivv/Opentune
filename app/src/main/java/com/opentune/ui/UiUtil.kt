@@ -23,7 +23,7 @@ fun friendlyError(e: Throwable): String = when (e) {
     is ResponseException -> when (e.response.status.value) {
         403, 429 -> "YouTube Music turned the request away. Wait a moment and try again."
         in 500..599 -> "YouTube Music is having trouble right now."
-        else -> "YouTube Music answered with an error (${e.response.status.value})."
+        else -> com.opentune.i18n.Tr.f("YouTube Music answered with an error ({0}).", e.response.status.value)
     }
     is IOException -> "Network error. Check your connection and try again."
     else -> e.message?.take(160) ?: "Something went wrong."

@@ -258,7 +258,7 @@ object DiscordRpc {
             .build()
         Http.client.newCall(request).execute().use { r ->
             if (r.code == 401) throw IllegalStateException("Discord didn't accept the sign-in. Connect again.")
-            if (!r.isSuccessful) throw IllegalStateException("Discord said ${r.code}")
+            if (!r.isSuccessful) throw IllegalStateException(com.opentune.i18n.Tr.f("Discord said {0}", r.code))
             return r.body?.string().orEmpty()
         }
     }

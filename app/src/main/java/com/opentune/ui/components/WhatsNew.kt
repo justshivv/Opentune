@@ -46,9 +46,9 @@ import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -224,7 +224,7 @@ fun WhatsNewSheet(notes: List<Pair<String, List<WhatsNew.Note>>>, version: Strin
     val ownNotes = notes.firstOrNull()?.first == version
     FloatingCard(
         onDismiss = onDismiss,
-        title = "What's new in $version",
+        title = com.opentune.i18n.Tr.f("What's new in {0}", version),
         actions = {
             Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)) { Text("Start listening") }
         },
@@ -235,7 +235,7 @@ fun WhatsNewSheet(notes: List<Pair<String, List<WhatsNew.Note>>>, version: Strin
             if (notes.isEmpty()) Text("You're up to date. Enjoy your music.", Modifier.padding(16.dp))
             notes.forEachIndexed { group, (releaseVersion, list) ->
                 if (group == 0) {
-                    Text(if (ownNotes) "The highlights" else "In $releaseVersion",
+                    Text(if (ownNotes) "The highlights" else com.opentune.i18n.Tr.f("In {0}", releaseVersion),
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.padding(top = 8.dp, start = 4.dp).semantics { heading() })
                     list.forEachIndexed { index, note -> NoteRow(note, index) }
@@ -246,8 +246,8 @@ fun WhatsNewSheet(notes: List<Pair<String, List<WhatsNew.Note>>>, version: Strin
                         Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(18.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text("Earlier · $releaseVersion", style = MaterialTheme.typography.titleMedium)
-                                Text("${list.size} changes", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(com.opentune.i18n.Tr.f("Earlier · {0}", releaseVersion), style = MaterialTheme.typography.titleMedium)
+                                Text(com.opentune.i18n.Tr.f("{0} changes", list.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                                 if (expanded) "Collapse changes" else "Expand changes")

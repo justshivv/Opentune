@@ -15,10 +15,10 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,7 +57,7 @@ object Support {
         try {
             context.startActivity(Intent.createChooser(view, "Send with").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: android.content.ActivityNotFoundException) {
-            com.opentune.data.Pills.error("No UPI app on this phone. You can send it to $UPI_ID from another one.", context)
+            com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("No UPI app on this phone. You can send it to {0} from another one.", UPI_ID), context)
         }
     }
 
@@ -134,7 +134,7 @@ fun SupportDialog(onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
                 Text(
-                    "Goes to ${Support.UPI_ID}",
+                    com.opentune.i18n.Tr.f("Goes to {0}", Support.UPI_ID),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 8.dp),
                 )
@@ -142,7 +142,7 @@ fun SupportDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             SheetButton(
-                rupees?.let { "Send ₹${if (it % 1.0 == 0.0) it.toLong().toString() else String.format(Locale.ROOT, "%.2f", it)}" } ?: "Send",
+                rupees?.let { com.opentune.i18n.Tr.f("Send ₹{0}", if (it % 1.0 == 0.0) it.toLong().toString() else String.format(Locale.ROOT, "%.2f", it)) } ?: "Send",
                 enabled = rupees != null,
                 onClick = { rupees?.let { Support.pay(context, it) }; onDismiss() },
             )

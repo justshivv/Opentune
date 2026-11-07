@@ -25,9 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Link
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -92,7 +92,7 @@ internal fun InviteSheet(code: RoomCode, hosting: Boolean, onDismiss: () -> Unit
                     // One group a line: big enough to read across a room.
                     Text(
                         code.pretty.replace('-', '\n'),
-                        Modifier.semantics { contentDescription = "Room code ${code.pretty}" },
+                        Modifier.semantics { contentDescription = com.opentune.i18n.Tr.f("Room code {0}", code.pretty) },
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
                         fontSize = 26.sp,
@@ -194,7 +194,7 @@ internal fun readBack(qr: QrModules, scale: Int = 4, quiet: Int = 4): String? {
 
 /** Opens the share sheet with the room's link and code. */
 internal fun shareRoom(context: Context, code: RoomCode) {
-    val text = "Listen with me on OpenTune. Room code: ${code.pretty}\n${code.link}"
+    val text = com.opentune.i18n.Tr.f("Listen with me on OpenTune. Room code: {0}\n{1}", code.pretty, code.link)
     context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Invite to your room"))
 }
 

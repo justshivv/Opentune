@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -18,7 +18,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -93,7 +93,7 @@ private fun MixBadge(modifier: Modifier, onClick: () -> Unit) {
     androidx.compose.foundation.layout.Row(
         modifier.widthIn(max = 280.dp).fillMaxWidth().heightIn(min = 40.dp)
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "${shown.value.label}: blending into the next song. Open the transition" },
+            .semantics { contentDescription = com.opentune.i18n.Tr.f("{0}: blending into the next song. Open the transition", shown.value.label) },
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
@@ -135,7 +135,7 @@ private fun QualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () 
     val lossless = isHighestQuality(source, format)
     val phase = if (ui.reduceAnimation || !lossless) null else rememberInfiniteTransition(label = "quality light")
         .animateFloat(-0.15f, 1.15f, infiniteRepeatable(tween(2800, easing = LinearEasing)), label = "quality sweep")
-    TextButton(onClick = onClick, modifier = modifier.widthIn(max = 280.dp).fillMaxWidth().heightIn(min = 40.dp).semantics { contentDescription = "$label. Open signal path" },
+    TextButton(onClick = onClick, modifier = modifier.widthIn(max = 280.dp).fillMaxWidth().heightIn(min = 40.dp).semantics { contentDescription = com.opentune.i18n.Tr.f("{0}. Open signal path", label) },
         colors = ButtonDefaults.textButtonColors(contentColor = colors.onSurfaceVariant),
         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) {
         // Lossless gets the waveform; a lossy stream the plain HQ mark (a headphone read as the output, not the quality).
@@ -193,15 +193,15 @@ internal fun qualityStatusLabel(source: NerdStats.Source?, format: AudioFormatIn
             val rate = format?.sampleRateHz ?: source.sampleRate
             listOfNotNull(bits?.let { "$it-bit" }, rate?.let { khzLabel(it) }).joinToString("/").ifEmpty { null }
         }
-        else -> kbps.takeIf { it > 0 }?.let { "$it kbps" }
+        else -> kbps.takeIf { it > 0 }?.let { com.opentune.i18n.Tr.f("{0} kbps", it) }
     }
     val label = listOfNotNull(tier, detail).joinToString(" · ")
-    return if (upgrading) "$label · upgrading" else label
+    return if (upgrading) com.opentune.i18n.Tr.f("{0} · upgrading", label) else label
 }
 
 /** A sample rate in Hz as "44.1 kHz" or "96 kHz", trimming a trailing ".0". */
 private fun khzLabel(hz: Int): String =
-    "${String.format(Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0")} kHz"
+    com.opentune.i18n.Tr.f("{0} kHz", String.format(Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0"))
 
 /** Whether [source] is the best there is: lossless, rather than a lossy stream at any bitrate. */
 internal fun isHighestQuality(source: NerdStats.Source?, format: AudioFormatInfo?): Boolean {
@@ -294,7 +294,7 @@ internal fun sourceQualityLabel(source: NerdStats.Source?, format: AudioFormatIn
     val rate = format?.sampleRateHz ?: source.sampleRate
     val quality = if (codec?.contains("FLAC", ignoreCase = true) == true) {
         listOfNotNull("FLAC", bits?.let { "$it-bit" }, rate?.let { khzLabel(it) }).joinToString(" · ")
-    } else listOfNotNull(codec, (format?.bitrateKbps ?: source.kbps)?.let { "$it kbps" }).joinToString(" · ")
+    } else listOfNotNull(codec, (format?.bitrateKbps ?: source.kbps)?.let { com.opentune.i18n.Tr.f("{0} kbps", it) }).joinToString(" · ")
     return "$provider · ${quality.ifEmpty { "quality pending" }}"
 }
 

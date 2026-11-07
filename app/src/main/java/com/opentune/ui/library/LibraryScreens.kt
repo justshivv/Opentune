@@ -35,9 +35,9 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -126,7 +126,7 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
                 val list = songs.orEmpty()
                 item {
                     Text(
-                        "${list.size} songs" + (library.localFolder?.let { " in $it" } ?: ""),
+                        com.opentune.i18n.Tr.f("{0} songs", list.size) + (library.localFolder?.let { com.opentune.i18n.Tr.f(" in {0}", it) } ?: ""),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 20.dp),
@@ -218,7 +218,7 @@ fun ReplayScreen(contentPadding: PaddingValues, actions: SongActions, onBack: ()
         itemsIndexed(summary.topSongs, key = { i, entry -> "s:$i:${entry.key}" }) { i, entry ->
             val song = entry.song ?: return@itemsIndexed
             // "Artist · 9 min" under the title, the plays at the end.
-            SongListItem(song.copy(durationText = "${TimeUnit.MILLISECONDS.toMinutes(entry.listenedMs)} min"),
+            SongListItem(song.copy(durationText = com.opentune.i18n.Tr.f("{0} min", TimeUnit.MILLISECONDS.toMinutes(entry.listenedMs))),
                 onClick = { actions.playAll(topSongs, i, false, "Replay") },
                 isCurrent = song.videoId == actions.currentVideoId, isPlaying = actions.isPlaying,
                 leading = { Row(verticalAlignment = Alignment.CenterVertically) {
@@ -247,7 +247,7 @@ private fun ReplayRankRow(index: Int, entry: com.opentune.data.history.TopEntry,
         Artwork(entry.thumbnailUrl, Modifier.size(56.dp), if (round) CircleShape else RoundedCornerShape(12.dp))
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
             Text(entry.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${TimeUnit.MILLISECONDS.toMinutes(entry.listenedMs)} min", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(com.opentune.i18n.Tr.f("{0} min", TimeUnit.MILLISECONDS.toMinutes(entry.listenedMs)), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("${entry.plays}", style = MaterialTheme.typography.labelLarge)
     }

@@ -60,10 +60,10 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -369,7 +369,7 @@ internal fun listMeta(kind: String, songs: List<com.opentune.data.model.Song>): 
     val length = when {
         total <= 0 -> null
         total >= 3600 -> "${total / 3600}h ${(total % 3600) / 60}m"
-        total >= 60 -> "${total / 60} min"
+        total >= 60 -> com.opentune.i18n.Tr.f("{0} min", total / 60)
         else -> "${total}s"
     }
     return listOfNotNull(kind, count, length).joinToString(" · ")
@@ -542,7 +542,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
             com.opentune.ui.components.MenuRow(Icons.Filled.Download, "Download all") {
                 close()
                 c.songs.forEach { com.opentune.data.download.Downloads.enqueue(context, it) }
-                com.opentune.data.Pills.done("Downloading ${c.songs.size} songs", context)
+                com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", c.songs.size), context)
             }
             com.opentune.ui.components.MenuRow(Icons.Filled.Share, "Share") { close(); com.opentune.ui.share.ListShare.shareList(context, c.title, c.browseId, com.opentune.ui.share.ListShare.coversFor(c.thumbnailUrl, c.songs, album = c.browseId.startsWith("MPRE")), c.subtitle) }
             com.opentune.ui.components.MenuRow(if (saved) Icons.Filled.BookmarkRemove else Icons.Filled.PushPin, if (saved) "Unpin" else "Pin") {

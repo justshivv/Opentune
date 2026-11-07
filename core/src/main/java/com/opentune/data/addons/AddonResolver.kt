@@ -98,20 +98,20 @@ object AddonResolver {
         /** [outcome]: asked over the network at all, and erred rather than answered. */
         suspend fun attempt(addon: AudioAddon, outcome: BooleanArray): AddonStream? {
             if (!addon.enabled) return null
-            if (addon.ownerOff) { report("${addon.manifest.name}: turned off by its owner"); return null }
-            if (paused(addon.key)) { report("${addon.manifest.name}: paused by its owner for now"); return null }
+            if (addon.ownerOff) { report(com.opentune.i18n.Tr.f("{0}: turned off by its owner", addon.manifest.name)); return null }
+            if (paused(addon.key)) { report(com.opentune.i18n.Tr.f("{0}: paused by its owner for now", addon.manifest.name)); return null }
             if ((failures["${addon.key}:${song.videoId}"] ?: 0) > now()) {
                 // Not a no: asked again once the hold is over.
                 outcome[0] = true; outcome[1] = true
-                report("${addon.manifest.name}: its file failed moments ago; asked again shortly"); return null
+                report(com.opentune.i18n.Tr.f("{0}: its file failed moments ago; asked again shortly", addon.manifest.name)); return null
             }
-            if (!AddonStore.usable(addon)) { report("${addon.manifest.name}: only used with wired headphones, a USB DAC or HDMI, as its owner asks"); return null }
-            if (download && !addon.manifest.downloads) { report("${addon.manifest.name}: streaming only"); return null }
+            if (!AddonStore.usable(addon)) { report(com.opentune.i18n.Tr.f("{0}: only used with wired headphones, a USB DAC or HDMI, as its owner asks", addon.manifest.name)); return null }
+            if (download && !addon.manifest.downloads) { report(com.opentune.i18n.Tr.f("{0}: streaming only", addon.manifest.name)); return null }
             val wait = (limitedUntil["${addon.key}:${song.videoId}"] ?: 0) - now()
             if (wait > 0) {
                 // Still an error to come back to, but nothing is sent until the add-on said it may be.
                 outcome[0] = true; outcome[1] = true
-                report("${addon.manifest.name}: rate limited; asked again in ${(wait + 999) / 1_000} s"); return null
+                report(com.opentune.i18n.Tr.f("{0}: rate limited; asked again in {1} s", addon.manifest.name, (wait + 999) / 1_000)); return null
             }
             var stage = "loading source manifest"
             val started = System.nanoTime()
@@ -129,7 +129,7 @@ object AddonResolver {
                     report("${addon.manifest.name}: $stage")
                     val candidates = client.search("${song.title} ${song.artist}", manifest, tier)
                         .filter { identity.matches(it.title, listOf(it.artist), it.album, it.durationMs) }
-                    if (candidates.isEmpty()) { report("${manifest.name}: no matching recording"); return@withTimeoutOrNull null }
+                    if (candidates.isEmpty()) { report(com.opentune.i18n.Tr.f("{0}: no matching recording", manifest.name)); return@withTimeoutOrNull null }
                     // Its last link for this song broke: a new one, not the cached one.
                     val fresh = staleLinks.remove("${addon.key}:${song.videoId}")
                     for (track in candidates.take(3)) {
@@ -148,9 +148,9 @@ object AddonResolver {
                             val plain = try { client.stream(track.id, manifest, "LOSSLESS", fresh) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
                             if (plain?.lossless == true) { stream = plain; asked = "LOSSLESS" }
                         }
-                        if (!stream.lossless) { report("${manifest.name}: has this song only in compressed quality, not lossless"); continue }
+                        if (!stream.lossless) { report(com.opentune.i18n.Tr.f("{0}: has this song only in compressed quality, not lossless", manifest.name)); continue }
                         if (download && stream.transport != null) {
-                            report("${manifest.name}: segmented stream; trying the next source for a downloadable file"); continue
+                            report(com.opentune.i18n.Tr.f("{0}: segmented stream; trying the next source for a downloadable file", manifest.name)); continue
                         }
                         if (!permitted()) return@withTimeoutOrNull null
                         stage = "checking audio header"
@@ -158,7 +158,7 @@ object AddonResolver {
                         val checked = if (stream.transport == null && stream.codec == "flac") {
                             val info = LosslessSource.flacInfo(probe(stream.url, 65536, true))
                             if (info == null || !LosslessSource.durationMatches(durationMs, info.durationMs)) {
-                                report("${manifest.name}: FLAC header or duration did not match"); continue
+                                report(com.opentune.i18n.Tr.f("{0}: FLAC header or duration did not match", manifest.name)); continue
                             }
                             // FLAC has no fixed bitrate and most add-ons don't state one: its average is the
                             // file's size over its length (bytes × 8 ÷ ms is kbit/s).
@@ -170,7 +170,7 @@ object AddonResolver {
                                 val text = prefix.toString(Charsets.UTF_8)
                                 val valid = if (stream.transport == "hls") text.trimStart().startsWith("#EXTM3U") && !Regex("#EXT-X-(?:SESSION-)?KEY:.*METHOD=(?!NONE)").containsMatchIn(text)
                                     else text.contains("<MPD") && !text.contains("ContentProtection", true)
-                                if (!valid) { report("${manifest.name}: invalid or protected media manifest"); continue }
+                                if (!valid) { report(com.opentune.i18n.Tr.f("{0}: invalid or protected media manifest", manifest.name)); continue }
                             }
                             if (stream.transport == "hls") {
                                 val text = prefix.toString(Charsets.UTF_8)
@@ -190,14 +190,14 @@ object AddonResolver {
                     null
                 } catch (e: CancellationException) { throw e }
                 catch (e: AddonHttp.Failure) {
-                    if (notePaused(addon.key, e)) { report("${addon.manifest.name}: paused by its owner for now"); return@withTimeoutOrNull null }
+                    if (notePaused(addon.key, e)) { report(com.opentune.i18n.Tr.f("{0}: paused by its owner for now", addon.manifest.name)); return@withTimeoutOrNull null }
                     outcome[1] = true
                     if (e.status == 429) limit(addon.key, song.videoId, e)
                     report("${addon.manifest.name}: ${failureDescription(stage, e)}"); null
                 }
                 catch (e: Exception) { outcome[1] = true; report("${addon.manifest.name}: ${failureDescription(stage, e)}"); null }
             }
-            if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) { outcome[1] = true; report("${addon.manifest.name}: timed out while $stage after ${ADDON_LIMIT_MS / 1_000} s") }
+            if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) { outcome[1] = true; report(com.opentune.i18n.Tr.f("{0}: timed out while {1} after {2} s", addon.manifest.name, stage, ADDON_LIMIT_MS / 1_000)) }
             return answer
         }
         val addons = AddonStore.addons.value.filterNot { it.key in skip }
@@ -281,16 +281,16 @@ object AddonResolver {
     internal fun failureDescription(stage: String, error: Exception): String = when (error) {
         is FirstPartyAddonAuth.VerificationFailure -> error.message.orEmpty()
         is AddonStreamException -> "$stage: ${error.reason.description}"
-        is AddonHttp.Failure -> "$stage: HTTP ${error.status}" + when (error.status) {
-            429 -> " · rate limited; retry in ${error.retryAfterSeconds.coerceAtLeast(1)}s"
+        is AddonHttp.Failure -> com.opentune.i18n.Tr.f("{0}: HTTP {1}", stage, error.status) + when (error.status) {
+            429 -> com.opentune.i18n.Tr.f(" · rate limited; retry in {0}s", error.retryAfterSeconds.coerceAtLeast(1))
             401, 403 -> " · access refused"
             else -> ""
         }
-        is java.net.SocketTimeoutException -> "$stage: connection timed out"
-        is java.net.UnknownHostException -> "$stage: could not resolve server; check DNS or connection"
-        is javax.net.ssl.SSLException -> "$stage: secure connection failed"
-        is org.json.JSONException -> "$stage: invalid JSON response"
-        is java.io.IOException -> "$stage: network request failed"
-        else -> "$stage: invalid source response"
+        is java.net.SocketTimeoutException -> com.opentune.i18n.Tr.f("{0}: connection timed out", stage)
+        is java.net.UnknownHostException -> com.opentune.i18n.Tr.f("{0}: could not resolve server; check DNS or connection", stage)
+        is javax.net.ssl.SSLException -> com.opentune.i18n.Tr.f("{0}: secure connection failed", stage)
+        is org.json.JSONException -> com.opentune.i18n.Tr.f("{0}: invalid JSON response", stage)
+        is java.io.IOException -> com.opentune.i18n.Tr.f("{0}: network request failed", stage)
+        else -> com.opentune.i18n.Tr.f("{0}: invalid source response", stage)
     }
 }

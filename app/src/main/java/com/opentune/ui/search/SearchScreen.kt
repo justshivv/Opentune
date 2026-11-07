@@ -48,11 +48,11 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -160,7 +160,7 @@ fun SearchScreen(
         vm.remember(query)
         scope.launch {
             val song = vm.songFor(hit)
-            if (song != null) onPlay(song) else com.opentune.data.Pills.error("Couldn't find \"${hit.track.title}\" to play")
+            if (song != null) onPlay(song) else com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't find \"{0}\" to play", hit.track.title))
         }
     }
 
@@ -595,7 +595,7 @@ private fun LibraryResults(
         }
         when {
             query.isBlank() || found == null -> item { SourceHint("Search your playlists, liked songs, downloads and the songs in your Local Music folder.") }
-            found.isEmpty() && lists.isEmpty() -> item { SourceHint("Nothing in your library matches \"${query.trim()}\".") }
+            found.isEmpty() && lists.isEmpty() -> item { SourceHint(com.opentune.i18n.Tr.f("Nothing in your library matches \"{0}\".", query.trim())) }
             else -> items(found, key = { "lib:${it.videoId}" }) { song ->
                 SongListItem(
                     song = song,
@@ -672,7 +672,7 @@ private fun AddonResults(
             }
             is com.opentune.data.model.UiState.Error -> item { SourceHint(found.message) }
             is com.opentune.data.model.UiState.Success ->
-                if (found.data.isEmpty()) item { SourceHint("None of your add-ons has \"${query.trim()}\".") }
+                if (found.data.isEmpty()) item { SourceHint(com.opentune.i18n.Tr.f("None of your add-ons has \"{0}\".", query.trim())) }
                 else items(found.data, key = { "ah:${it.addon.key}:${it.track.id}" }) { hit -> AddonRow(hit, onClick = { onPlay(hit) }) }
         }
     }

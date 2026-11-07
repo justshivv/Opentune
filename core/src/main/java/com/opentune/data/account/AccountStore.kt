@@ -188,7 +188,7 @@ object AccountStore {
                     record(target, a)
                     return@launch
                 }
-                val why = "Couldn't read the account profile (try ${attempt + 1})"
+                val why = com.opentune.i18n.Tr.f("Couldn't read the account profile (try {0})", attempt + 1)
                 result.exceptionOrNull()?.let { Log.w(TAG, why, it) } ?: Log.w(TAG, "$why: no profile in the answer")
             }
         }

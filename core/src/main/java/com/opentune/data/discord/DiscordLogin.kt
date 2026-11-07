@@ -62,7 +62,7 @@ object DiscordLogin {
     suspend fun sendSms(ticket: String): String? = withContext(Dispatchers.IO) {
         runCatching {
             post("/auth/mfa/sms/send", JSONObject().put("ticket", ticket), null).use { r ->
-                if (r.isSuccessful) null else errorMessage(r.body?.string().orEmpty()) ?: "Discord couldn't send a text (${r.code})"
+                if (r.isSuccessful) null else errorMessage(r.body?.string().orEmpty()) ?: com.opentune.i18n.Tr.f("Discord couldn't send a text ({0})", r.code)
             }
         }.getOrElse { it.message ?: "Couldn't reach Discord" }
     }
@@ -104,7 +104,7 @@ object DiscordLogin {
     /** Discord's answer to a sign-in call as the next [Step]. */
     internal fun parse(status: Int, text: String): Step {
         val o = runCatching { JSONObject(text) }.getOrNull()
-            ?: return Step.Failed(if (status == 429) "Discord asks to wait a moment before trying again." else "Discord said $status.")
+            ?: return Step.Failed(if (status == 429) "Discord asks to wait a moment before trying again." else com.opentune.i18n.Tr.f("Discord said {0}.", status))
         // A two-factor answer carries "token": null, which isn't a token.
         if (!o.isNull("token")) o.optString("token").takeIf { it.isNotBlank() }?.let { return Step.Done(it) }
         if (o.optBoolean("mfa")) {
@@ -122,8 +122,8 @@ object DiscordLogin {
                 o.optString("captcha_session_id").takeUnless { o.isNull("captcha_session_id") || it.isBlank() },
             )
         }
-        if (status == 429) return Step.Failed("Discord asks to wait ${o.optDouble("retry_after", 30.0).toInt()} s before trying again.")
-        return Step.Failed(errorMessage(text) ?: "Discord said $status.")
+        if (status == 429) return Step.Failed(com.opentune.i18n.Tr.f("Discord asks to wait {0} s before trying again.", o.optDouble("retry_after", 30.0).toInt()))
+        return Step.Failed(errorMessage(text) ?: com.opentune.i18n.Tr.f("Discord said {0}.", status))
     }
 
     /** The first message in a Discord error, e.g. "Login or password is invalid." */

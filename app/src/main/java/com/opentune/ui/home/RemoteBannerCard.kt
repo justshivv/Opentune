@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -23,7 +23,7 @@ internal fun RemoteBannerCard(banner: RemoteBanner) {
                 Text(banner.title, Modifier.weight(1f).padding(top = 12.dp), style = MaterialTheme.typography.titleLarge)
                 // Closed for good; a new banner shows again.
                 androidx.compose.material3.IconButton(onClick = { com.opentune.data.config.HomeDismissals.dismissBanner(banner.id) }) {
-                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Close, "Dismiss")
+                    com.opentune.ui.theme.Icon(androidx.compose.material.icons.Icons.Rounded.Close, "Dismiss")
                 }
             }
             if (banner.body.isNotBlank()) Text(banner.body, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 8.dp))

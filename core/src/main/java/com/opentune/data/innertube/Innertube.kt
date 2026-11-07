@@ -726,7 +726,7 @@ object Innertube {
     }
 
     class UnplayableException(private val reason: String) :
-        IllegalStateException("Track unavailable: $reason") {
+        IllegalStateException(com.opentune.i18n.Tr.f("Track unavailable: {0}", reason)) {
 
         /**
          * Whether this is Google doubting the client rather than the track
@@ -1015,7 +1015,7 @@ object Innertube {
         }
         response["error"]?.let { error ->
             val message = error.jsonObject["message"]?.jsonPrimitive?.contentOrNull
-            error("YouTube Music refused the rating: ${message ?: error}")
+            error(com.opentune.i18n.Tr.f("YouTube Music refused the rating: {0}", message ?: error))
         }
         // YouTube states what it did in the toast it would have shown. Worth
         // keeping: a rating it declines to act on still answers 200, and this
@@ -1046,7 +1046,7 @@ object Innertube {
         // As in [rate]: a refusal arrives as HTTP 200 with an error in the body.
         response["error"]?.let { error ->
             val message = error.jsonObject["message"]?.jsonPrimitive?.contentOrNull
-            error("YouTube Music refused the change: ${message ?: error}")
+            error(com.opentune.i18n.Tr.f("YouTube Music refused the change: {0}", message ?: error))
         }
         Log.d(TAG, "$endpoint $playlistId -> ${findString(response, "text") ?: "no confirmation"}")
     }
@@ -1070,7 +1070,7 @@ object Innertube {
         }
         response["error"]?.let { error ->
             val message = error.jsonObject["message"]?.jsonPrimitive?.contentOrNull
-            error("YouTube Music refused the change: ${message ?: error}")
+            error(com.opentune.i18n.Tr.f("YouTube Music refused the change: {0}", message ?: error))
         }
         Log.d(TAG, "$endpoint $channelId -> ${findString(response, "text") ?: "no confirmation"}")
     }
@@ -1141,7 +1141,7 @@ object Innertube {
         }
         val status = response["status"]?.jsonPrimitive?.contentOrNull
         if (status != null && status != "STATUS_SUCCEEDED") {
-            error("YouTube Music refused the edit ($status)")
+            error(com.opentune.i18n.Tr.f("YouTube Music refused the edit ({0})", status))
         }
         return response
     }

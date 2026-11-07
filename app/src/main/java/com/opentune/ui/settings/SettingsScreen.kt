@@ -118,12 +118,12 @@ import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material.icons.rounded.WavingHand
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -311,7 +311,7 @@ fun SettingsScreen(
                             it.group.contains(q, true) || it.category.title.contains(q, true)
                     }
                     if (hits.isEmpty()) {
-                        item { Text("No settings match \"$q\".", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp)) }
+                        item { Text(com.opentune.i18n.Tr.f("No settings match \"{0}\".", q), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp)) }
                     }
                     hits.groupBy { "${it.category.title} · ${it.group}" }.forEach { (where, rows) ->
                         item(key = "hit:$where") { GroupLabel(where) }
@@ -354,7 +354,7 @@ fun SettingsScreen(
                 }
                 item {
                     Text(
-                        "OpenTune ${BuildConfig.VERSION_NAME} • GNU GPL v3 • Lyrics from LRCLIB",
+                        com.opentune.i18n.Tr.f("OpenTune {0} • GNU GPL v3 • Lyrics from LRCLIB", BuildConfig.VERSION_NAME),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(28.dp),
@@ -374,7 +374,7 @@ private fun SeeMoreRow(open: Boolean, hidden: Int, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            if (open) "See less" else "See $hidden more",
+            if (open) "See less" else com.opentune.i18n.Tr.f("See {0} more", hidden),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(1f),
@@ -502,7 +502,7 @@ private fun settingsSections(
                     context.contentResolver.openOutputStream(uri)?.use { it.write(doc.toString().toByteArray()) }
                 }
                 "Exported settings, history, likes and playlists."
-            }.getOrElse { "Export failed: ${it.message}" }
+            }.getOrElse { com.opentune.i18n.Tr.f("Export failed: {0}", it.message) }
         }
     }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -516,7 +516,7 @@ private fun settingsSections(
                 doc["history"]?.let(History::importJson)
                 doc["library"]?.let(LibraryStore::importJson)
                 "Imported settings, history, likes and playlists."
-            }.getOrElse { "Import failed: ${it.message}" }
+            }.getOrElse { com.opentune.i18n.Tr.f("Import failed: {0}", it.message) }
         }
     }
 
@@ -791,9 +791,9 @@ private fun settingsSections(
                                 "Spotify",
                                 summary = when {
                                     spotifySync.running && spotifySync.error != null -> "Connected · Connection interrupted. Retrying…"
-                                    spotifySync.running && spotifySync.current != null -> "Connected · bringing over ${spotifySync.current} (${spotifySync.index} of ${spotifySync.count})"
+                                    spotifySync.running && spotifySync.current != null -> com.opentune.i18n.Tr.f("Connected · bringing over {0} ({1} of {2})", spotifySync.current, spotifySync.index, spotifySync.count)
                                     spotifySync.running -> "Connected · reading your Spotify library…"
-                                    spotifySync.error != null -> "Connected · ${spotifySync.error}. Tap to try again"
+                                    spotifySync.error != null -> com.opentune.i18n.Tr.f("Connected · {0}. Tap to try again", spotifySync.error)
                                     spotifySync.lastSynced > 0 -> "Connected · playlists in Library, checked " +
                                         android.text.format.DateUtils.getRelativeTimeSpanString(spotifySync.lastSynced) + ". Tap to check now"
                                     else -> "Connected · tap to bring your playlists into Library"
@@ -809,7 +809,7 @@ private fun settingsSections(
                         NavRow(
                             "Connect Spotify",
                             { context.startActivity(android.content.Intent(context, com.opentune.ui.spotify.SpotifyConnectActivity::class.java)) },
-                            summary = spotifyProblem?.let { "$it. Sign in again" } ?: "Your playlists in Library, each song's Canvas, and suggestions made for you",
+                            summary = spotifyProblem?.let { com.opentune.i18n.Tr.f("{0}. Sign in again", it) } ?: "Your playlists in Library, each song's Canvas, and suggestions made for you",
                             leading = { SpotifyMark() },
                         )
                     }
@@ -862,10 +862,10 @@ private fun settingsSections(
                         "Bit-perfect output",
                         { bitPerfectSheet = true },
                         summary = when (val s = usb) {
-                            is BitPerfectUsb.Status.Active -> "${s.device}: ${s.format.ifEmpty { "${s.bits}-bit" }} at ${s.sampleRate / 1000.0} kHz, bit for bit"
-                            is BitPerfectUsb.Status.NoMatch -> "The DAC has no bit-perfect mode for ${s.sampleRate / 1000.0} kHz, so this song goes through Android's mixer"
+                            is BitPerfectUsb.Status.Active -> com.opentune.i18n.Tr.f("{0}: {1} at {2} kHz, bit for bit", s.device, s.format.ifEmpty { "${s.bits}-bit" }, s.sampleRate / 1000.0)
+                            is BitPerfectUsb.Status.NoMatch -> com.opentune.i18n.Tr.f("The DAC has no bit-perfect mode for {0} kHz, so this song goes through Android's mixer", s.sampleRate / 1000.0)
                             else -> when (val d = direct) {
-                                is com.opentune.playback.nativeout.UsbDirect.Status.NeedsPermission -> "Tap to allow ${d.device}"
+                                is com.opentune.playback.nativeout.UsbDirect.Status.NeedsPermission -> com.opentune.i18n.Tr.f("Tap to allow {0}", d.device)
                                 is com.opentune.playback.nativeout.UsbDirect.Status.Failed -> "${d.device}: ${d.why}"
                                 com.opentune.playback.nativeout.UsbDirect.Status.NoDac -> "Plug in a USB DAC and the music moves to it"
                                 else -> mode.summary
@@ -940,7 +940,7 @@ private fun settingsSections(
                         summary = when {
                             pb.automix -> "Automix is choosing how long each blend lasts"
                             pb.crossfadeSeconds == 0 -> "Off: songs play back to back"
-                            else -> "Blend each song into the next over ${pb.crossfadeSeconds} s"
+                            else -> com.opentune.i18n.Tr.f("Blend each song into the next over {0} s", pb.crossfadeSeconds)
                         },
                         icon = Icons.Rounded.Animation,
                         below = {
@@ -1013,8 +1013,8 @@ private fun settingsSections(
                         { hiddenDialog = true },
                         summary = if (count == 0) "Kept out of autoplay, radio and Home. Nothing hidden yet"
                         else listOfNotNull(
-                            hidden.songs.size.takeIf { it > 0 }?.let { if (it == 1) "1 song" else "$it songs" },
-                            hidden.artists.size.takeIf { it > 0 }?.let { if (it == 1) "1 artist" else "$it artists" },
+                            hidden.songs.size.takeIf { it > 0 }?.let { if (it == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", it) },
+                            hidden.artists.size.takeIf { it > 0 }?.let { if (it == 1) "1 artist" else com.opentune.i18n.Tr.f("{0} artists", it) },
                         ).joinToString(" and ") + " kept out of suggestions",
                         icon = Icons.Rounded.VisibilityOff,
                     )
@@ -1174,7 +1174,7 @@ private fun settingsSections(
                         summary = when {
                             ui.fullScreenCover -> "Turn off Full-screen cover art to shape the cover"
                             ui.coverCornerDp == 0 -> "Square, with sharp corners"
-                            else -> "Rounded by ${ui.coverCornerDp} dp"
+                            else -> com.opentune.i18n.Tr.f("Rounded by {0} dp", ui.coverCornerDp)
                         },
                         icon = Icons.Rounded.RoundedCorner,
                         below = {
@@ -1423,7 +1423,7 @@ private fun settingsSections(
                     )
                 },
                 Entry("Followed artists", "follow artists unfollow") {
-                    NavRow("Followed artists", { followedDialog = true }, summary = if (followedArtists.isEmpty()) "Follow from an artist's page" else "${followedArtists.size} artists", icon = Icons.Rounded.Person)
+                    NavRow("Followed artists", { followedDialog = true }, summary = if (followedArtists.isEmpty()) "Follow from an artist's page" else com.opentune.i18n.Tr.f("{0} artists", followedArtists.size), icon = Icons.Rounded.Person)
                 },
             ),
         ),
@@ -1448,7 +1448,7 @@ private fun settingsSections(
                     NavRow(
                         "Downloaded songs",
                         onOpenDownloads,
-                        summary = "${done.size} songs · ${Formatter.formatShortFileSize(context, done.sumOf { it.bytes })}",
+                        summary = com.opentune.i18n.Tr.f("{0} songs · {1}", done.size, Formatter.formatShortFileSize(context, done.sumOf { it.bytes })),
                         icon = Icons.Rounded.DownloadDone,
                     )
                 },
@@ -1472,9 +1472,9 @@ private fun settingsSections(
                             if (v) scope.launch {
                                 val (copied, skipped) = com.opentune.data.download.Downloads.exportExisting(context.applicationContext)
                                 val note = buildString {
-                                    append(if (copied == 1) "1 song" else "$copied songs")
+                                    append(if (copied == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", copied))
                                     append(" copied to Music/OpenTune")
-                                    if (skipped > 0) append("; $skipped in a format other apps can't play, download them again to export")
+                                    if (skipped > 0) append(com.opentune.i18n.Tr.f("; {0} in a format other apps can't play, download them again to export", skipped))
                                 }
                                 if (copied > 0 || skipped > 0) com.opentune.data.Pills.done(note, context)
                             }
@@ -1525,7 +1525,7 @@ private fun settingsSections(
                             withContext(Dispatchers.IO) { AudioCache.clear(context) }
                             cacheBytes = withContext(Dispatchers.IO) { AudioCache.usedBytes(context) }
                         }
-                    }, summary = "Using ${Formatter.formatShortFileSize(context, cacheBytes)}", icon = Icons.Rounded.DeleteSweep)
+                    }, summary = com.opentune.i18n.Tr.f("Using {0}", Formatter.formatShortFileSize(context, cacheBytes)), icon = Icons.Rounded.DeleteSweep)
                 },
                 Entry("Delete downloaded updates", "apk update installer free space") {
                     NavRow("Delete downloaded updates", {
@@ -1534,7 +1534,7 @@ private fun settingsSections(
                             updateBytes = 0
                             message = "Downloaded updates deleted."
                         }
-                    }, summary = if (updateBytes > 0) "Using ${Formatter.formatShortFileSize(context, updateBytes)}" else "None kept", icon = Icons.Rounded.DeleteSweep)
+                    }, summary = if (updateBytes > 0) com.opentune.i18n.Tr.f("Using {0}", Formatter.formatShortFileSize(context, updateBytes)) else "None kept", icon = Icons.Rounded.DeleteSweep)
                 },
                 Entry("Clear image cache", "artwork") {
                     NavRow("Clear image cache", {
@@ -1575,7 +1575,7 @@ private fun settingsSections(
                         NavRow("Connect a server", { serverDialog = true }, summary = "Stream your own FLAC and hi-res files from any Subsonic server", icon = Icons.Rounded.Dns)
                     } else {
                         NavRow(
-                            "${connected.user} on ${connected.url.substringAfter("://")}",
+                            com.opentune.i18n.Tr.f("{0} on {1}", connected.user, connected.url.substringAfter("://")),
                             { serverDialog = true },
                             summary = "Streams stored files as they are. Tap to sign in again.",
                             icon = Icons.Rounded.Dns,
@@ -1600,10 +1600,10 @@ private fun settingsSections(
                             discordOn,
                             { v -> com.opentune.data.discord.DiscordRpc.setEnabled(v) },
                             summary = when {
-                                !discordOn -> "Off: nothing shows on ${who.name}'s profile"
+                                !discordOn -> com.opentune.i18n.Tr.f("Off: nothing shows on {0}'s profile", who.name)
                                 discordProblem != null -> discordProblem!!
-                                discordStatus == com.opentune.data.discord.DiscordRpc.Status.Ready -> "Showing what you play on ${who.name}'s profile"
-                                else -> "Shows what you play on ${who.name}'s profile while music plays"
+                                discordStatus == com.opentune.data.discord.DiscordRpc.Status.Ready -> com.opentune.i18n.Tr.f("Showing what you play on {0}'s profile", who.name)
+                                else -> com.opentune.i18n.Tr.f("Shows what you play on {0}'s profile while music plays", who.name)
                             },
                             icon = Icons.Rounded.Headphones,
                         )
@@ -1624,8 +1624,8 @@ private fun settingsSections(
                         NavRow("Connect Last.fm", { lastFmDialog = true }, summary = "Scrobble what you play with your own Last.fm API account", icon = Icons.Rounded.History)
                     } else {
                         SettingRow(
-                            "Scrobbling as ${who.user}",
-                            summary = if (scrobblesWaiting > 0) "$scrobblesWaiting scrobbles waiting to send" else "Songs are scrobbled after half their length or 4 minutes",
+                            com.opentune.i18n.Tr.f("Scrobbling as {0}", who.user),
+                            summary = if (scrobblesWaiting > 0) com.opentune.i18n.Tr.f("{0} scrobbles waiting to send", scrobblesWaiting) else "Songs are scrobbled after half their length or 4 minutes",
                             icon = Icons.Rounded.History,
                         )
                     }
@@ -1644,8 +1644,8 @@ private fun settingsSections(
                         NavRow("Connect ListenBrainz", { listenBrainzDialog = true }, summary = "Free, open listening history, and recommendations on Home", icon = Icons.Rounded.History)
                     } else {
                         SettingRow(
-                            "Sending listens as ${who.user}",
-                            summary = if (listensWaiting > 0) "$listensWaiting listens waiting to send" else "Recommendations from your listens show on Home",
+                            com.opentune.i18n.Tr.f("Sending listens as {0}", who.user),
+                            summary = if (listensWaiting > 0) com.opentune.i18n.Tr.f("{0} listens waiting to send", listensWaiting) else "Recommendations from your listens show on Home",
                             icon = Icons.Rounded.History,
                         )
                     }
@@ -1693,7 +1693,7 @@ private fun settingsSections(
             "Advanced",
             listOf(
                 Entry("What's new", "release notes changelog version highlights") {
-                    NavRow("What's new", { showWhatsNew = true }, summary = "Highlights and improvements in ${BuildConfig.VERSION_NAME}", icon = Icons.Rounded.SystemUpdate)
+                    NavRow("What's new", { showWhatsNew = true }, summary = com.opentune.i18n.Tr.f("Highlights and improvements in {0}", BuildConfig.VERSION_NAME), icon = Icons.Rounded.SystemUpdate)
                 },
                 Entry("Show the welcome again", "welcome onboarding first run start intro pick artists setup") {
                     NavRow("Show the welcome again", { com.opentune.data.Welcome.showAgain() }, summary = "Pick artists, choose a look and sign in, as on the first start", icon = Icons.Rounded.WavingHand)
@@ -1705,12 +1705,12 @@ private fun settingsSections(
                         scope.launch {
                             when (val r = UpdateCheck.checkNow(context)) {
                                 is UpdateCheck.Result.Newer -> update = r.release
-                                UpdateCheck.Result.UpToDate -> message = "You have the latest version (${BuildConfig.VERSION_NAME})."
+                                UpdateCheck.Result.UpToDate -> message = com.opentune.i18n.Tr.f("You have the latest version ({0}).", BuildConfig.VERSION_NAME)
                                 UpdateCheck.Result.NoReleases -> message = "No releases are published yet. Builds are on the GitHub branch for now."
-                                is UpdateCheck.Result.Failed -> message = "Couldn't check: ${r.reason}"
+                                is UpdateCheck.Result.Failed -> message = com.opentune.i18n.Tr.f("Couldn't check: {0}", r.reason)
                             }
                         }
-                    }, summary = pendingUpdate?.let { "OpenTune ${it.version} is ready to install. You have ${BuildConfig.VERSION_NAME}." } ?: "Current version: ${BuildConfig.VERSION_NAME}", icon = Icons.Rounded.SystemUpdate, dot = pendingUpdate != null)
+                    }, summary = pendingUpdate?.let { com.opentune.i18n.Tr.f("OpenTune {0} is ready to install. You have {1}.", it.version, BuildConfig.VERSION_NAME) } ?: com.opentune.i18n.Tr.f("Current version: {0}", BuildConfig.VERSION_NAME), icon = Icons.Rounded.SystemUpdate, dot = pendingUpdate != null)
                 },
                 Entry("Check for updates automatically", "update new version release auto") {
                     ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Looks for a new release on GitHub every few hours, in the background too, and offers to install it", icon = Icons.Rounded.SystemUpdate)
@@ -1743,7 +1743,7 @@ private fun settingsSections(
                         scope.launch {
                             val log = LogExport.recent()
                             val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                                .putExtra(Intent.EXTRA_SUBJECT, "OpenTune ${BuildConfig.VERSION_NAME} log")
+                                .putExtra(Intent.EXTRA_SUBJECT, com.opentune.i18n.Tr.f("OpenTune {0} log", BuildConfig.VERSION_NAME))
                                 .putExtra(Intent.EXTRA_TEXT, log)
                             context.startActivity(Intent.createChooser(send, "Share log"))
                         }
@@ -1764,7 +1764,7 @@ private fun outputSummary(context: Context, float: Boolean): String {
     return "AudioTrack · ${Build.MODEL} · $khz · ${if (float) "32-bit float" else "16-bit PCM"}"
 }
 
-private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 1024f) else "$mb MB"
+private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 1024f) else com.opentune.i18n.Tr.f("{0} MB", mb)
 
 /** Spotify's green disc, for its rows in Account. */
 @Composable

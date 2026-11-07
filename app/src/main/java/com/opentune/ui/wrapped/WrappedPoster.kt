@@ -38,7 +38,7 @@ object WrappedPoster {
                 val images = urls.map { u -> async { u?.let { ShareCard.loadImage(context, it, 400) } } }.awaitAll()
                 withContext(Dispatchers.Default) { draw(summary, title, images.first(), images.drop(1)) }
             }.onFailure { Log.w("WrappedPoster", "couldn't make the poster", it) }.getOrNull()
-            ShareCard.sendImage(context, bitmap, "OpenTune-Wrapped.png", "My $title Wrapped on OpenTune", "Wrapped")
+            ShareCard.sendImage(context, bitmap, "OpenTune-Wrapped.png", com.opentune.i18n.Tr.f("My {0} Wrapped on OpenTune", title), "Wrapped")
         }
     }
 
@@ -99,7 +99,7 @@ object WrappedPoster {
         val nameMax = w - nameX - left
         val namePaint = text(w * 0.06f, ink, serif, -0.02f)
         c.drawText(TextUtils.ellipsize(top?.title.orEmpty(), namePaint, nameMax, TextUtils.TruncateAt.END).toString(), nameX, photoTop + photo * 0.66f, namePaint)
-        top?.let { c.drawText("${it.plays} plays", nameX, photoTop + photo * 0.86f, text(w * 0.026f, soft)) }
+        top?.let { c.drawText(com.opentune.i18n.Tr.f("{0} plays", it.plays), nameX, photoTop + photo * 0.86f, text(w * 0.026f, soft)) }
 
         // Five artists and five songs, side by side.
         val listTop = photoTop + photo + h * 0.06f

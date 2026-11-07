@@ -65,7 +65,7 @@ object DailyMixes {
             val around = weighted(near.filter { Wrapped.mainArtist(it.artist) != artist })
             val songs = interleave(shuffle(own, today + i), shuffle(around, today + i + 7), ownEvery = 2)
             val others = around.map { Wrapped.mainArtist(it.artist) }.distinct().take(2)
-            mix("artist$i", "Daily Mix ${i + 1}", listOf(artist).plus(others).joinToString(", "), songs)?.let(mixes::add)
+            mix("artist$i", com.opentune.i18n.Tr.f("Daily Mix {0}", i + 1), listOf(artist).plus(others).joinToString(", "), songs)?.let(mixes::add)
         }
 
         // What you play at this time of day.

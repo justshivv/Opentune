@@ -188,7 +188,7 @@ object Audiobooks {
 
     private fun get(url: String): String =
         Http.client.newCall(Request.Builder().url(url).build()).execute().use { r ->
-            check(r.isSuccessful) { "The Internet Archive said ${r.code}" }
+            check(r.isSuccessful) { com.opentune.i18n.Tr.f("The Internet Archive said {0}", r.code) }
             r.body?.string().orEmpty()
         }
 

@@ -40,9 +40,9 @@ import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Smartphone
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -216,7 +216,7 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
         subtitle = when {
             !pickable -> "The lines you picked, laid out on a card with the cover."
             picked.isEmpty() -> "Tap the lines to put on the card"
-            else -> "${picked.size} of ${LyricCard.MAX_LINES} lines picked"
+            else -> com.opentune.i18n.Tr.f("{0} of {1} lines picked", picked.size, LyricCard.MAX_LINES)
         },
         startExpanded = !pickable,
         actions = {

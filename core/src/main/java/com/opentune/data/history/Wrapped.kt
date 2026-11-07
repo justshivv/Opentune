@@ -121,7 +121,7 @@ object Wrapped {
             songs = bySong.size,
             artists = byArtist.size,
             topSongs = bySong.take(5).map { (_, list) -> entry(list, list.first().title, list.first().artist) },
-            topArtists = byArtist.take(5).map { (name, list) -> entry(list, name, "${list.distinctBy { it.videoId }.size} songs") },
+            topArtists = byArtist.take(5).map { (name, list) -> entry(list, name, com.opentune.i18n.Tr.f("{0} songs", list.distinctBy { it.videoId }.size)) },
             topAlbum = byAlbum.firstOrNull()?.let { (name, list) -> entry(list, name, mainArtist(list.first().artist)) },
             hours = hours.map { TimeUnit.MILLISECONDS.toMinutes(it) },
             peakHour = peak,

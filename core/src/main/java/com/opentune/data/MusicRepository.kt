@@ -338,8 +338,8 @@ object MusicRepository {
         if (songs.isEmpty() || (engine != Recommender.SPOTIFY && songs.size < 4)) return emptyList()
         lastPicks = songs.mapTo(HashSet()) { it.videoId }
         val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
-        val by = if (result.engine == Recommender.YOUTUBE) "Picked for you" else "Picked by ${result.engine.label}"
-        return listOf(HomeShelf("Because you played ${last.title}", items, by))
+        val by = if (result.engine == Recommender.YOUTUBE) "Picked for you" else com.opentune.i18n.Tr.f("Picked by {0}", result.engine.label)
+        return listOf(HomeShelf(com.opentune.i18n.Tr.f("Because you played {0}", last.title), items, by))
     }
 
     /**
@@ -392,7 +392,7 @@ object MusicRepository {
                     // Cards that open a page: albums, singles, playlists, artists.
                     .filter { shelf -> shelf.items.isNotEmpty() && shelf.items.all { it.browseId != null } }
                     .take(3)
-                    .map { it.copy(subtitle = "Because you like $name") }
+                    .map { it.copy(subtitle = com.opentune.i18n.Tr.f("Because you like {0}", name)) }
               } catch (e: CancellationException) { throw e }
               catch (_: Exception) { emptyList<HomeShelf>() }
             }

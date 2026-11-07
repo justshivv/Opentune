@@ -17,7 +17,7 @@ class AddonApprovalActivity : ComponentActivity() {
         val uri = intent?.data
         val id = uri?.getQueryParameter("id").orEmpty()
         if (uri?.scheme != "opentune" || uri.host != "addon-approve" || !id.matches(Regex("[A-Za-z0-9_-]{43}"))) { finish(); return }
-        val waiting = AlertDialog.Builder(this).setTitle("Verify OpenTune").setMessage("Checking this device and browser request…")
+        val waiting = AlertDialog.Builder(this).setTitle(com.opentune.i18n.Tr.t("Verify OpenTune")).setMessage(com.opentune.i18n.Tr.t("Checking this device and browser request…"))
             .setNegativeButton("Cancel") { _, _ -> finish() }.setOnCancelListener { finish() }.show()
         lifecycleScope.launch {
             try {
@@ -49,7 +49,7 @@ class AddonApprovalActivity : ComponentActivity() {
         }
     }
     private fun showResult(message: String) {
-        AlertDialog.Builder(this).setTitle("OpenTune verification").setMessage(message)
+        AlertDialog.Builder(this).setTitle(com.opentune.i18n.Tr.t("OpenTune verification")).setMessage(com.opentune.i18n.Tr.t(message))
             .setPositiveButton("Done") { _, _ -> finish() }.setOnCancelListener { finish() }.show()
     }
 }
