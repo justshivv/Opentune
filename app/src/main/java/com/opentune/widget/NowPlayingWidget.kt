@@ -15,10 +15,13 @@ import android.view.KeyEvent
 import android.view.View
 import android.widget.RemoteViews
 import androidx.annotation.OptIn
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaButtonReceiver
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -30,8 +33,10 @@ import com.opentune.data.library.LibraryStore
 import com.opentune.data.model.Song
 import com.opentune.data.model.artworkAt
 import com.opentune.data.subsonic.Subsonic
+import com.opentune.playback.PlaybackService
 import com.opentune.playback.toSong
 import java.io.File
+import java.lang.ref.WeakReference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -67,12 +72,18 @@ open class NowPlayingWidget : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action != ACTION_LIKE) return
-        val state = load(context)
-        val id = state.videoId ?: return
-        val song = Song(id, state.title, state.artist, state.thumbnailUrl)
-        LibraryStore.setLiked(song, !LibraryStore.isLiked(id))
-        render(context, state.copy(liked = LibraryStore.isLiked(id)))
+        when (intent.action) {
+            ACTION_LIKE -> {
+                val state = load(context)
+                val id = state.videoId ?: return
+                val song = Song(id, state.title, state.artist, state.thumbnailUrl)
+                LibraryStore.setLiked(song, !LibraryStore.isLiked(id))
+                render(context, state.copy(liked = LibraryStore.isLiked(id)))
+            }
+            ACTION_PREVIOUS -> skipPrevious(context)
+            ACTION_NEXT -> skipNext(context)
+            ACTION_PLAY_PAUSE -> playPause(context)
+        }
     }
 
     private data class State(
@@ -86,14 +97,19 @@ open class NowPlayingWidget : AppWidgetProvider() {
 
     companion object {
         private const val ACTION_LIKE = "com.opentune.widget.LIKE"
+        private const val ACTION_PREVIOUS = "com.opentune.widget.PREVIOUS"
+        private const val ACTION_PLAY_PAUSE = "com.opentune.widget.PLAY_PAUSE"
+        private const val ACTION_NEXT = "com.opentune.widget.NEXT"
         private const val PREFS = "widget"
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         private var last: State? = null
         private var coverFor: String? = null
         private var coverJob: Job? = null
+        @Volatile private var activePlayer: WeakReference<Player>? = null
 
         /** Brings every placed widget up to date with [player]; cheap when nothing changed. */
         fun refresh(context: Context, player: Player?) {
+            activePlayer = player?.let { WeakReference(it) }
             val item = player?.currentMediaItem
             val song = item?.toSong()
             val state = State(
@@ -116,6 +132,7 @@ open class NowPlayingWidget : AppWidgetProvider() {
 
         /** The player has gone: keep the song shown, with Play rather than Pause. */
         fun stopped(context: Context) {
+            activePlayer = null
             val state = (last ?: load(context)).copy(playing = false)
             last = state
             render(context, state)
@@ -226,13 +243,69 @@ open class NowPlayingWidget : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(
                 context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             ))
-            views.setOnClickPendingIntent(R.id.widget_previous, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
-            views.setOnClickPendingIntent(R.id.widget_play, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
-            views.setOnClickPendingIntent(R.id.widget_next, mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT))
+            views.setOnClickPendingIntent(R.id.widget_previous, PendingIntent.getBroadcast(
+                context, 2, Intent(context, NowPlayingWidget::class.java).setAction(ACTION_PREVIOUS),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            ))
+            views.setOnClickPendingIntent(R.id.widget_play, PendingIntent.getBroadcast(
+                context, 3, Intent(context, NowPlayingWidget::class.java).setAction(ACTION_PLAY_PAUSE),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            ))
+            views.setOnClickPendingIntent(R.id.widget_next, PendingIntent.getBroadcast(
+                context, 4, Intent(context, NowPlayingWidget::class.java).setAction(ACTION_NEXT),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            ))
             views.setOnClickPendingIntent(R.id.widget_like, PendingIntent.getBroadcast(
                 context, 1, Intent(context, NowPlayingWidget::class.java).setAction(ACTION_LIKE),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             ))
+        }
+
+        private fun skipNext(context: Context) {
+            val player = activePlayer?.get()
+            if (player != null && player.mediaItemCount > 0) {
+                player.seekToNext()
+            } else {
+                withController(context) { it.seekToNext() }
+            }
+        }
+
+        private fun skipPrevious(context: Context) {
+            val player = activePlayer?.get()
+            if (player != null && player.mediaItemCount > 0) {
+                player.seekToPrevious()
+            } else {
+                withController(context) { it.seekToPrevious() }
+            }
+        }
+
+        private fun playPause(context: Context) {
+            val player = activePlayer?.get()
+            if (player != null && player.mediaItemCount > 0) {
+                if (player.isPlaying) player.pause() else player.play()
+            } else {
+                val intent = Intent(Intent.ACTION_MEDIA_BUTTON)
+                    .setComponent(ComponentName(context, MediaButtonReceiver::class.java))
+                    .putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+                context.sendBroadcast(intent)
+            }
+        }
+
+        private fun withController(context: Context, block: (Player) -> Unit) {
+            try {
+                val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+                val future = MediaController.Builder(context, token).buildAsync()
+                future.addListener({
+                    try {
+                        val controller = future.get()
+                        block(controller)
+                    } catch (_: Exception) {
+                    } finally {
+                        MediaController.releaseFuture(future)
+                    }
+                }, ContextCompat.getMainExecutor(context))
+            } catch (_: Exception) {
+            }
         }
 
         private fun mediaKey(context: Context, keyCode: Int): PendingIntent {
