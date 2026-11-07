@@ -8,7 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.os.Bundle
+import android.util.SizeF
 import android.view.KeyEvent
 import android.view.View
 import android.widget.RemoteViews
@@ -154,6 +156,7 @@ open class NowPlayingWidget : AppWidgetProvider() {
                 state.videoId != null && it.exists() && state.thumbnailUrl != null &&
                     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("cover-thumbnail", null) == state.thumbnailUrl
             }?.let { BitmapFactory.decodeFile(it.path) }
+            val empty = state.videoId == null
             val designs = listOf(
                 NowPlayingWidget::class.java to R.layout.widget_now_playing,
                 AlbumArtWidget::class.java to R.layout.widget_album_art,
@@ -163,34 +166,73 @@ open class NowPlayingWidget : AppWidgetProvider() {
                 val ids = manager.getAppWidgetIds(ComponentName(context, provider))
                 if (ids.isEmpty()) continue
                 for (id in ids) {
-                    val views = RemoteViews(context.packageName, layout)
                     val width = manager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 300)
-                    val compact = provider == NowPlayingWidget::class.java
-                    val empty = state.videoId == null
-                    views.setTextViewText(R.id.widget_title, if (empty) context.getString(R.string.widget_nothing_playing) else state.title)
-                    views.setTextViewText(R.id.widget_artist, if (empty) context.getString(R.string.widget_open) else state.artist)
-                    if (cover != null) views.setImageViewBitmap(R.id.widget_cover, cover) else views.setImageViewResource(R.id.widget_cover, R.drawable.ic_widget_cover)
-                    views.setImageViewResource(R.id.widget_play, if (state.playing) R.drawable.ic_widget_pause else R.drawable.ic_widget_play)
-                    views.setContentDescription(R.id.widget_play, context.getString(if (state.playing) R.string.widget_pause else R.string.widget_play))
-                    views.setImageViewResource(R.id.widget_like, if (state.liked) R.drawable.ic_widget_heart_filled else R.drawable.ic_widget_heart)
-                    views.setContentDescription(R.id.widget_like, context.getString(if (state.liked) R.string.widget_unlike else R.string.widget_like))
-                    // Keep real space for the song's title on narrow launcher cells.
-                    views.setViewVisibility(R.id.widget_like, if (empty || (compact && width < 420)) View.GONE else View.VISIBLE)
-                    views.setViewVisibility(R.id.widget_previous, if (compact && width < 360) View.GONE else View.VISIBLE)
-
-                    views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(
-                        context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                    ))
-                    views.setOnClickPendingIntent(R.id.widget_previous, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
-                    views.setOnClickPendingIntent(R.id.widget_play, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
-                    views.setOnClickPendingIntent(R.id.widget_next, mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT))
-                    views.setOnClickPendingIntent(R.id.widget_like, PendingIntent.getBroadcast(
-                        context, 1, Intent(context, NowPlayingWidget::class.java).setAction(ACTION_LIKE),
-                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                    ))
+                    val isNowPlaying = provider == NowPlayingWidget::class.java
+                    val views = if (isNowPlaying && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        // API 31+: serve a size-keyed map so the launcher picks the right
+                        // layout automatically as the user resizes the widget.
+                        // ≥ 145dp tall  →  widget_now_playing_tall (2-row: cover + text + controls)
+                        // ≥  40dp tall  →  widget_now_playing (1-row compact bar)
+                        val compact = RemoteViews(context.packageName, R.layout.widget_now_playing)
+                        applyState(compact, context, state, cover, empty,
+                            showLike = !empty && width >= 420, showPrevious = width >= 360)
+                        val tall = RemoteViews(context.packageName, R.layout.widget_now_playing_tall)
+                        applyState(tall, context, state, cover, empty,
+                            showLike = !empty, showPrevious = true)
+                        RemoteViews(mapOf(
+                            SizeF(180f, 40f) to compact,
+                            SizeF(180f, 145f) to tall,
+                        ))
+                    } else {
+                        // API < 31 or non-NowPlaying providers: single layout as before.
+                        val height = manager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 40)
+                        val useTall = isNowPlaying && height >= 145
+                        val targetLayout = if (useTall) R.layout.widget_now_playing_tall else layout
+                        val v = RemoteViews(context.packageName, targetLayout)
+                        applyState(v, context, state, cover, empty,
+                            // Keep real space for the song title on narrow launcher cells.
+                            showLike = !empty && (!isNowPlaying || useTall || width >= 420),
+                            showPrevious = !isNowPlaying || useTall || width >= 360)
+                        v
+                    }
                     manager.updateAppWidget(id, views)
                 }
             }
+        }
+
+        /**
+         * Populates [views] with the current playback [state], cover art, and click
+         * handlers. Called for every layout variant (compact, tall, album-art, studio)
+         * so mutations are never duplicated.
+         */
+        private fun applyState(
+            views: RemoteViews,
+            context: Context,
+            state: State,
+            cover: Bitmap?,
+            empty: Boolean,
+            showLike: Boolean,
+            showPrevious: Boolean,
+        ) {
+            views.setTextViewText(R.id.widget_title, if (empty) context.getString(R.string.widget_nothing_playing) else state.title)
+            views.setTextViewText(R.id.widget_artist, if (empty) context.getString(R.string.widget_open) else state.artist)
+            if (cover != null) views.setImageViewBitmap(R.id.widget_cover, cover) else views.setImageViewResource(R.id.widget_cover, R.drawable.ic_widget_cover)
+            views.setImageViewResource(R.id.widget_play, if (state.playing) R.drawable.ic_widget_pause else R.drawable.ic_widget_play)
+            views.setContentDescription(R.id.widget_play, context.getString(if (state.playing) R.string.widget_pause else R.string.widget_play))
+            views.setImageViewResource(R.id.widget_like, if (state.liked) R.drawable.ic_widget_heart_filled else R.drawable.ic_widget_heart)
+            views.setContentDescription(R.id.widget_like, context.getString(if (state.liked) R.string.widget_unlike else R.string.widget_like))
+            views.setViewVisibility(R.id.widget_like, if (showLike) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.widget_previous, if (showPrevious) View.VISIBLE else View.GONE)
+            views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(
+                context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            ))
+            views.setOnClickPendingIntent(R.id.widget_previous, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+            views.setOnClickPendingIntent(R.id.widget_play, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+            views.setOnClickPendingIntent(R.id.widget_next, mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT))
+            views.setOnClickPendingIntent(R.id.widget_like, PendingIntent.getBroadcast(
+                context, 1, Intent(context, NowPlayingWidget::class.java).setAction(ACTION_LIKE),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            ))
         }
 
         private fun mediaKey(context: Context, keyCode: Int): PendingIntent {
