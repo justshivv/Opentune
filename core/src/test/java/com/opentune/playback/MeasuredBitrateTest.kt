@@ -25,4 +25,49 @@ class MeasuredBitrateTest {
         assertEquals(4_608, bestKbps(AudioFormatInfo("RAW", null, 96_000, 2, 24, mime = "audio/raw"), null, null))
         assertNull(bestKbps(flac, null, null))
     }
+
+    /** Frames of [kbps] audio, 100 ms each, from [fromUs] for [seconds]; returns what was published. */
+    private fun BitrateSettler.feed(fromUs: Long, seconds: Int, kbps: (Long) -> Int): List<Int> {
+        val shown = mutableListOf<Int>()
+        for (i in 0 until seconds * 10) {
+            val t = fromUs + i * 100_000L
+            frame(kbps(t) * 100 / 8, t)?.let(shown::add)
+        }
+        return shown
+    }
+
+    @Test fun aSteadyStreamIsShownOnceItSettlesAndThenStaysPut() {
+        val settler = BitrateSettler()
+        val shown = settler.feed(0, 30) { 160 }
+        // One figure, published once, a few seconds in, never changed after.
+        assertEquals(listOf(160), shown)
+        assertEquals(160, settler.settled)
+    }
+
+    @Test fun aVariableStreamStillSettlesByTwelveSeconds() {
+        val settler = BitrateSettler()
+        // FLAC that swings ±20% second by second still gives one figure, its average, by twelve seconds.
+        val shown = settler.feed(0, 30) { t -> if ((t / 1_000_000L) % 2 == 0L) 1_080 else 720 }
+        assertEquals(1, shown.size)
+        assertEquals(true, shown.single() in 850..950)
+    }
+
+    @Test fun seeksKeepTheFigureAndANewStreamMeasuresAgain() {
+        val settler = BitrateSettler()
+        settler.feed(0, 20) { 256 }
+        settler.seeked()
+        // After the seek the louder part plays, but the figure shown stays.
+        assertEquals(emptyList<Int>(), settler.feed(120_000_000, 20) { 400 })
+        assertEquals(256, settler.settled)
+        settler.reset()
+        assertNull(settler.settled)
+        assertEquals(listOf(900), settler.feed(0, 20) { 900 })
+    }
+
+    @Test fun aShortSongIsMeasuredAtItsEnd() {
+        val settler = BitrateSettler()
+        assertEquals(emptyList<Int>(), settler.feed(0, 3) { t -> if (t < 1_500_000) 300 else 100 })
+        assertEquals(true, settler.ended() != null)
+        assertNull(settler.ended())
+    }
 }
