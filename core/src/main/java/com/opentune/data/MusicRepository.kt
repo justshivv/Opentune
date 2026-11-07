@@ -597,6 +597,34 @@ object MusicRepository {
         )
     }
 
+    /**
+     * The signed-in account's listening history on YouTube Music, in its own
+     * sections, newest first, repeats kept. Read live for the Remote tab of
+     * Listening history; nothing is stored, so a listen the app already
+     * recorded is never counted twice. A first page that won't read is an
+     * error; a later one just ends the list there.
+     */
+    suspend fun accountHistory(): InnertubeParser.HistoryPage = io {
+        val first = InnertubeParser.parseHistoryPage(Innertube.browse("FEmusic_history"))
+            ?: error("no history on the page")
+        val sections = first.sections.toMutableList()
+        var token = first.continuation
+        val seen = HashSet<String>()
+        while (token != null && seen.add(token) && seen.size <= 10) {
+            val next = try {
+                InnertubeParser.parseHistoryPage(Innertube.browseContinuation(token))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            } ?: break
+            sections += next.sections
+            token = next.continuation
+        }
+        InnertubeParser.HistoryPage(sections, null)
+    }
+
+
     suspend fun artist(browseId: String): ArtistPage = io {
         ContentFilter.artist(InnertubeParser.parseArtistPage(Innertube.browse(browseId)))
     }
