@@ -37,6 +37,7 @@ test('Musopen searches the curated collection, preserves credits, and measures o
       { name: 'Other composition.flac', format: 'Flac', length: '190' },
       { name: '../Goldberg.flac', format: 'Flac', length: '190' },
       { name: 'Goldberg.mp3', format: 'VBR MP3', length: '190' },
+      { name: 'Beethoven - Symphony No 3 Eroica/Symphony No. 3 - I. Allegro con brio.flac', format: '24bit Flac', length: '911.55' },
     ] });
     assert.equal(url, `https://archive.org/download/${item}/Goldberg%20Variations/Goldberg%20Variations%2C%20BWV%20988%20-%20Aria%20Da%20Capo.flac`);
     return new Response(flac({ rate: 44100, bits: 16, duration: 340 }));
@@ -48,6 +49,9 @@ test('Musopen searches the curated collection, preserves credits, and measures o
   assert.equal(r.status, 200); const stream = await r.json();
   assert.equal(stream.bitDepth, 16); assert.equal(stream.sampleRate, 44100);
   assert.deepEqual((await (await h(req('/musopen/search?q=unrelated%20pop%20song'))).json()).tracks, []);
+  // Hi-res files are labelled "24bit Flac" on Internet Archive: found too.
+  const hires = (await (await h(req('/musopen/search?q=beethoven%20eroica'))).json()).tracks;
+  assert.equal(hires.length, 1); assert.equal(hires[0].album, 'Beethoven - Symphony No 3 Eroica');
   const outside = btoa(JSON.stringify(['musopen', 'another-item', file])).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
   assert.equal((await h(req(`/musopen/stream/${outside}`))).status, 400);
   assert.equal((await h(req(`/archive/stream/${tracks[0].id}`))).status, 400);
