@@ -1401,7 +1401,7 @@ fun NerdStatsLine(format: AudioFormatInfo?) {
         kbps?.let { com.opentune.i18n.Tr.f("{0} kbps", it) },
         format?.sampleRateHz?.let { "%.1f kHz".format(it / 1000f) },
         format?.channels?.let { if (it == 2) "stereo" else if (it == 1) "mono" else com.opentune.i18n.Tr.f("{0} ch", it) },
-        gain?.let { "normalized %+.1f dB".format(it) },
+        gain?.let { com.opentune.i18n.Tr.t("normalized %+.1f dB").format(it) },
         startup?.let { com.opentune.i18n.Tr.f("started in {0} ms", it) },
         (lossless ?: engine)?.let { com.opentune.i18n.Tr.f("via {0}", it) },
     )

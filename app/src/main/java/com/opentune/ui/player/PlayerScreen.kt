@@ -356,7 +356,7 @@ fun PlayerLayout(
     val syncLine: (Long) -> Unit = { lineStart ->
         val shift = lineStart - position()
         AppSettings.setLyricsOffset(current.videoId, shift)
-        com.opentune.data.Pills.info("Lyrics moved %+.1f s for this song".format(shift / 1000f), context)
+        com.opentune.data.Pills.info(com.opentune.i18n.Tr.t("Lyrics moved %+.1f s for this song").format(shift / 1000f), context)
     }
     // Lyrics take the screen: the controls go after LYRICS_FOCUS_MS untouched while
     // synced lyrics play on the lyrics view, and come back at the next touch.

@@ -14,6 +14,7 @@ import json, pathlib, re, sys
 
 ASSETS = pathlib.Path(__file__).resolve().parents[2] / 'core/src/main/assets/i18n'
 PLACE = re.compile(r'\{\d+\}')
+PRINTF = re.compile(r'%[-+ 0#]*\d*(?:\.\d+)?[dsf]')
 
 def merge(tag, keys, lines):
     target = ASSETS / f'{tag}.json'
@@ -29,6 +30,7 @@ def merge(tag, keys, lines):
         text = text.strip().replace('\\n', '\n').replace('\\"', '"')
         if not text: refused.append((i, 'empty')); continue
         if sorted(PLACE.findall(text)) != sorted(PLACE.findall(key)): refused.append((i, f'places differ: {key!r} -> {text!r}')); continue
+        if sorted(PRINTF.findall(text)) != sorted(PRINTF.findall(key)): refused.append((i, f'formats differ: {key!r} -> {text!r}')); continue
         # A fragment joined to others keeps the English one's spaces at its ends.
         lead, trail = key[:len(key) - len(key.lstrip())], key[len(key.rstrip()):]
         table[key] = lead + text + trail; added += 1

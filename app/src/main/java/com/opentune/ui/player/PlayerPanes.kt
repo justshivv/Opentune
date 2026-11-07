@@ -706,7 +706,7 @@ fun sleepTimerLabel(): String? {
         SleepTimer.State.EndOfTrack -> "Stops at end of song"
         is SleepTimer.State.At -> {
             val left = ((s.endsAtMs - now) / 1000).coerceAtLeast(0)
-            "Stops in %d:%02d".format(left / 60, left % 60)
+            com.opentune.i18n.Tr.t("Stops in %d:%02d").format(left / 60, left % 60)
         }
     }
 }
