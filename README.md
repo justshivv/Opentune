@@ -419,6 +419,12 @@ on your own connection with no hosted proxy.
   phone and Replay, your playlists from the app and from YouTube in one
   list, and the last five songs you played, with the rest behind
   "Show all".
+- **Smart playlists:** lists that fill themselves from rules and change as
+  you listen. Start from On repeat, Forgotten favourites, New to you,
+  All-time top 100 or Lossless on this phone, or set your own: where the
+  songs come from (played, liked, downloaded or all), how often and how
+  lately they were played, liked, downloaded or lossless only, one artist,
+  the order and how many. Save as playlist keeps a copy as it is now.
 - **Replay:** top songs, artists and albums from this device's history.
 - **Wrapped:** your listening as a quiet animated story. Each page is a
   flat field of colour with one large shape drifting slowly on it (a low

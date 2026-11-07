@@ -142,6 +142,10 @@ class LibraryNav(
     val spotify: () -> Unit = {},
     /** An album or playlist downloaded as a whole, by its id. */
     val downloaded: (String) -> Unit = {},
+    /** A smart playlist, by its id. */
+    val smart: (String) -> Unit = {},
+    /** Making a new smart playlist. */
+    val newSmart: () -> Unit = {},
 )
 
 private data class LibraryPlaylistRow(
@@ -404,6 +408,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 items(top, key = { it.key }) { row -> PlaylistTile(row, Modifier.width(TILE_WIDTH).animateItem()) }
             }
         }
+        item(key = "smart-playlists") { SmartPlaylistsRow(nav.smart, nav.newSmart, TILE_WIDTH) }
     } }
 
     // Pull to refresh only when there's an account to refresh from.

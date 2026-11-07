@@ -372,6 +372,8 @@ fun AppRoot(vm: PlayerViewModel) {
         history = { nav.navigate("history") },
         allPlaylists = { nav.navigate("playlists") },
         spotify = { nav.navigate("spotify-playlists") },
+        smart = { id -> nav.navigate("smart/${Uri.encode(id)}") },
+        newSmart = { nav.navigate("smart-edit") },
     ) }
     val serverNav = remember(nav) {
         ServerNav(
@@ -708,6 +710,20 @@ fun AppRoot(vm: PlayerViewModel) {
                     page("spotify-playlists") { com.opentune.ui.library.AllPlaylistsScreen(content, libraryNav, onBack = { nav.popBackStack() }, spotify = true) }
                     page("liked") {
                         LikedScreen(content, actions, onBack = { nav.popBackStack() }, onOpenYouTubeLikes = { nav.openBrowse("VLLM", BrowseType.PLAYLIST) })
+                    }
+                    page("smart/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
+                        val id = e.arguments?.getString("id").orEmpty()
+                        com.opentune.ui.library.SmartPlaylistScreen(id, content, actions, onBack = { nav.popBackStack() },
+                            onEdit = { nav.navigate("smart-edit?id=${Uri.encode(id)}") },
+                            onOpenPlaylist = { copy -> nav.navigate("playlist/${Uri.encode(copy)}") })
+                    }
+                    page("smart-edit?id={id}", listOf(navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null })) { e ->
+                        val editing = e.arguments?.getString("id")
+                        com.opentune.ui.library.SmartPlaylistEditor(editing, content, onBack = { nav.popBackStack() }, onSaved = { saved ->
+                            nav.popBackStack()
+                            // A new one opens; an edited one is already under the editor.
+                            if (editing == null) nav.navigate("smart/${Uri.encode(saved)}")
+                        })
                     }
                     page("playlist/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         LocalPlaylistScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })

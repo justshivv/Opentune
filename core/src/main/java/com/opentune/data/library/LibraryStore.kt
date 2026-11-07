@@ -104,6 +104,8 @@ private data class LibraryDocument(
     val hiddenSongs: List<HiddenSong> = emptyList(),
     /** "Don't play [artist]": their songs kept out of suggestions, newest first. */
     val hiddenArtists: List<HiddenArtist> = emptyList(),
+    /** Lists that fill themselves from rules; see [SmartPlaylists]. */
+    val smartPlaylists: List<SmartPlaylist> = emptyList(),
 )
 
 /**
@@ -131,6 +133,25 @@ object LibraryStore {
     private val _disliked = MutableStateFlow<Set<String>>(emptySet())
     /** The videoIds marked "Dislike". */
     val disliked: StateFlow<Set<String>> = _disliked.asStateFlow()
+
+    private val _smart = MutableStateFlow<List<SmartPlaylist>>(emptyList())
+    /** Smart playlists, newest first. */
+    val smartPlaylists: StateFlow<List<SmartPlaylist>> = _smart.asStateFlow()
+
+    fun smartPlaylist(id: String): SmartPlaylist? = _smart.value.firstOrNull { it.id == id }
+
+    /** A new smart playlist; returns its id. */
+    fun createSmartPlaylist(name: String, rules: SmartRules): String {
+        val id = UUID.randomUUID().toString()
+        update { d -> d.copy(smartPlaylists = listOf(SmartPlaylist(id, name.trim().ifEmpty { "Smart playlist" }, rules)) + d.smartPlaylists) }
+        return id
+    }
+
+    fun updateSmartPlaylist(id: String, name: String, rules: SmartRules) = update { d ->
+        d.copy(smartPlaylists = d.smartPlaylists.map { if (it.id == id) it.copy(name = name.trim().ifEmpty { it.name }, rules = rules) else it })
+    }
+
+    fun deleteSmartPlaylist(id: String) = update { d -> d.copy(smartPlaylists = d.smartPlaylists.filterNot { it.id == id }) }
 
     private val _hidden = MutableStateFlow(HiddenList.EMPTY)
     /** Songs and artists kept out of autoplay, radio, smart shuffle and Home's picks. */
@@ -191,6 +212,7 @@ object LibraryStore {
         _savedLists.value = d.savedLists
         _hidden.value = HiddenList(d.hiddenSongs, d.hiddenArtists)
         _disliked.value = d.disliked
+        _smart.value = d.smartPlaylists
         LibraryArtwork.keep(d.liked.map { it.thumbnailUrl } + d.playlists.flatMap { p -> p.songs.map { it.thumbnailUrl } })
     }
 
