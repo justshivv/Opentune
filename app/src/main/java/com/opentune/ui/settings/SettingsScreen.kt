@@ -801,7 +801,7 @@ private fun settingsSections(
                                 },
                                 leading = { SpotifyMark() },
                                 enabled = !spotifySync.running,
-                                onClick = { com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true) },
+                                onClick = { com.opentune.ui.spotify.SpotifyConnection.checkPlaylists(withMixes = true) },
                             )
                             RowDivider()
                             SettingRow("Disconnect Spotify", summary = "Signs out of Spotify inside OpenTune. Playlists already brought over stay in Library", icon = Icons.Rounded.Close, onClick = { com.opentune.ui.spotify.SpotifyConnection.disconnect() })

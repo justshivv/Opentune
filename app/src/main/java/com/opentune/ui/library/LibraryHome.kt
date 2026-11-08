@@ -476,12 +476,12 @@ fun AllPlaylistsScreen(
         }
     }
     LaunchedEffect(signedIn, spotify) { loadLibrary() }
-    // The Spotify page brings Spotify's latest over once as it opens, behind the list already
-    // here, so it shows at once and changes only if Spotify has something new.
+    // The Spotify page asks Spotify what changed as it opens, behind the list already here, so it
+    // shows at once; only playlists added or changed there are read, and removed ones go.
     val spotifySync by com.opentune.data.spotify.SpotifySync.status.collectAsState()
     if (spotify) LaunchedEffect(spotifyOn) {
         if (spotifyOn) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true)
+            com.opentune.ui.spotify.SpotifyConnection.checkPlaylists()
         }
     }
     val shown = remember(rows, order, pinned) {
@@ -542,10 +542,8 @@ fun AllPlaylistsScreen(
                 }
             })
         }
-        // Bringing Spotify's latest over: a thin bar under the title while it runs.
-        if (spotify && spotifySync.running) item(key = "syncing", span = { full }) {
-            androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(2.dp))
-        }
+        // What the check is doing, in a small pill under the title; then what it found, briefly.
+        if (spotify) item(key = "syncing", span = { full }) { com.opentune.ui.spotify.SpotifySyncPill(spotifySync) }
         // The same for YouTube Music's: a bar while it loads, and a line with a way to try again when it didn't.
         if (!spotify && library == YouTubeLoad.Loading) item(key = "yt-loading", span = { full }) {
             androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(2.dp))
@@ -1208,7 +1206,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     if (moreOpen) LocalListMoreSheet(playlist, songs, actions,
         onRefresh = {
             // Reading the cookie starts the WebView engine: off the main thread.
-            if (playlist.spotifyId != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) { com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true) }
+            if (playlist.spotifyId != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) { com.opentune.ui.spotify.SpotifyConnection.checkPlaylists() }
             else if (signedIn && remoteId != null) PlaylistSync.refresh(id)
         },
         onAddSongs = { adding = true }, onRename = { renaming = true }, onDelete = { deleting = true },
