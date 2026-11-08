@@ -199,6 +199,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun addToQueue(song: Song) { if (!toRoom(song)) player.addToQueue(song) }
     // In someone else's room these go to the host instead (see Together.intercept).
     fun togglePlayPause() { if (!Together.intercept(Together.Control.PlayPause)) player.togglePlayPause() }
+    fun dismiss() = player.dismiss()
     fun skipNext() { if (!Together.intercept(Together.Control.Next)) player.skipNext() }
     fun skipPrevious() { if (!Together.intercept(Together.Control.Previous)) player.skipPrevious() }
     fun toggleShuffle() = player.toggleShuffle()

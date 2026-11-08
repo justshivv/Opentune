@@ -376,7 +376,7 @@ class PlayerConnection(private val context: Context) {
         // Anything else may have replaced the queue since (Android Auto, a
         // shared link); the list still counts while one of its songs plays.
         val fromList = origin != null && origin.canMix && current != null &&
-            (current.mediaId in origin.songIds || current.toSong().smartShuffle)
+                (current.mediaId in origin.songIds || current.toSong().smartShuffle)
         // With the setting off the button only offers smart shuffle to turn
         // off one already running.
         _smartShuffleAvailable.value = fromList && AppSettings.playback.value.smartShuffle
@@ -455,7 +455,7 @@ class PlayerConnection(private val context: Context) {
             val currentId = controller.currentMediaItem?.mediaId
             val after = mixed.drop(mixed.indexOfFirst { !it.smartShuffle && it.videoId == currentId } + 1)
             val plan = SmartShuffle.insertions(upcoming.map { it.videoId }, after)
-                // The queue was changed meanwhile: slot the picks into it as it is now.
+            // The queue was changed meanwhile: slot the picks into it as it is now.
                 ?: upcoming.takeIf { u -> u.none { it.smartShuffle } }?.let { u ->
                     SmartShuffle.insertions(u.map { it.videoId }, SmartShuffle.interleave(u, after.filter { it.smartShuffle }))
                 }
@@ -514,6 +514,13 @@ class PlayerConnection(private val context: Context) {
 
     fun pause() {
         controller?.pause()
+    }
+
+    /** Stops playback and clears the queue entirely: nothing is left playing. */
+    fun dismiss() {
+        val controller = controller ?: return
+        controller.stop()
+        controller.clearMediaItems()
     }
 
     /** Swaps everything after the current track for [songs], leaving the current one playing. */

@@ -39,6 +39,8 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -90,6 +92,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -123,6 +126,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.toArgb
 import com.materialkolor.hct.Hct
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -179,7 +183,7 @@ fun PlayerBackdrop(
     artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
     /** Apple's animated cover for the playing song, looped over the full-screen still. */
     video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
-    ) {
+) {
     val scheme = MaterialTheme.colorScheme
     if (style == PlayerBackground.AMOLED) {
         Box(modifier.background(Color.Black))
@@ -240,40 +244,40 @@ fun PlayerBackdrop(
                 // scrim at the top so the status line stays readable. It's never
                 // shorter than it is wide; taller, it's cropped at the sides.
                 androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = if (fullCoverVisible) 1f else 0f }) {
-                val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
-                val solid = (1f - FULL_COVER_FADE / height).coerceIn(0.4f, 0.8f)
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(height)
-                        .then(motion)
-                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                Brush.verticalGradient(solid to Color.Black, 1f to Color.Transparent),
-                                blendMode = BlendMode.DstIn,
-                            )
-                        },
-                ) {
-                    UpgradingArtwork(
-                        url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
-                        Modifier.matchParentSize(),
-                        shape = RectangleShape,
-                        imageModifier = Modifier.livingArt(playing, movingCover, artworkMotion),
+                    val height = maxOf(maxWidth / 0.9f, (fullCoverBottom ?: 0.dp) + FULL_COVER_OVERLAP)
+                    val solid = (1f - FULL_COVER_FADE / height).coerceIn(0.4f, 0.8f)
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(height)
+                            .then(motion)
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    Brush.verticalGradient(solid to Color.Black, 1f to Color.Transparent),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            },
                     ) {
-                        // The animated cover loops over the still one, as on the plain cover;
-                        // a Canvas takes the backdrop over instead, so not under one.
-                        if (video != null && canvas == null && url == artworkUrl) {
-                            val quality = com.opentune.data.settings.AppSettings.ui.collectAsState().value.motionQuality
-                            // Keyed on the quality, so a new choice in Settings takes effect at once.
-                            androidx.compose.runtime.key(quality) {
-                                LoopingVideo(video.url, playing, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl, maxPx = quality.maxPx, maxBitrate = quality.maxBitrate)
+                        UpgradingArtwork(
+                            url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
+                            Modifier.matchParentSize(),
+                            shape = RectangleShape,
+                            imageModifier = Modifier.livingArt(playing, movingCover, artworkMotion),
+                        ) {
+                            // The animated cover loops over the still one, as on the plain cover;
+                            // a Canvas takes the backdrop over instead, so not under one.
+                            if (video != null && canvas == null && url == artworkUrl) {
+                                val quality = com.opentune.data.settings.AppSettings.ui.collectAsState().value.motionQuality
+                                // Keyed on the quality, so a new choice in Settings takes effect at once.
+                                androidx.compose.runtime.key(quality) {
+                                    LoopingVideo(video.url, playing, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl, maxPx = quality.maxPx, maxBitrate = quality.maxBitrate)
+                                }
                             }
                         }
+                        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.2f to Color.Transparent)))
                     }
-                    Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.2f to Color.Transparent)))
-                }
                 }
             }
         }
@@ -827,45 +831,45 @@ fun ArtworkPane(
     ) {
         if (glow && !canvasShowing) CoverGlow(isPlaying, scale, Modifier.matchParentSize())
         Box(Modifier.graphicsLayer { alpha = coverShown }, contentAlignment = Alignment.Center) {
-        CoverSwap(CoverShown(song.thumbnailUrl, index, song.videoId), change) { url, motion ->
-            UpgradingArtwork(
-                url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
-                // As wide as the pane, unless that's taller than the room it has: then as
-                // tall as the room. Forcing the full width made a square that spilled over
-                // "Playing from" and the title on screens where the controls take more height.
-                Modifier
-                    .aspectRatio(1f)
-                    .then(motion)
-                    .then(with(com.opentune.ui.components.PlayerMorph) { Modifier.playerLanding() })
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offsetX.value
-                        rotationZ = offsetX.value / 90f
-                        // A soft, light shadow: Android casts an elevation shadow from a light
-                        // above the screen, and at full strength under a cover this size its lower
-                        // edge showed as a dark curve below the bottom corners.
-                        shadowElevation = 16.dp.toPx()
-                        ambientShadowColor = Color.Black.copy(alpha = 0.22f)
-                        spotShadowColor = Color.Black.copy(alpha = 0.16f)
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(corner)
-                        clip = true
-                        // Hidden under the morphing cover while it grows in or shrinks away.
-                        alpha = if (com.opentune.ui.components.PlayerMorph.coverAway) 0f else 1f
-                    },
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(corner),
-                imageModifier = Modifier.livingArt(isPlaying, moving, artworkMotion),
-            ) {
-                // Only on the playing song's cover, not on one leaving as the song changes.
-                if (video != null && !canvasShowing && url == song.thumbnailUrl) {
-                    val quality = com.opentune.data.settings.AppSettings.ui.collectAsState().value.motionQuality
-                    // Keyed on the quality, so a new choice in Settings takes effect at once.
-                    androidx.compose.runtime.key(quality) {
-                        LoopingVideo(video.url, isPlaying, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl, maxPx = quality.maxPx, maxBitrate = quality.maxBitrate)
+            CoverSwap(CoverShown(song.thumbnailUrl, index, song.videoId), change) { url, motion ->
+                UpgradingArtwork(
+                    url.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
+                    // As wide as the pane, unless that's taller than the room it has: then as
+                    // tall as the room. Forcing the full width made a square that spilled over
+                    // "Playing from" and the title on screens where the controls take more height.
+                    Modifier
+                        .aspectRatio(1f)
+                        .then(motion)
+                        .then(with(com.opentune.ui.components.PlayerMorph) { Modifier.playerLanding() })
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            translationX = offsetX.value
+                            rotationZ = offsetX.value / 90f
+                            // A soft, light shadow: Android casts an elevation shadow from a light
+                            // above the screen, and at full strength under a cover this size its lower
+                            // edge showed as a dark curve below the bottom corners.
+                            shadowElevation = 16.dp.toPx()
+                            ambientShadowColor = Color.Black.copy(alpha = 0.22f)
+                            spotShadowColor = Color.Black.copy(alpha = 0.16f)
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(corner)
+                            clip = true
+                            // Hidden under the morphing cover while it grows in or shrinks away.
+                            alpha = if (com.opentune.ui.components.PlayerMorph.coverAway) 0f else 1f
+                        },
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(corner),
+                    imageModifier = Modifier.livingArt(isPlaying, moving, artworkMotion),
+                ) {
+                    // Only on the playing song's cover, not on one leaving as the song changes.
+                    if (video != null && !canvasShowing && url == song.thumbnailUrl) {
+                        val quality = com.opentune.data.settings.AppSettings.ui.collectAsState().value.motionQuality
+                        // Keyed on the quality, so a new choice in Settings takes effect at once.
+                        androidx.compose.runtime.key(quality) {
+                            LoopingVideo(video.url, isPlaying, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl, maxPx = quality.maxPx, maxBitrate = quality.maxBitrate)
+                        }
                     }
                 }
             }
-        }
         }
         if (onSeekBy != null) SeekTaps(onSeekBy, scale, Modifier.matchParentSize())
     }
@@ -1041,122 +1045,122 @@ fun SeekBar(
 
     Column(modifier) {
         Box {
-        if (lyricAt != null) ScrubLyric(dragFraction, durationMs, lyricAt)
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                // Reserve the actual touch target in layout; thick tracks and
-                // their handles must not spill into the quality button below.
-                .height(maxOf(48.dp, base * 6f))
-                .onFocusChanged { focused = it.isFocused }
-                .onKeyEvent { e ->
-                    val step = seekStepMs(e.key, durationMs) ?: return@onKeyEvent false
-                    if (e.type == KeyEventType.KeyDown) onSeek((position() + step).coerceIn(0L, durationMs))
-                    true
-                }
-                .focusable()
-                // Redrawn every frame while playing; its own layer keeps that from
-                // re-recording the rest of the player.
-                .graphicsLayer()
-                .semantics {
-                    contentDescription = "Playback position. Drag away from the bar for fine scrubbing."
-                    progressBarRangeInfo = ProgressBarRangeInfo(fraction(), 0f..1f)
-                    setProgress { value ->
-                        if (durationMs <= 0) false else {
-                            onSeek((value.coerceIn(0f, 1f) * durationMs).toLong()); true
+            if (lyricAt != null) ScrubLyric(dragFraction, durationMs, lyricAt)
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    // Reserve the actual touch target in layout; thick tracks and
+                    // their handles must not spill into the quality button below.
+                    .height(maxOf(48.dp, base * 6f))
+                    .onFocusChanged { focused = it.isFocused }
+                    .onKeyEvent { e ->
+                        val step = seekStepMs(e.key, durationMs) ?: return@onKeyEvent false
+                        if (e.type == KeyEventType.KeyDown) onSeek((position() + step).coerceIn(0L, durationMs))
+                        true
+                    }
+                    .focusable()
+                    // Redrawn every frame while playing; its own layer keeps that from
+                    // re-recording the rest of the player.
+                    .graphicsLayer()
+                    .semantics {
+                        contentDescription = "Playback position. Drag away from the bar for fine scrubbing."
+                        progressBarRangeInfo = ProgressBarRangeInfo(fraction(), 0f..1f)
+                        setProgress { value ->
+                            if (durationMs <= 0) false else {
+                                onSeek((value.coerceIn(0f, 1f) * durationMs).toLong()); true
+                            }
                         }
                     }
-                }
-                .pointerInput(durationMs) {
-                    detectTapGestures { offset ->
-                        if (durationMs > 0) onSeek((offset.x / size.width).coerceIn(0f, 1f).times(durationMs).toLong())
+                    .pointerInput(durationMs) {
+                        detectTapGestures { offset ->
+                            if (durationMs > 0) onSeek((offset.x / size.width).coerceIn(0f, 1f).times(durationMs).toLong())
+                        }
                     }
+                    .pointerInput(durationMs) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { scrubStartY = it.y; dragFraction = (it.x / size.width).coerceIn(0f, 1f) },
+                            onDragEnd = {
+                                dragFraction?.let { if (durationMs > 0) onSeek((it * durationMs).toLong()) }
+                                dragFraction = null
+                                fineScrubbing = false
+                            },
+                            onDragCancel = { dragFraction = null; fineScrubbing = false },
+                        ) { change, delta ->
+                            change.consume()
+                            fineScrubbing = kotlin.math.abs(change.position.y - scrubStartY) > 48.dp.toPx()
+                            val speed = if (fineScrubbing) 0.2f else 1f
+                            val f = ((dragFraction ?: 0f) + delta / size.width * speed).coerceIn(0f, 1f)
+                            // A soft tick each time the drag crosses a tenth of the song, and a firmer one at either end.
+                            val before = dragFraction
+                            if (before != null && (before * 10).toInt() != (f * 10).toInt()) seekHaptics.tick()
+                            if (before != null && before > 0f && before < 1f && (f == 0f || f == 1f)) seekHaptics.press()
+                            dragFraction = f
+                        }
+                    },
+            ) {
+                val h = trackHeight.toPx() * (if (focused) 2f else 1f)
+                val y = (size.height - h) / 2
+                val r = CornerRadius(h / 2)
+                val f = fraction()
+                if (focused) drawRoundRect(focusRing, Offset(-3.dp.toPx(), y - 3.dp.toPx()), Size(size.width + 6.dp.toPx(), h + 6.dp.toPx()), CornerRadius(h / 2 + 3.dp.toPx()), style = Stroke(2.dp.toPx()))
+                val b = if (durationMs > 0) (buffered().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+                // Under the wave, the straight track starts where the played part ends: drawn the
+                // whole way along, it showed as a flat line behind the wave.
+                val trackFrom = if (amplitude > 0f && sweep == null) (size.width * f + h * 1.5f * amplitude).coerceAtMost(size.width) else 0f
+                if (trackFrom < size.width) drawRoundRect(inactive, Offset(trackFrom, y), Size(size.width - trackFrom, h), r)
+                if (sweep != null) {
+                    val at = sweep.value * size.width
+                    val band = size.width * 0.25f
+                    drawRoundRect(
+                        Brush.horizontalGradient(0f to sheen.copy(alpha = 0f), 0.5f to sheen, 1f to sheen.copy(alpha = 0f), startX = at - band, endX = at + band),
+                        Offset(0f, y), Size(size.width, h), r,
+                    )
+                    return@Canvas
                 }
-                .pointerInput(durationMs) {
-                    detectHorizontalDragGestures(
-                        onDragStart = { scrubStartY = it.y; dragFraction = (it.x / size.width).coerceIn(0f, 1f) },
-                        onDragEnd = {
-                            dragFraction?.let { if (durationMs > 0) onSeek((it * durationMs).toLong()) }
-                            dragFraction = null
-                            fineScrubbing = false
-                        },
-                        onDragCancel = { dragFraction = null; fineScrubbing = false },
-                    ) { change, delta ->
-                        change.consume()
-                        fineScrubbing = kotlin.math.abs(change.position.y - scrubStartY) > 48.dp.toPx()
-                        val speed = if (fineScrubbing) 0.2f else 1f
-                        val f = ((dragFraction ?: 0f) + delta / size.width * speed).coerceIn(0f, 1f)
-                        // A soft tick each time the drag crosses a tenth of the song, and a firmer one at either end.
-                        val before = dragFraction
-                        if (before != null && (before * 10).toInt() != (f * 10).toInt()) seekHaptics.tick()
-                        if (before != null && before > 0f && before < 1f && (f == 0f || f == 1f)) seekHaptics.press()
-                        dragFraction = f
+                val bufferedTo = size.width * maxOf(b, f)
+                if (bufferedTo > trackFrom) drawRoundRect(bufferedColor, Offset(trackFrom, y), Size(bufferedTo - trackFrom, h), r)
+                if (amplitude > 0f) {
+                    // Played part as a sine wave, a stroke as thick as the track.
+                    val amp = h * 0.9f * amplitude
+                    val length = h * 7f
+                    val wavePath = Path().apply {
+                        moveTo(0f, size.height / 2)
+                        var x = 0f
+                        while (x <= size.width * f) {
+                            lineTo(x, size.height / 2 + amp * sin(x / length * 2 * PI.toFloat() + (phaseState?.value ?: 0f)))
+                            x += 2f
+                        }
                     }
-                },
-        ) {
-            val h = trackHeight.toPx() * (if (focused) 2f else 1f)
-            val y = (size.height - h) / 2
-            val r = CornerRadius(h / 2)
-            val f = fraction()
-            if (focused) drawRoundRect(focusRing, Offset(-3.dp.toPx(), y - 3.dp.toPx()), Size(size.width + 6.dp.toPx(), h + 6.dp.toPx()), CornerRadius(h / 2 + 3.dp.toPx()), style = Stroke(2.dp.toPx()))
-            val b = if (durationMs > 0) (buffered().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-            // Under the wave, the straight track starts where the played part ends: drawn the
-            // whole way along, it showed as a flat line behind the wave.
-            val trackFrom = if (amplitude > 0f && sweep == null) (size.width * f + h * 1.5f * amplitude).coerceAtMost(size.width) else 0f
-            if (trackFrom < size.width) drawRoundRect(inactive, Offset(trackFrom, y), Size(size.width - trackFrom, h), r)
-            if (sweep != null) {
-                val at = sweep.value * size.width
-                val band = size.width * 0.25f
-                drawRoundRect(
-                    Brush.horizontalGradient(0f to sheen.copy(alpha = 0f), 0.5f to sheen, 1f to sheen.copy(alpha = 0f), startX = at - band, endX = at + band),
-                    Offset(0f, y), Size(size.width, h), r,
-                )
-                return@Canvas
-            }
-            val bufferedTo = size.width * maxOf(b, f)
-            if (bufferedTo > trackFrom) drawRoundRect(bufferedColor, Offset(trackFrom, y), Size(bufferedTo - trackFrom, h), r)
-            if (amplitude > 0f) {
-                // Played part as a sine wave, a stroke as thick as the track.
-                val amp = h * 0.9f * amplitude
-                val length = h * 7f
-                val wavePath = Path().apply {
-                    moveTo(0f, size.height / 2)
-                    var x = 0f
-                    while (x <= size.width * f) {
-                        lineTo(x, size.height / 2 + amp * sin(x / length * 2 * PI.toFloat() + (phaseState?.value ?: 0f)))
-                        x += 2f
-                    }
-                }
-                if (gradient) drawPath(wavePath, Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), style = Stroke(width = h, cap = StrokeCap.Round))
-                else drawPath(wavePath, active, style = Stroke(width = h, cap = StrokeCap.Round))
-            } else if (gradient) {
-                drawRoundRect(Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), Offset(0f, y), Size(size.width * f, h), r)
-            } else {
-                drawRoundRect(active, Offset(0f, y), Size(size.width * f, h), r)
-            }
-            // A small dot where each part of the song still to come begins. Ones already
-            // played aren't drawn: cut into the played line (the wave above all) they read as breaks.
-            if (durationMs > 0) {
-                val played = size.width * f
-                val clear = maxOf(thumbRadius.toPx(), h) + 2.dp.toPx()
-                shownMarks.forEach { ms ->
-                    val x = size.width * (ms.toFloat() / durationMs)
-                    if (x > played + clear && x < size.width - h) drawCircle(markDot, h * 0.32f, Offset(x, size.height / 2))
-                }
-            }
-            if (thumbRadius > 0.dp) {
-                val at = Offset(size.width * f, size.height / 2)
-                val thumbColor = if (gradient) gradientEnd else active
-                if (lineThumb) {
-                    // A short upright bar across the track, rounded at the ends.
-                    val w = 3.dp.toPx()
-                    val tall = thumbRadius.toPx() * 2.6f
-                    drawRoundRect(thumbColor, Offset(at.x - w / 2f, at.y - tall / 2f), Size(w, tall), CornerRadius(w / 2f))
+                    if (gradient) drawPath(wavePath, Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), style = Stroke(width = h, cap = StrokeCap.Round))
+                    else drawPath(wavePath, active, style = Stroke(width = h, cap = StrokeCap.Round))
+                } else if (gradient) {
+                    drawRoundRect(Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), Offset(0f, y), Size(size.width * f, h), r)
                 } else {
-                    drawCircle(thumbColor, thumbRadius.toPx(), at)
+                    drawRoundRect(active, Offset(0f, y), Size(size.width * f, h), r)
+                }
+                // A small dot where each part of the song still to come begins. Ones already
+                // played aren't drawn: cut into the played line (the wave above all) they read as breaks.
+                if (durationMs > 0) {
+                    val played = size.width * f
+                    val clear = maxOf(thumbRadius.toPx(), h) + 2.dp.toPx()
+                    shownMarks.forEach { ms ->
+                        val x = size.width * (ms.toFloat() / durationMs)
+                        if (x > played + clear && x < size.width - h) drawCircle(markDot, h * 0.32f, Offset(x, size.height / 2))
+                    }
+                }
+                if (thumbRadius > 0.dp) {
+                    val at = Offset(size.width * f, size.height / 2)
+                    val thumbColor = if (gradient) gradientEnd else active
+                    if (lineThumb) {
+                        // A short upright bar across the track, rounded at the ends.
+                        val w = 3.dp.toPx()
+                        val tall = thumbRadius.toPx() * 2.6f
+                        drawRoundRect(thumbColor, Offset(at.x - w / 2f, at.y - tall / 2f), Size(w, tall), CornerRadius(w / 2f))
+                    } else {
+                        drawCircle(thumbColor, thumbRadius.toPx(), at)
+                    }
                 }
             }
-        }
         }
         if (fineScrubbing) Text("Fine scrubbing · ⅕ speed", style = MaterialTheme.typography.labelSmall)
         val elapsedSeconds by remember(durationMs) {
@@ -1207,6 +1211,13 @@ private fun rememberWavePhase(): androidx.compose.runtime.State<Float> =
  * skip. [inline] is the round bubble the card becomes while a page scrolls:
  * the cover in a circle, ringed by progress; tap it to open the player.
  */
+/** Commands for the mini player's one swipe-down writer (see MiniPlayer). */
+private sealed interface MiniDragCommand {
+    data class Move(val y: Float) : MiniDragCommand
+    data object SpringBack : MiniDragCommand
+    data object Dismiss : MiniDragCommand
+}
+
 @Composable
 fun MiniPlayer(
     song: Song,
@@ -1218,6 +1229,7 @@ fun MiniPlayer(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onClick: () -> Unit,
+    onDismiss: () -> Unit = {},
     modifier: Modifier = Modifier,
     inline: Boolean = false,
     /**
@@ -1228,8 +1240,36 @@ fun MiniPlayer(
     replica: Boolean = false,
 ) {
     val offsetX = remember { Animatable(0f) }
+    val offsetY = remember { Animatable(0f) }
+    // Swipe-down positions and releases arrive here as commands, and this
+    // one writer executes them in order. Moves are chased with a stiff,
+    // critically damped spring — drawn per frame, so the card glides
+    // between the coarse steps of the incoming events instead of jumping
+    // event to event (the trembling). One writer also means a release can
+    // never fight an in-flight move: the command simply replaces it.
+    val dragPositions = remember { kotlinx.coroutines.channels.Channel<MiniDragCommand>(kotlinx.coroutines.channels.Channel.CONFLATED) }
+    LaunchedEffect(Unit) {
+        // collectLatest by hand: each new command cancels the in-flight
+        // animation and takes its place. (receiveAsFlow is not available
+        // in this project's coroutines setup, so no Flow bridge.)
+        var job: kotlinx.coroutines.Job? = null
+        for (cmd in dragPositions) {
+            job?.cancel()
+            job = launch {
+                when (cmd) {
+                    is MiniDragCommand.Move -> offsetY.snapTo(cmd.y)
+                    MiniDragCommand.SpringBack -> offsetY.animateTo(0f, spring(dampingRatio = 0.7f))
+                    MiniDragCommand.Dismiss -> {
+                        offsetY.animateTo(480f, tween(160))
+                        onDismiss()
+                    }
+                }
+            }
+        }
+    }
     val scope = rememberCoroutineScope()
     val threshold = with(LocalDensity.current) { 72.dp.toPx() }
+    val dismissThreshold = with(LocalDensity.current) { 56.dp.toPx() }
     val accent = MaterialTheme.colorScheme.primary
     val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
     // The cover's own colour, faded into the glass, so each song tints the card.
@@ -1271,7 +1311,11 @@ fun MiniPlayer(
         color = Color.Transparent,
         modifier = modifier
             .then(with(com.opentune.ui.components.PlayerMorph) { Modifier.miniBarLanding(round = false).miniUnderCard() })
-            .graphicsLayer { translationX = offsetX.value }
+            .graphicsLayer {
+                translationX = offsetX.value
+                translationY = offsetY.value
+                alpha = 1f - (offsetY.value / (dismissThreshold * 2.2f)).coerceIn(0f, 0.8f)
+            }
             .glass(shape, tint)
             .pullToOpen(round = false, onOpen = onClick)
             .pointerInput(Unit) {
@@ -1288,6 +1332,62 @@ fun MiniPlayer(
                     change.consume()
                     scope.launch { offsetX.snapTo(offsetX.value + amount * 0.6f) }
                 }
+            }
+            .pointerInput(Unit) {
+                // Swipe down to dismiss. Upward pulls belong to pullToOpen
+                // (downward is a dead direction there: pulled clamps at 0)
+                // and sideways swipes to the detector above, so this watcher
+                // takes over only a clearly downward drag: the card follows
+                // the finger down and fades, letting go past the line
+                // dismisses playback, short of it the card springs back.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var decided = false
+                    var engaged = false
+                    var lastMoveY = 0f
+                    var accX = 0f
+                    var accY = 0f
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) {
+                            if (engaged) {
+                                change.consume()
+                                if (lastMoveY > dismissThreshold) dragPositions.trySend(MiniDragCommand.Dismiss)
+                                else dragPositions.trySend(MiniDragCommand.SpringBack)
+                            }
+                            break
+                        }
+                        // Accumulate the framework's own per-event deltas,
+                        // exactly like the sideways detector. Subtracting
+                        // consecutive positions by hand is NOT the same: the
+                        // card moves with this very drag, so each event's
+                        // position arrives expressed against a different
+                        // card position and the difference measures the
+                        // card's own motion too — the two fight (the
+                        // trembling). positionChange() is kept consistent
+                        // by the framework, so it only ever measures the
+                        // finger.
+                        val ddx = change.positionChange().x
+                        val ddy = change.positionChange().y
+                        accX += ddx
+                        accY += ddy
+                        if (!decided) {
+                            when {
+                                accY > viewConfiguration.touchSlop && accY > kotlin.math.abs(accX) * 1.2f -> {
+                                    decided = true
+                                    engaged = true
+                                }
+                                accY < -viewConfiguration.touchSlop || kotlin.math.abs(accX) > viewConfiguration.touchSlop -> decided = true
+                            }
+                        }
+                        if (engaged) {
+                            change.consume()
+                            lastMoveY = (accY - viewConfiguration.touchSlop).coerceAtLeast(0f)
+                            dragPositions.trySend(MiniDragCommand.Move(lastMoveY))
+                        }
+                    }
+                }
             },
     ) {
         MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, onTogglePlay, onNext, landing)
@@ -1300,26 +1400,26 @@ private fun MiniRow(
     song: Song, isPlaying: Boolean, isBuffering: Boolean, hasNext: Boolean, progress: () -> Float,
     accent: Color, track: Color, onTogglePlay: () -> Unit, onNext: () -> Unit, landing: Modifier,
 ) {
-        Row(Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(44.dp).then(landing), RoundedCornerShape(12.dp))
-                    Column(Modifier.padding(start = 12.dp)) {
-                        Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        com.opentune.ui.components.SubtitleLine(s.artist, explicit = s.isExplicit == true, style = MaterialTheme.typography.bodySmall)
-                    }
+    Row(Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        AnimatedContent(song, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) }, label = "mini", modifier = Modifier.weight(1f)) { s ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Artwork(s.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(44.dp).then(landing), RoundedCornerShape(12.dp))
+                Column(Modifier.padding(start = 12.dp)) {
+                    Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    com.opentune.ui.components.SubtitleLine(s.artist, explicit = s.isExplicit == true, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            // Play inside the progress ring.
-            Box(Modifier.size(46.dp).clip(CircleShape).clickable(onClick = onTogglePlay), contentAlignment = Alignment.Center) {
-                ProgressRing(progress, accent, track, stroke = 2.5.dp, modifier = Modifier.matchParentSize().padding(3.dp))
-                if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize().padding(3.dp), strokeWidth = 2.5.dp, color = accent)
-                Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", Modifier.size(24.dp))
-            }
-            IconButton(onClick = onNext, enabled = hasNext) {
-                Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(26.dp))
-            }
         }
+        // Play inside the progress ring.
+        Box(Modifier.size(46.dp).clip(CircleShape).clickable(onClick = onTogglePlay), contentAlignment = Alignment.Center) {
+            ProgressRing(progress, accent, track, stroke = 2.5.dp, modifier = Modifier.matchParentSize().padding(3.dp))
+            if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize().padding(3.dp), strokeWidth = 2.5.dp, color = accent)
+            Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", Modifier.size(24.dp))
+        }
+        IconButton(onClick = onNext, enabled = hasNext) {
+            Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(26.dp))
+        }
+    }
 }
 
 /**
