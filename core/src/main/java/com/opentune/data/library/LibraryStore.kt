@@ -106,12 +106,11 @@ private data class LibraryDocument(
     val hiddenArtists: List<HiddenArtist> = emptyList(),
     /** Lists that fill themselves from rules; see [SmartPlaylists]. */
     val smartPlaylists: List<SmartPlaylist> = emptyList(),
-)
     /** The account the liked sync last ran for; null before the first run. */
     val likedSyncOwner: String? = null,
     /** The liked ids this phone and YouTube Music last agreed on. */
     val likedSyncedIds: Set<String> = emptySet(),
-    )
+)
 
 /**
  * Liked songs and playlists made in the app, kept on the device. Liking also
