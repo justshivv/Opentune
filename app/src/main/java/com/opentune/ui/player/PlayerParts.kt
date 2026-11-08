@@ -1232,7 +1232,7 @@ fun MiniPlayer(
         Box(
             modifier
                 .then(
-                    if (replica) Modifier.clip(CircleShape).background(replicaFace)
+                    if (replica) Modifier.background(replicaFace)
                     else with(com.opentune.ui.components.PlayerMorph) { Modifier.miniBarLanding(round = true).miniUnderCard() }
                         .glass(CircleShape, tint)
                         .pullToOpen(round = true, onOpen = onClick)
@@ -1250,7 +1250,7 @@ fun MiniPlayer(
 
     val shape = RoundedCornerShape(22.dp)
     if (replica) {
-        Box(modifier.clip(shape).background(replicaFace)) { MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, {}, {}, landing) }
+        Box(modifier.background(replicaFace)) { MiniRow(song, isPlaying, isBuffering, hasNext, progress, accent, track, {}, {}, landing) }
         return
     }
     Surface(
