@@ -30,9 +30,6 @@ import kotlinx.coroutines.launch
 private const val DISCORD_LOGIN = "https://discord.com/login"
 
 private const val DISCORD_DESTROY_AFTER_MS = 1_500L
-/** Chrome on a Samsung phone, for Motorola's WebView, which Discord's page turns away. */
-private const val MOTOROLA_AS_SAMSUNG =
-    "Mozilla/5.0 (Linux; Android 14; SM-S921U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
 private val DiscordBlurple = Color(0xFF5865F2)
 
 /**
@@ -84,8 +81,8 @@ private const val READ_TOKEN = """
  *
  * When Android takes the page's renderer back to free memory, the page goes blank
  * (and an unhandled loss takes the whole app with it); that's handled, with a Retry
- * that builds a fresh page. Motorola's WebView is turned away by Discord with its
- * own identity, so there it goes as Chrome on a Samsung phone, as SimpMusic does.
+ * that builds a fresh page. All devices use Discord's browser layout rather than
+ * its mobile WebView entry point; the actual installed Chromium version is retained.
  */
 @Composable
 private fun DiscordWebPage(
@@ -122,7 +119,6 @@ private fun DiscordWebPageView(
     onSignedIn: () -> Unit,
     onRendererGone: () -> Unit,
 ) {
-    var pageError by remember { mutableStateOf<String?>(null) }
     val gone = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val taken = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     DisposableEffect(Unit) { onDispose { gone.set(true) } }
@@ -141,20 +137,21 @@ private fun DiscordWebPageView(
             view.apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                if (android.os.Build.MANUFACTURER.equals("motorola", ignoreCase = true)) settings.userAgentString = MOTOROLA_AS_SAMSUNG
+                // Discord's mobile/WebView entry point can render an empty app shell.
+                // Use its browser layout on every OEM, preserving this WebView's Chromium version.
+                settings.userAgentString = discordBrowserUserAgent(settings.userAgentString)
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+                setBackgroundColor(android.graphics.Color.rgb(49, 51, 56))
+                layoutParams = android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                )
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                webChromeClient = object : android.webkit.WebChromeClient() {
-                    override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
-                        if (message.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR && pageError == null) {
-                            pageError = message.message().take(160)
-                        }
-                        return super.onConsoleMessage(message)
-                    }
-                }
+                webChromeClient = android.webkit.WebChromeClient()
                 fun check(view: WebView, url: String?) {
                     if (gone.get() || taken.get()) return
-                    val path = url?.let { runCatching { android.net.Uri.parse(it).path }.getOrNull() }.orEmpty()
-                    if (!path.startsWith("/app") && !path.startsWith("/channels")) return
+                    if (!isDiscordAccountPage(url)) return
                     view.evaluateJavascript(READ_TOKEN) { raw ->
                         val token = raw?.trim()?.removeSurrounding("\"").orEmpty()
                         if (token.length < 20 || gone.get() || !taken.compareAndSet(false, true)) return@evaluateJavascript
@@ -172,6 +169,18 @@ private fun DiscordWebPageView(
                     override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                         val scheme = request.url.scheme?.lowercase()
                         return scheme != "https" && scheme != "http"
+                    }
+                    override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
+                        if (request.isForMainFrame && !gone.get()) {
+                            onLoading(false)
+                            onProblem("Discord's page couldn't load. Check your connection and tap Retry page.")
+                        }
+                    }
+                    override fun onReceivedHttpError(view: WebView, request: android.webkit.WebResourceRequest, response: android.webkit.WebResourceResponse) {
+                        if (request.isForMainFrame && !gone.get()) {
+                            onLoading(false)
+                            onProblem("Discord's page returned HTTP ${response.statusCode}. Try Retry page shortly.")
+                        }
                     }
                     override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) { if (!gone.get()) onLoading(true) }
                     override fun onPageFinished(view: WebView, url: String?) {
@@ -201,7 +210,8 @@ private fun DiscordWebPageView(
                     evaluateJavascript("(document.body && document.body.innerText || '').trim().length") { n ->
                         if (gone.get() || taken.get()) return@evaluateJavascript
                         if ((n?.toIntOrNull() ?: 0) == 0) {
-                            onProblem("Discord's page didn't appear" + (pageError?.let { ": $it" } ?: ".") + " Use OpenTune's form or a token above instead.")
+                            onLoading(false)
+                            onProblem("Discord's page didn't appear. Update Android System WebView or Chrome, then tap Retry page.")
                         }
                     }
                 }, 15_000)
@@ -227,11 +237,13 @@ private fun DiscordWebPageView(
  * and a token are other ways in, for a phone whose WebView won't show the page.
  */
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 fun DiscordLoginScreen(onDone: () -> Unit) {
     var loading by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     // Discord's own page first, so it's plainly Discord being signed in to; the form and a token are other ways in.
     var onPage by remember { mutableStateOf(true) }
+    var pageAttempt by remember { mutableStateOf(0) }
     var tokenDialog by remember { mutableStateOf(false) }
     val left = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val leave = { if (left.compareAndSet(false, true)) onDone() }
@@ -249,9 +261,12 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
         hint = problem,
         privacy = if (onPage) null else "Your email and password go straight to Discord and aren't kept. Only the sign-in is kept on this phone, encrypted.",
         extra = {
-            androidx.compose.foundation.layout.Row(Modifier.padding(horizontal = 12.dp)) {
+            androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 12.dp)) {
                 androidx.compose.material3.TextButton(onClick = { onPage = !onPage; problem = null; loading = false }) {
                     com.opentune.ui.theme.Text(if (onPage) "Use OpenTune's form" else "Use Discord's page")
+                }
+                if (onPage) androidx.compose.material3.TextButton(onClick = { pageAttempt++; problem = null; loading = true }) {
+                    com.opentune.ui.theme.Text("Retry page")
                 }
                 androidx.compose.material3.TextButton(onClick = { tokenDialog = true }) {
                     com.opentune.ui.theme.Text("Sign in with a token")
@@ -260,7 +275,9 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
         },
     ) { webModifier ->
         if (onPage) {
-            DiscordWebPage(webModifier, onLoading = { loading = it }, onProblem = { problem = it }, onSignedIn = leave)
+            androidx.compose.runtime.key(pageAttempt) {
+                DiscordWebPage(webModifier, onLoading = { loading = it }, onProblem = { problem = it }, onSignedIn = leave)
+            }
         } else {
             DiscordForm(webModifier, onBusy = { loading = it }, onSignedIn = leave)
         }
@@ -486,3 +503,4 @@ private fun CaptchaView(asked: DiscordLogin.Step.Captcha, modifier: Modifier, on
         onRelease = { (it as? WebView)?.run { stopLoading(); destroy() } },
     )
 }
+

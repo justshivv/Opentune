@@ -76,7 +76,9 @@ fun Text(
     onTextLayout: (TextLayoutResult) -> Unit = {},
     style: TextStyle = LocalTextStyle.current,
 ) = androidx.compose.material3.Text(
-    text = if (text.spanStyles.isEmpty() && text.paragraphStyles.isEmpty()) AnnotatedString(Tr.t(text.text)) else text,
+    // Links, inline content and other annotations also carry ranges, even when
+    // there are no font or paragraph spans. Never flatten an AnnotatedString.
+    text = text,
     modifier = modifier, color = color, fontSize = fontSize, fontStyle = fontStyle,
     fontWeight = fontWeight, fontFamily = fontFamily, letterSpacing = letterSpacing, textDecoration = textDecoration,
     textAlign = textAlign, lineHeight = lineHeight, overflow = overflow, softWrap = softWrap, maxLines = maxLines,
@@ -94,3 +96,4 @@ fun Icon(bitmap: ImageBitmap, contentDescription: String?, modifier: Modifier = 
 @Composable
 fun Icon(painter: Painter, contentDescription: String?, modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) =
     androidx.compose.material3.Icon(painter, contentDescription?.let(Tr::t), modifier, tint)
+

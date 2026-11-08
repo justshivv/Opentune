@@ -1321,6 +1321,8 @@ fun PlayerLayout(
                             small = if (flight.toSmall) to else from,
                             q = { flight.progress.let { if (flight.toSmall) it else 1f - it }.coerceIn(0f, 1f) },
                             origin = origin,
+                            onLike = { LibraryStore.setLiked(current, !isLiked) },
+                            onMore = { showMenu = true },
                         )
                     } }
                 }
@@ -1499,10 +1501,11 @@ private fun TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () 
  * comes round to its right as the cover reaches the header, shrinking to the header's size.
  */
 @Composable
-private fun TitleFlight(
+internal fun TitleFlight(
     song: Song, liked: Boolean, bigTitle: androidx.compose.ui.geometry.Rect,
     big: androidx.compose.ui.geometry.Rect, small: androidx.compose.ui.geometry.Rect,
     q: () -> Float, origin: androidx.compose.ui.geometry.Offset,
+    onLike: () -> Unit, onMore: () -> Unit,
 ) {
     val sideGap = with(LocalDensity.current) { 14.dp.toPx() }
     val under = bigTitle.top - big.bottom
@@ -1530,10 +1533,10 @@ private fun TitleFlight(
         },
     ) {
         Row(Modifier.fillMaxWidth().align(Alignment.CenterStart).graphicsLayer { alpha = 1f - side(q()) }, verticalAlignment = Alignment.CenterVertically) {
-            TitleRow(song, liked, onLike = {}, onMore = {}, compact = false)
+            TitleRow(song, liked, onLike = onLike, onMore = onMore, compact = false)
         }
         Row(Modifier.fillMaxWidth().align(Alignment.CenterStart).graphicsLayer { alpha = side(q()) }, verticalAlignment = Alignment.CenterVertically) {
-            TitleRow(song, liked, onLike = {}, onMore = {}, compact = true)
+            TitleRow(song, liked, onLike = onLike, onMore = onMore, compact = true)
         }
     }
 }
@@ -1878,3 +1881,4 @@ internal class PaneFlight {
         com.opentune.ui.components.PlayerMorph.flying = false
     }
 }
+

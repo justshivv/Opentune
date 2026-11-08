@@ -642,6 +642,16 @@ fun CollectionScreen(
             is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
             else -> {
                 val c = (s as? UiState.Success)?.data
+                val fallbackCover: (@Composable () -> Unit)? = when {
+                    com.opentune.ui.library.isYouTubeLikes(browseId) -> ({
+                        com.opentune.ui.components.LikedPlaylistCover(Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape)
+                    })
+                    c != null && c.thumbnailUrl.isNullOrBlank() && !isAlbum -> ({
+                        com.opentune.ui.components.PlaylistCover(c.title, c.songs.map { it.thumbnailUrl },
+                            Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape, named = false)
+                    })
+                    else -> null
+                }
                 val tint = rememberCoverTint(c?.thumbnailUrl.artworkAt(CARD_ART_PX))
                 val band = com.opentune.ui.components.rememberRubberBand()
                 LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search), overscrollEffect = band) {
@@ -649,7 +659,7 @@ fun CollectionScreen(
                         val full = fullListCover()
                         androidx.compose.foundation.layout.BoxWithConstraints {
                             HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
-                            if (full) FullListCover(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.pinnedToTop(band))
+                            if (full) FullListCover(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.pinnedToTop(band), cover = fallbackCover)
                             Column(
                                 if (full) Modifier.fillMaxWidth().padding(top = maxWidth * FULL_COVER_TITLE_AT, start = 24.dp, end = 24.dp)
                                 else Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),
@@ -660,7 +670,7 @@ fun CollectionScreen(
                                     Placeholder(Modifier.padding(top = 20.dp).width(200.dp).height(24.dp))
                                     Placeholder(Modifier.padding(top = 8.dp).width(140.dp).height(16.dp))
                                 } else {
-                                    PlaylistHeading(c.title, c.subtitle, c.thumbnailUrl, c.songs, isAlbum, showCover = !full)
+                                    PlaylistHeading(c.title, c.subtitle, c.thumbnailUrl, c.songs, isAlbum, cover = fallbackCover, showCover = !full)
                                 }
                                 val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
                                 val saved = c != null && savedLists.any { it.browseId == c.browseId }
@@ -738,3 +748,4 @@ fun CollectionScreen(
     }
     }
 }
+
