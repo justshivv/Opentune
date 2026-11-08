@@ -107,7 +107,7 @@ object MusicRepository {
         homeFile = f
         val text = runCatching { f.readText() }.getOrNull() ?: return null
         val saved = runCatching { json.decodeFromString(SavedHome.serializer(), text) }.getOrNull()
-            // Copies saved before Home had more pages were a bare list.
+        // Copies saved before Home had more pages were a bare list.
             ?: runCatching { SavedHome(json.decodeFromString(ListSerializer(HomeShelf.serializer()), text)) }.getOrNull()
             ?: return null
         _homeMore.value = saved.more
@@ -334,7 +334,7 @@ object MusicRepository {
         // What the last shelf showed goes to the back, and the order changes with each refresh.
         val (seen, unseen) = fresh.partition { it.videoId in lastPicks }
         val songs = if (engine == Recommender.SPOTIFY) fresh.take(20)
-            else (unseen.shuffled(kotlin.random.Random(launchShuffle + turn)) + seen).take(20)
+        else (unseen.shuffled(kotlin.random.Random(launchShuffle + turn)) + seen).take(20)
         if (songs.isEmpty() || (engine != Recommender.SPOTIFY && songs.size < 4)) return emptyList()
         lastPicks = songs.mapTo(HashSet()) { it.videoId }
         val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
@@ -383,18 +383,18 @@ object MusicRepository {
         }))
         topShelf + top.map { entry ->
             async {
-              try {
-                val song = entry.song ?: return@async emptyList()
-                val id = artistIdFor(song) ?: return@async emptyList()
-                val page = personalArtistPage(id)
-                val name = page.name ?: entry.title
-                page.sections
-                    // Cards that open a page: albums, singles, playlists, artists.
-                    .filter { shelf -> shelf.items.isNotEmpty() && shelf.items.all { it.browseId != null } }
-                    .take(3)
-                    .map { it.copy(subtitle = com.opentune.i18n.Tr.f("Because you like {0}", name)) }
-              } catch (e: CancellationException) { throw e }
-              catch (_: Exception) { emptyList<HomeShelf>() }
+                try {
+                    val song = entry.song ?: return@async emptyList()
+                    val id = artistIdFor(song) ?: return@async emptyList()
+                    val page = personalArtistPage(id)
+                    val name = page.name ?: entry.title
+                    page.sections
+                        // Cards that open a page: albums, singles, playlists, artists.
+                        .filter { shelf -> shelf.items.isNotEmpty() && shelf.items.all { it.browseId != null } }
+                        .take(3)
+                        .map { it.copy(subtitle = com.opentune.i18n.Tr.f("Because you like {0}", name)) }
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) { emptyList<HomeShelf>() }
             }
         }.awaitAll().flatten()
     }
@@ -616,6 +616,32 @@ object MusicRepository {
         (first + laterPages(page?.continuation)).distinctBy { it.videoId }
     }
 
+    /**
+     * The signed-in account's listening history on YouTube Music, in its own
+     * sections, newest first, repeats kept. Read live for the Remote tab of
+     * Listening history; nothing is stored, so a listen the app already
+     * recorded is never counted twice. A first page that won't read is an
+     * error; a later one just ends the list there.
+     */
+    suspend fun accountHistory(): InnertubeParser.HistoryPage = io {
+        val first = InnertubeParser.parseHistoryPage(Innertube.browse("FEmusic_history"))
+            ?: error("no history on the page")
+        val sections = first.sections.toMutableList()
+        var token = first.continuation
+        val seen = HashSet<String>()
+        while (token != null && seen.add(token) && seen.size <= 10) {
+            val next = try {
+                InnertubeParser.parseHistoryPage(Innertube.browseContinuation(token))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            } ?: break
+            sections += next.sections
+            token = next.continuation
+        }
+        InnertubeParser.HistoryPage(sections, null)
+    }
     suspend fun artist(browseId: String): ArtistPage = io {
         ContentFilter.artist(InnertubeParser.parseArtistPage(Innertube.browse(browseId)))
     }
@@ -710,9 +736,9 @@ object MusicRepository {
             InnertubeParser.parseWatchQueue(response, allVersions = true).filter { it.videoId == videoId }
         }
         asked +
-            com.opentune.data.library.LibraryStore.hidden.value.songs(ContentFilter.songs(
-                com.opentune.data.reco.SongIdentity.distinct(queue.filter { it.videoId != videoId }, asked),
-            ))
+                com.opentune.data.library.LibraryStore.hidden.value.songs(ContentFilter.songs(
+                    com.opentune.data.reco.SongIdentity.distinct(queue.filter { it.videoId != videoId }, asked),
+                ))
     }
 
     /**
@@ -794,7 +820,7 @@ object MusicRepository {
         browseId.startsWith("UC") -> BrowseType.ARTIST
         browseId.startsWith("MPREb") -> BrowseType.ALBUM
         browseId.startsWith("VL") || browseId.startsWith("PL") || browseId.startsWith("RD") ||
-            browseId.startsWith("OLAK") || browseId.startsWith("MPSP") -> BrowseType.PLAYLIST
+                browseId.startsWith("OLAK") || browseId.startsWith("MPSP") -> BrowseType.PLAYLIST
         else -> BrowseType.OTHER
     }
 

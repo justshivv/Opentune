@@ -541,6 +541,35 @@ object InnertubeParser {
         return out.values.toList()
     }
 
+    /** One section of the account's history: its heading ("Today", a date…) and its rows in order. */
+    data class HistorySection(val title: String, val songs: List<Song>)
+
+    /** A page of the account's history: its sections as YouTube Music shows them, and the token for the rest. */
+    data class HistoryPage(val sections: List<HistorySection>, val continuation: String?)
+
+    /**
+     * The account's history page (FEmusic_history): a run of headed shelves.
+     * Every row is kept, in order — a song played three times is three rows,
+     * as in the history itself. Null when the page carries no history shelves
+     * at all, so a cut-down answer can't read as an empty history.
+     */
+    fun parseHistoryPage(root: JsonElement): HistoryPage? {
+        val shelves = collectRenderers(root, "musicShelfRenderer")
+        if (shelves.isEmpty()) return null
+        val credit = pageCredit(root)
+        val sections = shelves.map { shelf ->
+            HistorySection(
+                title = shelf.o("title").runs(),
+                songs = collectRenderers(shelf, "musicResponsiveListItemRenderer").mapNotNull { parseResponsiveListItem(it, credit) },
+            )
+        }.filter { it.songs.isNotEmpty() }
+        if (sections.isEmpty()) return null
+        val token = collectRenderers(root, "continuationItemRenderer").lastOrNull()
+            .o("continuationEndpoint").o("continuationCommand").s("token")
+        return HistoryPage(sections, token)
+    }
+
+
     /** A playlist page's own tracks, the ones YouTube suggests adding, and the token for the rest. */
     data class PlaylistShelfPage(val songs: List<Song>, val suggested: List<Song>, val continuation: String?)
 
