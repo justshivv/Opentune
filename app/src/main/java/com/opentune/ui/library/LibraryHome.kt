@@ -160,6 +160,9 @@ private data class LibraryPlaylistRow(
     val onClick: () -> Unit,
 )
 
+/** YouTube Music's Liked Music playlist, by its browse id ("VLLM") or playlist id ("LM"). */
+internal fun isYouTubeLikes(browseId: String?): Boolean = browseId == "VLLM" || browseId == "LM"
+
 /** Pinning playlists to the top of Library. */
 internal object LibraryPins {
     fun pinned(key: String) = key in AppSettings.ui.value.pinnedPlaylists
@@ -213,10 +216,11 @@ private fun rememberPlaylistRows(nav: LibraryNav): List<LibraryPlaylistRow> {
             p.coverUrl, p, pin = p.id, source = source,
             plays = p.songs.sumOf { playCounts[it.videoId] ?: 0 }, onClick = { nav.playlist(p.id) })
     }
-    for (h in hearted) {
+    // YouTube Music's own Liked Music is the app's Liked tile (which opens it too), so it isn't listed twice.
+    for (h in hearted.filterNot { isYouTubeLikes(it.browseId) }) {
         rows += LibraryPlaylistRow("saved:${h.browseId}", h.title, h.subtitle, h.thumbnailUrl, pin = h.browseId, source = "YouTube Music", onClick = { nav.browse(h.browseId) })
     }
-    for (p in ytPlaylists.filter { p -> hearted.none { it.browseId == p.browseId } }) {
+    for (p in ytPlaylists.filter { p -> hearted.none { it.browseId == p.browseId } && !isYouTubeLikes(p.browseId) }) {
         val browseId = p.browseId ?: continue
         rows += LibraryPlaylistRow("yt:$browseId", p.title, p.subtitle, p.thumbnailUrl, pin = browseId, source = "YouTube Music", onClick = { nav.browse(browseId) })
     }
