@@ -154,7 +154,7 @@ data class ThemeSettings(
     val customFontId: String = "",
     val customFontName: String = "",
 
-)
+    )
 
 /** Reverb presets map onto android.media.audiofx.PresetReverb's. */
 @Serializable
@@ -448,6 +448,7 @@ data class InterfaceSettings(
     val fullScreenListCover: Boolean = false,
     /** How round the player's cover is, in dp: 0 is a square with sharp corners. Not used with [fullScreenCover]. */
     val coverCornerDp: Int = 28,
+    val coverColorBackground: Boolean = false,
     val hideVolumeBar: Boolean = false,
     val hideSongStatus: Boolean = false,
     val hideOutputDevice: Boolean = false,
@@ -882,7 +883,7 @@ object AppSettings {
         val cm = connectivity ?: return true
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     fun onMeteredNetwork(): Boolean {

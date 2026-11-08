@@ -185,53 +185,60 @@ fun PlayerBackdrop(
     video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    val seed = rememberArtworkSeed(artworkUrl)
+    // With the setting on, the full-screen cover's own colour is the backdrop:
+    // the cover fades into itself and the player reads as one surface.
+    val matched = if (ui.coverColorBackground && fullCover) seed else null
     if (style == PlayerBackground.AMOLED) {
         Box(modifier.background(Color.Black))
         return
     }
     // The cover's own colours, not the scheme's turned ones, so each background looks like the cover.
     val tones = rememberCoverTones(artworkUrl)
-    Box(modifier.background(tones.base)) {
-        when (style) {
-            PlayerBackground.AMOLED -> Unit
-            PlayerBackground.ECHO_GLOW -> EchoGlowBackground(animate && playing, Modifier.matchParentSize(), tones.lights, tones.base)
-            PlayerBackground.BLUR -> CoverBlur(artworkUrl, animate && playing, Modifier.matchParentSize(), tones)
-            PlayerBackground.MESH -> MeshGradient(artworkUrl, animate, Modifier.matchParentSize())
-            PlayerBackground.GRADIENT -> {
-                // The cover's main colour at the top, its second colour coming in from a corner,
-                // both deepening to the cover's near-black by the controls.
-                val top = tones.deep
-                Box(
-                    Modifier.matchParentSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0f to top,
-                                0.32f to lerp(top, tones.base, 0.3f),
-                                0.66f to lerp(top, tones.base, 0.82f),
-                                1f to tones.base,
-                            ),
-                        )
-                        .drawBehind {
-                            drawRect(Brush.radialGradient(
-                                *com.opentune.ui.components.glowStops(tones.second, 0.75f, shape = 1.5f),
-                                center = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.08f),
-                                radius = size.width.coerceAtLeast(1f) * 1.1f,
-                            ))
-                            with(com.opentune.ui.components.Dither) { drawDither(0.05f) }
-                        },
-                )
-                // Under the controls, a faint glow in the cover's colours.
-                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize()) {
-                    AmbientLights(
-                        tones.lights.take(3),
-                        playing = playing,
-                        animate = animate,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(maxHeight * 0.5f)
-                            .align(Alignment.BottomCenter)
-                            .graphicsLayer { alpha = 0.35f },
+    Box(modifier.background(matched ?: tones.base)) {
+        if (matched == null) {
+            when (style) {
+                PlayerBackground.AMOLED -> Unit
+                PlayerBackground.ECHO_GLOW -> EchoGlowBackground(animate && playing, Modifier.matchParentSize(), tones.lights, tones.base)
+                PlayerBackground.BLUR -> CoverBlur(artworkUrl, animate && playing, Modifier.matchParentSize(), tones)
+                PlayerBackground.MESH -> MeshGradient(artworkUrl, animate, Modifier.matchParentSize())
+                PlayerBackground.GRADIENT -> {
+                    // The cover's main colour at the top, its second colour coming in from a corner,
+                    // both deepening to the cover's near-black by the controls.
+                    val top = tones.deep
+                    Box(
+                        Modifier.matchParentSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    0f to top,
+                                    0.32f to lerp(top, tones.base, 0.3f),
+                                    0.66f to lerp(top, tones.base, 0.82f),
+                                    1f to tones.base,
+                                ),
+                            )
+                            .drawBehind {
+                                drawRect(Brush.radialGradient(
+                                    *com.opentune.ui.components.glowStops(tones.second, 0.75f, shape = 1.5f),
+                                    center = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.08f),
+                                    radius = size.width.coerceAtLeast(1f) * 1.1f,
+                                ))
+                                with(com.opentune.ui.components.Dither) { drawDither(0.05f) }
+                            },
                     )
+                    // Under the controls, a faint glow in the cover's colours.
+                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize()) {
+                        AmbientLights(
+                            tones.lights.take(3),
+                            playing = playing,
+                            animate = animate,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(maxHeight * 0.5f)
+                                .align(Alignment.BottomCenter)
+                                .graphicsLayer { alpha = 0.35f },
+                        )
+                    }
                 }
             }
         }

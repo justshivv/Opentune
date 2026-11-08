@@ -255,8 +255,8 @@ fun SettingsScreen(
         transitionSpec = {
             val forward = targetState != null
             (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
-                androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { if (forward) it / 8 else -it / 8 }) togetherWith
-                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160))
+                    androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { if (forward) it / 8 else -it / 8 }) togetherWith
+                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160))
         },
         label = "settingsPage",
     ) { page ->
@@ -796,7 +796,7 @@ private fun settingsSections(
                                     spotifySync.running -> "Connected · reading your Spotify library…"
                                     spotifySync.error != null -> com.opentune.i18n.Tr.f("Connected · {0}. Tap to try again", spotifySync.error)
                                     spotifySync.lastSynced > 0 -> "Connected · playlists in Library, checked " +
-                                        android.text.format.DateUtils.getRelativeTimeSpanString(spotifySync.lastSynced) + ". Tap to check now"
+                                            android.text.format.DateUtils.getRelativeTimeSpanString(spotifySync.lastSynced) + ". Tap to check now"
                                     else -> "Connected · tap to bring your playlists into Library"
                                 },
                                 leading = { SpotifyMark() },
@@ -1189,6 +1189,9 @@ private fun settingsSections(
                         },
                     )
                 },
+                Entry("Match background to cover", "background colour seamless") {
+                    ToggleRow("Match background to cover", ui.coverColorBackground, { v -> AppSettings.updateUi { it.copy(coverColorBackground = v) } }, summary = "Paints the player's background in the cover's own colour, so the full-screen cover blends into it", icon = Icons.Rounded.Palette)
+                },
                 Entry("Wavy seek bar", "wave progress slider") {
                     // The Apple Music inspired player keeps its bar plain, so there it's shown off and can't be turned on.
                     val appleStyle = ui.playerStyle == PlayerStyle.APPLE_MUSIC
@@ -1344,7 +1347,7 @@ private fun settingsSections(
                     SettingRow(
                         "Haptic feedback",
                         summary = com.opentune.ui.components.Haptics.label(ui.hapticStrength) +
-                            if (ui.hapticStrength > 0f) " · ${(ui.hapticStrength * 100).roundToInt()}%" else " · No taps or buzzes",
+                                if (ui.hapticStrength > 0f) " · ${(ui.hapticStrength * 100).roundToInt()}%" else " · No taps or buzzes",
                         icon = Icons.Rounded.Vibration,
                         below = {
                             Slider(
@@ -1691,7 +1694,7 @@ private fun settingsSections(
                 Entry("Hide output device", "output device name speaker bluetooth headphones") {
                     ToggleRow("Hide output device", ui.hideOutputDevice, { v -> AppSettings.updateUi { it.copy(hideOutputDevice = v) } }, summary = "Hides the output device's name at the bottom of the player", icon = Icons.Rounded.VisibilityOff)
                 },
-                ),
+            ),
         ),
         Section(
             "Advanced",
