@@ -222,12 +222,13 @@ object DiscordRpc {
         val art = now.artworkUrl?.takeIf { it.startsWith("http") }
         val image = art?.let { externalAsset(token, it) ?: it }
         val activity = JSONObject()
-            // "Playing on OpenTune": Discord puts "Playing" before a type-0 activity's name.
-            .put("name", "on $APP_NAME")
-            .put("type", 0)
+            // A type-2 (Listening) activity, the way BitChord shows it: Discord heads
+            // the card "Listening to OpenTune", draws the song's progress as a bar
+            // from the timestamps, and puts details over state under the artwork.
+            .put("name", APP_NAME)
+            .put("type", 2)
             .put("details", fit(if (rate != 1f) "${now.title} [${"%.2f".format(rate)}x]" else now.title, TEXT_MAX))
             .put("state", fit(now.artist.ifBlank { "Unknown artist" }, TEXT_MAX))
-            // The status line under the name in member lists reads the activity's name: "Playing on OpenTune".
             .put("status_display_type", 0)
             .put("assets", JSONObject().apply {
                 if (image != null) put("large_image", image)
