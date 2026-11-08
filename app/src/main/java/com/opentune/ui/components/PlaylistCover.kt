@@ -146,4 +146,3 @@ internal fun gradientFor(name: String): Pair<Color, Color> {
     val h = (x and 0x7FFFFFFF) % 360
     return Color.hsv(h.toFloat(), 0.62f, 0.78f) to Color.hsv(((h + 48) % 360).toFloat(), 0.7f, 0.5f)
 }
-

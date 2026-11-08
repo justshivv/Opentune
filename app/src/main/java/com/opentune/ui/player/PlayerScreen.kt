@@ -1881,4 +1881,3 @@ internal class PaneFlight {
         com.opentune.ui.components.PlayerMorph.flying = false
     }
 }
-

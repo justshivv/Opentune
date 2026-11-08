@@ -503,4 +503,3 @@ private fun CaptchaView(asked: DiscordLogin.Step.Captcha, modifier: Modifier, on
         onRelease = { (it as? WebView)?.run { stopLoading(); destroy() } },
     )
 }
-
