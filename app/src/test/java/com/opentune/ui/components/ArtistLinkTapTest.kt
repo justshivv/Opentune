@@ -12,8 +12,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = android.app.Application::class)
 class ArtistLinkTapTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -25,6 +27,7 @@ class ArtistLinkTapTest {
         val node = compose.onNodeWithText(names)
         val layout = mutableListOf<TextLayoutResult>()
         node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layout) }
+        assertEquals(2, layout.single().layoutInput.text.getLinkAnnotations(0, names.length).size)
         for (name in listOf("Artist One", "Artist Two")) {
             val at = layout.single().getBoundingBox(names.indexOf(name) + 2).center
             node.performTouchInput { click(at) }

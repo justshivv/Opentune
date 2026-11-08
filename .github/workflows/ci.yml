@@ -40,6 +40,17 @@ jobs:
       - name: Android lint
         if: ${{ !cancelled() }}
         run: ./gradlew --no-daemon :app:lintDebug
+      - name: Report UI test failures
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for path in glob.glob('app/build/test-results/testDebugUnitTest/TEST-*.xml'):
+              for case in ET.parse(path).getroot().iter('testcase'):
+                  for failure in list(case.findall('failure')) + list(case.findall('error')):
+                      print(f"{case.get('classname')}.{case.get('name')}: {failure.get('message')}")
+                      print((failure.text or '')[:3000])
+          PY
       - name: UI test and lint reports
         if: always()
         uses: actions/upload-artifact@v4
