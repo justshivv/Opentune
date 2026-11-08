@@ -523,7 +523,9 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
         startExpanded = true,
         header = {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Artwork(c.thumbnailUrl.artworkAt(com.opentune.data.model.ROW_ART_PX), Modifier.size(56.dp))
+                if (com.opentune.ui.library.isYouTubeLikes(c.browseId)) {
+                    com.opentune.ui.components.LikedPlaylistCover(Modifier.size(56.dp))
+                } else Artwork(c.thumbnailUrl.artworkAt(com.opentune.data.model.ROW_ART_PX), Modifier.size(56.dp))
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(c.title, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)

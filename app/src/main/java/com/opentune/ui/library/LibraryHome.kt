@@ -1041,6 +1041,11 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     Box(Modifier.fillMaxSize()) {
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader("Liked Music", onBack = onBack) }
+        item(key = "liked-cover") {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), contentAlignment = Alignment.Center) {
+                com.opentune.ui.components.LikedPlaylistCover(Modifier.fillMaxWidth(0.76f).aspectRatio(1f))
+            }
+        }
         if (signedIn) {
             item {
                 TextButton(onClick = onOpenYouTubeLikes, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Liked on YouTube Music") }
