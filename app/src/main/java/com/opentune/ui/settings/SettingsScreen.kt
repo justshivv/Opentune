@@ -1742,6 +1742,30 @@ private fun settingsSections(
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/justshivv/Opentune".toUri())) }
                     }, summary = "github.com/justshivv/Opentune · GPL v3", icon = Icons.Rounded.Code)
                 },
+                Entry("justshivv", "github developer creator justshivv") {
+                    SettingRow(
+                        "justshivv",
+                        icon = null,
+                        leading = { Artwork("https://avatars.githubusercontent.com/u/78946189?v=4", Modifier.size(28.dp), CircleShape) },
+                        trailing = {
+                            IconButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/justshivv".toUri())) } }) {
+                                Icon(githubLogo, "GitHub", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        },
+                    )
+                },
+                Entry("aerluc", "github developer aerluc") {
+                    SettingRow(
+                        "aerluc",
+                        icon = null,
+                        leading = { Artwork("https://avatars.githubusercontent.com/u/122277259?v=4", Modifier.size(28.dp), CircleShape) },
+                        trailing = {
+                            IconButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/aerluc".toUri())) } }) {
+                                Icon(githubLogo, "GitHub", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        },
+                    )
+                },
                 Entry("Export diagnostics", "log share troubleshooting bug report") {
                     NavRow("Export diagnostics", {
                         scope.launch {
