@@ -84,6 +84,7 @@ object Core {
         com.opentune.data.library.LibraryCache.init(app)
         // After library and account: it sends playlist changes still waiting, when signed in.
         com.opentune.data.library.PlaylistSync.init(app)
+        com.opentune.data.library.LikedSync.init()
         InnerTubeXResolver.init(app)
     }
 

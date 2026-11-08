@@ -600,6 +600,22 @@ object MusicRepository {
         )
     }
 
+    /**
+     * The signed-in account's liked songs, whole, for the liked sync.
+     * Unlike [collection] nothing is filtered out, since a hidden or
+     * explicit row is still a like on the account; and unlike
+     * [remotePlaylist] a page whose playlist shelf won't read still gives
+     * up its songs to the deep read, as the Liked page itself does — a
+     * shelf that won't parse must not read as "nothing is liked".
+     */
+    suspend fun accountLikedSongs(): List<Song> = io {
+        val response = Innertube.browse("VLLM")
+        val page = InnertubeParser.parsePlaylistShelf(response)
+        val first = page?.songs?.takeIf { it.isNotEmpty() } ?: InnertubeParser.collectSongsDeep(response)
+        if (page == null && first.isEmpty()) error("no liked songs on the page")
+        (first + laterPages(page?.continuation)).distinctBy { it.videoId }
+    }
+
     suspend fun artist(browseId: String): ArtistPage = io {
         ContentFilter.artist(InnertubeParser.parseArtistPage(Innertube.browse(browseId)))
     }

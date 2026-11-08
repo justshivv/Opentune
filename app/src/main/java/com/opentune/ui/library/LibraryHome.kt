@@ -95,6 +95,7 @@ import com.opentune.data.history.History
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.library.PlaylistLinks
 import com.opentune.data.library.PlaylistSync
+import com.opentune.data.library.LikedSync
 import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.PlaylistPrivacy
 import com.opentune.data.model.ShelfItem
@@ -1034,6 +1035,7 @@ private enum class DownloadsTab {
 fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit, onOpenYouTubeLikes: () -> Unit) {
     val liked by LibraryStore.liked.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
+    LaunchedEffect(signedIn) { if (signedIn) LikedSync.sync() }
     val songs = remember(liked) { liked.map { it.toSong() } }
     val selection = com.opentune.ui.components.rememberSongSelection()
     val context = LocalContext.current

@@ -107,6 +107,11 @@ private data class LibraryDocument(
     /** Lists that fill themselves from rules; see [SmartPlaylists]. */
     val smartPlaylists: List<SmartPlaylist> = emptyList(),
 )
+    /** The account the liked sync last ran for; null before the first run. */
+    val likedSyncOwner: String? = null,
+    /** The liked ids this phone and YouTube Music last agreed on. */
+    val likedSyncedIds: Set<String> = emptySet(),
+    )
 
 /**
  * Liked songs and playlists made in the app, kept on the device. Liking also
@@ -495,6 +500,15 @@ object LibraryStore {
         val merged = PlaylistMerge.pull(p, remote)
         if (merged != p) editPlaylist(id) { merged }
     }
+
+    /** What the liked sync last agreed with YouTube Music: the account key, and the ids both sides shared. */
+    fun likedSyncState(): Pair<String?, Set<String>> =
+        doc.value.let { it.likedSyncOwner to it.likedSyncedIds }
+
+    /** Records a finished liked sync: the reconciled list, and the ids both sides share now. */
+    @Synchronized
+    internal fun applyLikedSync(owner: String, liked: List<SongRef>, agreed: Set<String>) =
+        update { d -> d.copy(liked = liked, likedSyncOwner = owner, likedSyncedIds = agreed) }
 
     fun exportJson(): JsonElement = json.encodeToJsonElement(LibraryDocument.serializer(), doc.value)
 
