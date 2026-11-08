@@ -177,7 +177,9 @@ fun PlayerBackdrop(
     canvasBehindText: Boolean = false,
     fullCoverVisible: Boolean = true,
     artworkMotion: com.opentune.ui.components.ArtworkMotion? = null,
-) {
+    /** Apple's animated cover for the playing song, looped over the full-screen still. */
+    video: com.opentune.data.covers.AppleMotionArt.Motion? = null,
+    ) {
     val scheme = MaterialTheme.colorScheme
     if (style == PlayerBackground.AMOLED) {
         Box(modifier.background(Color.Black))
@@ -259,7 +261,17 @@ fun PlayerBackdrop(
                         Modifier.matchParentSize(),
                         shape = RectangleShape,
                         imageModifier = Modifier.livingArt(playing, movingCover, artworkMotion),
-                    )
+                    ) {
+                        // The animated cover loops over the still one, as on the plain cover;
+                        // a Canvas takes the backdrop over instead, so not under one.
+                        if (video != null && canvas == null && url == artworkUrl) {
+                            val quality = com.opentune.data.settings.AppSettings.ui.collectAsState().value.motionQuality
+                            // Keyed on the quality, so a new choice in Settings takes effect at once.
+                            androidx.compose.runtime.key(quality) {
+                                LoopingVideo(video.url, playing, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl, maxPx = quality.maxPx, maxBitrate = quality.maxBitrate)
+                            }
+                        }
+                    }
                     Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.2f to Color.Transparent)))
                 }
                 }

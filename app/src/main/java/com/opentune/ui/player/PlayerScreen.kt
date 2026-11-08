@@ -730,6 +730,7 @@ fun PlayerLayout(
                     index = state.currentIndex,
                     songId = current.videoId,
                     canvas = state.canvasVideo,
+                    video = state.coverVideo,
                     titleTop = with(LocalDensity.current) { bigTitle?.top?.takeIf { it > 0f }?.toDp() },
                     // Lyrics and the queue are read over the whole page, so the Canvas frosts top to bottom.
                     canvasBehindText = pane != Pane.COVER,
