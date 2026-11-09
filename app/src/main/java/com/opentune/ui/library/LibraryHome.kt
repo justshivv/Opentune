@@ -205,7 +205,7 @@ private fun rememberPlaylistRows(nav: LibraryNav): List<LibraryPlaylistRow> {
     val ytPlaylists = if (signedIn) remember(cachedPlaylists, playlists) { PlaylistLinks.unlinked(cachedPlaylists, playlists) } else emptyList()
     val playCounts = remember(records) { records.groupingBy { it.videoId }.eachCount() }
     val rows = mutableListOf<LibraryPlaylistRow>()
-    for (p in playlists) {
+    for (p in playlists.filterNot { isYouTubeLikes(it.remoteId) || isYouTubeLikes(it.id) }) {
         val source = when {
             p.spotifyId != null && spotifyConnected -> "Spotify"
             p.spotifyId == null && p.synced -> "YouTube Music"
@@ -1032,7 +1032,7 @@ private enum class DownloadsTab {
 
 /** Songs liked in the app (and on YouTube Music, when signed in). */
 @Composable
-fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit, onOpenYouTubeLikes: () -> Unit) {
+fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
     val liked by LibraryStore.liked.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     LaunchedEffect(signedIn) { if (signedIn) LikedSync.sync() }
@@ -1046,11 +1046,6 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
         item(key = "liked-cover") {
             Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), contentAlignment = Alignment.Center) {
                 com.opentune.ui.components.LikedPlaylistCover(Modifier.fillMaxWidth(0.76f).aspectRatio(1f))
-            }
-        }
-        if (signedIn) {
-            item {
-                TextButton(onClick = onOpenYouTubeLikes, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Liked on YouTube Music") }
             }
         }
         if (songs.isEmpty()) {

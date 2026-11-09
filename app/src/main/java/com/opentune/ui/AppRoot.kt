@@ -714,7 +714,7 @@ fun AppRoot(vm: PlayerViewModel) {
                     page("playlists") { com.opentune.ui.library.AllPlaylistsScreen(content, libraryNav, onBack = { nav.popBackStack() }) }
                     page("spotify-playlists") { com.opentune.ui.library.AllPlaylistsScreen(content, libraryNav, onBack = { nav.popBackStack() }, spotify = true) }
                     page("liked") {
-                        LikedScreen(content, actions, onBack = { nav.popBackStack() }, onOpenYouTubeLikes = { nav.openBrowse("VLLM", BrowseType.PLAYLIST) })
+                        LikedScreen(content, actions, onBack = { nav.popBackStack() })
                     }
                     page("smart/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                         val id = e.arguments?.getString("id").orEmpty()
@@ -995,6 +995,10 @@ private fun PlayerStrip(vm: PlayerViewModel, onExpand: () -> Unit) {
 private fun NavHostController.stackIds(): List<String> = currentBackStack.value.map { it.id }
 
 private fun NavHostController.openBrowse(browseId: String, type: BrowseType = MusicRepository.typeOf(browseId)) {
+    if (com.opentune.ui.library.isYouTubeLikes(browseId)) {
+        navigate("liked") { launchSingleTop = true }
+        return
+    }
     val route = when {
         // A podcast show has its own page.
         browseId.startsWith("MPSP") -> "podcast/{id}"

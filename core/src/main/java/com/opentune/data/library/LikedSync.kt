@@ -33,10 +33,8 @@ import kotlinx.coroutines.sync.Mutex
  * "every song was unliked". Songs that live on this phone (`local:` ids)
  * and songs marked Dislike are never the sync's business.
  *
- * The first run for an account only takes what the account has — nothing
- * is rated or removed — and remembers it as the agreement; the honest
- * two-way reckoning runs from the second time on. A different account
- * starts over the same way.
+ * The first run merges both lists and uploads local likes missing from the
+ * account. Failed uploads stay local and are retried on a later sync.
  */
 object LikedSync {
     private const val TAG = "LikedSync"
@@ -48,29 +46,34 @@ object LikedSync {
     private val running = Mutex()
 
     @Volatile private var lastRun = 0L
+    @Volatile private var lastOwner: String? = null
+
+    private fun owner(): String? = AccountStore.accounts.value.firstOrNull { it.active }?.id
+        ?.takeIf { AccountStore.signedIn.value }
 
     /** Watches for sign-in from the start; each one is a chance to sync. */
     fun init() {
         scope.launch {
-            AccountStore.signedIn.collect { signedIn -> if (signedIn) sync() }
+            AccountStore.accounts.collect { if (owner() != null) sync() }
         }
     }
 
     /** Syncs now, when signed in — unless one is running or just ran. */
     fun sync() {
         scope.launch {
-            if (!running.tryLock()) return@launch
+            running.lock()
             try {
-                if (!AccountStore.signedIn.value) return@launch
+                val account = owner() ?: return@launch
                 val now = System.currentTimeMillis()
-                if (now - lastRun < MIN_INTERVAL_MS) return@launch
-                lastRun = now
+                if (lastOwner == account && now - lastRun < MIN_INTERVAL_MS) return@launch
                 try {
-                    reconcile()
+                    reconcile(account)
+                    lastOwner = account
+                    lastRun = System.currentTimeMillis()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.w(TAG, "Liked sync didn't finish; nothing was changed", e)
+                    Log.w(TAG, "Liked sync didn't finish; it can be retried", e)
                 }
             } finally {
                 running.unlock()
@@ -78,8 +81,11 @@ object LikedSync {
         }
     }
 
-    private suspend fun reconcile() {
-        val owner = LibraryCache.owner()
+    private suspend fun reconcile(accountId: String) {
+        val cookie = Innertube.cookie
+        fun checkAccount() {
+            if (owner() != accountId || Innertube.cookie != cookie) throw CancellationException("Liked sync account changed")
+        }
         val (agreedOwner, agreed) = LibraryStore.likedSyncState()
         val localAll = LibraryStore.liked.value
         val disliked = LibraryStore.disliked.value
@@ -92,34 +98,15 @@ object LikedSync {
             // An empty answer is trusted only when it comes twice.
             remote = fetchLiked()
         }
-        val remoteIds = remote.mapTo(HashSet()) { it.videoId }
-
-        if (agreedOwner != owner) {
-            // First run for this account: take what it has, agree on it,
-            // push nothing and remove nothing.
-            val additions = remote.filter { it.videoId !in localIds && it.videoId !in disliked }
-            LibraryStore.applyLikedSync(owner, additions.map { SongRef.of(it) } + localAll, remoteIds)
-            return
+        checkAccount()
+        val result = mergeLikedSongs(localAll, remote, agreed.takeIf { agreedOwner == accountId }, disliked) { id, status ->
+            checkAccount()
+            // A heart tap during the read wins over the older snapshot.
+            if (LibraryStore.isLiked(id) != (status == LikeStatus.LIKE)) false
+            else rate(id, status)
         }
-
-        // What each side did since the last agreement.
-        val addedHere = localIds - remoteIds - agreed
-        val removedHere = agreed - localIds - remoteIds
-        val removedThere = agreed.intersect(localIds) - remoteIds
-        val addedThere = remoteIds - localIds - agreed
-
-        val pushedLikes = HashSet<String>()
-        for (id in addedHere) if (rate(id, LikeStatus.LIKE)) pushedLikes += id
-        val pushedUnlikes = HashSet<String>()
-        for (id in removedHere) if (rate(id, LikeStatus.INDIFFERENT)) pushedUnlikes += id
-
-        val newLocal = remote.filter { it.videoId in addedThere && it.videoId !in disliked }
-            .map { SongRef.of(it) } +
-                localAll.filterNot { it.videoId in removedThere }
-        // What the two sides share now is the next agreement — no more, no less.
-        val remoteNow = remoteIds + pushedLikes - pushedUnlikes
-        val agreedNow = newLocal.mapTo(HashSet()) { it.videoId }.intersect(remoteNow)
-        LibraryStore.applyLikedSync(owner, newLocal, agreedNow)
+        checkAccount()
+        LibraryStore.applyLikedSync(accountId, localAll, result.songs, result.agreed)
     }
 
     /** The account's liked songs, whole; a failed or cut-down read throws. */

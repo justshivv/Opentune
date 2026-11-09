@@ -29,6 +29,8 @@ jobs:
         with:
           packages: platform-tools platforms;android-37.0 build-tools;36.0.0 ndk;27.2.12479018 cmake;3.22.1
       - uses: gradle/actions/setup-gradle@v4
+      - name: Liked Music merge regression tests
+        run: ./gradlew --no-daemon :core:testDebugUnitTest --tests '*LikedMergeTest'
       - name: Player and sign-in regression tests
         run: >-
           ./gradlew --no-daemon :app:testDebugUnitTest
@@ -40,6 +42,9 @@ jobs:
           --tests '*SignInPageScreenshotTest'
           --tests '*DiscordSignInScreenshotTest'
           --tests '*CommentsSheetScreenshotTest'
+          --tests '*ChoiceTransitionTest'
+          --tests '*ChoiceSheetScreenshotTest.pick*'
+          --tests '*ChoiceSheetScreenshotTest.backOnTheScreenClosesWithoutChoosing'
       - name: Android lint
         if: ${{ !cancelled() }}
         run: ./gradlew --no-daemon :app:lintDebug
@@ -48,7 +53,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import glob, xml.etree.ElementTree as ET
-          for path in glob.glob('app/build/test-results/testDebugUnitTest/TEST-*.xml'):
+          for path in glob.glob('*/build/test-results/testDebugUnitTest/TEST-*.xml'):
               for case in ET.parse(path).getroot().iter('testcase'):
                   for failure in list(case.findall('failure')) + list(case.findall('error')):
                       print(f"{case.get('classname')}.{case.get('name')}: {failure.get('message')}")
@@ -60,6 +65,8 @@ jobs:
         with:
           name: android-ui-reports
           path: |
+            core/build/reports/
+            core/build/test-results/
             app/build/reports/
             app/build/screenshots/
             app/build/test-results/

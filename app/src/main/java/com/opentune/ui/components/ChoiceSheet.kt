@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -50,6 +51,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,6 +65,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -141,27 +145,40 @@ private fun <T> ChoiceScreen(
 ) {
     val ui by AppSettings.ui.collectAsState()
     val still = ui.reduceAnimation
-    val scope = rememberCoroutineScope()
-    var shown by remember { mutableStateOf(false) }
+    val progress = remember { Animatable(if (still) 1f else 0f) }
     var closing by remember { mutableStateOf(false) }
-    fun close() {
-        if (closing) return
-        closing = true
-        shown = false
-        scope.launch { if (!still) delay(PAGE_OUT_MS.toLong()); onDismiss() }
-    }
-    LaunchedEffect(Unit) { shown = true }
+    val dismiss by rememberUpdatedState(onDismiss)
+    fun close() { closing = true }
     Dialog(
         onDismissRequest = ::close,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        androidx.compose.animation.AnimatedVisibility(
-            visible = shown,
-            enter = if (still) androidx.compose.animation.EnterTransition.None
-            else androidx.compose.animation.slideInHorizontally(tween<androidx.compose.ui.unit.IntOffset>(PAGE_IN_MS)) { it / 3 } + androidx.compose.animation.fadeIn(tween<Float>(PAGE_IN_MS)),
-            exit = if (still) androidx.compose.animation.ExitTransition.None
-            else androidx.compose.animation.slideOutHorizontally(tween<androidx.compose.ui.unit.IntOffset>(PAGE_OUT_MS)) { it / 3 } + androidx.compose.animation.fadeOut(tween<Float>(PAGE_OUT_MS)),
-        ) {
+        val view = LocalView.current
+        DisposableEffect(view) {
+            // Only Compose moves the page; Android's dialog animation must not move it again.
+            (view.parent as? DialogWindowProvider)?.window?.let { window ->
+                window.setWindowAnimations(0)
+                window.setDimAmount(0f)
+            }
+            onDispose { }
+        }
+        LaunchedEffect(closing, still) {
+            if (still) progress.snapTo(if (closing) 0f else 1f)
+            else {
+                if (!closing) {
+                    // Build and measure the full page before revealing it.
+                    withFrameNanos { }
+                    withFrameNanos { }
+                }
+                progress.animateTo(if (closing) 0f else 1f,
+                    tween(if (closing) PAGE_OUT_MS else PAGE_IN_MS, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            }
+            if (closing) dismiss()
+        }
+        Box(Modifier.fillMaxSize().testTag("choice-screen").graphicsLayer {
+            translationX = (1f - progress.value) * size.width * 0.125f
+            alpha = progress.value
+        }) {
             ChoicePage(title, options, selected, label, still, onSelect, onBack = ::close, onChosen = ::close)
         }
     }
@@ -184,7 +201,7 @@ internal fun <T> ChoicePage(
     var picked by remember { mutableStateOf(selected) }
     var done by remember { mutableStateOf(false) }
     androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().navigationBarsPadding()) {
             PageHeader(title, onBack = onBack)
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
                 Options(options, picked, label, still, scrolls = false) { o ->
@@ -220,8 +237,8 @@ private fun <T> Options(options: List<T>, picked: T, label: (T) -> String, still
             lensHeight.snapTo(height)
             placed = true
         } else {
-            launch { lensTop.animateTo(top, spring(dampingRatio = 0.72f, stiffness = 420f)) }
-            launch { lensHeight.animateTo(height, spring(dampingRatio = 0.9f, stiffness = 420f)) }
+            launch { lensTop.animateTo(top, spring(dampingRatio = 1f, stiffness = 420f)) }
+            launch { lensHeight.animateTo(height, spring(dampingRatio = 1f, stiffness = 420f)) }
         }
     }
     // The options sit together in one rimmed tray; the choice is a filled lens inside it.
@@ -277,13 +294,6 @@ private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolea
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val press by animateFloatAsState(if (pressed) 0.97f else 1f, spring(dampingRatio = 0.6f, stiffness = 700f), label = "press")
-    // Rows rise in one after another as the sheet opens.
-    val appear = remember { Animatable(if (still) 1f else 0f) }
-    LaunchedEffect(Unit) {
-        if (still) return@LaunchedEffect
-        delay(60L + index * 28L)
-        appear.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 320f))
-    }
     val check by animateFloatAsState(if (selected) 1f else 0f, if (still) snap() else spring(dampingRatio = 0.5f, stiffness = 520f), label = "check")
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(23.dp)
@@ -291,8 +301,6 @@ private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolea
         modifier
             .fillMaxWidth()
             .graphicsLayer {
-                alpha = appear.value.coerceIn(0f, 1f)
-                translationY = (1f - appear.value) * 18.dp.toPx()
                 scaleX = press
                 scaleY = press
             }

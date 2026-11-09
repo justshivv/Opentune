@@ -234,6 +234,7 @@ fun SettingsScreen(
     onOpenDevices: () -> Unit = {},
     onOpenDiscord: () -> Unit = {},
 ) {
+    val motion by AppSettings.ui.collectAsState()
     var query by rememberSaveable { mutableStateOf("") }
     var openKey by rememberSaveable { mutableStateOf<String?>(null) }
     val signedIn by AccountStore.signedIn.collectAsState()
@@ -252,11 +253,16 @@ fun SettingsScreen(
 
     androidx.compose.animation.AnimatedContent(
         open,
+        modifier = Modifier.fillMaxSize(),
+        contentKey = { it?.key ?: "settings-root" },
         transitionSpec = {
             val forward = targetState != null
-            (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
-                    androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { if (forward) it / 8 else -it / 8 }) togetherWith
-                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160))
+            val enter = if (motion.reduceAnimation) androidx.compose.animation.EnterTransition.None else
+                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
+                    androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { if (forward) it / 8 else -it / 8 }
+            val exit = if (motion.reduceAnimation) androidx.compose.animation.ExitTransition.None else
+                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160))
+            (enter togetherWith exit).using(null)
         },
         label = "settingsPage",
     ) { page ->
@@ -271,7 +277,7 @@ fun SettingsScreen(
                     item(key = "label:$group") { GroupLabel(group) }
                     item(key = "card:$group") {
                         val shown = FOLDED_GROUPS[group]?.takeIf { group !in unfolded && it < rows.size }
-                        GroupCard(Modifier.animateContentSize(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow))) {
+                        GroupCard(if (motion.reduceAnimation) Modifier else Modifier.animateContentSize(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow))) {
                             rows.take(shown ?: rows.size).forEachIndexed { i, row ->
                                 if (i > 0) RowDivider()
                                 row.entry.content()

@@ -506,8 +506,8 @@ object LibraryStore {
 
     /** Records a finished liked sync: the reconciled list, and the ids both sides share now. */
     @Synchronized
-    internal fun applyLikedSync(owner: String, liked: List<SongRef>, agreed: Set<String>) =
-        update { d -> d.copy(liked = liked, likedSyncOwner = owner, likedSyncedIds = agreed) }
+    internal fun applyLikedSync(owner: String, startedWith: List<SongRef>, liked: List<SongRef>, agreed: Set<String>) =
+        update { d -> d.copy(liked = keepLikedEdits(startedWith, d.liked, liked), likedSyncOwner = owner, likedSyncedIds = agreed) }
 
     fun exportJson(): JsonElement = json.encodeToJsonElement(LibraryDocument.serializer(), doc.value)
 
