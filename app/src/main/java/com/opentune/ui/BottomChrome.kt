@@ -4,7 +4,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.launch
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 import androidx.compose.ui.layout.layout
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -94,19 +96,24 @@ import com.opentune.ui.components.glass
 /** Room the chrome takes when shown, for content padding. */
 val CHROME_TAB_HEIGHT = 64.dp
 val CHROME_MINI_HEIGHT = 64.dp
+
 /** Height of the one-row minimized dock, and of the capsule. */
 private val MINI_ROW = 56.dp
+
 /** The capsule: the open tab at one end, the song's cover (or Search) at the other. */
 private val CAPSULE_WIDTH = 124.dp
 private val CAPSULE_INSET = 4.dp
 
 /** At this many tabs or fewer (Explore moved into Search), the tabs' icons and names are a size up. */
 private const val ROOMY_TABS = 3
+
 /** Between the now-playing card and the dock, and between the dock and Search. */
 private val CARD_GAP = 8.dp
 private val SEARCH_GAP = 10.dp
+
 /** Room around the sinking dock for its shadow, which the blur's layer would otherwise cut off. */
 private val SINK_ROOM = 32.dp
+
 /** How far into a sink the dock has gone from sight. */
 private const val SINK_GONE = 0.7f
 
@@ -135,7 +142,11 @@ class ChromeScrollConnection(private val thresholdPx: Float) : NestedScrollConne
         accumulated = 0f
     }
 
-    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+    override fun onPostScroll(
+        consumed: Offset,
+        available: Offset,
+        source: NestedScrollSource
+    ): Offset {
         if (holds > 0) return Offset.Zero
         val dy = consumed.y
         if (dy == 0f) return Offset.Zero
@@ -153,7 +164,8 @@ class ChromeScrollConnection(private val thresholdPx: Float) : NestedScrollConne
 }
 
 /** The app's [ChromeScrollConnection], for pages that need the dock to stay put. */
-val LocalChromeScroll = androidx.compose.runtime.staticCompositionLocalOf<ChromeScrollConnection?> { null }
+val LocalChromeScroll =
+    androidx.compose.runtime.staticCompositionLocalOf<ChromeScrollConnection?> { null }
 
 /**
  * Keeps the dock and the mini player out while the caller is shown, for a
@@ -205,7 +217,16 @@ fun BottomChrome(
     lens: DockLens = DockLens.STRETCH,
     reduceMotion: Boolean = false,
 ) {
-    val c = ChromeContent(tabs, selected, onSelect, onExpand, searchSelected, onSearch, mini, if (reduceMotion) DockLens.GLIDE else lens)
+    val c = ChromeContent(
+        tabs,
+        selected,
+        onSelect,
+        onExpand,
+        searchSelected,
+        onSearch,
+        mini,
+        if (reduceMotion) DockLens.GLIDE else lens
+    )
     val chrome: @Composable (Boolean, () -> Float, Modifier) -> Unit = { folded, progress, m ->
         when (motion) {
             DockMotion.MINIMIZE -> MinimizeChrome(c, folded, progress, m)
@@ -219,7 +240,12 @@ fun BottomChrome(
             modifier,
             transitionSpec = {
                 (fadeIn(tween(160)) togetherWith fadeOut(tween(120)))
-                    .using(SizeTransform(clip = false) { _, _ -> tween(200, easing = FastOutSlowInEasing) })
+                    .using(SizeTransform(clip = false) { _, _ ->
+                        tween(
+                            200,
+                            easing = FastOutSlowInEasing
+                        )
+                    })
             },
             contentAlignment = Alignment.BottomCenter,
             label = "chrome",
@@ -245,9 +271,17 @@ private class ChromeContent(
 /** The spring each [DockMotion] runs on, from open to folded and back. */
 private fun motionSpring(motion: DockMotion): SpringSpec<Float> = when (motion) {
     // Settles without bouncing past.
-    DockMotion.MINIMIZE -> spring(dampingRatio = 0.9f, stiffness = 300f, visibilityThreshold = 0.001f)
+    DockMotion.MINIMIZE -> spring(
+        dampingRatio = 0.9f,
+        stiffness = 300f,
+        visibilityThreshold = 0.001f
+    )
     // A little give as the capsule closes and opens out again.
-    DockMotion.CAPSULE -> spring(dampingRatio = 0.8f, stiffness = 260f, visibilityThreshold = 0.001f)
+    DockMotion.CAPSULE -> spring(
+        dampingRatio = 0.8f,
+        stiffness = 260f,
+        visibilityThreshold = 0.001f
+    )
     // Slower and even, with no overshoot: a sink, not a drop.
     DockMotion.SINK -> spring(dampingRatio = 1f, stiffness = 220f, visibilityThreshold = 0.001f)
 }
@@ -270,7 +304,13 @@ private fun Modifier.chromeHeight(progress: () -> Float, open: Dp, folded: Dp): 
     }
 
 /** A piece of the chrome at its size and place at a given moment, [bottom] up from the bottom edge. */
-private fun Modifier.placed(progress: () -> Float, x: (Float) -> Dp, bottom: (Float) -> Dp, w: (Float) -> Dp, h: (Float) -> Dp): Modifier =
+private fun Modifier.placed(
+    progress: () -> Float,
+    x: (Float) -> Dp,
+    bottom: (Float) -> Dp,
+    w: (Float) -> Dp,
+    h: (Float) -> Dp
+): Modifier =
     this.layout { measurable, constraints ->
         val t = progress()
         val pw = w(t).roundToPx().coerceAtLeast(0)
@@ -290,13 +330,23 @@ private fun Modifier.placed(progress: () -> Float, x: (Float) -> Dp, bottom: (Fl
  * runs it the other way.
  */
 @Composable
-private fun MinimizeChrome(c: ChromeContent, inline: Boolean, progress: () -> Float, modifier: Modifier) {
+private fun MinimizeChrome(
+    c: ChromeContent,
+    inline: Boolean,
+    progress: () -> Float,
+    modifier: Modifier
+) {
     val haptics = com.opentune.ui.components.rememberHaptics()
-    BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+    BoxWithConstraints(modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp)) {
         val width = maxWidth
         val fullDock = width - CHROME_TAB_HEIGHT - SEARCH_GAP
-        val openHeight = if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT
-        Box(Modifier.fillMaxWidth().chromeHeight(progress, openHeight, MINI_ROW)) {
+        val openHeight =
+            if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT
+        Box(Modifier
+            .fillMaxWidth()
+            .chromeHeight(progress, openHeight, MINI_ROW)) {
             val row = { t: Float -> lerp(CHROME_TAB_HEIGHT, MINI_ROW, t) }
             c.mini?.invoke(
                 false,
@@ -311,11 +361,23 @@ private fun MinimizeChrome(c: ChromeContent, inline: Boolean, progress: () -> Fl
             // The dock, contracting to the left into a circle.
             DockPill(
                 c, fullDock, inline, progress, anchor = MINI_ROW / 2,
-                Modifier.placed(progress, x = { 0.dp }, bottom = { 0.dp }, w = { t -> lerp(fullDock, MINI_ROW, t) }, h = row),
+                Modifier.placed(
+                    progress,
+                    x = { 0.dp },
+                    bottom = { 0.dp },
+                    w = { t -> lerp(fullDock, MINI_ROW, t) },
+                    h = row
+                ),
             )
             SearchOrb(
                 c.searchSelected,
-                Modifier.placed(progress, x = { t -> width - row(t) }, bottom = { 0.dp }, w = row, h = row),
+                Modifier.placed(
+                    progress,
+                    x = { t -> width - row(t) },
+                    bottom = { 0.dp },
+                    w = row,
+                    h = row
+                ),
             ) {
                 if (!c.searchSelected) haptics.tick()
                 c.onSearch()
@@ -334,23 +396,33 @@ private fun MinimizeChrome(c: ChromeContent, inline: Boolean, progress: () -> Fl
  * out and the card rises out of it.
  */
 @Composable
-private fun CapsuleChrome(c: ChromeContent, inline: Boolean, progress: () -> Float, modifier: Modifier) {
+private fun CapsuleChrome(
+    c: ChromeContent,
+    inline: Boolean,
+    progress: () -> Float,
+    modifier: Modifier
+) {
     val haptics = com.opentune.ui.components.rememberHaptics()
     // Each is only there while it can be seen, so nothing invisible takes a tap.
     val cardShown by remember { derivedStateOf { progress() < 0.85f } }
     val coverShown by remember { derivedStateOf { progress() > 0.6f } }
     val searchShown by remember { derivedStateOf { progress() < 0.45f } }
-    BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+    BoxWithConstraints(modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp)) {
         val width = maxWidth
         val fullDock = width - CHROME_TAB_HEIGHT - SEARCH_GAP
-        val openHeight = if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT
+        val openHeight =
+            if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT
         val left = (width - CAPSULE_WIDTH) / 2
         // The capsule's far end, where the cover or Search ends up.
         val end = MINI_ROW - CAPSULE_INSET * 2
         val endX = left + CAPSULE_WIDTH - CAPSULE_INSET - end
         val row = { t: Float -> lerp(CHROME_TAB_HEIGHT, MINI_ROW, t) }
         val mini = c.mini
-        Box(Modifier.fillMaxWidth().chromeHeight(progress, openHeight, MINI_ROW)) {
+        Box(Modifier
+            .fillMaxWidth()
+            .chromeHeight(progress, openHeight, MINI_ROW)) {
             val onSearch = {
                 if (!c.searchSelected) haptics.tick()
                 c.onSearch()
@@ -361,7 +433,12 @@ private fun CapsuleChrome(c: ChromeContent, inline: Boolean, progress: () -> Flo
                 if (cardShown) {
                     Box(
                         Modifier
-                            .placed(progress, x = { 0.dp }, bottom = row, w = { width }, h = { CHROME_MINI_HEIGHT + CARD_GAP })
+                            .placed(
+                                progress,
+                                x = { 0.dp },
+                                bottom = row,
+                                w = { width },
+                                h = { CHROME_MINI_HEIGHT + CARD_GAP })
                             .clipToBounds(),
                     ) {
                         mini(
@@ -372,7 +449,8 @@ private fun CapsuleChrome(c: ChromeContent, inline: Boolean, progress: () -> Flo
                                 .graphicsLayer {
                                     // Straight down toward the capsule's middle, narrowing to about its width.
                                     val t = progress()
-                                    translationY = (CHROME_MINI_HEIGHT / 2 + CARD_GAP + MINI_ROW / 2).toPx() * t
+                                    translationY =
+                                        (CHROME_MINI_HEIGHT / 2 + CARD_GAP + MINI_ROW / 2).toPx() * t
                                     val s = lerp(1f, CAPSULE_WIDTH / width, t.coerceIn(0f, 1f))
                                     scaleX = s
                                     scaleY = s
@@ -389,7 +467,13 @@ private fun CapsuleChrome(c: ChromeContent, inline: Boolean, progress: () -> Flo
                         Modifier
                             .placed(
                                 progress,
-                                x = { t -> lerp(width - CHROME_TAB_HEIGHT, left + CAPSULE_WIDTH + SEARCH_GAP, t) },
+                                x = { t ->
+                                    lerp(
+                                        width - CHROME_TAB_HEIGHT,
+                                        left + CAPSULE_WIDTH + SEARCH_GAP,
+                                        t
+                                    )
+                                },
                                 bottom = { t -> (row(t) - orb(t)) / 2 },
                                 w = orb,
                                 h = orb,
@@ -414,14 +498,25 @@ private fun CapsuleChrome(c: ChromeContent, inline: Boolean, progress: () -> Flo
                 val orb = { t: Float -> lerp(CHROME_TAB_HEIGHT, end, t) }
                 SearchOrb(
                     c.searchSelected,
-                    Modifier.placed(progress, x = { t -> lerp(width - CHROME_TAB_HEIGHT, endX, t) }, bottom = { t -> lerp(0.dp, CAPSULE_INSET, t) }, w = orb, h = orb),
+                    Modifier.placed(
+                        progress,
+                        x = { t -> lerp(width - CHROME_TAB_HEIGHT, endX, t) },
+                        bottom = { t -> lerp(0.dp, CAPSULE_INSET, t) },
+                        w = orb,
+                        h = orb
+                    ),
                     onSearch,
                 )
             } else if (coverShown) {
                 mini(
                     true,
                     Modifier
-                        .placed(progress, x = { endX }, bottom = { CAPSULE_INSET }, w = { end }, h = { end })
+                        .placed(
+                            progress,
+                            x = { endX },
+                            bottom = { CAPSULE_INSET },
+                            w = { end },
+                            h = { end })
                         .graphicsLayer {
                             val a = ramp(0.6f, 1f, progress())
                             alpha = a
@@ -443,17 +538,27 @@ private fun CapsuleChrome(c: ChromeContent, inline: Boolean, progress: () -> Flo
  * the open tab rises where the dock was, to bring it back.
  */
 @Composable
-private fun SinkChrome(c: ChromeContent, inline: Boolean, progress: () -> Float, modifier: Modifier) {
+private fun SinkChrome(
+    c: ChromeContent,
+    inline: Boolean,
+    progress: () -> Float,
+    modifier: Modifier
+) {
     val haptics = com.opentune.ui.components.rememberHaptics()
     val blur = !AppSettings.ui.collectAsState().value.reduceBlur
     // Gone from the layout once it's out of sight, so it can't take a tap.
     val dockShown by remember { derivedStateOf { progress() < SINK_GONE } }
     val buttonShown by remember { derivedStateOf { progress() > 0.5f } }
-    BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+    BoxWithConstraints(modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp)) {
         val width = maxWidth
-        val openHeight = if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT
+        val openHeight =
+            if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT
         val foldedHeight = if (c.mini != null) CHROME_MINI_HEIGHT else MINI_ROW
-        Box(Modifier.fillMaxWidth().chromeHeight(progress, openHeight, foldedHeight)) {
+        Box(Modifier
+            .fillMaxWidth()
+            .chromeHeight(progress, openHeight, foldedHeight)) {
             if (dockShown) {
                 Box(
                     Modifier
@@ -461,7 +566,12 @@ private fun SinkChrome(c: ChromeContent, inline: Boolean, progress: () -> Float,
                         .layout { measurable, constraints ->
                             val room = SINK_ROOM.roundToPx()
                             val h = CHROME_TAB_HEIGHT.roundToPx()
-                            val placeable = measurable.measure(Constraints.fixed(constraints.maxWidth + room * 2, h + room * 2))
+                            val placeable = measurable.measure(
+                                Constraints.fixed(
+                                    constraints.maxWidth + room * 2,
+                                    h + room * 2
+                                )
+                            )
                             layout(constraints.maxWidth, h) { placeable.place(-room, -room) }
                         }
                         .graphicsLayer {
@@ -472,12 +582,22 @@ private fun SinkChrome(c: ChromeContent, inline: Boolean, progress: () -> Float,
                             scaleY = scale
                             translationY = 14.dp.toPx() * s
                             val r = 18.dp.toPx() * s
-                            renderEffect = if (blur && r >= 0.5f) BlurEffect(r, r, TileMode.Decal) else null
+                            renderEffect =
+                                if (blur && r >= 0.5f) BlurEffect(r, r, TileMode.Decal) else null
                         }
                         .padding(SINK_ROOM),
                 ) {
                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                        DockPill(c, width - CHROME_TAB_HEIGHT - SEARCH_GAP, inline, { 0f }, anchor = MINI_ROW / 2, Modifier.weight(1f).fillMaxHeight())
+                        DockPill(
+                            c,
+                            width - CHROME_TAB_HEIGHT - SEARCH_GAP,
+                            inline,
+                            { 0f },
+                            anchor = MINI_ROW / 2,
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
                         Spacer(Modifier.width(SEARCH_GAP))
                         SearchOrb(c.searchSelected) {
                             if (!c.searchSelected) haptics.tick()
@@ -490,20 +610,27 @@ private fun SinkChrome(c: ChromeContent, inline: Boolean, progress: () -> Float,
             if (mini != null) {
                 mini(
                     false,
-                    Modifier.placed(progress, x = { 0.dp }, bottom = { t -> lerp(CHROME_TAB_HEIGHT + CARD_GAP, 0.dp, t) }, w = { width }, h = { CHROME_MINI_HEIGHT }),
+                    Modifier.placed(
+                        progress,
+                        x = { 0.dp },
+                        bottom = { t -> lerp(CHROME_TAB_HEIGHT + CARD_GAP, 0.dp, t) },
+                        w = { width },
+                        h = { CHROME_MINI_HEIGHT }),
                 )
             } else if (buttonShown) {
                 val current = c.selected?.let(c.tabs::getOrNull) ?: c.tabs.first()
                 TabOrb(
                     current,
                     c.searchSelected,
-                    Modifier.align(Alignment.BottomCenter).graphicsLayer {
-                        val a = ramp(0.5f, 1f, progress())
-                        alpha = a
-                        val s = lerp(0.85f, 1f, a)
-                        scaleX = s
-                        scaleY = s
-                    },
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .graphicsLayer {
+                            val a = ramp(0.5f, 1f, progress())
+                            alpha = a
+                            val s = lerp(0.85f, 1f, a)
+                            scaleX = s
+                            scaleY = s
+                        },
                     c.onExpand,
                 )
             }
@@ -520,7 +647,14 @@ private fun SinkChrome(c: ChromeContent, inline: Boolean, progress: () -> Float,
  * brings the dock back.
  */
 @Composable
-private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Float, anchor: Dp, modifier: Modifier) {
+private fun DockPill(
+    c: ChromeContent,
+    full: Dp,
+    folded: Boolean,
+    fold: () -> Float,
+    anchor: Dp,
+    modifier: Modifier
+) {
     val haptics = com.opentune.ui.components.rememberHaptics()
     val ink = dockInk()
     val pill = RoundedCornerShape(percent = 50)
@@ -535,6 +669,11 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
     // swallows the one click a finished drag would otherwise leave behind.
     var dragTarget by remember { mutableStateOf<Int?>(null) }
     var suppressTap by remember { mutableStateOf(false) }
+    // The finger itself, for the iOS feel: [fingerDown] grows the lens a
+    // little while it's held, and [dragCentre] is where it sits in slot
+    // space, so the lens can track it directly instead of chasing slots.
+    var fingerDown by remember { mutableStateOf(false) }
+    var dragCentre by remember { mutableStateOf<Dp?>(null) }
     val currentShown by rememberUpdatedState(shown)
     val currentContent by rememberUpdatedState(c)
     Box(
@@ -551,38 +690,71 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
                     val strayPx = 48.dp.toPx()
                     fun slotAt(x: Float): Int =
                         ((x - insetPx) / slotPx).toInt().coerceIn(0, currentContent.tabs.size - 1)
+
+                    // The finger's centre in slot space, kept inside the end
+                    // slots so the lens never slides past the dock.
+                    fun centreAt(x: Float): Dp {
+                        val half = slotPx / 2
+                        return (x - insetPx).coerceIn(
+                            half,
+                            slotPx * currentContent.tabs.size - half
+                        ).toDp()
+                    }
                     awaitEachGesture {
                         // The initial pass watches the press before the items
-                        // see it, but touches nothing unless it turns into a
-                        // real scrub — taps pass through completely untouched.
-                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        // see it. The scrub is a long-press feature: a plain
+                        // press or a quick swipe never engages it — the finger
+                        // must hold still past the long-press timeout first.
+                        val down = awaitFirstDown(
+                            requireUnconsumed = false,
+                            pass = PointerEventPass.Initial
+                        )
                         suppressTap = false
                         var dragging = false
                         try {
-                            while (true) {
-                                val event = awaitPointerEvent(PointerEventPass.Initial)
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) {
-                                    if (dragging) {
+                            // Phase one: wait out the long press. Only lifting
+                            // early cancels it — the finger may already be
+                            // moving; what counts is that it stayed down.
+                            var lastX = down.position.x
+                            val engaged = withTimeoutOrNull(240L) {
+                                var alive = true
+                                while (alive) {
+                                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                                    val ch = e.changes.firstOrNull { it.id == down.id }
+                                    if (ch == null || !ch.pressed) {
+                                        alive = false
+                                    } else {
+                                        lastX = ch.position.x
+                                    }
+                                }
+                                false
+                            } ?: true
+                            if (engaged) {
+                                // Held: the lens swells, and scrubbing is live
+                                // from exactly where the finger rests.
+                                fingerDown = true
+                                dragging = true
+                                dragTarget = slotAt(lastX)
+                                dragCentre = centreAt(lastX)
+                                haptics.tick()
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val change =
+                                        event.changes.firstOrNull { it.id == down.id } ?: break
+                                    if (!change.pressed) {
                                         change.consume()
                                         suppressTap = true
                                         val target = dragTarget
-                                        val strayed = kotlin.math.abs(change.position.y - down.position.y) > strayPx
+                                        val strayed =
+                                            kotlin.math.abs(change.position.y - down.position.y) > strayPx
                                         if (target != null && !strayed && target != currentShown) {
                                             haptics.tick()
                                             currentContent.onSelect(target)
                                         }
+                                        break
                                     }
-                                    break
-                                }
-                                if (!dragging) {
-                                    if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
-                                        dragging = true
-                                        dragTarget = slotAt(change.position.x)
-                                        if (dragTarget != currentShown) haptics.tick()
-                                    }
-                                } else {
                                     change.consume()
+                                    dragCentre = centreAt(change.position.x)
                                     val s = slotAt(change.position.x)
                                     if (s != dragTarget) {
                                         dragTarget = s
@@ -592,13 +764,27 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
                             }
                         } finally {
                             dragTarget = null
+                            fingerDown = false
+                            dragCentre = null
                         }
                     }
                 }
             },
     ) {
-        val (left, right) = rememberStretchingLens(dragTarget ?: resting, slot, c.lens)
-        val lensAlpha by animateFloatAsState(if (shown != null) 1f else 0f, tween(260, easing = FastOutSlowInEasing), label = "lensAlpha")
+        val (left, right) = rememberStretchingLens(dragTarget ?: resting, slot, c.lens, dragCentre)
+        // Held, the lens swells a little, the way iOS's does; let go and it
+        // springs back to its natural size.
+        val lensScale by animateFloatAsState(
+            if (fingerDown) 1.10f else 1f,
+            spring(dampingRatio = 0.45f, stiffness = 400f),
+            label = "lensScale"
+        )
+
+        val lensAlpha by animateFloatAsState(
+            if (shown != null) 1f else 0f,
+            tween(260, easing = FastOutSlowInEasing),
+            label = "lensAlpha"
+        )
         Box(
             Modifier
                 .layout { measurable, constraints ->
@@ -608,7 +794,10 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
                     val placeable = measurable.measure(Constraints.fixed(w, h))
                     // From the open tab's own place to [anchor].
                     val slide = (anchor - DOCK_INSET - slot * (resting + 0.5f)).toPx() * fold()
-                    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(inset + slide.roundToInt(), inset) }
+                    layout(
+                        constraints.maxWidth,
+                        constraints.maxHeight
+                    ) { placeable.place(inset + slide.roundToInt(), inset) }
                 },
         ) {
             Box(
@@ -616,14 +805,23 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
                     .offset { IntOffset(left().roundToPx(), 0) }
                     .layout { measurable, constraints ->
                         val w = (right() - left()).roundToPx().coerceAtLeast(0)
-                        val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+                        val placeable =
+                            measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
                         layout(placeable.width, placeable.height) { placeable.place(0, 0) }
                     }
                     .fillMaxHeight()
-                    .graphicsLayer { alpha = lensAlpha * (1f - fold()).coerceIn(0f, 1f) }
+                    .graphicsLayer {
+                        alpha = lensAlpha * (1f - fold()).coerceIn(0f, 1f)
+                        scaleX = lensScale
+                        scaleY = lensScale
+                    }
                     .clip(LENS_SHAPE)
                     .background(Brush.verticalGradient(listOf(ink.lensTop, ink.lensBottom)))
-                    .border(1.dp, Brush.verticalGradient(listOf(ink.rimTop, ink.rimBottom)), LENS_SHAPE),
+                    .border(
+                        1.dp,
+                        Brush.verticalGradient(listOf(ink.rimTop, ink.rimBottom)),
+                        LENS_SHAPE
+                    ),
             )
             Row(Modifier.fillMaxSize()) {
                 c.tabs.forEachIndexed { i, tab ->
@@ -634,7 +832,9 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
                             .width(slot)
                             .fillMaxHeight()
                             // The other tabs fade as the edge reaches them.
-                            .graphicsLayer { if (i != resting) alpha = (1f - fold() * 1.6f).coerceIn(0f, 1f) },
+                            .graphicsLayer {
+                                if (i != resting) alpha = (1f - fold() * 1.6f).coerceIn(0f, 1f)
+                            },
                         collapse = fold,
                         roomy = c.tabs.size <= ROOMY_TABS,
                     ) {
@@ -663,7 +863,14 @@ private fun DockPill(c: ChromeContent, full: Dp, folded: Boolean, fold: () -> Fl
 
 /** One destination: the icon, filled and lifted a little when open, over its name. */
 @Composable
-internal fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, collapse: () -> Float = { 0f }, roomy: Boolean = false, onClick: () -> Unit) {
+internal fun DockItem(
+    tab: ChromeTab,
+    selected: Boolean,
+    modifier: Modifier,
+    collapse: () -> Float = { 0f },
+    roomy: Boolean = false,
+    onClick: () -> Unit
+) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -684,39 +891,55 @@ internal fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, col
     Column(
         modifier
             .clip(LENS_SHAPE)
-            .clickable(interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(LENS_SHAPE), onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = com.opentune.ui.components.FocusRing(LENS_SHAPE),
+                onClick = onClick
+            )
             .semantics { role = Role.Tab; this.selected = selected },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Crossfade(selected, animationSpec = tween(280, easing = FastOutSlowInEasing), label = "dockIcon") { on ->
+        Crossfade(
+            selected,
+            animationSpec = tween(280, easing = FastOutSlowInEasing),
+            label = "dockIcon"
+        ) { on ->
             Icon(
                 if (on) tab.selectedIcon else tab.icon,
                 null,
                 tint = fg,
                 // With fewer tabs each has more room, and uses it.
-                modifier = Modifier.size(if (roomy) 29.dp else 25.dp).graphicsLayer {
-                    // Folding into a button, the icon drops to the middle as the name goes.
-                    val c = collapse()
-                    val s = scale * (1f + 0.04f * c)
-                    scaleX = s
-                    scaleY = s
-                    translationY = 9.dp.toPx() * c
-                },
+                modifier = Modifier
+                    .size(if (roomy) 29.dp else 25.dp)
+                    .graphicsLayer {
+                        // Folding into a button, the icon drops to the middle as the name goes.
+                        val c = collapse()
+                        val s = scale * (1f + 0.04f * c)
+                        scaleX = s
+                        scaleY = s
+                        translationY = 9.dp.toPx() * c
+                    },
             )
         }
         Text(
             com.opentune.ui.theme.tr(tab.label),
-            style = (if (roomy) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall).let { if (ink.shade != null) it.copy(shadow = ink.shade) else it },
+            style = (if (roomy) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall).let {
+                if (ink.shade != null) it.copy(
+                    shadow = ink.shade
+                ) else it
+            },
             // One weight either way, so the name doesn't change width as it's picked.
             fontWeight = FontWeight.SemiBold,
             color = fg,
             maxLines = 1,
-            modifier = Modifier.padding(top = 2.dp).graphicsLayer {
-                val c = collapse()
-                alpha = (1f - c * 2.5f).coerceIn(0f, 1f)
-                translationY = 6.dp.toPx() * c
-            },
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .graphicsLayer {
+                    val c = collapse()
+                    alpha = (1f - c * 2.5f).coerceIn(0f, 1f)
+                    translationY = 6.dp.toPx() * c
+                },
         )
     }
 }
@@ -726,10 +949,21 @@ internal fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, col
 internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "orbScale")
-    val fill by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, spring(stiffness = 500f), label = "orbFill")
+    val scale by animateFloatAsState(
+        if (pressed) 0.9f else 1f,
+        spring(dampingRatio = 0.5f, stiffness = 600f),
+        label = "orbScale"
+    )
+    val fill by animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        spring(stiffness = 500f),
+        label = "orbFill"
+    )
     val ink = dockInk()
-    val fg by animateColorAsState(if (selected) MaterialTheme.colorScheme.onPrimary else ink.search, label = "orbFg")
+    val fg by animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.onPrimary else ink.search,
+        label = "orbFg"
+    )
     Box(
         modifier
             .sizeIn(maxWidth = CHROME_TAB_HEIGHT, maxHeight = CHROME_TAB_HEIGHT)
@@ -741,7 +975,11 @@ internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onClick
             .padding(DOCK_INSET)
             .clip(CircleShape)
             .background(fill)
-            .clickable(interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(CircleShape), onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = com.opentune.ui.components.FocusRing(CircleShape),
+                onClick = onClick
+            )
             .semantics { role = Role.Tab; this.selected = selected },
         contentAlignment = Alignment.Center,
     ) {
@@ -755,10 +993,19 @@ internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onClick
  * the whole dock back.
  */
 @Composable
-private fun TabOrb(tab: ChromeTab, searchSelected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun TabOrb(
+    tab: ChromeTab,
+    searchSelected: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "tabOrbScale")
+    val scale by animateFloatAsState(
+        if (pressed) 0.9f else 1f,
+        spring(dampingRatio = 0.5f, stiffness = 600f),
+        label = "tabOrbScale"
+    )
     val ink = dockInk()
     Box(
         modifier
@@ -768,7 +1015,12 @@ private fun TabOrb(tab: ChromeTab, searchSelected: Boolean, modifier: Modifier, 
             .glass(CircleShape, tint = ink.film ?: MaterialTheme.colorScheme.surfaceContainerHigh)
             .dockHighlight(CircleShape)
             .clip(CircleShape)
-            .clickable(interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(CircleShape), onClickLabel = "Show navigation", onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = com.opentune.ui.components.FocusRing(CircleShape),
+                onClickLabel = "Show navigation",
+                onClick = onClick
+            )
             .semantics { role = Role.Button },
         contentAlignment = Alignment.Center,
     ) {
@@ -784,8 +1036,13 @@ private fun TabOrb(tab: ChromeTab, searchSelected: Boolean, modifier: Modifier, 
 /** A hairline of light along the top edge, fading down, so the glass reads as lit from above. */
 @Composable
 internal fun Modifier.dockHighlight(shape: androidx.compose.ui.graphics.Shape): Modifier {
-    val light = Color.White.copy(alpha = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) 0.22f else 0.6f)
-    return this.border(1.dp, Brush.verticalGradient(listOf(light, light.copy(alpha = 0f), light.copy(alpha = 0f))), shape)
+    val light =
+        Color.White.copy(alpha = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) 0.22f else 0.6f)
+    return this.border(
+        1.dp,
+        Brush.verticalGradient(listOf(light, light.copy(alpha = 0f), light.copy(alpha = 0f))),
+        shape
+    )
 }
 
 /**
@@ -804,7 +1061,8 @@ internal class DockInk(
 internal fun dockInk(): DockInk {
     val scheme = MaterialTheme.colorScheme
     val ui by AppSettings.ui.collectAsState()
-    val liquid = LocalBackdrop.current != null && liquidGlassOn() && ui.glassStyle == GlassStyle.LIQUID
+    val liquid =
+        LocalBackdrop.current != null && liquidGlassOn() && ui.glassStyle == GlassStyle.LIQUID
     if (!liquid) {
         val a = scheme.primary
         // Over a glass dock with content showing through, the muted inactive tint
@@ -818,8 +1076,21 @@ internal fun dockInk(): DockInk {
             dark -> Color.White.copy(alpha = 0.9f)
             else -> scheme.onSurface.copy(alpha = 0.82f)
         }
-        val shade = if (overGlass) androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.3f), blurRadius = 5f) else null
-        return DockInk(a, off, scheme.onSurface, a.copy(alpha = 0.24f), a.copy(alpha = 0.14f), a.copy(alpha = 0.45f), a.copy(alpha = 0.08f), null, shade)
+        val shade = if (overGlass) androidx.compose.ui.graphics.Shadow(
+            Color.Black.copy(alpha = 0.3f),
+            blurRadius = 5f
+        ) else null
+        return DockInk(
+            a,
+            off,
+            scheme.onSurface,
+            a.copy(alpha = 0.24f),
+            a.copy(alpha = 0.14f),
+            a.copy(alpha = 0.45f),
+            a.copy(alpha = 0.08f),
+            null,
+            shade
+        )
     }
     val dark = scheme.surface.luminance() <= 0.5f
     return DockInk(
@@ -827,13 +1098,22 @@ internal fun dockInk(): DockInk {
         lensTop = Color.Black.copy(alpha = 0.36f), lensBottom = Color.Black.copy(alpha = 0.28f),
         rimTop = Color.White.copy(alpha = 0.24f), rimBottom = Color.White.copy(alpha = 0.04f),
         film = Color.Black.copy(alpha = if (dark) 0.14f else 0.28f),
-        shade = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.35f), blurRadius = 6f),
+        shade = androidx.compose.ui.graphics.Shadow(
+            Color.Black.copy(alpha = 0.35f),
+            blurRadius = 6f
+        ),
     )
 }
 
 /** A soft drop shadow so the dock floats over the page. */
 internal fun Modifier.dockShadow(shape: androidx.compose.ui.graphics.Shape): Modifier =
-    shadow(18.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.45f))
+    shadow(
+        18.dp,
+        shape,
+        clip = false,
+        ambientColor = Color.Black.copy(alpha = 0.35f),
+        spotColor = Color.Black.copy(alpha = 0.45f)
+    )
 
 /**
  * The lens's two edges, which travel separately: the edge in the direction
@@ -842,25 +1122,136 @@ internal fun Modifier.dockShadow(shape: androidx.compose.ui.graphics.Shape): Mod
  * are critically damped, so it never overshoots.
  */
 @Composable
-internal fun rememberStretchingLens(index: Int, slot: Dp, style: DockLens = DockLens.STRETCH): Pair<() -> Dp, () -> Dp> {
-    val left = remember { Animatable(slot.value * index) }
-    val right = remember { Animatable(slot.value * (index + 1)) }
-    LaunchedEffect(index, slot) {
-        val toLeft = slot.value * index
-        val toRight = slot.value * (index + 1)
-        val movingRight = toLeft > left.value
-        val (lead, follow) = lensSprings(style)
-        launch { left.animateTo(toLeft, if (movingRight) follow else lead) }
-        launch { right.animateTo(toRight, if (movingRight) lead else follow) }
+internal fun rememberStretchingLens(
+    index: Int,
+    slot: Dp,
+    style: DockLens = DockLens.STRETCH,
+    dragCentre: Dp? = null
+): Pair<() -> Dp, () -> Dp> {
+    val currentIndex by rememberUpdatedState(index)
+    val currentSlot by rememberUpdatedState(slot)
+    val currentStyle by rememberUpdatedState(style)
+    val currentCentre by rememberUpdatedState(dragCentre)
+    var leftPos by remember { mutableFloatStateOf(slot.value * index) }
+    var rightPos by remember { mutableFloatStateOf(slot.value * (index + 1)) }
+    var leftVel by remember { mutableFloatStateOf(0f) }
+    var rightVel by remember { mutableFloatStateOf(0f) }
+    // The rubber lives in the width while scrubbing: the faster the scrub,
+    // the wider the lens stretches, springing back when the finger lifts.
+    var prevCentre by remember { mutableStateOf<Float?>(null) }
+    var dragged by remember { mutableStateOf(false) }
+    val stretch = remember { Animatable(1f) }
+    val trackSpring = spring<Float>(dampingRatio = 1f, stiffness = 2800f)
+    val rubberLead = spring<Float>(dampingRatio = 0.55f, stiffness = 380f)
+    val rubberTrail = spring<Float>(dampingRatio = 0.45f, stiffness = 240f)
+    LaunchedEffect(dragCentre) {
+        val centre = dragCentre
+        if (centre != null) {
+            dragged = true
+            val speed = kotlin.math.abs(centre.value - (prevCentre ?: centre.value))
+            prevCentre = centre.value
+            stretch.animateTo(
+                (1f + speed / slot.value * 0.9f).coerceAtMost(1.45f),
+                spring(dampingRatio = 0.5f, stiffness = 520f)
+            )
+        } else {
+            stretch.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 300f))
+        }
     }
-    return ({ left.value.dp } to { right.value.dp })
+    // One physics loop on the frame clock, never restarted: each edge is a
+    // spring integrated by hand toward wherever it belongs — the finger's
+    // span while scrubbing, its slot's span otherwise. Restarting animateTo
+    // on every finger event starved the springs; this cannot starve.
+    LaunchedEffect(Unit) {
+        var lastFrame = 0L
+        while (true) {
+            withFrameNanos { frame ->
+                val dt = if (lastFrame == 0L) 0.016f else ((frame - lastFrame) / 1e9f).coerceIn(
+                    0f,
+                    0.032f
+                )
+                lastFrame = frame
+                val slotV = currentSlot.value
+                val centre = currentCentre
+                val toLeft: Float
+                val toRight: Float
+                val lead: SpringSpec<Float>
+                val follow: SpringSpec<Float>
+                if (centre != null) {
+                    val half = slotV / 2 * stretch.value
+                    toLeft = centre.value - half
+                    toRight = centre.value + half
+                    lead = trackSpring
+                    follow = trackSpring
+                } else {
+                    toLeft = slotV * currentIndex
+                    toRight = slotV * (currentIndex + 1)
+                    val pair = if (dragged) rubberLead to rubberTrail else lensSprings(currentStyle)
+                    lead = pair.first
+                    follow = pair.second
+                }
+                val movingRight = toLeft > leftPos
+                val lSpec = if (movingRight) follow else lead
+                val rSpec = if (movingRight) lead else follow
+                // Substeps: a stiff spring integrated once per frame is
+                // numerically unstable at 60 Hz and the edges run away —
+                // small steps keep it exact at any frame rate.
+                val steps = (dt / 0.0075f).toInt().coerceIn(1, 6)
+                val h = dt / steps
+                repeat(steps) {
+                    val lAccel =
+                        lSpec.stiffness * (toLeft - leftPos) - 2f * lSpec.dampingRatio * kotlin.math.sqrt(
+                            lSpec.stiffness
+                        ) * leftVel
+                    leftVel += lAccel * h
+                    leftPos += leftVel * h
+                    val rAccel =
+                        rSpec.stiffness * (toRight - rightPos) - 2f * rSpec.dampingRatio * kotlin.math.sqrt(
+                            rSpec.stiffness
+                        ) * rightVel
+                    rightVel += rAccel * h
+                    rightPos += rightVel * h
+                }
+                // Watchdog: if the numbers ever go wrong, land on the target
+                // instead of feeding an impossible width to the layout.
+                if (!leftPos.isFinite() || !rightPos.isFinite() || kotlin.math.abs(leftPos) > 10000f || kotlin.math.abs(
+                        rightPos
+                    ) > 10000f
+                ) {
+                    leftPos = toLeft
+                    rightPos = toRight
+                    leftVel = 0f
+                    rightVel = 0f
+                }
+                if (centre == null && kotlin.math.abs(toLeft - leftPos) < 0.01f && kotlin.math.abs(
+                        toRight - rightPos
+                    ) < 0.01f && kotlin.math.abs(leftVel) < 0.05f && kotlin.math.abs(rightVel) < 0.05f
+                ) {
+                    leftPos = toLeft
+                    rightPos = toRight
+                    leftVel = 0f
+                    rightVel = 0f
+                    dragged = false
+                    prevCentre = null
+                }
+            }
+        }
+    }
+    return ({ leftPos.dp } to { rightPos.dp })
 }
 
 /** The springs for the lens's leading and trailing edges, for each [DockLens]. */
-internal fun lensSprings(style: DockLens): Pair<SpringSpec<Float>, SpringSpec<Float>> = when (style) {
-    DockLens.STRETCH -> spring<Float>(dampingRatio = 1f, stiffness = 520f) to spring(dampingRatio = 1f, stiffness = 170f)
-    // Underdamped edges: the front overshoots, the back catches up late and both wobble home.
-    DockLens.JELLY -> spring<Float>(dampingRatio = 0.5f, stiffness = 480f) to spring(dampingRatio = 0.55f, stiffness = 190f)
-    // Both edges on the same spring, so the lens keeps its width.
-    DockLens.GLIDE -> spring<Float>(dampingRatio = 0.86f, stiffness = 360f).let { it to it }
-}
+internal fun lensSprings(style: DockLens): Pair<SpringSpec<Float>, SpringSpec<Float>> =
+    when (style) {
+        DockLens.STRETCH -> spring<Float>(dampingRatio = 1f, stiffness = 520f) to spring(
+            dampingRatio = 1f,
+            stiffness = 170f
+        )
+        // Underdamped edges: the front overshoots, the back catches up late and both wobble home.
+        DockLens.JELLY -> spring<Float>(dampingRatio = 0.5f, stiffness = 480f) to spring(
+            dampingRatio = 0.55f,
+            stiffness = 190f
+        )
+        // Both edges on the same spring, so the lens keeps its width.
+        DockLens.GLIDE -> spring<Float>(dampingRatio = 0.86f, stiffness = 360f).let { it to it }
+    }
