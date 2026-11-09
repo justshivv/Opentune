@@ -67,6 +67,13 @@ internal object SharedLoops {
             return e
         }
         val player = ExoPlayer.Builder(context.applicationContext)
+            .setRenderersFactory(
+                // Some hardware decoders refuse these tall canvas files at
+                // start-up though they claim to support them: fall back to
+                // another decoder instead of showing nothing.
+                androidx.media3.exoplayer.DefaultRenderersFactory(context.applicationContext)
+                    .setEnableDecoderFallback(true)
+            )
             // Kept on disk, so each turn of the loop plays from the phone rather than downloading again.
             .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(LoopCache.dataSource(context)))
             .build()
