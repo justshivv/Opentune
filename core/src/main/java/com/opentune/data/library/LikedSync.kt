@@ -12,6 +12,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Keeps Liked in step with the signed-in account's liked songs on YouTube
@@ -44,6 +47,11 @@ object LikedSync {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val running = Mutex()
+    /** How the last sync went, for the Liked page's pill to show. */
+    data class Status(val running: Boolean = false, val changed: Int = 0, val failed: Boolean = false)
+
+    private val _status = MutableStateFlow(Status())
+    val status: StateFlow<Status> = _status.asStateFlow()
 
     @Volatile private var lastRun = 0L
     @Volatile private var lastOwner: String? = null
@@ -66,14 +74,18 @@ object LikedSync {
                 val account = owner() ?: return@launch
                 val now = System.currentTimeMillis()
                 if (lastOwner == account && now - lastRun < MIN_INTERVAL_MS) return@launch
+                _status.value = Status(running = true)
                 try {
-                    reconcile(account)
+                    val changed = reconcile(account)
                     lastOwner = account
                     lastRun = System.currentTimeMillis()
+                    _status.value = Status(changed = changed)
                 } catch (e: CancellationException) {
+                    _status.value = Status()
                     throw e
                 } catch (e: Exception) {
                     Log.w(TAG, "Liked sync didn't finish; it can be retried", e)
+                    _status.value = Status(failed = true)
                 }
             } finally {
                 running.unlock()
@@ -81,7 +93,7 @@ object LikedSync {
         }
     }
 
-    private suspend fun reconcile(accountId: String) {
+    private suspend fun reconcile(accountId: String): Int {
         val cookie = Innertube.cookie
         fun checkAccount() {
             if (owner() != accountId || Innertube.cookie != cookie) throw CancellationException("Liked sync account changed")
@@ -107,6 +119,9 @@ object LikedSync {
         }
         checkAccount()
         LibraryStore.applyLikedSync(accountId, localAll, result.songs, result.agreed)
+        val after = result.songs.mapTo(HashSet()) { it.videoId }
+            .filterNotTo(HashSet()) { it.startsWith("local:") }
+        return (localIds - after).size + (after - localIds).size
     }
 
     /** The account's liked songs, whole; a failed or cut-down read throws. */

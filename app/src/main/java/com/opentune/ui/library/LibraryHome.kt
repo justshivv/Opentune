@@ -1034,6 +1034,7 @@ private enum class DownloadsTab {
 @Composable
 fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
     val liked by LibraryStore.liked.collectAsState()
+    val likedSync by LikedSync.status.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     LaunchedEffect(signedIn) { if (signedIn) LikedSync.sync() }
     val songs = remember(liked) { liked.map { it.toSong() } }
@@ -1043,6 +1044,8 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     Box(Modifier.fillMaxSize()) {
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader("Liked Music", onBack = onBack) }
+        item(key = "liked-sync") { LikedSyncPill(likedSync) }
+
         item(key = "liked-cover") {
             Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), contentAlignment = Alignment.Center) {
                 com.opentune.ui.components.LikedPlaylistCover(Modifier.fillMaxWidth(0.76f).aspectRatio(1f))
