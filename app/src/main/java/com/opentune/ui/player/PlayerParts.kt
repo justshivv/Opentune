@@ -82,6 +82,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.opentune.ui.components.glass
+import androidx.compose.runtime.snapshotFlow
 import com.opentune.ui.components.pressable
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.FastForward
@@ -1280,6 +1281,13 @@ fun MiniPlayer(
                     }
                 }
             }
+        }
+    }
+    // The chrome mirrors this so it can keep the card behind the dock while
+    // it is pulled down; the sheet's replica never drags, and never writes.
+    if (!replica) {
+        LaunchedEffect(Unit) {
+            snapshotFlow { offsetY.value }.collect { com.opentune.ui.components.PlayerMorph.miniDismiss = it }
         }
     }
     val scope = rememberCoroutineScope()

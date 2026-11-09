@@ -120,6 +120,8 @@ object PlayerMorph {
      * second, negative toward the mini player).
      */
     var sheetDrag by mutableFloatStateOf(0f)
+    /** Px the mini player is pulled down toward dismissal, 0 at rest; while it is pulled, the chrome draws it behind the dock. */
+    var miniDismiss by mutableFloatStateOf(0f)
     var sheetFling = 0f
     /** Px per second the pull up was travelling when it let go, upward positive; the sheet's open carries on at that pace. */
     var pullFlingPx = 0f
