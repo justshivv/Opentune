@@ -726,7 +726,7 @@ private fun DockPill(
                             // early cancels it — the finger may already be
                             // moving; what counts is that it stayed down.
                             var lastX = down.position.x
-                            val engaged = withTimeoutOrNull(240L) {
+                            val engaged = withTimeoutOrNull(160L) {
                                 var alive = true
                                 while (alive) {
                                     val e = awaitPointerEvent(PointerEventPass.Initial)
@@ -1148,33 +1148,24 @@ internal fun rememberStretchingLens(
     var leftVel by remember { mutableFloatStateOf(0f) }
     var rightVel by remember { mutableFloatStateOf(0f) }
     // The rubber lives in the width while scrubbing: the faster the scrub,
-    // the wider the lens stretches, springing back when the finger lifts.
-    var prevCentre by remember { mutableStateOf<Float?>(null) }
+    // the wider the lens stretches, and the stretch melts back as the finger
+    // slows — measured on the frame clock in the loop below, so holding
+    // still melts it too, not only lifting the finger.
     var dragged by remember { mutableStateOf(false) }
-    val stretch = remember { Animatable(1f) }
+    var stretchValue by remember { mutableFloatStateOf(1f) }
+    var stretchVel by remember { mutableFloatStateOf(0f) }
     val trackSpring = spring<Float>(dampingRatio = 1f, stiffness = 2800f)
     val rubberLead = spring<Float>(dampingRatio = 0.55f, stiffness = 380f)
     val rubberTrail = spring<Float>(dampingRatio = 0.45f, stiffness = 240f)
-    LaunchedEffect(dragCentre) {
-        val centre = dragCentre
-        if (centre != null) {
-            dragged = true
-            val speed = kotlin.math.abs(centre.value - (prevCentre ?: centre.value))
-            prevCentre = centre.value
-            stretch.animateTo(
-                (1f + speed / slot.value * 0.9f).coerceAtMost(1.45f),
-                spring(dampingRatio = 0.5f, stiffness = 520f)
-            )
-        } else {
-            stretch.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 300f))
-        }
-    }
+    val stretchTrack = spring<Float>(dampingRatio = 0.5f, stiffness = 520f)
+    val stretchReturn = spring<Float>(dampingRatio = 0.4f, stiffness = 300f)
     // One physics loop on the frame clock, never restarted: each edge is a
     // spring integrated by hand toward wherever it belongs — the finger's
     // span while scrubbing, its slot's span otherwise. Restarting animateTo
     // on every finger event starved the springs; this cannot starve.
     LaunchedEffect(Unit) {
         var lastFrame = 0L
+        var prevCentreFrame: Float? = null
         while (true) {
             withFrameNanos { frame ->
                 val dt = if (lastFrame == 0L) 0.016f else ((frame - lastFrame) / 1e9f).coerceIn(
@@ -1184,12 +1175,25 @@ internal fun rememberStretchingLens(
                 lastFrame = frame
                 val slotV = currentSlot.value
                 val centre = currentCentre
+                val stretchTarget: Float
+                val stretchSpring: SpringSpec<Float>
+                if (centre != null) {
+                    dragged = true
+                    val speed = kotlin.math.abs(centre.value - (prevCentreFrame ?: centre.value))
+                    prevCentreFrame = centre.value
+                    stretchTarget = (1f + speed / slotV * 0.9f).coerceAtMost(1.45f)
+                    stretchSpring = stretchTrack
+                } else {
+                    prevCentreFrame = null
+                    stretchTarget = 1f
+                    stretchSpring = stretchReturn
+                }
                 val toLeft: Float
                 val toRight: Float
                 val lead: SpringSpec<Float>
                 val follow: SpringSpec<Float>
                 if (centre != null) {
-                    val half = slotV / 2 * stretch.value
+                    val half = slotV / 2 * stretchValue
                     toLeft = centre.value - half
                     toRight = centre.value + half
                     lead = trackSpring
@@ -1210,6 +1214,12 @@ internal fun rememberStretchingLens(
                 val steps = (dt / 0.0075f).toInt().coerceIn(1, 6)
                 val h = dt / steps
                 repeat(steps) {
+                    val sAccel =
+                        stretchSpring.stiffness * (stretchTarget - stretchValue) - 2f * stretchSpring.dampingRatio * kotlin.math.sqrt(
+                            stretchSpring.stiffness
+                        ) * stretchVel
+                    stretchVel += sAccel * h
+                    stretchValue += stretchVel * h
                     val lAccel =
                         lSpec.stiffness * (toLeft - leftPos) - 2f * lSpec.dampingRatio * kotlin.math.sqrt(
                             lSpec.stiffness
@@ -1243,7 +1253,6 @@ internal fun rememberStretchingLens(
                     leftVel = 0f
                     rightVel = 0f
                     dragged = false
-                    prevCentre = null
                 }
             }
         }
