@@ -52,6 +52,8 @@ jobs:
           --tests '*CommentsSheetScreenshotTest'
           --tests '*ChoiceTransitionTest'
           --tests '*FullListCoverTest'
+          --tests '*SeekBarTouchTest'
+          --tests '*SegmentedSettingsTest'
           --tests '*SettingsLayoutTest'
           --tests '*ChoiceSheetScreenshotTest.pick*'
           --tests '*ChoiceSheetScreenshotTest.backOnTheScreenClosesWithoutChoosing'
@@ -68,6 +70,10 @@ jobs:
                   for failure in list(case.findall('failure')) + list(case.findall('error')):
                       print(f"{case.get('classname')}.{case.get('name')}: {failure.get('message')}")
                       print((failure.text or '')[:3000])
+          for path in glob.glob('app/build/reports/lint-results-*.txt'):
+              for line in open(path):
+                  if 'Error:' in line:
+                      print(line.rstrip())
           PY
       - name: UI test and lint reports
         if: always()

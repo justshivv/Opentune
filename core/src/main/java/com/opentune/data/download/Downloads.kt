@@ -222,10 +222,17 @@ object Downloads {
 
     fun remove(context: Context, videoId: String) = remove(context, videoId, onlyActive = false)
 
-    private fun remove(context: Context, videoId: String, onlyActive: Boolean) {
+    internal fun removeSmart(context: Context, videoId: String, onlyPending: Boolean = false) =
+        remove(context, videoId, onlyActive = false, onlySmart = true, onlyPending = onlyPending)
+
+    private fun remove(context: Context, videoId: String, onlyActive: Boolean, onlySmart: Boolean = false, onlyPending: Boolean = false) {
         // Withdraw ownership first: progress, failure and completion callbacks can
         // never resurrect the row while WorkManager stops its coroutine.
-        fun eligible(entry: DownloadEntry?) = entry != null && (!onlyActive || entry.state == DownloadState.QUEUED || entry.state == DownloadState.DOWNLOADING)
+        // Recheck ownership in the atomic update: a manual save can promote an
+        // entry after the smart worker takes its snapshot of cleanup candidates.
+        fun eligible(entry: DownloadEntry?) = entry != null && (!onlySmart || entry.smartDownload) &&
+            (!onlyPending || entry.state != DownloadState.DONE) &&
+            (!onlyActive || entry.state == DownloadState.QUEUED || entry.state == DownloadState.DOWNLOADING)
         val entry = _entries.getAndUpdate { if (eligible(it[videoId])) it - videoId else it }[videoId]
             ?.takeIf { eligible(it) } ?: return
         val manager = WorkManager.getInstance(context)

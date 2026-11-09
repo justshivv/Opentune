@@ -17,8 +17,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -175,13 +175,11 @@ internal fun LoopingVideo(
     // Already drawn elsewhere: no fade, the picture is simply there.
     val alreadyDrawn = remember(entry) { entry.drawn.value }
     val fade by animateFloatAsState(if (drawn) 1f else 0f, if (alreadyDrawn) tween(0) else tween(700), label = "loopingVideo")
-    var wants by remember(entry) { mutableStateOf(false) }
-    val active = playing && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
-    LaunchedEffect(entry, active) {
-        if (active != wants) {
-            SharedLoops.want(entry, active)
-            wants = active
-        }
+    val lifecycleState by lifecycle.currentStateAsState()
+    val active = playing && lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+    DisposableEffect(entry, active) {
+        if (active) SharedLoops.want(entry, true)
+        onDispose { if (active) SharedLoops.want(entry, false) }
     }
     LaunchedEffect(url, drawn) {
         if (!drawn) return@LaunchedEffect
@@ -196,19 +194,8 @@ internal fun LoopingVideo(
             bars = found
         }
     }
-    DisposableEffect(entry, lifecycle) {
-        val watch = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> if (playing && !wants) { SharedLoops.want(entry, true); wants = true }
-                Lifecycle.Event.ON_STOP -> if (wants) { SharedLoops.want(entry, false); wants = false }
-                else -> Unit
-            }
-        }
-        lifecycle.addObserver(watch)
+    DisposableEffect(entry) {
         onDispose {
-            lifecycle.removeObserver(watch)
-            if (wants) SharedLoops.want(entry, false)
-            wants = false
             view?.let { SharedLoops.hide(entry, it) }
             onView?.invoke(null)
             SharedLoops.release(entry)

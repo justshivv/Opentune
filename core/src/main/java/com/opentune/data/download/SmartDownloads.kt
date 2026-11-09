@@ -35,11 +35,11 @@ object SmartDownloads {
                         manager.cancelUniqueWork(REFRESH)
                         manager.cancelUniqueWork(NOW)
                         Downloads.entries.value.values.filter { it.smartDownload && it.state != DownloadState.DONE }
-                            .forEach { Downloads.remove(app, it.song.videoId) }
+                            .forEach { Downloads.removeSmart(app, it.song.videoId, onlyPending = true) }
                     } else {
                         // Lowering the limit takes effect even while offline, without touching manual downloads.
                         Downloads.entries.value.values.filter { it.smartDownload }.sortedByDescending { it.addedAt }
-                            .drop(limit.coerceIn(10, 500)).forEach { Downloads.remove(app, it.song.videoId) }
+                            .drop(limit.coerceIn(10, 500)).forEach { Downloads.removeSmart(app, it.song.videoId) }
                         manager.enqueueUniquePeriodicWork(REFRESH, ExistingPeriodicWorkPolicy.UPDATE,
                             PeriodicWorkRequestBuilder<SmartDownloadWorker>(12, TimeUnit.HOURS)
                                 .setConstraints(constraints()).build())
@@ -98,7 +98,7 @@ class SmartDownloadWorker(context: Context, parameters: WorkerParameters) : Coro
             AppSettings.library.value.smartDownloadLimit)
         val ids = desired.mapTo(HashSet()) { it.videoId }
         Downloads.entries.value.values.filter { it.smartDownload && it.song.videoId !in ids }
-            .forEach { Downloads.remove(applicationContext, it.song.videoId) }
+            .forEach { Downloads.removeSmart(applicationContext, it.song.videoId) }
         for (song in desired) {
             currentCoroutineContext().ensureActive()
             if (!SmartDownloads.allowed(applicationContext)) return Result.retry()

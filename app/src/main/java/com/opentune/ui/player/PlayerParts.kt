@@ -1140,6 +1140,14 @@ fun SeekBar(
                     }
                     if (gradient) drawPath(wavePath, Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), style = Stroke(width = h, cap = StrokeCap.Round))
                     else drawPath(wavePath, active, style = Stroke(width = h, cap = StrokeCap.Round))
+                } else if (lineThumb && thumbRadius > 0.dp) {
+                    // Clip the full capsule at the handle instead of rounding the
+                    // played segment there. Its outer edge stays round; the join
+                    // stays flush even with a thick track and a narrow line thumb.
+                    clipRect(right = size.width * f) {
+                        if (gradient) drawRoundRect(Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), Offset(0f, y), Size(size.width, h), r)
+                        else drawRoundRect(active, Offset(0f, y), Size(size.width, h), r)
+                    }
                 } else if (gradient) {
                     drawRoundRect(Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), Offset(0f, y), Size(size.width * f, h), r)
                 } else {

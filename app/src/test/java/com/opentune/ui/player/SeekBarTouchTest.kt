@@ -2,6 +2,11 @@ package com.opentune.ui.player
 
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.geometry.Offset
@@ -16,17 +21,42 @@ import androidx.compose.ui.unit.dp
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.SeekbarThickness
 import com.opentune.data.settings.SeekbarTime
+import com.opentune.data.settings.SeekbarThumb
+import com.opentune.data.settings.SeekbarColor
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], application = android.app.Application::class)
 class SeekBarTouchTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun thickLineHandleMeetsTheFillWithoutARoundedShoulder() {
+        AppSettings.init(compose.activity)
+        AppSettings.updateUi { it.copy(seekbarThickness = SeekbarThickness.THICK,
+            seekbarThumb = SeekbarThumb.LINE, seekbarColor = SeekbarColor.PLAIN,
+            seekbarTime = SeekbarTime.HIDDEN) }
+        compose.setContent {
+            MaterialTheme(colorScheme = darkColorScheme(onSurface = Color.Red)) {
+                Surface(color = Color.Black) { SeekBar({ 50_000L }, { 100_000L }, 100_000L, onSeek = {}) }
+            }
+        }
+        compose.waitForIdle()
+        val pixels = compose.onNodeWithContentDescription("Playback position. Drag away from the bar for fine scrubbing.")
+            .captureToImage().toPixelMap()
+        val density = compose.activity.resources.displayMetrics.density
+        // Just outside the 3dp handle, at the track's top edge. A rounded
+        // progress capsule leaves this pixel translucent instead of filled.
+        val x = (pixels.width / 2f - 2.25f * density).toInt()
+        val y = (pixels.height / 2f - 4.5f * density + .4f * density).toInt()
+        assertTrue("fill must reach the line handle at full track height", pixels[x, y].red > .95f)
+    }
 
     @Test fun thickTrackTapsAndDragsNeverOpenQualityWithTimesShownOrHidden() {
         AppSettings.init(compose.activity)
