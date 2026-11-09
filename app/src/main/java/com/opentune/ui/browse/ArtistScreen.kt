@@ -173,6 +173,7 @@ internal fun ArtistPageView(
     onShowAll: (HomeShelf) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val appearance by AppSettings.ui.collectAsState()
     // One portrait per artist for a day (see ArtistPhotos), so going back or coming again shows
     // the picture already in the image cache. Better artwork is downloaded for a later visit
     // rather than replacing a visible face and leaving its palette tied to the previous one.
@@ -208,7 +209,9 @@ internal fun ArtistPageView(
             },
         ) {
             val band = com.opentune.ui.components.rememberRubberBand()
-            LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize(), overscrollEffect = band) {
+            LazyColumn(state = listState, contentPadding = contentPadding,
+                modifier = Modifier.fillMaxSize().then(if (appearance.artistPageTint) Modifier.coverWash(rememberCoverTint(photo), photo) else Modifier),
+                overscrollEffect = band) {
                 item(key = "hero", contentType = "hero") { ArtistHero(browseId, page, photo, listState, actions, band) }
                 if (page == null) {
                     item(key = "latest-placeholder") {

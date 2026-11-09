@@ -47,6 +47,14 @@ class PaneTransitionTest {
         }.coroutineContext(Dispatchers.Unconfined).build())
     }
 
+    @Test fun pillNeverHasAnEmptyMidpoint() {
+        for (step in 0..100) {
+            val p = step / 100f
+            org.junit.Assert.assertEquals(1f, morphShown(p) + morphShown(1f - p), 0.0001f)
+        }
+        org.junit.Assert.assertEquals(0.5f, morphShown(0.5f), 0.0001f)
+    }
+
     @Test fun classicLyricsShrinksBeforeReachingTheHeader() = transition(PlayerStyle.CLASSIC, "Lyrics")
     @Test fun classicQueueShrinksBeforeReachingTheHeader() = transition(PlayerStyle.CLASSIC, "Queue")
     @Test fun appleLyricsShrinksBeforeReachingTheHeader() = transition(PlayerStyle.APPLE_MUSIC, "Lyrics")

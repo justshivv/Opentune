@@ -113,10 +113,12 @@ fun Artwork(
     imageModifier: Modifier = Modifier,
     /** Hears whether the cover is showing (loaded, so cached) each time that changes. */
     onLoaded: ((Boolean) -> Unit)? = null,
+    contentScale: ContentScale = ContentScale.Crop,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
 ) {
     var loaded by remember(url) { mutableStateOf(false) }
     Box(
-        modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        modifier.clip(shape).background(containerColor),
         contentAlignment = Alignment.Center,
     ) {
         if (!loaded) {
@@ -131,7 +133,7 @@ fun Artwork(
             AsyncImage(
                 model = url,
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
+                contentScale = contentScale,
                 modifier = Modifier.matchParentSize().then(imageModifier),
                 onState = {
                     loaded = it is AsyncImagePainter.State.Success

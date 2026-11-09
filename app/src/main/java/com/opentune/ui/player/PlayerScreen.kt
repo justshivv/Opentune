@@ -1228,6 +1228,11 @@ fun PlayerLayout(
                                 MorphPill(
                                     second = inQueueNow,
                                     animate = !state.ui.reduceAnimation,
+                                    progress = {
+                                        if (flight.active && returnPane == Pane.QUEUE.name) {
+                                            if (flight.toSmall) flight.progress else 1f - flight.progress
+                                        } else null
+                                    },
                                     firstFill = Color.White.copy(alpha = 0.14f),
                                     secondFill = MaterialTheme.colorScheme.surfaceContainerHigh,
                                     modifier = Modifier.weight(1f),

@@ -1288,7 +1288,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     val tint = com.opentune.ui.browse.rememberCoverTint((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(CARD_ART_PX))
     val band = com.opentune.ui.components.rememberRubberBand()
     LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding,
-        modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search), overscrollEffect = band) {
+        modifier = Modifier.fillMaxSize().coverWash(tint, (playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(CARD_ART_PX)).playlistSearchResults(search), overscrollEffect = band) {
         if (!searching) item(key = "header") {
             val full = com.opentune.ui.browse.fullListCover()
             androidx.compose.foundation.layout.BoxWithConstraints {
@@ -1298,7 +1298,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                         com.opentune.ui.components.PlaylistCover(playlist.name, songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape, named = false)
                     }) else null)
                 Column(
-                    if (full) Modifier.fillMaxWidth().padding(top = maxWidth * com.opentune.ui.browse.FULL_COVER_TITLE_AT, start = 24.dp, end = 24.dp)
+                    if (full) Modifier.fillMaxWidth().padding(top = maxWidth * com.opentune.ui.browse.FULL_COVER_TITLE_AT + 16.dp, start = 24.dp, end = 24.dp)
                     else Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {

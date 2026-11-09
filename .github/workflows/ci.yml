@@ -43,6 +43,7 @@ jobs:
           --tests '*DiscordSignInScreenshotTest'
           --tests '*CommentsSheetScreenshotTest'
           --tests '*ChoiceTransitionTest'
+          --tests '*FullListCoverTest'
           --tests '*ChoiceSheetScreenshotTest.pick*'
           --tests '*ChoiceSheetScreenshotTest.backOnTheScreenClosesWithoutChoosing'
       - name: Android lint

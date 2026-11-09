@@ -331,6 +331,8 @@ internal fun rememberCoverTint(url: String?): Color {
     val loaded = !url.isNullOrBlank()
     val tint by androidx.compose.animation.animateColorAsState(
         if (loaded) androidx.compose.ui.graphics.lerp(background, coverTone(seed, background.luminance() < 0.5f), 0.32f) else background,
+        animationSpec = if (com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation)
+            androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(550),
         label = "coverTint",
     )
     return tint
@@ -349,10 +351,23 @@ internal fun coverTone(seed: Color?, dark: Boolean): Color {
  * the plain background at the foot.
  */
 @Composable
-internal fun Modifier.coverWash(tint: Color): Modifier {
+internal fun Modifier.coverWash(tint: Color, artwork: String? = null): Modifier {
     val background = MaterialTheme.colorScheme.background
-    // Down to the foot it keeps most of the colour, rather than ending in the plain background.
-    return this.background(Brush.verticalGradient(0f to tint, 0.5f to tint, 1f to androidx.compose.ui.graphics.lerp(tint, background, 0.3f)))
+    val dark = background.luminance() < 0.5f
+    val palette = com.opentune.ui.theme.rememberArtworkPalette(artwork)
+    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+    val secondary by androidx.compose.animation.animateColorAsState(
+        palette.getOrNull(1)?.let { androidx.compose.ui.graphics.lerp(background, coverTone(it, dark), if (dark) 0.36f else 0.18f) } ?: tint,
+        animationSpec = if (still) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(550),
+        label = "ambientSecondary",
+    )
+    return this.drawBehind {
+        drawRect(Brush.verticalGradient(0f to tint, 0.45f to androidx.compose.ui.graphics.lerp(tint, background, 0.18f),
+            1f to androidx.compose.ui.graphics.lerp(tint, background, 0.65f)))
+        drawRect(Brush.radialGradient(listOf(secondary.copy(alpha = 0.65f), Color.Transparent),
+            center = androidx.compose.ui.geometry.Offset(size.width * 0.9f, size.height * 0.3f),
+            radius = maxOf(size.width, size.height * 0.7f).coerceAtLeast(1f)))
+    }
 }
 
 /** The orders a list's songs can be shown in. */
@@ -381,30 +396,25 @@ internal fun fullListCover(): Boolean =
     com.opentune.data.settings.AppSettings.ui.collectAsState().value.fullScreenListCover
 
 /**
- * A list's cover across the top of its page, edge to edge and under the status bar, square,
- * darkened a little at the top for the status line and fading out at its foot, so the
- * blurred wash of its colours behind the header ([HeaderBackdrop]) carries on below it,
- * down past the title, as on the page without it. [cover] draws it when it's made of the
- * songs' covers.
+ * A full-width square for the complete cover. Wide artwork is fitted within it;
+ * the title follows below, and a light edge scrim keeps the top controls readable.
+ * [cover] supplies generated artwork when a playlist has no image URL.
  */
 @Composable
 internal fun FullListCover(url: String?, modifier: Modifier = Modifier, cover: (@Composable () -> Unit)? = null) {
-    Box(
-        modifier.fillMaxWidth().aspectRatio(1f).clipToBounds()
-            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-            .drawWithContent {
-                drawContent()
-                drawRect(Brush.verticalGradient(0.5f to Color.Black, 1f to Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
-            },
-    ) {
+    Box(modifier.fillMaxWidth().aspectRatio(1f).clipToBounds()) {
         if (cover != null) cover()
-        else Artwork(url, Modifier.matchParentSize(), shape = androidx.compose.ui.graphics.RectangleShape, placeholder = Icons.Filled.Album)
-        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.4f), 0.18f to Color.Transparent)))
+        else Artwork(url, Modifier.matchParentSize(), shape = androidx.compose.ui.graphics.RectangleShape,
+            placeholder = Icons.Filled.Album, contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            containerColor = Color.Transparent)
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(
+            0f to Color.Black.copy(alpha = 0.25f), 0.16f to Color.Transparent,
+            0.92f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.12f))))
     }
 }
 
-/** How far down a full cover the title starts, as a share of its height: on its faded foot. */
-internal const val FULL_COVER_TITLE_AT = 0.7f
+/** The title starts below the complete square cover, never over the artwork. */
+internal const val FULL_COVER_TITLE_AT = 1f
 
 /** Shared artwork, typography and spacing for YouTube, Spotify and local playlists. */
 @Composable
@@ -656,14 +666,14 @@ fun CollectionScreen(
                 }
                 val tint = rememberCoverTint(c?.thumbnailUrl.artworkAt(CARD_ART_PX))
                 val band = com.opentune.ui.components.rememberRubberBand()
-                LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search), overscrollEffect = band) {
+                LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().coverWash(tint, c?.thumbnailUrl.artworkAt(CARD_ART_PX)).playlistSearchResults(search), overscrollEffect = band) {
                     if (!searching) item(key = "header") {
                         val full = fullListCover()
                         androidx.compose.foundation.layout.BoxWithConstraints {
                             HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
                             if (full) FullListCover(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.pinnedToTop(band), cover = fallbackCover)
                             Column(
-                                if (full) Modifier.fillMaxWidth().padding(top = maxWidth * FULL_COVER_TITLE_AT, start = 24.dp, end = 24.dp)
+                                if (full) Modifier.fillMaxWidth().padding(top = maxWidth * FULL_COVER_TITLE_AT + 16.dp, start = 24.dp, end = 24.dp)
                                 else Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {

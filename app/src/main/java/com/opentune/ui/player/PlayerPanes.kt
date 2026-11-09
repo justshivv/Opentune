@@ -81,6 +81,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -439,21 +441,23 @@ fun MorphPill(
     firstFill: Color,
     secondFill: Color,
     modifier: Modifier = Modifier,
+    /** When the cover is flying, the pill follows that same transition clock. */
+    progress: (() -> Float?)? = null,
     first: @Composable (enabled: Boolean) -> Unit,
     secondContent: @Composable (enabled: Boolean) -> Unit,
 ) {
     val morph = remember { androidx.compose.animation.core.Animatable(if (second) 1f else 0f) }
     LaunchedEffect(second, animate) {
         val target = if (second) 1f else 0f
-        if (!animate) morph.snapTo(target) else morph.animateTo(target, spring(dampingRatio = 1f, stiffness = 340f))
+        if (!animate) morph.snapTo(target) else morph.animateTo(target, androidx.compose.animation.core.tween(440, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)))
     }
-    var firstWidth by remember { mutableFloatStateOf(0f) }
-    var secondWidth by remember { mutableFloatStateOf(0f) }
-    Box(
-        modifier.height(52.dp).drawWithContent {
-            if (firstWidth <= 0f || secondWidth <= 0f) return@drawWithContent
-            val p = morph.value
-            val w = androidx.compose.ui.util.lerp(firstWidth, secondWidth, p)
+    // Set while measuring, before this frame draws; onSizeChanged used to leave a blank frame.
+    val widths = remember { FloatArray(2) }
+    val currentProgress = { (progress?.invoke() ?: morph.value).coerceIn(0f, 1f) }
+    androidx.compose.ui.layout.Layout(
+        modifier = modifier.height(52.dp).drawWithContent {
+            val p = currentProgress()
+            val w = androidx.compose.ui.util.lerp(widths[0], widths[1], p)
             val left = (size.width - w) / 2f
             val path = androidx.compose.ui.graphics.Path().apply {
                 addRoundRect(androidx.compose.ui.geometry.RoundRect(left, 0f, left + w, size.height, androidx.compose.ui.geometry.CornerRadius(size.height / 2f)))
@@ -461,28 +465,26 @@ fun MorphPill(
             drawPath(path, androidx.compose.ui.graphics.lerp(firstFill, secondFill, p))
             clipPath(path) { this@drawWithContent.drawContent() }
         },
-        contentAlignment = Alignment.Center,
-    ) {
-        // The coming-in set is on top, so it's the one under the finger.
-        Box(
-            Modifier.zIndex(if (second) 0f else 1f)
-                .onSizeChanged { firstWidth = it.width.toFloat() }
-                .graphicsLayer { alpha = morphShown(1f - morph.value) },
-        ) { first(!second) }
-        Box(
-            Modifier.zIndex(if (second) 1f else 0f)
-                .onSizeChanged { secondWidth = it.width.toFloat() }
-                .graphicsLayer { alpha = morphShown(morph.value) },
-        ) { secondContent(second) }
+        content = {
+            Box(Modifier.zIndex(if (second) 0f else 1f)
+                .graphicsLayer { alpha = morphShown(1f - currentProgress()) }) { first(!second) }
+            Box(Modifier.zIndex(if (second) 1f else 0f)
+                .graphicsLayer { alpha = morphShown(currentProgress()) }) { secondContent(second) }
+        },
+    ) { measurables, constraints ->
+        val children = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        widths[0] = children[0].width.toFloat()
+        widths[1] = children[1].width.toFloat()
+        val width = constraints.constrainWidth(children.maxOf { it.width })
+        val height = constraints.constrainHeight(children.maxOf { it.height })
+        layout(width, height) {
+            children.forEach { it.placeRelative((width - it.width) / 2, (height - it.height) / 2) }
+        }
     }
 }
 
-/**
- * How visible a set is at [p] of the way to it: nothing until 42%, then an
- * ease in to fully there by 95%. The old set is all but gone by the middle
- * when the new one starts, so their icons never sit on top of each other.
- */
-internal fun morphShown(p: Float): Float = ((p - 0.42f) / 0.53f).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+/** Complementary fades keep the controls visible throughout the morph, including its midpoint. */
+internal fun morphShown(p: Float): Float = p.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
 /**
  * Shuffle, repeat and autoplay in one glass pill, split by hairlines. Each
