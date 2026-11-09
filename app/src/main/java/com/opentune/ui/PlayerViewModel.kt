@@ -110,20 +110,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val duration = withTimeoutOrNull(20_000) {
                     player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
                 } ?: 0L
-                // The Canvas cookie is read only now, never when the song first
-                // became current: at app start the WebView cookie store may
-                // still be loading, and an early read found no cookie and
-                // skipped the Canvas for good. Give it a while to appear.
-                val cookie = if (moving && ui.spotifyCanvas) {
-                    withTimeoutOrNull(30_000) {
-                        var found = com.opentune.ui.spotify.SpotifyConnection.cookie()
-                        while (found == null) {
-                            kotlinx.coroutines.delay(500)
-                            found = com.opentune.ui.spotify.SpotifyConnection.cookie()
-                        }
-                        found
-                    }
-                } else null
                 kotlinx.coroutines.coroutineScope {
                     if (ui.albumCovers && betterCover.value?.first != song.videoId) launch {
                         com.opentune.data.covers.AlbumCovers.coverFor(song, duration)?.let {
@@ -134,13 +120,39 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     if (motion && duration > 0) launch {
                         com.opentune.data.covers.AppleMotionArt.forSong(song, duration)?.let { motionFound.value = song.videoId to it }
                     }
-                    if (cookie != null && duration > 0) launch {
-                        try {
-                            com.opentune.data.spotify.SpotifyWebPlayer.canvasFor(song, duration, cookie)?.let { canvasFound.value = song.videoId to it }
-                        } catch (e: com.opentune.data.spotify.SpotifyWebPlayer.SignedOut) {
-                            com.opentune.ui.spotify.SpotifyConnection.lost(e.message)
-                        } catch (e: java.io.IOException) {
-                            com.opentune.data.DebugLog.w("Canvas", "no canvas for ${song.videoId}", e)
+                    if (moving && ui.spotifyCanvas) launch {
+                        // Canvas waits for the length without the cap above: on a
+                        // slow connection the player may take far longer than
+                        // 20s to prepare the song, and a capped wait meant the
+                        // Canvas was skipped for good. collectLatest cancels
+                        // this wait the moment the song changes, so waiting is
+                        // safe. The cookie is read after the wait, and a failed
+                        // fetch is retried instead of given up on.
+                        val d = player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
+                        val cookie = withTimeoutOrNull(30_000) {
+                            var found = com.opentune.ui.spotify.SpotifyConnection.cookie()
+                            while (found == null) {
+                                kotlinx.coroutines.delay(500)
+                                found = com.opentune.ui.spotify.SpotifyConnection.cookie()
+                            }
+                            found
+                        } ?: return@launch
+                        var attempt = 0
+                        while (true) {
+                            try {
+                                com.opentune.data.spotify.SpotifyWebPlayer.canvasFor(song, d, cookie)?.let { canvasFound.value = song.videoId to it }
+                                break
+                            } catch (e: com.opentune.data.spotify.SpotifyWebPlayer.SignedOut) {
+                                com.opentune.ui.spotify.SpotifyConnection.lost(e.message)
+                                break
+                            } catch (e: java.io.IOException) {
+                                attempt++
+                                if (attempt >= 3) {
+                                    com.opentune.data.DebugLog.w("Canvas", "no canvas for ${song.videoId}", e)
+                                    break
+                                }
+                                kotlinx.coroutines.delay(3_000)
+                            }
                         }
                     }
                 }
