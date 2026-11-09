@@ -5,8 +5,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.geometry.Offset
@@ -33,7 +31,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], application = android.app.Application::class)
+@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = android.app.Application::class)
 class SeekBarTouchTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
@@ -48,14 +46,27 @@ class SeekBarTouchTest {
             }
         }
         compose.waitForIdle()
-        val pixels = compose.onNodeWithContentDescription("Playback position. Drag away from the bar for fine scrubbing.")
-            .captureToImage().toPixelMap()
+        val bounds = compose.onNodeWithContentDescription("Playback position. Drag away from the bar for fine scrubbing.")
+            .fetchSemanticsNode().boundsInRoot
+        // Draw directly under Robolectric: PixelCopy waits for a hardware frame
+        // callback that its simulated window does not deliver.
+        fun composeView(view: android.view.View): android.view.View? {
+            if (view.javaClass.simpleName == "AndroidComposeView") return view
+            if (view is android.view.ViewGroup) for (i in 0 until view.childCount) {
+                composeView(view.getChildAt(i))?.let { return it }
+            }
+            return null
+        }
+        val view = requireNotNull(composeView(compose.activity.window.decorView))
+        val frame = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(frame))
         val density = compose.activity.resources.displayMetrics.density
         // Just outside the 3dp handle, at the track's top edge. A rounded
         // progress capsule leaves this pixel translucent instead of filled.
-        val x = (pixels.width / 2f - 2.25f * density).toInt()
-        val y = (pixels.height / 2f - 4.5f * density + .4f * density).toInt()
-        assertTrue("fill must reach the line handle at full track height", pixels[x, y].red > .95f)
+        val x = (bounds.center.x - 2.25f * density).toInt()
+        val y = (bounds.center.y - 4.5f * density + .4f * density).toInt()
+        assertTrue("fill must reach the line handle at full track height", android.graphics.Color.red(frame.getPixel(x, y)) > 242)
+        frame.recycle()
     }
 
     @Test fun thickTrackTapsAndDragsNeverOpenQualityWithTimesShownOrHidden() {

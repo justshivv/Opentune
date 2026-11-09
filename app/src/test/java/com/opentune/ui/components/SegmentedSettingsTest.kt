@@ -42,7 +42,7 @@ class SegmentedSettingsTest {
         compose.onNodeWithText("While dragging", useUnmergedTree = true)
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         assertTrue(layouts.isNotEmpty())
-        assertFalse(layouts.single().hasVisualOverflow)
+        assertFalse("Label layout: ${layouts.single().size}, constraints ${layouts.single().layoutInput.constraints}, lines ${layouts.single().lineCount}", layouts.single().hasVisualOverflow)
         compose.onNodeWithText("Line").assertIsSelected()
         compose.onNodeWithText("While dragging").performClick().assertIsSelected()
         compose.runOnIdle { assertEquals(SeekbarThumb.TOUCH, selected.value) }

@@ -212,7 +212,9 @@ fun <T> PillSegmented(options: List<T>, selected: T, label: (T) -> String, onSel
         val segment = (maxWidth - 10.dp) / options.size
         val labelHeight = labels.maxOf { text ->
             measurer.measure(text, MaterialTheme.typography.labelLarge,
-                constraints = Constraints(maxWidth = with(density) { (segment - 16.dp).roundToPx().coerceAtLeast(1) })).size.height
+                // Weighted rows round each segment to whole pixels. Measure
+                // conservatively so a one-pixel difference cannot add a clipped line.
+                constraints = Constraints(maxWidth = with(density) { (segment - 16.dp).toPx().toInt().minus(1).coerceAtLeast(1) })).size.height
         }
         // Keep the whole label at larger font sizes instead of silently clipping it.
         val height = maxOf(58.dp, with(density) { labelHeight.toDp() } + 26.dp)

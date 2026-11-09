@@ -165,12 +165,15 @@ object Downloads {
         return File(folder, "$videoId.lyrics.json")
     }
 
+    @Synchronized
     fun enqueue(context: Context, song: Song) {
         if (!com.opentune.data.isYouTubeId(song.videoId)) return
         val existing = _entries.value[song.videoId]
         // An explicit download keeps this copy permanently, outside the smart budget.
         if (existing?.smartDownload == true) put(song.videoId) { (it ?: existing).copy(smartDownload = false) }
-        if (existing?.state == DownloadState.DONE || existing?.state == DownloadState.DOWNLOADING || existing?.state == DownloadState.QUEUED) return
+        if (existing?.state == DownloadState.DONE || existing?.state == DownloadState.DOWNLOADING ||
+            (existing?.state == DownloadState.QUEUED && !existing.smartDownload)) return
+        // A promoted queued copy uses the listener's manual-download constraints.
         val preferred = com.opentune.data.lossless.ExternalStreams.downloadPreference(song.videoId)
         schedule(context, SongRef.of(song), preferred != null || existing?.preferLossless == true,
             preferred?.key ?: existing?.preferredRenditionKey)
@@ -209,6 +212,7 @@ object Downloads {
      * job keeps the network it was queued for, so turning "Wi-Fi only" off
      * left the songs already waiting still waiting for Wi-Fi.
      */
+    @Synchronized
     fun requeueWaiting(context: Context) {
         _entries.value.values.filter { it.state == DownloadState.QUEUED }.forEach { schedule(context, it.song, it.preferLossless, it.preferredRenditionKey, it.smartDownload) }
     }
@@ -225,6 +229,7 @@ object Downloads {
     internal fun removeSmart(context: Context, videoId: String, onlyPending: Boolean = false) =
         remove(context, videoId, onlyActive = false, onlySmart = true, onlyPending = onlyPending)
 
+    @Synchronized
     private fun remove(context: Context, videoId: String, onlyActive: Boolean, onlySmart: Boolean = false, onlyPending: Boolean = false) {
         // Withdraw ownership first: progress, failure and completion callbacks can
         // never resurrect the row while WorkManager stops its coroutine.
@@ -282,6 +287,7 @@ object Downloads {
 
     fun selection(songs: List<Song>): DownloadSelection = downloadSelection(songs, _entries.value)
 
+    @Synchronized
     fun retry(context: Context, videoId: String) {
         val e = _entries.value[videoId]?.takeIf { it.state == DownloadState.FAILED } ?: return
         remove(context, videoId)
@@ -640,13 +646,20 @@ internal object RangedFetch {
                                 got += n
                                 if (got > maxBytes) throw IOException("Audio file exceeds the download size limit.")
                                 out.write(buf, 0, n)
-                                if (length != null && got - reported > 256 * 1024) { reported = got; onProgress(got.toFloat() / length) }
+                                if (got - reported > 256 * 1024) {
+                                    reported = got
+                                    // Unknown-size streams still need policy/cancellation checks.
+                                    onProgress(if (length != null) got.toFloat() / length else 0f)
+                                }
                             }
                         }
                         if (got == 0L || (length != null && got != length)) throw IOException("Download came out the wrong size")
                     }
                 }
                 return
+            } catch (e: SmartDownloadDeferred) {
+                part.delete()
+                throw e
             } catch (e: IOException) {
                 part.delete()
                 if (++attempt >= ATTEMPTS) throw e
@@ -701,6 +714,8 @@ internal object RangedFetch {
                     }
                 }
                 return
+            } catch (e: SmartDownloadDeferred) {
+                throw e
             } catch (e: IOException) {
                 // Take back what this try counted, so progress doesn't run past the end.
                 if (got > 0) onBytes(-got)

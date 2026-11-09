@@ -56,7 +56,7 @@ class VideoFrostScreenshotTest {
                         return true
                     }
                 }
-                VideoFrost(frames, playing = false, Modifier.fillMaxSize(), mutableFloatStateOf(h * 0.45f), with(density) { 112f * this.density })
+                VideoFrost(frames, playing = false, Modifier.fillMaxSize(), remember0 { mutableFloatStateOf(h * 0.45f) }, with(density) { 112f * this.density })
             }
         }
         compose.mainClock.advanceTimeBy(1_000)
