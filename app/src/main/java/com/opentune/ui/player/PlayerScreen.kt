@@ -615,6 +615,7 @@ fun PlayerLayout(
                     orientation = Orientation.Vertical,
                     enabled = !docked,
                     state = rememberDraggableState { delta ->
+                        // Back down after a swipe up: the cover comes back with the finger first.
                         var d = delta
                         // Back down after a swipe up: the cover comes back with the finger first.
                         if (upPull < 0f && d > 0f) {
@@ -627,6 +628,11 @@ fun PlayerLayout(
                         dragOffset = (dragOffset + d).coerceAtLeast(0f)
                         // The card shrinks toward the mini player under the finger.
                         if (com.opentune.ui.components.PlayerMorph.sheetMorph) com.opentune.ui.components.PlayerMorph.sheetDrag = dragOffset
+                        // The swipe has turned into a close: end the follow now,
+                        // not at release, so the close runs on the plain state
+                        // and the flight stops holding the cover and the lists
+                        // where the swipe left them.
+                        if (dragOffset > 0f && flight.following) flight.end()
                         followUp()
                         // When the cover itself can't fly with the finger, the whole cover page
                         // lifts with it instead, so a swipe up always moves something.
@@ -690,6 +696,18 @@ fun PlayerLayout(
                             }
                             upPull = 0f
                         } else if (dragOffset > dismissPx || velocity > 2_000f) {
+                            // Closing from a list: the player goes back to its cover
+                            // first, so the shrink starts from the cover page and the
+                            // player reopens whole — not with the list's header, its
+                            // cover and info, left stuck at the top.
+                            if (pane != Pane.COVER) {
+                                liftSettle?.cancel()
+                                coverSettle?.cancel()
+                                coverLift = 0f
+                                upPull = 0f
+                                paneName = Pane.COVER.name
+                                returnPane = null
+                            }
                             val size = playerCoords?.takeIf { it.isAttached }?.size
                             if (com.opentune.ui.components.PlayerMorph.sheetMorph && size != null) {
                                 // The card is already part of the way to the mini player, under
