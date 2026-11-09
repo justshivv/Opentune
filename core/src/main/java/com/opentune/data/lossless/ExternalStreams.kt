@@ -20,7 +20,10 @@ object ExternalStreams {
         val trackId: String? = null, val tier: String? = null, val codec: String? = null)
     // The source selected by playback can outlive the short startup lookup cache.
     @Volatile private var playing: Pair<String, String>? = null
+    @Volatile internal var playingVideoId: String? = null
+        private set
     fun playing(videoId: String?, key: String?) {
+        playingVideoId = videoId
         playing = if (videoId != null && key != null) videoId to key else null
     }
     fun downloadPreference(videoId: String): Rendition? =
@@ -138,6 +141,9 @@ object ExternalStreams {
     }
 
     private val losslessInFlight = ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Rendition?>>()
+
+    internal fun awaitingFirstLossless(videoId: String): Boolean =
+        losslessInFlight[videoId]?.isActive == true && cached(videoId)?.lossless != true
 
     /**
      * The best external stream for [song]. A FLAC search already running for it (one readying

@@ -1642,8 +1642,7 @@ class PlaybackService : MediaLibraryService() {
 
     /**
      * Finds the better sources for the next [PREFETCH_AHEAD] songs while this
-     * one plays: JioSaavn first, a quick answer that lets the song start on it
-     * at once, then the lossless one, so each starts on the best found (or
+     * one plays: JioSaavn and lossless independently, so each starts on the best found (or
      * swaps to it as soon as it's sounding) instead of waiting for a lookup
      * after it's begun. Only what's on for this network; local, server and
      * downloaded songs are left alone.
@@ -1688,15 +1687,21 @@ class PlaybackService : MediaLibraryService() {
     private val aheadSlots = kotlinx.coroutines.sync.Semaphore(PREFETCH_AT_ONCE)
 
     /**
-     * Gets [song] ready to start in its best quality: JioSaavn first, quick to
-     * answer, then the verified lossless files. Their files aren't read again
+     * Gets [song] ready to start in its best quality: JioSaavn and verified
+     * lossless files are prepared independently. Their files aren't read again
      * here: the search read each one's start to verify it, and reading it once
      * more for every song ahead only used up the file servers' patience.
      */
     private suspend fun readyAhead(song: com.opentune.data.model.Song, saavn: Boolean, lossless: Boolean) {
-        suspend fun attempt(block: suspend () -> Unit) = try { block() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
-        if (saavn) attempt { ExternalStreams.findJioSaavn(song, song.durationMillis()) }
-        if (lossless) attempt { ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true) }
+        prefetchExternalSources(
+            lossless = {
+                if (lossless) {
+                    awaitForegroundLookup(song.videoId, { ExternalStreams.playingVideoId }, ExternalStreams::awaitingFirstLossless)
+                    ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true)
+                }
+            },
+            lossy = { if (saavn) ExternalStreams.findJioSaavn(song, song.durationMillis()) },
+        )
     }
 
     /**

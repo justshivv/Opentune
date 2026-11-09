@@ -29,7 +29,7 @@ jobs:
         with:
           packages: platform-tools platforms;android-37.0 build-tools;36.0.0 ndk;27.2.12479018 cmake;3.22.1
       - uses: gradle/actions/setup-gradle@v4
-      - name: Library and Automix regression tests
+      - name: Library, Automix and add-on regression tests
         run: >-
           ./gradlew --no-daemon :core:testDebugUnitTest
           --tests '*LikedMergeTest'
@@ -40,6 +40,15 @@ jobs:
           --tests '*AutomixPlanPropertiesTest'
           --tests '*MixAnalysisTest'
           --tests '*KeyAndTempoTest'
+          --tests '*AddonResolverTest'
+          --tests '*AddonHttpRulesTest'
+          --tests '*AddonRequestSlotsTest'
+          --tests '*AddonVerificationRequestTest'
+          --tests '*FirstPartyAddonAuthTest'
+          --tests '*SourcePrefetchTest'
+          --tests '*ExternalStreamsTest'
+          --tests '*LosslessSourceTest'
+          --tests '*UpgradeHandoffTest'
       - name: Player and sign-in regression tests
         run: >-
           ./gradlew --no-daemon :app:testDebugUnitTest

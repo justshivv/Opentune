@@ -117,85 +117,92 @@ object AddonResolver {
             val started = System.nanoTime()
             outcome[0] = true
             val answer = withTimeoutOrNull(ADDON_LIMIT_MS) {
-                try {
-                    val client = clientFor(addon.base)
-                    val manifest = client.manifest().let { if (addon.admin) it.copy(name = addon.manifest.name) else it }
-                    AddonStore.refreshed(addon.key, manifest)
-                    fun permitted(): Boolean = AddonStore.addons.value.firstOrNull { it.key == addon.key }?.let {
-                        AddonStore.usable(it) && (!download || it.manifest.downloads)
-                    } == true
-                    if (!permitted()) return@withTimeoutOrNull null
-                    stage = "searching catalogue"
-                    report("${addon.manifest.name}: $stage")
-                    val candidates = client.search("${song.title} ${song.artist}", manifest, tier)
-                        .filter { identity.matches(it.title, listOf(it.artist), it.album, it.durationMs) }
-                    if (candidates.isEmpty()) { report(com.opentune.i18n.Tr.f("{0}: no matching recording", manifest.name)); return@withTimeoutOrNull null }
-                    // Its last link for this song broke: a new one, not the cached one.
-                    val fresh = staleLinks.remove("${addon.key}:${song.videoId}")
-                    for (track in candidates.take(3)) {
+                withContext(AddonRequestStatus { nextStage ->
+                    stage = nextStage
+                    report("${addon.manifest.name}: $nextStage")
+                }) {
+                    try {
+                        val client = clientFor(addon.base)
+                        val manifest = client.manifest().let { if (addon.admin) it.copy(name = addon.manifest.name) else it }
+                        AddonStore.refreshed(addon.key, manifest)
+                        fun permitted(): Boolean = AddonStore.addons.value.firstOrNull { it.key == addon.key }?.let {
+                            AddonStore.usable(it) && (!download || it.manifest.downloads)
+                        } == true
                         if (!permitted()) return@withTimeoutOrNull null
-                        stage = "resolving audio"
+                        stage = "searching catalogue"
                         report("${addon.manifest.name}: $stage")
-                        var asked = tier
-                        var stream = try { client.stream(track.id, manifest, tier, fresh) }
-                        catch (e: AddonHttp.Failure) {
-                            if (e.status != 404 || track.streamUrl == null) throw e
-                            AddonProtocol.stream(org.json.JSONObject().put("url", track.streamUrl).put("format", track.format).toString())
-                        }
-                        // An add-on with no hi-res setting can take that ask as its first (lossy) quality:
-                        // asked once more for plain lossless before it's passed over.
-                        if (!stream.lossless && tier != "LOSSLESS") {
-                            val plain = try { client.stream(track.id, manifest, "LOSSLESS", fresh) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
-                            if (plain?.lossless == true) { stream = plain; asked = "LOSSLESS" }
-                        }
-                        if (!stream.lossless) { report(com.opentune.i18n.Tr.f("{0}: has this song only in compressed quality, not lossless", manifest.name)); continue }
-                        if (download && stream.transport != null) {
-                            report(com.opentune.i18n.Tr.f("{0}: segmented stream; trying the next source for a downloadable file", manifest.name)); continue
-                        }
-                        if (!permitted()) return@withTimeoutOrNull null
-                        stage = "checking audio header"
-                        report("${addon.manifest.name}: $stage")
-                        val checked = if (stream.transport == null && stream.codec == "flac") {
-                            val info = LosslessSource.flacInfo(probe(stream.url, 65536, true))
-                            if (info == null || !LosslessSource.durationMatches(durationMs, info.durationMs)) {
-                                report(com.opentune.i18n.Tr.f("{0}: FLAC header or duration did not match", manifest.name)); continue
+                        val candidates = client.search("${song.title} ${song.artist}", manifest, tier)
+                            .filter { identity.matches(it.title, listOf(it.artist), it.album, it.durationMs) }
+                        if (candidates.isEmpty()) { report(com.opentune.i18n.Tr.f("{0}: no matching recording", manifest.name)); return@withTimeoutOrNull null }
+                        // Its last link for this song broke: a new one, not the cached one.
+                        val fresh = staleLinks.remove("${addon.key}:${song.videoId}")
+                        for (track in candidates.take(3)) {
+                            if (!permitted()) return@withTimeoutOrNull null
+                            stage = "resolving audio"
+                            report("${addon.manifest.name}: $stage")
+                            var asked = tier
+                            var stream = try { client.stream(track.id, manifest, tier, fresh) }
+                            catch (e: AddonHttp.Failure) {
+                                if (e.status != 404 || track.streamUrl == null) throw e
+                                AddonProtocol.stream(org.json.JSONObject().put("url", track.streamUrl).put("format", track.format).toString())
                             }
-                            // FLAC has no fixed bitrate and most add-ons don't state one: its average is the
-                            // file's size over its length (bytes × 8 ÷ ms is kbit/s).
-                            val average = AddonHttp.lengthOf(stream.url)?.takeIf { info.durationMs > 0 }?.let { (it * 8 / info.durationMs).toInt() }
-                            stream.copy(bits = info.bits, sampleRate = info.sampleRate, kbps = stream.kbps ?: average)
-                        } else {
-                            val prefix = probe(stream.url, 65536, true)
-                            if (stream.transport != null) {
-                                val text = prefix.toString(Charsets.UTF_8)
-                                val valid = if (stream.transport == "hls") text.trimStart().startsWith("#EXTM3U") && !Regex("#EXT-X-(?:SESSION-)?KEY:.*METHOD=(?!NONE)").containsMatchIn(text)
-                                    else text.contains("<MPD") && !text.contains("ContentProtection", true)
-                                if (!valid) { report(com.opentune.i18n.Tr.f("{0}: invalid or protected media manifest", manifest.name)); continue }
+                            // An add-on with no hi-res setting can take that ask as its first (lossy) quality:
+                            // asked once more for plain lossless before it's passed over.
+                            if (!stream.lossless && tier != "LOSSLESS") {
+                                val plain = try { client.stream(track.id, manifest, "LOSSLESS", fresh) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                                if (plain?.lossless == true) { stream = plain; asked = "LOSSLESS" }
                             }
-                            if (stream.transport == "hls") {
-                                val text = prefix.toString(Charsets.UTF_8)
-                                val initialization = Regex("#EXT-X-MAP:.*?URI=\"([^\"]+)\"").find(text)?.groupValues?.get(1)
-                                val info = initialization?.let { relative ->
-                                    val address = AddonProtocol.url(stream.url).resolve(relative)?.toString() ?: return@let null
-                                    com.opentune.playback.LosslessAudioPolicy.mp4StreamInfo(probe(address, 65536, true))
+                            if (!stream.lossless) { report(com.opentune.i18n.Tr.f("{0}: has this song only in compressed quality, not lossless", manifest.name)); continue }
+                            if (download && stream.transport != null) {
+                                report(com.opentune.i18n.Tr.f("{0}: segmented stream; trying the next source for a downloadable file", manifest.name)); continue
+                            }
+                            if (!permitted()) return@withTimeoutOrNull null
+                            stage = "checking audio header"
+                            report("${addon.manifest.name}: $stage")
+                            val checked = if (stream.transport == null && stream.codec == "flac") {
+                                // STREAMINFO is the first 42 bytes. Waiting for 64 KB
+                                // adds a second transfer delay on throttled file hosts.
+                                val info = LosslessSource.flacInfo(probe(stream.url, 42, true))
+                                if (info == null || !LosslessSource.durationMatches(durationMs, info.durationMs)) {
+                                    report(com.opentune.i18n.Tr.f("{0}: FLAC header or duration did not match", manifest.name)); continue
                                 }
-                                if (info != null) stream.copy(bits = info.bits, sampleRate = info.rate)
-                                else stream.copy(bits = null, sampleRate = null)
-                            } else stream
+                                // FLAC has no fixed bitrate and most add-ons don't state one: its average is the
+                                // file's size over its length (bytes × 8 ÷ ms is kbit/s).
+                                val average = AddonHttp.lengthOf(stream.url)?.takeIf { info.durationMs > 0 }?.let { (it * 8 / info.durationMs).toInt() }
+                                stream.copy(bits = info.bits, sampleRate = info.sampleRate, kbps = stream.kbps ?: average)
+                            } else {
+                                val prefix = probe(stream.url, 65536, true)
+                                if (stream.transport != null) {
+                                    val text = prefix.toString(Charsets.UTF_8)
+                                    val valid = if (stream.transport == "hls") text.trimStart().startsWith("#EXTM3U") && !Regex("#EXT-X-(?:SESSION-)?KEY:.*METHOD=(?!NONE)").containsMatchIn(text)
+                                        else text.contains("<MPD") && !text.contains("ContentProtection", true)
+                                    if (!valid) { report(com.opentune.i18n.Tr.f("{0}: invalid or protected media manifest", manifest.name)); continue }
+                                }
+                                if (stream.transport == "hls") {
+                                    val text = prefix.toString(Charsets.UTF_8)
+                                    val initialization = Regex("#EXT-X-MAP:.*?URI=\"([^\"]+)\"").find(text)?.groupValues?.get(1)
+                                    val info = initialization?.let { relative ->
+                                        val address = AddonProtocol.url(stream.url).resolve(relative)?.toString() ?: return@let null
+                                        com.opentune.playback.LosslessAudioPolicy.mp4StreamInfo(probe(address, 65536, true))
+                                    }
+                                    if (info != null) stream.copy(bits = info.bits, sampleRate = info.rate)
+                                    else stream.copy(bits = null, sampleRate = null)
+                                } else stream
+                            }
+                            report("${manifest.name}: ${if (stream.transport == null && stream.codec == "flac") "verified FLAC" else "lossless requested; decoder confirms quality during playback"}")
+                            return@withTimeoutOrNull checked.copy(addonId = addon.key, provider = manifest.name,
+                                trackId = if (track.streamUrl != null && stream.url == track.streamUrl) "" else track.id, tier = asked)
                         }
-                        report("${manifest.name}: ${if (stream.transport == null && stream.codec == "flac") "verified FLAC" else "lossless requested; decoder confirms quality during playback"}")
-                        return@withTimeoutOrNull checked.copy(addonId = addon.key, provider = manifest.name,
-                            trackId = if (track.streamUrl != null && stream.url == track.streamUrl) "" else track.id, tier = asked)
+                        null
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: AddonHttp.Failure) {
+                        if (notePaused(addon.key, e)) { report(com.opentune.i18n.Tr.f("{0}: paused by its owner for now", addon.manifest.name)); return@withTimeoutOrNull null }
+                        outcome[1] = true
+                        if (e.status == 429) limit(addon.key, song.videoId, e)
+                        report("${addon.manifest.name}: ${failureDescription(stage, e)}"); null
                     }
-                    null
-                } catch (e: CancellationException) { throw e }
-                catch (e: AddonHttp.Failure) {
-                    if (notePaused(addon.key, e)) { report(com.opentune.i18n.Tr.f("{0}: paused by its owner for now", addon.manifest.name)); return@withTimeoutOrNull null }
-                    outcome[1] = true
-                    if (e.status == 429) limit(addon.key, song.videoId, e)
-                    report("${addon.manifest.name}: ${failureDescription(stage, e)}"); null
+                    catch (e: Exception) { outcome[1] = true; report("${addon.manifest.name}: ${failureDescription(stage, e)}"); null }
                 }
-                catch (e: Exception) { outcome[1] = true; report("${addon.manifest.name}: ${failureDescription(stage, e)}"); null }
             }
             if (answer == null && System.nanoTime() - started >= ADDON_LIMIT_MS * 1_000_000) { outcome[1] = true; report(com.opentune.i18n.Tr.f("{0}: timed out while {1} after {2} s", addon.manifest.name, stage, ADDON_LIMIT_MS / 1_000)) }
             return answer

@@ -36,4 +36,14 @@ class AddonHttpRulesTest {
         catch (e: AddonHttp.Failure) { assertEquals(429, e.status) }
         assertEquals(1, calls)
     }
+
+    @Test fun retryWaitReportsRateLimitingInsteadOfSearching() = runBlocking {
+        val stages = mutableListOf<String>()
+        var calls = 0
+        kotlinx.coroutines.withContext(AddonRequestStatus { stages += it }) {
+            AddonHttp.waitingOutRateLimits { if (++calls == 1) throw AddonHttp.Failure(429) else "ok" }
+        }
+        assertEquals(2, calls)
+        assertTrue(stages.single().startsWith("rate limited; retry in"))
+    }
 }
