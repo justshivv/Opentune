@@ -6,6 +6,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.layout
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
@@ -490,7 +491,9 @@ private fun SinkChrome(c: ChromeContent, inline: Boolean, progress: () -> Float,
             if (mini != null) {
                 mini(
                     false,
-                    Modifier.placed(progress, x = { 0.dp }, bottom = { t -> lerp(CHROME_TAB_HEIGHT + CARD_GAP, 0.dp, t) }, w = { width }, h = { CHROME_MINI_HEIGHT }),
+                    Modifier
+                        .placed(progress, x = { 0.dp }, bottom = { t -> lerp(CHROME_TAB_HEIGHT + CARD_GAP, 0.dp, t) }, w = { width }, h = { CHROME_MINI_HEIGHT })
+                        .zIndex(if (com.opentune.ui.components.PlayerMorph.miniDismiss > 0f) -1f else 0f),
                 )
             } else if (buttonShown) {
                 val current = c.selected?.let(c.tabs::getOrNull) ?: c.tabs.first()

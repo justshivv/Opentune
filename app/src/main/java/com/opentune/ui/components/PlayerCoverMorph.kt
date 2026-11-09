@@ -120,6 +120,8 @@ object PlayerMorph {
      * second, negative toward the mini player).
      */
     var sheetDrag by mutableFloatStateOf(0f)
+    /** Px the mini player is pulled down toward dismissal, 0 at rest; while it is pulled, the chrome draws it behind the dock. */
+    var miniDismiss by mutableFloatStateOf(0f)
     var sheetFling = 0f
     /** Where the player's card was when a drag down let go, in the root, and its corner in px. */
     internal var cardFrom by mutableStateOf<Rect?>(null)
