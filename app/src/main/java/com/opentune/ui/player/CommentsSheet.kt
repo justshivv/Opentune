@@ -113,10 +113,10 @@ internal fun CommentsSheet(
         fullFraction = 1f,
     ) {
         when {
-            loading -> Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) { CircularProgressIndicator() }
-            failed -> Note("Comments didn't load. Check the connection and try again.")
-            thread?.first == null -> Note("Comments are turned off for this song on YouTube.")
-            comments.isEmpty() -> Note("No comments yet.")
+            loading -> Box(Modifier.fillMaxWidth().weight(1f), Alignment.Center) { CircularProgressIndicator() }
+            failed -> Note("Comments didn't load. Check the connection and try again.", Modifier.weight(1f))
+            thread?.first == null -> Note("Comments are turned off for this song on YouTube.", Modifier.weight(1f))
+            comments.isEmpty() -> Note("No comments yet.", Modifier.weight(1f))
             else -> LazyColumn(state = list, modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(comments, key = { it.id }) { CommentRow(it) }
                 if (next != null) item(key = "more") {
@@ -142,8 +142,8 @@ internal fun CommentsSheet(
 }
 
 @Composable
-private fun Note(text: String) {
-    Text(text, Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 20.dp),
+private fun Note(text: String, modifier: Modifier = Modifier) {
+    Text(text, modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 20.dp),
         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
