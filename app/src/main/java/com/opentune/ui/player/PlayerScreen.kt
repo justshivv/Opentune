@@ -178,6 +178,7 @@ fun rememberPlaybackPosition(vm: PlayerViewModel): () -> Long {
 data class PlayerUiState(
     val song: Song,
     val isPlaying: Boolean,
+    val isSounding: Boolean,
     val isBuffering: Boolean,
     val hasNext: Boolean,
     val shuffle: Boolean,
@@ -235,6 +236,7 @@ fun PlayerScreen(
     val theme by AppSettings.theme.collectAsState()
     val sound by AppSettings.sound.collectAsState()
     val isPlaying by vm.isPlaying.collectAsState()
+    val isSounding by vm.isSounding.collectAsState()
     val isBuffering by vm.isBuffering.collectAsState()
     val loadingMessage by vm.loadingMessage.collectAsState()
     val hasNext by vm.hasNext.collectAsState()
@@ -271,7 +273,7 @@ fun PlayerScreen(
     }
     PlayerLayout(
         PlayerUiState(
-            shown, isPlaying, isBuffering, hasNext, shuffle, repeat, duration,
+            shown, isPlaying, isSounding, isBuffering, hasNext, shuffle, repeat, duration,
             lyrics, queue, currentIndex, upNext, sound, theme, ui, source, audioFormat,
             shuffleMode, smartShuffleAvailable, coverVideo, canvasVideo, loadingMessage,
         ),
@@ -726,6 +728,7 @@ fun PlayerLayout(
                     fullCoverBottom = with(LocalDensity.current) { coverBottomPx.takeIf { it > 0f }?.toDp() },
                     movingCover = state.ui.movingCover && !state.ui.reduceAnimation,
                     playing = state.isPlaying,
+                    canvasPlaying = state.isSounding,
                     change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                     index = state.currentIndex,
                     songId = current.videoId,

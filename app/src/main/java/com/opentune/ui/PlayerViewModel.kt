@@ -57,6 +57,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val upNext = player.upNext
     val hasNext = player.hasNext
     val isPlaying = player.isPlaying
+    val isSounding = player.isSounding
     val isBuffering = player.isBuffering
     val loadingMessage = player.loadingMessage
     val shuffleEnabled = player.shuffleEnabled

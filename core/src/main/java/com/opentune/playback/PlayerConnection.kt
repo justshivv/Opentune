@@ -88,6 +88,10 @@ class PlayerConnection(private val context: Context) {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
 
+    private val _isSounding = MutableStateFlow(false)
+    /** Really sounding right now — playing and ready, not merely meant to play while a stream loads. The Canvas follows this, so it waits frozen until the song itself starts. */
+    val isSounding = _isSounding.asStateFlow()
+
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering = _isBuffering.asStateFlow()
     private val _loadingMessage = MutableStateFlow<String?>(null)
@@ -262,6 +266,7 @@ class PlayerConnection(private val context: Context) {
         // loading its stream, a stall), still counts as playing: the button
         // flipped to play and back for that moment at every upgrade.
         _isPlaying.value = player.isPlaying || (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING)
+        _isSounding.value = player.isPlaying
         // A quality switch rebuffers the main player while the song plays on (another player
         // sounding it, or a moment's silence between streams): no spinner on the button for that.
         refreshLoading(player)

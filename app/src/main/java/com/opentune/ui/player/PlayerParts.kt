@@ -169,6 +169,8 @@ fun PlayerBackdrop(
     /** Let the full cover drift and zoom while playing (see livingArt). */
     movingCover: Boolean = false,
     playing: Boolean = false,
+    /** The Canvas runs only on this stricter signal: really sounding, not just meant to play. */
+    canvasPlaying: Boolean = playing,
     /** How the full-screen cover changes to the next song's, and where that song is in the queue. */
     change: com.opentune.data.settings.CoverChange = com.opentune.data.settings.CoverChange.FADE,
     index: Int = 0,
@@ -244,7 +246,7 @@ fun PlayerBackdrop(
             }
         }
         if (canvas != null) {
-            CanvasBackdrop(canvas, playing, titleTop, canvasBehindText, Modifier.matchParentSize())
+            CanvasBackdrop(canvas, canvasPlaying, titleTop, canvasBehindText, Modifier.matchParentSize())
         } else if (fullCover) {
             CoverSwap(CoverShown(artworkUrl, index, songId), change) { url, motion ->
                 // The cover runs from the top down to just behind the title and
