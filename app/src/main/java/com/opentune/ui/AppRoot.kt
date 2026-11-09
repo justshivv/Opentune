@@ -852,6 +852,7 @@ fun AppRoot(vm: PlayerViewModel) {
                     onExpand = chromeScroll::expand,
                     searchSelected = route == SEARCH_ROUTE,
                     onSearch = openSearch,
+                    onSearchLongPress = { nav.navigate("recognize") },
                     mini = if (song == null) null else { folded, m ->
                         MiniPlayerBar(vm, onExpand = { openPlayer(folded) }, modifier = m, inline = folded)
                     },

@@ -7,6 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import androidx.compose.ui.layout.layout
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -199,13 +200,14 @@ fun BottomChrome(
     onExpand: () -> Unit,
     searchSelected: Boolean,
     onSearch: () -> Unit,
+    onSearchLongPress: () -> Unit = {},
     mini: (@Composable (inline: Boolean, modifier: Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
     motion: DockMotion = DockMotion.MINIMIZE,
     lens: DockLens = DockLens.STRETCH,
     reduceMotion: Boolean = false,
 ) {
-    val c = ChromeContent(tabs, selected, onSelect, onExpand, searchSelected, onSearch, mini, if (reduceMotion) DockLens.GLIDE else lens)
+    val c = ChromeContent(tabs, selected, onSelect, onExpand, searchSelected, onSearch, onSearchLongPress, mini, if (reduceMotion) DockLens.GLIDE else lens)
     val chrome: @Composable (Boolean, () -> Float, Modifier) -> Unit = { folded, progress, m ->
         when (motion) {
             DockMotion.MINIMIZE -> MinimizeChrome(c, folded, progress, m)
@@ -238,6 +240,7 @@ private class ChromeContent(
     val onExpand: () -> Unit,
     val searchSelected: Boolean,
     val onSearch: () -> Unit,
+    val onSearchLongPress: () -> Unit,
     val mini: (@Composable (inline: Boolean, modifier: Modifier) -> Unit)?,
     val lens: DockLens,
 )
@@ -316,10 +319,12 @@ private fun MinimizeChrome(c: ChromeContent, inline: Boolean, progress: () -> Fl
             SearchOrb(
                 c.searchSelected,
                 Modifier.placed(progress, x = { t -> width - row(t) }, bottom = { 0.dp }, w = row, h = row),
-            ) {
-                if (!c.searchSelected) haptics.tick()
-                c.onSearch()
-            }
+                onClick = {
+                    if (!c.searchSelected) haptics.tick()
+                    c.onSearch()
+                },
+                onLongPress = { haptics.tick(); c.onSearchLongPress() },
+            )
         }
     }
 }
@@ -395,7 +400,8 @@ private fun CapsuleChrome(c: ChromeContent, inline: Boolean, progress: () -> Flo
                                 h = orb,
                             )
                             .graphicsLayer { alpha = 1f - ramp(0f, 0.45f, progress()) },
-                        onSearch,
+                        onClick = onSearch,
+                        onLongPress = { c.onSearchLongPress() },
                     )
                 }
             }
@@ -415,7 +421,8 @@ private fun CapsuleChrome(c: ChromeContent, inline: Boolean, progress: () -> Flo
                 SearchOrb(
                     c.searchSelected,
                     Modifier.placed(progress, x = { t -> lerp(width - CHROME_TAB_HEIGHT, endX, t) }, bottom = { t -> lerp(0.dp, CAPSULE_INSET, t) }, w = orb, h = orb),
-                    onSearch,
+                    onClick = onSearch,
+                    onLongPress = { c.onSearchLongPress() },
                 )
             } else if (coverShown) {
                 mini(
@@ -479,10 +486,14 @@ private fun SinkChrome(c: ChromeContent, inline: Boolean, progress: () -> Float,
                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                         DockPill(c, width - CHROME_TAB_HEIGHT - SEARCH_GAP, inline, { 0f }, anchor = MINI_ROW / 2, Modifier.weight(1f).fillMaxHeight())
                         Spacer(Modifier.width(SEARCH_GAP))
-                        SearchOrb(c.searchSelected) {
-                            if (!c.searchSelected) haptics.tick()
-                            c.onSearch()
-                        }
+                        SearchOrb(
+                            c.searchSelected,
+                            onClick = {
+                                if (!c.searchSelected) haptics.tick()
+                                c.onSearch()
+                            },
+                            onLongPress = { haptics.tick(); c.onSearchLongPress() },
+                        )
                     }
                 }
             }
@@ -723,7 +734,7 @@ internal fun DockItem(tab: ChromeTab, selected: Boolean, modifier: Modifier, col
 
 /** Search on its own: a glass circle that fills with the accent while search is open. */
 @Composable
-internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onLongPress: (() -> Unit)? = null, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "orbScale")
@@ -741,7 +752,7 @@ internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onClick
             .padding(DOCK_INSET)
             .clip(CircleShape)
             .background(fill)
-            .clickable(interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(CircleShape), onClick = onClick)
+            .combinedClickable(interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(CircleShape), onClick = onClick, onLongClick = onLongPress)
             .semantics { role = Role.Tab; this.selected = selected },
         contentAlignment = Alignment.Center,
     ) {
