@@ -106,8 +106,9 @@ internal fun CommentsSheet(
             else -> "From YouTube"
         },
         expandable = true,
-        // Open at full height straight away, the comment box at its foot; a slide down closes it.
-        startExpanded = true,
+        // Start halfway; the handle grows the comments to the full available screen.
+        startExpanded = false,
+        fitContent = false,
         // Pulled up (or scrolled), it takes over the page; pulled down it goes back to half, then closes.
         fullFraction = 1f,
     ) {

@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import com.opentune.data.comments.SongComments
@@ -68,8 +70,9 @@ class CommentsSheetScreenshotTest {
         File("build/screenshots/player/comments.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    /** The sheet opens taking over the page; slid down, it closes. */
+    /** Loading must not freeze the sheet at its loading height; the handle can expand it. */
     @Test fun expandsAndCloses() {
+        val loaded = kotlinx.coroutines.CompletableDeferred<SongComments.Page>()
         val many = (1..30).map { c("$it", "@listener$it", "Comment number $it, long enough to wrap onto a second line now and then.", "$it days ago", "${it * 3}") }
         var open by androidx.compose.runtime.mutableStateOf(true)
         compose.setContent {
@@ -78,16 +81,27 @@ class CommentsSheetScreenshotTest {
                 if (open) CommentsSheet(
                     Song("4NRXx6U8ABQ", "Blinding Lights", "The Weeknd", null, "3:20"), onDismiss = { open = false },
                     open = { SongComments.Thread(it, first = "t", turnedOff = false, fromVideo = false) },
-                    pageOf = { SongComments.Page(many, null, null) },
+                    pageOf = { loaded.await() },
                 )
             }
         }
         compose.mainClock.advanceTimeBy(1_500)
         compose.waitForIdle()
-        // Opens at full height: the title near the top of the screen.
-        val top = compose.onNodeWithText("Comments").fetchSemanticsNode().boundsInRoot.top
         val screen = compose.activity.window.decorView.height.toFloat()
-        org.junit.Assert.assertTrue("title at $top of $screen", top < screen * 0.2f)
+        val half = compose.onNodeWithText("Comments").fetchSemanticsNode().boundsInRoot.top
+        org.junit.Assert.assertTrue("opens halfway: $half of $screen", half > screen * 0.35f)
+        compose.runOnIdle { loaded.complete(SongComments.Page(many, null, null)) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Sheet drag handle").performTouchInput {
+            swipe(center, center + androidx.compose.ui.geometry.Offset(0f, -700f), 300)
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        val top = compose.onNodeWithText("Comments").fetchSemanticsNode().boundsInRoot.top
+        org.junit.Assert.assertTrue("expanded title at $top of $screen", top < screen * 0.2f)
+        // The handle also supports click/remote/assistive expansion and collapse.
+        compose.onNodeWithContentDescription("Sheet drag handle").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        org.junit.Assert.assertTrue(compose.onNodeWithText("Comments").fetchSemanticsNode().boundsInRoot.top > screen * 0.35f)
         // Down: the list to its top, the card back to half, then away.
         repeat(6) {
             if (!open) return@repeat

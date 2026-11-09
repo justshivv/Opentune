@@ -89,7 +89,6 @@ import com.opentune.data.model.ShelfItem
 import com.opentune.ui.browse.ArtistScreen
 import com.opentune.ui.browse.CollectionScreen
 import com.opentune.ui.browse.SongActions
-import com.opentune.ui.account.LoginScreen
 import com.opentune.ui.components.LocalBackdrop
 import com.opentune.ui.components.LocalHazeState
 import com.opentune.ui.components.LocalSongMenu
@@ -433,7 +432,7 @@ fun AppRoot(vm: PlayerViewModel) {
         Links.consumed()
     }
     // The Wrapped story fills the screen, like the login page.
-    val chromeRoute = route != "login" && route != "wrapped"
+    val chromeRoute = route != "login" && route != "discord-login" && route != "wrapped"
     val chromeVisible = chromeRoute && !playerCovers
     // The window's size class picks the chrome. A fold or unfold only changes
     // what's around the pages: the NavHost and the player keep their place in
@@ -685,7 +684,10 @@ fun AppRoot(vm: PlayerViewModel) {
                         )
                     }
                     page("discord-login") { entry ->
-                        com.opentune.ui.account.DiscordLoginScreen(onDone = { if (nav.currentBackStackEntry == entry) nav.popBackStack() })
+                        LaunchedEffect(entry.id) {
+                            appContext.startActivity(com.opentune.ui.account.SignInActivity.intent(appContext, discord = true))
+                            if (nav.currentBackStackEntry == entry) nav.popBackStack()
+                        }
                     }
                     page("devices") {
                         com.opentune.ui.settings.LinkDeviceScreen(
@@ -700,8 +702,10 @@ fun AppRoot(vm: PlayerViewModel) {
                         com.opentune.ui.remote.TvRemoteScreen(content, onBack = { nav.popBackStack() })
                     }
                     page("login") { entry ->
-                        // Only while it's still the page in front: a late second call mustn't close the one under it.
-                        LoginScreen(onDone = { if (nav.currentBackStackEntry == entry) nav.popBackStack() })
+                        LaunchedEffect(entry.id) {
+                            appContext.startActivity(com.opentune.ui.account.SignInActivity.intent(appContext))
+                            if (nav.currentBackStackEntry == entry) nav.popBackStack()
+                        }
                     }
                     page("downloads") { DownloadsScreen(content, actions, onBack = { nav.popBackStack() }, onOpenList = { id -> nav.navigate("downloaded/${Uri.encode(id)}") }) }
                     page("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
@@ -827,7 +831,7 @@ fun AppRoot(vm: PlayerViewModel) {
             }
 
             // Pages blur and fade as they pass under the status bar.
-            if (route != "login") com.opentune.ui.components.TopEdgeFrost(Modifier.align(Alignment.TopCenter))
+            if (chromeRoute) com.opentune.ui.components.TopEdgeFrost(Modifier.align(Alignment.TopCenter))
 
             // Floating chrome: the mini player above the nav pill and search button.
             // It sits outside the recorded layer, so its Liquid Glass can sample it.

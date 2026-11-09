@@ -131,7 +131,7 @@ private fun DiscordWebPageView(
                 CookieManager.getInstance().setAcceptCookie(true)
                 WebView(context)
             }.onFailure {
-                onProblem("Discord's page needs Android System WebView, which isn't working on this device. Sign in above instead.")
+                onProblem("Discord's page needs Android System WebView, which isn't working on this device. Open Sign-in help for another way to sign in.")
                 onLoading(false)
             }.getOrNull() ?: return@AndroidView android.view.View(context)
             view.apply {
@@ -247,7 +247,7 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
     var tokenDialog by remember { mutableStateOf(false) }
     val left = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val leave = { if (left.compareAndSet(false, true)) onDone() }
-    androidx.activity.compose.BackHandler { if (onPage) { onPage = false; problem = null } else leave() }
+    androidx.activity.compose.BackHandler { leave() }
 
     if (tokenDialog) DiscordTokenDialog(onDismiss = { tokenDialog = false }, onSignedIn = { tokenDialog = false; leave() })
     SignInPage(
@@ -260,15 +260,15 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
         onBack = leave,
         hint = problem,
         privacy = if (onPage) null else "Your email and password go straight to Discord and aren't kept. Only the sign-in is kept on this phone, encrypted.",
-        extra = {
+        extra = { closeHelp ->
             androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 12.dp)) {
-                androidx.compose.material3.TextButton(onClick = { onPage = !onPage; problem = null; loading = false }) {
+                androidx.compose.material3.TextButton(onClick = { closeHelp(); onPage = !onPage; problem = null; loading = false }) {
                     com.opentune.ui.theme.Text(if (onPage) "Use OpenTune's form" else "Use Discord's page")
                 }
-                if (onPage) androidx.compose.material3.TextButton(onClick = { pageAttempt++; problem = null; loading = true }) {
+                if (onPage) androidx.compose.material3.TextButton(onClick = { closeHelp(); pageAttempt++; problem = null; loading = true }) {
                     com.opentune.ui.theme.Text("Retry page")
                 }
-                androidx.compose.material3.TextButton(onClick = { tokenDialog = true }) {
+                androidx.compose.material3.TextButton(onClick = { closeHelp(); tokenDialog = true }) {
                     com.opentune.ui.theme.Text("Sign in with a token")
                 }
             }

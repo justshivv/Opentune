@@ -81,6 +81,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -128,6 +130,8 @@ fun FloatingCard(
     startExpanded: Boolean = false,
     /** How much of the screen an [expandable] card takes pulled all the way up: 1 takes over the page. */
     fullFraction: Float = 0.9f,
+    /** False for asynchronously loaded lists: loading and empty states must not cap expansion. */
+    fitContent: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val ui by AppSettings.ui.collectAsState()
@@ -207,15 +211,18 @@ fun FloatingCard(
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 val maxCard = maxHeight
-                val shape = RoundedCornerShape(32.dp)
                 val density = LocalDensity.current
                 // The card's own height with everything shown, measured as it lays out;
                 // an expandable card never grows past it, so a short menu has no empty foot.
                 var naturalPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
-                val fullPx = minOf(with(density) { (maxCard * fullFraction).toPx() }, naturalPx)
+                val fullPx = minOf(with(density) { (maxCard * fullFraction).toPx() }, if (fitContent) naturalPx else Float.MAX_VALUE)
                 // Start at full height when asked, so the whole menu shows at once; otherwise half.
                 val halfPx = if (startExpanded) fullPx else minOf(with(density) { (maxCard * 0.5f).toPx() }, fullPx)
                 val range = (fullPx - halfPx).coerceAtLeast(0f)
+                val fullscreen = expandable && fullFraction >= 1f && !fitContent
+                val expandedFraction = if (range > 0f) (extra / range).coerceIn(0f, 1f) else 1f
+                val edge = if (fullscreen) 1f - expandedFraction else 1f
+                val shape = RoundedCornerShape(32.dp * edge)
                 fun settle(velocity: Float) {
                     settling?.cancel()
                     settling = scope.launch {
@@ -297,14 +304,14 @@ fun FloatingCard(
                         .statusBarsPadding()
                         .navigationBarsPadding()
                         .imePadding()
-                        .padding(12.dp)
-                        .widthIn(max = 560.dp)
+                        .padding(12.dp * edge)
+                        .widthIn(max = if (fullscreen) maxWidth else 560.dp)
                         .fillMaxWidth()
                         .then(
                             if (expandable) {
                                 Modifier.layout { measurable, constraints ->
                                     // Lists that can't be measured whole (lazy ones) just take the height asked for.
-                                    val natural = runCatching { measurable.maxIntrinsicHeight(constraints.maxWidth) }.getOrNull()
+                                    val natural = if (fitContent) runCatching { measurable.maxIntrinsicHeight(constraints.maxWidth) }.getOrNull() else null
                                     if (natural != null && natural.toFloat() != naturalPx) naturalPx = natural.toFloat()
                                     measured = true
                                     val want = (halfPx + extra).roundToInt()
@@ -375,10 +382,17 @@ fun FloatingCard(
                         ),
                     ) {
                         Box(
-                            Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp)
-                                .size(width = 36.dp, height = 4.dp).clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)),
-                        )
+                            Modifier.fillMaxWidth().height(24.dp)
+                                .then(if (expandable) Modifier.clickable(
+                                    onClickLabel = if (extra < range / 2) "Expand sheet" else "Collapse sheet",
+                                    role = Role.Button,
+                                ) { settle(if (extra < range / 2) -FLING - 1 else FLING + 1) } else Modifier)
+                                .semantics { contentDescription = "Sheet drag handle" },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)))
+                        }
                         if (title != null) {
                             Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (icon != null) {

@@ -2,6 +2,8 @@ package com.opentune.ui.account
 
 import android.graphics.Bitmap
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performClick
@@ -30,11 +32,17 @@ class DiscordSignInScreenshotTest {
             }
         }
         compose.waitForIdle()
-        // Discord's own page first; OpenTune's form a tap away.
+        // The browser fills the page; alternative methods live in Help.
+        val page = compose.onNodeWithTag("sign-in-page").fetchSemanticsNode().boundsInRoot
+        val browser = compose.onNodeWithTag("sign-in-browser").fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertEquals(page.height - 56f * compose.activity.resources.displayMetrics.density, browser.height, 1f)
+        compose.onNodeWithContentDescription("Sign-in help").performClick()
+        compose.mainClock.advanceTimeBy(1000)
         compose.onNodeWithText("Use OpenTune's form").assertIsDisplayed().performClick()
+        compose.mainClock.advanceTimeBy(1000)
         compose.waitForIdle()
         compose.onNodeWithText("Email or phone number").assertIsDisplayed()
-        compose.onNodeWithText("Use Discord's page").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Sign-in help").assertIsDisplayed()
         val view = compose.activity.window.decorView
         val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
         view.draw(android.graphics.Canvas(bitmap))

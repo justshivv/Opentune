@@ -71,6 +71,7 @@ class SpotifyConnectActivity : ComponentActivity() {
         setContent {
             val theme by AppSettings.theme.collectAsState()
             OpenTuneTheme(theme) {
+                com.opentune.ui.theme.SystemBars(androidx.compose.material3.MaterialTheme.colorScheme.background)
                 SignInPage(
                     service = "Spotify",
                     brand = SpotifyGreen,

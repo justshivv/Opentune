@@ -37,6 +37,9 @@ jobs:
           --tests '*LikedPlaylistCoverTest'
           --tests '*TitleFlightActionsTest'
           --tests '*PaneTransitionTest'
+          --tests '*SignInPageScreenshotTest'
+          --tests '*DiscordSignInScreenshotTest'
+          --tests '*CommentsSheetScreenshotTest'
       - name: Android lint
         if: ${{ !cancelled() }}
         run: ./gradlew --no-daemon :app:lintDebug
@@ -58,6 +61,7 @@ jobs:
           name: android-ui-reports
           path: |
             app/build/reports/
+            app/build/screenshots/
             app/build/test-results/
           if-no-files-found: ignore
 
@@ -115,6 +119,7 @@ jobs:
           name: reports
           path: |
             app/build/reports/
+            app/build/screenshots/
             app/build/test-results/
             app/build/screenshots/
             core/build/reports/

@@ -251,6 +251,13 @@
             android:theme="@style/Theme.OpenTune"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Account browsers fill their own window, outside the player and app chrome. -->
+        <activity
+            android:name=".ui.account.SignInActivity"
+            android:exported="false"
+            android:theme="@style/Theme.OpenTune"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- Spotify's sign-in in its own screen, for Canvas. -->
         <activity
             android:name=".ui.spotify.SpotifyConnectActivity"
