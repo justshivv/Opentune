@@ -79,6 +79,7 @@ object Core {
         com.opentune.data.library.LibraryArtwork.init(app)
         LibraryStore.init(app)
         Downloads.init(app)
+        if (phone) com.opentune.data.download.SmartDownloads.init(app)
         com.opentune.data.download.DownloadedLists.init(app)
         AccountStore.init(app)
         com.opentune.data.library.LibraryCache.init(app)

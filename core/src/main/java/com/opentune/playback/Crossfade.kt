@@ -32,24 +32,13 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Blends the end of each song into the start of the next: a crossfade of a
  * set length, or Automix, which reads both songs and shapes the blend to them.
  *
- * The main player stays the one the media session, the notification and the
- * history see. Shortly before the blend, a second player (the "tail") starts
- * the same stream of the playing song, silently and through the same effects,
- * and is lined up with the main player to within a few milliseconds. At the
- * mix point the sound moves onto the tail in a 50 ms crossover of two copies
- * of the same moment, which can't be heard, and the main player, now silent,
- * moves on to the next song. Only once that song is really sounding does the
- * blend begin; until then the tail carries on at full level, so there's never
- * a gap. The tail's own loudness gain stays the outgoing song's.
+ * The main player remains the media session's player. A second player buffers
+ * the incoming song before its cue point, blends it over the outgoing song,
+ * then keeps it audible until the main player is ready to take over the same
+ * stream. Buffering and pauses do not advance the blend clock.
  *
- * The earlier version started the tail and muted the main player the moment
- * the tail said it was playing, before its sound had reached the speaker
- * (a short gap), and from wherever it had got to while loading (a bit of the
- * song heard twice). It also started fading before the next song had begun.
- *
- * A skip, seek or pause from the listener during a blend is respected: the
- * old song's tail fades out in [BAIL_MS] and the main player is left at full
- * volume.
+ * A skip or seek cancels the blend; a pause or audio-focus loss pauses both
+ * players. The second player is released when playback returns to the main one.
  */
 @OptIn(UnstableApi::class)
 internal class Crossfade(
@@ -88,6 +77,8 @@ internal class Crossfade(
     /** The second player, carrying the next song in from its first moment until the main player takes it. */
     private var tail: Tail? = null
     private var mix: Job? = null
+    private var ticker: Job? = null
+    private var expectedNext: Pair<Int, String>? = null
     private var lastMixed: Pair<Int, String>? = null
     /** Tries at a transition for the song in [triesFor]: a next song that didn't load gets another go. */
     private var tries = 0
@@ -134,15 +125,30 @@ internal class Crossfade(
             if (reason == Player.DISCONTINUITY_REASON_SEEK && !handingOver && tail != null) bail()
         }
 
+        override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+            if (!handingOver && tail != null) bail()
+        }
+
+        override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+            if (handingOver || tail == null) return
+            val expected = expectedNext ?: return
+            if (expected.first !in 0 until main.mediaItemCount || main.getMediaItemAt(expected.first).mediaId != expected.second) bail()
+        }
+
+        override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
+            if (phase != Phase.LOADING) tail?.player?.playWhenReady = main.playWhenReady && playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
+        }
+
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             val t = tail?.player ?: return
             // Loading, the next song waits paused at its cue point whatever the player does.
             if (phase == Phase.LOADING) return
-            t.playWhenReady = playWhenReady
+            t.playWhenReady = playWhenReady && main.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
         }
     }
 
     fun start() {
+        if (ticker?.isActive == true) return
         main.addListener(listener)
         // The playing song's time for the transition view; through a blend, the song coming in
         // carries it on, as it's what's heard.
@@ -152,7 +158,7 @@ internal class Crossfade(
             if (bp != null && t != null && phase != Phase.LOADING) bp.mixAtMs + ((t.currentPosition - bp.inFromMs) * bp.outSpeed).toLong()
             else main.currentPosition
         }
-        scope.launch {
+        ticker = scope.launch {
             while (isActive) {
                 val wait = runCatching { check() }.onFailure { Log.w(TAG, "Crossfade check failed", it) }.getOrDefault(POLL_MS)
                 delay(wait)
@@ -163,8 +169,11 @@ internal class Crossfade(
     fun release() {
         main.removeListener(listener)
         MixState.clock = null
+        ticker?.cancel()
+        ticker = null
         mix?.cancel()
         planning?.cancel()
+        restCheck?.cancel()
         releaseTail()
         mainLowCut(0f)
         main.volume = 1f
@@ -173,6 +182,12 @@ internal class Crossfade(
     /** Looks at where the song is and starts what's due; returns how long to wait before looking again. */
     private fun check(): Long {
         if (tail != null) {
+            val expected = expectedNext
+            if (!enabled || BitPerfectUsb.active || main.repeatMode == Player.REPEAT_MODE_ONE ||
+                (expected != null && (expected.first !in 0 until main.mediaItemCount || main.getMediaItemAt(expected.first).mediaId != expected.second))) {
+                bail()
+                return POLL_MS
+            }
             // The next song is loading and the playing one's sound has ended for good: go now.
             if (phase == Phase.LOADING && silentMs() >= SILENCE_SKIP_MS) {
                 val item = main.currentMediaItem
@@ -181,7 +196,7 @@ internal class Crossfade(
             }
             return SOON_MS
         }
-        if (!enabled || BitPerfectUsb.active) return POLL_MS
+        if (mix?.isActive == true || !enabled || BitPerfectUsb.active) return POLL_MS
         if (!main.isPlaying || !main.hasNextMediaItem() || main.repeatMode == Player.REPEAT_MODE_ONE) return POLL_MS
         val item = main.currentMediaItem ?: return POLL_MS
         // Some streams (a FLAC sent as it's read) don't say how long they are; the song's details do.
@@ -320,7 +335,9 @@ internal class Crossfade(
         val nextIndex = main.nextMediaItemIndex
         if (nextIndex == C.INDEX_UNSET) return
         val next = main.getMediaItemAt(nextIndex)
-        val t = runCatching { newTail() }.onFailure { Log.w(TAG, "Couldn't make the second player", it) }.getOrNull() ?: return
+        val t = runCatching { newTail() }.onFailure { Log.w(TAG, "Couldn't make the second player", it) }.getOrNull()
+        if (t == null) { if (tries < MAX_TRIES) lastMixed = null; return }
+        expectedNext = nextIndex to next.mediaId
         tail = t
         urgent = now
         phase = Phase.LOADING
@@ -328,8 +345,9 @@ internal class Crossfade(
         tp.volume = 0f
         tp.playWhenReady = false
         // While they blend, the next song runs at the playing one's tempo; it eases back after.
-        val inSpeed = if (p.outSpeed != 1f) 1f / p.outSpeed else 1f
-        tp.playbackParameters = androidx.media3.common.PlaybackParameters(inSpeed, 1f)
+        val baseSpeed = main.playbackParameters.speed
+        val inSpeed = baseSpeed / p.outSpeed
+        tp.playbackParameters = androidx.media3.common.PlaybackParameters(inSpeed, main.playbackParameters.pitch)
         tp.setMediaItem(next, p.inFromMs)
         tp.prepare()
         val playing = main.currentMediaItemIndex
@@ -358,7 +376,7 @@ internal class Crossfade(
                 MixState.show(MixState.Showing(next, nextIndex,
                     durationMs = { tp.duration.takeIf { it > 0 } ?: durationOf(next) ?: 0L },
                     positionMs = { tp.currentPosition }))
-                tp.playWhenReady = main.playWhenReady
+                tp.playWhenReady = main.playWhenReady && main.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
                 if (!sounding(tp, START_TIMEOUT_MS)) {
                     Log.w(TAG, "The next song didn't start sounding (try $tries)")
                     return@launch
@@ -367,13 +385,31 @@ internal class Crossfade(
                 if (p.beatMs != null && !urgent) putOnBeat(tp, p)
                 // 3. The blend, over what's left of the playing song.
                 val left = (p.outEndMs - main.currentPosition).coerceAtLeast(MIN_LEFT_MS)
-                val length = if (urgent) minOf(p.blendMs, URGENT_BLEND_MS) else minOf(p.blendMs, left)
-                ramp(length, stop = { main.currentMediaItemIndex != playing }) { q ->
+                val length = ((if (urgent) minOf(p.blendMs, URGENT_BLEND_MS) else minOf(p.blendMs, left)) / baseSpeed).toLong().coerceAtLeast(1L)
+                val levels = com.opentune.playback.mix.BlendLevels(main.volume, tp.volume)
+                var gainAt = SystemClock.elapsedRealtime()
+                fun setLevels(out: Float, into: Float) {
+                    val at = SystemClock.elapsedRealtime()
+                    val (a, b) = levels.towards(out, into, at - gainAt)
+                    gainAt = at
+                    main.volume = a
+                    tp.volume = b
+                }
+                fun outgoingEnded() = main.currentMediaItemIndex != playing || main.playbackState == Player.STATE_ENDED
+                ramp(length, stop = { outgoingEnded() && tp.isPlaying },
+                    canAdvance = { com.opentune.playback.mix.blendCanAdvance(main.isPlaying, tp.isPlaying, outgoingEnded()) },
+                    onWaiting = {
+                        tp.playerError?.let { throw it }
+                        if (outgoingEnded() && main.isPlaying && !tp.isPlaying) throw CancellationException("Main player already resumed the next song")
+                        // Either stream may buffer. Never mute the only one still sounding.
+                        com.opentune.playback.mix.bufferingGains(main.isPlaying, tp.isPlaying)?.let { (out, into) -> setLevels(out, into) }
+                        mainLowCut(0f)
+                        t.lowCut(0f)
+                    }) { q ->
                     MixState.progress(q * 0.92f)
                     val (out, inc) = blendGains(q, p.outFades && !urgent, p.inEases && !urgent)
                     val (outTrim, inTrim) = if (matchLevels) levelTrims(p.levelDb, q) else 1f to 1f
-                    main.volume = out * outTrim
-                    tp.volume = inc * inTrim
+                    setLevels(out * outTrim, inc * inTrim)
                     if (p.bassSwap) {
                         val (outCut, inCut) = bassCuts(q, p.swapAt, p.swapWidth)
                         mainLowCut(outCut)
@@ -385,11 +421,15 @@ internal class Crossfade(
                 mainLowCut(0f)
                 t.lowCut(0f)
                 // 4. Back to its own tempo.
-                if (inSpeed != 1f) easeSpeed(tp, 1f)
+                if (inSpeed != baseSpeed) easeSpeed(tp, baseSpeed)
                 // 5. The main player takes the next song over.
                 phase = Phase.HANDOVER
                 handOver(tp, next, nextIndex)
                 MixState.progress(1f)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Mix interrupted; returning to the main player", e)
             } finally {
                 MixState.end()
                 // That transition is over: the view waits for the next one to be planned.
@@ -420,7 +460,8 @@ internal class Crossfade(
         handingOver = true
         try {
             val index = if (main.currentMediaItemIndex == nextIndex || main.currentMediaItem?.mediaId == next.mediaId) main.currentMediaItemIndex else nextIndex
-            if (chosen != null && index < main.mediaItemCount && main.getMediaItemAt(index).mediaId == chosen.mediaId) {
+            if (index !in 0 until main.mediaItemCount || main.getMediaItemAt(index).mediaId != next.mediaId) throw CancellationException("Mix queue changed")
+            if (chosen != null && main.getMediaItemAt(index).mediaId == chosen.mediaId) {
                 main.replaceMediaItem(index, chosen.buildUpon().setMediaMetadata(main.getMediaItemAt(index).mediaMetadata).build())
             }
             main.seekTo(index, tp.currentPosition + TAIL_LEAD_MS)
@@ -428,9 +469,24 @@ internal class Crossfade(
             handingOver = false
         }
         lineUp(follower = main, leader = tp)
+        // A failed line-up may mean buffering, not merely a few milliseconds of drift.
+        // Never fade away the audible tail until the replacement is actually sounding.
+        var retryAt = 0L
+        while (!main.isPlaying && tp.playbackState != Player.STATE_ENDED && tp.playerError == null) {
+            if (!main.playWhenReady) { delay(FRAME_MS * 5); continue }
+            val now = SystemClock.elapsedRealtime()
+            if (main.playerError != null && now >= retryAt) {
+                main.prepare()
+                retryAt = now + 3_000L
+            }
+            if (sounding(main, START_TIMEOUT_MS)) lineUp(follower = main, leader = tp)
+        }
+        if (!main.isPlaying) return
         val d = drift(follower = main, leader = tp)
         // Two copies of one moment, crossed; a wider cross if they couldn't be brought closer.
-        ramp(if (abs(d) <= MAX_DRIFT_MS) CROSSOVER_MS else WIDE_CROSSOVER_MS) { q ->
+        ramp(if (abs(d) <= MAX_DRIFT_MS) CROSSOVER_MS else WIDE_CROSSOVER_MS,
+            canAdvance = { main.isPlaying },
+            onWaiting = { tp.volume = 1f; main.volume = 0f }) { q ->
             tp.volume = 1f - q
             main.volume = q
         }
@@ -440,7 +496,7 @@ internal class Crossfade(
     private suspend fun easeSpeed(tp: ExoPlayer, speed: Float) {
         val from = tp.playbackParameters.speed
         for (i in 1..TEMPO_STEPS) {
-            tp.playbackParameters = androidx.media3.common.PlaybackParameters(from + (speed - from) * i / TEMPO_STEPS, 1f)
+            tp.playbackParameters = androidx.media3.common.PlaybackParameters(from + (speed - from) * i / TEMPO_STEPS, tp.playbackParameters.pitch)
             delay(TEMPO_STEP_MS)
         }
     }
@@ -502,13 +558,21 @@ internal class Crossfade(
     } == true
 
     /** Runs [step] from 0 to 1 over [ms] of playing time; paused time doesn't count, and [stop] skips to the end. */
-    private suspend fun ramp(ms: Long, stop: () -> Boolean = { false }, step: (Float) -> Unit) {
+    private suspend fun ramp(ms: Long, stop: () -> Boolean = { false },
+        canAdvance: () -> Boolean = { main.isPlaying || tail?.player?.isPlaying == true },
+        onWaiting: () -> Unit = {}, step: (Float) -> Unit) {
         var done = 0L
         var last = SystemClock.elapsedRealtime()
         while (true) {
             val now = SystemClock.elapsedRealtime()
-            if (main.isPlaying || tail?.player?.isPlaying == true) done += now - last
+            val advance = canAdvance()
+            if (advance) done += (now - last).coerceAtLeast(0L)
             last = now
+            if (!advance && !stop()) {
+                onWaiting()
+                delay(FRAME_MS)
+                continue
+            }
             val q = if (stop()) 1f else (done.toFloat() / ms).coerceIn(0f, 1f)
             step(q)
             if (q >= 1f) break

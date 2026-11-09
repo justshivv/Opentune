@@ -29,8 +29,16 @@ jobs:
         with:
           packages: platform-tools platforms;android-37.0 build-tools;36.0.0 ndk;27.2.12479018 cmake;3.22.1
       - uses: gradle/actions/setup-gradle@v4
-      - name: Liked Music merge regression tests
-        run: ./gradlew --no-daemon :core:testDebugUnitTest --tests '*LikedMergeTest'
+      - name: Library and Automix regression tests
+        run: >-
+          ./gradlew --no-daemon :core:testDebugUnitTest
+          --tests '*LikedMergeTest'
+          --tests '*SmartDownloadsTest'
+          --tests '*DownloadManagementTest'
+          --tests '*BlendContinuityTest'
+          --tests '*AutomixPlanPropertiesTest'
+          --tests '*MixAnalysisTest'
+          --tests '*KeyAndTempoTest'
       - name: Player and sign-in regression tests
         run: >-
           ./gradlew --no-daemon :app:testDebugUnitTest
@@ -44,6 +52,7 @@ jobs:
           --tests '*CommentsSheetScreenshotTest'
           --tests '*ChoiceTransitionTest'
           --tests '*FullListCoverTest'
+          --tests '*SettingsLayoutTest'
           --tests '*ChoiceSheetScreenshotTest.pick*'
           --tests '*ChoiceSheetScreenshotTest.backOnTheScreenClosesWithoutChoosing'
       - name: Android lint

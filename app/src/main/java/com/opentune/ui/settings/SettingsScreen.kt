@@ -80,6 +80,7 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
@@ -1461,6 +1462,30 @@ private fun settingsSections(
                         summary = com.opentune.i18n.Tr.f("{0} songs · {1}", done.size, Formatter.formatShortFileSize(context, done.sumOf { it.bytes })),
                         icon = Icons.Rounded.DownloadDone,
                     )
+                },
+                Entry("Smart downloads", "automatic offline favorite wifi battery") {
+                    ToggleRow("Smart downloads", lib.smartDownloads,
+                        { enabled -> AppSettings.updateLibrary { it.copy(smartDownloads = enabled) } },
+                        summary = "Save your liked and most-listened music on unmetered Wi-Fi with sufficient battery. Manual downloads are kept separately.",
+                        icon = Icons.Rounded.DownloadDone)
+                },
+                Entry("Smart download limit", "automatic offline songs storage threshold") {
+                    var limit by remember(lib.smartDownloadLimit) { mutableStateOf(lib.smartDownloadLimit.coerceIn(10, 500).toFloat()) }
+                    SettingRow("Smart download limit", icon = Icons.Rounded.Storage,
+                        summary = "${limit.toInt()} songs · Space used depends on download quality", below = {
+                            Slider(value = limit, onValueChange = { limit = (kotlin.math.round(it / 10f) * 10f).coerceIn(10f, 500f) },
+                                onValueChangeFinished = { AppSettings.updateLibrary { it.copy(smartDownloadLimit = limit.toInt()) } },
+                                valueRange = 10f..500f, steps = 48, enabled = lib.smartDownloads)
+                        })
+                },
+                Entry("Smart download battery", "automatic offline battery threshold charging") {
+                    var minimum by remember(lib.smartDownloadMinBattery) { mutableStateOf(lib.smartDownloadMinBattery.coerceIn(15, 80).toFloat()) }
+                    SettingRow("Smart download battery", icon = Icons.Rounded.BatteryFull,
+                        summary = "At least ${minimum.toInt()}% battery, or while charging", below = {
+                            Slider(value = minimum, onValueChange = { minimum = (kotlin.math.round(it / 5f) * 5f).coerceIn(15f, 80f) },
+                                onValueChangeFinished = { AppSettings.updateLibrary { it.copy(smartDownloadMinBattery = minimum.toInt()) } },
+                                valueRange = 15f..80f, steps = 12, enabled = lib.smartDownloads)
+                        })
                 },
                 Entry("Download quality", "offline bitrate") {
                     NavRow("Download quality", { downloadQualityDialog = true }, icon = Icons.Rounded.Download, value = lib.downloadQuality.label)
