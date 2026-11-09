@@ -40,9 +40,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -63,6 +65,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -95,6 +99,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.clipToBounds
 
 /**
  * Artwork with a tinted placeholder icon while it loads or when there is none.
@@ -713,6 +718,22 @@ fun MessageState(
  * round again, and both edges fade, so the two never read as one line
  * running into the next; text that fits sits still, unfaded.
  */
+/**
+ * Single-line text that scrolls when it doesn't fit, as on a car stereo. A
+ * third of its width of space runs between the end and the start coming
+ * round again; text that fits sits still, unfaded. The scroll is run here
+ * rather than by basicMarquee, which never reports where it is: each edge
+ * fades only while text is really cut there, so at rest the start of the
+ * line is clear, and its fade returns as the line moves off it.
+ */
+/**
+ * Single-line text that scrolls when it doesn't fit, as on a car stereo. A
+ * third of its width of space runs between the end and the start coming
+ * round again; text that fits sits still, unfaded. The scroll is run here
+ * rather than by basicMarquee, which never reports where it is: each edge
+ * fades only while text is really cut there, so at rest the start of the
+ * line is clear, and its fade returns as the line moves off it.
+ */
 @Composable
 fun MarqueeText(
     text: String,
@@ -724,30 +745,60 @@ fun MarqueeText(
     androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
         val textWidth = remember(text, style) { measurer.measure(text, style, maxLines = 1, softWrap = false).size.width }
         val overflows = constraints.hasBoundedWidth && textWidth > constraints.maxWidth
-        val fade = with(androidx.compose.ui.platform.LocalDensity.current) { MARQUEE_FADE.toPx() }
-        Text(
-            text,
-            style = style,
-            color = color,
-            maxLines = 1,
-            modifier = if (!overflows) Modifier else Modifier
-                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    val edge = (fade / size.width).coerceIn(0f, 0.5f)
-                    drawRect(
-                        androidx.compose.ui.graphics.Brush.horizontalGradient(
-                            0f to Color.Transparent, edge to Color.Black, 1f - edge to Color.Black, 1f to Color.Transparent,
-                        ),
-                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
-                    )
+        if (!overflows) {
+            Text(text, style = style, color = color, maxLines = 1)
+        } else {
+            val containerWidth = constraints.maxWidth
+            val totalWidth = textWidth + containerWidth / 3
+            val fade = with(androidx.compose.ui.platform.LocalDensity.current) { MARQUEE_FADE.toPx() }
+            var phase by remember(text, containerWidth) { mutableFloatStateOf(0f) }
+            val velocityPx = with(androidx.compose.ui.platform.LocalDensity.current) { 50.dp.toPx() }
+            LaunchedEffect(text, style, containerWidth) {
+                val cycleMs = 1_500f + totalWidth / velocityPx * 1_000f
+                var start = 0L
+                while (true) {
+                    androidx.compose.runtime.withFrameNanos { frame ->
+                        if (start == 0L) start = frame
+                        val inCycle = ((frame - start) / 1_000_000f) % cycleMs
+                        val p = if (inCycle < 1_500f) 0f else (inCycle - 1_500f) / 1_000f * velocityPx
+                        if (p != phase) phase = p
+                    }
                 }
-                .basicMarquee(
-                    iterations = Int.MAX_VALUE,
-                    initialDelayMillis = 1_500,
-                    spacing = androidx.compose.foundation.MarqueeSpacing.fractionOfContainer(1f / 3f),
-                ),
-        )
+            }
+            val leftCut by remember(text, containerWidth) { derivedStateOf { phase > 0.5f && phase < textWidth } }
+            val rightCut by remember(text, containerWidth) { derivedStateOf { phase + containerWidth < textWidth || phase > totalWidth - containerWidth } }
+            val leftFade by androidx.compose.animation.core.animateFloatAsState(if (leftCut) 1f else 0f, androidx.compose.animation.core.tween(150), label = "marqueeLeftFade")
+            val rightFade by androidx.compose.animation.core.animateFloatAsState(if (rightCut) 1f else 0f, androidx.compose.animation.core.tween(150), label = "marqueeRightFade")
+            androidx.compose.foundation.layout.Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
+                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        val edge = (fade / size.width).coerceIn(0f, 0.5f)
+                        drawRect(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                0f to Color.Black.copy(alpha = 1f - leftFade), edge to Color.Black, 1f - edge to Color.Black, 1f to Color.Black.copy(alpha = 1f - rightFade),
+                            ),
+                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                        )
+                    }
+            ) {
+                Text(
+                    text, style = style, color = color, maxLines = 1, softWrap = false,
+                    modifier = Modifier
+                        .wrapContentWidth(androidx.compose.ui.Alignment.Start, unbounded = true)
+                        .offset { androidx.compose.ui.unit.IntOffset(-phase.toInt(), 0) }
+                )
+                Text(
+                    text, style = style, color = color, maxLines = 1, softWrap = false,
+                    modifier = Modifier
+                        .wrapContentWidth(androidx.compose.ui.Alignment.Start, unbounded = true)
+                        .offset { androidx.compose.ui.unit.IntOffset((totalWidth - phase).toInt(), 0) }
+                )
+            }
+        }
     }
 }
 
