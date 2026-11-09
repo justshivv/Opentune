@@ -100,8 +100,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // Clips are only fetched where they may play: motion allowed, and off mobile data when asked.
                 val moving = !ui.reduceAnimation && !(ui.animatedCoversWifiOnly && AppSettings.onMeteredNetwork())
                 val motion = moving && ui.animatedCovers
-                val cookie = if (moving && ui.spotifyCanvas) com.opentune.ui.spotify.SpotifyConnection.cookie() else null
-                if (!ui.albumCovers && !motion && cookie == null) return@collectLatest
+                if (!ui.albumCovers && !motion && !(moving && ui.spotifyCanvas)) return@collectLatest
                 // A sharper cover found for this song before: straight away once it's shown to load,
                 // rather than after waiting for the song's length.
                 if (ui.albumCovers) com.opentune.data.covers.AlbumCovers.cached(song)?.let {
@@ -111,6 +110,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val duration = withTimeoutOrNull(20_000) {
                     player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
                 } ?: 0L
+                // The Canvas cookie is read only now, never when the song first
+                // became current: at app start the WebView cookie store may
+                // still be loading, and an early read found no cookie and
+                // skipped the Canvas for good. Give it a while to appear.
+                val cookie = if (moving && ui.spotifyCanvas) {
+                    withTimeoutOrNull(30_000) {
+                        var found = com.opentune.ui.spotify.SpotifyConnection.cookie()
+                        while (found == null) {
+                            kotlinx.coroutines.delay(500)
+                            found = com.opentune.ui.spotify.SpotifyConnection.cookie()
+                        }
+                        found
+                    }
+                } else null
                 kotlinx.coroutines.coroutineScope {
                     if (ui.albumCovers && betterCover.value?.first != song.videoId) launch {
                         com.opentune.data.covers.AlbumCovers.coverFor(song, duration)?.let {
@@ -173,9 +186,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             // has to be this song's: right after a change the player can
             // still report the last one's, and lyrics found with that are
             // another version's, out of step from the first line.
-            val duration = withTimeoutOrNull(20_000) {
-                player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
-            } ?: 0L
+            // Apple, Deezer and Spotify are matched on the exact length, so wait for the player's.
+            // No giving up after a while: a song restored at app start may not be
+            // played until long after it became current, and its length only
+            // arrives once it is; a timed-out wait skipped the clips for good,
+            // until the song was left and returned to. collectLatest cancels
+            // this wait when the song changes, so waiting is safe.
+            val duration = player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
             // Plain text often means a synced source was busy just then; the
             // repository asks again a little later and sends better lyrics on.
             LyricsRepository.lyricsUpdates(song.videoId, song.title, song.artist, duration).collect { found ->
