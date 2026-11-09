@@ -44,6 +44,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -212,6 +213,7 @@ fun BottomChrome(
     onExpand: () -> Unit,
     searchSelected: Boolean,
     onSearch: () -> Unit,
+    onSearchLongPress: () -> Unit = {},
     mini: (@Composable (inline: Boolean, modifier: Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
     motion: DockMotion = DockMotion.MINIMIZE,
@@ -225,6 +227,7 @@ fun BottomChrome(
         onExpand,
         searchSelected,
         onSearch,
+        onSearchLongPress,
         mini,
         if (reduceMotion) DockLens.GLIDE else lens
     )
@@ -265,6 +268,7 @@ private class ChromeContent(
     val onExpand: () -> Unit,
     val searchSelected: Boolean,
     val onSearch: () -> Unit,
+    val onSearchLongPress: () -> Unit,
     val mini: (@Composable (inline: Boolean, modifier: Modifier) -> Unit)?,
     val lens: DockLens,
 )
@@ -379,10 +383,12 @@ private fun MinimizeChrome(
                     w = row,
                     h = row
                 ),
-            ) {
-                if (!c.searchSelected) haptics.tick()
-                c.onSearch()
-            }
+                onClick = {
+                    if (!c.searchSelected) haptics.tick()
+                    c.onSearch()
+                },
+                onLongPress = { haptics.tick(); c.onSearchLongPress() },
+            )
         }
     }
 }
@@ -480,7 +486,8 @@ private fun CapsuleChrome(
                                 h = orb,
                             )
                             .graphicsLayer { alpha = 1f - ramp(0f, 0.45f, progress()) },
-                        onSearch,
+                        onClick = onSearch,
+                        onLongPress = { c.onSearchLongPress() },
                     )
                 }
             }
@@ -506,7 +513,8 @@ private fun CapsuleChrome(
                         w = orb,
                         h = orb
                     ),
-                    onSearch,
+                    onClick = onSearch,
+                    onLongPress = { c.onSearchLongPress() },
                 )
             } else if (coverShown) {
                 mini(
@@ -600,10 +608,14 @@ private fun SinkChrome(
                                 .fillMaxHeight()
                         )
                         Spacer(Modifier.width(SEARCH_GAP))
-                        SearchOrb(c.searchSelected) {
-                            if (!c.searchSelected) haptics.tick()
-                            c.onSearch()
-                        }
+                        SearchOrb(
+                            c.searchSelected,
+                            onClick = {
+                                if (!c.searchSelected) haptics.tick()
+                                c.onSearch()
+                            },
+                            onLongPress = { haptics.tick(); c.onSearchLongPress() },
+                        )
                     }
                 }
             }
@@ -944,7 +956,7 @@ internal fun DockItem(
 
 /** Search on its own: a glass circle that fills with the accent while search is open. */
 @Composable
-internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onLongPress: (() -> Unit)? = null, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -973,10 +985,11 @@ internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onClick
             .padding(DOCK_INSET)
             .clip(CircleShape)
             .background(fill)
-            .clickable(
+            .combinedClickable(
                 interactionSource = interaction,
                 indication = com.opentune.ui.components.FocusRing(CircleShape),
-                onClick = onClick
+                onClick = onClick,
+                onLongClick = onLongPress
             )
             .semantics { role = Role.Tab; this.selected = selected },
         contentAlignment = Alignment.Center,
