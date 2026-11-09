@@ -120,7 +120,7 @@ object AddonResolver {
                 withContext(AddonRequestStatus { nextStage ->
                     stage = nextStage
                     report("${addon.manifest.name}: $nextStage")
-                }) {
+                }) lookup@ {
                     try {
                         val client = clientFor(addon.base)
                         val manifest = client.manifest().let { if (addon.admin) it.copy(name = addon.manifest.name) else it }
@@ -128,16 +128,16 @@ object AddonResolver {
                         fun permitted(): Boolean = AddonStore.addons.value.firstOrNull { it.key == addon.key }?.let {
                             AddonStore.usable(it) && (!download || it.manifest.downloads)
                         } == true
-                        if (!permitted()) return@withTimeoutOrNull null
+                        if (!permitted()) return@lookup null
                         stage = "searching catalogue"
                         report("${addon.manifest.name}: $stage")
                         val candidates = client.search("${song.title} ${song.artist}", manifest, tier)
                             .filter { identity.matches(it.title, listOf(it.artist), it.album, it.durationMs) }
-                        if (candidates.isEmpty()) { report(com.opentune.i18n.Tr.f("{0}: no matching recording", manifest.name)); return@withTimeoutOrNull null }
+                        if (candidates.isEmpty()) { report(com.opentune.i18n.Tr.f("{0}: no matching recording", manifest.name)); return@lookup null }
                         // Its last link for this song broke: a new one, not the cached one.
                         val fresh = staleLinks.remove("${addon.key}:${song.videoId}")
                         for (track in candidates.take(3)) {
-                            if (!permitted()) return@withTimeoutOrNull null
+                            if (!permitted()) return@lookup null
                             stage = "resolving audio"
                             report("${addon.manifest.name}: $stage")
                             var asked = tier
@@ -156,7 +156,7 @@ object AddonResolver {
                             if (download && stream.transport != null) {
                                 report(com.opentune.i18n.Tr.f("{0}: segmented stream; trying the next source for a downloadable file", manifest.name)); continue
                             }
-                            if (!permitted()) return@withTimeoutOrNull null
+                            if (!permitted()) return@lookup null
                             stage = "checking audio header"
                             report("${addon.manifest.name}: $stage")
                             val checked = if (stream.transport == null && stream.codec == "flac") {
@@ -190,13 +190,13 @@ object AddonResolver {
                                 } else stream
                             }
                             report("${manifest.name}: ${if (stream.transport == null && stream.codec == "flac") "verified FLAC" else "lossless requested; decoder confirms quality during playback"}")
-                            return@withTimeoutOrNull checked.copy(addonId = addon.key, provider = manifest.name,
+                            return@lookup checked.copy(addonId = addon.key, provider = manifest.name,
                                 trackId = if (track.streamUrl != null && stream.url == track.streamUrl) "" else track.id, tier = asked)
                         }
                         null
                     } catch (e: CancellationException) { throw e }
                     catch (e: AddonHttp.Failure) {
-                        if (notePaused(addon.key, e)) { report(com.opentune.i18n.Tr.f("{0}: paused by its owner for now", addon.manifest.name)); return@withTimeoutOrNull null }
+                        if (notePaused(addon.key, e)) { report(com.opentune.i18n.Tr.f("{0}: paused by its owner for now", addon.manifest.name)); return@lookup null }
                         outcome[1] = true
                         if (e.status == 429) limit(addon.key, song.videoId, e)
                         report("${addon.manifest.name}: ${failureDescription(stage, e)}"); null
