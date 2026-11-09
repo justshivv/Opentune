@@ -18,6 +18,8 @@ import com.opentune.data.innertube.InnertubeParser
 import com.opentune.ui.browse.SongActions
 import com.opentune.ui.components.PageHeader
 import com.opentune.ui.components.SongListItem
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.Alignment
 
 /**
  * Every stored listen in time order, including repeat listens; no 30-song
@@ -75,7 +77,11 @@ fun ListeningHistoryScreen(contentPadding: PaddingValues, actions: SongActions, 
         } else {
             val page = remotePage
             if (page == null) {
-                item { Text("Loading…", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge) }
+                item {
+                    Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(Modifier.offset(y = (-56).dp))
+                    }
+                }
             } else if (page.sections.all { it.songs.isEmpty() }) {
                 item { Text("Nothing here yet — what you play on YouTube Music will show up here.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge) }
             } else {
