@@ -1465,18 +1465,57 @@ private fun Modifier.pullToOpen(round: Boolean, onOpen: () -> Unit): Modifier {
     // Taken away mid-pull (the player opened over it, the dock folded): let go of the cover.
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { morph.endPull() } }
     return pointerInput(round, reduce) {
-        detectVerticalDragGestures(
-            onDragStart = { pulled = 0f; scope.launch { back.stop() } },
-            onDragEnd = {
-                val far = pulled
-                pulled = 0f
-                if (far >= openPx || morph.pulling >= 0.25f) open() else settle(far)
-            },
-            onDragCancel = { settle(pulled).also { pulled = 0f } },
-        ) { change, dy ->
-            change.consume()
-            pulled = (pulled - dy).coerceAtLeast(0f)
-            if (!reduce) morph.pullOpen(pulled, round, screenH)
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            pulled = 0f
+            morph.pullFlingPx = 0f
+            scope.launch { back.stop() }
+            var lastT = down.uptimeMillis
+            var velPx = 0f
+            var engaged = false
+            var released = false
+            try {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) {
+                        released = true
+                        val far = pulled
+                        pulled = 0f
+                        if (engaged) change.consume()
+                        if (far >= openPx || morph.pulling >= 0.25f) {
+                            morph.pullFlingPx = velPx
+                            open()
+                        } else {
+                            settle(far)
+                        }
+                        break
+                    }
+                    // The framework's own delta, never positions subtracted
+                    // by hand: the bar itself moves with other drags (the
+                    // dismiss below, the chrome scroll), and a hand-made
+                    // difference would measure that motion too and read a
+                    // downward drag as an upward pull.
+                    val dy = change.positionChange().y
+                    if (dy < 0f || pulled > 0f) {
+                        pulled = (pulled - dy).coerceAtLeast(0f)
+                        if (pulled > 0f) {
+                            engaged = true
+                            change.consume()
+                            if (!reduce) morph.pullOpen(pulled, round, screenH)
+                            val dt = (change.uptimeMillis - lastT).toFloat()
+                            if (dt > 0f) velPx = velPx * 0.6f + (-dy / dt * 1000f) * 0.4f
+                        }
+                    }
+                    lastT = change.uptimeMillis
+                }
+            } finally {
+                if (!released && pulled > 0f) {
+                    val far = pulled
+                    pulled = 0f
+                    settle(far)
+                }
+            }
         }
     }
 }

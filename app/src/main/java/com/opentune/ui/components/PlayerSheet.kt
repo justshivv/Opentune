@@ -60,9 +60,18 @@ fun PlayerSheet(
             PlayerMorph.cardFrom = null
             // The first frames build the player (out of sight, or under the
             // finger): the card starts moving once they're done, not through them.
+            // The first frames build the player (out of sight, or under the
+            // finger): the card starts moving once they're done, not through them.
             withFrameNanos { }
             withFrameNanos { }
-            t.animateTo(1f, tween(sheetMs(1f - t.value, SHEET_OPEN_MS), easing = SHEET_EASING))
+            // A pull that let go moving hands its speed over: the card
+            // carries on at the finger's pace instead of starting from rest —
+            // the same courtesy the close gives a flick, through [sheetFling].
+            val flingPx = PlayerMorph.pullFlingPx
+            PlayerMorph.pullFlingPx = 0f
+            val travel = (PlayerMorph.miniBar?.top ?: 0f).coerceAtLeast(1f)
+            val byFling = if (flingPx > 1f) ((1f - t.value) / (flingPx / travel) * 1_000f * FLING_STRETCH).toInt() else Int.MAX_VALUE
+            t.animateTo(1f, tween(minOf(sheetMs(1f - t.value, SHEET_OPEN_MS), byFling).coerceAtLeast(SHEET_MIN_MS), easing = SHEET_EASING))
         } else {
             // Dragged down part of the way already: the shrink goes on from where the finger let go, at its speed.
             val dragged = PlayerMorph.sheetDrag

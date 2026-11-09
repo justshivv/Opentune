@@ -121,6 +121,8 @@ object PlayerMorph {
      */
     var sheetDrag by mutableFloatStateOf(0f)
     var sheetFling = 0f
+    /** Px per second the pull up was travelling when it let go, upward positive; the sheet's open carries on at that pace. */
+    var pullFlingPx = 0f
     /** Where the player's card was when a drag down let go, in the root, and its corner in px. */
     internal var cardFrom by mutableStateOf<Rect?>(null)
     internal var cardCornerPx = 0f
