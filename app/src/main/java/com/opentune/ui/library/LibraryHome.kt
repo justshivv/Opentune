@@ -1669,11 +1669,15 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                         coverUrl = playlist.coverUrl,
                         songs = songs,
                         buttons = {
-                            PlayButtons(
+                            com.opentune.ui.browse.ListPlayRow(
+                                enabled = shown.isNotEmpty(),
+                                saved = false,
                                 onPlay = { actions.playAll(shown, 0, false, playlist.name) },
                                 onShuffle = { actions.playAll(shown, 0, true, playlist.name) },
                                 onSmartShuffle = { actions.smartShuffle(shown, playlist.name) },
+                                onSave = if (playlist.spotifyId == null) ({ adding = true }) else null,
                                 modifier = Modifier.fillMaxWidth(),
+                                actionLabel = "Add songs",
                             )
                         },
                         tools = tools,
