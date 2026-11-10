@@ -127,6 +127,14 @@ object LibraryStore {
     /** Newest like first. */
     val liked: StateFlow<List<SongRef>> = _liked.asStateFlow()
 
+    private val _ready = MutableStateFlow(false)
+    /**
+     * True once the stored library has been read at startup. Before that,
+     * an empty list can mean "not read yet" rather than "nothing there",
+     * so a page can show a skeleton instead of an empty state.
+     */
+    val ready: StateFlow<Boolean> = _ready.asStateFlow()
+
     private val _playlists = MutableStateFlow<List<LocalPlaylist>>(emptyList())
     val playlists: StateFlow<List<LocalPlaylist>> = _playlists.asStateFlow()
 
@@ -198,6 +206,7 @@ object LibraryStore {
         val f = com.opentune.data.SavedFile(File(context.filesDir, "library.json"), "LibraryStore").also { saved = it }
         // A library that won't read is kept aside, never saved over with an empty one.
         publish(f.read(LibraryDocument()) { json.decodeFromString(LibraryDocument.serializer(), it) })
+        _ready.value = true
         scope.launch {
             doc.drop(1).onEach { f.dirty = true }.debounce(800).collect { d ->
                 runCatching { f.write(json.encodeToString(LibraryDocument.serializer(), d)) }
