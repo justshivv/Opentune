@@ -1061,7 +1061,7 @@ fun TopNavBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                Modifier.size(40.dp)
+                Modifier.size(48.dp)
                     .then(if (solid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape))
                     .clickable(onClickLabel = "Back", onClick = onBack),
                 contentAlignment = Alignment.Center,
