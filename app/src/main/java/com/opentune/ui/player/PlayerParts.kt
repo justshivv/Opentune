@@ -1311,7 +1311,7 @@ fun MiniPlayer(
                 .then(
                     if (replica) Modifier.background(replicaFace)
                     else with(com.opentune.ui.components.PlayerMorph) { Modifier.miniBarLanding(round = true).miniUnderCard() }
-                        .glass(CircleShape, tint)
+                        .glass(CircleShape, tint, swell = false)
                         .pullToOpen(round = true, onOpen = onClick)
                         .clickable(onClick = onClick),
                 )
@@ -1341,7 +1341,7 @@ fun MiniPlayer(
                 translationY = offsetY.value
                 alpha = 1f - (offsetY.value / (dismissThreshold * 2.2f)).coerceIn(0f, 0.8f)
             }
-            .glass(shape, tint)
+            .glass(shape, tint, swell = false)
             .pullToOpen(round = false, onOpen = onClick)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(

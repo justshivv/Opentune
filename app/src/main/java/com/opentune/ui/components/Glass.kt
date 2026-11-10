@@ -124,7 +124,7 @@ fun liquidGlassOn(): Boolean {
  * Every grade keeps a hairline edge so the shape reads on any background.
  */
 @Composable
-fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surfaceContainerHigh): Modifier {
+fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surfaceContainerHigh, touchResponse: Boolean = true, swell: Boolean = true): Modifier {
     val ui by AppSettings.ui.collectAsState()
     val haze = LocalHazeState.current
     val backdrop = LocalBackdrop.current
@@ -139,13 +139,13 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     // wobble, and a pool of light follows the touch. Left out in Lite mode and with motion reduced.
     val touch = remember { LiquidTouch() }
     val liquid = backdrop != null && liquidGlassOn()
-    val live = liquid && !lite && !ui.reduceAnimation
+    val live = liquid && !lite && !ui.reduceAnimation && touchResponse
     val press by animateFloatAsState(
         if (live && touch.down) 1f else 0f,
         spring(dampingRatio = 0.5f, stiffness = 320f),
         label = "liquidPress",
     )
-    val body = if (live) this.liquidTouch(touch) { press } else this
+    val body = if (live) this.liquidTouch(touch, swell) { press } else this
     if (backdrop != null && liquidGlassOn()) {
         androidx.compose.runtime.DisposableEffect(Unit) {
             GlassPerformance.glassShowing++
@@ -306,8 +306,8 @@ internal class LiquidTouch {
  * swells it toward the finger by [press], 0 at rest to 1 while held. [press] runs on a spring,
  * so letting go sends it a little past rest and back: the glass settles like a drop.
  */
-private fun Modifier.liquidTouch(touch: LiquidTouch, press: () -> Float): Modifier = this
-    .pointerInput(touch) {
+private fun Modifier.liquidTouch(touch: LiquidTouch, swell: Boolean, press: () -> Float): Modifier {
+    val tracked = this.pointerInput(touch) {
         awaitEachGesture {
             // The first pass sees the touch before anything on the glass does, and leaves it alone.
             val first = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.pressed } ?: return@awaitEachGesture
@@ -322,7 +322,11 @@ private fun Modifier.liquidTouch(touch: LiquidTouch, press: () -> Float): Modifi
             touch.down = false
         }
     }
-    .graphicsLayer {
+    // A card that is itself dragged (the mini player) keeps the light under
+    // the finger but not the swell: swelling a layer while it is being
+    // pulled around draws it past its own face and shaves its corners.
+    if (!swell) return tracked
+    return tracked.graphicsLayer {
         val p = press()
         if (p == 0f || size.width <= 0f || size.height <= 0f) return@graphicsLayer
         // About 8 dp wider and 5 dp taller at most, whatever the size: a big bar swells no more than a small button.
@@ -331,6 +335,7 @@ private fun Modifier.liquidTouch(touch: LiquidTouch, press: () -> Float): Modifi
         val at = touch.at
         if (at.isSpecified) transformOrigin = TransformOrigin((at.x / size.width).coerceIn(0f, 1f), (at.y / size.height).coerceIn(0f, 1f))
     }
+}
 
 private const val LIQUID_SWELL = 0.05f
 
