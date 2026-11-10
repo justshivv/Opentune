@@ -758,7 +758,15 @@ fun CollectionScreen(
                             if (c == null) {
                                 // The hero's loading shape: the cover across the
                                 // whole top, then the title, the counts and the
-                                // two buttons as bars over its foot.
+                                // buttons as shapes over its foot.
+                                // Whether the loaded page will offer its save
+                                // button, from the lists already on the phone,
+                                // so the shapes match the hero's (its rule is
+                                // spelt out where the hero's buttons are made).
+                                val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
+                                val saved = savedLists.any { it.browseId == browseId }
+                                val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
+                                val showSave = saved || accountLists.none { it.browseId?.removePrefix("VL") == browseId.removePrefix("VL") }
                                 val skeletonHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
                                 Box(Modifier.fillMaxWidth().height(skeletonHeight)) {
                                     Placeholder(Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape)
@@ -772,9 +780,10 @@ fun CollectionScreen(
                                     ) {
                                         Placeholder(Modifier.width(200.dp).height(26.dp))
                                         Placeholder(Modifier.padding(top = 10.dp).width(140.dp).height(16.dp))
-                                        Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Placeholder(Modifier.weight(1f).height(52.dp), androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
-                                            Placeholder(Modifier.weight(1f).height(52.dp), androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
+                                        Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                            Placeholder(Modifier.size(56.dp), androidx.compose.foundation.shape.CircleShape)
+                                            Placeholder(Modifier.weight(1f).height(56.dp), androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
+                                            if (showSave) Placeholder(Modifier.size(56.dp), androidx.compose.foundation.shape.CircleShape)
                                         }
                                         Spacer(Modifier.height(16.dp))
                                     }
@@ -789,10 +798,18 @@ fun CollectionScreen(
                                     thumbnailUrl = c.thumbnailUrl,
                                     fallbackCover = fallbackCover,
                                     buttons = {
-                                        com.opentune.ui.library.PlayButtons(
+                                        val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
+                                        val saved = savedLists.any { it.browseId == c.browseId }
+                                        // Already in the account's library (made there, or saved there): nothing for a plus to add.
+                                        val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
+                                        val inAccount = own != null || accountLists.any { it.browseId?.removePrefix("VL") == c.browseId.removePrefix("VL") }
+                                        ListPlayRow(
+                                            enabled = c.songs.isNotEmpty(),
+                                            saved = saved,
                                             onPlay = { actions.playAll(shown.ifEmpty { c.songs }, 0, false, c.title) },
                                             onShuffle = { actions.playAll(shown.ifEmpty { c.songs }, 0, true, c.title) },
                                             onSmartShuffle = { actions.smartShuffle(shown.ifEmpty { c.songs }, c.title) },
+                                            onSave = if (inAccount && !saved) null else ({ com.opentune.data.library.LibraryStore.setSaved(com.opentune.data.library.SavedList(c.browseId, c.title, c.subtitle, c.thumbnailUrl), !saved) }),
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     },
