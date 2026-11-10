@@ -173,8 +173,8 @@ class PlayerConnection(private val context: Context) {
                 PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
                 PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
                 PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
-                -> if (dolby) "This phone can't decode Dolby audio. It plays through a Dolby-capable receiver or TV over HDMI or eARC."
-                    else error.cause?.message ?: error.message
+                    -> if (dolby) "This phone can't decode Dolby audio. It plays through a Dolby-capable receiver or TV over HDMI or eARC."
+                else error.cause?.message ?: error.message
                 PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
                 PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED ->
                     "This audio copy could not be read. Saved downloads will be repaired when connected."
@@ -344,14 +344,41 @@ class PlayerConnection(private val context: Context) {
             }
         }
         controller.shuffleModeEnabled = false
-        controller.setMediaItems(
-            ordered.map { it.toMediaItem() },
-            if (shuffled) 0 else startIndex.coerceIn(songs.indices),
-            startPositionMs.coerceAtLeast(0L),
-        )
+        val startAt = if (shuffled) 0 else startIndex.coerceIn(songs.indices)
+        val landing = setQueue(controller, ordered, startAt, startPositionMs.coerceAtLeast(0L))
         controller.prepare()
         controller.play()
-        if (mixing) startSmartShuffle(origin, songs, seed)
+        if (mixing) startSmartShuffle(origin, songs, seed, landing)
+    }
+
+    /** Stamps each queue hand-over; a newer playAll supersedes one still landing. */
+    private var queueStamp = 0
+
+    /**
+     * Hands [ordered] to the player in chunks: the head — with the start
+     * song in it — goes up at once, so playback begins without waiting for
+     * a long list to cross to the playback service, and the rest follows
+     * behind it. However long the list, the first song starts the same.
+     */
+    private fun setQueue(controller: MediaController, ordered: List<Song>, startIndex: Int, startPositionMs: Long): Job? {
+        val stamp = ++queueStamp
+        val headSize = maxOf(QUEUE_CHUNK, startIndex + 1)
+        val head = ordered.take(headSize)
+        controller.setMediaItems(head.map { it.toMediaItem() }, startIndex.coerceIn(head.indices), startPositionMs)
+        if (ordered.size <= head.size) return null
+        return scope.launch {
+            var at = head.size
+            while (at < ordered.size) {
+                if (stamp != queueStamp) return@launch
+                // The queue was cleared or replaced meanwhile (a dismiss, a
+                // radio): stop landing instead of refilling it.
+                if (controller.mediaItemCount < at) return@launch
+                val chunk = ordered.subList(at, minOf(at + QUEUE_CHUNK, ordered.size))
+                controller.addMediaItems(at, chunk.map { it.toMediaItem() })
+                at += chunk.size
+                kotlinx.coroutines.delay(QUEUE_CHUNK_MS)
+            }
+        }
     }
 
     fun toggleShuffle() {
@@ -440,12 +467,13 @@ class PlayerConnection(private val context: Context) {
     }
 
     /** Finds the picks for [list] and slots them into the queue where [SmartShuffle.mix] places them. */
-    private fun startSmartShuffle(origin: SmartShuffle.Origin, list: List<Song>, seed: Long) {
+    private fun startSmartShuffle(origin: SmartShuffle.Origin, list: List<Song>, seed: Long, landed: Job? = null) {
         SmartShuffle.setOn(true)
         controller?.let(::publishShuffle)
         smartJob?.cancel()
         smartJob = scope.launch {
             val found = SmartShuffle.recommendationsFor(list, seed)
+            landed?.join()
             val controller = controller ?: return@launch
             if (SmartShuffle.origin.value?.token != origin.token || !SmartShuffle.on.value) return@launch
             val queued = (0 until controller.mediaItemCount).mapTo(HashSet()) { controller.getMediaItemAt(it).mediaId }
@@ -459,13 +487,19 @@ class PlayerConnection(private val context: Context) {
             // Counted from the song playing now, which may have moved on while the picks were found.
             val currentId = controller.currentMediaItem?.mediaId
             val after = mixed.drop(mixed.indexOfFirst { !it.smartShuffle && it.videoId == currentId } + 1)
-            val plan = SmartShuffle.insertions(upcoming.map { it.videoId }, after)
-            // The queue was changed meanwhile: slot the picks into it as it is now.
-                ?: upcoming.takeIf { u -> u.none { it.smartShuffle } }?.let { u ->
+            if (SmartShuffle.insertions(upcoming.map { it.videoId }, after) != null) {
+                // The queue is still the list as mixed: swap everything after
+                // the playing song for the mixed tail in two calls, instead of
+                // a call - and a queue rebuild - per added song.
+                controller.removeMediaItems(from, controller.mediaItemCount)
+                controller.addMediaItems(from, after.map { it.toMediaItem() })
+            } else {
+                // The queue was changed meanwhile: slot the picks into it as it is now.
+                val plan = upcoming.takeIf { u -> u.none { it.smartShuffle } }?.let { u ->
                     SmartShuffle.insertions(u.map { it.videoId }, SmartShuffle.interleave(u, after.filter { it.smartShuffle }))
-                }
-                ?: return@launch
-            plan.forEach { (at, song) -> controller.addMediaItem(from + at, song.toMediaItem()) }
+                } ?: return@launch
+                plan.forEach { (at, song) -> controller.addMediaItem(from + at, song.toMediaItem()) }
+            }
         }
     }
 
@@ -622,6 +656,10 @@ class PlayerConnection(private val context: Context) {
         const val SWITCH_STALL_MS = 2_500L
         const val SWITCH_SETTLE_MS = 3_000L
         const val LOADING_TICK_MS = 250L
+
+        /** Songs per chunk when a queue is handed to the player; see setQueue. */
+        const val QUEUE_CHUNK = 150
+        const val QUEUE_CHUNK_MS = 50L
         val DOLBY_MIMES = setOf("audio/ac3", "audio/eac3", "audio/eac3-joc", "audio/ac4")
     }
 }
