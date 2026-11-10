@@ -290,7 +290,13 @@ fun GlassPage(modifier: Modifier = Modifier, overlay: @Composable BoxScope.() ->
         CompositionLocalProvider(
             LocalHazeState provides haze.takeIf { !ui.reduceBlur },
             LocalBackdrop provides backdrop.takeIf { sampled },
-        ) { overlay() }
+        ) {
+            // The page's own frost, under its overlay: drawn at the root it
+            // would sit over the whole NavHost and blur the top bar itself,
+            // so AppRoot skips its strip on these pages.
+            TopEdgeFrost(Modifier.align(Alignment.TopCenter))
+            overlay()
+        }
     }
 }
 
