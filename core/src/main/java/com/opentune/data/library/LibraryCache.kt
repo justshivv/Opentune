@@ -22,6 +22,16 @@ import kotlinx.serialization.json.Json
 /** Private, account-scoped snapshots; music files are still managed by Downloads. */
 object LibraryCache {
     private val json = Json { ignoreUnknownKeys = true }
+
+    /**
+     * The last few collections read or saved, kept in memory: opening a
+     * playlist again in the same session shows it at once instead of
+     * reading and decoding its whole file first. The file stays the
+     * record; this only skips the wait.
+     */
+    private val memory = object : LinkedHashMap<String, Collection>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Collection>?) = size > 6
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var root: File? = null
     private val _playlists = MutableStateFlow<List<ShelfItem>>(emptyList())
@@ -75,10 +85,18 @@ object LibraryCache {
         }
     }
 
-    fun collection(id: String, owner: String = owner()): Collection? = runCatching {
+    fun collection(id: String, owner: String = owner()): Collection? {
         if (owner == "unidentified") return null
-        json.decodeFromString(Collection.serializer(), file(owner, id).readText())
-    }.getOrNull()
+        val key = "$owner-${hash(id)}"
+        synchronized(memory) { memory[key] }?.let { return it }
+        return runCatching {
+            json.decodeFromString(Collection.serializer(), file(owner, id).readText())
+        }.getOrNull()?.also { decoded -> synchronized(memory) { memory[key] = decoded } }
+    }
+
+    /** The in-memory copy of a collection, if this session has one; never reads the file. */
+    fun peek(id: String, owner: String = owner()): Collection? =
+        if (owner == "unidentified") null else synchronized(memory) { memory["$owner-${hash(id)}"] }
 
     fun fresh(id: String, owner: String): Boolean = runCatching {
         val f = file(owner, id)
@@ -89,6 +107,7 @@ object LibraryCache {
     fun save(collection: Collection, owner: String) {
         if (this.owner() != owner || owner == "unidentified") return
         write(file(owner, collection.browseId), json.encodeToString(Collection.serializer(), collection))
+        synchronized(memory) { memory["$owner-${hash(collection.browseId)}"] = collection }
         LibraryArtwork.keep(listOf(collection.thumbnailUrl) + collection.songs.map { it.thumbnailUrl })
         val isOwn = collection.owned
         if (isOwn != null && InnertubeParser.isEditablePlaylist(collection.browseId) && _owned.value[collection.browseId] != isOwn) {
