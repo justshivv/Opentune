@@ -373,12 +373,14 @@ fun ListTools(
     /** For a playlist on the account's YouTube Music: who can see it, and changing that. */
     privacy: com.opentune.data.model.PlaylistPrivacy? = null,
     onPrivacy: (() -> Unit)? = null,
+    /** False when the page's own button row already offers the download, as the hero pages' does. */
+    showDownload: Boolean = true,
 ) {
     androidx.compose.foundation.layout.FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (saved != null) ListHeart(saved, onSave)
         if (onPrivacy != null) com.opentune.ui.components.PrivacyButton(privacy, onPrivacy)
         if (onAddSongs != null) AddSongsButton(onAddSongs)
-        if (songs.isNotEmpty()) DownloadAllButton(songs, list = list)
+        if (showDownload && songs.isNotEmpty()) DownloadAllButton(songs, list = list)
         if (onShare != null) RoundToolButton(Icons.Rounded.Share, "Share", onShare)
     }
 }

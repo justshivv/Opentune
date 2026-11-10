@@ -1,6 +1,8 @@
 package com.opentune.ui.browse
 
 import com.opentune.ui.components.pinnedToTop
+import com.opentune.ui.components.icon
+import com.opentune.ui.components.meaning
 import com.opentune.ui.components.GlassPage
 import com.opentune.ui.components.LocalHazeState
 import androidx.compose.ui.layout.layout
@@ -390,6 +392,24 @@ internal fun listMeta(kind: String, songs: List<com.opentune.data.model.Song>): 
     return listOfNotNull(kind, count, length).joinToString(" · ")
 }
 
+/**
+ * A playlist's counts the way the Liked page says them: how many songs
+ * and how long they run, with no kind word in front.
+ */
+internal fun playlistMeta(songs: List<com.opentune.data.model.Song>): String {
+    val total = songs.sumOf { it.durationMillis() } / 1000
+    val days = total / 86_400
+    val hours = total % 86_400 / 3_600
+    val minutes = total % 3_600 / 60
+    val length = when {
+        total <= 0 -> null
+        days > 0 -> "${days}d ${hours}h ${minutes}m"
+        hours > 0 -> "${hours}h ${minutes}m"
+        else -> "${minutes}m"
+    }
+    return listOfNotNull(com.opentune.i18n.Tr.f("{0} songs", songs.size), length).joinToString(" • ")
+}
+
 /** Whether lists open with their cover across the top of the page (Settings › Full-screen playlist covers). */
 @Composable
 internal fun fullListCover(): Boolean =
@@ -415,13 +435,15 @@ internal fun FullListCover(url: String?, modifier: Modifier = Modifier, cover: (
 
 /** The title starts below the complete square cover, never over the artwork. */
 internal const val FULL_COVER_TITLE_AT = 1f
+private const val COLLECTION_HERO_FRACTION = 0.68f
+private const val COLLECTION_PAGE_SIZE = 50
 
 /** Shared artwork, typography and spacing for YouTube, Spotify and local playlists. */
 @Composable
 internal fun PlaylistHeading(title: String, subtitle: String, thumbnail: String?, songs: List<com.opentune.data.model.Song>,
-    isAlbum: Boolean = false, cover: (@Composable () -> Unit)? = null,
-    /** False when the cover is shown across the page above ([FullListCover]). */
-    showCover: Boolean = true) {
+                             isAlbum: Boolean = false, cover: (@Composable () -> Unit)? = null,
+                             /** False when the cover is shown across the page above ([FullListCover]). */
+                             showCover: Boolean = true) {
     val coverSize = Modifier.fillMaxWidth(0.76f).aspectRatio(1f)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         if (!showCover) Unit
@@ -527,6 +549,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
     val context = androidx.compose.ui.platform.LocalContext.current
     val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
     val saved = savedLists.any { it.browseId == c.browseId }
+    val own = rememberOwnPlaylist(c)
     com.opentune.ui.components.FloatingCard(
         onDismiss = onDismiss,
         contentPadding = PaddingValues(0.dp),
@@ -557,11 +580,67 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", c.songs.size), context)
             }
             com.opentune.ui.components.MenuRow(Icons.Filled.Share, "Share") { close(); com.opentune.ui.share.ListShare.shareList(context, c.title, c.browseId, com.opentune.ui.share.ListShare.coversFor(c.thumbnailUrl, c.songs, album = c.browseId.startsWith("MPRE")), c.subtitle) }
+            val ownNow = own
+            if (ownNow != null) {
+                com.opentune.ui.components.MenuRow((ownNow.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).icon, (ownNow.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).meaning) { ownNow.choose() }
+            }
             com.opentune.ui.components.MenuRow(if (saved) Icons.Filled.BookmarkRemove else Icons.Filled.PushPin, if (saved) "Unpin" else "Pin") {
                 close()
                 com.opentune.data.library.LibraryStore.setSaved(com.opentune.data.library.SavedList(c.browseId, c.title, c.subtitle, c.thumbnailUrl), !saved)
             }
             Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/**
+ * A collection's hero, in the library pages' shape: the cover across the
+ * whole top, the name and counts over its fade, then the page's actions —
+ * the play row and its tools — inside it.
+ */
+@Composable
+private fun CollectionHero(
+    title: String,
+    subtitle: String,
+    explicit: Boolean,
+    meta: String,
+    thumbnailUrl: String?,
+    fallbackCover: (@Composable () -> Unit)?,
+    buttons: @Composable () -> Unit,
+) {
+    val heroHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
+    Box(Modifier.fillMaxWidth().height(heroHeight)) {
+        when {
+            !thumbnailUrl.isNullOrBlank() -> Artwork(thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX), Modifier.fillMaxSize(), shape = androidx.compose.ui.graphics.RectangleShape)
+            fallbackCover != null -> Box(Modifier.fillMaxSize()) { fallbackCover() }
+            else -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
+        }
+        Box(
+            Modifier.fillMaxWidth().height(96.dp)
+                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.28f), androidx.compose.ui.graphics.Color.Transparent))),
+        )
+        Box(
+            Modifier.fillMaxWidth().height(heroHeight * 0.52f).align(Alignment.BottomCenter)
+                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent, MaterialTheme.colorScheme.background))),
+        )
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(title, style = MaterialTheme.typography.displaySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (subtitle.isNotBlank()) {
+                com.opentune.ui.components.SubtitleLine(
+                    subtitle,
+                    explicit = explicit,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            Text(meta, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+            Spacer(Modifier.height(20.dp))
+            buttons()
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
@@ -615,148 +694,156 @@ fun CollectionScreen(
     // Songs picked together (long press, then Select): the bar over the top acts on them.
     val selection = com.opentune.ui.components.rememberSongSelection()
     androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
-    GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
-        PlaylistSearchHeader(search) {
-        CollapsingBar(title, listState, onBack, forceCollapsed = searching, artworkBehind = loaded?.thumbnailUrl != null) {
-            // Search, order and more in one glass pill.
-            Row(
-                Modifier.height(48.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                androidx.compose.material3.IconButton(onClick = { if (searching) search.close() else search.open = true }) {
-                    Icon(if (searching) Icons.Filled.Close else Icons.Filled.Search, if (searching) "Stop searching" else "Search this list")
-                }
-                Box {
-                    androidx.compose.material3.IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
-                    androidx.compose.material3.DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
-                        ListOrder.entries.forEach { o ->
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text(o.label) },
-                                trailingIcon = { if (o == order) Icon(Icons.Filled.Check, null) },
-                                onClick = { order = o; sortOpen = false },
-                            )
-                        }
+        GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
+            PlaylistSearchHeader(search) {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val heroPx = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp.roundToPx() }
+                val pastHero by remember(listState, heroPx) {
+                    androidx.compose.runtime.derivedStateOf {
+                        listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > heroPx - with(density) { 56.dp.roundToPx() }
                     }
                 }
-                androidx.compose.material3.IconButton(onClick = { moreOpen = true }, enabled = loaded != null) { Icon(Icons.Filled.MoreHoriz, "More") }
-            }
-        }
-        }
-        val listed = (state as? UiState.Success)?.data?.songs.orEmpty()
-        com.opentune.ui.components.SongSelectionBar(
-            selection,
-            rows = listed.mapIndexed { i, s -> "$i:${s.videoId}" to s },
-            onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
-            modifier = Modifier.align(Alignment.TopCenter),
-        )
-    }) {
-        when (val s = state) {
-            is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
-            else -> {
-                val c = (s as? UiState.Success)?.data
-                val fallbackCover: (@Composable () -> Unit)? = when {
-                    com.opentune.ui.library.isYouTubeLikes(browseId) -> ({
-                        com.opentune.ui.components.LikedPlaylistCover(Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape)
-                    })
-                    c != null && c.thumbnailUrl.isNullOrBlank() && !isAlbum -> ({
-                        com.opentune.ui.components.PlaylistCover(c.title, c.songs.map { it.thumbnailUrl },
-                            Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape, named = false)
-                    })
-                    else -> null
-                }
-                val tint = rememberCoverTint(c?.thumbnailUrl.artworkAt(CARD_ART_PX))
-                val band = com.opentune.ui.components.rememberRubberBand()
-                LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding, modifier = Modifier.fillMaxSize().coverWash(tint, c?.thumbnailUrl.artworkAt(CARD_ART_PX)).playlistSearchResults(search), overscrollEffect = band) {
-                    if (!searching) item(key = "header") {
-                        val full = fullListCover()
-                        androidx.compose.foundation.layout.BoxWithConstraints {
-                            HeaderBackdrop(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
-                            if (full) FullListCover(c?.thumbnailUrl.artworkAt(HEADER_ART_PX), Modifier.pinnedToTop(band), cover = fallbackCover)
-                            Column(
-                                if (full) Modifier.fillMaxWidth().padding(top = maxWidth * FULL_COVER_TITLE_AT + 16.dp, start = 24.dp, end = 24.dp)
-                                else Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                if (c == null) {
-                                    Placeholder(Modifier.size(260.dp), MaterialTheme.shapes.large)
-                                    Placeholder(Modifier.padding(top = 20.dp).width(200.dp).height(24.dp))
-                                    Placeholder(Modifier.padding(top = 8.dp).width(140.dp).height(16.dp))
-                                } else {
-                                    PlaylistHeading(c.title, c.subtitle, c.thumbnailUrl, c.songs, isAlbum, cover = fallbackCover, showCover = !full)
-                                }
-                                val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
-                                val saved = c != null && savedLists.any { it.browseId == c.browseId }
-                                val own = c?.let { rememberOwnPlaylist(it) }
-                                // Already in the account's library (made there, or saved there): nothing for a plus to add.
-                                val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
-                                val inAccount = own != null || (c != null && accountLists.any { it.browseId?.removePrefix("VL") == c.browseId.removePrefix("VL") })
-                                ListPlayRow(
-                                    enabled = !c?.songs.isNullOrEmpty(),
-                                    saved = saved,
-                                    // While the list is searched or sorted, the buttons play what's shown, as it's shown.
-                                    onPlay = { c?.let { actions.playAll(shown.ifEmpty { it.songs }, 0, false, it.title) } },
-                                    onShuffle = { c?.let { actions.playAll(shown.ifEmpty { it.songs }, 0, true, it.title) } },
-                                    onSmartShuffle = { c?.let { actions.smartShuffle(shown.ifEmpty { it.songs }, it.title) } },
-                                    onSave = if (inAccount && !saved) null else ({
-                                        c?.let {
-                                            com.opentune.data.library.LibraryStore.setSaved(
-                                                com.opentune.data.library.SavedList(it.browseId, it.title, it.subtitle, it.thumbnailUrl), !saved,
-                                            )
-                                        }
-                                    }),
-                                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 12.dp),
-                                )
-                                if (c != null) {
-                                    // Your own playlist keeps its tools: privacy, sharing your copy.
-                                    if (own != null) com.opentune.ui.library.ListTools(
-                                        c.songs, onAddSongs = null, Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                        list = com.opentune.ui.library.DownloadedListInfo(c.browseId, c.title, c.subtitle, c.thumbnailUrl),
-                                        // No heart here: the plus beside Play already saves it.
-                                        onShare = { own.share() },
-                                        privacy = own.privacy,
-                                        onPrivacy = { own.choose() },
+                val barSolid = searching || pastHero
+                com.opentune.ui.library.TopNavBar(title, barSolid, onBack) {
+                    // Search, order and more in one glass pill.
+                    Row(
+                        Modifier.height(48.dp).then(if (barSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.IconButton(onClick = { if (searching) search.close() else search.open = true }) {
+                            Icon(if (searching) Icons.Filled.Close else Icons.Filled.Search, if (searching) "Stop searching" else "Search this list")
+                        }
+                        Box {
+                            androidx.compose.material3.IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
+                            androidx.compose.material3.DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
+                                ListOrder.entries.forEach { o ->
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(o.label) },
+                                        trailingIcon = { if (o == order) Icon(Icons.Filled.Check, null) },
+                                        onClick = { order = o; sortOpen = false },
                                     )
                                 }
-
                             }
                         }
+                        androidx.compose.material3.IconButton(onClick = { moreOpen = true }, enabled = loaded != null) { Icon(Icons.Filled.MoreHoriz, "More") }
                     }
-                    if (firstPage != null && loadingState is UiState.Error) item(key = "retry-pages") {
-                        androidx.compose.material3.TextButton(onClick = { loader.reload() }) { Text("Some tracks couldn't load. Retry") }
+                }
+            }
+            val listed = (state as? UiState.Success)?.data?.songs.orEmpty()
+            com.opentune.ui.components.SongSelectionBar(
+                selection,
+                rows = listed.mapIndexed { i, s -> "$i:${s.videoId}" to s },
+                onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        }) {
+            when (val s = state) {
+                is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
+                else -> {
+                    val c = (s as? UiState.Success)?.data
+                    val fallbackCover: (@Composable () -> Unit)? = when {
+                        com.opentune.ui.library.isYouTubeLikes(browseId) -> ({
+                            com.opentune.ui.components.LikedPlaylistCover(Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape)
+                        })
+                        c != null && c.thumbnailUrl.isNullOrBlank() && !isAlbum -> ({
+                            com.opentune.ui.components.PlaylistCover(c.title, c.songs.map { it.thumbnailUrl },
+                                Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape, named = false)
+                        })
+                        else -> null
                     }
-                    if (c == null) {
-                        items(8) { SongRowPlaceholder() }
-                    } else {
-                        itemsIndexed(shown, key = { i, song -> "$i:${song.videoId}" }) { i, song ->
-                            SongListItem(
-                                song = song,
-                                onClick = { actions.playAll(shown, i, false, c.title) },
-                                isCurrent = song.videoId == actions.currentVideoId,
-                                isPlaying = actions.isPlaying,
-                                leading = if (isAlbum) {
-                                    {
-                                        Box(Modifier.size(width = 28.dp, height = 52.dp), Alignment.Center) {
-                                            Text(
-                                                "${c.songs.indexOf(song).takeIf { it >= 0 }?.plus(1) ?: (i + 1)}",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = if (song.videoId == actions.currentVideoId) MaterialTheme.colorScheme.primary
-                                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
+                    var shownCount by remember { androidx.compose.runtime.mutableIntStateOf(COLLECTION_PAGE_SIZE) }
+                    val paged = shown.take(shownCount)
+                    LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else PaddingValues(bottom = contentPadding.calculateBottomPadding()), modifier = Modifier.fillMaxSize().playlistSearchResults(search)) {
+                        if (!searching) item(key = "header") {
+                            if (c == null) {
+                                // The hero's loading shape: the cover across the
+                                // whole top, then the title, the counts and the
+                                // two buttons as bars over its foot.
+                                val skeletonHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
+                                Box(Modifier.fillMaxWidth().height(skeletonHeight)) {
+                                    Placeholder(Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape)
+                                    Box(
+                                        Modifier.fillMaxWidth().height(skeletonHeight * 0.52f).align(Alignment.BottomCenter)
+                                            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent, MaterialTheme.colorScheme.background))),
+                                    )
+                                    Column(
+                                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        Placeholder(Modifier.width(200.dp).height(26.dp))
+                                        Placeholder(Modifier.padding(top = 10.dp).width(140.dp).height(16.dp))
+                                        Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Placeholder(Modifier.weight(1f).height(52.dp), androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
+                                            Placeholder(Modifier.weight(1f).height(52.dp), androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
                                         }
+                                        Spacer(Modifier.height(16.dp))
                                     }
-                                } else {
-                                    null
-                                },
-                                onPlayNext = { actions.playNext(song) },
-                                onAddToQueue = { actions.addToQueue(song) },
-                                selectKey = "${c.songs.indexOf(song).takeIf { it >= 0 } ?: i}:${song.videoId}",
-                            )
+                                }
+                            } else {
+                                val own = rememberOwnPlaylist(c)
+                                CollectionHero(
+                                    title = c.title,
+                                    subtitle = if (isAlbum) c.subtitle else "",
+                                    explicit = isAlbum && c.songs.any { it.isExplicit == true },
+                                    meta = if (isAlbum) listMeta("Album", c.songs) else playlistMeta(c.songs),
+                                    thumbnailUrl = c.thumbnailUrl,
+                                    fallbackCover = fallbackCover,
+                                    buttons = {
+                                        com.opentune.ui.library.PlayButtons(
+                                            onPlay = { actions.playAll(shown.ifEmpty { c.songs }, 0, false, c.title) },
+                                            onShuffle = { actions.playAll(shown.ifEmpty { c.songs }, 0, true, c.title) },
+                                            onSmartShuffle = { actions.smartShuffle(shown.ifEmpty { c.songs }, c.title) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    },
+                                )
+                            }
                         }
-                    }
+                        if (firstPage != null && loadingState is UiState.Error) item(key = "retry-pages") {
+                            androidx.compose.material3.TextButton(onClick = { loader.reload() }) { Text("Some tracks couldn't load. Retry") }
+                        }
+                        if (c == null) {
+                            items(8) { SongRowPlaceholder() }
+                        } else {
+                            itemsIndexed(paged, key = { i, song -> "$i:${song.videoId}" }) { i, song ->
+                                SongListItem(
+                                    song = song,
+                                    onClick = { actions.playAll(shown, i, false, c.title) },
+                                    isCurrent = song.videoId == actions.currentVideoId,
+                                    isPlaying = actions.isPlaying,
+                                    leading = if (isAlbum) {
+                                        {
+                                            Box(Modifier.size(width = 28.dp, height = 52.dp), Alignment.Center) {
+                                                Text(
+                                                    "${c.songs.indexOf(song).takeIf { it >= 0 }?.plus(1) ?: (i + 1)}",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    color = if (song.videoId == actions.currentVideoId) MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                    onPlayNext = { actions.playNext(song) },
+                                    onAddToQueue = { actions.addToQueue(song) },
+                                    selectKey = "${c.songs.indexOf(song).takeIf { it >= 0 } ?: i}:${song.videoId}",
+                                )
+                            }
+                        }
+                        if (shownCount < shown.size) item(key = "collection-more") {
+                            LaunchedEffect(shownCount) {
+                                kotlinx.coroutines.delay(700)
+                                shownCount += COLLECTION_PAGE_SIZE
+                            }
+                            Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+                                androidx.compose.material3.CircularProgressIndicator()
+                            }
+                        }
 
+                    }
                 }
             }
         }
-    }
     }
 }
