@@ -1213,7 +1213,8 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
         com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
             com.opentune.ui.browse.PlaylistSearchHeader(search) {
-                val topSolid = searching || barSolid
+                val returning = com.opentune.ui.browse.rememberSearchReturn(search, listState) { i, o -> i > 0 || o > heroHeightPx - barHeightPx }
+                val topSolid = searching || barSolid || returning
                 TopNavBar("Liked Music", topSolid, onBack) {
                     Row(Modifier.height(48.dp).then(if (topSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { if (searching) search.close() else search.open = true }) {
@@ -1680,7 +1681,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                         listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > heroPx - with(density) { 56.dp.roundToPx() }
                     }
                 }
-                val barSolid = searching || pastHero
+                val returning = com.opentune.ui.browse.rememberSearchReturn(search, listState) { i, o -> i > 0 || o > heroPx - with(density) { 56.dp.roundToPx() } }
+                val barSolid = searching || pastHero || returning
                 TopNavBar(playlist.name, barSolid, onBack) {
                     Row(Modifier.height(48.dp).then(if (barSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { if (searching) search.close() else search.open = true }) {

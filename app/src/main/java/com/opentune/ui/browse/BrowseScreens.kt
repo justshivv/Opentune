@@ -809,7 +809,8 @@ fun CollectionScreen(
                         listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > heroPx - with(density) { 56.dp.roundToPx() }
                     }
                 }
-                val barSolid = searching || pastHero
+                val returning = rememberSearchReturn(search, listState) { i, o -> i > 0 || o > heroPx - with(density) { 56.dp.roundToPx() } }
+                val barSolid = searching || pastHero || returning
                 com.opentune.ui.library.TopNavBar(title, barSolid, onBack) {
                     // Search, order and more in one glass pill.
                     Row(

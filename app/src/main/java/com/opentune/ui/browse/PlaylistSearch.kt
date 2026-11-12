@@ -89,3 +89,43 @@ internal fun Modifier.playlistSearchResults(search: PlaylistSearch): Modifier = 
     if (search.open) padding(top = with(LocalDensity.current) { search.headerHeight.toDp() }).imePadding()
     else this
 }
+
+/**
+ * Puts the list back where it was before a search, the moment the search closes. Searching
+ * jumps the list to the top of the results, so on closing, for one frame, the list still read
+ * as being at its top: the bar drew its see-through glass pill (as it does over the cover),
+ * then the songs came back past the cover and the bar went solid again, a flash. The place is
+ * put back in that same frame, and the result is true (keep the bar solid) for the few frames
+ * the list takes to report it, when that place is past the cover.
+ */
+@Composable
+internal fun rememberSearchReturn(
+    search: PlaylistSearch,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    pastHero: (index: Int, offset: Int) -> Boolean,
+): Boolean {
+    val memo = remember { SearchReturn(search.open) }
+    var hold by remember { mutableStateOf(false) }
+    val open = search.open
+    if (open != memo.wasOpen) {
+        if (open) {
+            memo.index = listState.firstVisibleItemIndex
+            memo.offset = listState.firstVisibleItemScrollOffset
+        } else {
+            listState.requestScrollToItem(memo.index, memo.offset)
+            hold = pastHero(memo.index, memo.offset)
+        }
+        memo.wasOpen = open
+    }
+    androidx.compose.runtime.LaunchedEffect(hold) {
+        if (!hold) return@LaunchedEffect
+        repeat(2) { androidx.compose.runtime.withFrameNanos { } }
+        hold = false
+    }
+    return hold
+}
+
+private class SearchReturn(var wasOpen: Boolean) {
+    var index = 0
+    var offset = 0
+}
