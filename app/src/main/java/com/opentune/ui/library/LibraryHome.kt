@@ -1,5 +1,9 @@
 package com.opentune.ui.library
 
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
+import dev.chrisbanes.haze.hazeEffect
 import androidx.compose.animation.core.animateTo
 import com.opentune.ui.components.pinnedToTop
 import com.opentune.ui.components.menuClickable
@@ -1060,11 +1064,51 @@ fun TopNavBar(
     modifier: Modifier = Modifier,
     actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
 ) {
-    val barColor by androidx.compose.animation.animateColorAsState(
-        if (solid) MaterialTheme.colorScheme.background else Color.Transparent,
-        androidx.compose.animation.core.tween(200), label = "topNavBar",
-    )
-    Column(modifier.fillMaxWidth().background(barColor)) {
+    // Once the hero has scrolled away the bar frosts in: the songs under it blur and take the
+    // page's colour, and the frost thins out over a short tail below the bar rather than
+    // ending at a hard line. Where blur is off, a near-solid wash of the page colour instead.
+    val frost by androidx.compose.animation.core.animateFloatAsState(if (solid) 1f else 0f, androidx.compose.animation.core.tween(240), label = "topNavFrost")
+    val haze = com.opentune.ui.components.LocalHazeState.current
+    val page = MaterialTheme.colorScheme.background
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    var tall by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    Box(modifier.fillMaxWidth()) {
+    if (frost > 0f) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .layout { measurable, constraints ->
+                    // Drawn taller than the bar by the tail; the bar's own size is unchanged.
+                    val h = constraints.maxHeight + NAV_FROST_TAIL.roundToPx()
+                    val p = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                    layout(constraints.maxWidth, constraints.maxHeight) { p.place(0, 0) }
+                }
+                .onSizeChanged { tall = it.height }
+                .then(
+                    if (haze == null) {
+                        Modifier.graphicsLayer { alpha = frost }.drawBehind {
+                            drawRect(Brush.verticalGradient(0f to page.copy(alpha = 0.95f), 0.72f to page.copy(alpha = 0.88f), 1f to page.copy(alpha = 0f)))
+                        }
+                    } else {
+                        Modifier.hazeEffect(haze) {
+                            alpha = frost
+                            backgroundColor = page
+                            tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.5f)))
+                            blurRadius = 28.dp
+                            noiseFactor = 0.03f
+                            progressive = dev.chrisbanes.haze.HazeProgressive.verticalGradient(
+                                easing = androidx.compose.animation.core.EaseIn,
+                                startY = tall - NAV_FROST_TAIL.value * density * 1.6f,
+                                startIntensity = 1f,
+                                endY = tall.toFloat(),
+                                endIntensity = 0f,
+                            )
+                        }
+                    },
+                ),
+        )
+    }
+    Column(Modifier.fillMaxWidth()) {
         Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         Row(
             Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
@@ -1095,7 +1139,11 @@ fun TopNavBar(
             actions()
         }
     }
+    }
 }
+
+/** How far a top bar's frost reaches below it, thinning out. */
+private val NAV_FROST_TAIL = 22.dp
 
 /** Songs liked in the app (and on YouTube Music, when signed in). */
 @Composable

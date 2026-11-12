@@ -398,6 +398,8 @@ internal fun Modifier.coverWash(tint: Color, artwork: String? = null): Modifier 
 private val LocalListBase = androidx.compose.runtime.compositionLocalOf<Color?> { null }
 /** The cover a tinted page is coloured from. */
 private val LocalListCover = androidx.compose.runtime.compositionLocalOf<String?> { null }
+/** Which look a tinted page has behind its songs. */
+private val LocalListLook = androidx.compose.runtime.compositionLocalOf { com.opentune.data.settings.ListBackground.PLAIN }
 
 /**
  * A playlist, album or Liked page with the background Settings ask for (Playlist page
@@ -410,7 +412,7 @@ private val LocalListCover = androidx.compose.runtime.compositionLocalOf<String?
 internal fun ListPageTint(coverUrl: String?, seed: Color? = null, content: @Composable () -> Unit) {
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
     val base = MaterialTheme.colorScheme
-    if (ui.listBackground != com.opentune.data.settings.ListBackground.COVER) {
+    if (ui.listBackground == com.opentune.data.settings.ListBackground.PLAIN) {
         content()
         return
     }
@@ -434,7 +436,10 @@ internal fun ListPageTint(coverUrl: String?, seed: Color? = null, content: @Comp
         surfaceContainerHighest = lift(0.14f),
     )
     MaterialTheme(colorScheme = scheme) {
-        androidx.compose.runtime.CompositionLocalProvider(LocalListBase provides base.background, LocalListCover provides coverUrl, content = content)
+        androidx.compose.runtime.CompositionLocalProvider(
+            LocalListBase provides base.background, LocalListCover provides coverUrl, LocalListLook provides ui.listBackground,
+            content = content,
+        )
     }
 }
 
@@ -449,6 +454,16 @@ internal fun ListPageWash() {
     val cover = LocalListCover.current
     val tint = MaterialTheme.colorScheme.background
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    if (LocalListLook.current == com.opentune.data.settings.ListBackground.AMBIENT) {
+        // The artist page's look: the cover's colours washed down the page, its second colour
+        // glowing in from the side, all fading back to the plain background at the very bottom.
+        Box(Modifier.fillMaxSize().coverWash(tint, cover)) {
+            Box(Modifier.matchParentSize().drawBehind {
+                drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.72f to Color.Transparent, 1f to base))
+            })
+        }
+        return
+    }
     Box(Modifier.fillMaxSize()) {
         if (!cover.isNullOrBlank() && !ui.reduceBlur && !ui.liteMode) {
             com.opentune.ui.library.CoverWash(cover.artworkAt(com.opentune.data.model.CARD_ART_PX) ?: cover, tint, Modifier.fillMaxWidth().height(380.dp))

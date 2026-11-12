@@ -1,5 +1,12 @@
 package com.opentune.ui.components
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.layout.height
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,7 +15,6 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.blur
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -311,11 +317,57 @@ private fun SongMenuPage(
         // Solid, whatever the theme's surfaces are, so the player never shows through.
         val base = colors.background.compositeOver(if (dark) Color.Black else Color.White)
         val canBlur = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        // Pulled down by its bar (or by the list once it's at its top), the page follows the
+        // finger; let go far enough or fast enough and it slides away, else it springs back.
+        var drag by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+        var pageHeight by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        var settle by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+        fun release(velocity: Float) {
+            settle?.cancel()
+            settle = scope.launch {
+                if (drag > pageHeight * 0.22f || velocity > 1_600f) {
+                    androidx.compose.animation.core.animate(drag, pageHeight, velocity, androidx.compose.animation.core.tween(200)) { v, _ -> drag = v }
+                    dismiss()
+                } else {
+                    androidx.compose.animation.core.animate(drag, 0f, velocity, androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 520f)) { v, _ -> drag = v }
+                }
+            }
+        }
+        val pullDown = remember {
+            object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                    // Pushed back up: the page goes back up before the list scrolls.
+                    if (drag <= 0f || available.y >= 0f) return androidx.compose.ui.geometry.Offset.Zero
+                    val take = maxOf(available.y, -drag)
+                    drag += take
+                    return androidx.compose.ui.geometry.Offset(0f, take)
+                }
+                override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                    // The list at its top and still pulled down: the page comes with it.
+                    if (available.y <= 0f || source != androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) return androidx.compose.ui.geometry.Offset.Zero
+                    settle?.cancel()
+                    drag += available.y
+                    return androidx.compose.ui.geometry.Offset(0f, available.y)
+                }
+                override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                    if (drag <= 0f) return androidx.compose.ui.unit.Velocity.Zero
+                    release(available.y)
+                    return available
+                }
+            }
+        }
         androidx.compose.runtime.CompositionLocalProvider(
             androidx.compose.material3.LocalContentColor provides colors.onSurface,
             LocalFloatingCard provides card,
         ) {
-            Box(Modifier.fillMaxSize().background(base)) {
+            Box(
+                Modifier.fillMaxSize()
+                    .onSizeChanged { pageHeight = it.height.toFloat().coerceAtLeast(1f) }
+                    .graphicsLayer { translationY = drag }
+                    .background(base)
+                    .nestedScroll(pullDown),
+            ) {
                 // The cover behind, where the phone can blur it; a plain page where it can't.
                 if (canBlur && !song.thumbnailUrl.isNullOrBlank()) {
                     Artwork(
@@ -333,11 +385,21 @@ private fun SongMenuPage(
                     )
                 }
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Close", role = androidx.compose.ui.semantics.Role.Button, onClick = onDismiss),
-                            contentAlignment = Alignment.Center,
-                        ) { Icon(Icons.Rounded.KeyboardArrowDown, "Close", Modifier.size(30.dp)) }
+                    // The bar and the song under it pull the page down.
+                    val headerDrag = androidx.compose.foundation.gestures.rememberDraggableState { d -> settle?.cancel(); drag = (drag + d).coerceAtLeast(0f) }
+                    Column(
+                        Modifier.fillMaxWidth().draggable(
+                            headerDrag, androidx.compose.foundation.gestures.Orientation.Vertical,
+                            onDragStopped = { v -> release(v) },
+                        ),
+                    ) {
+                    Box(
+                        Modifier.fillMaxWidth().height(28.dp)
+                            .clickable(onClickLabel = "Close", role = androidx.compose.ui.semantics.Role.Button, onClick = onDismiss)
+                            .semantics { contentDescription = "Close" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(Modifier.size(width = 40.dp, height = 5.dp).clip(CircleShape).background(colors.onSurface.copy(alpha = 0.35f)))
                     }
                     Row(
                         Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 12.dp),
@@ -352,6 +414,7 @@ private fun SongMenuPage(
                                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
                             )
                         }
+                    }
                     }
                     header()
                     body()

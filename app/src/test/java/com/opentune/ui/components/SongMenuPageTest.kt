@@ -14,6 +14,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import com.opentune.data.model.Song
 import androidx.compose.material.icons.rounded.BugReport
 import org.junit.Assert.assertTrue
@@ -53,6 +55,24 @@ class SongMenuPageTest {
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
         compose.onNodeWithText("Copy log").assertDoesNotExist()
+    }
+
+    @Test fun pullingTheBarDownClosesIt() {
+        var open by androidx.compose.runtime.mutableStateOf(true)
+        compose.setContent {
+            MaterialTheme(darkColorScheme()) {
+                if (open) SongMenuSheet(song, onDismiss = { open = false }, asPage = true)
+            }
+        }
+        compose.waitForIdle()
+        // A short pull springs back.
+        compose.onNodeWithContentDescription("Close").performTouchInput { swipeDown(centerY, centerY + 60f, 300) }
+        compose.waitForIdle()
+        assertTrue(open)
+        // A long pull takes it away.
+        compose.onNodeWithContentDescription("Close").performTouchInput { swipeDown(centerY, centerY + 1_400f, 300) }
+        compose.waitForIdle()
+        assertTrue(!open)
     }
 
     private fun snap(path: String) {

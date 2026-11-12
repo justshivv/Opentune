@@ -467,7 +467,7 @@ data class InterfaceSettings(
     /** How deep that wash is: a soft wash of the photo's colour, or the deep shade alone. */
     val artistShade: ArtistShade = ArtistShade.LIGHT,
     /** What is behind a playlist, album or Liked page: the cover's colour and blur, or the theme's plain background. */
-    val listBackground: ListBackground = ListBackground.PLAIN,
+    val listBackground: ListBackground = ListBackground.AMBIENT,
     val statsForNerds: Boolean = false,
     val recentsAsGrid: Boolean = false,
     /** Speed dial at the top of Home: the most-played songs, albums and artists. */
@@ -630,7 +630,8 @@ enum class ArtistShade(val label: String, val summary: String) {
 /** What sits behind the songs on playlist, album and Liked pages. */
 @Serializable
 enum class ListBackground(val label: String, val summary: String) {
-    COVER("Cover colour", "The cover's colour fades down the page, over a soft blur of the cover"),
+    AMBIENT("Ambient colours", "The cover's colours wash down the page and fade out at the very bottom, like the artist page"),
+    COVER("Cover blur", "The cover's colour fades down the page, over a soft blur of the cover"),
     PLAIN("Plain", "The app's own light or dark background"),
 }
 
