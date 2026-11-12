@@ -45,10 +45,10 @@ fun UpdateRequiredScreen(found: UpdateCheck.Release, behind: Int) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Column(Modifier.widthIn(max = 520.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Update OpenTune to keep listening", style = MaterialTheme.typography.headlineSmall)
+                Text("Update WEAV to keep listening", style = MaterialTheme.typography.headlineSmall)
                 Text(
                     "You have ${BuildConfig.VERSION_NAME}, which is $behind versions behind. Versions this old stop working as YouTube Music and " +
-                        "the add-ons change, so OpenTune needs the update before it opens. Your library, downloads and settings stay as they are.",
+                        "the add-ons change, so WEAV needs the update before it opens. Your library, downloads and settings stay as they are.",
                     style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 ReleaseHero(release.version, "Required update · you have ${BuildConfig.VERSION_NAME}")

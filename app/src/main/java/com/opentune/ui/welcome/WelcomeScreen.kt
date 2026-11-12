@@ -754,7 +754,7 @@ internal fun LookPreview(picks: List<ExploreFeed.Artist>, modifier: Modifier = M
         Song(
             videoId = "welcome-preview",
             title = lead?.let { "${it.name} mix" } ?: "Your first song",
-            artist = picks.take(3).joinToString(", ") { it.name }.ifEmpty { "OpenTune" },
+            artist = picks.take(3).joinToString(", ") { it.name }.ifEmpty { "WEAV" },
             thumbnailUrl = lead?.thumbnailUrl.artworkAt(240),
         )
     }

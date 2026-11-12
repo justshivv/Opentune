@@ -89,7 +89,7 @@ internal fun FestivalCard() {
             Column(Modifier.weight(1f)) {
                 Text("Festival wishes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "OpenTune can greet you on the festivals where you live. It uses your rough location once to know your country, and keeps only that. Not now asks again in about six weeks.",
+                    "WEAV can greet you on the festivals where you live. It uses your rough location once to know your country, and keeps only that. Not now asks again in about six weeks.",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 4.dp),
                 )

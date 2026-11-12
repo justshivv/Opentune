@@ -19,7 +19,7 @@ import kotlinx.coroutines.withContext
 object LogExport {
     suspend fun recent(): String = withContext(Dispatchers.IO) {
         val header = buildString {
-            appendLine("OpenTune ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})${if (BuildConfig.DEBUG) " debug" else ""}")
+            appendLine("WEAV ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})${if (BuildConfig.DEBUG) " debug" else ""}")
             appendLine("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
             appendLine("Signed in: ${AccountStore.signedIn.value}")
             appendLine("Settings: ${AppSettings.playback.value}")

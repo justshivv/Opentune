@@ -399,9 +399,9 @@ internal fun NearbyPrompt(
         Icons.Rounded.NearMe,
         "Radio stations near you",
         message = if (refused) {
-            "Location access is turned off for OpenTune. You can allow approximate location in the app's settings."
+            "Location access is turned off for WEAV. You can allow approximate location in the app's settings."
         } else {
-            "OpenTune uses your approximate location once to find stations around you. " +
+            "WEAV uses your approximate location once to find stations around you. " +
                 "Only a rounded position goes to Radio Browser, and it isn't saved."
         },
         action = {

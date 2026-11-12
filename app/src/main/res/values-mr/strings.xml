@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">सध्या वाजणारे गाणे, प्ले, स्किप आणि लाइकसह</string>
     <string name="widget_nothing_playing">काहीही वाजत नाही</string>
-    <string name="widget_open">OpenTune उघडण्यासाठी टॅप करा</string>
+    <string name="widget_open">WEAV उघडण्यासाठी टॅप करा</string>
     <string name="widget_like">लाइक</string>
     <string name="widget_unlike">लाइक केलेल्यांमधून काढा</string>
     <string name="widget_previous">मागील</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">एका टॅपमध्ये जवळपास वाजणारे गाणे ऐकते आणि ते तुमच्या लायब्ररीत जोडते</string>
     <string name="widget_album_art_label">अल्बम कव्हर</string>
     <string name="widget_studio_label">स्टुडिओ नियंत्रणे</string>
+    <string name="about_developer_title">डेव्हलपरबद्दल</string>
+    <string name="about_developer_subtitle">Alejandro Kundrah यांनी बनवले</string>
 </resources>

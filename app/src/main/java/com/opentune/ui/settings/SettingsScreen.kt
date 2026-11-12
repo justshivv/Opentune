@@ -359,7 +359,7 @@ fun SettingsScreen(
                 }
                 item {
                     Text(
-                        "OpenTune ${BuildConfig.VERSION_NAME} • GNU GPL v3 • Lyrics from LRCLIB",
+                        "WEAV ${BuildConfig.VERSION_NAME} • GNU GPL v3 • Lyrics from LRCLIB",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(28.dp),
@@ -434,7 +434,6 @@ private fun settingsSections(
     var listenBrainzDialog by remember { mutableStateOf(false) }
     var sponsorBlockDialog by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<UpdateCheck.Release?>(null) }
-    var showWhatsNew by remember { mutableStateOf(false) }
     var supportDialog by remember { mutableStateOf(false) }
     val pendingUpdate by UpdateCheck.pending.collectAsState()
     var updateBytes by remember { mutableStateOf(0L) }
@@ -507,7 +506,7 @@ private fun settingsSections(
             message = runCatching {
                 val doc = withContext(Dispatchers.IO) {
                     context.contentResolver.openInputStream(uri)?.use { AppSettings.json.parseToJsonElement(it.readBytes().decodeToString()) }
-                } as? JsonObject ?: error("not an OpenTune export")
+                } as? JsonObject ?: error("not an WEAV export")
                 doc["settings"]?.let(AppSettings::importJson)
                 doc["history"]?.let(History::importJson)
                 doc["library"]?.let(LibraryStore::importJson)
@@ -532,10 +531,6 @@ private fun settingsSections(
     if (listenBrainzDialog) ListenBrainzDialog(onDismiss = { listenBrainzDialog = false })
     if (sponsorBlockDialog) SponsorBlockDialog(onDismiss = { sponsorBlockDialog = false })
     update?.let { UpdateDialog(it, onDismiss = { update = null }) }
-    if (showWhatsNew) com.opentune.ui.components.WhatsNewSheet(
-        com.opentune.ui.components.WhatsNew.since(null, BuildConfig.VERSION_NAME, BuildConfig.CHANGELOG),
-        BuildConfig.VERSION_NAME, onDismiss = { showWhatsNew = false },
-    )
     if (supportDialog) com.opentune.ui.components.SupportDialog(onDismiss = { supportDialog = false })
     if (followedDialog) FollowedArtistsDialog(onDismiss = { followedDialog = false })
     if (hiddenDialog) HiddenDialog(onDismiss = { hiddenDialog = false })
@@ -758,7 +753,7 @@ private fun settingsSections(
                                 onClick = { com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true) },
                             )
                             RowDivider()
-                            SettingRow("Disconnect Spotify", summary = "Signs out of Spotify inside OpenTune. Playlists already brought over stay in Library", icon = Icons.Rounded.Close, onClick = { com.opentune.ui.spotify.SpotifyConnection.disconnect() })
+                            SettingRow("Disconnect Spotify", summary = "Signs out of Spotify inside WEAV. Playlists already brought over stay in Library", icon = Icons.Rounded.Close, onClick = { com.opentune.ui.spotify.SpotifyConnection.disconnect() })
                         }
                     } else {
                         NavRow(
@@ -820,7 +815,7 @@ private fun settingsSections(
                             is BitPerfectUsb.Status.Active -> "Exclusive on ${s.device}: ${s.format.ifEmpty { "${s.bits}-bit" }} at ${s.sampleRate / 1000.0} kHz, bit for bit"
                             is BitPerfectUsb.Status.NoMatch -> "On. The DAC lists no bit-perfect mode for ${s.sampleRate / 1000.0} kHz, so this song goes through Android's mixer"
                             BitPerfectUsb.Status.NoDac -> "On. Plug in a USB DAC and the music moves to it"
-                            else -> "The DAC plays only OpenTune, switched to each song's own sample rate and bit depth: no mixing, resampling or effects. Volume is applied by the app; at full volume the signal is bit-exact"
+                            else -> "The DAC plays only WEAV, switched to each song's own sample rate and bit depth: no mixing, resampling or effects. Volume is applied by the app; at full volume the signal is bit-exact"
                         },
                         icon = Icons.Rounded.Usb,
                         enabled = BitPerfectUsb.supported,
@@ -835,7 +830,7 @@ private fun settingsSections(
                     NavRow(
                         "Background playback",
                         { runCatching { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } },
-                        summary = if (ignoring) "Unrestricted: music keeps playing with the screen off" else "Restricted: if playback stops in the background, set OpenTune to Unrestricted",
+                        summary = if (ignoring) "Unrestricted: music keeps playing with the screen off" else "Restricted: if playback stops in the background, set WEAV to Unrestricted",
                         icon = Icons.Rounded.BatteryChargingFull,
                     )
                 },
@@ -941,7 +936,7 @@ private fun settingsSections(
                     )
                 },
                 Entry("Resume when headphones connect", "bluetooth headset wired auto play resume connect car") {
-                    ToggleRow("Resume when headphones connect", pb.resumeOnConnect, { v -> AppSettings.updatePlayback { it.copy(resumeOnConnect = v) } }, summary = "Carries on playing when headphones are plugged in or a Bluetooth device connects, while OpenTune is open or in the notification", icon = com.opentune.ui.player.PlayerIcons.Headphones)
+                    ToggleRow("Resume when headphones connect", pb.resumeOnConnect, { v -> AppSettings.updatePlayback { it.copy(resumeOnConnect = v) } }, summary = "Carries on playing when headphones are plugged in or a Bluetooth device connects, while WEAV is open or in the notification", icon = com.opentune.ui.player.PlayerIcons.Headphones)
                 },
                 Entry("Pause at zero volume", "mute volume down silent") {
                     ToggleRow("Pause at zero volume", pb.pauseAtZeroVolume, { v -> AppSettings.updatePlayback { it.copy(pauseAtZeroVolume = v) } }, summary = "Pauses when the volume is turned all the way down and plays again when it comes back up", icon = Icons.AutoMirrored.Rounded.VolumeOff)
@@ -1014,7 +1009,7 @@ private fun settingsSections(
                         value = com.opentune.ui.theme.AppLanguages.selected(context).label)
                 },
                 Entry("App icon", "launcher icon design glass pearl midnight rose ocean") {
-                    NavRow("App icon", { appIconDialog = true }, summary = "Choose the OpenTune icon on your home screen", icon = Icons.Rounded.Palette)
+                    NavRow("App icon", { appIconDialog = true }, summary = "Choose the WEAV icon on your home screen", icon = Icons.Rounded.Palette)
                 },
                 Entry("Fonts & readability", "font typeface text weight bold thin ttf otf import custom") {
                     NavRow("Fonts & readability", { fontDialog = true }, summary = "Built-in fonts, text weight and your own font file", icon = Icons.Rounded.TextFields, value = theme.font.label)
@@ -1049,7 +1044,7 @@ private fun settingsSections(
                         "Opening animation",
                         ui.openingAnimation,
                         { v -> AppSettings.updateUi { it.copy(openingAnimation = v) } },
-                        summary = "When OpenTune starts, the screen dives into the logo and the app comes through it",
+                        summary = "When WEAV starts, the screen dives into the logo and the app comes through it",
                         icon = Icons.Rounded.AutoAwesome,
                     )
                 },
@@ -1343,14 +1338,14 @@ private fun settingsSections(
                                 val (copied, skipped) = com.opentune.data.download.Downloads.exportExisting(context.applicationContext)
                                 val note = buildString {
                                     append(if (copied == 1) "1 song" else "$copied songs")
-                                    append(" copied to Music/OpenTune")
+                                    append(" copied to Music/WEAV")
                                     if (skipped > 0) append("; $skipped in a format other apps can't play, download them again to export")
                                 }
                                 if (copied > 0 || skipped > 0) com.opentune.data.Pills.done(note, context)
                             }
                         },
                         summary = if (com.opentune.data.download.DownloadExport.supported)
-                            "Also saves each download to Music/OpenTune as AAC (M4A) or FLAC, so other music apps can play it"
+                            "Also saves each download to Music/WEAV as AAC (M4A) or FLAC, so other music apps can play it"
                         else "Needs Android 10 or newer",
                         icon = Icons.Rounded.DownloadDone,
                         enabled = com.opentune.data.download.DownloadExport.supported,
@@ -1531,9 +1526,6 @@ private fun settingsSections(
         Section(
             "Advanced",
             listOf(
-                Entry("What's new", "release notes changelog version highlights") {
-                    NavRow("What's new", { showWhatsNew = true }, summary = "Highlights and improvements in ${BuildConfig.VERSION_NAME}", icon = Icons.Rounded.SystemUpdate)
-                },
                 Entry("Show the welcome again", "welcome onboarding first run start intro pick artists setup") {
                     NavRow("Show the welcome again", { com.opentune.data.Welcome.showAgain() }, summary = "Pick artists, choose a look and sign in, as on the first start", icon = Icons.Rounded.WavingHand)
                 },
@@ -1549,7 +1541,7 @@ private fun settingsSections(
                                 is UpdateCheck.Result.Failed -> message = "Couldn't check: ${r.reason}"
                             }
                         }
-                    }, summary = pendingUpdate?.let { "OpenTune ${it.version} is ready to install. You have ${BuildConfig.VERSION_NAME}." } ?: "Current version: ${BuildConfig.VERSION_NAME}", icon = Icons.Rounded.SystemUpdate, dot = pendingUpdate != null)
+                    }, summary = pendingUpdate?.let { "WEAV ${it.version} is ready to install. You have ${BuildConfig.VERSION_NAME}." } ?: "Current version: ${BuildConfig.VERSION_NAME}", icon = Icons.Rounded.SystemUpdate, dot = pendingUpdate != null)
                 },
                 Entry("Check for updates automatically", "update new version release auto") {
                     ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Looks for a new release on GitHub every few hours, in the background too, and offers to install it", icon = Icons.Rounded.SystemUpdate)
@@ -1563,15 +1555,11 @@ private fun settingsSections(
                         icon = Icons.Rounded.Info,
                     )
                 },
-                Entry("OpenTune community", "github discord community addons developer") { CommunityBanner() },
-                Entry("Support OpenTune", "donate upi pay money tip support developer") {
-                    NavRow("Support OpenTune", { supportDialog = true }, summary = "A small thank-you helps keep OpenTune going", icon = Icons.Rounded.Favorite)
+                Entry("WEAV community", "github discord community addons developer") { CommunityBanner() },
+                Entry("Support WEAV", "donate upi pay money tip support developer") {
+                    NavRow("Support WEAV", { supportDialog = true }, summary = "A small thank-you helps keep WEAV going", icon = Icons.Rounded.Favorite)
                 },
-                Entry("Star on GitHub", "star github rate like") {
-                    NavRow("Star on GitHub", {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, com.opentune.ui.components.Support.REPO.toUri())) }
-                    }, summary = "Helps other people find OpenTune", icon = Icons.Rounded.Star)
-                },
+                Entry("About the developer", "developer author creator alejandro kundrah about") { DeveloperCard() },
                 Entry("Source code", "github open source license gpl") {
                     NavRow("Source code", {
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/justshivv/Opentune".toUri())) }
@@ -1582,7 +1570,7 @@ private fun settingsSections(
                         scope.launch {
                             val log = LogExport.recent()
                             val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                                .putExtra(Intent.EXTRA_SUBJECT, "OpenTune ${BuildConfig.VERSION_NAME} log")
+                                .putExtra(Intent.EXTRA_SUBJECT, "WEAV ${BuildConfig.VERSION_NAME} log")
                                 .putExtra(Intent.EXTRA_TEXT, log)
                             context.startActivity(Intent.createChooser(send, "Share log"))
                         }

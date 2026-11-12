@@ -69,7 +69,7 @@ fun RingtoneDialog(song: Song, onDismiss: () -> Unit) {
     }
     val systemSettings = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (Ringtones.allowed(context)) proceed()
-        else com.opentune.data.Pills.error("OpenTune needs \"Modify system settings\" to change the ringtone", context)
+        else com.opentune.data.Pills.error("WEAV needs \"Modify system settings\" to change the ringtone", context)
     }
 
     FloatingDialog(
@@ -88,7 +88,7 @@ fun RingtoneDialog(song: Song, onDismiss: () -> Unit) {
                 }
                 if (!Ringtones.allowed(context)) {
                     Text(
-                        "Android will ask you to allow OpenTune to modify system settings. That's what lets an app change the default sounds.",
+                        "Android will ask you to allow WEAV to modify system settings. That's what lets an app change the default sounds.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),

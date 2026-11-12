@@ -230,7 +230,7 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
                     haptics.press()
                     scope.launch {
                         val saved = runCatching { ShareCard.saveImage(context, card, fileName) }.isSuccess
-                        if (saved) com.opentune.data.Pills.done("Saved to Pictures/OpenTune", context) else com.opentune.data.Pills.error("Couldn't save the card", context)
+                        if (saved) com.opentune.data.Pills.done("Saved to Pictures/WEAV", context) else com.opentune.data.Pills.error("Couldn't save the card", context)
                     }
                 },
             )

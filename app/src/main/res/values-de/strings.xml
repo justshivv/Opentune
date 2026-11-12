@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Was gerade läuft, mit Wiedergabe, Überspringen und Gefällt mir</string>
     <string name="widget_nothing_playing">Keine Wiedergabe</string>
-    <string name="widget_open">Tippen, um OpenTune zu öffnen</string>
+    <string name="widget_open">Tippen, um WEAV zu öffnen</string>
     <string name="widget_like">Gefällt mir</string>
     <string name="widget_unlike">Aus „Gefällt mir“ entfernen</string>
     <string name="widget_previous">Zurück</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">Ein Tippen erkennt den Song, der in der Nähe läuft, und fügt ihn deiner Mediathek hinzu</string>
     <string name="widget_album_art_label">Albumcover</string>
     <string name="widget_studio_label">Studio-Steuerung</string>
+    <string name="about_developer_title">Über den Entwickler</string>
+    <string name="about_developer_subtitle">Entwickelt von Alejandro Kundrah</string>
 </resources>

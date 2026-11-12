@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 sealed interface LinkTarget {
     data class Song(val videoId: String) : LinkTarget
     data class Browse(val browseId: String) : LinkTarget
-    /** "Play … on OpenTune" from the Assistant; blank means "play some music". */
+    /** "Play … on WEAV" from the Assistant; blank means "play some music". */
     data class PlaySearch(val query: String) : LinkTarget
     /** A song on another service (Apple Music, Deezer, Tidal…), to find and play here. */
     data class Elsewhere(val url: String) : LinkTarget

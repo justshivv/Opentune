@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">चल रहे गाने को चलाएँ, छोड़ें या पसंद करें</string>
     <string name="widget_nothing_playing">कुछ नहीं चल रहा</string>
-    <string name="widget_open">OpenTune खोलने के लिए टैप करें</string>
+    <string name="widget_open">WEAV खोलने के लिए टैप करें</string>
     <string name="widget_like">पसंद करें</string>
     <string name="widget_unlike">पसंदीदा गानों से हटाएँ</string>
     <string name="widget_previous">पिछला</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">एक टैप में आसपास बज रहे गाने को पहचानें और अपनी लाइब्रेरी में जोड़ें</string>
     <string name="widget_album_art_label">एल्बम कलाकृति</string>
     <string name="widget_studio_label">स्टूडियो कंट्रोल</string>
+    <string name="about_developer_title">डेवलपर के बारे में</string>
+    <string name="about_developer_subtitle">Alejandro Kundrah द्वारा बनाया गया</string>
 </resources>

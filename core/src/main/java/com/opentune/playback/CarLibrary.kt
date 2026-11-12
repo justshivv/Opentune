@@ -51,7 +51,7 @@ class CarLibrary(private val context: Context) {
 
     private var homeCache: Pair<Long, List<HomeShelf>>? = null
 
-    fun root(): MediaItem = folder(ROOT, "OpenTune", browsableStyle = MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM)
+    fun root(): MediaItem = folder(ROOT, "WEAV", browsableStyle = MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM)
 
     /** Extras for the root: search is supported, folders show as a grid and songs as a list. */
     fun rootExtras(): Bundle = Bundle().apply {
@@ -109,7 +109,7 @@ class CarLibrary(private val context: Context) {
 
     /**
      * Items a browser asked to play, as queue items. A single tapped song
-     * brings its list with it; a spoken request ("play … on OpenTune")
+     * brings its list with it; a spoken request ("play … on WEAV")
      * plays the best match, and autoplay carries on after it.
      */
     suspend fun resolve(items: List<MediaItem>, startIndex: Int, startPositionMs: Long): MediaSession.MediaItemsWithStartPosition {

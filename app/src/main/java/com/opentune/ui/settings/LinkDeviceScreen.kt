@@ -111,7 +111,7 @@ fun LinkDeviceScreen(
         val view = Intent(Intent.ACTION_VIEW, text.toUri())
         if (!com.opentune.ui.account.PairingLinks.receive(view)) {
             if (com.opentune.ui.Links.parse(text) != null || text.startsWith("opentune://")) com.opentune.ui.Links.receive(view)
-            else Pills.error("That isn't an OpenTune code", context)
+            else Pills.error("That isn't an WEAV code", context)
         }
     }
     val signedIn by AccountStore.signedIn.collectAsState()
@@ -136,7 +136,7 @@ fun LinkDeviceScreen(
         item { PageHeader("Link a device", onBack = onBack) }
         item {
             Text(
-                "Sign in your TV, open OpenTune on a computer, play on a speaker or listen with a friend.",
+                "Sign in your TV, open WEAV on a computer, play on a speaker or listen with a friend.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
@@ -183,7 +183,7 @@ fun LinkDeviceScreen(
                             "Send what's playing to a Chromecast, a Google speaker or a TV that plays over the network.",
                         ) {
                             Step(1, "Join the same Wi-Fi", "The speaker or TV and this phone need to be on the same network.")
-                            Step(2, "Pick it from the list", "OpenTune looks for devices nearby. The phone stays the remote.", last = true) {
+                            Step(2, "Pick it from the list", "WEAV looks for devices nearby. The phone stays the remote.", last = true) {
                                 Buttons({ SheetButton("Find devices", onClick = { casting = true }, icon = Icons.Rounded.Cast, tone = SheetTone.Primary) })
                             }
                         }
@@ -192,7 +192,7 @@ fun LinkDeviceScreen(
                             "Listen to the same song at the same moment on two phones, wherever each of you is, and chat or talk as it plays.",
                         ) {
                             Step(1, "Start a room", "You get a code and a link to send.")
-                            Step(2, "Your friend joins", "They open the link, or type the code in OpenTune.", last = true) {
+                            Step(2, "Your friend joins", "They open the link, or type the code in WEAV.", last = true) {
                                 Buttons({ SheetButton("Listen together", onClick = onTogether, icon = Icons.Rounded.Groups, tone = SheetTone.Primary) })
                             }
                         }
@@ -228,20 +228,20 @@ private fun TvSteps(
             Step(1, "Show a code here", "A QR code comes up on this screen.") {
                 Buttons({ SheetButton("Show the code", onClick = showCode, icon = Icons.Rounded.QrCode2, tone = SheetTone.Primary) })
             }
-            Step(2, "Scan it with your phone", "Use the phone's camera. OpenTune opens on the phone and asks you to approve.", last = true)
+            Step(2, "Scan it with your phone", "Use the phone's camera. WEAV opens on the phone and asks you to approve.", last = true)
             Note(Icons.Rounded.Lock, "Both on the same Wi-Fi. The code lasts two minutes, and the session goes straight from the phone to this TV, encrypted.")
         }
         return
     }
     DeviceCard("Android TV", "Sign the TV in with this phone's YouTube Music account. No typing with the remote.") {
-        Step(1, "Install OpenTune on the TV", "The same app as this one. Get the universal APK from the latest release.") {
+        Step(1, "Install WEAV on the TV", "The same app as this one. Get the universal APK from the latest release.") {
             Buttons(
                 { SheetButton("Get the app", onClick = { open(RELEASES) }, icon = Icons.Rounded.Download) },
                 { SheetButton("Share", onClick = { share(RELEASES) }, icon = Icons.Rounded.Share) },
             )
         }
         Step(2, "Show the code on the TV", "On the TV, open Settings, then Link a device, and choose Show the code.")
-        Step(3, "Scan it with this phone", "Scan it right here in OpenTune, or with the phone's own camera app, then approve on this phone.", last = true) {
+        Step(3, "Scan it with this phone", "Scan it right here in WEAV, or with the phone's own camera app, then approve on this phone.", last = true) {
             if (signedIn) {
                 Buttons({ SheetButton("Open the camera", onClick = camera, icon = Icons.Rounded.CameraAlt, tone = SheetTone.Primary) })
             } else {

@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">再生中の曲を表示し、再生・スキップ・高評価ができます</string>
     <string name="widget_nothing_playing">再生中の曲はありません</string>
-    <string name="widget_open">タップして OpenTune を開く</string>
+    <string name="widget_open">タップして WEAV を開く</string>
     <string name="widget_like">高評価</string>
     <string name="widget_unlike">高評価から削除</string>
     <string name="widget_previous">前へ</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">ワンタップで近くで流れている曲を聞き取り、ライブラリに追加します</string>
     <string name="widget_album_art_label">アルバムアート</string>
     <string name="widget_studio_label">スタジオ コントロール</string>
+    <string name="about_developer_title">開発者について</string>
+    <string name="about_developer_subtitle">開発: Alejandro Kundrah</string>
 </resources>

@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">ਚੱਲ ਰਹੇ ਗਾਣੇ ਨੂੰ ਚਲਾਓ, ਛੱਡੋ ਜਾਂ ਪਸੰਦ ਕਰੋ</string>
     <string name="widget_nothing_playing">ਕੁਝ ਨਹੀਂ ਚੱਲ ਰਿਹਾ</string>
-    <string name="widget_open">OpenTune ਖੋਲ੍ਹਣ ਲਈ ਟੈਪ ਕਰੋ</string>
+    <string name="widget_open">WEAV ਖੋਲ੍ਹਣ ਲਈ ਟੈਪ ਕਰੋ</string>
     <string name="widget_like">ਪਸੰਦ ਕਰੋ</string>
     <string name="widget_unlike">ਪਸੰਦੀਦਾ ਗਾਣਿਆਂ ਵਿੱਚੋਂ ਹਟਾਓ</string>
     <string name="widget_previous">ਪਿਛਲਾ</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">ਇੱਕ ਟੈਪ ਨਾਲ ਨੇੜੇ ਚੱਲ ਰਹੇ ਗਾਣੇ ਨੂੰ ਪਛਾਣੋ ਅਤੇ ਆਪਣੀ ਲਾਇਬ੍ਰੇਰੀ ਵਿੱਚ ਜੋੜੋ</string>
     <string name="widget_album_art_label">ਐਲਬਮ ਕਵਰ</string>
     <string name="widget_studio_label">ਸਟੂਡੀਓ ਕੰਟਰੋਲ</string>
+    <string name="about_developer_title">ਡਿਵੈਲਪਰ ਬਾਰੇ</string>
+    <string name="about_developer_subtitle">Alejandro Kundrah ਵੱਲੋਂ ਬਣਾਇਆ ਗਿਆ</string>
 </resources>

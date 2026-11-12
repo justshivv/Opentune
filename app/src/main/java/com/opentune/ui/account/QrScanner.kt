@@ -84,7 +84,7 @@ fun QrScannerDialog(onDismiss: () -> Unit, onCode: (String) -> Unit) {
             ) {
                 Text(
                     when {
-                        refused -> "OpenTune needs the camera to scan the code. Allow it in the phone's settings, or scan the code with the phone's own camera app."
+                        refused -> "WEAV needs the camera to scan the code. Allow it in the phone's settings, or scan the code with the phone's own camera app."
                         else -> "Point the camera at the code on the TV."
                     },
                     style = MaterialTheme.typography.bodyLarge,

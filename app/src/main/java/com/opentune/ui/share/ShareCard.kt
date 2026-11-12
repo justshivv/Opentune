@@ -237,7 +237,7 @@ object ShareCard {
         val pad = u * 0.012f
         val namePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = white; textSize = u * 0.037f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
         val subPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = soft; textSize = u * 0.033f }
-        val sub = subtitle?.takeIf { it.isNotBlank() } ?: "OpenTune"
+        val sub = subtitle?.takeIf { it.isNotBlank() } ?: "WEAV"
         val textMax = u * 0.36f
         val name = TextUtils.ellipsize(artist, namePaint, textMax, TextUtils.TruncateAt.END).toString()
         val subLine = TextUtils.ellipsize(sub, subPaint, textMax, TextUtils.TruncateAt.END).toString()
@@ -339,7 +339,7 @@ object ShareCard {
         c.restore()
     }
 
-    private const val BRAND = "OpenTune"
+    private const val BRAND = "WEAV"
     // Where the mark sits in the icon's 108-unit square.
     private const val MARK_LEFT = 27.8f
     private const val MARK_RIGHT = 80.3f

@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">O que está tocando, com tocar, pular e curtir</string>
     <string name="widget_nothing_playing">Nada tocando</string>
-    <string name="widget_open">Toque para abrir o OpenTune</string>
+    <string name="widget_open">Toque para abrir o WEAV</string>
     <string name="widget_like">Curtir</string>
     <string name="widget_unlike">Remover das curtidas</string>
     <string name="widget_previous">Anterior</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">Com um toque, ouve a música tocando por perto e a adiciona à sua biblioteca</string>
     <string name="widget_album_art_label">Capa do álbum</string>
     <string name="widget_studio_label">Controles de estúdio</string>
+    <string name="about_developer_title">Sobre o desenvolvedor</string>
+    <string name="about_developer_subtitle">Criado por Alejandro Kundrah</string>
 </resources>

@@ -15,8 +15,8 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35], application = Application::class)
 class AddonResolverTest {
     @Test fun failureDiagnosticsKeepVerificationDistinctAndDoNotLeakPrivateUrls() {
-        assertEquals("OpenTune device verification failed", AddonResolver.failureDescription("searching catalogue",
-            FirstPartyAddonAuth.VerificationFailure("OpenTune device verification failed")))
+        assertEquals("WEAV device verification failed", AddonResolver.failureDescription("searching catalogue",
+            FirstPartyAddonAuth.VerificationFailure("WEAV device verification failed")))
         assertEquals("checking audio header: connection timed out", AddonResolver.failureDescription("checking audio header", java.net.SocketTimeoutException("https://private.example/token")))
         assertEquals("searching catalogue: HTTP 429 · rate limited; retry in 12s", AddonResolver.failureDescription("searching catalogue", AddonHttp.Failure(429, 12)))
         assertEquals("resolving audio: invalid JSON response", AddonResolver.failureDescription("resolving audio", org.json.JSONException("private query token")))

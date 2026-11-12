@@ -102,7 +102,7 @@ internal fun SignInPage(
         ) {
             Icon(Icons.Rounded.Lock, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
             Text(
-                "You sign in on $service's own page. Only the sign-in is kept on this phone; your password never reaches OpenTune.",
+                "You sign in on $service's own page. Only the sign-in is kept on this phone; your password never reaches WEAV.",
                 style = MaterialTheme.typography.labelMedium,
                 color = scheme.onSurfaceVariant,
             )
