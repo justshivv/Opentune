@@ -754,14 +754,18 @@ fun MarqueeText(
             var phase by remember(text, containerWidth) { mutableFloatStateOf(0f) }
             val velocityPx = with(androidx.compose.ui.platform.LocalDensity.current) { 50.dp.toPx() }
             LaunchedEffect(text, style, containerWidth) {
-                val cycleMs = 1_500f + totalWidth / velocityPx * 1_000f
-                var start = 0L
                 while (true) {
-                    androidx.compose.runtime.withFrameNanos { frame ->
-                        if (start == 0L) start = frame
-                        val inCycle = ((frame - start) / 1_000_000f) % cycleMs
-                        val p = if (inCycle < 1_500f) 0f else (inCycle - 1_500f) / 1_000f * velocityPx
-                        if (p != phase) phase = p
+                    // Resting at the start is a plain wait: frames are asked for only while the
+                    // text moves, so a long title on screen doesn't keep the app drawing.
+                    phase = 0f
+                    kotlinx.coroutines.delay(1_500)
+                    val start = androidx.compose.runtime.withFrameNanos { it }
+                    var p = 0f
+                    while (p < totalWidth) {
+                        androidx.compose.runtime.withFrameNanos { frame ->
+                            p = (frame - start) / 1e9f * velocityPx
+                            phase = p.coerceAtMost(totalWidth.toFloat())
+                        }
                     }
                 }
             }

@@ -30,7 +30,9 @@ object SmartDownloads {
         watching = scope.launch {
             AppSettings.library.map { Triple(it.smartDownloads, it.smartDownloadLimit, it.smartDownloadMinBattery) }
                 .distinctUntilChanged().collect { (enabled, limit, _) ->
-                    val manager = WorkManager.getInstance(app)
+                    // WorkManager not set up yet (a test, or a process that never schedules work):
+                    // nothing to schedule or cancel, rather than an exception thrown in the background.
+                    val manager = runCatching { WorkManager.getInstance(app) }.getOrNull() ?: return@collect
                     if (!enabled) {
                         manager.cancelUniqueWork(REFRESH)
                         manager.cancelUniqueWork(NOW)

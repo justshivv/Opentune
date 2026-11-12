@@ -365,7 +365,8 @@ internal fun Modifier.coverWash(tint: Color, artwork: String? = null): Modifier 
     )
     return this.drawBehind {
         drawRect(Brush.verticalGradient(0f to tint, 0.45f to androidx.compose.ui.graphics.lerp(tint, background, 0.18f),
-            1f to androidx.compose.ui.graphics.lerp(tint, background, 0.65f)))
+            // Not further toward the background than this: a dark cover's page would end in black.
+            1f to androidx.compose.ui.graphics.lerp(tint, background, 0.3f)))
         drawRect(Brush.radialGradient(listOf(secondary.copy(alpha = 0.65f), Color.Transparent),
             center = androidx.compose.ui.geometry.Offset(size.width * 0.9f, size.height * 0.3f),
             radius = maxOf(size.width, size.height * 0.7f).coerceAtLeast(1f)))

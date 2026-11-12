@@ -1129,7 +1129,8 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     val density = androidx.compose.ui.platform.LocalDensity.current
     val heroHeightPx = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * HERO_FRACTION).dp.toPx() }
     val barHeightPx = with(density) { 56.dp.toPx() }
-    val barSolid by remember {
+    // Keyed on the sizes, so turning the phone works the threshold out again.
+    val barSolid by remember(heroHeightPx, barHeightPx) {
         androidx.compose.runtime.derivedStateOf {
             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > heroHeightPx - barHeightPx
         }
@@ -1682,7 +1683,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 if (!searching) item(key = "header") {
                     PlaylistHero(
                         name = playlist.name,
-                        source = if (playlist.spotifyId != null) "" else if (playlist.synced) "YouTube Music" else "On this phone",
+                        source = if (playlist.spotifyId != null) "Spotify" else if (playlist.synced) "YouTube Music" else "On this phone",
                         meta = com.opentune.ui.browse.playlistMeta(songs),
                         coverUrl = playlist.coverUrl,
                         songs = songs,

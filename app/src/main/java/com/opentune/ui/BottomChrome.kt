@@ -6,6 +6,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 import androidx.compose.ui.zIndex
@@ -1166,7 +1167,16 @@ internal fun rememberStretchingLens(
     LaunchedEffect(Unit) {
         var lastFrame = 0L
         var prevCentreFrame: Float? = null
+        var asleep = false
         while (true) {
+            // Settled with no finger on it: no frames at all until the tab, the dock's size or a
+            // finger changes. Asking for a frame every vsync at rest kept the app drawing forever.
+            if (asleep) {
+                val at = Triple(currentIndex, currentSlot, currentCentre)
+                androidx.compose.runtime.snapshotFlow { Triple(currentIndex, currentSlot, currentCentre) }.first { it != at }
+                asleep = false
+                lastFrame = 0L
+            }
             withFrameNanos { frame ->
                 val dt = if (lastFrame == 0L) 0.016f else ((frame - lastFrame) / 1e9f).coerceIn(
                     0f,
@@ -1253,6 +1263,11 @@ internal fun rememberStretchingLens(
                     leftVel = 0f
                     rightVel = 0f
                     dragged = false
+                    if (kotlin.math.abs(stretchValue - 1f) < 0.001f && kotlin.math.abs(stretchVel) < 0.01f) {
+                        stretchValue = 1f
+                        stretchVel = 0f
+                        asleep = true
+                    }
                 }
             }
         }
