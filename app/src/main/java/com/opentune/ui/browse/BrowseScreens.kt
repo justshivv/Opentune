@@ -372,6 +372,71 @@ internal fun Modifier.coverWash(tint: Color, artwork: String? = null): Modifier 
     }
 }
 
+/** The theme's own background outside a page tinted by [ListPageTint]; null on a plain page. */
+private val LocalListBase = androidx.compose.runtime.compositionLocalOf<Color?> { null }
+/** The cover a tinted page is coloured from. */
+private val LocalListCover = androidx.compose.runtime.compositionLocalOf<String?> { null }
+
+/**
+ * A playlist, album or Liked page with the background Settings ask for (Playlist page
+ * background). Plain leaves the theme alone. Cover colour makes the page's background the
+ * cover's own colour, so the hero fades into it and the bars and cards sit on it;
+ * [ListPageWash], drawn behind the songs, adds the blur of the cover and the fade down the
+ * page. [seed] colours a page whose cover is drawn, not loaded (Liked Music).
+ */
+@Composable
+internal fun ListPageTint(coverUrl: String?, seed: Color? = null, content: @Composable () -> Unit) {
+    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    val base = MaterialTheme.colorScheme
+    if (ui.listBackground != com.opentune.data.settings.ListBackground.COVER) {
+        content()
+        return
+    }
+    val dark = base.background.luminance() < 0.5f
+    val fromCover = rememberCoverTint(coverUrl)
+    val fromSeed by androidx.compose.animation.animateColorAsState(
+        seed?.let { androidx.compose.ui.graphics.lerp(base.background, coverTone(it, dark), 0.32f) } ?: base.background,
+        animationSpec = if (ui.reduceAnimation) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(550),
+        label = "listSeedTint",
+    )
+    val tint = if (coverUrl.isNullOrBlank()) fromSeed else fromCover
+    fun lift(f: Float) = androidx.compose.ui.graphics.lerp(tint, base.onSurface, f)
+    val scheme = base.copy(
+        background = tint,
+        surface = tint,
+        surfaceVariant = lift(0.14f),
+        surfaceContainerLowest = lift(0.02f),
+        surfaceContainerLow = lift(0.04f),
+        surfaceContainer = lift(0.07f),
+        surfaceContainerHigh = lift(0.10f),
+        surfaceContainerHighest = lift(0.14f),
+    )
+    MaterialTheme(colorScheme = scheme) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalListBase provides base.background, LocalListCover provides coverUrl, content = content)
+    }
+}
+
+/**
+ * What a page tinted by [ListPageTint] has behind its songs: a soft blur of the cover across
+ * the top, which shows once the hero has scrolled away, and the cover's colour easing back
+ * toward the theme's own background at the foot. Draws nothing on a plain page.
+ */
+@Composable
+internal fun ListPageWash() {
+    val base = LocalListBase.current ?: return
+    val cover = LocalListCover.current
+    val tint = MaterialTheme.colorScheme.background
+    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    Box(Modifier.fillMaxSize()) {
+        if (!cover.isNullOrBlank() && !ui.reduceBlur && !ui.liteMode) {
+            com.opentune.ui.library.CoverWash(cover.artworkAt(com.opentune.data.model.CARD_ART_PX) ?: cover, tint, Modifier.fillMaxWidth().height(380.dp))
+        }
+        Box(Modifier.matchParentSize().drawBehind {
+            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.6f to Color.Transparent, 1f to base.copy(alpha = 0.65f)))
+        })
+    }
+}
+
 /** The orders a list's songs can be shown in. */
 internal enum class ListOrder(val label: String) {
     DEFAULT("Default order"),
@@ -693,6 +758,12 @@ fun CollectionScreen(
 
     // Songs picked together (long press, then Select): the bar over the top acts on them.
     val selection = com.opentune.ui.components.rememberSongSelection()
+    // The page's background as Settings ask for it; YouTube Music's liked songs have a drawn cover, so its colour is given.
+    val likes = com.opentune.ui.library.isYouTubeLikes(browseId)
+    ListPageTint(
+        coverUrl = if (likes) null else loaded?.thumbnailUrl?.takeIf { it.isNotBlank() } ?: loaded?.songs?.firstOrNull()?.thumbnailUrl,
+        seed = if (likes) com.opentune.ui.library.LIKED_SEED else null,
+    ) {
     androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
         GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
             PlaylistSearchHeader(search) {
@@ -737,6 +808,8 @@ fun CollectionScreen(
                 modifier = Modifier.align(Alignment.TopCenter),
             )
         }) {
+            // The cover's blur and fade behind the songs, when Settings ask for the cover-coloured page.
+            ListPageWash()
             when (val s = state) {
                 is UiState.Error -> Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
                 else -> {
@@ -862,5 +935,6 @@ fun CollectionScreen(
                 }
             }
         }
+    }
     }
 }

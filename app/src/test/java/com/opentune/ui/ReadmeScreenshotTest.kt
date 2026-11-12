@@ -137,7 +137,7 @@ class ReadmeScreenshotTest {
         playing: Boolean = true,
         theme: ThemeSettings = ThemeSettings(),
     ) = PlayerUiState(
-        song = song, isPlaying = playing, isBuffering = false, hasNext = true, shuffle = false, repeatMode = Player.REPEAT_MODE_OFF,
+        song = song, isPlaying = playing, isSounding = playing, isBuffering = false, hasNext = true, shuffle = false, repeatMode = Player.REPEAT_MODE_OFF,
         durationMs = 200_000, lyrics = lyrics, queue = queue, currentIndex = 0, upNext = listOf(1, 2, 3),
         sound = SoundSettings(), theme = theme, source = song.albumName,
         // Liquid Glass needs the GPU's shaders, which this software drawing can't run; the frosted look stands in.

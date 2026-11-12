@@ -467,6 +467,8 @@ private fun settingsSections(
     var dockLensDialog by remember { mutableStateOf(false) }
     var glassStyleDialog by remember { mutableStateOf(false) }
     var choiceMenusDialog by remember { mutableStateOf(false) }
+    var artistShadeDialog by remember { mutableStateOf(false) }
+    var listBackgroundDialog by remember { mutableStateOf(false) }
     var pageTransitionDialog by remember { mutableStateOf(false) }
     var playerMotionDialog by remember { mutableStateOf(false) }
     var coverChangeDialog by remember { mutableStateOf(false) }
@@ -656,6 +658,26 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { l -> AppSettings.updateUi { it.copy(dockLens = l) } },
             onDismiss = { dockLensDialog = false },
+        )
+    }
+    if (artistShadeDialog) {
+        ChoiceSheet(
+            title = "Artist page shade",
+            options = com.opentune.data.settings.ArtistShade.entries,
+            selected = ui.artistShade,
+            label = { "${com.opentune.i18n.Tr.t(it.label)} · ${com.opentune.i18n.Tr.t(it.summary)}" },
+            onSelect = { m -> AppSettings.updateUi { it.copy(artistShade = m) } },
+            onDismiss = { artistShadeDialog = false },
+        )
+    }
+    if (listBackgroundDialog) {
+        ChoiceSheet(
+            title = "Playlist page background",
+            options = com.opentune.data.settings.ListBackground.entries,
+            selected = ui.listBackground,
+            label = { "${com.opentune.i18n.Tr.t(it.label)} · ${com.opentune.i18n.Tr.t(it.summary)}" },
+            onSelect = { m -> AppSettings.updateUi { it.copy(listBackground = m) } },
+            onDismiss = { listBackgroundDialog = false },
         )
     }
     if (choiceMenusDialog) {
@@ -1060,6 +1082,13 @@ private fun settingsSections(
                 },
                 Entry("Artist pages take the photo's colour", "artist page tint colour photo background") {
                     ToggleRow("Artist pages take the photo's colour", ui.artistPageTint, { v -> AppSettings.updateUi { it.copy(artistPageTint = v) } }, summary = "Off keeps artist pages in the app's own colours", icon = Icons.Rounded.AutoAwesome)
+                },
+                Entry("Artist page shade", "artist page tint light dark deep soft shade colour photo background") {
+                    NavRow("Artist page shade", { artistShadeDialog = true }, summary = if (ui.artistPageTint) ui.artistShade.summary else "Turn on Artist pages take the photo's colour first",
+                        icon = Icons.Rounded.AutoAwesome, value = ui.artistShade.label)
+                },
+                Entry("Playlist page background", "playlist album liked spotify page background cover colour accent blur fade plain dark light") {
+                    NavRow("Playlist page background", { listBackgroundDialog = true }, summary = ui.listBackground.summary, icon = Icons.Rounded.AutoAwesome, value = ui.listBackground.label)
                 },
                 Entry("Material You", "wallpaper dynamic color") {
                     val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S

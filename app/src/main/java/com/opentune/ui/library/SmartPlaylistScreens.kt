@@ -182,6 +182,10 @@ fun SmartPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     val context = LocalContext.current
     val refs = rememberSmartSongs(playlist.rules, playlist.id.hashCode().toLong())
     val songs = remember(refs) { refs.orEmpty().map { it.toSong() } }
+    // The page's background as Settings ask for it, from the first song's cover.
+    com.opentune.ui.browse.ListPageTint(coverUrl = songs.firstOrNull()?.thumbnailUrl) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    com.opentune.ui.browse.ListPageWash()
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item {
             PageHeader(playlist.name, onBack = onBack, actions = {
@@ -239,6 +243,8 @@ fun SmartPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 onAddToQueue = { actions.addToQueue(song) },
             )
         }
+    }
+    }
     }
 }
 

@@ -210,7 +210,10 @@ internal fun ArtistPageView(
         ) {
             val band = com.opentune.ui.components.rememberRubberBand()
             LazyColumn(state = listState, contentPadding = contentPadding,
-                modifier = Modifier.fillMaxSize().then(if (appearance.artistPageTint) Modifier.coverWash(rememberCoverTint(photo), photo) else Modifier),
+                // Light lays a soft wash of the photo's colour over the page's deep shade; Dark leaves the deep shade alone.
+                modifier = Modifier.fillMaxSize().then(
+                    if (appearance.artistPageTint && appearance.artistShade == com.opentune.data.settings.ArtistShade.LIGHT) Modifier.coverWash(rememberCoverTint(photo), photo) else Modifier,
+                ),
                 overscrollEffect = band) {
                 item(key = "hero", contentType = "hero") { ArtistHero(browseId, page, photo, listState, actions, band) }
                 if (page == null) {

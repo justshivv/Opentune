@@ -168,6 +168,9 @@ private data class LibraryPlaylistRow(
     val onClick: () -> Unit,
 )
 
+/** Liked Music's own colour (the purple of its cover), for the page behind it. */
+internal val LIKED_SEED = Color(0xFF8C6AF0)
+
 /** YouTube Music's Liked Music playlist, by its browse id ("VLLM") or playlist id ("LM"). */
 internal fun isYouTubeLikes(browseId: String?): Boolean = browseId == "VLLM" || browseId == "LM"
 
@@ -614,7 +617,7 @@ private sealed interface YouTubeLoad {
  * can't blur, a tiny copy of it stretched to fill gives the same soft wash.
  */
 @Composable
-private fun CoverWash(url: String, into: Color, modifier: Modifier) {
+internal fun CoverWash(url: String, into: Color, modifier: Modifier) {
     Box(modifier.clipToBounds()) {
         val blurs = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
         androidx.compose.animation.Crossfade(url, animationSpec = androidx.compose.animation.core.tween(800), label = "coverWash") { u ->
@@ -912,6 +915,10 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
         }) },
         dismissButton = { com.opentune.ui.components.SheetButton("Keep", onClick = { confirmRemove = false }, closes = true) },
     )
+    // The page's background as Settings ask for it, from the downloaded list's cover.
+    com.opentune.ui.browse.ListPageTint(coverUrl = saved?.thumbnailUrl) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    com.opentune.ui.browse.ListPageWash()
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader(saved?.title ?: "Downloaded", onBack = onBack) }
         if (saved == null || inList.isEmpty()) {
@@ -960,6 +967,8 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
                 onAddToQueue = { actions.addToQueue(song) },
             )
         }
+    }
+    }
     }
 }
 
@@ -1149,6 +1158,8 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     }
     val selectionRows = remember(shown) { shown.map { it.videoId to it } }
     if (moreOpen) LikedMoreSheet(songs, actions) { moreOpen = false }
+    // The page's background as Settings ask for it: from the newest liked song's cover, or Liked Music's own purple.
+    com.opentune.ui.browse.ListPageTint(coverUrl = songs.firstOrNull()?.thumbnailUrl, seed = LIKED_SEED) {
     androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
         com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
             com.opentune.ui.browse.PlaylistSearchHeader(search) {
@@ -1183,6 +1194,8 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 removeLabel = "Unlike",
             )
         }) {
+            // The cover's blur and fade behind the songs, when Settings ask for the cover-coloured page.
+            com.opentune.ui.browse.ListPageWash()
             // The hero runs to the very top of the screen, so the list keeps only the
             // bottom inset (room for the dock); the hero carries its own top shade.
             LazyColumn(
@@ -1238,6 +1251,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 }
             }
         }
+    }
     }
 }
 
@@ -1614,6 +1628,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     }
     // Songs picked together (long press, then Select): the bar over the top acts on them.
     val selection = com.opentune.ui.components.rememberSongSelection()
+    // The page's background as Settings ask for it, from the playlist's cover or its first song's.
+    com.opentune.ui.browse.ListPageTint(coverUrl = playlist.coverUrl ?: playlist.songs.firstOrNull()?.thumbnailUrl) {
     androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
         com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
             com.opentune.ui.browse.PlaylistSearchHeader(search) {
@@ -1657,6 +1673,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 removeLabel = "Remove",
             )
         }) {
+            // The cover's blur and fade behind the songs, when Settings ask for the cover-coloured page.
+            com.opentune.ui.browse.ListPageWash()
             var shownCount by remember { androidx.compose.runtime.mutableIntStateOf(PAGE_SIZE) }
             val paged = shown.take(shownCount)
             LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else PaddingValues(bottom = contentPadding.calculateBottomPadding()),
@@ -1720,6 +1738,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 }
             }
         }
+    }
     }
 }
 

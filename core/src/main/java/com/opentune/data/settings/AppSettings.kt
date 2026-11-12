@@ -464,6 +464,10 @@ data class InterfaceSettings(
     val miniPlayerTint: Boolean = true,
     /** An artist's page is washed with a deep shade of their photo's colour; off keeps the theme's own. */
     val artistPageTint: Boolean = true,
+    /** How deep that wash is: a soft wash of the photo's colour, or the deep shade alone. */
+    val artistShade: ArtistShade = ArtistShade.LIGHT,
+    /** What is behind a playlist, album or Liked page: the cover's colour and blur, or the theme's plain background. */
+    val listBackground: ListBackground = ListBackground.PLAIN,
     val statsForNerds: Boolean = false,
     val recentsAsGrid: Boolean = false,
     /** Speed dial at the top of Home: the most-played songs, albums and artists. */
@@ -614,6 +618,20 @@ enum class GlassStyle(val label: String, val summary: String) {
     TINTED("Tinted", "Glass washed with your accent colour"),
     SMOKE("Smoke", "Dark smoked glass with deep contrast"),
     LIQUID("Liquid", "Apple's Liquid Glass: softly frosted, the edges bend and split the light, with a bright rim (Android 13+)"),
+}
+
+/** How strongly an artist's page takes the colour of their photo. */
+@Serializable
+enum class ArtistShade(val label: String, val summary: String) {
+    LIGHT("Light", "A soft wash of the photo's colour over the whole page"),
+    DARK("Dark", "A deep shade of the photo's colour, close to black"),
+}
+
+/** What sits behind the songs on playlist, album and Liked pages. */
+@Serializable
+enum class ListBackground(val label: String, val summary: String) {
+    COVER("Cover colour", "The cover's colour fades down the page, over a soft blur of the cover"),
+    PLAIN("Plain", "The app's own light or dark background"),
 }
 
 /** How a choice in Settings (quality, glass style, and so on) is picked from a list. */

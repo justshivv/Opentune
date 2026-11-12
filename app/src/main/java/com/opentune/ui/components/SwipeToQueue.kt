@@ -345,28 +345,34 @@ private fun SwipeRow(
                     armed = false
                     val from = offset
                     settling = scope.launch {
-                        // Held on its own side of the middle: an overshoot would
-                        // flash the other action's colour on the way back.
+                        // Picks up the row's own speed where the finger left it, so letting go
+                        // mid-swipe carries on smoothly instead of stopping dead first; critically
+                        // damped, so it settles without crossing the middle (which would flash the
+                        // other action's colour) or having to be stopped there.
                         animate(
-                            from, 0f,
-                            animationSpec = if (calm) tween(140) else spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow),
+                            from, 0f, initialVelocity = if (calm) 0f else velocity * SwipeQueue.FOLLOW,
+                            animationSpec = if (calm) tween(140) else spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
                         ) { value, _ -> offset = if (from > 0f) value.coerceAtLeast(0f) else value.coerceAtMost(0f) }
                     }
                 }
             },
     ) {
-        val action = SwipeQueue.actionFor(offset, rtl)
-        val gone = vanish.value
-        if (action != null) {
-            Box(Modifier.matchParentSize().graphicsLayer { alpha = 1f - gone }) {
-                SwipeReveal(shown(action), SwipeQueue.progress(offset, width.toFloat()), towardRight = offset > 0f, armed = armed, calm = calm, pop = pop.value)
+        // Only which side and whether it moves at all are read while composing; how far is read
+        // while drawing, so following the finger or springing back never rebuilds the row.
+        val action by remember { androidx.compose.runtime.derivedStateOf { SwipeQueue.actionFor(offset, rtl) } }
+        val moving by remember { androidx.compose.runtime.derivedStateOf { offset != 0f } }
+        val towardRight by remember { androidx.compose.runtime.derivedStateOf { offset > 0f } }
+        val side = action
+        if (side != null) {
+            Box(Modifier.matchParentSize().graphicsLayer { alpha = 1f - vanish.value }) {
+                SwipeReveal(shown(side), { SwipeQueue.progress(offset, width.toFloat()) }, towardRight = towardRight, armed = armed, calm = calm, pop = { pop.value })
             }
         }
-        val moving = offset != 0f
         Box(
             Modifier
                 .fillMaxWidth()
                 .graphicsLayer {
+                    val gone = vanish.value
                     translationX = offset
                     if (gone > 0f) {
                         val scale = SwipeQueue.bubble(gone)
@@ -406,11 +412,11 @@ private fun labelOf(action: SwipeAction) = when (action) {
 @Composable
 private fun androidx.compose.foundation.layout.BoxScope.SwipeReveal(
     action: SwipeAction,
-    progress: Float,
+    progress: () -> Float,
     towardRight: Boolean,
     armed: Boolean,
     calm: Boolean,
-    pop: Float,
+    pop: () -> Float,
 ) {
     val colors = MaterialTheme.colorScheme
     val (container, onContainer) = when (action) {
@@ -425,12 +431,13 @@ private fun androidx.compose.foundation.layout.BoxScope.SwipeReveal(
     }
     val label = labelOf(action)
     // The icon grows toward the threshold and pops on reaching it; held still with less motion.
-    val scale = if (calm) 1f else (0.6f + 0.4f * progress) * pop
+    // Read while drawing, frame by frame, without composing the reveal again.
+    fun scale() = if (calm) 1f else (0.6f + 0.4f * progress()) * pop()
     Box(
         Modifier
             .matchParentSize()
             .padding(horizontal = 8.dp, vertical = 2.dp)
-            .graphicsLayer { alpha = (progress * 2f).coerceAtMost(1f) }
+            .graphicsLayer { alpha = (progress() * 2f).coerceAtMost(1f) }
             .clip(RowShape)
             .background(container),
         contentAlignment = if (towardRight) AbsoluteAlignment.CenterLeft else AbsoluteAlignment.CenterRight,
@@ -443,7 +450,7 @@ private fun androidx.compose.foundation.layout.BoxScope.SwipeReveal(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 val glyph = @Composable {
-                    Icon(icon, null, tint = onContainer, modifier = Modifier.size(26.dp).graphicsLayer { scaleX = scale; scaleY = scale })
+                    Icon(icon, null, tint = onContainer, modifier = Modifier.size(26.dp).graphicsLayer { val k = scale(); scaleX = k; scaleY = k })
                 }
                 val text = @Composable {
                     Text(

@@ -64,7 +64,7 @@ class PaneTransitionTest {
     private fun transition(style: PlayerStyle, pane: String, fullCover: Boolean = false) {
         val song = Song("test", "Test track", "Test artist", "https://covers.invalid/test.jpg", "3:00")
         val state = PlayerUiState(
-            song = song, isPlaying = true, isBuffering = false, hasNext = true,
+            song = song, isPlaying = true, isSounding = true, isBuffering = false, hasNext = true,
             shuffle = false, repeatMode = Player.REPEAT_MODE_OFF, durationMs = 180_000,
             lyrics = LyricsState.NotFound, queue = listOf(song), currentIndex = 0, upNext = emptyList(),
             sound = SoundSettings(), theme = ThemeSettings(), source = null,
