@@ -63,6 +63,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import com.opentune.ui.browse.playlistSearchResults
 import com.opentune.ui.browse.coverWash
+import com.opentune.ui.browse.meltIntoPage
 import com.opentune.ui.browse.dismissPlaylistSearch
 import androidx.compose.material.icons.rounded.Settings
 import com.opentune.ui.theme.Icon
@@ -1315,14 +1316,9 @@ private fun LikedMoreSheet(
  */
 @Composable
 private fun LikedSkeleton() {
-    val background = MaterialTheme.colorScheme.background
     val heroHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * HERO_FRACTION).dp
     Box(Modifier.fillMaxWidth().height(heroHeight)) {
-        com.opentune.ui.components.Placeholder(Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape)
-        Box(
-            Modifier.fillMaxWidth().height(heroHeight * 0.52f).align(Alignment.BottomCenter)
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent, background))),
-        )
+        com.opentune.ui.components.Placeholder(Modifier.fillMaxSize().meltIntoPage(), androidx.compose.ui.graphics.RectangleShape)
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1355,29 +1351,26 @@ private fun LikedHero(
     latest: Song?, count: Int, totalSeconds: Long,
     onPlay: () -> Unit, onShuffle: () -> Unit, onSmartShuffle: () -> Unit,
 ) {
-    val background = MaterialTheme.colorScheme.background
     val heroHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * HERO_FRACTION).dp
     Box(Modifier.fillMaxWidth().height(heroHeight)) {
         val cover = latest?.thumbnailUrl
-        if (cover != null) {
-            Artwork(
-                cover.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
-                Modifier.fillMaxSize(),
-                shape = androidx.compose.ui.graphics.RectangleShape,
+        // The cover melts into the page behind it, with no edge where it ends.
+        Box(Modifier.fillMaxSize().meltIntoPage()) {
+            if (cover != null) {
+                Artwork(
+                    cover.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
+                    Modifier.fillMaxSize(),
+                    shape = androidx.compose.ui.graphics.RectangleShape,
+                )
+            } else {
+                com.opentune.ui.components.LikedPlaylistCover(Modifier.fillMaxSize())
+            }
+            // A shade at the very top, so the back button reads on any cover.
+            Box(
+                Modifier.fillMaxWidth().height(96.dp)
+                    .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent))),
             )
-        } else {
-            com.opentune.ui.components.LikedPlaylistCover(Modifier.fillMaxSize())
         }
-        // A shade at the very top, so the back button reads on any cover.
-        Box(
-            Modifier.fillMaxWidth().height(96.dp)
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent))),
-        )
-        // The fade into the page.
-        Box(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(heroHeight * 0.52f)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, background))),
-        )
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1437,19 +1430,17 @@ private fun PlaylistHero(
 ) {
     val heroHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * HERO_FRACTION).dp
     Box(Modifier.fillMaxWidth().height(heroHeight)) {
-        if (coverUrl != null) {
-            Artwork(coverUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX), Modifier.fillMaxSize(), shape = androidx.compose.ui.graphics.RectangleShape)
-        } else {
-            com.opentune.ui.components.PlaylistCover(name, songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape, named = false)
+        Box(Modifier.fillMaxSize().meltIntoPage()) {
+            if (coverUrl != null) {
+                Artwork(coverUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX), Modifier.fillMaxSize(), shape = androidx.compose.ui.graphics.RectangleShape)
+            } else {
+                com.opentune.ui.components.PlaylistCover(name, songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape, named = false)
+            }
+            Box(
+                Modifier.fillMaxWidth().height(96.dp)
+                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent))),
+            )
         }
-        Box(
-            Modifier.fillMaxWidth().height(96.dp)
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent))),
-        )
-        Box(
-            Modifier.fillMaxWidth().height(heroHeight * 0.52f).align(Alignment.BottomCenter)
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background))),
-        )
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

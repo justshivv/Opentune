@@ -4,6 +4,14 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.blur
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -123,6 +131,8 @@ fun SongMenuSheet(
     top: MenuRows? = null,
     tools: MenuRows? = null,
     end: MenuRows? = null,
+    /** Shown as a page of its own straight away (the player's "…"), instead of a card rising from the bottom. */
+    asPage: Boolean = false,
 ) {
     val actions = LocalSongMenu.current
     val context = LocalContext.current
@@ -143,17 +153,12 @@ fun SongMenuSheet(
     var ringtone by remember { mutableStateOf(false) }
     val close = onDismiss
 
-    FloatingCard(
-        onDismiss = onDismiss,
-        contentPadding = PaddingValues(0.dp),
-        expandable = true,
-        // Open fully so the whole menu shows at once; the content lifts to make room, no scrolling needed.
-        startExpanded = true,
-        // The song and its four quick actions stay put; the rest of the menu scrolls under them.
-        header = {
+    // The song and its four quick actions stay put; the rest of the menu scrolls under them.
+    val header: @Composable ColumnScope.() -> Unit = {
             val card = LocalFloatingCard.current
             val close: () -> Unit = { card?.close() ?: onDismiss() }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The page shows the song larger itself.
+            if (!asPage) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(56.dp))
                 Spacer(Modifier.size(14.dp))
                 Column(Modifier.weight(1f)) {
@@ -198,8 +203,8 @@ fun SongMenuSheet(
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-        },
-    ) {
+    }
+    val body: @Composable ColumnScope.() -> Unit = {
         // Menu picks play the card out as they act.
         val card = LocalFloatingCard.current
         val close: () -> Unit = { card?.close() ?: onDismiss() }
@@ -256,8 +261,104 @@ fun SongMenuSheet(
             Spacer(Modifier.size(12.dp))
         }
     }
+    if (asPage) {
+        SongMenuPage(song, onDismiss, header, body)
+    } else {
+        FloatingCard(
+            onDismiss = onDismiss,
+            contentPadding = PaddingValues(0.dp),
+            expandable = true,
+            // Open fully so the whole menu shows at once; the content lifts to make room, no scrolling needed.
+            startExpanded = true,
+            header = header,
+            content = body,
+        )
+    }
     if (ringtone) RingtoneDialog(song, onDismiss = { ringtone = false; close() })
     if (pickPlaylist) AddToPlaylistDialog(song, onDone = { pickPlaylist = false; close() }, onDismiss = { pickPlaylist = false })
+}
+
+/**
+ * The song menu as a page of its own over the player: there at once, with no motion, and gone
+ * at once. The cover, softly blurred and dimmed, fills the back; the song sits large at the top
+ * with a button to close, then the quick actions and the rest of the menu, which scrolls.
+ */
+@Composable
+private fun SongMenuPage(
+    song: com.opentune.data.model.Song,
+    onDismiss: () -> Unit,
+    header: @Composable ColumnScope.() -> Unit,
+    body: @Composable ColumnScope.() -> Unit,
+) {
+    val dismiss by androidx.compose.runtime.rememberUpdatedState(onDismiss)
+    // Picks close the page straight away too, then do what they do.
+    val card = remember { FloatingCardScope { after -> (after ?: dismiss)() } }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        val view = androidx.compose.ui.platform.LocalView.current
+        androidx.compose.runtime.DisposableEffect(view) {
+            // No window animation and no dimming: the page is simply there.
+            (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { window ->
+                window.setWindowAnimations(0)
+                window.setDimAmount(0f)
+            }
+            onDispose { }
+        }
+        val colors = MaterialTheme.colorScheme
+        val dark = colors.background.luminance() < 0.5f
+        // Solid, whatever the theme's surfaces are, so the player never shows through.
+        val base = colors.background.compositeOver(if (dark) Color.Black else Color.White)
+        val canBlur = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides colors.onSurface,
+            LocalFloatingCard provides card,
+        ) {
+            Box(Modifier.fillMaxSize().background(base)) {
+                // The cover behind, where the phone can blur it; a plain page where it can't.
+                if (canBlur && !song.thumbnailUrl.isNullOrBlank()) {
+                    Artwork(
+                        song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.fillMaxSize().blur(72.dp),
+                        shape = RectangleShape,
+                    )
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                0f to base.copy(alpha = if (dark) 0.62f else 0.66f),
+                                0.45f to base.copy(alpha = if (dark) 0.84f else 0.86f),
+                                1f to base.copy(alpha = 0.96f),
+                            ),
+                        ),
+                    )
+                }
+                Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Close", role = androidx.compose.ui.semantics.Role.Button, onClick = onDismiss),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Rounded.KeyboardArrowDown, "Close", Modifier.size(30.dp)) }
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(84.dp), RoundedCornerShape(16.dp))
+                        Spacer(Modifier.size(18.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(song.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                song.artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                    }
+                    header()
+                    body()
+                }
+            }
+        }
+    }
 }
 
 /** A round quick action with its label underneath; filled when [active]. */

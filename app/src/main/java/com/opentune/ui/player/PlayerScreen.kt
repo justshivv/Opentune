@@ -1374,6 +1374,7 @@ fun PlayerLayout(
             SongMenuSheet(
                 current,
                 onDismiss = { showMenu = false },
+                asPage = true,
                 top = { close ->
                     MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
                     if (state.ui.commentsButton) MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }

@@ -10,6 +10,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,12 +37,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import com.opentune.data.account.AccountStore
 import com.opentune.data.settings.AppSettings
 import com.opentune.ui.theme.Icon
@@ -75,21 +78,43 @@ fun AccountMenu(nav: AccountMenuNav, onDismiss: () -> Unit) {
     if (!shown.targetState && shown.isIdle) {
         androidx.compose.runtime.LaunchedEffect(Unit) { onDismiss() }
     }
-    Popup(alignment = Alignment.TopEnd, onDismissRequest = close, properties = PopupProperties(focusable = true)) {
-        AnimatedVisibility(
-            shown,
-            enter = if (calm) fadeIn(tween(120)) else fadeIn(tween(160)) + scaleIn(tween(220), initialScale = 0.85f, transformOrigin = TransformOrigin(1f, 0f)),
-            exit = if (calm) fadeOut(tween(100)) else fadeOut(tween(140)) + scaleOut(tween(160), targetScale = 0.9f, transformOrigin = TransformOrigin(1f, 0f)),
-        ) {
+    // The theme's surfaces can be see-through (for the glass); the card is made solid from them,
+    // so the page never shows through it, light theme or dark.
+    val colors = MaterialTheme.colorScheme
+    val dark = colors.background.luminance() < 0.5f
+    val card = colors.surfaceContainerHigh.compositeOver(colors.background).compositeOver(if (dark) Color.Black else Color.White)
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = close,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        // The dialog's own dimming is left to this scrim, which fades with the card.
+        val view = androidx.compose.ui.platform.LocalView.current
+        androidx.compose.runtime.SideEffect { (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.setDimAmount(0f) }
+        Box(Modifier.fillMaxSize()) {
+            AnimatedVisibility(shown, enter = fadeIn(tween(180)), exit = fadeOut(tween(160))) {
+                Box(
+                    Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (dark) 0.5f else 0.32f))
+                        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = close),
+                )
+            }
+            AnimatedVisibility(
+                shown,
+                modifier = Modifier.align(Alignment.TopEnd),
+                enter = if (calm) fadeIn(tween(120)) else fadeIn(tween(160)) + scaleIn(tween(240), initialScale = 0.86f, transformOrigin = TransformOrigin(1f, 0f)),
+                exit = if (calm) fadeOut(tween(100)) else fadeOut(tween(140)) + scaleOut(tween(160), targetScale = 0.92f, transformOrigin = TransformOrigin(1f, 0f)),
+            ) {
             Column(
                 Modifier
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 16.dp, end = 16.dp, top = 6.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                     .widthIn(max = 420.dp)
                     .fillMaxWidth()
+                    .shadow(24.dp, RoundedCornerShape(30.dp))
                     .clip(RoundedCornerShape(30.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.97f))
-                    .padding(vertical = 18.dp),
+                    .background(card)
+                    // Taps on the card stay on the card.
+                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+                    .padding(vertical = 16.dp),
             ) {
                 val active = accounts.firstOrNull { it.active }
                 Text(
@@ -126,6 +151,7 @@ fun AccountMenu(nav: AccountMenuNav, onDismiss: () -> Unit) {
                 if (signedIn) MenuLine(Icons.Rounded.Close, "Manage accounts") { close(); nav.manageAccounts() }
                 MenuLine(Icons.Rounded.Settings, "Settings") { close(); nav.settings() }
             }
+            }
         }
     }
 }
@@ -133,7 +159,7 @@ fun AccountMenu(nav: AccountMenuNav, onDismiss: () -> Unit) {
 @Composable
 private fun MenuLine(icon: ImageVector, label: String, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(28.dp)) }

@@ -321,6 +321,27 @@ internal fun Modifier.fadeOutAtFoot(): Modifier = this
     }
 
 /**
+ * A list page's cover, faded out over its lower half so it melts into whatever lies behind
+ * the page (the cover's own blurred colour, or the plain background) with no edge where it
+ * ends. Eased, so the fade has no visible start either.
+ */
+internal fun Modifier.meltIntoPage(): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(
+            Brush.verticalGradient(
+                0.40f to Color.Black,
+                0.55f to Color.Black.copy(alpha = 0.86f),
+                0.70f to Color.Black.copy(alpha = 0.55f),
+                0.85f to Color.Black.copy(alpha = 0.2f),
+                1f to Color.Transparent,
+            ),
+            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+        )
+    }
+
+/**
  * The page's colour taken from a cover: its own colour laid lightly over the
  * background. A dark cover's colour is lifted to a mid tone first, and a
  * black-and-white one (which has no colour to read) gets a soft grey, so
@@ -676,19 +697,17 @@ private fun CollectionHero(
 ) {
     val heroHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
     Box(Modifier.fillMaxWidth().height(heroHeight)) {
-        when {
-            !thumbnailUrl.isNullOrBlank() -> Artwork(thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX), Modifier.fillMaxSize(), shape = androidx.compose.ui.graphics.RectangleShape)
-            fallbackCover != null -> Box(Modifier.fillMaxSize()) { fallbackCover() }
-            else -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
+        Box(Modifier.fillMaxSize().meltIntoPage()) {
+            when {
+                !thumbnailUrl.isNullOrBlank() -> Artwork(thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX), Modifier.fillMaxSize(), shape = androidx.compose.ui.graphics.RectangleShape)
+                fallbackCover != null -> Box(Modifier.fillMaxSize()) { fallbackCover() }
+                else -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
+            }
+            Box(
+                Modifier.fillMaxWidth().height(96.dp)
+                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.28f), androidx.compose.ui.graphics.Color.Transparent))),
+            )
         }
-        Box(
-            Modifier.fillMaxWidth().height(96.dp)
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.28f), androidx.compose.ui.graphics.Color.Transparent))),
-        )
-        Box(
-            Modifier.fillMaxWidth().height(heroHeight * 0.52f).align(Alignment.BottomCenter)
-                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent, MaterialTheme.colorScheme.background))),
-        )
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -843,11 +862,7 @@ fun CollectionScreen(
                                 val showSave = saved || accountLists.none { it.browseId?.removePrefix("VL") == browseId.removePrefix("VL") }
                                 val skeletonHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
                                 Box(Modifier.fillMaxWidth().height(skeletonHeight)) {
-                                    Placeholder(Modifier.fillMaxSize(), androidx.compose.ui.graphics.RectangleShape)
-                                    Box(
-                                        Modifier.fillMaxWidth().height(skeletonHeight * 0.52f).align(Alignment.BottomCenter)
-                                            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent, MaterialTheme.colorScheme.background))),
-                                    )
+                                    Placeholder(Modifier.fillMaxSize().meltIntoPage(), androidx.compose.ui.graphics.RectangleShape)
                                     Column(
                                         Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally,
