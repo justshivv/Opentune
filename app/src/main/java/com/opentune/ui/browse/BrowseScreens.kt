@@ -518,6 +518,57 @@ internal fun fullListCover(): Boolean =
     com.opentune.data.settings.AppSettings.ui.collectAsState().value.fullScreenListCover
 
 /**
+ * The top of a playlist, album or Liked page, as Settings › Full-screen playlist covers asks.
+ * On, [cover] runs across the whole top of the page and melts into it, with [info] (the name,
+ * counts and buttons) over its fade. Off, the cover is framed and centred under the bar, with
+ * a soft shadow, and [info] follows below it on the page's own background.
+ */
+@Composable
+internal fun ListHero(
+    cover: @Composable (Modifier) -> Unit,
+    footPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    info: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    if (fullListCover()) {
+        val heroHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
+        Box(Modifier.fillMaxWidth().height(heroHeight)) {
+            // The cover melts into the page behind it, with no edge where it ends.
+            Box(Modifier.fillMaxSize().meltIntoPage()) {
+                cover(Modifier.fillMaxSize())
+                // A shade at the very top, so the back button reads on any cover.
+                Box(
+                    Modifier.fillMaxWidth().height(96.dp)
+                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent))),
+                )
+            }
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = footPadding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                content = info,
+            )
+        }
+    } else {
+        Column(
+            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = 64.dp, start = 24.dp, end = 24.dp, bottom = footPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            val frame = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+            Box(
+                Modifier.fillMaxWidth(FRAMED_COVER_WIDTH).aspectRatio(1f)
+                    .shadow(22.dp, frame, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
+                    .clip(frame),
+            ) { cover(Modifier.fillMaxSize()) }
+            Spacer(Modifier.height(22.dp))
+            info()
+        }
+    }
+}
+
+/** How much of the page's width a framed cover takes, with Full-screen playlist covers off. */
+private const val FRAMED_COVER_WIDTH = 0.68f
+
+/**
  * A full-width square for the complete cover. Wide artwork is fitted within it;
  * the title follows below, and a light edge scrim keeps the top controls readable.
  * [cover] supplies generated artwork when a playlist has no image URL.
@@ -710,23 +761,15 @@ private fun CollectionHero(
     fallbackCover: (@Composable () -> Unit)?,
     buttons: @Composable () -> Unit,
 ) {
-    val heroHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
-    Box(Modifier.fillMaxWidth().height(heroHeight)) {
-        Box(Modifier.fillMaxSize().meltIntoPage()) {
+    ListHero(
+        cover = { m ->
             when {
-                !thumbnailUrl.isNullOrBlank() -> Artwork(thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX), Modifier.fillMaxSize(), shape = androidx.compose.ui.graphics.RectangleShape)
-                fallbackCover != null -> Box(Modifier.fillMaxSize()) { fallbackCover() }
-                else -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
+                !thumbnailUrl.isNullOrBlank() -> Artwork(thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX), m, shape = androidx.compose.ui.graphics.RectangleShape)
+                fallbackCover != null -> Box(m) { fallbackCover() }
+                else -> Box(m.background(MaterialTheme.colorScheme.surfaceVariant))
             }
-            Box(
-                Modifier.fillMaxWidth().height(96.dp)
-                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.28f), androidx.compose.ui.graphics.Color.Transparent))),
-            )
-        }
-        Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
+        },
+    ) {
             Text(title, style = MaterialTheme.typography.displaySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (subtitle.isNotBlank()) {
                 com.opentune.ui.components.SubtitleLine(
@@ -741,7 +784,6 @@ private fun CollectionHero(
             Spacer(Modifier.height(20.dp))
             buttons()
             Spacer(Modifier.height(16.dp))
-        }
     }
 }
 
@@ -876,13 +918,8 @@ fun CollectionScreen(
                                 val saved = savedLists.any { it.browseId == browseId }
                                 val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
                                 val showSave = saved || accountLists.none { it.browseId?.removePrefix("VL") == browseId.removePrefix("VL") }
-                                val skeletonHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
-                                Box(Modifier.fillMaxWidth().height(skeletonHeight)) {
-                                    Placeholder(Modifier.fillMaxSize().meltIntoPage(), androidx.compose.ui.graphics.RectangleShape)
-                                    Column(
-                                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                    ) {
+                                ListHero(cover = { m -> Placeholder(m, androidx.compose.ui.graphics.RectangleShape) }) {
+                                    run {
                                         Placeholder(Modifier.width(200.dp).height(26.dp))
                                         Placeholder(Modifier.padding(top = 10.dp).width(140.dp).height(16.dp))
                                         Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {

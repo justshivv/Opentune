@@ -283,8 +283,12 @@ internal fun MorphBox(
                 layout(minOf(w, constraints.maxWidth), minOf(h, constraints.maxHeight)) { placeable.place(0, 0) }
             }
             .graphicsLayer {
-                if (fullBleed) compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
                 val t = p()
+                // Its own buffer, the size of the whole cover, only while the soft foot is drawn
+                // (more than half grown): rendered off screen on every frame, it was the flight's
+                // costliest part.
+                compositingStrategy = if (fullBleed && grownAt(t) > 0.5f) androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                    else androidx.compose.ui.graphics.CompositingStrategy.Auto
                 fun lerp(a: Float, b: Float) = a + (b - a) * t
                 val w = lerp(from.width, to.width)
                 transformOrigin = TransformOrigin(0f, 0f)
@@ -316,7 +320,7 @@ internal fun MorphBox(
                     )
                     // Full at full size, gone well before the cover is small.
                     val fade = ((grown - 0.5f) * 2f).coerceIn(0f, 1f)
-                    drawRect(
+                    if (fade > 0f) drawRect(
                         androidx.compose.ui.graphics.Brush.verticalGradient(solid to androidx.compose.ui.graphics.Color.Black, 1f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 1f - fade)),
                         blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
                     )

@@ -1079,7 +1079,9 @@ fun PlayerLayout(
                                 if (list == Pane.LYRICS) lyricsBuilt = true else queueBuilt = true
                                 // The other one is built a moment after this view opens, out of sight,
                                 // so the first switch to it is as smooth as the rest.
-                                LaunchedEffect(Unit) { delay(700); lyricsBuilt = true; queueBuilt = true }
+                                // A moment, not long: opened in that gap, the other list was built on the
+                                // first frame of its own opening.
+                                LaunchedEffect(Unit) { delay(200); lyricsBuilt = true; queueBuilt = true }
                                 Box(Modifier.weight(1f).fillMaxWidth()) {
                                     for (shown in listOf(Pane.LYRICS, Pane.QUEUE)) {
                                         if (!(if (shown == Pane.LYRICS) lyricsBuilt else queueBuilt)) continue
@@ -1103,11 +1105,17 @@ fun PlayerLayout(
                                                 },
                                         ) {
                                             if (shown == Pane.LYRICS) {
+                                                // Parked behind the cover, the lyrics follow once a second rather than
+                                                // drawing every frame; they stay on their line, so coming in needs no scroll.
+                                                // One clock that asks whether they're parked: handing over a different one
+                                                // as they came out rebuilt the whole lyrics on the opening's first frame.
+                                                val parkedNow by androidx.compose.runtime.rememberUpdatedState(hidden)
+                                                val lyricsClock = remember(lyricsPosition) {
+                                                    { if (parkedNow) lyricsPosition() / HIDDEN_LYRICS_STEP_MS * HIDDEN_LYRICS_STEP_MS else lyricsPosition() }
+                                                }
                                                 LyricsView(
                                                     state.lyrics,
-                                                    // Parked behind the cover, the lyrics follow once a second rather than
-                                                    // drawing every frame; they stay on their line, so coming in needs no scroll.
-                                                    if (hidden) ({ lyricsPosition() / HIDDEN_LYRICS_STEP_MS * HIDDEN_LYRICS_STEP_MS }) else lyricsPosition,
+                                                    lyricsClock,
                                                     onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
                                                     modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(lyricsScroll).focusIn(!state.ui.reduceAnimation),
                                                     synced = state.ui.syncedLyrics,
@@ -1304,13 +1312,22 @@ fun PlayerLayout(
                     }
                 }
             }
-            // The cover on its way between the header and the full cover, over the rest.
-            if (flight.active) {
-                val from = flight.from
-                // Before the header is back (a swipe still under the finger), where it was last.
-                val to = flight.target(smallCover, bigCover())
+            // The cover on its way between the header and the full cover, over the rest. Kept built
+            // between flights, out of sight and out of reach, wherever both its ends are known:
+            // built only as a fold began, its first frame (the cover, both its images, the title and
+            // its buttons all made at once) took several frames' time and the cover stalled.
+            val flying = flight.active
+            val from = if (flying) flight.from else bigCover()
+            // Before the header is back (a swipe still under the finger), where it was last.
+            val to = if (flying) flight.target(smallCover, bigCover()) else (smallCover ?: flight.lastSmall)
+            if (from != null && to != null && (flying || flies)) {
                 val origin = playerCoords?.takeIf { it.isAttached }?.positionInRoot() ?: androidx.compose.ui.geometry.Offset.Zero
-                if (from != null && to != null) {
+                Box(
+                    Modifier
+                        .offset { if (flight.active) androidx.compose.ui.unit.IntOffset.Zero else androidx.compose.ui.unit.IntOffset(100_000, 0) }
+                        .graphicsLayer { alpha = if (flight.active) 1f else 0f }
+                        .then(if (flying) Modifier else Modifier.clearAndSetSemantics { }),
+                ) {
                     // Progress is read in the layer only: the finger or the runner, frame by frame.
                     com.opentune.ui.components.MorphBox(
                         current.thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
@@ -1321,14 +1338,14 @@ fun PlayerLayout(
                         endCornerDp = if (flight.toSmall) 10f else (if (fullStyle) 0f else 28f),
                         origin = origin,
                         fullBleed = fullStyle,
-                        contentModifier = Modifier.testTag("pane-cover-flight"),
-                        artworkMotion = artworkMotion.takeIf { state.ui.movingCover && !state.ui.reduceAnimation },
+                        contentModifier = if (flying) Modifier.testTag("pane-cover-flight") else Modifier,
+                        artworkMotion = artworkMotion.takeIf { flying && state.ui.movingCover && !state.ui.reduceAnimation },
                         // The animated cover flies too, on the same player as the cover it leaves or
                         // lands on, so the still cover never shows for a moment on the way.
                         // With a Spotify Canvas behind, the big cover is the video: the still cover
                         // flies in only as it shrinks, so it never covers the Canvas on the way.
                         bigAlpha = if (state.canvasVideo != null) 0f else 1f,
-                        overlay = state.coverVideo?.takeIf { state.canvasVideo == null && !fullStyle }?.let { video ->
+                        overlay = state.coverVideo?.takeIf { flying && state.canvasVideo == null && !fullStyle }?.let { video ->
                             {
                                 val quality = state.ui.motionQuality
                                 LoopingVideo(video.url, state.isPlaying, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl, maxPx = quality.maxPx, maxBitrate = quality.maxBitrate)
@@ -1340,8 +1357,8 @@ fun PlayerLayout(
                     bigTitle?.let { title -> CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                         TitleFlight(
                             current, isLiked, title,
-                            big = if (flight.toSmall) from else to,
-                            small = if (flight.toSmall) to else from,
+                            big = if (flight.toSmall || !flying) from else to,
+                            small = if (flight.toSmall || !flying) to else from,
                             q = { flight.progress.let { if (flight.toSmall) it else 1f - it }.coerceIn(0f, 1f) },
                             origin = origin,
                             onLike = { LibraryStore.setLiked(current, !isLiked) },
