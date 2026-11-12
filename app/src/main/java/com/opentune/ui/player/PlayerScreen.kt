@@ -101,6 +101,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -331,6 +332,13 @@ fun PlayerLayout(
     // so it can travel with the cover into the header and back.
     var bigTitle by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val flight = remember { PaneFlight() }
+    // The one clock of the cover <-> lists change, 0 on the cover and 1 on the lists: the
+    // finger or the flight while the cover moves, else a short ease. The page, the status
+    // line, the grab pill and the button pill all read it, so they move as one.
+    val listsShown = remember { androidx.compose.animation.core.Animatable(if (pane == Pane.COVER) 0f else 1f) }
+    fun paneProgress(): Float = if (flight.active) {
+        if (flight.toSmall) flight.progress else 1f - flight.progress
+    } else listsShown.value
     var showRemix by remember { mutableStateOf(false) }
     var showCast by remember { mutableStateOf(false) }
     var showOutput by remember { mutableStateOf(false) }
@@ -589,6 +597,23 @@ fun PlayerLayout(
             // flight (no bigger than the small one) made the cover leap to the
             // header at the first touch and freeze there.
             flight.follow(big, home, (-upPull / travel).coerceIn(0f, 1f), travel)
+        }
+    }
+
+    val headerIn = remember {
+        androidx.compose.animation.core.Animatable(if (com.opentune.ui.components.PlayerMorph.expanding && !state.ui.reduceAnimation) 0f else 1f)
+    }
+    // Run in the page's own scope: the open's flag clears when the cover lands, a little
+    // before this has finished, and that mustn't cut it short.
+    val headerScope = rememberCoroutineScope()
+    LaunchedEffect(com.opentune.ui.components.PlayerMorph.expanding) {
+        if (!com.opentune.ui.components.PlayerMorph.expanding) return@LaunchedEffect
+        headerScope.launch {
+            if (state.ui.reduceAnimation) { headerIn.snapTo(1f); return@launch }
+            headerIn.snapTo(0f)
+            headerIn.animateTo(1f, androidx.compose.animation.core.tween(
+                com.opentune.ui.components.SHEET_OPEN_MS, delayMillis = com.opentune.ui.components.SHEET_OPEN_MS / 4,
+                easing = com.opentune.ui.components.SHEET_EASING))
         }
     }
 
@@ -873,35 +898,10 @@ fun PlayerLayout(
                     // first frame: the grab handle slides down a little into place, and "Playing from"
                     // follows from just under it. Both on the sheet's own clock, so they settle with it.
                     // Hidden from its first frame when the player is built as it opens, so it never flashes in first.
-                    val headerIn = remember {
-                        androidx.compose.animation.core.Animatable(if (com.opentune.ui.components.PlayerMorph.expanding && !state.ui.reduceAnimation) 0f else 1f)
-                    }
-                    // Run in the page's own scope: the open's flag clears when the cover lands, a little
-                    // before this has finished, and that mustn't cut it short.
-                    val headerScope = rememberCoroutineScope()
-                    LaunchedEffect(com.opentune.ui.components.PlayerMorph.expanding) {
-                        if (!com.opentune.ui.components.PlayerMorph.expanding) return@LaunchedEffect
-                        headerScope.launch {
-                            if (state.ui.reduceAnimation) { headerIn.snapTo(1f); return@launch }
-                            headerIn.snapTo(0f)
-                            headerIn.animateTo(1f, androidx.compose.animation.core.tween(
-                                com.opentune.ui.components.SHEET_OPEN_MS, delayMillis = com.opentune.ui.components.SHEET_OPEN_MS / 4,
-                                easing = com.opentune.ui.components.SHEET_EASING))
-                        }
-                    }
                     // Grab handle. Docked, there's nothing to pull down: a button at the end folds the pane away.
                     Column(Modifier.fillMaxWidth().padding(top = if (docked) 0.dp else 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (!docked) Box(
-                            Modifier
-                                .graphicsLayer {
-                                    val p = headerIn.value
-                                    alpha = p
-                                    translationY = -10.dp.toPx() * (1f - p)
-                                }
-                                .size(width = 40.dp, height = 5.dp).clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
-                                .clickable(onClick = actions.collapse),
-                        )
+                        // The grab pill's room; the pill itself is drawn over everything, below.
+                        if (!docked) Spacer(Modifier.size(width = 40.dp, height = 5.dp))
                         // Docked, the line stays in the header beside the hide button; otherwise it sits
                         // over the top of the pages and goes as the lyrics or queue come in.
                         if (docked) Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
@@ -928,7 +928,6 @@ fun PlayerLayout(
                     // finger or a 420ms ease drives. Nothing is composed while it moves: the lists,
                     // the heaviest thing here, are built out of sight a moment after the player
                     // settles, and fade up behind the cover as it reaches the header.
-                    val listsShown = remember { androidx.compose.animation.core.Animatable(if (outerPane == Pane.COVER) 0f else 1f) }
                     var listsBuilt by remember { mutableStateOf(outerPane != Pane.COVER) }
                     LaunchedEffect(Unit) { delay(LISTS_PREWARM_MS); listsBuilt = true }
                     LaunchedEffect(outerPane, flight.following, flight.active) {
@@ -947,9 +946,6 @@ fun PlayerLayout(
                     }
                     // A flying cover and the page beneath it share a clock, including the
                     // first layout frames. The list must not finish fading in ahead of it.
-                    fun paneProgress(): Float = if (flight.active) {
-                        if (flight.toSmall) flight.progress else 1f - flight.progress
-                    } else listsShown.value
                     val listsGone by remember { androidx.compose.runtime.derivedStateOf { paneProgress() <= 0.001f } }
                     val listsFull by remember { androidx.compose.runtime.derivedStateOf { paneProgress() >= 0.999f } }
                     val paneBody: @Composable (Pane, Boolean) -> Unit = { p, hidden ->
@@ -1000,6 +996,8 @@ fun PlayerLayout(
                                                     onSwipeNext = actions.next,
                                                     onSwipePrevious = actions.previous,
                                                     modifier = Modifier.fillMaxSize().onGloballyPositioned { c ->
+                                                        // Scaled down under the lists: not its place.
+                                                        if (hidden) return@onGloballyPositioned
                                                         val root = playerCoords ?: return@onGloballyPositioned
                                                         if (root.isAttached && c.isAttached) {
                                                             coverBottomPx = root.localPositionOf(c, androidx.compose.ui.geometry.Offset(0f, c.size.height.toFloat())).y
@@ -1039,7 +1037,7 @@ fun PlayerLayout(
                                 TitleRow(
                                     current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true },
                                     Modifier
-                                        .onGloballyPositioned { if (!flight.active && coverLift == 0f && dragOffset == 0f) bigTitle = it.boundsInRoot() }
+                                        .onGloballyPositioned { if (!hidden && !flight.active && coverLift == 0f && dragOffset == 0f) bigTitle = it.boundsInRoot() }
                                         .graphicsLayer { alpha = if (flight.active && bigTitle != null) 0f else 1f },
                                 )
                             } else {
@@ -1143,9 +1141,12 @@ fun PlayerLayout(
                     Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { paneCoords = it }) {
                         val switchDp = with(LocalDensity.current) { 26.dp.toPx() }
                         // The cover page: only while it's in sight, so its cover reports its own place.
-                        if (outerPane == Pane.COVER || !listsFull) {
+                        val coverHidden = outerPane != Pane.COVER && listsFull
+                        if (outerPane == Pane.COVER || !listsFull || fullStyle) {
                             Box(
                                 Modifier.fillMaxSize().zIndex(if (outerPane == Pane.COVER) 1f else 0f)
+                                    // Kept built under the lists but out of reach: no touches, nothing read out.
+                                    .then(if (coverHidden) Modifier.clearAndSetSemantics { } else Modifier)
                                     .padding(top = if (docked) 0.dp else STATUS_ROOM)
                                     .graphicsLayer {
                                         val v = paneProgress()
@@ -1157,7 +1158,7 @@ fun PlayerLayout(
                                         // glow spilling above the cover would end in a straight line.
                                         compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
                                     },
-                            ) { paneBody(Pane.COVER, false) }
+                            ) { paneBody(Pane.COVER, coverHidden) }
                         }
                         // The lists: built once, then parked far off to the side while the cover is up,
                         // so they never take its touches or cost a frame when they come in.
@@ -1178,10 +1179,13 @@ fun PlayerLayout(
                         // The status line over the top: on the cover page it has its own room; as the
                         // lists come in it lifts away and fades on their clock, so nothing under it
                         // moves, and comes back down the same way with the cover.
-                        if (!docked && !listsFull) {
+                        if (!docked) {
                             val lift = with(LocalDensity.current) { 14.dp.toPx() }
                             Box(
-                                Modifier.fillMaxWidth().height(STATUS_ROOM).zIndex(2f).graphicsLayer {
+                                Modifier.fillMaxWidth().height(STATUS_ROOM).zIndex(2f)
+                                    // Kept built, parked aside over the lists so it takes none of their touches.
+                                    .offset { if (listsFull) androidx.compose.ui.unit.IntOffset(100_000, 0) else androidx.compose.ui.unit.IntOffset.Zero }
+                                    .graphicsLayer {
                                     val v = paneProgress()
                                     // Opening: a beat after the handle, out from just under it.
                                     val opened = ((headerIn.value - 0.3f) / 0.7f).coerceIn(0f, 1f)
@@ -1249,10 +1253,17 @@ fun PlayerLayout(
                                 MorphPill(
                                     second = inQueueNow,
                                     animate = !state.ui.reduceAnimation,
+                                    // Between the cover and the queue, on the cover's own clock (the finger's
+                                    // while a swipe carries it), so the pill changes as the cover moves
+                                    // rather than in a second animation after it lands.
                                     progress = {
-                                        if (flight.active && returnPane == Pane.QUEUE.name) {
-                                            if (flight.toSmall) flight.progress else 1f - flight.progress
-                                        } else null
+                                        val queueSide = when {
+                                            pane == Pane.QUEUE -> true
+                                            pane == Pane.LYRICS -> false
+                                            flight.following -> (returnPane ?: Pane.QUEUE.name) == Pane.QUEUE.name
+                                            else -> lastList == Pane.QUEUE.name
+                                        }
+                                        if (queueSide && (flight.active || listsShown.isRunning)) paneProgress() else null
                                     },
                                     firstFill = Color.White.copy(alpha = 0.14f),
                                     secondFill = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -1352,6 +1363,29 @@ fun PlayerLayout(
                             onMore = { showMenu = true },
                         )
                     } }
+                }
+            }
+            // The grab pill, drawn once over everything, the flying cover included: it never goes
+            // under the cover and comes back out, it only drifts a little lower as the lyrics or
+            // queue come in and back up with the cover, on the same clock as the cover itself.
+            if (!docked && !landscape) {
+                val pillColour = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                Box(
+                    Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 6.dp),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Box(
+                        Modifier
+                            .testTag("grab-handle")
+                            .graphicsLayer {
+                                val p = headerIn.value
+                                alpha = p
+                                translationY = -10.dp.toPx() * (1f - p) + PILL_DRIFT.toPx() * paneProgress().coerceIn(0f, 1f)
+                            }
+                            .size(width = 40.dp, height = 5.dp).clip(CircleShape)
+                            .background(pillColour)
+                            .clickable(onClick = actions.collapse),
+                    )
                 }
             }
         }
@@ -1713,6 +1747,8 @@ private val DOCKED_ROOMY_HEIGHT = 720.dp
 
 /** Room kept at the top of the cover page for the "Playing from" line over it. */
 private val STATUS_ROOM = 40.dp
+/** How far the grab pill drifts down as the lyrics or queue come in. */
+private val PILL_DRIFT = 3.dp
 
 /** How long the lyrics view goes untouched before the controls slide away. */
 private const val LYRICS_FOCUS_MS = 5_000L
@@ -1901,6 +1937,9 @@ internal class PaneFlight {
     fun endRun(run: Int) { if (run == runs) end() }
 
     fun end() {
+        // Held where it got to: dropping primed alone put the cover back at its start for
+        // the one frame before it was taken away, a flash of the big cover after folding.
+        startAt = progress
         active = false
         primed = false
         following = false

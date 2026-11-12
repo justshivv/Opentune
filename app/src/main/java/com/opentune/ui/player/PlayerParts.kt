@@ -1011,6 +1011,24 @@ fun SeekBar(
     quality: (@Composable () -> Unit)? = null,
 ) {
     var dragFraction by remember { mutableStateOf<Float?>(null) }
+    // Where the finger let go (or tapped), held until the player has got there: the seek takes
+    // a few frames, and drawn from the player's position at once the line went back to where
+    // it was and then jumped to the new place.
+    var heldFraction by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(heldFraction, durationMs) {
+        val held = heldFraction ?: return@LaunchedEffect
+        if (durationMs <= 0) { heldFraction = null; return@LaunchedEffect }
+        val target = (held * durationMs).toLong()
+        kotlinx.coroutines.withTimeoutOrNull(SEEK_HOLD_MS) {
+            while (kotlin.math.abs(position() - target) > SEEK_LANDED_MS) androidx.compose.runtime.withFrameNanos { }
+        }
+        heldFraction = null
+    }
+    fun seekTo(f: Float) {
+        if (durationMs <= 0) return
+        heldFraction = f.coerceIn(0f, 1f)
+        onSeek((f.coerceIn(0f, 1f) * durationMs).toLong())
+    }
     var scrubStartY by remember { mutableStateOf(0f) }
     var fineScrubbing by remember { mutableStateOf(false) }
     // The wave travels while music plays and flattens out when it stops.
@@ -1040,7 +1058,7 @@ fun SeekBar(
     val markDot = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
 
     val seekHaptics = com.opentune.ui.components.rememberHaptics()
-    fun fraction(): Float = dragFraction
+    fun fraction(): Float = dragFraction ?: heldFraction
         ?: if (durationMs > 0) (position().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     // Until the song's length is known there's nothing to seek: a band of light runs along the
     // track instead, so it reads as loading rather than stuck at the start.
@@ -1083,14 +1101,14 @@ fun SeekBar(
                     }
                     .pointerInput(durationMs) {
                         detectTapGestures { offset ->
-                            if (durationMs > 0) onSeek((offset.x / size.width).coerceIn(0f, 1f).times(durationMs).toLong())
+                            seekTo(offset.x / size.width)
                         }
                     }
                     .pointerInput(durationMs) {
                         detectHorizontalDragGestures(
                             onDragStart = { scrubStartY = it.y; dragFraction = (it.x / size.width).coerceIn(0f, 1f) },
                             onDragEnd = {
-                                dragFraction?.let { if (durationMs > 0) onSeek((it * durationMs).toLong()) }
+                                dragFraction?.let { seekTo(it) }
                                 dragFraction = null
                                 fineScrubbing = false
                             },
@@ -1182,7 +1200,7 @@ fun SeekBar(
         }
         if (fineScrubbing) Text("Fine scrubbing · ⅕ speed", style = MaterialTheme.typography.labelSmall)
         val elapsedSeconds by remember(durationMs) {
-            derivedStateOf { ((dragFraction?.times(durationMs)?.toLong() ?: position()) / 1000) }
+            derivedStateOf { (((dragFraction ?: heldFraction)?.times(durationMs)?.toLong() ?: position()) / 1000) }
         }
         if (look.seekbarTime != com.opentune.data.settings.SeekbarTime.HIDDEN) {
             val timeStyle = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
@@ -1854,3 +1872,8 @@ internal fun seekStepMs(key: Key, durationMs: Long): Long? {
         else -> null
     }
 }
+
+/** How long a let-go seek is held on the bar at most, waiting for the player to get there. */
+private const val SEEK_HOLD_MS = 2_000L
+/** Close enough to the let-go point to count as there. */
+private const val SEEK_LANDED_MS = 700L

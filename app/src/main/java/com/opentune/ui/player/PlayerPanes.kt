@@ -1,5 +1,6 @@
 package com.opentune.ui.player
 
+import kotlinx.coroutines.flow.first
 import android.content.Context
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
@@ -447,8 +448,16 @@ fun MorphPill(
     secondContent: @Composable (enabled: Boolean) -> Unit,
 ) {
     val morph = remember { androidx.compose.animation.core.Animatable(if (second) 1f else 0f) }
+    // While something else drives the pill, its own value follows along, so when that ends the
+    // pill carries on from exactly where it was instead of jumping to a second animation's place.
+    LaunchedEffect(progress) {
+        if (progress == null) return@LaunchedEffect
+        androidx.compose.runtime.snapshotFlow { progress() }.collect { v -> if (v != null) morph.snapTo(v.coerceIn(0f, 1f)) }
+    }
     LaunchedEffect(second, animate) {
         val target = if (second) 1f else 0f
+        // Driven from outside: wait for that to finish, then settle from where it left off.
+        if (progress != null) androidx.compose.runtime.snapshotFlow { progress() == null }.first { it }
         if (!animate) morph.snapTo(target) else morph.animateTo(target, androidx.compose.animation.core.tween(440, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)))
     }
     // Set while measuring, before this frame draws; onSizeChanged used to leave a blank frame.
