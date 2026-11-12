@@ -286,7 +286,7 @@ fun PlayerBackdrop(
                                 }
                             }
                         }
-                        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.2f to Color.Transparent)))
+                        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = com.opentune.ui.components.FULL_COVER_TOP_SHADE), 0.2f to Color.Transparent)))
                     }
                 }
             }

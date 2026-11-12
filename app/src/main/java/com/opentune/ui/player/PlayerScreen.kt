@@ -98,6 +98,7 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.layout.offset
@@ -617,7 +618,33 @@ fun PlayerLayout(
         }
     }
 
+    val listsGone by remember { androidx.compose.runtime.derivedStateOf { paneProgress() <= 0.001f } }
+    val listsFull by remember { androidx.compose.runtime.derivedStateOf { paneProgress() >= 0.999f } }
+
     PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme, neutral = apple) {
+        // "Playing from", whose room it is, or the remix pill.
+        val statusLine: @Composable () -> Unit = {
+            val room by Together.room.collectAsState()
+            AnimatedContent(sound.isDefault, label = "remixPill") { normal ->
+                if (room != null) {
+                    TogetherPill(room!!, actions.openTogether)
+                } else if (normal) {
+                    if (!state.ui.hideSongStatus) SongStatus(state.source)
+                } else {
+                    AssistChip(
+                        onClick = { showRemix = true },
+                        label = { Text(RemixPreset.matching(sound)?.label ?: "Custom remix") },
+                        leadingIcon = { Icon(Icons.Rounded.GraphicEq, null, Modifier.size(18.dp)) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                    )
+                }
+            }
+        }
+
         Box(
             Modifier
                 .fillMaxSize()
@@ -872,28 +899,6 @@ fun PlayerLayout(
                             }
                         },
                 ) {
-                    // "Playing from", whose room it is, or the remix pill.
-                    val statusLine: @Composable () -> Unit = {
-                        val room by Together.room.collectAsState()
-                        AnimatedContent(sound.isDefault, label = "remixPill") { normal ->
-                            if (room != null) {
-                                TogetherPill(room!!, actions.openTogether)
-                            } else if (normal) {
-                                if (!state.ui.hideSongStatus) SongStatus(state.source)
-                            } else {
-                                AssistChip(
-                                    onClick = { showRemix = true },
-                                    label = { Text(RemixPreset.matching(sound)?.label ?: "Custom remix") },
-                                    leadingIcon = { Icon(Icons.Rounded.GraphicEq, null, Modifier.size(18.dp)) },
-                                    colors = AssistChipDefaults.assistChipColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    ),
-                                )
-                            }
-                        }
-                    }
                     // As the player opens, its top comes in after the cover rather than being there from the
                     // first frame: the grab handle slides down a little into place, and "Playing from"
                     // follows from just under it. Both on the sheet's own clock, so they settle with it.
@@ -946,8 +951,6 @@ fun PlayerLayout(
                     }
                     // A flying cover and the page beneath it share a clock, including the
                     // first layout frames. The list must not finish fading in ahead of it.
-                    val listsGone by remember { androidx.compose.runtime.derivedStateOf { paneProgress() <= 0.001f } }
-                    val listsFull by remember { androidx.compose.runtime.derivedStateOf { paneProgress() >= 0.999f } }
                     val paneBody: @Composable (Pane, Boolean) -> Unit = { p, hidden ->
                         Column(
                             Modifier.fillMaxSize().graphicsLayer {
@@ -1176,25 +1179,6 @@ fun PlayerLayout(
                                     },
                             ) { paneBody(Pane.LYRICS, parked) }
                         }
-                        // The status line over the top: on the cover page it has its own room; as the
-                        // lists come in it lifts away and fades on their clock, so nothing under it
-                        // moves, and comes back down the same way with the cover.
-                        if (!docked) {
-                            val lift = with(LocalDensity.current) { 14.dp.toPx() }
-                            Box(
-                                Modifier.fillMaxWidth().height(STATUS_ROOM).zIndex(2f)
-                                    // Kept built, parked aside over the lists so it takes none of their touches.
-                                    .offset { if (listsFull) androidx.compose.ui.unit.IntOffset(100_000, 0) else androidx.compose.ui.unit.IntOffset.Zero }
-                                    .graphicsLayer {
-                                    val v = paneProgress()
-                                    // Opening: a beat after the handle, out from just under it.
-                                    val opened = ((headerIn.value - 0.3f) / 0.7f).coerceIn(0f, 1f)
-                                    alpha = (1f - v * 2.2f).coerceIn(0f, 1f) * opened
-                                    translationY = -lift * v - 8.dp.toPx() * (1f - opened)
-                                },
-                                contentAlignment = Alignment.Center,
-                            ) { statusLine() }
-                        }
                     }
 
                     val synced = (state.lyrics as? LyricsState.Found)?.lyrics as? com.opentune.data.lyrics.Lyrics.Synced
@@ -1365,18 +1349,21 @@ fun PlayerLayout(
                     } }
                 }
             }
-            // The grab pill, drawn once over everything, the flying cover included: it never goes
-            // under the cover and comes back out, it only drifts a little lower as the lyrics or
-            // queue come in and back up with the cover, on the same clock as the cover itself.
+            // The grab pill and the "Playing from" line under it, drawn over everything, the flying
+            // cover included, so neither goes under the cover and pops back out when it lands. As the
+            // cover folds away the line is drawn up into the pill and goes in under it; as the cover
+            // grows back it drifts out from under the pill. The pill itself only drifts a little.
+            // All of it on the cover's own clock.
             if (!docked && !landscape) {
                 val pillColour = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                Box(
-                    Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 6.dp),
-                    contentAlignment = Alignment.TopCenter,
+                Column(
+                    Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 24.dp, end = 24.dp, top = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(
                         Modifier
                             .testTag("grab-handle")
+                            .zIndex(1f)
                             .graphicsLayer {
                                 val p = headerIn.value
                                 alpha = p
@@ -1386,6 +1373,29 @@ fun PlayerLayout(
                             .background(pillColour)
                             .clickable(onClick = actions.collapse),
                     )
+                    Box(
+                        Modifier.fillMaxWidth().height(STATUS_ROOM)
+                            // Kept built, parked aside over the lists so it takes none of their touches.
+                            .offset { if (listsFull) androidx.compose.ui.unit.IntOffset(100_000, 0) else androidx.compose.ui.unit.IntOffset.Zero }
+                            // What rises past the top goes in under the pill.
+                            .clipToBounds(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            Modifier.testTag("status-line").graphicsLayer {
+                                val v = paneProgress().coerceIn(0f, 1f)
+                                val tuck = v * v * (3f - 2f * v)
+                                // Opening the player: a beat after the pill, out from just under it.
+                                val opened = ((headerIn.value - 0.3f) / 0.7f).coerceIn(0f, 1f)
+                                transformOrigin = TransformOrigin(0.5f, 0f)
+                                translationY = -STATUS_ROOM.toPx() * 0.8f * tuck - 8.dp.toPx() * (1f - opened)
+                                val sc = 1f - 0.12f * tuck
+                                scaleX = sc
+                                scaleY = sc
+                                alpha = (1f - tuck * 0.7f) * opened
+                            },
+                        ) { statusLine() }
+                    }
                 }
             }
         }

@@ -305,8 +305,17 @@ internal fun MorphBox(
                 if (!fullBleed) Modifier
                 else Modifier.drawWithContent {
                     drawContent()
+                    // The full cover's own shade along the top, for the status bar, grown with the
+                    // cover: without it the shade appeared all at once as the cover landed.
+                    val grown = grownAt(p())
+                    if (grown > 0f) drawRect(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0f to androidx.compose.ui.graphics.Color.Black.copy(alpha = FULL_COVER_TOP_SHADE * grown),
+                            0.2f to androidx.compose.ui.graphics.Color.Transparent,
+                        ),
+                    )
                     // Full at full size, gone well before the cover is small.
-                    val fade = ((grownAt(p()) - 0.5f) * 2f).coerceIn(0f, 1f)
+                    val fade = ((grown - 0.5f) * 2f).coerceIn(0f, 1f)
                     drawRect(
                         androidx.compose.ui.graphics.Brush.verticalGradient(solid to androidx.compose.ui.graphics.Color.Black, 1f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 1f - fade)),
                         blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
@@ -411,3 +420,6 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
 
 /** The last stretch of the card's way (0..1) over which it hands over to the real mini player. */
 internal const val MINI_HANDOVER = 0.06f
+
+/** How dark the full-screen cover's shade along the top is, where the status bar sits. */
+internal const val FULL_COVER_TOP_SHADE = 0.35f
