@@ -602,7 +602,15 @@ fun AppRoot(vm: PlayerViewModel) {
                 // Glass inside the pages is part of the layer the chrome blurs, so it
                 // can't blur that layer itself: it's filled, unless a page records
                 // its own content for an overlay (GlassPage).
-                CompositionLocalProvider(LocalHazeState provides null) {
+                // Every page's account button opens the account menu, which leads here.
+                val accountMenu = remember(nav) {
+                    com.opentune.ui.components.AccountMenuNav(
+                        addAccount = { nav.navigate("login") },
+                        manageAccounts = { nav.navigate("settings?page=account") },
+                        settings = { nav.navigate("settings") },
+                    )
+                }
+                CompositionLocalProvider(LocalHazeState provides null, com.opentune.ui.components.LocalAccountMenu provides accountMenu) {
                     NavHost(
                         navController = nav,
                         startDestination = Tab.HOME.route,
@@ -669,8 +677,9 @@ fun AppRoot(vm: PlayerViewModel) {
                                 }),
                             )
                         }
-                        page("settings") {
+                        page("settings?page={page}", listOf(navArgument("page") { type = NavType.StringType; nullable = true; defaultValue = null })) { e ->
                             SettingsScreen(
+                                startPage = e.arguments?.getString("page"),
                                 contentPadding = content,
                                 onBack = { nav.popBackStack() },
                                 onOpenEqualizer = { nav.navigate("equalizer") },

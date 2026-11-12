@@ -30,6 +30,17 @@ internal class SettingsCategory(
  */
 internal val FOLDED_GROUPS = mapOf("Seek bar" to 2)
 
+/** Subsections drawn as a card with no heading over it: the page's title already says what it is. */
+internal val UNLABELLED_GROUPS = setOf("YouTube Music")
+
+/** A short line under a subsection's card, saying what it's for. */
+internal val GROUP_NOTES = mapOf(
+    "YouTube Music" to "A Google account can have Personal and Brand profiles. Each has its own library, likes and history.",
+    "Spotify" to "Sign in to load your playlists. Playback uses YouTube Music.",
+    "Rich presence" to "Show what you are playing on your Discord profile.",
+    "Scrobbling" to "Scrobble your listens to Last.fm and ListenBrainz.",
+)
+
 /**
  * Where every setting lives. Each page is named for what someone opening it is looking for,
  * and each setting is on the page they'd try first: everything about a service with that
@@ -39,12 +50,13 @@ internal val FOLDED_GROUPS = mapOf("Seek bar" to 2)
  */
 internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
-        "account", "Accounts and services", "YouTube Music, Spotify, scrobbling, Discord and your other devices", Icons.Rounded.Person,
+        "account", "Account & integrations", "YouTube Music, Spotify, scrobbling, Discord and your other devices", Icons.Rounded.Person,
         listOf(
-            "YouTube Music" to listOf("YouTube Music account", "Add another account", "Sign out"),
+            "YouTube Music" to listOf("YouTube Music account", "Listen as", "Sign out"),
+            "Your accounts" to listOf("Other accounts", "Add another account"),
             "Spotify" to listOf("Spotify account", "Spotify"),
-            "Scrobbling" to listOf("Last.fm scrobbling", "Disconnect Last.fm", "ListenBrainz", "Disconnect ListenBrainz"),
-            "Discord" to listOf("Show on Discord", "Disconnect Discord"),
+            "Rich presence" to listOf("Show on Discord", "Disconnect Discord"),
+            "Scrobbling" to listOf("ListenBrainz", "Disconnect ListenBrainz", "Last.fm scrobbling", "Disconnect Last.fm"),
             "Your music server" to listOf("Music server", "Disconnect server"),
             "Other devices" to listOf("Link a device"),
         ),

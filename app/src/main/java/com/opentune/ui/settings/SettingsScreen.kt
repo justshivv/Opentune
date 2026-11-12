@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -234,10 +235,12 @@ fun SettingsScreen(
     onOpenSpotify: () -> Unit = {},
     onOpenDevices: () -> Unit = {},
     onOpenDiscord: () -> Unit = {},
+    /** A page to open on (its key, "account" for Account & integrations); the main list when null. */
+    startPage: String? = null,
 ) {
     val motion by AppSettings.ui.collectAsState()
     var query by rememberSaveable { mutableStateOf("") }
-    var openKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var openKey by rememberSaveable { mutableStateOf(startPage) }
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val updatePending = com.opentune.ui.components.updatePending()
@@ -275,7 +278,9 @@ fun SettingsScreen(
             if (page != null) {
                 item { PageHeader(com.opentune.ui.theme.tr(page.title), onBack = { openKey = null }) }
                 placed.filter { it.category == page }.groupBy { it.group }.forEach { (group, rows) ->
-                    item(key = "label:$group") { GroupLabel(group) }
+                    item(key = "label:$group") {
+                        if (group in UNLABELLED_GROUPS) androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp)) else GroupLabel(group)
+                    }
                     item(key = "card:$group") {
                         val shown = FOLDED_GROUPS[group]?.takeIf { group !in unfolded && it < rows.size }
                         GroupCard(if (motion.reduceAnimation) Modifier else Modifier.animateContentSize(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow))) {
@@ -289,6 +294,14 @@ fun SettingsScreen(
                                     unfolded = if (group in unfolded) unfolded - group else unfolded + group
                                 }
                             }
+                        }
+                    }
+                    GROUP_NOTES[group]?.let { note ->
+                        item(key = "note:$group") {
+                            Text(
+                                note, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 10.dp),
+                            )
                         }
                     }
                 }
@@ -477,6 +490,8 @@ private fun settingsSections(
     val scrobblesWaiting by LastFm.queued.collectAsState()
     val lyricsSettings by AppSettings.lyrics.collectAsState()
     var confirmSignOut by remember { mutableStateOf(false) }
+    var listenAsOpen by remember { mutableStateOf(false) }
+    if (listenAsOpen) ListenAsSheet(onDismiss = { listenAsOpen = false })
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     LaunchedEffect(update) { updateBytes = withContext(Dispatchers.IO) { Updater.cachedBytes(context) } }
@@ -792,23 +807,52 @@ private fun settingsSections(
             "Account",
             listOfNotNull(
                 Entry("YouTube Music account", "sign in login google profile switch add") {
-                    if (signedIn) {
-                        Column {
-                            accounts.forEachIndexed { i, acc ->
-                                if (i > 0) RowDivider()
-                                SettingRow(
-                                    acc.name.ifBlank { "Signed in" },
-                                    summary = acc.email.ifBlank { "YouTube Music" },
-                                    onClick = if (acc.active) null else ({ AccountStore.switchTo(acc.id) }),
-                                    leading = { Artwork(acc.thumbnailUrl, Modifier.size(40.dp), CircleShape) },
-                                    trailing = if (acc.active) ({ Icon(Icons.Rounded.Check, "Active account", tint = MaterialTheme.colorScheme.primary) }) else null,
-                                )
+                    val active = accounts.firstOrNull { it.active }
+                    if (signedIn && active != null) {
+                        // The account in use, large: its photo, name and handle.
+                        androidx.compose.foundation.layout.Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Artwork(active.thumbnailUrl, Modifier.size(64.dp), CircleShape)
+                            Column(Modifier.padding(start = 18.dp).weight(1f)) {
+                                Text(active.name.ifBlank { "Signed in" }, style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                Text(active.email.ifBlank { "YouTube Music" }, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             }
                         }
                     } else {
                         NavRow("Sign in to YouTube Music", onSignIn, summary = "Your playlists, liked songs and recommendations", icon = Icons.Rounded.AccountCircle)
                     }
                 },
+                if (signedIn) {
+                    Entry("Listen as", "listen as brand channel profile personal switch identity library") {
+                        val listeningAs by AccountStore.listeningAs.collectAsState()
+                        val own = accounts.firstOrNull { it.active }?.name.orEmpty()
+                        NavRow("Listen as", { listenAsOpen = true }, summary = listeningAs ?: own.ifBlank { "Your own profile" }, icon = Icons.Rounded.AccountCircle)
+                    }
+                } else null,
+                if (signedIn && accounts.size > 1) {
+                    Entry("Other accounts", "switch google account multiple other remove") {
+                        Column {
+                            accounts.filterNot { it.active }.forEachIndexed { i, acc ->
+                                if (i > 0) RowDivider()
+                                SettingRow(
+                                    acc.name.ifBlank { "Signed in" },
+                                    summary = acc.email.ifBlank { "Tap to switch" },
+                                    onClick = { AccountStore.switchTo(acc.id) },
+                                    leading = { Artwork(acc.thumbnailUrl, Modifier.size(40.dp), CircleShape) },
+                                    trailing = {
+                                        androidx.compose.material3.IconButton(onClick = { AccountStore.remove(acc.id) }) {
+                                            Icon(Icons.Rounded.Close, com.opentune.i18n.Tr.f("Remove {0}", acc.name.ifBlank { acc.email }))
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                } else null,
                 if (signedIn) {
                     Entry("Add another account", "add switch google account multiple") {
                         NavRow("Add another account", onSignIn, summary = "Sign in to a second YouTube Music account and switch between them", icon = Icons.Rounded.PersonAdd)
@@ -833,7 +877,7 @@ private fun settingsSections(
                                 onClick = { com.opentune.ui.spotify.SpotifyConnection.checkPlaylists(withMixes = true) },
                             )
                             RowDivider()
-                            SettingRow("Disconnect Spotify", summary = "Signs out of Spotify inside OpenTune. Playlists already brought over stay in Library", icon = Icons.Rounded.Close, onClick = { com.opentune.ui.spotify.SpotifyConnection.disconnect() })
+                            CentredAction("Disconnect") { com.opentune.ui.spotify.SpotifyConnection.disconnect() }
                         }
                     } else {
                         NavRow(
@@ -849,7 +893,7 @@ private fun settingsSections(
                 },
                 if (signedIn) {
                     Entry("Sign out", "logout account") {
-                        SettingRow(if (accounts.size > 1) "Sign out of this account" else "Sign out", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { confirmSignOut = true })
+                        CentredAction(if (accounts.size > 1) "Sign out of this account" else "Sign out") { confirmSignOut = true }
                     }
                 } else null,
             ),
@@ -1905,6 +1949,53 @@ private fun BitPerfectSheet(mode: com.opentune.data.settings.BitPerfectOutput, o
                 "Sends the track to the DAC unchanged. The equalizer, loudness normalization, crossfade, Automix and playback speed are bypassed; the volume is set by the app.",
                 Modifier.padding(20.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** A card's own action, as plain centred text across the row: Sign out, Disconnect. */
+@Composable
+private fun CentredAction(label: String, onClick: () -> Unit) {
+    Box(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 18.dp), contentAlignment = Alignment.Center) {
+        Text(label, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+/**
+ * The profiles the signed-in Google account can listen as, its own and any Brand channel it
+ * owns, read from YouTube when opened; the one chosen is remembered for the account.
+ */
+@Composable
+private fun ListenAsSheet(onDismiss: () -> Unit) {
+    val listeningAs by AccountStore.listeningAs.collectAsState()
+    val profiles by androidx.compose.runtime.produceState<List<com.opentune.data.model.AccountChannel>?>(null) {
+        value = withContext(Dispatchers.IO) { AccountStore.profiles() }
+    }
+    com.opentune.ui.components.FloatingCard(onDismiss = onDismiss, title = "Listen as") {
+        Column(Modifier.padding(bottom = 12.dp)) {
+            val list = profiles
+            when {
+                list == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
+                }
+                list.isEmpty() -> Text(
+                    "YouTube didn't list any other profiles for this account.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                )
+                else -> list.forEachIndexed { i, p ->
+                    // The account's own profile is the one that isn't a delegated page.
+                    val own = p.pageId == null
+                    val chosen = if (listeningAs == null) own else p.name == listeningAs
+                    SettingRow(
+                        p.name,
+                        summary = p.subtitle.ifBlank { if (own) "Personal" else "Brand" },
+                        leading = { Artwork(p.thumbnailUrl, Modifier.size(40.dp), CircleShape) },
+                        trailing = if (chosen) ({ Icon(Icons.Rounded.Check, "In use", tint = MaterialTheme.colorScheme.primary) }) else null,
+                        onClick = { if (!chosen) AccountStore.listenAs(p, own); onDismiss() },
+                    )
+                }
+            }
         }
     }
 }

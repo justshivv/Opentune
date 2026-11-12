@@ -290,7 +290,11 @@ fun HomeScreen(
                             GlassIconButton(Icons.Rounded.GraphicEq, "Name a song playing nearby", onRecognize, size = 48.dp)
                         }
                         com.opentune.ui.components.WithUpdateDot {
-                            GlassIconButton(Icons.Rounded.Person, "Account and settings", onOpenSettings, size = 48.dp) {
+                            // The account menu (switch, add, manage, Settings) where the shell provides it.
+                            val menu = com.opentune.ui.components.LocalAccountMenu.current
+                            var menuOpen by remember { mutableStateOf(false) }
+                            if (menuOpen && menu != null) com.opentune.ui.components.AccountMenu(menu, onDismiss = { menuOpen = false })
+                            GlassIconButton(Icons.Rounded.Person, "Account and settings", if (menu != null) ({ menuOpen = true }) else onOpenSettings, size = 48.dp) {
                                 val photo = account?.thumbnailUrl
                                 if (photo != null) Artwork(photo, Modifier.size(48.dp), CircleShape)
                                 else Icon(Icons.Rounded.Person, "Account and settings", Modifier.size(24.dp))
