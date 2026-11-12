@@ -85,7 +85,7 @@ internal fun SourcesSection() {
         AnimatedVisibility(lossless, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (sources.isEmpty()) {
-                    Text("No add-ons yet. OpenTune's own appear here when they're published; you can add others below.",
+                    Text("No add-ons yet. WEAV's own appear here when they're published; you can add others below.",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 sources.forEachIndexed { i, source -> SourceRow(source, first = i == 0, last = i == sources.lastIndex) }
@@ -122,8 +122,8 @@ private fun SourceRow(source: Addons.Source, first: Boolean, last: Boolean) {
             Text(source.name, style = MaterialTheme.typography.bodyLarge)
             Text(
                 when {
-                    source.ownerOff -> "Turned off by OpenTune for now"
-                    source.admin -> "Added by OpenTune"
+                    source.ownerOff -> "Turned off by WEAV for now"
+                    source.admin -> "Added by WEAV"
                     else -> runCatching { java.net.URI(source.url).host }.getOrDefault(source.url)
                 },
                 style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant,
@@ -187,9 +187,9 @@ private fun VerifyComputer() {
     }
     Surface(color = scheme.surfaceContainerHigh, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("OpenTune's own source", style = MaterialTheme.typography.titleMedium)
+            Text("WEAV's own source", style = MaterialTheme.typography.titleMedium)
             Text(
-                "It plays only for devices the official app vouches for. Approve this computer once from OpenTune on your Android phone or TV; access lasts up to 12 hours.",
+                "It plays only for devices the official app vouches for. Approve this computer once from WEAV on your Android phone or TV; access lasts up to 12 hours.",
                 style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant,
             )
             val now = System.currentTimeMillis()
@@ -201,7 +201,7 @@ private fun VerifyComputer() {
                         Text("Code", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
                         Text(waiting.code, fontFamily = FontFamily.Monospace, fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
                         Text(
-                            "Scan this with your phone's camera, then allow it in OpenTune when the app shows this same code.",
+                            "Scan this with your phone's camera, then allow it in WEAV when the app shows this same code.",
                             style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(320.dp),
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

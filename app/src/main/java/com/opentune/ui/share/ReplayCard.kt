@@ -91,7 +91,7 @@ object ReplayCard {
     const val TOP = 5
     const val ALBUMS = 3
     const val GENRES = 6
-    const val FOOTER = "Counted on this phone with OpenTune"
+    const val FOOTER = "Counted on this phone with WEAV"
     private const val TAG = "ReplayCard"
     private const val IMAGE_WAIT_MS = 6_000L
     private const val PHOTO_WAIT_MS = 3_000L
@@ -271,13 +271,13 @@ object ReplayCard {
             c.drawText(content.title, margin, 150f, titlePaint)
             val line = listOfNotNull(content.name, content.period).joinToString(" · ").uppercase()
             val brandPaint = text(32f, white, bold)
-            val brandW = brandPaint.measureText("OpenTune")
+            val brandW = brandPaint.measureText("WEAV")
             val logo = 46f
             c.drawText(fit(line, eyebrow(1f), inner - brandW - logo - 40f), margin, 204f, eyebrow(1f))
 
             // The name and mark, small, at the top right, level with the title.
             val right = w - margin
-            c.drawText("OpenTune", right - brandW, 140f, brandPaint)
+            c.drawText("WEAV", right - brandW, 140f, brandPaint)
             val logoTop = 140f - 11f - logo / 2f
             images.logo?.let { c.drawBitmap(it, null, RectF(right - brandW - logo - 10f, logoTop, right - brandW - 10f, logoTop + logo), image) }
         }
@@ -488,7 +488,7 @@ fun ReplayShareSheet(summary: ReplaySummary, period: String, onDismiss: () -> Un
             val saved = runCatching { ShareCard.saveImage(context, b, ReplayCard.fileName(System.currentTimeMillis())) }
                 .onFailure { Log.w("ReplayCard", "couldn't save the card", it) }.isSuccess
             saving = false
-            if (saved) com.opentune.data.Pills.done("Saved to Pictures/OpenTune", context) else com.opentune.data.Pills.error("Couldn't save the picture", context)
+            if (saved) com.opentune.data.Pills.done("Saved to Pictures/WEAV", context) else com.opentune.data.Pills.error("Couldn't save the picture", context)
         }
     }
     val storage = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -528,7 +528,7 @@ fun ReplayShareSheet(summary: ReplaySummary, period: String, onDismiss: () -> Un
                     val b = card ?: return@SheetButton
                     haptics.press()
                     scope.launch {
-                        ShareCard.sendImage(context, b, "OpenTune-Replay.png", "My ${content.title} on OpenTune · ${content.period}", "Replay")
+                        ShareCard.sendImage(context, b, "OpenTune-Replay.png", "My ${content.title} on WEAV · ${content.period}", "Replay")
                     }
                 },
             )

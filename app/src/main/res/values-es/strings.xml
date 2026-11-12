@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Lo que suena, con reproducir, saltar y me gusta</string>
     <string name="widget_nothing_playing">Nada en reproducción</string>
-    <string name="widget_open">Toca para abrir OpenTune</string>
+    <string name="widget_open">Toca para abrir WEAV</string>
     <string name="widget_like">Me gusta</string>
     <string name="widget_unlike">Quitar de Me gusta</string>
     <string name="widget_previous">Anterior</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">Con un toque escucha la canción que suena cerca y la añade a tu biblioteca</string>
     <string name="widget_album_art_label">Portada del álbum</string>
     <string name="widget_studio_label">Controles de estudio</string>
+    <string name="about_developer_title">Acerca del desarrollador</string>
+    <string name="about_developer_subtitle">Creado por Alejandro Kundrah</string>
 </resources>

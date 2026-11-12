@@ -93,7 +93,7 @@ class ExportifyActivity : ComponentActivity() {
             addView(browser)
         }
         val hint = TextView(this).apply {
-            text = "Sign in with Spotify, then tap Export on a playlist, or Export All. OpenTune picks the file up by itself. " +
+            text = "Sign in with Spotify, then tap Export on a playlist, or Export All. WEAV picks the file up by itself. " +
                 "Use your Spotify email or username: Google sign-in doesn't work inside apps."
             setTextColor(Color.rgb(0xB3, 0xB3, 0xB3))
             textSize = 12f

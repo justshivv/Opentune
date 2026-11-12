@@ -656,7 +656,7 @@ private fun BoxScope.IntroSlide(title: String, period: WrappedPeriod, empty: Boo
     val c = entrance(500, still)
     if (covers.isNotEmpty()) CoverCollage(covers, still, Modifier.align(Alignment.BottomEnd).padding(bottom = 64.dp).fillMaxWidth(0.92f).aspectRatio(1.05f))
     Column(Modifier.align(Alignment.TopStart).padding(top = 28.dp)) {
-        Eyebrow("OpenTune", look, Modifier.rise(a))
+        Eyebrow("WEAV", look, Modifier.rise(a))
         Spacer(Modifier.height(18.dp))
         Text("Your", style = display(64.sp, look.ink), modifier = Modifier.wipe(a))
         Text(title, style = display(if (title.length > 5) 64.sp else 92.sp, look.shape), modifier = Modifier.wipe(b))
@@ -991,7 +991,7 @@ private fun BoxScope.SummarySlide(title: String, s: Wrapped.Summary, look: Look,
                 .border(1.dp, look.ink.copy(alpha = 0.16f), RoundedCornerShape(24.dp))
                 .padding(22.dp),
         ) {
-            Eyebrow("OpenTune", look)
+            Eyebrow("WEAV", look)
             Spacer(Modifier.height(8.dp))
             Text("Your $title Wrapped", style = display(34.sp, look.ink))
             Spacer(Modifier.height(20.dp))

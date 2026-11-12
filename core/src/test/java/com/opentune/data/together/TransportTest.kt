@@ -59,7 +59,7 @@ class TransportTest {
         assertEquals(code, RoomCode.parse(code.pretty))
         assertEquals(code, RoomCode.parse(code.pretty.lowercase().replace("-", " ")))
         assertEquals(code, RoomCode.parse(code.link))
-        assertEquals(code, RoomCode.find("Listen with me on OpenTune! Code ${code.pretty}"))
+        assertEquals(code, RoomCode.find("Listen with me on WEAV! Code ${code.pretty}"))
         assertEquals(code, RoomCode.find("join: ${code.link} now"))
         assertNull(RoomCode.parse("K7QX-M2PA-9DT"))
         assertNull(RoomCode.parse("K7QX-M2PA-9DT0")) // 0 isn't in the alphabet

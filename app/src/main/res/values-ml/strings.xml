@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">ഇപ്പോൾ പ്ലേ ചെയ്യുന്ന പാട്ട്, പ്ലേ, സ്‌കിപ്പ്, ലൈക്ക് എന്നിവയോടൊപ്പം</string>
     <string name="widget_nothing_playing">ഒന്നും പ്ലേ ചെയ്യുന്നില്ല</string>
-    <string name="widget_open">OpenTune തുറക്കാൻ ടാപ്പ് ചെയ്യുക</string>
+    <string name="widget_open">WEAV തുറക്കാൻ ടാപ്പ് ചെയ്യുക</string>
     <string name="widget_like">ലൈക്ക്</string>
     <string name="widget_unlike">ലൈക്ക് ചെയ്തവയിൽ നിന്ന് നീക്കുക</string>
     <string name="widget_previous">മുമ്പത്തേത്</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">ഒറ്റ ടാപ്പിൽ അടുത്ത് പ്ലേ ചെയ്യുന്ന പാട്ട് കേട്ട് നിങ്ങളുടെ ലൈബ്രറിയിൽ ചേർക്കുന്നു</string>
     <string name="widget_album_art_label">ആൽബം കവർ</string>
     <string name="widget_studio_label">സ്റ്റുഡിയോ നിയന്ത്രണങ്ങൾ</string>
+    <string name="about_developer_title">ഡെവലപ്പറെക്കുറിച്ച്</string>
+    <string name="about_developer_subtitle">Alejandro Kundrah നിർമ്മിച്ചത്</string>
 </resources>

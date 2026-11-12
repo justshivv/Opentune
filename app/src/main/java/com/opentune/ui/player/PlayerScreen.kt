@@ -1325,7 +1325,7 @@ fun PlayerLayout(
                         close()
                         scope.launch {
                             val log = LogExport.recent()
-                            clipboard.setPrimaryClip(ClipData.newPlainText("OpenTune log", log))
+                            clipboard.setPrimaryClip(ClipData.newPlainText("WEAV log", log))
                             com.opentune.data.Pills.done("Log copied", context)
                         }
                     }

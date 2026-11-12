@@ -38,7 +38,7 @@ object WrappedPoster {
                 val images = urls.map { u -> async { u?.let { ShareCard.loadImage(context, it, 400) } } }.awaitAll()
                 withContext(Dispatchers.Default) { draw(summary, title, images.first(), images.drop(1)) }
             }.onFailure { Log.w("WrappedPoster", "couldn't make the poster", it) }.getOrNull()
-            ShareCard.sendImage(context, bitmap, "OpenTune-Wrapped.png", "My $title Wrapped on OpenTune", "Wrapped")
+            ShareCard.sendImage(context, bitmap, "OpenTune-Wrapped.png", "My $title Wrapped on WEAV", "Wrapped")
         }
     }
 

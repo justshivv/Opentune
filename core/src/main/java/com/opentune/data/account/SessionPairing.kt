@@ -29,14 +29,14 @@ object PairingCrypto {
         val nonce = ByteArray(12).also(random::nextBytes)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
-        cipher.updateAAD("OpenTune pairing v1/$purpose".toByteArray(UTF_8))
+        cipher.updateAAD("WEAV pairing v1/$purpose".toByteArray(UTF_8))
         return nonce + cipher.doFinal(value)
     }
     fun open(key: ByteArray, packet: ByteArray, purpose: String): ByteArray {
         require(packet.size in 29..65536)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, packet.copyOfRange(0, 12)))
-        cipher.updateAAD("OpenTune pairing v1/$purpose".toByteArray(UTF_8))
+        cipher.updateAAD("WEAV pairing v1/$purpose".toByteArray(UTF_8))
         return cipher.doFinal(packet, 12, packet.size - 12)
     }
 }

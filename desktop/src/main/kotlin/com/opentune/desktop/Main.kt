@@ -36,7 +36,7 @@ fun main(args: Array<String>) {
     application {
         Window(
             onCloseRequest = ::exitApplication,
-            title = "OpenTune",
+            title = "WEAV",
             icon = rememberLogo(Logo.APP),
             state = rememberWindowState(size = DpSize(1180.dp, 760.dp)),
             // On Windows the app draws its own title bar (see WindowsFrame), and on Windows 11 the

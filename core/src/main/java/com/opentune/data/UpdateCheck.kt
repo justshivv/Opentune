@@ -273,7 +273,7 @@ object UpdateCheck {
         )
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(com.opentune.core.R.drawable.ic_stat_opentune)
-            .setContentTitle("OpenTune ${release.version} is out")
+            .setContentTitle("WEAV ${release.version} is out")
             .setContentText("Tap to update from ${BuildConfig.VERSION_NAME}")
             .setContentIntent(open)
             .setAutoCancel(true)

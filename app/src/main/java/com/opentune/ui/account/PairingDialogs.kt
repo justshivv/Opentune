@@ -50,7 +50,7 @@ internal fun ReceiveSessionSheet(onDismiss: () -> Unit) {
         try {
             val current = withContext(Dispatchers.IO) { PairingReceiver() }
             receiver = current
-            status = "Scan with your signed-in OpenTune phone. Keep both devices on the same Wi-Fi. This code expires in two minutes."
+            status = "Scan with your signed-in WEAV phone. Keep both devices on the same Wi-Fi. This code expires in two minutes."
             withContext(Dispatchers.IO) {
                 current.receive { cookie -> AccountStore.signIn(cookie); true }
             }

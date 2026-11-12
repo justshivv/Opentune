@@ -24,7 +24,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * "Listening to OpenTune" on the listener's Discord profile, through the
+ * "Listening to WEAV" on the listener's Discord profile, through the
  * Discord app running on the same computer (its local RPC socket), the way
  * Discord means apps to do it. No account token is involved, and it works only
  * while the Discord app is open. Paused or stopped, the card comes down.

@@ -180,7 +180,7 @@ fun RecognizeScreen(contentPadding: PaddingValues, onPlay: (Song) -> Unit, onBac
                                     listening -> "Listening…"
                                     stage == Stage.MISSED -> "Couldn't name that one"
                                     stage == Stage.FAILED -> (state as? Recognizer.State.Failed)?.reason ?: "Something went wrong"
-                                    denied -> "OpenTune needs the microphone to listen"
+                                    denied -> "WEAV needs the microphone to listen"
                                     else -> "Tap to find the song playing near you"
                                 },
                                 style = MaterialTheme.typography.titleMedium,

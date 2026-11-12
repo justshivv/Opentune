@@ -107,7 +107,7 @@ internal fun TvNavRail(
     Column(modifier.width(TV_RAIL_GUTTER).fillMaxHeight().padding(end = 16.dp)
         .focusRestorer().focusGroup().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("OpenTune", Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.titleMedium)
+        Text("WEAV", Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.titleMedium)
         TvDestination("Search", Icons.Rounded.Search, false, onSearch)
         tabs.forEachIndexed { i, tab -> TvDestination(tab.label, tab.icon, i == selected) { onSelect(i) } }
         if (onPlayer != null) TvDestination("Player", Icons.Rounded.PlayArrow, false, onPlayer)

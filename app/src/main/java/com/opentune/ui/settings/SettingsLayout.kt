@@ -134,8 +134,8 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "about", "About", "Updates, source code and diagnostics", Icons.Rounded.Info,
         listOf(
-            "Updates" to listOf("What's new", "Check for updates", "Check for updates automatically"),
-            "Community" to listOf("OpenTune community", "Support OpenTune", "Star on GitHub", "Source code"),
+            "Updates" to listOf("Check for updates", "Check for updates automatically"),
+            "Community" to listOf("WEAV community", "Support WEAV", "About the developer", "Source code"),
             "Help" to listOf("Show the welcome again", "Count this phone in usage numbers", "Export diagnostics"),
         ),
     ),

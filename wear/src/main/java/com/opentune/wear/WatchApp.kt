@@ -115,7 +115,7 @@ private fun Home(player: WatchPlayer, onOpen: (String) -> Unit) {
     val list = rememberScalingLazyListState()
     ScreenScaffold(scrollState = list) { padding ->
         ScalingLazyColumn(state = list, contentPadding = padding, modifier = Modifier.fillMaxSize()) {
-            item { ListHeader { Text("OpenTune") } }
+            item { ListHeader { Text("WEAV") } }
             song?.let { s ->
                 item {
                     Button(

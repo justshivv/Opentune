@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">હાલ વાગતું ગીત, પ્લે, સ્કિપ અને લાઇક સાથે</string>
     <string name="widget_nothing_playing">કંઈ વાગતું નથી</string>
-    <string name="widget_open">OpenTune ખોલવા ટૅપ કરો</string>
+    <string name="widget_open">WEAV ખોલવા ટૅપ કરો</string>
     <string name="widget_like">લાઇક</string>
     <string name="widget_unlike">લાઇક કરેલામાંથી દૂર કરો</string>
     <string name="widget_previous">પાછલું</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">એક ટૅપમાં નજીકમાં વાગતું ગીત સાંભળે છે અને તેને તમારી લાઇબ્રેરીમાં ઉમેરે છે</string>
     <string name="widget_album_art_label">આલ્બમ કવર</string>
     <string name="widget_studio_label">સ્ટુડિયો નિયંત્રણો</string>
+    <string name="about_developer_title">ડેવલપર વિશે</string>
+    <string name="about_developer_subtitle">Alejandro Kundrah દ્વારા બનાવેલ</string>
 </resources>

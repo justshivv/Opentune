@@ -1,8 +1,6 @@
 package com.opentune.ui.components
 
 import android.graphics.Bitmap
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -29,21 +27,6 @@ import org.robolectric.shadows.ShadowDialog
 class ReleasePresentationTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
-    @Test fun olderNotesExpandAndPrimaryActionStaysVisible() {
-        var closed = false
-        val note = WhatsNew.Note(Icons.Rounded.Download, "Downloads in your hands", "Cancel pending downloads or remove saved songs from a playlist.")
-        compose.setContent { MaterialTheme(darkColorScheme()) {
-            WhatsNewSheet(listOf("0.4.15" to listOf(note), "0.4.14" to listOf(note.copy(title = "Earlier improvement"))), "0.4.15") { closed = true }
-        } }
-        compose.onNodeWithText("Earlier improvement").assertDoesNotExist()
-        compose.onNodeWithText("Earlier · 0.4.14").performScrollTo().performClick()
-        compose.onNodeWithText("Earlier improvement").assertExists()
-        compose.onNodeWithText("Start listening").assertIsDisplayed()
-        capture("installed")
-        compose.onNodeWithText("Start listening").performClick()
-        assertTrue(closed)
-    }
-
     @Test fun smallScreenLargeTextKeepsUpdateActionVisible() {
         val release = UpdateCheck.Release("0.4.16", "https://github.com/justshivv/Opentune/releases", "## Improvements\n" + (1..20).joinToString("\n") { "- Improvement $it with a readable description that wraps to fit your phone." }, UpdateCheck.Asset("app-arm64-v8a-release.apk", "https://example.com/app.apk", 30_000_000), null)
         compose.setContent { MaterialTheme(lightColorScheme()) {
@@ -51,16 +34,11 @@ class ReleasePresentationTest {
                 UpdateDialog(release, onDismiss = {})
             }
         } }
-        compose.onNodeWithText("Update OpenTune").assertIsDisplayed()
+        compose.onNodeWithText("Update WEAV").assertIsDisplayed()
         compose.onNodeWithText("Not now").assertIsDisplayed()
         compose.onNodeWithText("app-arm64-v8a-release.apk").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Update OpenTune").assertIsDisplayed()
+        compose.onNodeWithText("Update WEAV").assertIsDisplayed()
         capture("update-large-text")
-    }
-
-    @Test fun emptyNotesStillOfferAWorkingDismissAction() {
-        compose.setContent { MaterialTheme { WhatsNewSheet(emptyList(), "0.4.15", {}) } }
-        compose.onNodeWithText("Start listening").assertIsDisplayed()
     }
 
     private fun capture(name: String) {

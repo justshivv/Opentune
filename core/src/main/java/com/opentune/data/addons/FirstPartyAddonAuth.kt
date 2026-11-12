@@ -64,7 +64,7 @@ object FirstPartyAddonAuth {
             val stage = when (request.url.encodedPath) {
                 "/auth/challenge" -> "Verification challenge"
                 "/auth/enroll" -> "Device enrollment"
-                else -> "OpenTune verification"
+                else -> "WEAV verification"
             }
             val code = data.optString("code").takeIf { it.matches(Regex("[A-Z0-9_]{3,64}")) }
             throw VerificationFailure("$stage failed (HTTP ${response.code}${code?.let { "; $it" }.orEmpty()}); retry on a supported, locked device")
@@ -73,12 +73,12 @@ object FirstPartyAddonAuth {
     }
     private fun post(origin: String, path: String, body: String) = Request.Builder().url(origin + path).post(body.toRequestBody("application/json".toMediaType())).build()
     private fun session(origin: String): JSONObject {
-        check(::dir.isInitialized) { "OpenTune verification has not initialized" }
+        check(::dir.isInitialized) { "WEAV verification has not initialized" }
         val file = fileFor(origin)
         val alias = aliasFor(origin)
         val old = runCatching { JSONObject(file.readText()) }.getOrNull()
         if (old != null && old.optLong("expires") > System.currentTimeMillis() + old.optLong("offset") + 60_000 && store.containsAlias(alias)) return old
-        if (System.currentTimeMillis() < (blockedUntil[origin] ?: 0L)) throw VerificationFailure("${blockedReason[origin] ?: "OpenTune device verification failed"}; retry in a minute")
+        if (System.currentTimeMillis() < (blockedUntil[origin] ?: 0L)) throw VerificationFailure("${blockedReason[origin] ?: "WEAV device verification failed"}; retry in a minute")
         try {
             val challenge = call(Request.Builder().url("$origin/auth/challenge").build())
             val offset = challenge.getLong("serverTime") - System.currentTimeMillis()
@@ -102,10 +102,10 @@ object FirstPartyAddonAuth {
             blockedUntil[origin] = System.currentTimeMillis() + 60_000
             val reason = when (e) {
                 is VerificationFailure -> e.message.orEmpty()
-                is java.net.SocketTimeoutException -> "OpenTune verification timed out; retry on a working connection"
-                is java.net.UnknownHostException -> "Cannot reach OpenTune verification; check your connection or DNS"
+                is java.net.SocketTimeoutException -> "WEAV verification timed out; retry on a working connection"
+                is java.net.UnknownHostException -> "Cannot reach WEAV verification; check your connection or DNS"
                 is java.security.GeneralSecurityException -> "Android could not create the hardware verification key; a supported, locked device is required"
-                else -> "OpenTune device verification failed; use the official build on a supported, locked device"
+                else -> "WEAV device verification failed; use the official build on a supported, locked device"
             }
             blockedReason[origin] = reason
             throw VerificationFailure(reason, e)
@@ -113,7 +113,7 @@ object FirstPartyAddonAuth {
     }
     suspend fun authorize(request: Request, body: String = ""): Request = withContext(Dispatchers.IO) {
         val origin = "https://${request.url.host}"
-        require(request.url.scheme == "https" && request.url.port == 443 && origin in ORIGINS) { "Device proofs cannot leave OpenTune's source" }
+        require(request.url.scheme == "https" && request.url.port == 443 && origin in ORIGINS) { "Device proofs cannot leave WEAV's source" }
         mutex.withLock {
             val alias = aliasFor(origin)
             val session = session(origin)

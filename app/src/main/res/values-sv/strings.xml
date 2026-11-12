@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Det som spelas, med spela, hoppa över och gilla</string>
     <string name="widget_nothing_playing">Inget spelas</string>
-    <string name="widget_open">Tryck för att öppna OpenTune</string>
+    <string name="widget_open">Tryck för att öppna WEAV</string>
     <string name="widget_like">Gilla</string>
     <string name="widget_unlike">Ta bort från gillade</string>
     <string name="widget_previous">Föregående</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">Ett tryck lyssnar efter låten som spelas i närheten och lägger till den i ditt bibliotek</string>
     <string name="widget_album_art_label">Skivomslag</string>
     <string name="widget_studio_label">Studiokontroller</string>
+    <string name="about_developer_title">Om utvecklaren</string>
+    <string name="about_developer_subtitle">Skapad av Alejandro Kundrah</string>
 </resources>

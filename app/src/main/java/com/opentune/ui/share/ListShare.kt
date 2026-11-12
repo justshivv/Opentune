@@ -45,7 +45,7 @@ object ListShare {
             append("\nhttps://music.youtube.com/watch?v=").append(s.videoId)
         }
         if (songs.size > MAX_SONGS) append("\n\n…and ").append(songs.size - MAX_SONGS).append(" more")
-        append("\n\nShared from OpenTune")
+        append("\n\nShared from WEAV")
     }
 
     fun shareLocal(context: Context, name: String, songs: List<Song>) =

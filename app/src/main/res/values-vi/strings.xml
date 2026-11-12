@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Bài đang phát, kèm phát, bỏ qua và thích</string>
     <string name="widget_nothing_playing">Không có gì đang phát</string>
-    <string name="widget_open">Nhấn để mở OpenTune</string>
+    <string name="widget_open">Nhấn để mở WEAV</string>
     <string name="widget_like">Thích</string>
     <string name="widget_unlike">Xóa khỏi mục Đã thích</string>
     <string name="widget_previous">Trước</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">Một lần nhấn để nghe bài hát đang phát gần bạn và thêm vào thư viện</string>
     <string name="widget_album_art_label">Ảnh bìa album</string>
     <string name="widget_studio_label">Điều khiển phòng thu</string>
+    <string name="about_developer_title">Về nhà phát triển</string>
+    <string name="about_developer_subtitle">Được tạo bởi Alejandro Kundrah</string>
 </resources>

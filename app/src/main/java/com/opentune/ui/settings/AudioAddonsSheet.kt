@@ -64,7 +64,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
                     IconButton(onClick = { scope.launch { notice = if (AddonRefresh.refresh(force = true)) "Audio sources refreshed" else "Couldn't refresh. Your saved sources are still available." } }) { Icon(Icons.Rounded.Refresh, "Refresh audio sources") }
                 }
                 Text("YOUR SOUND, YOUR ORDER", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Text("OpenTune starts music quickly, then looks for better audio. Lossless quality checks your enabled sources for the best available lossless copy. Equal quality follows this order.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("WEAV starts music quickly, then looks for better audio. Lossless quality checks your enabled sources for the best available lossless copy. Equal quality follows this order.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
                     Column {
                         addons.forEachIndexed { index, addon ->
@@ -183,7 +183,7 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
     }
     if (adding) AlertDialog(onDismissRequest = { if (!working) adding = false }, title = { com.opentune.ui.components.FrostBehind(enabled = !com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceBlur); Text("Add audio source") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Paste a service root or manifest URL. OpenTune loads its capabilities without installing executable code.")
+            Text("Paste a service root or manifest URL. WEAV loads its capabilities without installing executable code.")
             OutlinedTextField(input, { input = it.take(2048) }, label = { Text("HTTPS addon URL") }, singleLine = true)
             if (working) LinearProgressIndicator(Modifier.fillMaxWidth())
             notice?.let { Text(it) }

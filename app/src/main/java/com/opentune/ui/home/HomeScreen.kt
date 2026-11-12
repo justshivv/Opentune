@@ -330,7 +330,7 @@ fun HomeScreen(
                 }
                 "featured-playlists" -> if (runtime.playlists.isNotEmpty()) item(key = "featured-playlists") {
                     HomeShelfView(HomeShelf(runtime.title(section.id, "From the community"), runtime.playlists.map {
-                        ShelfItem(it.title, "OpenTune picks", it.artwork, null, it.browseId)
+                        ShelfItem(it.title, "WEAV picks", it.artwork, null, it.browseId)
                     }), onItemClick, songRows = false, covers = covers, coverKey = "featured-playlists")
                 }
                 "recommendations" -> {

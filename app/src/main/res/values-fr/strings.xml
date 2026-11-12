@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Le titre en cours, avec lecture, passage et j\'aime</string>
     <string name="widget_nothing_playing">Aucune lecture</string>
-    <string name="widget_open">Appuyez pour ouvrir OpenTune</string>
+    <string name="widget_open">Appuyez pour ouvrir WEAV</string>
     <string name="widget_like">J’aime</string>
     <string name="widget_unlike">Retirer des titres aimés</string>
     <string name="widget_previous">Précédent</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">D\'un appui, écoute le titre qui passe autour de vous et l\'ajoute à votre bibliothèque</string>
     <string name="widget_album_art_label">Pochette de l\'album</string>
     <string name="widget_studio_label">Commandes studio</string>
+    <string name="about_developer_title">À propos du développeur</string>
+    <string name="about_developer_subtitle">Créé par Alejandro Kundrah</string>
 </resources>

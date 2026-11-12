@@ -187,7 +187,7 @@ object Updater {
                     Log.w(TAG, "Install failed: $status $message")
                     val text = when (status) {
                         PackageInstaller.STATUS_FAILURE_CONFLICT, PackageInstaller.STATUS_FAILURE_INCOMPATIBLE ->
-                            "This update is signed differently from the installed app. Uninstall OpenTune, then install the update."
+                            "This update is signed differently from the installed app. Uninstall WEAV, then install the update."
                         PackageInstaller.STATUS_FAILURE_ABORTED -> "Update cancelled"
                         PackageInstaller.STATUS_FAILURE_STORAGE -> "Not enough space for the update"
                         else -> "Update failed${message?.let { ": $it" } ?: ""}"

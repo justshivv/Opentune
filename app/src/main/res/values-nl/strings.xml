@@ -1,7 +1,7 @@
 <resources>
     <string name="widget_description">Wat er speelt, met afspelen, overslaan en leuk vinden</string>
     <string name="widget_nothing_playing">Er wordt niets afgespeeld</string>
-    <string name="widget_open">Tik om OpenTune te openen</string>
+    <string name="widget_open">Tik om WEAV te openen</string>
     <string name="widget_like">Leuk</string>
     <string name="widget_unlike">Verwijderen uit Leuk gevonden</string>
     <string name="widget_previous">Vorige</string>
@@ -12,4 +12,6 @@
     <string name="recognize_widget_description">Met één tik luistert het naar het nummer dat in de buurt speelt en zet het in je bibliotheek</string>
     <string name="widget_album_art_label">Albumhoes</string>
     <string name="widget_studio_label">Studiobediening</string>
+    <string name="about_developer_title">Over de ontwikkelaar</string>
+    <string name="about_developer_subtitle">Gemaakt door Alejandro Kundrah</string>
 </resources>
