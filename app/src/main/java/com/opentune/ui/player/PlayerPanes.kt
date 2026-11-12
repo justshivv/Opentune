@@ -1,5 +1,8 @@
 package com.opentune.ui.player
 
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onPlaced
 import kotlinx.coroutines.flow.first
 import android.content.Context
 import android.media.AudioDeviceCallback
@@ -417,7 +420,7 @@ fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () 
     val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val scale = pressScale(press, selected)
     Box(
-        Modifier.fillMaxHeight().width(width).background(bg)
+        Modifier.fillMaxHeight().width(width).segmentFill(bg)
             .clickable(press, androidx.compose.material3.ripple(), enabled = enabled, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -475,10 +478,18 @@ fun MorphPill(
             clipPath(path) { this@drawWithContent.drawContent() }
         },
         content = {
+            // Each set's lit end segments reach out to the pill's edge as it stretches or narrows:
+            // stopping at their own ends, a lit button showed a second edge inside the pill's.
+            fun overhang(i: Int): Float =
+                (androidx.compose.ui.util.lerp(widths[0], widths[1], currentProgress()) - widths[i]) / 2f
             Box(Modifier.zIndex(if (second) 0f else 1f)
-                .graphicsLayer { alpha = morphShown(1f - currentProgress()) }) { first(!second) }
+                .graphicsLayer { alpha = morphShown(1f - currentProgress()) }) {
+                androidx.compose.runtime.CompositionLocalProvider(LocalPillOverhang provides { overhang(0) }) { first(!second) }
+            }
             Box(Modifier.zIndex(if (second) 1f else 0f)
-                .graphicsLayer { alpha = morphShown(currentProgress()) }) { secondContent(second) }
+                .graphicsLayer { alpha = morphShown(currentProgress()) }) {
+                androidx.compose.runtime.CompositionLocalProvider(LocalPillOverhang provides { overhang(1) }) { secondContent(second) }
+            }
         },
     ) { measurables, constraints ->
         val children = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
@@ -490,6 +501,35 @@ fun MorphPill(
             children.forEach { it.placeRelative((width - it.width) / 2, (height - it.height) / 2) }
         }
     }
+}
+
+/** How far a morphing pill's outline reaches past the set of buttons inside it, each side, in px. */
+internal val LocalPillOverhang = androidx.compose.runtime.staticCompositionLocalOf<() -> Float> { { 0f } }
+
+/**
+ * A segment's lit fill. At either end of its pill it reaches on out to the pill's outline
+ * while a morphing pill is wider than the segments, so a lit end button and the pill share
+ * one edge all the way through the change.
+ */
+@Composable
+internal fun Modifier.segmentFill(color: Color): Modifier {
+    val overhang = LocalPillOverhang.current
+    // At the start or end of its row: set as it's placed, read as it's drawn.
+    val ends = remember { BooleanArray(2) }
+    return this
+        .onPlaced { c ->
+            val parent = c.parentLayoutCoordinates ?: return@onPlaced
+            val x = c.positionInParent().x
+            ends[0] = x <= 0.5f
+            ends[1] = parent.size.width - (x + c.size.width) <= 0.5f
+        }
+        .drawBehind {
+            if (color.alpha <= 0f) return@drawBehind
+            val o = overhang().coerceAtLeast(0f)
+            val l = if (ends[0]) o else 0f
+            val r = if (ends[1]) o else 0f
+            drawRect(color, androidx.compose.ui.geometry.Offset(-l, 0f), androidx.compose.ui.geometry.Size(size.width + l + r, size.height))
+        }
 }
 
 /** Complementary fades keep the controls visible throughout the morph, including its midpoint. */
@@ -517,7 +557,8 @@ fun ModesPill(
     val context = LocalContext.current
     val shape = RoundedCornerShape(30.dp)
     Row(
-        Modifier.height(52.dp).clip(shape).then(if (filled) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier),
+        // In a morphing pill the pill's own outline does the rounding, so the lit end segments can reach it.
+        Modifier.height(52.dp).then(if (filled) Modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Like repeat beside it, shuffle has a third state for a queue from a
@@ -596,7 +637,7 @@ private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motio
         kick.snapTo(0f)
     }
     Box(
-        Modifier.fillMaxHeight().width(60.dp).background(bg).clickable(enabled = enabled) { taps++; onClick() },
+        Modifier.fillMaxHeight().width(60.dp).segmentFill(bg).clickable(enabled = enabled) { taps++; onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

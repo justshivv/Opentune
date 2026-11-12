@@ -1254,7 +1254,8 @@ fun PlayerLayout(
                                     modifier = Modifier.weight(1f),
                                     first = { enabled ->
                                         // Its two halves split by a hairline; the fill is the morphing one behind.
-                                        Row(Modifier.height(52.dp).clip(RoundedCornerShape(30.dp)), verticalAlignment = Alignment.CenterVertically) {
+                                        // Rounded by the morphing pill's own outline, so its lit end buttons reach that edge.
+                                        Row(Modifier.height(52.dp), verticalAlignment = Alignment.CenterVertically) {
                                             // Each half is the button: a press fills the half, not a circle round the icon.
                                             // Apple Music's has where it's playing, then who's listening with you.
                                             if (!apple) {
