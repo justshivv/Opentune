@@ -868,9 +868,8 @@ private fun settingsSections(
                                     spotifySync.running && spotifySync.current != null -> com.opentune.i18n.Tr.f("Connected · bringing over {0} ({1} of {2})", spotifySync.current, spotifySync.index, spotifySync.count)
                                     spotifySync.running -> "Connected · reading your Spotify library…"
                                     spotifySync.error != null -> com.opentune.i18n.Tr.f("Connected · {0}. Tap to try again", spotifySync.error)
-                                    spotifySync.lastSynced > 0 -> "Connected · playlists in Library, checked " +
-                                            android.text.format.DateUtils.getRelativeTimeSpanString(spotifySync.lastSynced) + ". Tap to check now"
-                                    else -> "Connected · tap to bring your playlists into Library"
+                                    // At rest it just says so; tapping still checks Spotify for changes.
+                                    else -> "Connected"
                                 },
                                 leading = { SpotifyMark() },
                                 enabled = !spotifySync.running,

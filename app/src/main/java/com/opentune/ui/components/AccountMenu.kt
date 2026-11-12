@@ -24,7 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ManageAccounts
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -123,7 +123,7 @@ fun AccountMenu(nav: AccountMenuNav, onDismiss: () -> Unit) {
                     }
                 }
                 MenuLine(Icons.Rounded.Add, if (signedIn) "Add account" else "Sign in") { close(); nav.addAccount() }
-                if (signedIn) MenuLine(Icons.Rounded.ManageAccounts, "Manage accounts") { close(); nav.manageAccounts() }
+                if (signedIn) MenuLine(Icons.Rounded.Close, "Manage accounts") { close(); nav.manageAccounts() }
                 MenuLine(Icons.Rounded.Settings, "Settings") { close(); nav.settings() }
             }
         }
