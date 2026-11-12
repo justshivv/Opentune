@@ -1208,7 +1208,8 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     val selectionRows = remember(shown) { shown.map { it.videoId to it } }
     if (moreOpen) LikedMoreSheet(songs, actions) { moreOpen = false }
     // The page's background as Settings ask for it: from the newest liked song's cover, or Liked Music's own purple.
-    com.opentune.ui.browse.ListPageTint(coverUrl = songs.firstOrNull()?.thumbnailUrl, seed = LIKED_SEED) {
+    // Coloured from the heart cover's own purple, as the cover is.
+    com.opentune.ui.browse.ListPageTint(coverUrl = null, seed = LIKED_SEED) {
     androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
         com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
             com.opentune.ui.browse.PlaylistSearchHeader(search) {
@@ -1384,22 +1385,18 @@ private const val PAGE_SIZE = 50
 private const val HERO_FRACTION = 0.68f
 
 /**
- * The Liked page's hero: the newest liked song's cover, full-bleed from the
- * very top of the screen and fading into the page at the bottom, with the
- * title and the library's size over the fade and the back button floating
- * over the cover. With nothing liked yet, the drawn cover stands in.
+ * The Liked page's hero: Liked Music's own cover (the thumb on its purple-pink
+ * gradient), full-bleed or framed as Settings ask, with the title and the
+ * library's size and the play buttons.
  */
 @Composable
 private fun LikedHero(
     latest: Song?, count: Int, totalSeconds: Long,
     onPlay: () -> Unit, onShuffle: () -> Unit, onSmartShuffle: () -> Unit,
 ) {
-    val cover = latest?.thumbnailUrl
+    // Liked Music's own heart cover, as on YouTube Music, not the newest song's art.
     com.opentune.ui.browse.ListHero(
-        cover = { m ->
-            if (cover != null) Artwork(cover.artworkAt(com.opentune.data.model.PLAYER_ART_PX), m, shape = androidx.compose.ui.graphics.RectangleShape)
-            else com.opentune.ui.components.LikedPlaylistCover(m)
-        },
+        cover = { m -> com.opentune.ui.components.LikedPlaylistCover(m, androidx.compose.ui.graphics.RectangleShape) },
         footPadding = 18.dp,
     ) {
         run {
