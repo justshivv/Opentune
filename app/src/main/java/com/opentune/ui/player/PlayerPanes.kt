@@ -451,32 +451,44 @@ fun MorphPill(
     secondContent: @Composable (enabled: Boolean) -> Unit,
 ) {
     val morph = remember { androidx.compose.animation.core.Animatable(if (second) 1f else 0f) }
+    // The caller's lambda is new on each of its recompositions; one watcher reads the latest,
+    // rather than a watcher started again every time the player redraws.
+    val driver by androidx.compose.runtime.rememberUpdatedState(progress)
     // While something else drives the pill, its own value follows along, so when that ends the
     // pill carries on from exactly where it was instead of jumping to a second animation's place.
-    LaunchedEffect(progress) {
-        if (progress == null) return@LaunchedEffect
-        androidx.compose.runtime.snapshotFlow { progress() }.collect { v -> if (v != null) morph.snapTo(v.coerceIn(0f, 1f)) }
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { driver?.invoke() }.collect { v -> if (v != null) morph.snapTo(v.coerceIn(0f, 1f)) }
     }
     LaunchedEffect(second, animate) {
         val target = if (second) 1f else 0f
         // Driven from outside: wait for that to finish, then settle from where it left off.
-        if (progress != null) androidx.compose.runtime.snapshotFlow { progress() == null }.first { it }
+        androidx.compose.runtime.snapshotFlow { driver?.invoke() == null }.first { it }
         if (!animate) morph.snapTo(target) else morph.animateTo(target, androidx.compose.animation.core.tween(440, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)))
     }
     // Set while measuring, before this frame draws; onSizeChanged used to leave a blank frame.
     val widths = remember { FloatArray(2) }
-    val currentProgress = { (progress?.invoke() ?: morph.value).coerceIn(0f, 1f) }
+    val currentProgress = { (driver?.invoke() ?: morph.value).coerceIn(0f, 1f) }
     androidx.compose.ui.layout.Layout(
-        modifier = modifier.height(52.dp).drawWithContent {
-            val p = currentProgress()
-            val w = androidx.compose.ui.util.lerp(widths[0], widths[1], p)
-            val left = (size.width - w) / 2f
-            val path = androidx.compose.ui.graphics.Path().apply {
-                addRoundRect(androidx.compose.ui.geometry.RoundRect(left, 0f, left + w, size.height, androidx.compose.ui.geometry.CornerRadius(size.height / 2f)))
+        modifier = modifier.height(52.dp)
+            // Clipped by the layer's own rounded outline, which the GPU does cheaply, not by a path
+            // made and clipped to on every frame of the change.
+            .graphicsLayer {
+                val w = androidx.compose.ui.util.lerp(widths[0], widths[1], currentProgress())
+                val left = (size.width - w) / 2f
+                shape = PillOutline(left, w)
+                clip = true
             }
-            drawPath(path, androidx.compose.ui.graphics.lerp(firstFill, secondFill, p))
-            clipPath(path) { this@drawWithContent.drawContent() }
-        },
+            .drawBehind {
+                val p = currentProgress()
+                val w = androidx.compose.ui.util.lerp(widths[0], widths[1], p)
+                val left = (size.width - w) / 2f
+                drawRoundRect(
+                    androidx.compose.ui.graphics.lerp(firstFill, secondFill, p),
+                    topLeft = androidx.compose.ui.geometry.Offset(left, 0f),
+                    size = androidx.compose.ui.geometry.Size(w, size.height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f),
+                )
+            },
         content = {
             // Each set's lit end segments reach out to the pill's edge as it stretches or narrows:
             // stopping at their own ends, a lit button showed a second edge inside the pill's.
@@ -501,6 +513,14 @@ fun MorphPill(
             children.forEach { it.placeRelative((width - it.width) / 2, (height - it.height) / 2) }
         }
     }
+}
+
+/** A morphing pill's outline: a capsule [width] wide from [left], as tall as the pill. */
+private class PillOutline(private val left: Float, private val width: Float) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density) =
+        androidx.compose.ui.graphics.Outline.Rounded(
+            androidx.compose.ui.geometry.RoundRect(left, 0f, left + width, size.height, androidx.compose.ui.geometry.CornerRadius(size.height / 2f)),
+        )
 }
 
 /** How far a morphing pill's outline reaches past the set of buttons inside it, each side, in px. */

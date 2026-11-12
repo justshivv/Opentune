@@ -399,7 +399,7 @@ private fun SongMenuPage(
                             .semantics { contentDescription = "Close" },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Box(Modifier.size(width = 40.dp, height = 5.dp).clip(CircleShape).background(colors.onSurface.copy(alpha = 0.35f)))
+                        Box(Modifier.size(width = 44.dp, height = 5.dp).clip(CircleShape).background(colors.onSurface.copy(alpha = 0.55f)))
                     }
                     Row(
                         Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 12.dp),
