@@ -348,6 +348,18 @@ object ShareCard {
     private const val MARK_ASPECT = (MARK_RIGHT - MARK_LEFT) / (MARK_BOTTOM - MARK_TOP)
 
     /**
+     * The cover blurred over the whole [w] by [h] card, a little larger than it so the soft
+     * edges fall outside, and its colours lifted a touch so the wash isn't muddy.
+     */
+    internal fun drawBlurredCover(c: Canvas, cover: Bitmap, w: Float, h: Float) {
+        val side = maxOf(w, h) * 1.12f
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+            colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(1.35f) })
+        }
+        c.drawBitmap(blurred(centerSquare(cover)), null, RectF((w - side) / 2f, (h - side) / 2f, (w + side) / 2f, (h + side) / 2f), paint)
+    }
+
+    /**
      * The cover shrunk to a few dozen pixels and box-blurred three times
      * over, which comes out close to a gaussian blur. Stretched back up with
      * filtering it's a smooth wash of the cover's colours, with no blocks.

@@ -28,16 +28,11 @@ object PlaylistCard {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         val image = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-        // The background: the first cover, blown up from a few pixels so it blurs softly.
+        // The background: the first cover, blurred over the whole card.
         val first = covers.firstOrNull()
-        if (first != null) {
-            val side = w * 1.15f
-            c.drawBitmap(ShareCard.blurred(ShareCard.centerSquare(first)), null, RectF((w - side) / 2f, (w - side) / 2f, (w + side) / 2f, (w + side) / 2f), image)
-        } else {
-            c.drawColor(Color.rgb(72, 64, 78))
-        }
+        if (first != null) ShareCard.drawBlurredCover(c, first, w, w) else c.drawColor(Color.rgb(72, 64, 78))
         // Darker toward the foot, where the words go.
-        paint.shader = LinearGradient(0f, 0f, 0f, w, intArrayOf(Color.argb(40, 0, 0, 0), Color.argb(150, 0, 0, 0)), null, Shader.TileMode.CLAMP)
+        paint.shader = LinearGradient(0f, 0f, 0f, w, intArrayOf(Color.argb(25, 0, 0, 0), Color.argb(60, 0, 0, 0), Color.argb(165, 0, 0, 0)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w, w, paint)
         paint.shader = null
 
