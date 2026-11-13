@@ -806,25 +806,10 @@ private fun settingsSections(
         Section(
             "Account",
             listOfNotNull(
-                Entry("YouTube Music account", "sign in login google profile switch add") {
+                Entry("YouTube Music account", "sign in login google profile switch add youtube") {
                     val active = accounts.firstOrNull { it.active }
-                    if (signedIn && active != null) {
-                        // The account in use, large: its photo, name and handle.
-                        androidx.compose.foundation.layout.Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Artwork(active.thumbnailUrl, Modifier.size(64.dp), CircleShape)
-                            Column(Modifier.padding(start = 18.dp).weight(1f)) {
-                                Text(active.name.ifBlank { "Signed in" }, style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                Text(active.email.ifBlank { "YouTube Music" }, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                            }
-                        }
-                    } else {
-                        NavRow("Sign in to YouTube Music", onSignIn, summary = "Your playlists, liked songs and recommendations", icon = Icons.Rounded.AccountCircle)
-                    }
+                    if (signedIn && active != null) YouTubeMusicHero(active.name, active.email, active.thumbnailUrl, onSignIn)
+                    else YouTubeMusicHero(null, null, null, onSignIn)
                 },
                 if (signedIn) {
                     Entry("Listen as", "listen as brand channel profile personal switch identity library") {
@@ -842,7 +827,7 @@ private fun settingsSections(
                                     acc.name.ifBlank { "Signed in" },
                                     summary = acc.email.ifBlank { "Tap to switch" },
                                     onClick = { AccountStore.switchTo(acc.id) },
-                                    leading = { Artwork(acc.thumbnailUrl, Modifier.size(40.dp), CircleShape) },
+                                    leading = { Artwork(acc.thumbnailUrl, Modifier.size(32.dp), CircleShape) },
                                     trailing = {
                                         androidx.compose.material3.IconButton(onClick = { AccountStore.remove(acc.id) }) {
                                             Icon(Icons.Rounded.Close, com.opentune.i18n.Tr.f("Remove {0}", acc.name.ifBlank { acc.email }))
@@ -855,44 +840,38 @@ private fun settingsSections(
                 } else null,
                 if (signedIn) {
                     Entry("Add another account", "add switch google account multiple") {
-                        NavRow("Add another account", onSignIn, summary = "Sign in to a second YouTube Music account and switch between them", icon = Icons.Rounded.PersonAdd)
+                        NavRow("Add another account", onSignIn, summary = "Switch between YouTube Music accounts", icon = Icons.Rounded.PersonAdd)
                     }
                 } else null,
-                Entry("Spotify account", "spotify connect sign in login account playlists library sync disconnect") {
-                    if (spotifyConnected) {
-                        Column {
-                            SettingRow(
-                                "Spotify",
-                                summary = when {
-                                    spotifySync.running && spotifySync.error != null -> "Connected · Connection interrupted. Retrying…"
-                                    spotifySync.running && spotifySync.current != null -> com.opentune.i18n.Tr.f("Connected · bringing over {0} ({1} of {2})", spotifySync.current, spotifySync.index, spotifySync.count)
-                                    spotifySync.running -> "Connected · reading your Spotify library…"
-                                    spotifySync.error != null -> com.opentune.i18n.Tr.f("Connected · {0}. Tap to try again", spotifySync.error)
-                                    // At rest it just says so; tapping still checks Spotify for changes.
-                                    else -> "Connected"
-                                },
-                                leading = { SpotifyMark() },
-                                enabled = !spotifySync.running,
-                                onClick = { com.opentune.ui.spotify.SpotifyConnection.checkPlaylists(withMixes = true) },
-                            )
-                            RowDivider()
-                            CentredAction("Disconnect") { com.opentune.ui.spotify.SpotifyConnection.disconnect() }
-                        }
-                    } else {
-                        NavRow(
-                            "Connect Spotify",
-                            { context.startActivity(android.content.Intent(context, com.opentune.ui.spotify.SpotifyConnectActivity::class.java)) },
-                            summary = spotifyProblem?.let { com.opentune.i18n.Tr.f("{0}. Sign in again", it) } ?: com.opentune.i18n.Tr.t("Your playlists in Library, each song's Canvas, and suggestions made for you"),
-                            leading = { SpotifyMark() },
-                        )
-                    }
+                Entry("Spotify account", "spotify connect sign in login account playlists library sync disconnect canvas video loop likes mixes") {
+                    ServiceRow(
+                        ServiceKind.Spotify, "Spotify",
+                        connectedAs = if (spotifyConnected) "Connected" else null,
+                        detail = when {
+                            !spotifyConnected -> spotifyProblem?.let { com.opentune.i18n.Tr.f("{0}. Sign in again", it) } ?: com.opentune.i18n.Tr.t("Your playlists in Library, each song's Canvas, and mixes made for you")
+                            spotifySync.running && spotifySync.error != null -> "Connection interrupted. Retrying…"
+                            spotifySync.running && spotifySync.current != null -> com.opentune.i18n.Tr.f("Bringing over {0} ({1} of {2})", spotifySync.current, spotifySync.index, spotifySync.count)
+                            spotifySync.running -> "Reading your Spotify library…"
+                            spotifySync.error != null -> com.opentune.i18n.Tr.f("{0}. Tap Sync now to try again", spotifySync.error)
+                            else -> "Playlists in Library. Playback uses YouTube Music"
+                        },
+                        onClick = {
+                            if (spotifyConnected) { if (!spotifySync.running) com.opentune.ui.spotify.SpotifyConnection.checkPlaylists(withMixes = true) }
+                            else context.startActivity(android.content.Intent(context, com.opentune.ui.spotify.SpotifyConnectActivity::class.java))
+                        },
+                        actions = listOf(
+                            ServiceAction(if (spotifySync.running) "Syncing…" else "Sync now") { if (!spotifySync.running) com.opentune.ui.spotify.SpotifyConnection.checkPlaylists(withMixes = true) },
+                            ServiceAction("Disconnect", danger = true) { com.opentune.ui.spotify.SpotifyConnection.disconnect() },
+                        ),
+                        chevron = false,
+                    )
                 },
                 Entry("Link a device", "tv television web browser computer cast speaker chromecast watch wear together qr pairing sign in with your phone platforms") {
-                    NavRow("Link a device", onOpenDevices, summary = "Sign in your TV, the web player, speakers and more", icon = Icons.Rounded.Devices)
+                    NavRow("Link a device", onOpenDevices, summary = "Sign in your TV, the web player, speakers and more", leading = { ServiceMark(ServiceKind.Devices) })
                 },
                 if (signedIn) {
                     Entry("Sign out", "logout account") {
-                        CentredAction(if (accounts.size > 1) "Sign out of this account" else "Sign out") { confirmSignOut = true }
+                        CentredAction(if (accounts.size > 1) "Sign out of this account" else "Sign out", danger = true) { confirmSignOut = true }
                     }
                 } else null,
             ),
@@ -1111,7 +1090,7 @@ private fun settingsSections(
         ),
         Section(
             "Appearance",
-            listOf(
+            listOfNotNull(
                 Entry("Theme", "dark light system") {
                     SettingRow("Theme", icon = Icons.Rounded.Palette, below = {
                         PillSegmented(ThemeMode.entries, theme.mode, { it.label }, { m -> AppSettings.updateTheme { it.copy(mode = m) } })
@@ -1345,19 +1324,18 @@ private fun settingsSections(
                         })
                     }
                 },
-                Entry("Spotify", "spotify canvas video loop background likes mixes home") {
-                    // Connecting is in Account; these only do something while Spotify is connected.
-                    val off = if (spotifyConnected) null else "Connect Spotify in Account first"
-                    ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = off ?: "When a song has a Canvas on Spotify, it loops silently behind the player", icon = Icons.Rounded.Animation, enabled = spotifyConnected)
+                // Shown once Spotify is connected; before that the Spotify row above says what it adds.
+                if (spotifyConnected) Entry("Spotify", "spotify canvas video loop background likes mixes home") {
+                    ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = "When a song has a Canvas on Spotify, it loops silently behind the player", icon = Icons.Rounded.Animation)
                     RowDivider()
-                    SettingRow("Behind the title and controls", summary = off ?: ui.canvasLook.summary, icon = Icons.Rounded.BlurOn, below = {
+                    SettingRow("Behind the title and controls", summary = ui.canvasLook.summary, icon = Icons.Rounded.BlurOn, below = {
                         PillSegmented(com.opentune.data.settings.CanvasLook.entries, ui.canvasLook, { it.label }, { v -> AppSettings.updateUi { it.copy(canvasLook = v) } })
                     })
                     RowDivider()
-                    ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = off ?: "Likes are saved to Spotify. Listening here does not add plays to Spotify history", icon = Icons.Rounded.Favorite, enabled = spotifyConnected)
+                    ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = "Likes are saved to Spotify. Listening here does not add plays to Spotify history", icon = Icons.Rounded.Favorite)
                     RowDivider()
-                    ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = off ?: "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = Icons.Rounded.Album, enabled = spotifyConnected)
-                },
+                    ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = Icons.Rounded.Album)
+                } else null,
                 Entry("Animated covers on Wi-Fi only", "mobile data metered save data wifi animated covers canvas video") {
                     ToggleRow("Animated covers on Wi-Fi only", ui.animatedCoversWifiOnly, { v -> AppSettings.updateUi { it.copy(animatedCoversWifiOnly = v) } }, summary = "Animated covers and Canvas don't load on mobile data", icon = Icons.Rounded.Wifi, enabled = ui.animatedCovers || (spotifyConnected && ui.spotifyCanvas))
                 },
@@ -1687,90 +1665,82 @@ private fun settingsSections(
         Section(
             "Your music server",
             listOfNotNull(
-                Entry("Music server", "subsonic navidrome gonic airsonic jellyfin flac lossless server") {
+                Entry("Music server", "subsonic navidrome gonic airsonic jellyfin flac lossless server sign out disconnect") {
                     val connected = musicServer
-                    if (connected == null) {
-                        NavRow("Connect a server", { serverDialog = true }, summary = "Stream your own FLAC and hi-res files from any Subsonic server", icon = Icons.Rounded.Dns)
-                    } else {
-                        NavRow(
-                            com.opentune.i18n.Tr.f("{0} on {1}", connected.user, connected.url.substringAfter("://")),
-                            { serverDialog = true },
-                            summary = "Streams stored files as they are. Tap to sign in again.",
-                            icon = Icons.Rounded.Dns,
-                        )
-                    }
+                    ServiceRow(
+                        ServiceKind.Server, "Music server",
+                        connectedAs = connected?.let { com.opentune.i18n.Tr.f("{0} on {1}", it.user, it.url.substringAfter("://")) },
+                        detail = if (connected == null) "Stream your own FLAC and hi-res files from any Subsonic server" else "Streams stored files as they are",
+                        onClick = { serverDialog = true },
+                        actions = listOf(
+                            ServiceAction("Sign in again") { serverDialog = true },
+                            ServiceAction("Disconnect", danger = true) { Subsonic.disconnect() },
+                        ),
+                        chevron = false,
+                    )
                 },
-                if (musicServer != null) Entry("Disconnect server", "sign out subsonic") {
-                    SettingRow("Disconnect server", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { Subsonic.disconnect() })
-                } else null,
             ),
         ),
         Section(
             "Discord",
             listOfNotNull(
-                Entry("Show on Discord", "discord rich presence status listening activity profile") {
+                Entry("Show on Discord", "discord rich presence status listening activity profile sign out disconnect") {
                     val who = discord
-                    if (who == null) {
-                        NavRow("Connect Discord", onOpenDiscord, summary = "Show the song you play on your Discord profile", icon = Icons.Rounded.Headphones)
-                    } else {
-                        ToggleRow(
-                            "Show on Discord",
-                            discordOn,
-                            { v -> com.opentune.data.discord.DiscordRpc.setEnabled(v) },
-                            summary = when {
-                                !discordOn -> com.opentune.i18n.Tr.f("Off: nothing shows on {0}'s profile", who.name)
-                                discordProblem != null -> discordProblem!!
-                                discordStatus == com.opentune.data.discord.DiscordRpc.Status.Ready -> com.opentune.i18n.Tr.f("Showing what you play on {0}'s profile", who.name)
-                                else -> com.opentune.i18n.Tr.f("Shows what you play on {0}'s profile while music plays", who.name)
-                            },
-                            icon = Icons.Rounded.Headphones,
-                        )
-                    }
+                    ServiceRow(
+                        ServiceKind.Discord, "Discord",
+                        connectedAs = who?.let { com.opentune.i18n.Tr.f("Connected as {0}", it.name) },
+                        detail = when {
+                            who == null -> "Show the song you play on your Discord profile"
+                            !discordOn -> "Off: nothing shows on your profile"
+                            discordProblem != null -> discordProblem!!
+                            discordStatus == com.opentune.data.discord.DiscordRpc.Status.Ready -> "Showing what you play on your profile"
+                            else -> "Shows what you play on your profile while music plays"
+                        },
+                        onClick = { if (who == null) onOpenDiscord() else com.opentune.data.discord.DiscordRpc.setEnabled(!discordOn) },
+                        actions = listOf(ServiceAction("Disconnect", danger = true) { com.opentune.data.discord.DiscordRpc.signOut() }),
+                        trailing = if (who != null) { { AppSwitch(discordOn, { v -> com.opentune.data.discord.DiscordRpc.setEnabled(v) }) } } else null,
+                    )
                 },
-                if (discord != null) Entry("Disconnect Discord", "sign out discord") {
-                    SettingRow("Disconnect Discord", summary = "Forgets the sign-in on this phone", icon = Icons.AutoMirrored.Rounded.Logout,
-                        onClick = { com.opentune.data.discord.DiscordRpc.signOut() })
-                } else null,
             ),
         ),
         Section(
             "Last.fm (optional)",
             listOfNotNull(
-                Entry("Last.fm scrobbling", "scrobble lastfm audioscrobbler history") {
+                Entry("Last.fm scrobbling", "scrobble lastfm audioscrobbler history sign out disconnect") {
                     val who = lastFm
-                    if (who == null) {
-                        NavRow("Connect Last.fm", { lastFmDialog = true }, summary = "Scrobble what you play with your own Last.fm API account", icon = Icons.Rounded.History)
-                    } else {
-                        SettingRow(
-                            com.opentune.i18n.Tr.f("Scrobbling as {0}", who.user),
-                            summary = if (scrobblesWaiting > 0) com.opentune.i18n.Tr.f("{0} scrobbles waiting to send", scrobblesWaiting) else "Songs are scrobbled after half their length or 4 minutes",
-                            icon = Icons.Rounded.History,
-                        )
-                    }
+                    ServiceRow(
+                        ServiceKind.LastFm, "Last.fm",
+                        connectedAs = who?.let { com.opentune.i18n.Tr.f("Scrobbling as {0}", it.user) },
+                        detail = when {
+                            who == null -> "Scrobble what you play with your own Last.fm API account"
+                            scrobblesWaiting > 0 -> com.opentune.i18n.Tr.f("{0} scrobbles waiting to send", scrobblesWaiting)
+                            else -> "Songs count after half their length or 4 minutes"
+                        },
+                        onClick = { if (who == null) lastFmDialog = true },
+                        actions = listOf(ServiceAction("Disconnect", danger = true) { LastFm.signOut() }),
+                        chevron = false,
+                    )
                 },
-                if (lastFm != null) Entry("Disconnect Last.fm", "sign out lastfm") {
-                    SettingRow("Disconnect Last.fm", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { LastFm.signOut() })
-                } else null,
             ),
         ),
         Section(
             "ListenBrainz (optional)",
             listOfNotNull(
-                Entry("ListenBrainz", "listenbrainz scrobble history recommendations metabrainz") {
+                Entry("ListenBrainz", "listenbrainz scrobble history recommendations metabrainz sign out disconnect") {
                     val who = listenBrainz
-                    if (who == null) {
-                        NavRow("Connect ListenBrainz", { listenBrainzDialog = true }, summary = "Free, open listening history, and recommendations on Home", icon = Icons.Rounded.History)
-                    } else {
-                        SettingRow(
-                            com.opentune.i18n.Tr.f("Sending listens as {0}", who.user),
-                            summary = if (listensWaiting > 0) com.opentune.i18n.Tr.f("{0} listens waiting to send", listensWaiting) else "Recommendations from your listens show on Home",
-                            icon = Icons.Rounded.History,
-                        )
-                    }
+                    ServiceRow(
+                        ServiceKind.ListenBrainz, "ListenBrainz",
+                        connectedAs = who?.let { com.opentune.i18n.Tr.f("Sending listens as {0}", it.user) },
+                        detail = when {
+                            who == null -> "Free, open listening history, and recommendations on Home"
+                            listensWaiting > 0 -> com.opentune.i18n.Tr.f("{0} listens waiting to send", listensWaiting)
+                            else -> "Recommendations from your listens show on Home"
+                        },
+                        onClick = { if (who == null) listenBrainzDialog = true },
+                        actions = listOf(ServiceAction("Disconnect", danger = true) { ListenBrainz.signOut() }),
+                        chevron = false,
+                    )
                 },
-                if (listenBrainz != null) Entry("Disconnect ListenBrainz", "sign out listenbrainz") {
-                    SettingRow("Disconnect ListenBrainz", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { ListenBrainz.signOut() })
-                } else null,
             ),
         ),
         Section(
@@ -1912,12 +1882,6 @@ private fun outputSummary(context: Context, float: Boolean): String {
 private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 1024f) else com.opentune.i18n.Tr.f("{0} MB", mb)
 
 /** Spotify's green disc, for its rows in Account. */
-@Composable
-private fun SpotifyMark() {
-    // Spotify's own mark, in its own colours.
-    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), "Spotify", Modifier.size(40.dp))
-}
-
 /**
  * The four bit-perfect paths, each with what it does, and USB access for the direct driver.
  * A choice like any other in Settings: a sheet or a page of its own, as Choice menus says.
@@ -1970,9 +1934,9 @@ private fun BitPerfectSheet(mode: com.opentune.data.settings.BitPerfectOutput, o
 
 /** A card's own action, as plain centred text across the row: Sign out, Disconnect. */
 @Composable
-private fun CentredAction(label: String, onClick: () -> Unit) {
+private fun CentredAction(label: String, danger: Boolean = false, onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 18.dp), contentAlignment = Alignment.Center) {
-        Text(label, style = MaterialTheme.typography.titleMedium)
+        Text(label, style = MaterialTheme.typography.titleMedium, color = if (danger) MaterialTheme.colorScheme.error else Color.Unspecified)
     }
 }
 
