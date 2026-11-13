@@ -13,13 +13,22 @@ export function rangeError({ from, to }, now = new Date(), timeZone = 'Asia/Kolk
   return '';
 }
 // Zero means no reports received during collection, never a failed request.
+// Each day's active installations are split into new (first seen that day) and returning
+// (seen before), when the server reports the split; together they make the day's active count.
 export function dailyRows(data) {
   const byDay = new Map(data.daily.map(row => [row.day, row]));
+  const cohorts = Array.isArray(data.cohorts) ? new Map(data.cohorts.map(row => [row.day, row])) : null;
   const rows = [];
   for (let time = Date.parse(data.range.from); time <= Date.parse(data.range.to); time += DAY) {
     const day = isoDay(new Date(time));
     const covered = Boolean(data.coverageSince && day >= data.coverageSince);
-    rows.push({ day, active: covered ? 0 : null, plays: covered ? 0 : null, ...byDay.get(day) });
+    const row = { day, active: covered ? 0 : null, plays: covered ? 0 : null, ...byDay.get(day) };
+    if (cohorts) {
+      const c = cohorts.get(day);
+      row.newInstallations = c ? c.newInstallations : covered ? 0 : null;
+      row.returningInstallations = c ? c.returningInstallations : covered ? 0 : null;
+    }
+    rows.push(row);
   }
   return rows;
 }

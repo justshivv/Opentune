@@ -84,6 +84,27 @@ export async function cohorts(db, from, to, timeZone = 'UTC') {
   return result.results;
 }
 
+/**
+ * The period as a whole, split by when each installation was first seen: new ones were first
+ * seen within [from, to], returning ones before it. Together they make the period's unique
+ * active installations, each counted once.
+ */
+export async function periodCohorts(db, from, to, timeZone = 'UTC') {
+  const table = activityTable(timeZone);
+  const [result] = await db.batch([db.prepare(`WITH first_seen AS (
+    SELECT installation, MIN(day) AS first_day FROM ${allActivity} GROUP BY installation
+  ), period AS (
+    SELECT installation, SUM(plays) AS plays FROM ${table}
+    WHERE day BETWEEN ? AND ? GROUP BY installation
+  ) SELECT
+    COALESCE(SUM(CASE WHEN f.first_day>=? THEN 1 ELSE 0 END),0) AS newInstallations,
+    COALESCE(SUM(CASE WHEN f.first_day<? THEN 1 ELSE 0 END),0) AS returningInstallations,
+    COALESCE(SUM(CASE WHEN f.first_day>=? THEN p.plays ELSE 0 END),0) AS newPlays,
+    COALESCE(SUM(CASE WHEN f.first_day<? THEN p.plays ELSE 0 END),0) AS returningPlays
+    FROM period p JOIN first_seen f USING(installation)`).bind(from, to, from, from, from, from)]);
+  return result.results[0];
+}
+
 export async function summary(db, now = new Date(), timeZone = 'UTC') {
   const table = activityTable(timeZone);
   const day = calendarDay(now,timeZone);
@@ -135,6 +156,7 @@ export async function analytics(db, range, now = new Date(), timeZone = 'UTC') {
     db.prepare(`SELECT MIN(day) AS since FROM ${table}`),
   ]);
   return { asOf: now.toISOString(), range, timeZone, totals: results[0].results[0],
+    split: await periodCohorts(db, from, to, timeZone),
     daily: results[1].results, cohorts: await cohorts(db, from, to, timeZone), versions: results[2].results,
     coverageSince: results[3].results[0].since };
 }

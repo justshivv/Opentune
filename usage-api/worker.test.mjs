@@ -358,3 +358,19 @@ test('cohorts count upgrades once and distinguish new and returning listening', 
   assert.deepEqual({...row}, {day:'2026-10-09',newInstallations:1,returningInstallations:1,newPlays:7,returningPlays:5,listeners:2});
   assert.equal(row.newPlays + row.returningPlays, result.today.plays);
 });
+
+test('the period splits its active installations into new and returning, each counted once', async () => {
+  const db = database();
+  const two = id.replace(/1$/, '2'), three = id.replace(/1$/, '3');
+  // One first seen before the period, one first seen inside it on two days, one upgraded inside it.
+  await ingest(db, {installationId:id, days:[{day:'2026-10-01',version:'0.4.2',plays:1}]}, now);
+  await ingest(db, {installationId:id, days:[{day:'2026-10-08',version:'0.4.2',plays:2}]}, now);
+  await ingest(db, {installationId:two, days:[{day:'2026-10-08',version:'0.4.2',plays:3}]}, now);
+  await ingest(db, {installationId:two, days:[{day:'2026-10-09',version:'0.4.2',plays:4}]}, now);
+  await ingest(db, {installationId:three, days:[{day:'2026-10-09',version:'0.4.2',plays:1}]}, now);
+  await ingest(db, {installationId:three, days:[{day:'2026-10-09',version:'0.4.3',plays:1}]}, now);
+  const result = await analytics(db, {from:'2026-10-08',to:'2026-10-09'}, now);
+  assert.deepEqual({...result.split}, {newInstallations:2, returningInstallations:1, newPlays:9, returningPlays:2});
+  assert.equal(result.split.newInstallations + result.split.returningInstallations, result.totals.active);
+  assert.equal(result.split.newPlays + result.split.returningPlays, result.totals.plays);
+});

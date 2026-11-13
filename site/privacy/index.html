@@ -13,16 +13,30 @@
 <meta name="description" content="How OpenTune handles local music data, optional usage counting, website download counts and connected services.">
 <meta name="robots" content="index,follow">
 <link rel="canonical" href="https://justshivv.github.io/Opentune/privacy/">
-<meta name="theme-color" content="#101210">
-<style>
-:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101210;color:#f3f6ee}*{box-sizing:border-box}body{margin:0;padding:32px 20px 64px;line-height:1.75}main{max-width:760px;margin:auto}a{color:#c8ee9b}h1{font-size:clamp(32px,6vw,48px);line-height:1.15}h2{font-size:22px;margin-top:36px}p,li{color:#c9d0c4}a:focus-visible{outline:2px solid currentColor;outline-offset:4px}code{overflow-wrap:anywhere}nav{margin-bottom:36px}
-</style>
+<meta name="theme-color" content="#131111">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@95..115,400..700&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
 </head>
-<body><main>
-<nav><a href="../">← OpenTune</a></nav>
-<h1>Privacy, in plain language.</h1>
-<p>This policy describes OpenTune for Android and the project website. OpenTune is open-source and does not display in-app advertising.</p>
-<h2>Your music and settings</h2>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="../" aria-label="OpenTune home"><img src="../img/opentune-logo.svg" alt="" width="30" height="30">OpenTune</a>
+    <nav aria-label="Main">
+      <ul class="nav-links">
+        <li class="opt"><a href="../#features">Features</a></li>
+        <li><a href="../#download">Download</a></li>
+        <li class="opt"><a href="../#faq">FAQ</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-primary" href="https://github.com/justshivv/Opentune/releases/latest">Get the app</a>
+  </div>
+</header>
+<main id="main" class="wrap">
+  <div class="page-head"><h1>Privacy, in plain language.</h1><p class="lede">This policy describes OpenTune for Android and the project website. OpenTune is open-source and does not display in-app advertising.</p></div>
+  <div class="prose"><h2>Your music and settings</h2>
 <p>Listening history, local playlists, preferences and downloaded files are stored on your device. Optional account connections may also read or change data on the service you connect. Clearing app data or uninstalling removes the app’s local data; Android backups and exports you create are separate copies.</p>
 <h2>Optional app usage counting</h2>
 <p>Usage counting is enabled by default. It sends a random installation identifier, current app version, activity dates and daily play totals to the project’s analytics service hosted on Cloudflare. The identifier distinguishes installations and version updates; it is not a hardware or advertising identifier. These usage requests do not include song titles, artist names, your Google email or your name.</p>
@@ -35,4 +49,18 @@
 <p>Microphone access is used when you choose recognition or room voice features. Media access is used for device music. Notifications support playback and downloads. The app’s update installer asks Android for permission before installing an APK. You can change granted permissions in Android settings and disconnect optional services in OpenTune.</p>
 <h2>Questions and source code</h2>
 <p>You can review the implementation or contact the maintainer through <a href="https://github.com/justshivv/Opentune">the GitHub repository</a>. Do not post passwords, account tokens or private identifiers in public issues. Provider retention practices are governed by their own policies.</p>
-<section><h2>Spotify connection and custom audio servers</h2><p>Optional Spotify sign-in reads your playlists and saved tracks to import into OpenTune. Tokens are encrypted on your phone and sent only to Spotify. OpenTune does not write to your Spotify account. You can disconnect in the app or revoke access in Spotify. If you configure a ClashFLAC server, track titles and artists are sent to that server to find matching audio. These services receive your IP address when contacted.</p></section></main></body></html>
+<section><h2>Spotify connection and custom audio servers</h2><p>Optional Spotify sign-in reads your playlists and saved tracks to import into OpenTune. Tokens are encrypted on your phone and sent only to Spotify. OpenTune does not write to your Spotify account. You can disconnect in the app or revoke access in Spotify. If you configure a ClashFLAC server, track titles and artists are sent to that server to find matching audio. These services receive your IP address when contacted.</p></section>
+  </div>
+</main>
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div><a class="brand" href="../"><img src="../img/opentune-logo.svg" alt="" width="30" height="30">OpenTune</a><p style="margin-top:12px;max-width:34ch">A free, open-source music player for Android, TV, desktop and the web.</p></div>
+      <div><h3>App</h3><ul><li><a href="../#features">Features</a></li><li><a href="../#download">Download</a></li><li><a href="../player/">Web player</a></li></ul></div>
+      <div><h3>Project</h3><ul><li><a href="https://github.com/justshivv/Opentune">Source code</a></li><li><a href="../addons/">Audio add-ons</a></li><li><a href="./">Privacy</a></li></ul></div>
+      <div><h3>Help</h3><ul><li><a href="../#faq">FAQ</a></li><li><a href="https://discord.gg/6udrCVh5n">Discord</a></li><li><a href="https://github.com/justshivv/Opentune/issues/new">Report a problem</a></li></ul></div>
+    </div>
+  </div>
+</footer>
+<script>(()=>{const n=document.getElementById('nav');const f=()=>n.classList.toggle('scrolled',scrollY>8);addEventListener('scroll',f,{passive:true});f();})();</script>
+</body></html>
