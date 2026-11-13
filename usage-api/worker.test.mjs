@@ -272,12 +272,17 @@ test('public counts include current apps (India time) and older ones (UTC), each
   assert.equal(counts.monthly,3);
   assert.equal(counts.daily,3);
   assert.equal(counts.installations,3);
-  const shield=await (await worker.fetch(new Request('https://example.test/v1/badge'),{DB:db})).json();
+  // The badge endpoint counts this month by the real clock, so its data is dated today.
+  const live=database(), today=new Date(), istToday=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(today);
+  for (const n of [1,2,3]) await ingest(live,{installationId:id.replace(/1$/,String(n)),days:[{day:istToday,version:'1.0.1',plays:1,timeZone:'Asia/Kolkata'}]},today);
+  const shield=await (await worker.fetch(new Request('https://example.test/v1/badge'),{DB:live})).json();
   assert.equal(shield.message,'3');
 });
 
 test('the public count and badge endpoints need no sign-in',async()=>{
-  const db=database(); await ingest(db,body(1),now);
+  // Dated today: the endpoints count this month by the real clock.
+  const today=new Date(), istToday=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(today);
+  const db=database(); await ingest(db,{installationId:id,days:[{day:istToday,version:'1.0.1',plays:1,timeZone:'Asia/Kolkata'}]},today);
   const env={DB:db};
   const open=await worker.fetch(new Request('https://example.test/v1/public'),env);
   assert.equal(open.status,200);
