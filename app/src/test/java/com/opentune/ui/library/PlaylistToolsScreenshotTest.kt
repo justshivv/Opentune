@@ -26,6 +26,8 @@ import java.io.File
 import org.junit.Before
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.assertCountEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -115,6 +117,25 @@ class PlaylistToolsScreenshotTest {
         } }
         compose.onNodeWithText("Spotify collection").assertDoesNotExist()
         compose.onNodeWithText("Late nights").assertExists()
+    }
+
+    /**
+     * Searching a list: the field sits on the bar's own frost (no band of another colour behind
+     * it), and has no X of its own until something is typed; the bar's X closes the search.
+     */
+    @Test fun searchOpen() {
+        compose.setContent { OpenTuneTheme(ThemeSettings()) { Surface(color = MaterialTheme.colorScheme.background) {
+            LocalPlaylistScreen(id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {})
+        } } }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithContentDescription("Search this list").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onAllNodesWithContentDescription("Clear search").assertCountEquals(0)
+        val view = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bitmap))
+        val file = File("build/screenshots/playlist/search.png").apply { parentFile!!.mkdirs() }
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     @Test fun addSheet() = shoot("playlist/add") { AddSongsSheet(id, onDismiss = {}) }

@@ -1071,14 +1071,16 @@ fun TopNavBar(
     val page = MaterialTheme.colorScheme.background
     val density = androidx.compose.ui.platform.LocalDensity.current.density
     var tall by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val below = LocalNavFrostBelow.current
     Box(modifier.fillMaxWidth()) {
     if (frost > 0f) {
         Box(
             Modifier
                 .matchParentSize()
                 .layout { measurable, constraints ->
-                    // Drawn taller than the bar by the tail; the bar's own size is unchanged.
-                    val h = constraints.maxHeight + NAV_FROST_TAIL.roundToPx()
+                    // Drawn taller than the bar by the tail, and by whatever sits under it as part
+                    // of it (a list's search field); the bar's own size is unchanged.
+                    val h = constraints.maxHeight + below.roundToPx() + NAV_FROST_TAIL.roundToPx()
                     val p = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
                     layout(constraints.maxWidth, constraints.maxHeight) { p.place(0, 0) }
                 }
@@ -1143,6 +1145,13 @@ fun TopNavBar(
 
 /** How far a top bar's frost reaches below it, thinning out. */
 private val NAV_FROST_TAIL = 22.dp
+
+/**
+ * How far below the top bar its frost reaches before its soft tail: the height of what sits
+ * under the bar as part of it, a list's search field. One frost for both, so the field doesn't
+ * sit on a band of its own colour with a hard line where the bar's frost ends.
+ */
+internal val LocalNavFrostBelow = androidx.compose.runtime.compositionLocalOf { 0.dp }
 
 /** Songs liked in the app (and on YouTube Music, when signed in). */
 @Composable

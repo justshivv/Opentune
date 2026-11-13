@@ -1,8 +1,6 @@
 package com.opentune.ui.browse
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -68,21 +66,28 @@ internal fun PlaylistSearchField(search: PlaylistSearch, modifier: Modifier = Mo
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     androidx.activity.compose.BackHandler { search.close(); focus.clearFocus(); keyboard?.hide() }
-    ListSearchField(search.query, { search.query = it }, {
-        search.close(); focus.clearFocus(); keyboard?.hide()
-    }, modifier.onGloballyPositioned { search.bounds = it.boundsInRoot() }, autoFocus = true)
+    // The field's X empties it and keeps the keyboard; the bar's X closes the search.
+    ListSearchField(search.query, { search.query = it }, { search.query = "" }, modifier.onGloballyPositioned { search.bounds = it.boundsInRoot() }, autoFocus = true)
 }
 
-/** The search field belongs to the fixed toolbar, never to the scrolling cover header. */
+/**
+ * The search field belongs to the fixed toolbar, never to the scrolling cover header. The bar's
+ * own frost reaches down behind the field, so the two read as one surface: a solid page-colour
+ * band of its own under the field ended in a hard line against the bar's lighter frost.
+ */
 @Composable
 internal fun PlaylistSearchHeader(search: PlaylistSearch, toolbar: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth()
-        .then(if (search.open) Modifier.background(MaterialTheme.colorScheme.background) else Modifier)
-        .onSizeChanged { search.headerHeight = it.height }) {
-        toolbar()
-        PlaylistSearchField(search, Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+    Column(Modifier.fillMaxWidth().onSizeChanged { search.headerHeight = it.height }) {
+        CompositionLocalProvider(com.opentune.ui.library.LocalNavFrostBelow provides if (search.open) SEARCH_FIELD_ROOM else 0.dp) {
+            toolbar()
+        }
+        PlaylistSearchField(search, Modifier.padding(horizontal = 20.dp, vertical = SEARCH_FIELD_GAP))
     }
 }
+
+private val SEARCH_FIELD_GAP = 8.dp
+/** The field and the gap above and below it. */
+private val SEARCH_FIELD_ROOM = SEARCH_FIELD_HEIGHT + SEARCH_FIELD_GAP * 2
 
 /** Constrain the results viewport above the IME, leaving the fixed search header visible. */
 internal fun Modifier.playlistSearchResults(search: PlaylistSearch): Modifier = composed {

@@ -669,14 +669,21 @@ internal fun ListPlayRow(
     }
 }
 
-/** "Search this list", in a rounded field under the buttons. */
+/** How tall the list search field is. */
+internal val SEARCH_FIELD_HEIGHT = 56.dp
+
+/**
+ * "Search this list", in a rounded field under the buttons. Its X clears what's typed and shows
+ * only while there's something to clear: closing the search is the bar's own X, and with both
+ * there were two X buttons that did the same thing.
+ */
 @Composable
 internal fun ListSearchField(query: String, onQuery: (String) -> Unit, onClear: () -> Unit, modifier: Modifier = Modifier, autoFocus: Boolean = false) {
     val colors = MaterialTheme.colorScheme
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(autoFocus) { if (autoFocus) runCatching { focus.requestFocus() } }
     Row(
-        modifier.fillMaxWidth().height(56.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+        modifier.fillMaxWidth().height(SEARCH_FIELD_HEIGHT).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
             .background(colors.surfaceContainerHigh.copy(alpha = 0.85f)).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -692,7 +699,7 @@ internal fun ListSearchField(query: String, onQuery: (String) -> Unit, onClear: 
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         }
-        androidx.compose.material3.IconButton(onClick = onClear) { Icon(Icons.Filled.Close, "Close search") }
+        if (query.isNotEmpty()) androidx.compose.material3.IconButton(onClick = onClear) { Icon(Icons.Filled.Close, "Clear search") }
     }
 }
 
