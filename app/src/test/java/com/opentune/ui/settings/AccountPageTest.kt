@@ -90,4 +90,24 @@ class AccountPageTest {
         // Barely moved: stays put.
         assertEquals(1, sourceDropIndex(listOf(200, 200, 200), from = 1, top = 150f))
     }
+
+    @Test fun audioSourcesIsOnTheMainSettingsPage() {
+        AppSettings.init(context)
+        LibraryStore.init(context)
+        compose.setContent {
+            OpenTuneTheme(ThemeSettings().copy(mode = ThemeMode.DARK, dynamicColor = false)) {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    SettingsScreen(PaddingValues(), onBack = {}, onOpenEqualizer = {}, onOpenReplay = {})
+                }
+            }
+        }
+        val list = compose.onNode(hasScrollToNodeAction())
+        list.performScrollToNode(hasText("Audio sources"))
+        compose.onAllNodesWithText("Audio sources").assertCountEquals(1)
+        // Not on Sound and quality any more.
+        compose.onNodeWithText("Sound and quality").performClick()
+        compose.waitForIdle()
+        compose.onAllNodesWithText("Audio sources").assertCountEquals(0)
+        compose.onAllNodesWithText("Audio add-ons").assertCountEquals(0)
+    }
 }

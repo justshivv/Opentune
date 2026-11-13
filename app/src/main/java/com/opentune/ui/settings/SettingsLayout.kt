@@ -33,6 +33,9 @@ internal val FOLDED_GROUPS = mapOf("Seek bar" to 2)
 /** Subsections drawn as a card with no heading over it: the page's title already says what it is. */
 internal val UNLABELLED_GROUPS = setOf("YouTube Music")
 
+/** Settings shown as a row on the main Settings page instead of on their category's page; search still finds them. */
+internal val MAIN_PAGE_ONLY = setOf("Audio sources")
+
 /** A short line under a subsection's card, saying what it's for. */
 internal val GROUP_NOTES = mapOf(
     "YouTube Music" to "A Google account can have Personal and Brand profiles. Each has its own library, likes and history.",
@@ -57,10 +60,10 @@ internal val SETTINGS_CATEGORIES = listOf(
         ),
     ),
     SettingsCategory(
-        "audio", "Sound and quality", "Streaming quality, lossless add-ons, loudness, effects and bit-perfect output", Icons.Rounded.GraphicEq,
+        "audio", "Sound and quality", "Streaming quality, lossless, loudness, effects and bit-perfect output", Icons.Rounded.GraphicEq,
         listOf(
             "Streaming quality" to listOf("On Wi-Fi", "On mobile data", "Upgrade quality while playing"),
-            "Lossless and add-ons" to listOf("Lossless streaming", "Audio add-ons", "Unmetered networks only"),
+            "Lossless" to listOf("Lossless streaming", "Audio sources", "Unmetered networks only"),
             "Download quality" to listOf("Download quality", "Download on Wi-Fi only"),
             "Loudness" to listOf("Loudness normalization", "Volume level", "Normalize on the phone speaker"),
             "Effects" to listOf("Equalizer", "Clarity", "Spatial audio", "System audio effects"),

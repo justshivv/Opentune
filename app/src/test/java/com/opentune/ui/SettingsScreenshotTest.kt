@@ -55,6 +55,7 @@ class SettingsScreenshotTest {
 
     @Test fun categoriesThenAPage() {
         save("settings-home")
+        compose.onNode(androidx.compose.ui.test.hasScrollToNodeAction()).performScrollToNode(androidx.compose.ui.test.hasText("Appearance"))
         compose.onNodeWithText("Appearance").performClick()
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()

@@ -83,6 +83,7 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lens
@@ -246,6 +247,8 @@ fun SettingsScreen(
     val updatePending = com.opentune.ui.components.updatePending()
     val sections = settingsSections(onOpenEqualizer, onOpenReplay, onOpenWrapped, onSignIn, onOpenDownloads, onOpenSpotify, onOpenDevices, onOpenDiscord)
     val placed = remember(sections) { place(sections) }
+    var sourcesOpen by rememberSaveable { mutableStateOf(false) }
+    if (sourcesOpen) AudioAddonsSheet { sourcesOpen = false }
     val open = SETTINGS_CATEGORIES.firstOrNull { it.key == openKey }
     androidx.activity.compose.BackHandler(enabled = open != null) { openKey = null }
     val q = query.trim()
@@ -277,7 +280,7 @@ fun SettingsScreen(
         ) {
             if (page != null) {
                 item { PageHeader(com.opentune.ui.theme.tr(page.title), onBack = { openKey = null }) }
-                placed.filter { it.category == page }.groupBy { it.group }.forEach { (group, rows) ->
+                placed.filter { it.category == page && it.entry.title !in MAIN_PAGE_ONLY }.groupBy { it.group }.forEach { (group, rows) ->
                     item(key = "label:$group") {
                         if (group in UNLABELLED_GROUPS) androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp)) else GroupLabel(group)
                     }
@@ -353,6 +356,11 @@ fun SettingsScreen(
                             GroupCard {
                                 cats.forEachIndexed { i, c ->
                                     if (i > 0) RowDivider()
+                                    // Audio sources sits on the main page, just above the sound settings.
+                                    if (c.key == "audio") {
+                                        NavRow("Audio sources", { sourcesOpen = true }, summary = audioSourcesSummary(), icon = Icons.Rounded.Extension)
+                                        RowDivider()
+                                    }
                                     val summary = if (c.key == "account") {
                                         if (signedIn) account?.name ?: "Signed in to YouTube Music" else "Not signed in"
                                     } else {
@@ -383,6 +391,18 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+/** What the Audio sources row says: how many lossless sources are on, or that there are none yet. */
+@Composable
+private fun audioSourcesSummary(): String {
+    val addons by com.opentune.data.addons.AddonStore.addons.collectAsState()
+    val on = addons.count { it.enabled && !it.ownerOff }
+    return when {
+        addons.isEmpty() -> com.opentune.i18n.Tr.t("Add lossless sources and choose their order")
+        on == 1 -> com.opentune.i18n.Tr.t("1 lossless source on · choose the order")
+        else -> com.opentune.i18n.Tr.f("{0} lossless sources on · choose the order", on)
     }
 }
 
@@ -903,8 +923,9 @@ private fun settingsSections(
                 Entry("Unmetered networks only", "flac saavn mobile wifi data") {
                     ToggleRow("Unmetered networks only", pb.losslessUnmeteredOnly, { v -> AppSettings.updatePlayback { it.copy(losslessUnmeteredOnly = v) } }, summary = "When on, mobile data uses YouTube even with Lossless selected. Turn off to try FLAC and JioSaavn on mobile data", icon = Icons.Rounded.Wifi)
                 },
-                Entry("Audio add-ons", "source URL manifest order priority lossless flac high res") {
-                    SettingRow("Audio add-ons", icon = Icons.Rounded.HighQuality, summary = "Add service URLs and choose source priority", onClick = { audioAddons = true })
+                // On the main Settings page; here only so searching finds it.
+                Entry("Audio sources", "audio add-ons addons source URL manifest order priority lossless flac high res") {
+                    NavRow("Audio sources", { audioAddons = true }, summary = audioSourcesSummary(), icon = Icons.Rounded.Extension)
                 },
                 Entry("Bit-perfect output", "dac exclusive mode usb audio player pro hiby passthrough hi-fi audiophile mixer bypass sample rate switching direct driver aaudio built-in") {
                     val usb by BitPerfectUsb.status.collectAsState()
