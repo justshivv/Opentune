@@ -1,4 +1,5 @@
 import { Maximize2 } from 'lucide-react';
+import { useTrackContextMenu } from '@/components/music/TrackMenu';
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { LogoMark } from '@/components/icons/LogoMark';
@@ -103,6 +104,12 @@ export function Lcd() {
     return entry && entry.videoId === s.nowPlaying?.videoId ? entry : null;
   });
   const video = useHasVideo(nowPlaying?.videoId);
+  const context = useTrackContextMenu(
+    track ??
+      (nowPlaying
+        ? { videoId: nowPlaying.videoId, title: nowPlaying.title, artists: nowPlaying.artist ? [{ name: nowPlaying.artist, id: null }] : [], album: null, durationSec: nowPlaying.durationSec || null, explicit: false, thumbnail: nowPlaying.artworkUrl, index: null, plays: null }
+        : null),
+  );
 
   if (!nowPlaying) {
     return (
@@ -117,7 +124,9 @@ export function Lcd() {
   return (
     <div
       className={`group/lcd relative grid h-full items-center gap-x-2 pb-1.5 ${video ? 'grid-cols-[60px_minmax(0,1fr)]' : 'grid-cols-[34px_minmax(0,1fr)]'}`}
+      onContextMenu={context.onContextMenu}
     >
+      {context.menu}
       {/* As Apple's: the artwork opens the full-screen player, with an expand glyph on hover. */}
       <button
         // A music video plays here in small, at 16:9.
@@ -166,7 +175,16 @@ export function Lcd() {
           <span className={titleClass}>{status === 'loading' ? 'Loading…' : ''}</span>
         )}
         {status === 'error' ? (
-          <span className="truncate type-callout-medium text-key">{error}</span>
+          // What went wrong, and the two ways on: load it again, or move to the next song.
+          <span className="flex min-w-0 items-center gap-2 type-callout-medium">
+            <span className="min-w-0 truncate text-key" title={error ?? undefined}>{error}</span>
+            <button className="flex-none text-primary underline-offset-2 hover:underline" onClick={() => usePlayer.getState().togglePlay()}>
+              Try Again
+            </button>
+            <button className="flex-none text-primary underline-offset-2 hover:underline" onClick={() => usePlayer.getState().next()}>
+              Skip
+            </button>
+          </span>
         ) : (
           <span className="truncate type-callout-medium text-secondary">
             {artist ? <Credits videoId={videoId} line={artist} artists={track?.artists ?? []} /> : status === 'loading' ? 'Loading…' : ''}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getAudio, usePlayer } from '@/state/player';
+import { getAudio, resumePosition, usePlayer } from '@/state/player';
 
 export function clock(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -19,13 +19,22 @@ export function useScrubber() {
   const remaining = useRef<HTMLSpanElement>(null);
   const status = usePlayer((s) => s.status);
   const deck = usePlayer((s) => s.deck);
+  const restoredDuration = usePlayer((s) => s.nowPlaying?.durationSec ?? 0);
   const seek = usePlayer((s) => s.seek);
   const [dragging, setDragging] = useState<number | null>(null);
 
   useEffect(() => {
     const audio = getAudio();
     const element = bar.current;
-    if (!audio || !element) return;
+    if (!element) return;
+    if (!audio) {
+      // A queue restored from the last visit: where it was left, until Play loads it.
+      const time = resumePosition();
+      element.style.setProperty('--progress', String(restoredDuration > 0 ? Math.min(1, time / restoredDuration) : 0));
+      if (elapsed.current) elapsed.current.textContent = clock(time);
+      if (remaining.current) remaining.current.textContent = `-${clock(restoredDuration - time)}`;
+      return;
+    }
     let frame = 0;
     const draw = () => {
       const duration = audio.duration;
@@ -43,7 +52,7 @@ export function useScrubber() {
       cancelAnimationFrame(frame);
       audio.removeEventListener('seeked', onSeeked);
     };
-  }, [status, deck, dragging]);
+  }, [status, deck, dragging, restoredDuration]);
 
   const fractionAt = (event: React.PointerEvent<HTMLElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();

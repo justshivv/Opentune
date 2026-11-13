@@ -1,10 +1,12 @@
-import { Infinity as InfinityIcon, MoreHorizontal, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Infinity as InfinityIcon, ListStart, Moon, MoreHorizontal, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Menu, MenuHeader, MenuItem, MenuSeparator } from '@/components/Menu';
 import { Artwork } from '@/components/music/Artwork';
 import { formatDuration } from '@/components/music/links';
+import { toast } from '@/components/Toast';
 import { autoplaySectionStart, upcomingUserQueueIndices, type QueueEntry } from '@/playback/queue/timeline';
 import { CROSSFADE_CHOICES, usePlayer } from '@/state/player';
+import { SLEEP_CHOICES, sleepLabel, useSleepTimer } from '@/state/sleepTimer';
 
 // The panel's square buttons: AutoPlay (the key colour when on) and the options menu.
 const square = 'grid size-7 place-items-center rounded-[6px] text-secondary hover:bg-quinary aria-pressed:text-key';
@@ -14,17 +16,22 @@ const list = 'flex flex-col';
 function Row({
   entry,
   at,
+  first,
+  last,
   onDragStart,
   onDropAt,
   dragging,
 }: {
   entry: QueueEntry;
   at: number;
+  /** The first and last upcoming rows: nothing to move above or below them. */
+  first: boolean;
+  last: boolean;
   onDragStart: (at: number) => void;
   onDropAt: (at: number) => void;
   dragging: boolean;
 }) {
-  const { jumpTo, removeAt, playNext } = usePlayer.getState();
+  const { jumpTo, removeAt, playNext, move } = usePlayer.getState();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [over, setOver] = useState(false);
   const close = useCallback(() => setAnchor(null), []);
@@ -68,9 +75,10 @@ function Row({
         <span className="truncate type-body text-secondary">{track.artists.map((a) => a.name).join(', ')}</span>
       </button>
       <div className="relative grid items-center justify-items-end">
-        <span className="type-body tabular-nums text-secondary group-hover/row:invisible group-has-[[data-open]]/row:invisible">{formatDuration(track.durationSec)}</span>
+        <span className="type-body tabular-nums text-secondary group-hover/row:invisible group-has-[[data-open]]/row:invisible [@media(hover:none)]:invisible">{formatDuration(track.durationSec)}</span>
         <button
-          className="absolute inset-y-0 right-0 my-auto hidden size-7 place-items-center rounded-full text-key group-hover/row:grid data-open:grid"
+          // Always there on a touch screen, where there's no hover and no dragging.
+          className="absolute inset-y-0 right-0 my-auto hidden size-7 place-items-center rounded-full text-key group-hover/row:grid data-open:grid [@media(hover:none)]:grid"
           aria-label={`More options for ${track.title}`}
           aria-haspopup="menu"
           data-open={anchor !== null || undefined}
@@ -82,15 +90,30 @@ function Row({
       {anchor && (
         <Menu anchor={anchor} onClose={close} label={track.title}>
           <MenuItem onSelect={() => (close(), jumpTo(at))}>Play Now</MenuItem>
-          <MenuItem
-            onSelect={() => {
-              close();
-              removeAt(at);
-              playNext([track], entry.source);
-            }}
-          >
-            Play Next
-          </MenuItem>
+          {!first && (
+            <MenuItem
+              icon={<ListStart size={15} />}
+              onSelect={() => {
+                close();
+                removeAt(at);
+                playNext([track], entry.source);
+                toast(`Playing next: ${track.title}`);
+              }}
+            >
+              Play Next
+            </MenuItem>
+          )}
+          {(!first || !last) && <MenuSeparator />}
+          {!first && (
+            <MenuItem icon={<ArrowUp size={15} />} onSelect={() => (close(), move(at, at - 1))}>
+              Move Up
+            </MenuItem>
+          )}
+          {!last && (
+            <MenuItem icon={<ArrowDown size={15} />} onSelect={() => (close(), move(at, at + 1))}>
+              Move Down
+            </MenuItem>
+          )}
           <MenuSeparator />
           <MenuItem destructive onSelect={() => (close(), removeAt(at))}>
             Remove from Up Next
@@ -109,6 +132,8 @@ export function UpNext() {
   const repeat = usePlayer((s) => s.repeat);
   const crossfadeSec = usePlayer((s) => s.crossfadeSec);
   const { clearUpNext, setAutoplay, setCrossfade, move } = usePlayer.getState();
+  const sleep = useSleepTimer();
+  const sleeping = sleepLabel(sleep.endsAt, sleep.endOfSong);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const close = useCallback(() => setAnchor(null), []);
@@ -121,12 +146,16 @@ export function UpNext() {
   const afterAutoplay = upcoming.filter(({ at }) => at >= autoplayAt);
   const playingFrom = queue[index]?.source?.title;
 
+  const firstAt = upcoming[0]?.at ?? -1;
+  const lastAt = upcoming[upcoming.length - 1]?.at ?? -1;
   const rows = (items: typeof upcoming) =>
     items.map(({ entry, at }) => (
       <Row
         key={entry.entryId}
         entry={entry}
         at={at}
+        first={at === firstAt}
+        last={at === lastAt}
         dragging={dragFrom === at}
         onDragStart={setDragFrom}
         onDropAt={(to) => {
@@ -154,8 +183,15 @@ export function UpNext() {
         >
           <InfinityIcon size={16} strokeWidth={2.4} />
         </button>
-        <button className={square} aria-label="Playback options" aria-haspopup="menu" onClick={(e) => setAnchor(e.currentTarget)}>
-          <MoreHorizontal size={16} />
+        <button
+          className={square}
+          aria-label={sleeping ? `Playback options, sleep timer ${sleeping}` : 'Playback options'}
+          aria-haspopup="menu"
+          aria-pressed={!!sleeping}
+          title={sleeping ? `Sleep timer: ${sleeping}` : undefined}
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
+          {sleeping ? <Moon size={15} /> : <MoreHorizontal size={16} />}
         </button>
         {anchor && (
           <Menu anchor={anchor} onClose={close} label="Playback options">
@@ -165,6 +201,19 @@ export function UpNext() {
                 {seconds === 0 ? 'Off' : `${seconds} seconds`}
               </MenuItem>
             ))}
+            <MenuSeparator />
+            <MenuHeader>{sleeping ? `Sleep Timer · ${sleeping}` : 'Sleep Timer'}</MenuHeader>
+            <MenuItem checked={!sleeping} onSelect={() => (close(), sleep.set(null))}>
+              Off
+            </MenuItem>
+            {SLEEP_CHOICES.map((minutes) => (
+              <MenuItem key={minutes} onSelect={() => (close(), sleep.set(minutes), toast(`Pausing in ${minutes} minutes`))}>
+                {minutes} minutes
+              </MenuItem>
+            ))}
+            <MenuItem checked={sleep.endOfSong} onSelect={() => (close(), sleep.set('end'), toast('Pausing after this song'))}>
+              End of This Song
+            </MenuItem>
           </Menu>
         )}
       </div>

@@ -7,173 +7,96 @@
 <meta name="description" content="Build an OpenTune audio add-on: a small HTTPS API for catalog search, lossless playback and downloads. Protocol, examples and a working starter.">
 <link rel="canonical" href="https://justshivv.github.io/Opentune/addons/">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
-<meta name="theme-color" content="#1a1716">
+<meta name="theme-color" content="#131111">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@95..115,400..700&display=swap">
+<link rel="stylesheet" href="../assets/site.css">
 <style>
-/* The main site's palette and type (site/index.html): warm night, the red tint, Archivo. */
-:root {
-  color-scheme: dark;
-  --tint: #E5483A;
-  --tint-soft: color-mix(in oklab, var(--tint) 55%, #ffe0d5);
-  --night: oklch(0.16 0.006 25);
-  --night-2: oklch(0.205 0.007 25);
-  --night-3: oklch(0.26 0.008 25);
-  --line: oklch(0.3 0.008 25);
-  --snow: oklch(0.972 0.002 25);
-  --muted: oklch(0.77 0.008 25);
-  --font: "Archivo", "Helvetica Neue", Arial, system-ui, sans-serif;
-  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  --gutter: clamp(16px, 4.5vw, 56px);
-  --ease: cubic-bezier(.16, 1, .3, 1);
-  --nav-h: 64px;
-}
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; background: var(--night); overflow-x: clip; }
-body { margin: 0; background: var(--night); color: var(--snow); font: 400 17px/1.65 var(--font); -webkit-font-smoothing: antialiased; overflow-x: clip; }
-a { color: inherit; text-underline-offset: .2em; text-decoration-thickness: 1px; }
-p, li, td { overflow-wrap: anywhere; }
-[id] { scroll-margin-top: calc(var(--nav-h) + 20px); }
-:focus-visible { outline: 2px solid var(--tint-soft); outline-offset: 3px; border-radius: 8px; }
-.wrap { max-width: 1200px; margin-inline: auto; padding-inline: var(--gutter); }
-h1, h2, h3 { margin: 0; font-stretch: 72%; font-weight: 800; letter-spacing: -0.012em; text-wrap: balance; }
-h1 { font-size: clamp(52px, 10vw, 104px); line-height: .9; }
-h2 { font-size: clamp(34px, 4.6vw, 54px); line-height: .98; margin-bottom: 18px; }
-h3 { font-size: 22px; font-stretch: 85%; font-weight: 750; margin: 34px 0 12px; }
-p { margin: 0 0 16px; }
-code { font-family: var(--mono); font-size: .88em; }
-p code, li code, td code { background: var(--night-3); padding: .12em .4em; border-radius: 6px; color: var(--tint-soft); }
-
-/* Top bar: stays put and blurs what scrolls under it. */
-.nav { position: sticky; top: 0; z-index: 20; height: var(--nav-h); background: color-mix(in oklab, var(--night) 78%, transparent); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); border-bottom: 1px solid transparent; transition: border-color .3s; }
-.nav[data-scrolled] { border-color: var(--line); }
-.nav .wrap { height: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; font-stretch: 80%; font-size: 21px; }
-.brand img { width: 30px; height: 30px; }
-.brand small { color: var(--muted); font-weight: 500; font-stretch: 100%; font-size: 14px; }
-.nav-links { display: flex; gap: 6px; }
-.nav-links a { text-decoration: none; color: var(--muted); padding: 8px 14px; border-radius: 99px; font-size: 15px; transition: background-color .2s, color .2s; }
-.nav-links a:hover { background: var(--night-3); color: var(--snow); }
-
-.btn { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 24px; border-radius: 999px; font: 650 16px/1 var(--font); text-decoration: none; white-space: nowrap; transition: transform .45s var(--ease), background-color .3s; }
-.btn:hover { transform: translateY(-2px); }
-.btn:active { transform: scale(.97); transition-duration: .1s; }
-.btn-primary { background: var(--tint); color: #1b0b08; }
-.btn-ghost { border: 1.5px solid var(--line); }
-.btn-ghost:hover { background: var(--night-2); }
-
-/* Hero, with the three calls drawn as a route from OpenTune to the service. */
-.hero { padding: clamp(48px, 9vw, 112px) 0 clamp(40px, 6vw, 72px); display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 48px; align-items: center; }
-.eyebrow { display: inline-flex; gap: 8px; align-items: center; color: var(--tint-soft); font-weight: 650; font-size: 14px; margin-bottom: 22px; }
-.eyebrow::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--tint); box-shadow: 0 0 0 4px color-mix(in oklab, var(--tint) 25%, transparent); }
-.hero h1 mark { background: none; color: var(--tint); }
-.lede { font-size: clamp(18px, 1.6vw, 21px); color: var(--muted); max-width: 40ch; margin: 24px 0 30px; }
-.ctas { display: flex; flex-wrap: wrap; gap: 12px; }
-.route { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; position: relative; }
-.route::before { content: ''; position: absolute; left: 27px; top: 28px; bottom: 28px; width: 2px; background: linear-gradient(var(--tint), color-mix(in oklab, var(--tint) 10%, transparent)); }
-.route li { position: relative; display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 14px; align-items: center; padding: 14px 18px 14px 0; }
-.route .dot { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; background: var(--night-2); border: 1px solid var(--line); z-index: 1; }
-.route svg { width: 24px; height: 24px; fill: none; stroke: var(--tint-soft); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.route strong { display: block; font-stretch: 85%; font-size: 19px; }
-.route code { color: var(--muted); font-size: 13px; }
-
-/* Body: contents on the left, the guide on the right. */
-.layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); padding-bottom: 80px; }
-.toc { position: sticky; top: calc(var(--nav-h) + 24px); align-self: start; display: grid; gap: 2px; }
-.toc p { font-size: 13px; color: var(--muted); margin: 0 0 8px 14px; }
-.toc a { position: relative; text-decoration: none; color: var(--muted); padding: 8px 14px; border-radius: 12px; font-size: 15px; transition: color .2s, background-color .2s; }
-.toc a:hover { color: var(--snow); background: var(--night-2); }
-.toc a[aria-current] { color: var(--snow); background: var(--night-2); }
-.toc a[aria-current]::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--tint); }
-article > section { padding: 40px 0 8px; border-top: 1px solid var(--line); }
-article > section:first-child { border-top: 0; padding-top: 0; }
-
-/* Endpoint cards: the method and path on top, the response under it, a copy button. */
-.endpoint { margin: 16px 0 18px; border: 1px solid var(--line); border-radius: 20px; background: var(--night-2); overflow: hidden; }
-.endpoint header { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 18px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 14px; min-width: 0; }
-.endpoint header span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.method { font-weight: 700; font-size: 12px; color: #1b0b08; background: var(--tint-soft); border-radius: 6px; padding: 3px 7px; }
-pre { margin: 0; padding: 20px; overflow: auto; font: 13.5px/1.65 var(--mono); color: #ead9d3; tab-size: 2; }
-.code { position: relative; margin: 16px 0 18px; border: 1px solid var(--line); border-radius: 20px; background: var(--night-2); }
-.code pre { padding-right: 84px; }
-.copy { font: 600 13px/1 var(--font); color: var(--muted); background: var(--night-3); border: 0; border-radius: 99px; padding: 8px 12px; cursor: pointer; transition: color .2s, background-color .2s; }
-.copy:hover { color: var(--snow); }
-.copy[data-done] { color: #1b0b08; background: var(--tint-soft); }
-.code .copy { position: absolute; top: 12px; right: 12px; }
-.k { color: var(--tint-soft); } .s { color: #c9e3b5; } .n { color: #f2c38d; }
-
-.fields { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
-.fields li { font-size: 14px; background: var(--night-2); border: 1px solid var(--line); border-radius: 99px; padding: 6px 12px; color: var(--muted); }
-.fields b { color: var(--snow); font-weight: 650; }
-.note { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 14px; padding: 18px 20px; border-radius: 18px; background: color-mix(in oklab, var(--tint) 12%, var(--night-2)); border: 1px solid color-mix(in oklab, var(--tint) 30%, transparent); color: var(--snow); margin: 20px 0; }
-.note svg { width: 22px; height: 22px; fill: none; stroke: var(--tint-soft); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; margin-top: 2px; }
+/* The add-ons guide: a contents rail beside the article, code and endpoint blocks. */
+.addon-hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); gap: clamp(32px, 6vw, 80px); align-items: center; padding: clamp(48px, 8vw, 104px) 0 clamp(40px, 6vw, 72px); }
+.addon-hero > * { min-width: 0; }
+.addon-hero h1 { font-size: var(--step-4); letter-spacing: -0.03em; margin-bottom: 22px; }
+.addon-hero h1 mark { background: none; color: var(--ink-3); }
+.addon-hero .lede { max-width: 44ch; margin-bottom: 30px; }
+.route { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.route li { display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: center; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.route .dot { width: 44px; height: 44px; border-radius: 14px; background: var(--bg-3); display: grid; place-items: center; }
+.route svg { width: 22px; height: 22px; fill: none; stroke: var(--coral-text); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.route strong { display: block; font-weight: 620; }
+.route code { color: var(--ink-3); font-size: 0.9rem; }
+.layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: clamp(32px, 6vw, 88px); align-items: start; padding-bottom: clamp(64px, 9vw, 120px); border-top: 1px solid var(--line); padding-top: clamp(40px, 6vw, 72px); }
+.layout .toc { position: sticky; top: 88px; display: grid; gap: 2px; }
+.layout .toc p { margin: 0 0 8px; font-size: var(--step--1); color: var(--ink-3); }
+.layout .toc a { padding: 7px 12px; border-radius: 10px; text-decoration: none; color: var(--ink-3); font-size: 0.95rem; border: 0; }
+.layout .toc a:hover { color: var(--ink); background: var(--bg-2); }
+.layout .toc a[aria-current="true"] { color: var(--ink); background: var(--bg-3); }
+article { max-width: 74ch; }
+article section + section { margin-top: clamp(48px, 7vw, 88px); }
+article h2 { font-size: var(--step-3); margin-bottom: 18px; }
+article h3 { margin: 32px 0 12px; }
+article p, article li { color: var(--ink-2); }
+article a { color: var(--ink); text-decoration-color: var(--coral-text); text-underline-offset: 3px; }
+article code { font-size: 0.88em; background: var(--bg-3); padding: 2px 6px; border-radius: 6px; color: var(--ink); overflow-wrap: anywhere; }
+.code, .endpoint { position: relative; margin: 18px 0; background: var(--bg-2); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.endpoint header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 0.92rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.method { font-weight: 700; font-size: 0.78rem; color: var(--coral-text); background: color-mix(in oklab, var(--coral) 16%, transparent); padding: 3px 8px; border-radius: 6px; }
+.code pre, .endpoint pre { margin: 0; padding: 18px 20px; overflow-x: auto; font-size: 0.86rem; line-height: 1.65; }
+.code pre code, .endpoint pre code { background: none; padding: 0; color: var(--ink-2); }
+.k { color: oklch(0.82 0.08 60); } .s { color: oklch(0.82 0.1 150); } .n { color: var(--coral-text); }
+.copy { margin-left: auto; font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--ink-2); background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.code .copy { position: absolute; top: 10px; right: 10px; }
+.copy[data-done] { color: var(--coral-text); }
+.fields { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0 0 16px; }
+.fields li { font-size: var(--step--1); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+.note { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding: 18px 20px; border-radius: 16px; background: var(--bg-2); border: 1px solid var(--line); margin: 20px 0; }
+.note svg { width: 22px; height: 22px; fill: none; stroke: var(--ink-3); stroke-width: 1.8; stroke-linecap: round; }
 .note p { margin: 0; }
-.rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
-.rule { background: var(--night-2); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; transition: border-color .3s, transform .45s var(--ease); }
-.rule:hover { border-color: color-mix(in oklab, var(--tint) 45%, var(--line)); transform: translateY(-2px); }
-.rule strong { display: block; font-stretch: 85%; font-size: 18px; margin-bottom: 6px; }
-.rule p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
-
-/* The test list: tick items off as you go; remembered in this browser only. */
-.checklist { list-style: none; margin: 16px 0 24px; padding: 0; display: grid; gap: 8px; counter-reset: step; }
-.checklist label { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 14px; align-items: start; padding: 14px 18px; border-radius: 16px; background: var(--night-2); border: 1px solid var(--line); cursor: pointer; transition: border-color .2s, opacity .3s; }
-.checklist input { appearance: none; margin: 1px 0 0; width: 24px; height: 24px; border-radius: 8px; border: 2px solid var(--line); display: grid; place-items: center; transition: background-color .2s, border-color .2s; cursor: pointer; }
-.checklist input:checked { background: var(--tint); border-color: var(--tint); }
-.checklist input:checked::after { content: ''; width: 6px; height: 11px; border: solid #1b0b08; border-width: 0 2.5px 2.5px 0; rotate: 45deg; translate: 0 -1px; }
-.checklist label:has(input:checked) { opacity: .6; }
-.checklist label:has(input:checked) span { text-decoration: line-through; text-decoration-color: var(--muted); }
-.progress { font-size: 14px; color: var(--muted); }
-
-.cta-band { margin: 32px 0 0; padding: clamp(28px, 5vw, 48px); border-radius: 28px; background: var(--tint); color: #1b0b08; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; }
-.cta-band h3 { margin: 0 0 6px; font-size: clamp(26px, 3vw, 36px); font-stretch: 72%; font-weight: 800; }
-.cta-band p { margin: 0; max-width: 52ch; }
-.cta-band .btn { background: #1b0b08; color: var(--snow); }
-footer { border-top: 1px solid var(--line); padding: 32px 0 calc(32px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: 15px; }
-footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 20px; }
-
-/* Things rise in as they scroll into view. */
-.reveal { opacity: 0; translate: 0 18px; transition: opacity .7s var(--ease), translate .7s var(--ease); }
-.reveal[data-in] { opacity: 1; translate: 0 0; }
-
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 0 32px; }
+.rule { padding: 18px 0; border-top: 1px solid var(--line); }
+.rule strong { display: block; margin-bottom: 6px; font-weight: 620; }
+.rule p { margin: 0; }
+.progress { color: var(--coral-text); font-size: var(--step--1); min-height: 1.4em; }
+.checklist { list-style: none; padding: 0; margin: 0 0 20px; }
+.checklist li { border-top: 1px solid var(--line); }
+.checklist li:last-child { border-bottom: 1px solid var(--line); }
+.checklist label { display: grid; grid-template-columns: 22px 1fr; gap: 14px; padding: 14px 0; cursor: pointer; }
+.checklist input { width: 20px; height: 20px; margin: 3px 0 0; accent-color: var(--coral); }
+.checklist input:checked + span { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--ink-3); }
+.cta-band { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-between; align-items: center; margin-top: 28px; padding: 26px 28px; border-radius: var(--radius); background: var(--bg-2); border: 1px solid var(--line); }
+.cta-band h3 { margin: 0 0 6px; }
+.cta-band p { margin: 0; }
 @media (max-width: 900px) {
-  .hero { grid-template-columns: minmax(0, 1fr); }
-  .layout { grid-template-columns: minmax(0, 1fr); }
-  /* Contents become a row of chips under the bar. */
-  .toc { top: var(--nav-h); z-index: 10; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-inline: calc(var(--gutter) * -1); padding: 10px var(--gutter); background: color-mix(in oklab, var(--night) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-  .toc::-webkit-scrollbar { display: none; }
-  .toc p { display: none; }
-  .toc a { white-space: nowrap; border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; font-size: 14px; }
-  .toc a[aria-current]::before { display: none; }
-  .toc a[aria-current] { background: var(--tint); color: #1b0b08; border-color: var(--tint); }
-  [id] { scroll-margin-top: calc(var(--nav-h) + 72px); }
-}
-@media (max-width: 600px) {
-  .rules { grid-template-columns: minmax(0, 1fr); }
-  .brand small, .nav-links a:first-child { display: none; }
-  pre { padding: 16px; font-size: 12.5px; }
-  .code pre { padding-right: 16px; padding-top: 52px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  .reveal { opacity: 1; translate: none; transition: none; }
-  .btn, .rule { transition: none; }
+  .addon-hero { grid-template-columns: 1fr; }
+  .layout { grid-template-columns: 1fr; }
+  .layout .toc { position: sticky; top: 58px; z-index: 5; display: flex; overflow-x: auto; gap: 4px; padding: 10px 0; margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); background: color-mix(in oklab, var(--bg) 90%, transparent); backdrop-filter: blur(12px); scrollbar-width: none; }
+  .layout .toc p { display: none; }
+  .layout .toc a { white-space: nowrap; }
 }
 </style>
 </head>
 <body>
-<div class="nav" id="nav"><div class="wrap">
-  <a class="brand" href="../"><img src="../img/opentune-logo.svg" alt="">OpenTune <small>Add-ons</small></a>
-  <nav class="nav-links" aria-label="Community"><a href="https://github.com/justshivv/Opentune/tree/main/examples/audio-addon">Starter</a><a href="https://github.com/justshivv/Opentune">GitHub</a><a href="https://discord.gg/6udrCVh5n">Discord</a></nav>
-</div></div>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="../" aria-label="OpenTune home"><img src="../img/opentune-logo.svg" alt="" width="30" height="30">OpenTune</a>
+    <nav aria-label="Main">
+      <ul class="nav-links">
+        <li class="opt"><a href="../#features">Features</a></li>
+        <li><a href="../#download">Download</a></li>
+        <li class="opt"><a href="https://github.com/justshivv/Opentune/tree/main/examples/audio-addon">Starter</a></li>
+      </ul>
+    </nav>
+    <a class="btn" href="https://discord.gg/6udrCVh5n">Discord</a>
+  </div>
+</header>
 
-<main class="wrap">
-<section class="hero">
+<main class="wrap" id="main">
+<section class="addon-hero">
   <div>
-    <span class="eyebrow">For the community · Audio add-ons</span>
     <h1>Your catalog.<br><mark>More ways to listen.</mark></h1>
     <p class="lede">Connect your audio service to OpenTune with three HTTPS endpoints. Search recordings, return the best available audio, and let listeners choose their source order.</p>
-    <div class="ctas"><a class="btn btn-primary" href="https://github.com/justshivv/Opentune/tree/main/examples/audio-addon">Get the starter ↗</a><a class="btn btn-ghost" href="#contract">Read the protocol</a></div>
+    <div class="btn-row"><a class="btn btn-primary" href="https://github.com/justshivv/Opentune/tree/main/examples/audio-addon">Get the starter ↗</a><a class="btn" href="#contract">Read the protocol</a></div>
   </div>
   <ol class="route reveal" aria-label="How a song is found">
     <li><span class="dot"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h4"/></svg></span><div><strong>Describe</strong><code>GET /manifest.json</code></div></li>
@@ -281,12 +204,21 @@ npx wrangler deploy</code></pre></div>
 </article>
 </div>
 </main>
-<footer><div class="wrap"><span>OpenTune · Free and open source</span><a href="../privacy/">Privacy</a><a href="https://github.com/justshivv/Opentune">Source code</a></div></footer>
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div><a class="brand" href="../"><img src="../img/opentune-logo.svg" alt="" width="30" height="30">OpenTune</a><p style="margin-top:12px;max-width:34ch">A free, open-source music player for Android, TV, desktop and the web.</p></div>
+      <div><h3>App</h3><ul><li><a href="../#features">Features</a></li><li><a href="../#download">Download</a></li><li><a href="../player/">Web player</a></li></ul></div>
+      <div><h3>Project</h3><ul><li><a href="https://github.com/justshivv/Opentune">Source code</a></li><li><a href="./">Audio add-ons</a></li><li><a href="../privacy/">Privacy</a></li></ul></div>
+      <div><h3>Help</h3><ul><li><a href="../#faq">FAQ</a></li><li><a href="https://discord.gg/6udrCVh5n">Discord</a></li><li><a href="https://github.com/justshivv/Opentune/issues/new">Report a problem</a></li></ul></div>
+    </div>
+  </div>
+</footer>
 
 <script>
 (() => {
   const nav = document.getElementById('nav');
-  const onScroll = () => nav.toggleAttribute('data-scrolled', scrollY > 8);
+  const onScroll = () => nav.classList.toggle('scrolled', scrollY > 8);
   addEventListener('scroll', onScroll, { passive: true });
   onScroll();
 

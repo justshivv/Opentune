@@ -58,23 +58,42 @@ function selectDay(day) {
   selectedDay = day;
   const row = dailyRows(periodData).find(row => row.day === day);
   const detail = $('day-detail'); detail.replaceChildren(node('strong', dateLabel(day) + ' · ' + zoneLabel()));
-  detail.append(node('span', row?.active == null ? ' — No activity history available for this date.' : ` — ${fmt(row.active)} active installations · ${fmt(row.plays)} plays · ${fmt(row.active ? row.plays / row.active : null)} plays per active installation`));
+  const split = row?.newInstallations != null ? ` (${fmt(row.newInstallations)} new · ${fmt(row.returningInstallations)} returning)` : '';
+  detail.append(node('span', row?.active == null ? ' — No activity history available for this date.' : ` — ${fmt(row.active)} active installations${split} · ${fmt(row.plays)} plays · ${fmt(row.active ? row.plays / row.active : null)} plays per active installation`));
   for (const bar of $('chart').children) { const selected = bar.dataset.day === day; bar.classList.toggle('selected', selected); bar.setAttribute('aria-pressed', String(selected)); }
   const activeBar = $('chart').querySelector('.selected');
   if (activeBar) $('chart').scrollLeft = activeBar.offsetLeft - $('chart').clientWidth / 2 + activeBar.clientWidth / 2;
 }
+const METRIC_NAMES = { plays: 'plays', active: 'active installations', newInstallations: 'new installations', returningInstallations: 'returning installations' };
 function chart() {
   if (!periodData) return;
-  const metric = $('chart-metric').value, rows = dailyRows(periodData), max = Math.max(1, ...rows.map(row => row[metric] ?? 0));
+  const metric = $('chart-metric').value, rows = dailyRows(periodData);
+  // Active installations are drawn as two stacked parts, returning below and new on top, when the split is known.
+  const stacked = metric === 'active' && rows.some(row => row.newInstallations != null);
+  $('chart-legend').hidden = !stacked;
+  const max = Math.max(1, ...rows.map(row => row[metric] ?? 0));
   const host = $('chart'); host.replaceChildren();
   host.classList.toggle('chart-single', rows.length === 1);
   host.classList.toggle('chart-sparse', rows.length <= 7);
   for (const row of rows) {
     const value = row[metric], button = node('button', null, 'bar' + (value == null ? ' unknown' : ''));
     button.type = 'button'; button.dataset.day = row.day;
-    const label = `${dateLabel(row.day)}: ${value == null ? 'unavailable' : fmt(value)} ${metric === 'plays' ? 'plays' : 'active installations'}`;
+    const split = stacked && row.newInstallations != null ? ` (${fmt(row.newInstallations)} new, ${fmt(row.returningInstallations)} returning)` : '';
+    const label = `${dateLabel(row.day)}: ${value == null ? 'unavailable' : fmt(value)} ${METRIC_NAMES[metric]}${split}`;
     button.title = label; button.setAttribute('aria-label', label);
-    const fill = node('span', null, 'bar-fill'); fill.style.height = `${Math.max(3, (value ?? 0) / max * 118)}px`; fill.setAttribute('aria-hidden', 'true');
+    const height = v => `${Math.max(3, (v ?? 0) / max * 118)}px`;
+    let fill;
+    if (stacked && row.newInstallations != null && value) {
+      fill = node('span', null, 'bar-stack');
+      const fresh = node('span', null, 'bar-fill bar-new'), back = node('span', null, 'bar-fill bar-returning');
+      fresh.style.height = row.newInstallations ? `${row.newInstallations / max * 118}px` : '0px';
+      back.style.height = row.returningInstallations ? `${row.returningInstallations / max * 118}px` : '0px';
+      fill.append(fresh, back);
+    } else {
+      fill = node('span', null, 'bar-fill' + (metric === 'newInstallations' ? ' bar-new' : metric === 'returningInstallations' ? ' bar-returning' : ''));
+      fill.style.height = height(value);
+    }
+    fill.setAttribute('aria-hidden', 'true');
     const tick = node('span', rows.length === 1 ? dateLabel(row.day) : row.day.slice(5), 'bar-label'); tick.setAttribute('aria-hidden', 'true');
     if (rows.length <= 7) {
       const count = node('span', fmt(value), 'bar-value'); count.setAttribute('aria-hidden', 'true'); button.append(count);
@@ -92,7 +111,7 @@ async function loadPeriod() {
   $('period').setAttribute('aria-busy', 'true');
   $('period-title').textContent = range.from === range.to ? dateLabel(range.from) : `${dateLabel(range.from)} – ${dateLabel(range.to)}`;
   $('period-status').textContent = 'Loading selected dates…';
-  for (const id of ['period-active', 'period-plays', 'period-average']) $(id).textContent = '—';
+  for (const id of ['period-active', 'period-new', 'period-returning', 'period-plays', 'period-average']) $(id).textContent = '—';
   for (const id of ['daily-table', 'versions-table', 'cohort-table', 'chart']) empty(id, 'Loading…');
   $('day-detail').textContent = 'Loading daily counts…';
   for (const button of document.querySelectorAll('[data-days]')) { const preset = presetRange(Number(button.dataset.days), new Date(), reportZone()); button.setAttribute('aria-pressed', String(preset.from === range.from && preset.to === range.to)); }
@@ -105,14 +124,19 @@ async function loadPeriod() {
     periodData = data;
     const hasHistory = data.coverageSince && range.to >= data.coverageSince;
     $('period-active').textContent = fmt(hasHistory ? data.totals.active : null);
+    // New and returning, each installation once across the whole period (needs the API's split).
+    $('period-new').textContent = fmt(hasHistory && data.split ? data.split.newInstallations : null);
+    $('period-returning').textContent = fmt(hasHistory && data.split ? data.split.returningInstallations : null);
     $('period-plays').textContent = fmt(hasHistory ? data.totals.plays : null);
     $('period-average').textContent = fmt(hasHistory && data.totals.active > 0 ? data.totals.plays / data.totals.active : null);
     $('period-status').textContent = data.limited ? 'Limited server: daily counts available; period-wide unique counts and version filters need the analytics API update.' : !hasHistory ? (reportZone() === 'Asia/Kolkata' ? 'No IST reports for these dates yet. Updated apps report IST; older counts remain in UTC history.' : 'No activity history available for these dates.') : `Reports available since ${dateLabel(data.coverageSince)}. Today and recent days may still change.`;
-    table('daily-table', [`Date (${zoneLabel()})`, 'Active', 'Plays'], dailyRows(data).reverse().map(row => [row.day, row.active, row.plays]), { daily: true });
+    const days = dailyRows(data).reverse();
+    if (data.cohorts) table('daily-table', [`Date (${zoneLabel()})`, 'Active', 'New', 'Returning', 'Plays'], days.map(row => [row.day, row.active, row.newInstallations, row.returningInstallations, row.plays]), { daily: true });
+    else table('daily-table', [`Date (${zoneLabel()})`, 'Active', 'Plays'], days.map(row => [row.day, row.active, row.plays]), { daily: true });
     if (data.versions) table('versions-table', ['Version', 'Active', 'Plays'], data.versions.map(row => [row.version, row.installations, row.plays]));
     else empty('versions-table', 'Date-filtered versions need the analytics API update.');
-    if (data.cohorts) table('cohort-table', ['Date', 'New', 'Returning', 'New plays', 'Returning plays', 'Listeners'],
-      data.cohorts.slice().reverse().map(row => [row.day, row.newInstallations, row.returningInstallations, row.newPlays, row.returningPlays, row.listeners]));
+    if (data.cohorts) table('cohort-table', ['Date', 'New plays', 'Returning plays', 'Listeners'],
+      data.cohorts.slice().reverse().map(row => [row.day, row.newPlays, row.returningPlays, row.listeners]));
     else empty('cohort-table', 'Cohort reporting needs the API update.');
     chart();
   } catch (e) {

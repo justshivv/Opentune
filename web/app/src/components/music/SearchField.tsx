@@ -1,13 +1,17 @@
-import { Search, X } from 'lucide-react';
+import { Clock, Search, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useSuggestions } from '@/data/music/queries';
 import type { MusicItem } from '@/data/music/types';
+import { useRecentSearches } from '@/lib/recentSearches';
 import { Artwork } from './Artwork';
 import { hrefFor } from './links';
 import { playTrack } from './play';
 
-type Option = { kind: 'query'; text: string; typed: string; rest: string } | { kind: 'item'; item: MusicItem };
+type Option =
+  | { kind: 'query'; text: string; typed: string; rest: string }
+  | { kind: 'recent'; text: string }
+  | { kind: 'item'; item: MusicItem };
 
 /**
  * The centred search field and its suggestions (report §6): a pill field, and
@@ -22,22 +26,31 @@ export function SearchField({ initial, onSearch }: { initial: string; onSearch: 
   const listId = useId();
   const navigate = useNavigate();
   const suggestions = useSuggestions(open ? value : '');
+  const { recent, add: remember, remove: forget, clear: clearRecent } = useRecentSearches();
 
   useEffect(() => setValue(initial), [initial]);
 
-  const options: Option[] = [
-    ...(suggestions.data?.queries ?? []).map((q) => ({ kind: 'query' as const, ...q })),
-    ...(suggestions.data?.items ?? []).map((item) => ({ kind: 'item' as const, item })),
-  ];
-  const showList = open && value.trim().length > 0 && options.length > 0;
+  const empty = value.trim().length === 0;
+  // An empty field offers the last few searches; typing, YouTube Music's suggestions.
+  const options: Option[] = empty
+    ? recent.map((text) => ({ kind: 'recent' as const, text }))
+    : [
+        ...(suggestions.data?.queries ?? []).map((q) => ({ kind: 'query' as const, ...q })),
+        ...(suggestions.data?.items ?? []).map((item) => ({ kind: 'item' as const, item })),
+      ];
+  const showList = open && options.length > 0;
+  const search = (query: string) => {
+    if (query) remember(query);
+    onSearch(query);
+  };
 
   const pick = (option: Option | undefined) => {
     setOpen(false);
     setActive(-1);
-    if (!option) return onSearch(value.trim());
-    if (option.kind === 'query') {
+    if (!option) return search(value.trim());
+    if (option.kind === 'query' || option.kind === 'recent') {
       setValue(option.text);
-      return onSearch(option.text);
+      return search(option.text);
     }
     const href = hrefFor(option.item);
     if (href) navigate(href);
@@ -108,19 +121,49 @@ export function SearchField({ initial, onSearch }: { initial: string; onSearch: 
           className="absolute top-[calc(100%+3px)] left-0 z-(--z-contextual-menus) max-h-[min(700px,70vh)] w-[302px] overflow-y-auto rounded-[9px] border border-[#00000033] bg-thick-material py-1.5 shadow-[inset_0_0_0_1px_#ffffff33,0_8px_40px_#0000008c] [backdrop-filter:blur(60px)_saturate(2.2)]"
           role="listbox"
         >
+          {empty && (
+            <li className="mx-1.5 flex items-center justify-between px-1 pt-0.5 pb-1 type-subhead-emphasized text-secondary" role="presentation">
+              <span>Recent</span>
+              <button
+                type="button"
+                className="type-subhead text-key hover:underline"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={clearRecent}
+              >
+                Clear
+              </button>
+            </li>
+          )}
           {options.map((option, i) => (
             <li
-              key={option.kind === 'query' ? `q-${option.text}` : `i-${option.item.id}`}
+              key={option.kind === 'item' ? `i-${option.item.id}` : `${option.kind}-${option.text}`}
               id={`${listId}-${i}`}
               role="option"
               aria-selected={i === active}
-              className={option.kind === 'query' ? hint : lockup}
+              className={option.kind === 'item' ? lockup : option.kind === 'recent' ? recentRow : hint}
               data-active={i === active || undefined}
               onMouseDown={(e) => e.preventDefault()}
               onMouseEnter={() => setActive(i)}
               onClick={() => pick(option)}
             >
-              {option.kind === 'query' ? (
+              {option.kind === 'recent' ? (
+                <>
+                  <Clock size={13} strokeWidth={2.4} aria-hidden="true" />
+                  <span className="truncate text-primary group-data-active/option:text-white">{option.text}</span>
+                  <button
+                    type="button"
+                    className="grid size-5 place-items-center rounded-full text-tertiary hover:bg-quaternary group-data-active/option:text-white"
+                    aria-label={`Remove ${option.text} from recent searches`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      forget(option.text);
+                    }}
+                  >
+                    <X size={12} strokeWidth={2.6} />
+                  </button>
+                </>
+              ) : option.kind === 'query' ? (
                 <>
                   <Search size={13} strokeWidth={2.4} aria-hidden="true" />
                   <span className="truncate">
@@ -154,6 +197,7 @@ export function SearchField({ initial, onSearch }: { initial: string; onSearch: 
 // A suggestion row; hover or keyboard selection paints it in the key colour, white text.
 const optionRow = 'group/option mx-1.5 cursor-default rounded-[3px] data-active:bg-key-bg data-active:text-white';
 const hint = `${optionRow} grid grid-cols-[16px_minmax(0,1fr)] items-center p-1 type-body text-secondary`;
+const recentRow = `${optionRow} grid grid-cols-[16px_minmax(0,1fr)_20px] items-center p-1 type-body text-secondary`;
 const lockup = `${optionRow} mt-1.5 grid grid-cols-[46px_minmax(0,1fr)] items-center gap-x-2.5 p-1.5`;
 
 function kindLabel(kind: MusicItem['kind']): string {

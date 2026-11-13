@@ -12,9 +12,10 @@ export function requestHostAccess(origins: readonly string[]): void {
  * Whether the extension may reach every one of [origins] (its optional host
  * permissions), for Settings, with a request for the ones it may not. Asked
  * again whenever the tab comes back: the grant happens on the extension's
- * own page, in another tab.
+ * own page, in another tab. [watch] asks again when it changes, as when the
+ * extension turns up after the page opened.
  */
-export function useHostAccess(origins: readonly string[]): { access: HostAccess; request: () => void } {
+export function useHostAccess(origins: readonly string[], watch?: unknown): { access: HostAccess; request: () => void } {
   const [granted, setGranted] = useState<string[] | null | 'unavailable'>(null);
   const key = origins.join(',');
   useEffect(() => {
@@ -35,7 +36,7 @@ export function useHostAccess(origins: readonly string[]): { access: HostAccess;
       window.removeEventListener('focus', check);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [key]);
+  }, [key, watch]);
   if (granted === null) return { access: 'checking', request: () => undefined };
   if (granted === 'unavailable') return { access: 'unavailable', request: () => undefined };
   const missing = origins.filter((o) => !granted.includes(o));

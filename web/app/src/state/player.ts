@@ -218,12 +218,72 @@ let loadToken = 0;
 /** Canonical positions of the queue before shuffle, for turning it off again. */
 let canonical: Map<string, number> | null = null;
 
+// ---- The queue, kept across reloads --------------------------------------------------
+
+const SESSION_KEY = 'opentune:session';
+/** Where the restored track was left, until it is played again. */
+let resumeSec = 0;
+/** The restored track's place, for the seek line before anything has loaded. */
+export const resumePosition = () => resumeSec;
+
+interface SavedSession {
+  queue: QueueEntry[];
+  index: number;
+  positionSec: number;
+}
+
+/**
+ * The queue and the place in the playing track as the last visit left them,
+ * loaded paused: Play picks up where the listener stopped instead of a blank player.
+ */
+function restoredSession(): Pick<PlayerState, 'queue' | 'index' | 'nowPlaying' | 'status'> {
+  const empty = { queue: [], index: -1, nowPlaying: null, status: 'idle' as const };
+  try {
+    const saved = JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null') as SavedSession | null;
+    if (!saved || !Array.isArray(saved.queue)) return empty;
+    const queue = saved.queue.filter((e) => typeof e?.track?.videoId === 'string' && typeof e.entryId === 'string');
+    const entry = queue[saved.index];
+    if (!entry) return empty;
+    resumeSec = Number.isFinite(saved.positionSec) ? Math.max(0, saved.positionSec) : 0;
+    return { queue, index: saved.index, nowPlaying: hintOf(entry.track), status: 'paused' };
+  } catch {
+    return empty;
+  }
+}
+
+/** At most this many entries are kept: what played a long while ago isn't worth the storage. */
+const SAVED_QUEUE_LIMIT = 300;
+
+function saveSession() {
+  const { queue, index } = usePlayer.getState();
+  // Someone else's room isn't this listener's queue.
+  if (partyHooks?.inParty()) return;
+  try {
+    if (index < 0 || !queue.length) return localStorage.removeItem(SESSION_KEY);
+    const from = Math.max(0, Math.min(index - 50, queue.length - SAVED_QUEUE_LIMIT));
+    const audio = getAudio();
+    const positionSec = audio && usePlayer.getState().nowPlaying ? audio.currentTime : resumeSec;
+    const saved: SavedSession = { queue: queue.slice(from, from + SAVED_QUEUE_LIMIT), index: index - from, positionSec };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(saved));
+  } catch {
+    /* Full or blocked storage: the queue just isn't kept. */
+  }
+}
+
+let saveTimer = 0;
+function scheduleSave() {
+  if (saveTimer) return;
+  saveTimer = window.setTimeout(() => {
+    saveTimer = 0;
+    saveSession();
+  }, 1000);
+}
+
+const restored = restoredSession();
+
 export const usePlayer = create<PlayerState>()((set, get) => ({
   ...loadSettings(),
-  queue: [],
-  index: -1,
-  nowPlaying: null,
-  status: 'idle',
+  ...restored,
   error: null,
   deck: 0,
 
@@ -340,7 +400,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
     if (partyHooks?.intercept({ kind: 'toggle' })) return;
     if (!audio || status === 'error') {
       // A stopped or failed track starts again from where it was.
-      void startAt(index, { startSec: audio?.currentTime ?? 0 });
+      void startAt(index, { startSec: audio?.currentTime ?? resumeSec });
     } else if (audio.paused) {
       void audio.play().catch((e: unknown) => trackLog.w(`play() refused: ${String(e)}`));
     } else {
@@ -352,7 +412,11 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
 
   seek(seconds) {
     const audio = getAudio();
-    if (!audio) return;
+    if (!audio) {
+      // A restored track not started yet: Play starts it from here.
+      if (get().nowPlaying) resumeSec = Math.max(0, seconds);
+      return;
+    }
     if (partyHooks?.intercept({ kind: 'seek', ms: seconds * 1000 })) return;
     cancelCrossfade();
     audio.currentTime = Math.max(0, Math.min(seconds, audio.duration || seconds));
@@ -418,6 +482,18 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 }));
 
+// The queue is saved as it changes, and the place in the track every so often and on leaving.
+usePlayer.subscribe((state, before) => {
+  if (state.queue !== before.queue || state.index !== before.index) scheduleSave();
+});
+if (typeof window !== 'undefined') {
+  window.setInterval(() => {
+    if (usePlayer.getState().status === 'playing') saveSession();
+  }, 10_000);
+  window.addEventListener('pagehide', saveSession);
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && saveSession());
+}
+
 // For browser-driven tests, next to __bcAudio.
 if (import.meta.env.DEV) Object.assign(window, { __bcPlayer: usePlayer });
 
@@ -447,6 +523,8 @@ async function startAt(at: number, { startSec = 0, auto = false, autoplay = true
   if (!entry) return;
   cancelCrossfade();
   const token = ++loadToken;
+  // Where this load starts; kept if it fails, so Try Again starts there too.
+  resumeSec = startSec;
 
   if (!extensionReady()) {
     usePlayer.setState({
@@ -468,6 +546,7 @@ async function startAt(at: number, { startSec = 0, auto = false, autoplay = true
     applyVolumes();
     const track = await deck.engine.load(entry.track.videoId, { startSec, autoplay, hint: searchHintOf(entry.track) });
     if (token !== loadToken) return;
+    resumeSec = 0;
     applyTrack(track, entry.track);
     if (!autoplay) usePlayer.setState({ status: 'paused' });
     afterTrackStarted();
@@ -505,7 +584,20 @@ function planNext(auto: boolean): NextPlan | null {
   return null;
 }
 
+/** The sleep timer's "end of this song": the song ends and nothing follows it. */
+let stopAfterCurrent: (() => void) | null = null;
+export function setStopAfterCurrent(onStopped: (() => void) | null): void {
+  stopAfterCurrent = onStopped;
+}
+
 async function advance(auto: boolean): Promise<void> {
+  if (auto && stopAfterCurrent) {
+    const stopped = stopAfterCurrent;
+    stopAfterCurrent = null;
+    usePlayer.setState({ status: 'paused' });
+    stopped();
+    return;
+  }
   let plan = planNext(auto);
   if (!plan && usePlayer.getState().autoplay) {
     await refillAutoplay(true);
@@ -630,7 +722,7 @@ function cancelCrossfade() {
 /** Called as the track in front plays: within the crossfade length of its end, start the next one underneath. */
 function maybeCrossfade() {
   const state = usePlayer.getState();
-  if (!decks || fade || !state.crossfadeSec || state.status !== 'playing') return;
+  if (!decks || fade || !state.crossfadeSec || state.status !== 'playing' || stopAfterCurrent) return;
   const front = decks[active]!;
   const remaining = front.audio.duration - front.audio.currentTime;
   if (!Number.isFinite(remaining) || remaining > state.crossfadeSec || remaining < 1) return;

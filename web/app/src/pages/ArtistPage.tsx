@@ -1,9 +1,11 @@
+import { Radio, Shuffle } from 'lucide-react';
 import { useMemo, useState, type CSSProperties } from 'react';
 import { useParams } from 'react-router';
 import { PlayIcon } from '@/components/icons/Transport';
 import { Artwork } from '@/components/music/Artwork';
 import { browseHref } from '@/components/music/links';
-import { playList } from '@/components/music/play';
+import { playList, shuffleList } from '@/components/music/play';
+import { usePlayer } from '@/state/player';
 import { Shelves, TrackShelf } from '@/components/music/ShelfView';
 import { LoadError, NeedsExtension } from '@/components/music/States';
 import { requestAppleAccess, useAppleArtistArt, useUngrantedAppleOrigins, type AppleArtistArt } from '@/data/apple/artistArt';
@@ -11,6 +13,10 @@ import { useArtist, useYouTubeReady } from '@/data/music/queries';
 import type { ArtworkColor } from '@/lib/artworkColor';
 import { usePageTint } from '@/lib/usePageTint';
 import { ArtistSkeleton } from '@/skeletons/PageSkeletons';
+
+/** The smaller round buttons either side of Play, glass over the photograph. */
+const heroSide =
+  'ot-press grid size-10 place-items-center rounded-[999px] bg-[#0000004d] text-white [backdrop-filter:blur(20px)_saturate(1.6)] transition-[scale,background-color] disabled:opacity-40 enabled:hover:bg-[#00000066]';
 
 function luminance(color: string): number {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16) / 255);
@@ -101,22 +107,48 @@ export default function ArtistPage() {
         <div className="ot-detail-text absolute inset-x-0 bottom-6 flex flex-col items-center gap-1.5 px-(--body-gutter) text-center">
           <ArtistName name={data.name} apple={apple} />
           {data.audience && <p className="type-callout-emphasized text-secondary">{data.audience}</p>}
-          <button
-            // The 56px key-colour play button.
-            className="ot-press mt-2.5 grid size-14 place-items-center rounded-full bg-(--play-fill,var(--keyColorBG)) text-(--play-glyph,#fff) shadow-[0_10px_28px_-10px_#000a,inset_0_0_2px_#ffffff1a] disabled:opacity-40 enabled:hover:brightness-110"
-            // Apple's fill for the Play circle, with the triangle in the page's colour,
-            // as the phone cuts it out of the circle; white without a key colour.
-            style={
-              apple
-                ? ({ '--play-fill': apple.keyColor ?? '#ffffff', '--play-glyph': apple.background } as CSSProperties)
-                : undefined
-            }
-            aria-label={`Play ${data.name}`}
-            disabled={!data.topSongs.length}
-            onClick={() => playList(data.topSongs, 0, { source: topSongs })}
-          >
-            <PlayIcon size={26} />
-          </button>
+          {/* Shuffle · Play · Radio: the artist's top songs in order or mixed, or a station built from them. */}
+          <div className="mt-2.5 flex items-center gap-4">
+            <button
+              className={heroSide}
+              aria-label={`Shuffle ${data.name}`}
+              title="Shuffle"
+              disabled={!data.topSongs.length}
+              onClick={() => shuffleList(data.topSongs, { source: topSongs })}
+            >
+              <Shuffle size={18} strokeWidth={2.2} />
+            </button>
+            <button
+              // The 56px key-colour play button.
+              className="ot-press grid size-14 place-items-center rounded-full bg-(--play-fill,var(--keyColorBG)) text-(--play-glyph,#fff) shadow-[0_10px_28px_-10px_#000a,inset_0_0_2px_#ffffff1a] disabled:opacity-40 enabled:hover:brightness-110"
+              // Apple's fill for the Play circle, with the triangle in the page's colour,
+              // as the phone cuts it out of the circle; white without a key colour.
+              style={
+                apple
+                  ? ({ '--play-fill': apple.keyColor ?? '#ffffff', '--play-glyph': apple.background } as CSSProperties)
+                  : undefined
+              }
+              aria-label={`Play ${data.name}`}
+              disabled={!data.topSongs.length}
+              onClick={() => playList(data.topSongs, 0, { source: topSongs })}
+            >
+              <PlayIcon size={26} />
+            </button>
+            <button
+              className={heroSide}
+              aria-label={`${data.name} Radio`}
+              title="Radio"
+              disabled={!data.topSongs.length}
+              onClick={() => {
+                const player = usePlayer.getState();
+                // The top song, then AutoPlay keeps the artist's sound going.
+                if (!player.autoplay) player.setAutoplay(true);
+                player.playTrack(data.topSongs[0]!, { title: `${data.name} Radio`, type: 'radio', id: data.id });
+              }}
+            >
+              <Radio size={18} strokeWidth={2.2} />
+            </button>
+          </div>
           {!apple && appleUngranted.length > 0 && (
             // The lyrics panel's permission notice, as a pill over the photograph.
             <div className="mt-3 flex items-center gap-2.5 rounded-[999px] bg-[#0000004d] py-1.5 pr-2 pl-3.5 type-callout text-[#ffffffcc] [backdrop-filter:blur(20px)_saturate(1.6)]">
