@@ -35,6 +35,8 @@ export function useKeyboardShortcuts() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey) return;
+      // The player is locked behind the setup popup.
+      if (document.querySelector('[data-allow-gate]')) return;
       const player = usePlayer.getState();
       const command = event.metaKey || event.ctrlKey;
 
