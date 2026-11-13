@@ -222,7 +222,7 @@ internal class MixAnalyzer(
                 if (info.presentationTimeUs > toUs) break
             }
             // A short stretch (the silent end of a song) has few hops; the reading of a whole span needs more.
-        if (energy.size < minOf(MIN_HOPS.toLong(), (toMs - fromMs) / 20).toInt().coerceAtLeast(10) || firstUs < 0) return null
+            if (energy.size < minOf(MIN_HOPS.toLong(), (toMs - fromMs) / 20).toInt().coerceAtLeast(10) || firstUs < 0) return null
             val notes = runCatching { chroma(slow.raw(), slow.size, rate / decimate) }.getOrNull()
             return Decoded(Features.of(firstUs / 1000, hop * 1000.0 / rate, energy.toArray(), low.toArray(), mid.toArray()), notes)
         } finally {
