@@ -154,14 +154,25 @@ fun ToggleRow(
 }
 
 @Composable
-fun NavRow(title: String, onClick: () -> Unit, summary: String? = null, icon: ImageVector? = null, value: String? = null, dot: Boolean = false, leading: (@Composable () -> Unit)? = null) {
-    SettingRow(title, summary = summary, icon = icon, onClick = onClick, leading = leading, trailing = {
+fun NavRow(
+    title: String,
+    onClick: () -> Unit,
+    summary: String? = null,
+    icon: ImageVector? = null,
+    value: String? = null,
+    dot: Boolean = false,
+    leading: (@Composable () -> Unit)? = null,
+    /** Off where the setting has no effect: dimmed, value and arrow too, and it doesn't open. */
+    enabled: Boolean = true,
+) {
+    val alpha = if (enabled) 1f else 0.45f
+    SettingRow(title, summary = summary, icon = icon, enabled = enabled, onClick = onClick, leading = leading, trailing = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (dot) UpdateDot(Modifier.padding(end = 6.dp))
             if (value != null) {
-                Text(com.opentune.ui.theme.tr(value), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(com.opentune.ui.theme.tr(value), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
             }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
         }
     })
 }

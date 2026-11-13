@@ -105,6 +105,29 @@ class SettingsScreenshotTest {
         compose.onNodeWithText("Search settings").assertIsNotDisplayed()
     }
 
+    /** The Apple Music inspired player has buttons of its own: the button design can't be picked there. */
+    @Test fun playerButtonsAreOffWithTheAppleInspiredPlayer() {
+        val apple = com.opentune.data.settings.PlayerStyle.APPLE_MUSIC
+        val designs = com.opentune.data.settings.ControlStyle.entries
+        // A design's own name, not the chosen one shown as the row's value.
+        val other = designs.first { it != AppSettings.ui.value.controlStyle }.label
+        AppSettings.updateUi { it.copy(playerStyle = apple) }
+        compose.onNodeWithText("Search settings").performTextInput("Player buttons")
+        compose.waitForIdle()
+        compose.onNodeWithText("Not with the Apple Music inspired player, which has buttons of its own").assertExists()
+        compose.onNode(hasText("Player buttons") and !androidx.compose.ui.test.hasSetTextAction()).performClick()
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        compose.onNodeWithText(other).assertDoesNotExist()
+        // Back on another layout, the choice opens as before.
+        AppSettings.updateUi { it.copy(playerStyle = com.opentune.data.settings.PlayerStyle.CLASSIC) }
+        compose.waitForIdle()
+        compose.onNode(hasText("Player buttons") and !androidx.compose.ui.test.hasSetTextAction()).performClick()
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        assertTrue(compose.onAllNodesWithText(other).fetchSemanticsNodes().isNotEmpty())
+    }
+
     private fun list() = compose.onNode(hasScrollToNodeAction())
 
     private fun save(name: String) {

@@ -645,7 +645,7 @@ private fun settingsSections(
             onDismiss = { recommenderDialog = false },
         )
     }
-    if (controlStyleDialog) {
+    if (controlStyleDialog && ui.playerStyle != PlayerStyle.APPLE_MUSIC) {
         ChoiceSheet(
             title = "Player buttons",
             options = ControlStyle.entries,
@@ -1195,7 +1195,14 @@ private fun settingsSections(
                     )
                 },
                 Entry("Player buttons", "play pause next previous skip controls buttons design morph disc squircle glass") {
-                    NavRow("Player buttons", { controlStyleDialog = true }, summary = ui.controlStyle.summary, icon = Icons.Rounded.PlayCircle, value = ui.controlStyle.label)
+                    // The Apple Music inspired player always draws its own buttons, so the design
+                    // chosen here does nothing there: shown dimmed, and kept for the other layouts.
+                    val appleStyle = ui.playerStyle == PlayerStyle.APPLE_MUSIC
+                    NavRow(
+                        "Player buttons", { controlStyleDialog = true },
+                        summary = if (appleStyle) "Not with the Apple Music inspired player, which has buttons of its own" else ui.controlStyle.summary,
+                        icon = Icons.Rounded.PlayCircle, value = ui.controlStyle.label, enabled = !appleStyle,
+                    )
                 },
                 Entry("Dock animation", "navigation bar dock fold hide scroll animation motion squash pop") {
                     NavRow("Dock animation", { dockMotionDialog = true }, summary = ui.dockMotion.summary, icon = Icons.Rounded.Dock, value = ui.dockMotion.label)
@@ -1219,7 +1226,11 @@ private fun settingsSections(
                     ToggleRow("Double-tap to skip 10 seconds", ui.doubleTapSeek, { v -> AppSettings.updateUi { it.copy(doubleTapSeek = v) } }, summary = "Double-tap the left of the cover to go back 10 seconds, the right to go on", icon = Icons.Rounded.TouchApp)
                 },
                 Entry("Glow under the cover", "glow shadow light cover colour bass pulse") {
-                    ToggleRow("Glow under the cover", ui.coverGlow, { v -> AppSettings.updateUi { it.copy(coverGlow = v) } }, summary = "A soft light in the cover's colours under it, swelling a little with the bass", icon = Icons.Rounded.AutoAwesome)
+                    // Nor does the Apple Music inspired player draw the glow.
+                    val appleStyle = ui.playerStyle == PlayerStyle.APPLE_MUSIC
+                    ToggleRow("Glow under the cover", ui.coverGlow && !appleStyle, { v -> AppSettings.updateUi { it.copy(coverGlow = v) } },
+                        summary = if (appleStyle) "Not with the Apple Music inspired player" else "A soft light in the cover's colours under it, swelling a little with the bass",
+                        icon = Icons.Rounded.AutoAwesome, enabled = !appleStyle)
                 },
                 Entry("Song change", "cover change next song skip animation flip carousel deck fade") {
                     NavRow("Song change", { coverChangeDialog = true }, summary = ui.coverChange.summary, icon = Icons.Rounded.SwapHoriz, value = ui.coverChange.label)
