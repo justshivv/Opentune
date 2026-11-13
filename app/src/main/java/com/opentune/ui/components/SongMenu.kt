@@ -395,7 +395,12 @@ private fun SongMenuPage(
                     ) {
                     Box(
                         Modifier.fillMaxWidth().height(28.dp)
-                            .clickable(onClickLabel = "Close", role = androidx.compose.ui.semantics.Role.Button, onClick = onDismiss)
+                            // Tapping the bar closes the page, with no ripple across the strip.
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null,
+                                onClickLabel = "Close", role = androidx.compose.ui.semantics.Role.Button, onClick = onDismiss,
+                            )
                             .semantics { contentDescription = "Close" },
                         contentAlignment = Alignment.Center,
                     ) {

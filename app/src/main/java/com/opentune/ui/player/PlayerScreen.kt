@@ -1389,7 +1389,12 @@ fun PlayerLayout(
                             }
                             .size(width = 40.dp, height = 5.dp).clip(CircleShape)
                             .background(pillColour)
-                            .clickable(onClick = actions.collapse),
+                            // Tapping the pill closes the player, without a ripple on it.
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null,
+                                onClick = actions.collapse,
+                            ),
                     )
                     Box(
                         Modifier.fillMaxWidth().height(STATUS_ROOM)

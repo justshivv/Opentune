@@ -383,7 +383,10 @@ fun FloatingCard(
                     ) {
                         Box(
                             Modifier.fillMaxWidth().height(24.dp)
+                                // A tap on the bar expands or collapses the sheet, with no ripple across the strip.
                                 .then(if (expandable) Modifier.clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null,
                                     onClickLabel = if (extra < range / 2) "Expand sheet" else "Collapse sheet",
                                     role = Role.Button,
                                 ) { settle(if (extra < range / 2) -FLING - 1 else FLING + 1) } else Modifier)
