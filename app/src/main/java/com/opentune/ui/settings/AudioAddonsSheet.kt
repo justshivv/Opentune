@@ -74,6 +74,27 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
     } }) { Text(com.opentune.ui.theme.tr("Add source")) } }, dismissButton = { TextButton(enabled = !working, onClick = { adding = false }) { Text(com.opentune.ui.theme.tr("Cancel")) } })
 }
 
+/**
+ * Where a dragged source belongs, given each row's height, where it started and where its
+ * top is now. It passes a row above once its top edge is above that row's middle, and a row
+ * below once its bottom edge is past that row's middle. Edges, not its centre: the drag
+ * stops at the list's top, so a row a little taller than the first one (by a divider, or a
+ * status that wraps) could never get its centre above the first row's and stayed second.
+ */
+internal fun sourceDropIndex(heights: List<Int>, from: Int, top: Float): Int {
+    if (from !in heights.indices) return from
+    val bottom = top + heights[from]
+    var cursor = 0f
+    var target = from
+    heights.forEachIndexed { position, h ->
+        val middle = cursor + h / 2f
+        if (position < from && top < middle) target = minOf(target, position)
+        if (position > from && bottom > middle) target = maxOf(target, position)
+        cursor += h
+    }
+    return target
+}
+
 /** How a source is doing, as a coloured dot beside its status line. */
 private enum class Tone { Good, Waiting, Off, Bad }
 
@@ -237,16 +258,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
                                         val height = rowHeights[addon.key] ?: 100
                                         val total = current.sumOf { rowHeights[it.key] ?: 100 }
                                         draggedTop = (draggedTop + distance).coerceIn(0f, (total - height).coerceAtLeast(0).toFloat())
-                                        val center = draggedTop + height / 2f
-                                        var cursor = 0f
-                                        var target = from
-                                        current.forEachIndexed { position, item ->
-                                            val itemHeight = rowHeights[item.key] ?: 100
-                                            val middle = cursor + itemHeight / 2f
-                                            if (position < from && center < middle) target = minOf(target, position)
-                                            if (position > from && center > middle) target = maxOf(target, position)
-                                            cursor += itemHeight
-                                        }
+                                        val target = sourceDropIndex(current.map { rowHeights[it.key] ?: 100 }, from, draggedTop)
                                         if (target != from) { AddonStore.move(addon.key, target - from); haptics.tick() }
                                     }
                                 }.padding(12.dp), tint = c.onSurfaceVariant)

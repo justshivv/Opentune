@@ -79,4 +79,15 @@ class AccountPageTest {
         compose.waitForIdle()
         assertEquals(listOf("Second Source", "First Source"), AddonStore.addons.value.map { it.manifest.name })
     }
+
+    @Test fun aTallerRowCanStillBeDraggedToTheTop() {
+        // The second row is taller than the first (a divider, a wrapped status): dragged all
+        // the way up it must land first, not stop second.
+        assertEquals(0, sourceDropIndex(listOf(200, 260, 200), from = 1, top = 0f))
+        assertEquals(0, sourceDropIndex(listOf(200, 202, 200), from = 1, top = 0f))
+        // And to the bottom from the top.
+        assertEquals(2, sourceDropIndex(listOf(260, 200, 200), from = 0, top = 400f))
+        // Barely moved: stays put.
+        assertEquals(1, sourceDropIndex(listOf(200, 200, 200), from = 1, top = 150f))
+    }
 }
