@@ -85,3 +85,22 @@ it('queues a whole album after what is playing, credited to the album', async ()
   expect(queued.source?.title).toBe('An Album');
   expect(useToast.getState().message).toBe('Playing next: An Album');
 });
+
+it('starts the next song from zero, not where the restored one was left', async () => {
+  localStorage.setItem(
+    'opentune:session',
+    JSON.stringify({
+      index: 0,
+      positionSec: 40,
+      queue: [
+        { entryId: 'e1', tier: 'user', source: null, track: track('song00000001', 'One') },
+        { entryId: 'e2', tier: 'user', source: null, track: track('song00000002', 'Two') },
+      ],
+    }),
+  );
+  const { usePlayer, resumePosition } = await import('./player');
+  expect(resumePosition()).toBe(40);
+  usePlayer.getState().next();
+  await vi.waitFor(() => expect(usePlayer.getState().nowPlaying?.title).toBe('Two'));
+  expect(resumePosition()).toBe(0);
+});

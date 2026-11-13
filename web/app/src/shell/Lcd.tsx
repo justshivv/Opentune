@@ -175,7 +175,16 @@ export function Lcd() {
           <span className={titleClass}>{status === 'loading' ? 'Loading…' : ''}</span>
         )}
         {status === 'error' ? (
-          <span className="truncate type-callout-medium text-key">{error}</span>
+          // What went wrong, and the two ways on: load it again, or move to the next song.
+          <span className="flex min-w-0 items-center gap-2 type-callout-medium">
+            <span className="min-w-0 truncate text-key" title={error ?? undefined}>{error}</span>
+            <button className="flex-none text-primary underline-offset-2 hover:underline" onClick={() => usePlayer.getState().togglePlay()}>
+              Try Again
+            </button>
+            <button className="flex-none text-primary underline-offset-2 hover:underline" onClick={() => usePlayer.getState().next()}>
+              Skip
+            </button>
+          </span>
         ) : (
           <span className="truncate type-callout-medium text-secondary">
             {artist ? <Credits videoId={videoId} line={artist} artists={track?.artists ?? []} /> : status === 'loading' ? 'Loading…' : ''}

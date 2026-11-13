@@ -523,6 +523,8 @@ async function startAt(at: number, { startSec = 0, auto = false, autoplay = true
   if (!entry) return;
   cancelCrossfade();
   const token = ++loadToken;
+  // Where this load starts; kept if it fails, so Try Again starts there too.
+  resumeSec = startSec;
 
   if (!extensionReady()) {
     usePlayer.setState({
