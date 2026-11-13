@@ -61,6 +61,7 @@ function VolumeControl({ open, onOpen }: { open: boolean; onOpen: () => void }) 
         tabIndex={open ? 0 : -1}
         style={{ '--fill': `${level * 100}%` } as React.CSSProperties}
         onChange={(e) => setVolume(Number(e.currentTarget.value))}
+        onWheel={(e) => setVolume(level - Math.sign(e.deltaY) * 0.05)}
       />
       <button
         className={action}
@@ -69,6 +70,8 @@ function VolumeControl({ open, onOpen }: { open: boolean; onOpen: () => void }) 
         onClick={toggleMute}
         onPointerEnter={onOpen}
         onFocus={onOpen}
+        // Scrolling over the speaker turns it up or down, as on most desktop players.
+        onWheel={(e) => setVolume(level - Math.sign(e.deltaY) * 0.05)}
       >
         <VolumeIcon level={level} size={20} />
       </button>

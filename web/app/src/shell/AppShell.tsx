@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Toaster } from '@/components/Toast';
 import '@/together/room';
 import { useDiscordPresence } from '@/playback/discordPresence';
 import { startHistoryReporting } from '@/playback/historyReporting';
@@ -11,14 +12,17 @@ import { syncPublished } from '@/addons/client';
 import { isMobileBrowser } from '@/lib/platform';
 import { useUi } from '@/state/ui';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { useNowPlayingTitle } from './useNowPlayingTitle';
 import { Banner, bannerButtonClass } from './Banner';
 import { answered, due, usedToday, type Invitation } from './invitations';
 import { MobileTopBar } from './MobileTopBar';
 import { PlayerBar } from './PlayerBar';
 import { SidePanel } from './SidePanel';
+import { useAllowGate } from './AllowGate';
 import { Appearance } from './Appearance';
 import { MobileDock } from './MobileDock';
 import { RoomNotice } from './RoomNotice';
+import { ShortcutsHelp } from './ShortcutsHelp';
 import { Sidebar } from './Sidebar';
 
 const mobile = isMobileBrowser();
@@ -112,6 +116,7 @@ function useScrollEdge() {
 export function AppShell() {
   const runtime = useRemoteConfig(s => s.config.data);
   useKeyboardShortcuts();
+  useNowPlayingTitle();
   useDiscordPresence();
   usePageScroll();
   const edge = useScrollEdge();
@@ -125,6 +130,8 @@ export function AppShell() {
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
   }, []);
   const extension = useExtension();
+  // Locked behind the setup popup until the extension is in and allowed.
+  const { locked, gate } = useAllowGate();
   const bannerDismissed = useUi((s) => s.installBannerDismissed);
   const dismissBanner = useUi((s) => s.dismissInstallBanner);
   const fullScreen = useUi((s) => s.fullScreen);
@@ -160,7 +167,7 @@ export function AppShell() {
         }
       />
     );
-  } else if (extension.state === 'missing' && !bannerDismissed) {
+  } else if (extension.state === 'missing' && !bannerDismissed && !locked) {
     banner = (
       <Banner
         title="Play YouTube Music with the OpenTune extension."
@@ -202,7 +209,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="grid h-full grid-rows-[minmax(0,1fr)_auto]">
+    <div className="grid h-full grid-rows-[minmax(0,1fr)_auto]" inert={locked}>
       {/* The side panel slides in from beyond the right edge; never let it scroll the page. */}
       <div className="relative min-h-0 overflow-hidden">
         <Appearance />
@@ -227,6 +234,8 @@ export function AppShell() {
         <MobileDock />
         <SidePanel />
         <RoomNotice />
+        <Toaster />
+        <ShortcutsHelp />
       </div>
       {banner}
       {(fullScreen || playerUp) && (
@@ -234,6 +243,7 @@ export function AppShell() {
           <FullScreenPlayer closing={!fullScreen} onClosed={() => setPlayerUp(false)} />
         </Suspense>
       )}
+      {gate}
     </div>
   );
 }

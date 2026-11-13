@@ -26,3 +26,13 @@ test('IST is the default and changes calendar day at 18:30 UTC', () => {
   assert.equal(rangeError({from:'2027-01-01',to:'2027-01-01'},new Date('2026-12-31T18:30:00Z')),'');
   assert.ok(rangeError({from:'2027-01-01',to:'2027-01-01'},new Date('2026-12-31T18:30:00Z'),'UTC'));
 });
+
+test('days carry the new and returning split when the server reports it', () => {
+  const rows = dailyRows({range:{from:'2026-10-01',to:'2026-10-03'},coverageSince:'2026-10-02',
+    daily:[{day:'2026-10-02',active:5,plays:9}],
+    cohorts:[{day:'2026-10-02',newInstallations:2,returningInstallations:3,newPlays:4,returningPlays:5,listeners:5}]});
+  assert.deepEqual(rows.map(r=>[r.newInstallations,r.returningInstallations]),[[null,null],[2,3],[0,0]]);
+  assert.equal(rows[1].newInstallations + rows[1].returningInstallations, rows[1].active);
+  // Older servers without the split leave it out rather than inventing zeros.
+  assert.equal(dailyRows({range:{from:'2026-10-02',to:'2026-10-02'},coverageSince:'2026-10-01',daily:[]})[0].newInstallations, undefined);
+});

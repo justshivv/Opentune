@@ -272,12 +272,17 @@ test('public counts include current apps (India time) and older ones (UTC), each
   assert.equal(counts.monthly,3);
   assert.equal(counts.daily,3);
   assert.equal(counts.installations,3);
-  const shield=await (await worker.fetch(new Request('https://example.test/v1/badge'),{DB:db})).json();
+  // The badge endpoint counts this month by the real clock, so its data is dated today.
+  const live=database(), today=new Date(), istToday=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(today);
+  for (const n of [1,2,3]) await ingest(live,{installationId:id.replace(/1$/,String(n)),days:[{day:istToday,version:'1.0.1',plays:1,timeZone:'Asia/Kolkata'}]},today);
+  const shield=await (await worker.fetch(new Request('https://example.test/v1/badge'),{DB:live})).json();
   assert.equal(shield.message,'3');
 });
 
 test('the public count and badge endpoints need no sign-in',async()=>{
-  const db=database(); await ingest(db,body(1),now);
+  // Dated today: the endpoints count this month by the real clock.
+  const today=new Date(), istToday=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(today);
+  const db=database(); await ingest(db,{installationId:id,days:[{day:istToday,version:'1.0.1',plays:1,timeZone:'Asia/Kolkata'}]},today);
   const env={DB:db};
   const open=await worker.fetch(new Request('https://example.test/v1/public'),env);
   assert.equal(open.status,200);
@@ -357,4 +362,20 @@ test('cohorts count upgrades once and distinguish new and returning listening', 
   const row = result.cohorts.find(x => x.day === '2026-10-09');
   assert.deepEqual({...row}, {day:'2026-10-09',newInstallations:1,returningInstallations:1,newPlays:7,returningPlays:5,listeners:2});
   assert.equal(row.newPlays + row.returningPlays, result.today.plays);
+});
+
+test('the period splits its active installations into new and returning, each counted once', async () => {
+  const db = database();
+  const two = id.replace(/1$/, '2'), three = id.replace(/1$/, '3');
+  // One first seen before the period, one first seen inside it on two days, one upgraded inside it.
+  await ingest(db, {installationId:id, days:[{day:'2026-10-01',version:'0.4.2',plays:1}]}, now);
+  await ingest(db, {installationId:id, days:[{day:'2026-10-08',version:'0.4.2',plays:2}]}, now);
+  await ingest(db, {installationId:two, days:[{day:'2026-10-08',version:'0.4.2',plays:3}]}, now);
+  await ingest(db, {installationId:two, days:[{day:'2026-10-09',version:'0.4.2',plays:4}]}, now);
+  await ingest(db, {installationId:three, days:[{day:'2026-10-09',version:'0.4.2',plays:1}]}, now);
+  await ingest(db, {installationId:three, days:[{day:'2026-10-09',version:'0.4.3',plays:1}]}, now);
+  const result = await analytics(db, {from:'2026-10-08',to:'2026-10-09'}, now);
+  assert.deepEqual({...result.split}, {newInstallations:2, returningInstallations:1, newPlays:9, returningPlays:2});
+  assert.equal(result.split.newInstallations + result.split.returningInstallations, result.totals.active);
+  assert.equal(result.split.newPlays + result.split.returningPlays, result.totals.plays);
 });

@@ -8,7 +8,7 @@ import { Artwork } from './Artwork';
 import { ExplicitBadge } from './ExplicitBadge';
 import { albumHref, artistHref, formatDuration } from './links';
 import { playList, playTrack, type ListContext } from './play';
-import { TrackMenu } from './TrackMenu';
+import { TrackMenu, useTrackContextMenu } from './TrackMenu';
 
 type Variant = 'album' | 'playlist';
 
@@ -98,10 +98,12 @@ function Row({ track, variant, position, fallbackArtwork, onPlayRow }: RowProps)
   const togglePlay = usePlayer((s) => s.togglePlay);
   const unavailable = track.unavailable;
   const onPlay = () => (unavailable ? undefined : current ? togglePlay() : onPlayRow());
+  const context = useTrackContextMenu(unavailable ? null : track);
 
   return (
     <div
       className={`${row} ${rowVariant[variant]}`}
+      onContextMenu={context.onContextMenu}
       data-variant={variant}
       data-current={current || undefined}
       data-unavailable={unavailable}
@@ -182,16 +184,18 @@ function Row({ track, variant, position, fallbackArtwork, onPlayRow }: RowProps)
       )}
       <div className={`${cell} ${time[variant]} ${dimmed}`}>
         {/* The ⋯ button (TrackMenu) takes the time's place on hover, as Apple's rows do. */}
-        <span className={unavailable ? undefined : 'group-focus-within/row:invisible group-hover/row:invisible group-has-[[data-open]]/row:invisible'}>
+        <span className={unavailable ? undefined : 'group-focus-within/row:invisible group-hover/row:invisible group-has-[[data-open]]/row:invisible [@media(hover:none)]:invisible'}>
           {unavailable === 'missing' ? 'Not found' : formatDuration(track.durationSec)}
         </span>
         {!unavailable && (
           <TrackMenu
             track={track}
-            className="absolute end-2.5 hidden size-7 place-items-center rounded-full text-key group-focus-within/row:grid group-hover/row:grid hover:bg-quinary data-open:grid"
+            // Without hover (a touch screen) the button is always there, in place of the time.
+            className="absolute end-2.5 hidden size-7 place-items-center rounded-full text-key group-focus-within/row:grid group-hover/row:grid hover:bg-quinary data-open:grid [@media(hover:none)]:grid"
           />
         )}
       </div>
+      {context.menu}
     </div>
   );
 }

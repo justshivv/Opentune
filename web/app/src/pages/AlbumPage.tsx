@@ -1,6 +1,6 @@
 import { useParams } from 'react-router';
 import { DetailHeader } from '@/components/music/DetailHeader';
-import { playList, shuffleList } from '@/components/music/play';
+import { playList, queueList, shuffleList } from '@/components/music/play';
 import { Shelves } from '@/components/music/ShelfView';
 import { LoadError, NeedsExtension } from '@/components/music/States';
 import { TrackList } from '@/components/music/TrackList';
@@ -40,6 +40,8 @@ export default function AlbumPage() {
         motion={motion}
         onPlay={() => playList(tracks, 0, context)}
         onShuffle={() => shuffleList(tracks, context)}
+        onQueue={(next) => queueList(tracks, context, next)}
+        shareUrl={`https://music.youtube.com/browse/${encodeURIComponent(data.id)}`}
       />
       <TrackList
         tracks={tracks}

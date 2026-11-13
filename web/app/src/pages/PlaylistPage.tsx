@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useParams } from 'react-router';
 import { DetailHeader } from '@/components/music/DetailHeader';
-import { playList, shuffleList } from '@/components/music/play';
+import { playList, queueList, shuffleList } from '@/components/music/play';
 import { LoadError, LoadMoreError, NeedsExtension } from '@/components/music/States';
 import { TrackList } from '@/components/music/TrackList';
 import { usePlaylist, useYouTubeReady } from '@/data/music/queries';
@@ -36,6 +36,8 @@ export default function PlaylistPage() {
         canPlay={tracks.length > 0}
         onPlay={() => playList(tracks, 0, context)}
         onShuffle={() => shuffleList(tracks, context)}
+        onQueue={(next) => queueList(tracks, context, next)}
+        shareUrl={`https://music.youtube.com/playlist?list=${encodeURIComponent(id.replace(/^VL/, ''))}`}
       />
       <TrackList tracks={tracks} variant="playlist" onNearEnd={onNearEnd} source={context.source} />
       {isFetchingNextPage && <div className="flex justify-center py-5 type-callout text-secondary">Loading more songs…</div>}

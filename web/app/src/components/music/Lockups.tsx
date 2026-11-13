@@ -5,6 +5,7 @@ import { Artwork } from './Artwork';
 import { ExplicitBadge } from './ExplicitBadge';
 import { artistHref, hrefFor } from './links';
 import { playTrack } from './play';
+import { TrackMenu, useTrackContextMenu } from './TrackMenu';
 
 const isPlayable = (item: MusicItem) => item.kind === 'song' || item.kind === 'video';
 
@@ -77,10 +78,16 @@ function LockupArtwork({ item, width, aspect }: { item: MusicItem; width: number
 }
 
 /** Square lockup (report §2): artwork, hover scrim with play platter, title and subtitle. */
+/** The ⋯ button beside a playable card's title: on hover and focus, always on touch screens. */
+const cardMenu =
+  'ms-auto grid size-6 flex-none place-items-center rounded-full text-secondary opacity-0 transition-opacity hover:bg-quinary hover:text-primary focus-visible:opacity-100 group-hover/card:opacity-100 data-open:opacity-100 [@media(hover:none)]:opacity-100';
+
 export function SquareLockup({ item, width = 220 }: { item: MusicItem; width?: number }) {
   const href = hrefFor(item);
+  const playable = isPlayable(item);
+  const context = useTrackContextMenu(playable ? item : null);
   return (
-    <div className={lockup}>
+    <div className={`${lockup} group/card`} onContextMenu={playable ? context.onContextMenu : undefined}>
       <LockupArtwork item={item} width={width} aspect={1} />
       <div className={caption}>
         <div className={title}>
@@ -92,27 +99,32 @@ export function SquareLockup({ item, width = 220 }: { item: MusicItem; width?: n
             <span>{item.title}</span>
           )}
           {item.explicit && <ExplicitBadge />}
+          {playable && <TrackMenu track={item} className={cardMenu} />}
         </div>
         <div className={subtitle}>
           <Byline item={item} />
         </div>
       </div>
+      {context.menu}
     </div>
   );
 }
 
 /** 16:9 video lockup (report §2, type C). */
 export function VideoLockup({ item, width = 300 }: { item: MusicItem; width?: number }) {
+  const context = useTrackContextMenu(item);
   return (
-    <div className={lockup}>
+    <div className={`${lockup} group/card`} onContextMenu={context.onContextMenu}>
       <LockupArtwork item={item} width={width} aspect={16 / 9} />
       <div className={caption}>
         <div className={title}>
           <span>{item.title}</span>
           {item.explicit && <ExplicitBadge />}
+          <TrackMenu track={item} className={cardMenu} />
         </div>
         <div className={subtitle}>{item.subtitle}</div>
       </div>
+      {context.menu}
     </div>
   );
 }
@@ -130,9 +142,13 @@ export function CircleLockup({ item, width = 160 }: { item: MusicItem; width?: n
 /** A song row inside a shelf (report §2, track lockup): 40px art, title, byline. */
 export function TrackLockup({ item, onPlay }: { item: MusicItem; onPlay?: () => void }) {
   const play = onPlay ?? (() => playTrack(item));
+  const context = useTrackContextMenu(item);
   return (
-    // 52px art column (40 + 12 gap), content; 55px tall.
-    <div className="ot-track-lockup group/track grid h-[55px] grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 py-[7.5px] pr-3.5 pl-0">
+    // 52px art column (40 + 12 gap), content, the ⋯ button; 55px tall.
+    <div
+      className="ot-track-lockup group/track grid h-[55px] grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-x-3 py-[7.5px] pr-2 pl-0"
+      onContextMenu={context.onContextMenu}
+    >
       <button className="group/art relative w-10 rounded-artwork-sm" aria-label={`Play ${item.title}`} onClick={play}>
         <Artwork src={item.thumbnail} displayWidth={40} radius="var(--radius-artwork-small)" />
         <span
@@ -153,6 +169,11 @@ export function TrackLockup({ item, onPlay }: { item: MusicItem; onPlay?: () => 
           <Byline item={item} />
         </div>
       </div>
+      <TrackMenu
+        track={item}
+        className="grid size-7 place-items-center rounded-full text-key opacity-0 transition-opacity hover:bg-quinary focus-visible:opacity-100 group-hover/track:opacity-100 data-open:opacity-100 [@media(hover:none)]:opacity-100"
+      />
+      {context.menu}
     </div>
   );
 }

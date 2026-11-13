@@ -1,6 +1,8 @@
-import { Check, Plus, Shuffle } from 'lucide-react';
+import { Check, Link2, ListEnd, ListStart, MoreHorizontal, Plus, Shuffle } from 'lucide-react';
 import { useState } from 'react';
+import { Menu, MenuItem, MenuSeparator } from '@/components/Menu';
 import { PrefetchLink } from '@/components/PrefetchLink';
+import { toast } from '@/components/Toast';
 import { PlayIcon } from '@/components/icons/Transport';
 import { useSetListSaved, useSignedIn } from '@/data/music/queries';
 import type { AppleMotion } from '@/data/apple/motionArt';
@@ -20,6 +22,56 @@ interface DetailHeaderProps {
   extra?: React.ReactNode;
   /** Apple's motion artwork for an album, over the cover once it plays. */
   motion?: AppleMotion | null;
+  /** The ⋯ menu's Play Next and Add to Queue, for the whole list. */
+  onQueue?: (next: boolean) => void;
+  /** The list's YouTube Music link, for Copy Link. */
+  shareUrl?: string;
+}
+
+/** ⋯ after Play: the whole album or playlist into the queue, or its link. */
+function ListMenu({ title, onQueue, shareUrl, disabled }: { title: string; onQueue?: (next: boolean) => void; shareUrl?: string; disabled: boolean }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const close = () => setAnchor(null);
+  return (
+    <>
+      <button
+        className={detailButton.circle}
+        aria-label={`More options for ${title}`}
+        aria-haspopup="menu"
+        aria-expanded={anchor !== null}
+        disabled={disabled}
+        onClick={(e) => setAnchor(anchor ? null : e.currentTarget)}
+      >
+        <MoreHorizontal size={18} strokeWidth={2.2} />
+      </button>
+      {anchor && (
+        <Menu anchor={anchor} onClose={close} label={title}>
+          {onQueue && (
+            <>
+              <MenuItem icon={<ListStart size={15} />} onSelect={() => { close(); onQueue(true); }}>
+                Play Next
+              </MenuItem>
+              <MenuItem icon={<ListEnd size={15} />} onSelect={() => { close(); onQueue(false); }}>
+                Add to Queue
+              </MenuItem>
+            </>
+          )}
+          {onQueue && shareUrl && <MenuSeparator />}
+          {shareUrl && (
+            <MenuItem
+              icon={<Link2 size={15} />}
+              onSelect={() => {
+                close();
+                navigator.clipboard.writeText(shareUrl).then(() => toast('Link copied'), () => toast('Couldn’t copy the link'));
+              }}
+            >
+              Copy Link
+            </MenuItem>
+          )}
+        </Menu>
+      )}
+    </>
+  );
 }
 
 /** Shuffle (circle) · Play (pill), report §14; also the Spotify playlist's Import button. */
@@ -33,7 +85,7 @@ export const detailButton = {
  * Album and playlist header (report §3, §14): artwork with its glow, title,
  * artist, metadata, a three-line description, then Shuffle · Play.
  */
-export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion }: DetailHeaderProps) {
+export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, onQueue, shareUrl }: DetailHeaderProps) {
   const [expanded, setExpanded] = useState(false);
   const signedIn = useSignedIn();
   const setSaved = useSetListSaved();
@@ -118,6 +170,7 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion }
               {library.saved ? <Check size={18} strokeWidth={2.4} /> : <Plus size={18} strokeWidth={2.4} />}
             </button>
           )}
+          {(onQueue || shareUrl) && <ListMenu title={info.title} onQueue={onQueue} shareUrl={shareUrl} disabled={!canPlay && !shareUrl} />}
           {extra}
         </div>
       </div>

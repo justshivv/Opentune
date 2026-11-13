@@ -1,5 +1,6 @@
 import type { ArtistRef, MusicItem, Track } from '@/data/music/types';
 import type { QueueSource } from '@/playback/queue/timeline';
+import { toast } from '@/components/Toast';
 import { usePlayer } from '@/state/player';
 
 /** A shelf or search item as a queue track. */
@@ -50,4 +51,14 @@ export function shuffleList(tracks: Track[], context: ListContext) {
   const player = usePlayer.getState();
   if (!player.shuffle) player.toggleShuffle();
   player.playTracks(prepared(tracks, context), Math.floor(Math.random() * tracks.length), context.source);
+}
+
+/** A whole album or playlist after what's playing ([next]) or at the end of the queue. */
+export function queueList(tracks: Track[], context: ListContext, next: boolean) {
+  if (!tracks.length) return;
+  const player = usePlayer.getState();
+  const list = prepared(tracks, context);
+  if (next) player.playNext(list, context.source);
+  else player.addToQueue(list, context.source);
+  toast(`${next ? 'Playing next' : 'Added to queue'}: ${context.source.title}`);
 }
