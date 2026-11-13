@@ -1,8 +1,9 @@
-import { Infinity as InfinityIcon, MoreHorizontal, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Infinity as InfinityIcon, ListStart, MoreHorizontal, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Menu, MenuHeader, MenuItem, MenuSeparator } from '@/components/Menu';
 import { Artwork } from '@/components/music/Artwork';
 import { formatDuration } from '@/components/music/links';
+import { toast } from '@/components/Toast';
 import { autoplaySectionStart, upcomingUserQueueIndices, type QueueEntry } from '@/playback/queue/timeline';
 import { CROSSFADE_CHOICES, usePlayer } from '@/state/player';
 
@@ -14,17 +15,22 @@ const list = 'flex flex-col';
 function Row({
   entry,
   at,
+  first,
+  last,
   onDragStart,
   onDropAt,
   dragging,
 }: {
   entry: QueueEntry;
   at: number;
+  /** The first and last upcoming rows: nothing to move above or below them. */
+  first: boolean;
+  last: boolean;
   onDragStart: (at: number) => void;
   onDropAt: (at: number) => void;
   dragging: boolean;
 }) {
-  const { jumpTo, removeAt, playNext } = usePlayer.getState();
+  const { jumpTo, removeAt, playNext, move } = usePlayer.getState();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [over, setOver] = useState(false);
   const close = useCallback(() => setAnchor(null), []);
@@ -68,9 +74,10 @@ function Row({
         <span className="truncate type-body text-secondary">{track.artists.map((a) => a.name).join(', ')}</span>
       </button>
       <div className="relative grid items-center justify-items-end">
-        <span className="type-body tabular-nums text-secondary group-hover/row:invisible group-has-[[data-open]]/row:invisible">{formatDuration(track.durationSec)}</span>
+        <span className="type-body tabular-nums text-secondary group-hover/row:invisible group-has-[[data-open]]/row:invisible [@media(hover:none)]:invisible">{formatDuration(track.durationSec)}</span>
         <button
-          className="absolute inset-y-0 right-0 my-auto hidden size-7 place-items-center rounded-full text-key group-hover/row:grid data-open:grid"
+          // Always there on a touch screen, where there's no hover and no dragging.
+          className="absolute inset-y-0 right-0 my-auto hidden size-7 place-items-center rounded-full text-key group-hover/row:grid data-open:grid [@media(hover:none)]:grid"
           aria-label={`More options for ${track.title}`}
           aria-haspopup="menu"
           data-open={anchor !== null || undefined}
@@ -82,15 +89,30 @@ function Row({
       {anchor && (
         <Menu anchor={anchor} onClose={close} label={track.title}>
           <MenuItem onSelect={() => (close(), jumpTo(at))}>Play Now</MenuItem>
-          <MenuItem
-            onSelect={() => {
-              close();
-              removeAt(at);
-              playNext([track], entry.source);
-            }}
-          >
-            Play Next
-          </MenuItem>
+          {!first && (
+            <MenuItem
+              icon={<ListStart size={15} />}
+              onSelect={() => {
+                close();
+                removeAt(at);
+                playNext([track], entry.source);
+                toast(`Playing next: ${track.title}`);
+              }}
+            >
+              Play Next
+            </MenuItem>
+          )}
+          {(!first || !last) && <MenuSeparator />}
+          {!first && (
+            <MenuItem icon={<ArrowUp size={15} />} onSelect={() => (close(), move(at, at - 1))}>
+              Move Up
+            </MenuItem>
+          )}
+          {!last && (
+            <MenuItem icon={<ArrowDown size={15} />} onSelect={() => (close(), move(at, at + 1))}>
+              Move Down
+            </MenuItem>
+          )}
           <MenuSeparator />
           <MenuItem destructive onSelect={() => (close(), removeAt(at))}>
             Remove from Up Next
@@ -121,12 +143,16 @@ export function UpNext() {
   const afterAutoplay = upcoming.filter(({ at }) => at >= autoplayAt);
   const playingFrom = queue[index]?.source?.title;
 
+  const firstAt = upcoming[0]?.at ?? -1;
+  const lastAt = upcoming[upcoming.length - 1]?.at ?? -1;
   const rows = (items: typeof upcoming) =>
     items.map(({ entry, at }) => (
       <Row
         key={entry.entryId}
         entry={entry}
         at={at}
+        first={at === firstAt}
+        last={at === lastAt}
         dragging={dragFrom === at}
         onDragStart={setDragFrom}
         onDropAt={(to) => {

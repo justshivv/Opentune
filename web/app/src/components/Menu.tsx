@@ -4,9 +4,15 @@ import { createPortal } from 'react-dom';
 
 export type MenuPlacement = 'above-start' | 'below-end';
 
+/** Where a menu opened by a right-click (or a long press) sits: the pointer's place on screen. */
+export interface MenuPoint {
+  x: number;
+  y: number;
+}
+
 interface MenuProps {
-  /** The element the menu opens from. */
-  anchor: HTMLElement;
+  /** The element the menu opens from, or the point it was asked for at. */
+  anchor: HTMLElement | MenuPoint;
   placement?: MenuPlacement;
   onClose: () => void;
   label: string;
@@ -23,6 +29,18 @@ export function Menu({ anchor, placement = 'below-end', onClose, label, children
   const [position, setPosition] = useState<React.CSSProperties>({ visibility: 'hidden' });
 
   useLayoutEffect(() => {
+    if (!(anchor instanceof HTMLElement)) {
+      // At the pointer, kept on screen: below it when there's room, else above it.
+      const gap = 4;
+      const left = Math.min(Math.max(8, anchor.x), window.innerWidth - 200);
+      const below = anchor.y < window.innerHeight * 0.6;
+      setPosition(
+        below
+          ? { left, top: anchor.y + gap, maxHeight: window.innerHeight - anchor.y - 3 * gap }
+          : { left, bottom: window.innerHeight - anchor.y + gap, maxHeight: anchor.y - 3 * gap },
+      );
+      return;
+    }
     const rect = anchor.getBoundingClientRect();
     const gap = 6;
     setPosition(
@@ -42,7 +60,7 @@ export function Menu({ anchor, placement = 'below-end', onClose, label, children
       if (event.key === 'Escape') {
         event.stopPropagation();
         onClose();
-        anchor.focus();
+        if (anchor instanceof HTMLElement) anchor.focus();
       } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
         const items = [...(panel.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)') ?? [])];

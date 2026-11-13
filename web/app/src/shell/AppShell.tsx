@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Toaster } from '@/components/Toast';
 import '@/together/room';
 import { useDiscordPresence } from '@/playback/discordPresence';
 import { startHistoryReporting } from '@/playback/historyReporting';
@@ -227,6 +228,7 @@ export function AppShell() {
         <MobileDock />
         <SidePanel />
         <RoomNotice />
+        <Toaster />
       </div>
       {banner}
       {(fullScreen || playerUp) && (
