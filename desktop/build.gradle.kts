@@ -89,6 +89,8 @@ val sharedFromApp = listOf(
     "com/opentune/ui/player/PlayerIcons.kt",
     "com/opentune/ui/components/FocusRing.kt",
     "com/opentune/ui/components/Motion.kt",
+    // Text and Icon as the shared files call them, translated through Tr (a desktop stand-in in src/shim).
+    "com/opentune/ui/theme/AppText.kt",
 )
 
 /** core's BuildConfig, for the shared files that read it, with this build's version. */
