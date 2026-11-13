@@ -12,6 +12,7 @@ import { syncPublished } from '@/addons/client';
 import { isMobileBrowser } from '@/lib/platform';
 import { useUi } from '@/state/ui';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { useNowPlayingTitle } from './useNowPlayingTitle';
 import { Banner, bannerButtonClass } from './Banner';
 import { answered, due, usedToday, type Invitation } from './invitations';
 import { MobileTopBar } from './MobileTopBar';
@@ -21,6 +22,7 @@ import { useAllowGate } from './AllowGate';
 import { Appearance } from './Appearance';
 import { MobileDock } from './MobileDock';
 import { RoomNotice } from './RoomNotice';
+import { ShortcutsHelp } from './ShortcutsHelp';
 import { Sidebar } from './Sidebar';
 
 const mobile = isMobileBrowser();
@@ -114,6 +116,7 @@ function useScrollEdge() {
 export function AppShell() {
   const runtime = useRemoteConfig(s => s.config.data);
   useKeyboardShortcuts();
+  useNowPlayingTitle();
   useDiscordPresence();
   usePageScroll();
   const edge = useScrollEdge();
@@ -232,6 +235,7 @@ export function AppShell() {
         <SidePanel />
         <RoomNotice />
         <Toaster />
+        <ShortcutsHelp />
       </div>
       {banner}
       {(fullScreen || playerUp) && (

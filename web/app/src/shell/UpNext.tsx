@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Infinity as InfinityIcon, ListStart, MoreHorizontal, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Infinity as InfinityIcon, ListStart, Moon, MoreHorizontal, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Menu, MenuHeader, MenuItem, MenuSeparator } from '@/components/Menu';
 import { Artwork } from '@/components/music/Artwork';
@@ -6,6 +6,7 @@ import { formatDuration } from '@/components/music/links';
 import { toast } from '@/components/Toast';
 import { autoplaySectionStart, upcomingUserQueueIndices, type QueueEntry } from '@/playback/queue/timeline';
 import { CROSSFADE_CHOICES, usePlayer } from '@/state/player';
+import { SLEEP_CHOICES, sleepLabel, useSleepTimer } from '@/state/sleepTimer';
 
 // The panel's square buttons: AutoPlay (the key colour when on) and the options menu.
 const square = 'grid size-7 place-items-center rounded-[6px] text-secondary hover:bg-quinary aria-pressed:text-key';
@@ -131,6 +132,8 @@ export function UpNext() {
   const repeat = usePlayer((s) => s.repeat);
   const crossfadeSec = usePlayer((s) => s.crossfadeSec);
   const { clearUpNext, setAutoplay, setCrossfade, move } = usePlayer.getState();
+  const sleep = useSleepTimer();
+  const sleeping = sleepLabel(sleep.endsAt, sleep.endOfSong);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const close = useCallback(() => setAnchor(null), []);
@@ -180,8 +183,15 @@ export function UpNext() {
         >
           <InfinityIcon size={16} strokeWidth={2.4} />
         </button>
-        <button className={square} aria-label="Playback options" aria-haspopup="menu" onClick={(e) => setAnchor(e.currentTarget)}>
-          <MoreHorizontal size={16} />
+        <button
+          className={square}
+          aria-label={sleeping ? `Playback options, sleep timer ${sleeping}` : 'Playback options'}
+          aria-haspopup="menu"
+          aria-pressed={!!sleeping}
+          title={sleeping ? `Sleep timer: ${sleeping}` : undefined}
+          onClick={(e) => setAnchor(e.currentTarget)}
+        >
+          {sleeping ? <Moon size={15} /> : <MoreHorizontal size={16} />}
         </button>
         {anchor && (
           <Menu anchor={anchor} onClose={close} label="Playback options">
@@ -191,6 +201,19 @@ export function UpNext() {
                 {seconds === 0 ? 'Off' : `${seconds} seconds`}
               </MenuItem>
             ))}
+            <MenuSeparator />
+            <MenuHeader>{sleeping ? `Sleep Timer · ${sleeping}` : 'Sleep Timer'}</MenuHeader>
+            <MenuItem checked={!sleeping} onSelect={() => (close(), sleep.set(null))}>
+              Off
+            </MenuItem>
+            {SLEEP_CHOICES.map((minutes) => (
+              <MenuItem key={minutes} onSelect={() => (close(), sleep.set(minutes), toast(`Pausing in ${minutes} minutes`))}>
+                {minutes} minutes
+              </MenuItem>
+            ))}
+            <MenuItem checked={sleep.endOfSong} onSelect={() => (close(), sleep.set('end'), toast('Pausing after this song'))}>
+              End of This Song
+            </MenuItem>
           </Menu>
         )}
       </div>

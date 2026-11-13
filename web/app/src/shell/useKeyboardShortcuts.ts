@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { usePlayer } from '@/state/player';
+import { getAudio, usePlayer } from '@/state/player';
 import { useUi } from '@/state/ui';
 
 /** Typing in a field shouldn't trigger the player. */
@@ -28,7 +28,8 @@ function focusSearch(navigate: ReturnType<typeof useNavigate>) {
  * The web player's shortcuts, which OpenTune matches (report §8): Space
  * play/pause; ⌘/Ctrl+→ / ← next/previous; ⌘/Ctrl+↑ / ↓ volume; ⌘/Ctrl+F or
  * "/" focuses search; ⌘/Ctrl+\ folds the sidebar; Esc closes the full-screen
- * player, else the side panel.
+ * player, else the side panel. Also Shift+→ / ← to skip ten seconds forward or
+ * back, M to mute, S for shuffle, R for repeat, and L for the lyrics.
  */
 export function useKeyboardShortcuts() {
   const navigate = useNavigate();
@@ -56,6 +57,25 @@ export function useKeyboardShortcuts() {
         if ((event.target as HTMLElement | null)?.closest('button, a, [role="slider"]')) return;
         event.preventDefault();
         return player.togglePlay();
+      }
+      if (!command && event.shiftKey && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+        event.preventDefault();
+        const audio = getAudio();
+        const at = audio?.currentTime ?? 0;
+        return player.seek(at + (event.key === 'ArrowRight' ? 10 : -10));
+      }
+      if (!command && !event.shiftKey && (event.target as HTMLElement | null)?.closest('[role="slider"], [role="menu"], [role="listbox"]') == null) {
+        switch (event.key.toLowerCase()) {
+          case 'm':
+            return player.toggleMute();
+          case 's':
+            return player.toggleShuffle();
+          case 'r':
+            return player.cycleRepeat();
+          case 'l':
+            if (player.nowPlaying) useUi.getState().toggleSidePanel('lyrics');
+            return;
+        }
       }
       if (event.key === '/' && !command) {
         event.preventDefault();
