@@ -153,7 +153,7 @@ interface GateProps {
 }
 
 const allowButton =
-  'flex-none rounded-full bg-key-bg px-3.5 py-1.5 type-callout-emphasized text-white hover:brightness-110 disabled:opacity-50';
+  'flex-none rounded-pill bg-key-bg px-3.5 py-1.5 type-callout-emphasized text-white hover:brightness-110 disabled:opacity-50';
 
 function Step({
   n,
@@ -269,7 +269,7 @@ function GateDialog(props: GateProps) {
                 {here.title}
               </a>
               <a
-                className="rounded-full px-3 py-1.5 type-callout-emphasized text-key hover:bg-quaternary"
+                className="rounded-pill px-3 py-1.5 type-callout-emphasized text-key hover:bg-quaternary"
                 href={other.href}
                 download
                 onClick={() => setChosen(other)}
@@ -298,7 +298,7 @@ function GateDialog(props: GateProps) {
         {allDone && (
           <button
             type="button"
-            className="mt-4 self-end rounded-full bg-key-bg px-5 py-2 type-body-emphasized text-white hover:brightness-110"
+            className="mt-4 self-end rounded-pill bg-key-bg px-5 py-2 type-body-emphasized text-white hover:brightness-110"
             onClick={props.onFinish}
             autoFocus
           >
