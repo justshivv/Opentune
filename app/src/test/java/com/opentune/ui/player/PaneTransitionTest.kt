@@ -48,26 +48,33 @@ class PaneTransitionTest {
     }
 
     /**
-     * The pill draws in to a small one and swells out again, and the two sets of buttons never
-     * show over each other: the old set is gone before the new one starts.
+     * The pill turns straight into the other one: its width goes directly from one set's to
+     * the other's (never drawing in), every frame shows a row of buttons, and no place in the
+     * pill ever shows both sets at once.
      */
-    @Test fun pillDrawsInAndOutWithoutTheSetsOverlapping() {
+    @Test fun pillTransformsWithoutAnEmptyMomentOrOverlap() {
         val (a, b) = 300f to 420f
-        var narrowest = Float.MAX_VALUE
         for (step in 0..100) {
             val p = step / 100f
-            org.junit.Assert.assertFalse("both sets show at $p", pillOutgoing(p) > 0f && pillIncoming(p) > 0f)
-            narrowest = minOf(narrowest, pillWidth(a, b, p))
+            var shown = 0f
+            for (k in 0..200) {
+                val u = k / 200f
+                val old = sweepOld(p, u)
+                val new = sweepNew(p, u)
+                org.junit.Assert.assertFalse("both sets show at p=$p u=$u", old > 0f && new > 0f)
+                shown += maxOf(old, new) / 201f
+            }
+            // Only the soft edge and the sliver between the sets is ever dim: most of the row shows.
+            org.junit.Assert.assertTrue("the pill is mostly empty at $p ($shown)", shown > 0.7f)
+            val w = pillWidth(a, b, p)
+            org.junit.Assert.assertTrue("narrower than both sets at $p", w >= minOf(a, b) - 0.01f && w <= maxOf(a, b) + 0.01f)
         }
-        org.junit.Assert.assertEquals(1f, pillOutgoing(0f), 0.0001f)
-        org.junit.Assert.assertEquals(1f, pillIncoming(1f), 0.0001f)
-        org.junit.Assert.assertEquals(a, pillWidth(a, b, 0f), 0.01f)
-        org.junit.Assert.assertEquals(b, pillWidth(a, b, 1f), 0.01f)
-        org.junit.Assert.assertTrue("it draws in to a small pill", narrowest < minOf(a, b) * 0.7f)
-        // Smooth: no step of the way jumps the width by more than a few percent.
-        for (step in 0 until 100) {
-            val d = kotlin.math.abs(pillWidth(a, b, (step + 1) / 100f) - pillWidth(a, b, step / 100f))
-            org.junit.Assert.assertTrue("width jumped at $step: $d", d < 12f)
+        for (k in 0..20) {
+            val u = k / 20f
+            org.junit.Assert.assertEquals(1f, sweepOld(0f, u), 0.0001f)
+            org.junit.Assert.assertEquals(0f, sweepNew(0f, u), 0.0001f)
+            org.junit.Assert.assertEquals(0f, sweepOld(1f, u), 0.0001f)
+            org.junit.Assert.assertEquals(1f, sweepNew(1f, u), 0.0001f)
         }
     }
 

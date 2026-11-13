@@ -431,13 +431,14 @@ fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () 
 
 /**
  * One pill that morphs between two sets of buttons, [first] and [second]
- * (shown when [second] is true). It draws in to a small pill as the old set
- * shrinks and fades away, then swells out to the new set's width as the new
- * set grows in, taking the new colour on the way: the two sets never show
- * over each other. All of that is read from one value each frame, so the
- * parts can't drift apart, and a tap back mid-way turns it round from where
- * it is, at the speed it had. Only the set that's coming in takes taps: each
- * gets whether it's enabled.
+ * (shown when [second] is true). Its fill stretches or narrows straight to the
+ * new set's width and takes its colour, and the buttons change over in a sweep
+ * across it: each place in the pill turns from the old set to the new as the
+ * edge passes, so there's always a full row of buttons, some old and some new,
+ * and the two sets never show over each other. All of that is read from one
+ * value each frame, so the parts can't drift apart, and a tap back mid-way
+ * turns it round from where it is, at the speed it had. Only the set that's
+ * coming in takes taps: each gets whether it's enabled.
  */
 @Composable
 fun MorphPill(
@@ -474,22 +475,18 @@ fun MorphPill(
             // Clipped by the layer's own rounded outline, which the GPU does cheaply, not by a path
             // made and clipped to on every frame of the change.
             .graphicsLayer {
-                val p = currentProgress()
-                val w = pillWidth(widths[0], widths[1], p)
-                val inset = size.height * PILL_SQUEEZE_HEIGHT * pillSqueeze(p) / 2f
-                shape = PillOutline((size.width - w) / 2f, w, inset)
+                val w = pillWidth(widths[0], widths[1], currentProgress())
+                shape = PillOutline((size.width - w) / 2f, w)
                 clip = true
             }
             .drawBehind {
                 val p = currentProgress()
                 val w = pillWidth(widths[0], widths[1], p)
-                val inset = size.height * PILL_SQUEEZE_HEIGHT * pillSqueeze(p) / 2f
-                val h = size.height - inset * 2f
                 drawRoundRect(
                     androidx.compose.ui.graphics.lerp(firstFill, secondFill, pillEase(p)),
-                    topLeft = androidx.compose.ui.geometry.Offset((size.width - w) / 2f, inset),
-                    size = androidx.compose.ui.geometry.Size(w, h),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f),
+                    topLeft = androidx.compose.ui.geometry.Offset((size.width - w) / 2f, 0f),
+                    size = androidx.compose.ui.geometry.Size(w, size.height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f),
                 )
             },
         content = {
@@ -497,22 +494,10 @@ fun MorphPill(
             // stopping at their own ends, a lit button showed a second edge inside the pill's.
             fun overhang(i: Int): Float =
                 (pillWidth(widths[0], widths[1], currentProgress()) - widths[i]) / 2f
-            Box(Modifier.zIndex(if (second) 0f else 1f)
-                .graphicsLayer {
-                    val shown = pillOutgoing(currentProgress())
-                    alpha = shown
-                    scaleX = PILL_SET_SCALE + (1f - PILL_SET_SCALE) * shown
-                    scaleY = scaleX
-                }) {
+            Box(Modifier.zIndex(if (second) 0f else 1f).sweepMask(old = true, set = 0, widths, currentProgress)) {
                 androidx.compose.runtime.CompositionLocalProvider(LocalPillOverhang provides { overhang(0) }) { first(!second) }
             }
-            Box(Modifier.zIndex(if (second) 1f else 0f)
-                .graphicsLayer {
-                    val shown = pillIncoming(currentProgress())
-                    alpha = shown
-                    scaleX = PILL_SET_SCALE + (1f - PILL_SET_SCALE) * shown
-                    scaleY = scaleX
-                }) {
+            Box(Modifier.zIndex(if (second) 1f else 0f).sweepMask(old = false, set = 1, widths, currentProgress)) {
                 androidx.compose.runtime.CompositionLocalProvider(LocalPillOverhang provides { overhang(1) }) { secondContent(second) }
             }
         },
@@ -528,13 +513,46 @@ fun MorphPill(
     }
 }
 
-/** A morphing pill's outline: a capsule [width] wide from [left], [inset] in from the top and bottom. */
-private class PillOutline(private val left: Float, private val width: Float, private val inset: Float = 0f) : androidx.compose.ui.graphics.Shape {
+/** A morphing pill's outline: a capsule [width] wide from [left], as tall as the pill. */
+private class PillOutline(private val left: Float, private val width: Float) : androidx.compose.ui.graphics.Shape {
     override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density) =
         androidx.compose.ui.graphics.Outline.Rounded(
-            androidx.compose.ui.geometry.RoundRect(left, inset, left + width, size.height - inset, androidx.compose.ui.geometry.CornerRadius((size.height - inset * 2f) / 2f)),
+            androidx.compose.ui.geometry.RoundRect(left, 0f, left + width, size.height, androidx.compose.ui.geometry.CornerRadius(size.height / 2f)),
         )
 }
+
+/**
+ * Shows one set of a morphing pill only where the sweep says: the old set ahead of the
+ * edge, the new one behind it. Measured across the pill as it is this frame, from its left
+ * end (0) to its right (1). Not drawn at all while nothing of it shows, and no off-screen
+ * buffer while all of it does.
+ */
+private fun Modifier.sweepMask(old: Boolean, set: Int, widths: FloatArray, progress: () -> Float): Modifier = this
+    .graphicsLayer {
+        val p = progress()
+        val whole = if (old) p <= 0f else p >= 1f
+        val none = if (old) p >= 1f else p <= 0f
+        alpha = if (none) 0f else 1f
+        compositingStrategy = if (whole || none) androidx.compose.ui.graphics.CompositingStrategy.Auto
+            else androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+    }
+    .drawWithContent {
+        val p = progress()
+        if (if (old) p >= 1f else p <= 0f) return@drawWithContent
+        drawContent()
+        if (if (old) p <= 0f else p >= 1f) return@drawWithContent
+        // The pill's ends this frame, in this set's own coordinates (both are centred).
+        val w = pillWidth(widths[0], widths[1], p)
+        val start = (widths[set] - w) / 2f
+        val stops = Array(SWEEP_SAMPLES + 1) { i ->
+            val u = i / SWEEP_SAMPLES.toFloat()
+            u to androidx.compose.ui.graphics.Color.Black.copy(alpha = if (old) sweepOld(p, u) else sweepNew(p, u))
+        }
+        drawRect(
+            androidx.compose.ui.graphics.Brush.horizontalGradient(*stops, startX = start, endX = start + w),
+            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+        )
+    }
 
 /** How far a morphing pill's outline reaches past the set of buttons inside it, each side, in px. */
 internal val LocalPillOverhang = androidx.compose.runtime.staticCompositionLocalOf<() -> Float> { { 0f } }
@@ -566,36 +584,31 @@ internal fun Modifier.segmentFill(color: Color): Modifier {
 }
 
 /*
- * The pill's morph, as shares of the way from the first set (0) to the second (1). The old set
- * is gone before the middle and the new one only starts after it, so at no point do the two
- * show over each other (they used to cross-fade at full width, a jumble of both sets' icons
- * half-way); in between, the pill draws in to a small one and swells out again.
+ * The pill's morph, as shares of the way from the first set (0) to the second (1). Its width
+ * and colour go straight from one to the other. The buttons change over in a sweep from left
+ * to right (and back the same way on the return): ahead of the edge the old set, behind it
+ * the new, with a soft edge [SWEEP_FEATHER] of the pill wide and, between the two, a sliver
+ * [SWEEP_GAP] wide where neither shows, so no place in the pill ever shows both sets at once
+ * (they used to cross-fade over each other, a jumble of both sets' icons half-way).
  */
-/** How far in the old set has gone when it's fully faded. */
-private const val PILL_OUT_END = 0.45f
-/** How far in the new set starts to show. */
-private const val PILL_IN_START = 0.55f
-/** At the middle, the pill is this share of its width... */
-private const val PILL_SQUEEZE_WIDTH = 0.55f
-/** ...and loses this share of its height. */
-private const val PILL_SQUEEZE_HEIGHT = 0.16f
-/** The size a set of buttons shrinks to as it fades, and grows from as it comes in. */
-private const val PILL_SET_SCALE = 0.82f
+private const val SWEEP_FEATHER = 0.22f
+private const val SWEEP_GAP = 0.03f
+private const val SWEEP_SAMPLES = 24
 
 private fun smooth(edge0: Float, edge1: Float, x: Float): Float =
     ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
-/** Ease in and out: the pill's own width and colour change. */
+/** Ease in and out: the pill's own width and colour change, and the sweep's pace. */
 internal fun pillEase(p: Float): Float = smooth(0f, 1f, p)
-/** How much the pill is drawn in: none at either end, most at the middle. */
-internal fun pillSqueeze(p: Float): Float = kotlin.math.sin(Math.PI.toFloat() * p.coerceIn(0f, 1f))
-/** How much of the old set shows. */
-internal fun pillOutgoing(p: Float): Float = 1f - smooth(0f, PILL_OUT_END, p)
-/** How much of the new set shows. */
-internal fun pillIncoming(p: Float): Float = smooth(PILL_IN_START, 1f, p)
-/** The pill's width: from one set's width to the other's, drawn in at the middle. */
-internal fun pillWidth(from: Float, to: Float, p: Float): Float =
-    androidx.compose.ui.util.lerp(from, to, pillEase(p)) * (1f - (1f - PILL_SQUEEZE_WIDTH) * pillSqueeze(p))
+/** Where the old set's edge is, across the pill (0 its left end, 1 its right). */
+private fun sweepEdge(p: Float): Float =
+    -SWEEP_FEATHER + (1f + 2f * SWEEP_FEATHER + SWEEP_GAP) * pillEase(p)
+/** How much of the old set shows at [u] across the pill. */
+internal fun sweepOld(p: Float, u: Float): Float = sweepEdge(p).let { e -> smooth(e, e + SWEEP_FEATHER, u) }
+/** How much of the new set shows at [u] across the pill. */
+internal fun sweepNew(p: Float, u: Float): Float = (sweepEdge(p) - SWEEP_GAP).let { e -> 1f - smooth(e - SWEEP_FEATHER, e, u) }
+/** The pill's width: straight from one set's width to the other's. */
+internal fun pillWidth(from: Float, to: Float, p: Float): Float = androidx.compose.ui.util.lerp(from, to, pillEase(p))
 
 /**
  * Shuffle, repeat and autoplay in one glass pill, split by hairlines. Each
