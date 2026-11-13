@@ -47,12 +47,28 @@ class PaneTransitionTest {
         }.coroutineContext(Dispatchers.Unconfined).build())
     }
 
-    @Test fun pillNeverHasAnEmptyMidpoint() {
+    /**
+     * The pill draws in to a small one and swells out again, and the two sets of buttons never
+     * show over each other: the old set is gone before the new one starts.
+     */
+    @Test fun pillDrawsInAndOutWithoutTheSetsOverlapping() {
+        val (a, b) = 300f to 420f
+        var narrowest = Float.MAX_VALUE
         for (step in 0..100) {
             val p = step / 100f
-            org.junit.Assert.assertEquals(1f, morphShown(p) + morphShown(1f - p), 0.0001f)
+            org.junit.Assert.assertFalse("both sets show at $p", pillOutgoing(p) > 0f && pillIncoming(p) > 0f)
+            narrowest = minOf(narrowest, pillWidth(a, b, p))
         }
-        org.junit.Assert.assertEquals(0.5f, morphShown(0.5f), 0.0001f)
+        org.junit.Assert.assertEquals(1f, pillOutgoing(0f), 0.0001f)
+        org.junit.Assert.assertEquals(1f, pillIncoming(1f), 0.0001f)
+        org.junit.Assert.assertEquals(a, pillWidth(a, b, 0f), 0.01f)
+        org.junit.Assert.assertEquals(b, pillWidth(a, b, 1f), 0.01f)
+        org.junit.Assert.assertTrue("it draws in to a small pill", narrowest < minOf(a, b) * 0.7f)
+        // Smooth: no step of the way jumps the width by more than a few percent.
+        for (step in 0 until 100) {
+            val d = kotlin.math.abs(pillWidth(a, b, (step + 1) / 100f) - pillWidth(a, b, step / 100f))
+            org.junit.Assert.assertTrue("width jumped at $step: $d", d < 12f)
+        }
     }
 
     @Test fun classicLyricsShrinksBeforeReachingTheHeader() = transition(PlayerStyle.CLASSIC, "Lyrics")
