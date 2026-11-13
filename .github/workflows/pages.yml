@@ -127,6 +127,10 @@ jobs:
         run: python scripts/check-social-preview.py
       - name: Version dashboard assets
         run: python scripts/prepare-usage-assets.py
+      # Each page links its stylesheet and scripts by content hash, so a browser never
+      # draws a new page with an old cached stylesheet.
+      - name: Version website assets
+        run: python scripts/stamp-site-assets.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
