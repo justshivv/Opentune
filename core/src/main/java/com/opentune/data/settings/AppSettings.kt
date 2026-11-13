@@ -472,6 +472,8 @@ data class InterfaceSettings(
     val recentsAsGrid: Boolean = false,
     /** Speed dial at the top of Home: the most-played songs, albums and artists. */
     val speedDial: Boolean = true,
+    /** Listening streaks and small milestones under Home's greeting. */
+    val homeStreaks: Boolean = true,
     /** Refracting Liquid Glass on Android 13+; frosted blur otherwise. */
     val liquidGlass: Boolean = true,
     /** Draw the played part of the seek bar as a moving wave. */
@@ -676,6 +678,8 @@ data class LibrarySettings(
     val smartDownloads: Boolean = false,
     val smartDownloadLimit: Int = 250,
     val smartDownloadMinBattery: Int = 25,
+    /** Smart downloads also keep the start of today's mixes (daylist, daily, genre and Discover). */
+    val smartDownloadMixes: Boolean = true,
     /** Also copy each download into the phone's Music folder, in a format other apps play; see [com.opentune.data.download.DownloadExport]. */
     val exportDownloads: Boolean = false,
     /** Leave out songs and albums marked explicit; see [com.opentune.data.ContentFilter]. */

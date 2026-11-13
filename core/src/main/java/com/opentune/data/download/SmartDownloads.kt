@@ -28,7 +28,7 @@ object SmartDownloads {
         val app = context.applicationContext
         watching?.cancel()
         watching = scope.launch {
-            AppSettings.library.map { Triple(it.smartDownloads, it.smartDownloadLimit, it.smartDownloadMinBattery) }
+            AppSettings.library.map { Triple(it.smartDownloads, it.smartDownloadLimit, it.smartDownloadMinBattery to it.smartDownloadMixes) }
                 .distinctUntilChanged().collect { (enabled, limit, _) ->
                     // WorkManager not set up yet (a test, or a process that never schedules work):
                     // nothing to schedule or cancel, rather than an exception thrown in the background.
@@ -75,12 +75,35 @@ object SmartDownloads {
         val favourites = History.records.value.groupBy { it.videoId }.values
             .sortedByDescending { group -> group.sumOf { it.listenedMs } }
             .map { group -> group.maxBy { it.playedAt }.toSong() }
-        return (LibraryStore.liked.value.map { it.toSong() } + favourites)
+        val mixes = if (AppSettings.library.value.smartDownloadMixes) todaysMixSongs() else emptyList()
+        return (mixes + LibraryStore.liked.value.map { it.toSong() } + favourites)
             .filter { com.opentune.data.isYouTubeId(it.videoId) && !LibraryStore.isDisliked(it.videoId) &&
                 (!AppSettings.library.value.hideExplicit || it.isExplicit != true) }
             .distinctBy { it.videoId }
     }
 }
+
+/**
+ * The start of each of today's mixes, the ones on Home: the daylist, the daily mixes, the genre
+ * mixes and Discover. Only the first [MIX_SONGS_KEPT] of each, so the set changes little from one
+ * day to the next while the first songs of every mix play with no connection.
+ */
+internal fun todaysMixSongs(nowMs: Long = System.currentTimeMillis()): List<Song> {
+    val records = History.records.value
+    val hidden = LibraryStore.hidden.value
+    val genreOf = { artist: String -> com.opentune.data.metadata.ArtistGenres.genreOf(artist) }
+    val mixes = listOfNotNull(com.opentune.data.history.Daylist.build(records, genreOf, nowMs, hidden = hidden)) +
+        com.opentune.data.history.DailyMixes.build(records, nowMs, hidden = hidden) +
+        com.opentune.data.history.GenreMixes.build(records, genreOf, nowMs, hidden = hidden) +
+        com.opentune.data.reco.GenreDiscover.mixes.value
+    return mixStarts(mixes.map { it.songs })
+}
+
+internal const val MIX_SONGS_KEPT = 15
+
+/** The first [MIX_SONGS_KEPT] of each mix, taken a song from each in turn so every mix gets its start. */
+internal fun mixStarts(mixes: List<List<Song>>): List<Song> =
+    com.opentune.data.ExploreFeed.weave(mixes.map { it.take(MIX_SONGS_KEPT) }).distinctBy { it.videoId }
 
 internal fun smartDownloadAllowed(enabled: Boolean, wifi: Boolean, charging: Boolean,
     battery: Int, minimum: Int, freeBytes: Long): Boolean =

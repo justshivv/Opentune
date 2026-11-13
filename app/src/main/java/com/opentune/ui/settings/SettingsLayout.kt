@@ -118,7 +118,7 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "library", "Home and Library", "Tabs, playlists and their covers, artist pages and what's hidden", Icons.Rounded.LibraryMusic,
         listOf(
-            "Home and tabs" to listOf("Separate Explore tab", "Speed dial", "Wide-screen layout"),
+            "Home and tabs" to listOf("Separate Explore tab", "Speed dial", "Streaks on Home", "Wide-screen layout"),
             "Playlists and songs" to listOf("Playlists in Library", "Full-screen playlist covers", "Import a playlist", "Swipe songs to queue them"),
             "Artist pages" to listOf("Artist signatures"),
             "New releases" to listOf("New-release alerts", "Followed artists"),
@@ -128,7 +128,7 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "data", "Downloads and storage", "Downloads, music on this phone, space used and backups", Icons.Rounded.Storage,
         listOf(
-            "Downloads" to listOf("Downloaded songs", "Smart downloads", "Smart download limit", "Smart download battery", "Stream downloads when online", "Export compatible downloads"),
+            "Downloads" to listOf("Downloaded songs", "Smart downloads", "Keep today's mixes offline", "Smart download limit", "Smart download battery", "Stream downloads when online", "Export compatible downloads"),
             "Music on this phone" to listOf("Local music folder", "Filter non-music audio"),
             "Space used" to listOf("Song cache limit", "Clear song cache", "Clear image cache", "Delete downloaded updates"),
             "Backup" to listOf("Export data", "Import data"),

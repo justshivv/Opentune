@@ -79,4 +79,22 @@ class MixesScreenshotTest {
         view.draw(android.graphics.Canvas(bitmap))
         File("build/screenshots/home/genre-mixes.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
+
+    @Test fun streaks() {
+        val badges = listOf(
+            com.opentune.data.history.Streaks.Badge.DayStreak(12),
+            com.opentune.data.history.Streaks.Badge.ArtistHours("Diljit Dosanjh", 25),
+            com.opentune.data.history.Streaks.Badge.NewArtists(4),
+        )
+        compose.setContent {
+            MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65))) {
+                Surface(color = MaterialTheme.colorScheme.background) { StreakPills(badges) }
+            }
+        }
+        compose.waitForIdle()
+        val view = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bitmap))
+        File("build/screenshots/home/streaks.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
 }

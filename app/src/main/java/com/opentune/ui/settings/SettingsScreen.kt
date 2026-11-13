@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Devices
+import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.automirrored.rounded.Logout
@@ -1389,6 +1390,10 @@ private fun settingsSections(
                 Entry("High performance mode", "120hz 90hz smooth fps refresh rate frame rate scrolling performance battery unrestricted lag") {
                     HighPerformanceRows(ui)
                 },
+                Entry("Streaks on Home", "streak badges milestones hours artists new week home") {
+                    ToggleRow("Streaks on Home", ui.homeStreaks, { v -> AppSettings.updateUi { it.copy(homeStreaks = v) } },
+                        summary = "Days in a row you've listened, new artists this week and hours with an artist, under the greeting", icon = Icons.Rounded.LocalFireDepartment)
+                },
                 Entry("Speed dial", "home most played quick grid shortcuts favourites top") {
                     ToggleRow("Speed dial", ui.speedDial, { v -> AppSettings.updateUi { it.copy(speedDial = v) } }, summary = "Your most-played songs, albums and artists at the top of Home", icon = Icons.Rounded.GridView)
                 },
@@ -1550,6 +1555,12 @@ private fun settingsSections(
                         { enabled -> AppSettings.updateLibrary { it.copy(smartDownloads = enabled) } },
                         summary = "Save your liked and most-listened music on unmetered Wi-Fi with sufficient battery. Manual downloads are kept separately.",
                         icon = Icons.Rounded.DownloadDone)
+                },
+                Entry("Keep today's mixes offline", "smart download mixes daylist discover genre offline automatic") {
+                    ToggleRow("Keep today's mixes offline", lib.smartDownloadMixes,
+                        { v -> AppSettings.updateLibrary { it.copy(smartDownloadMixes = v) } },
+                        summary = "Smart downloads also save the first songs of each mix on Home: your daylist, daily, genre and Discover mixes",
+                        icon = Icons.Rounded.AutoAwesome, enabled = lib.smartDownloads)
                 },
                 Entry("Smart download limit", "automatic offline songs storage threshold") {
                     var limit by remember(lib.smartDownloadLimit) { mutableStateOf(lib.smartDownloadLimit.coerceIn(10, 500).toFloat()) }

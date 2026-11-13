@@ -37,6 +37,9 @@ import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.foundation.layout.Spacer
 import com.opentune.ui.theme.Icon
@@ -182,11 +185,54 @@ fun HomeScreen(
     val genreMixes = remember(records, artistGenres, hidden) {
         com.opentune.data.history.GenreMixes.build(records, { artistGenres[com.opentune.data.metadata.ArtistGenres.key(it)] }, hidden = hidden)
     }
-    LaunchedEffect(records.size / 25, hidden) {
+    // The artists picked at the welcome count too, so a new install has genres from the start.
+    val followed by com.opentune.data.releases.NewReleases.followed.collectAsState()
+    LaunchedEffect(records.size / 25, hidden, followed.size) {
         val top = hidden.records(records).groupBy { com.opentune.data.history.Wrapped.mainArtist(it.artist) }
             .filterKeys { it.isNotBlank() }.toList().sortedByDescending { it.second.size }.take(GENRE_ARTISTS).map { it.first }
-        if (top.isNotEmpty()) com.opentune.data.metadata.ArtistGenres.learn(top)
+        val picked = followed.sortedByDescending { it.followedAt }.map { it.name }.filterNot { hidden.hidesArtist(it) }
+        val ask = (top + picked).distinct()
+        if (ask.isNotEmpty()) com.opentune.data.metadata.ArtistGenres.learn(ask)
     }
+    // The daylist, turning over with the part of the day: checked every few minutes, rebuilt
+    // only when the part changes.
+    var daylistPart by remember { mutableStateOf(com.opentune.data.history.Daylist.partAt(System.currentTimeMillis())) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(5 * 60_000L)
+            daylistPart = com.opentune.data.history.Daylist.partAt(System.currentTimeMillis())
+        }
+    }
+    val daylist = remember(records, artistGenres, hidden, daylistPart) {
+        com.opentune.data.history.Daylist.build(records, { artistGenres[com.opentune.data.metadata.ArtistGenres.key(it)] }, hidden = hidden)
+    }
+    // Discover: songs not played yet from the radios of each genre's favourites, made once a day.
+    // While history is short, the welcome's artists' top songs stand in as each genre's favourites.
+    val discoverMixes by com.opentune.data.reco.GenreDiscover.mixes.collectAsState()
+    val discoverSeeds = remember(records, artistGenres, hidden, seeds) {
+        val genreOf = { a: String -> artistGenres[com.opentune.data.metadata.ArtistGenres.key(a)] }
+        val fromHistory = com.opentune.data.history.GenreMixes.favourites(records, genreOf, hidden)
+        if (com.opentune.data.reco.HomeSeed.isShort(records.size)) {
+            seeds.forEach { a ->
+                val g = genreOf(a.name) ?: return@forEach
+                fromHistory[g] = (fromHistory[g].orEmpty() + a.top).distinctBy { it.videoId }
+            }
+        }
+        fromHistory
+    }
+    LaunchedEffect(discoverSeeds.keys.toList()) {
+        if (discoverSeeds.isEmpty()) return@LaunchedEffect
+        val played = records.mapTo(HashSet()) { it.videoId } + com.opentune.data.library.LibraryStore.liked.value.map { it.videoId }
+        val known = records.mapTo(HashSet()) { com.opentune.data.history.Wrapped.mainArtist(it.artist) } + followed.map { it.name }
+        com.opentune.data.reco.GenreDiscover.refresh(
+            discoverSeeds, played, hidden,
+            { a -> com.opentune.data.metadata.ArtistGenres.genreOf(a) }, known,
+        ) { com.opentune.data.reco.Recommendations.youtube(it.videoId) }
+    }
+    val discover = remember(discoverMixes, hidden) {
+        discoverMixes.mapNotNull { m -> hidden.songs(m.songs).takeIf { it.size >= 6 }?.let { m.copy(songs = it) } }
+    }
+    val badges = remember(records) { com.opentune.data.history.Streaks.badges(records) }
     val ui by AppSettings.ui.collectAsState()
     // Spotify's own mixes for the listener, when Spotify is connected (see SpotifySync).
     val spotifyConnected by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
@@ -314,6 +360,7 @@ fun HomeScreen(
                     }
                 }
             }
+            if (ui.homeStreaks && badges.isNotEmpty()) item(key = "streaks") { StreakPills(badges) }
             item(key = "festival") { FestivalCard() }
             itemsIndexed(runtime.banners.filter { platform in it.platforms && it.id !in closedBanners }, key = { _, banner -> "remote-banner:${banner.id}" }) { _, banner ->
                 RemoteBannerCard(banner)
@@ -338,14 +385,19 @@ fun HomeScreen(
                     else SectionHeader(title, action = historyAction)
                 }
                 "mixes" -> {
-                    if (mixes.isNotEmpty()) item(key = "mixes") {
-                        val seededOnly = mixes.all { it.id.startsWith("seed:") }
-                        MixesShelf(mixes, actions, if (seededOnly) "From the artists you follow, until you've played more" else MIXES_LINE,
+                    // The daylist leads today's mixes: it's the one that changes while you look.
+                    val today = listOfNotNull(daylist) + mixes
+                    if (today.isNotEmpty()) item(key = "mixes") {
+                        val seededOnly = mixes.isNotEmpty() && mixes.all { it.id.startsWith("seed:") } && daylist == null
+                        MixesShelf(today, actions, if (seededOnly) "From the artists you follow, until you've played more" else MIXES_LINE,
                             title = runtime.title(section.id, "Made for you today"))
                     }
-                    // Your listening sorted by genre, right under the daily mixes.
+                    // Your listening sorted by genre, right under the daily mixes, then what's new in each.
                     if (genreMixes.isNotEmpty()) item(key = "genre-mixes") {
                         MixesShelf(genreMixes, actions, GENRE_MIXES_LINE, title = "Your genres")
+                    }
+                    if (discover.isNotEmpty()) item(key = "discover-mixes") {
+                        MixesShelf(discover, actions, DISCOVER_LINE, title = "Discover by genre")
                     }
                 }
                 "spotify-mixes" -> if (spotifyMixes.isNotEmpty()) item(key = "spotifyMixes") {
@@ -568,8 +620,38 @@ private fun QuickPicks(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, actio
 
 private const val MIXES_LINE = "Daily mixes from what you play, new each day"
 private const val GENRE_MIXES_LINE = "What you play, sorted by genre, in a new order each day"
+private const val DISCOVER_LINE = "Songs you haven't played, from the radios of your favourites in each genre"
 /** How many of the most played artists have their genre looked up. */
 private const val GENRE_ARTISTS = 40
+
+/** Streaks and milestones, small, in one row under the greeting. */
+@Composable
+internal fun StreakPills(badges: List<com.opentune.data.history.Streaks.Badge>) {
+    androidx.compose.foundation.lazy.LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+    ) {
+        items(badges.size) { i ->
+            val (icon, text) = when (val b = badges[i]) {
+                is com.opentune.data.history.Streaks.Badge.DayStreak ->
+                    Icons.Rounded.LocalFireDepartment to com.opentune.i18n.Tr.f("{0}-day streak", b.days)
+                is com.opentune.data.history.Streaks.Badge.NewArtists ->
+                    Icons.Rounded.AutoAwesome to com.opentune.i18n.Tr.f("{0} new artists this week", b.count)
+                is com.opentune.data.history.Streaks.Badge.ArtistHours ->
+                    Icons.Rounded.Headphones to (if (b.hours == 1) com.opentune.i18n.Tr.f("Your first hour of {0}", b.artist)
+                        else com.opentune.i18n.Tr.f("{0} hours of {1}", b.hours, b.artist))
+            }
+            Row(
+                Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(start = 10.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(icon, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(6.dp))
+                Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            }
+        }
+    }
+}
 
 /** Today's mixes from this phone's listening, each a card of four covers. */
 @Composable

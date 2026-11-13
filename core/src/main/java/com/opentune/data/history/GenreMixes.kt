@@ -46,6 +46,27 @@ object GenreMixes {
             .take(MAX_MIXES)
     }
 
+    /**
+     * Each genre that makes a mix, most played first, with its songs most played first: what
+     * Discover starts its radios from.
+     */
+    fun favourites(
+        allRecords: List<PlayRecord>,
+        genreOf: (artist: String) -> String?,
+        hidden: HiddenList = HiddenList.EMPTY,
+    ): LinkedHashMap<String, List<com.opentune.data.model.Song>> {
+        val out = LinkedHashMap<String, List<com.opentune.data.model.Song>>()
+        hidden.records(allRecords).groupBy { r -> Wrapped.mainArtist(r.artist).takeIf { it.isNotBlank() }?.let(genreOf) }
+            .entries.mapNotNull { (g, plays) -> g?.let { it to plays } }
+            .sortedByDescending { it.second.size }
+            .forEach { (genre, plays) ->
+                val artists = plays.mapTo(HashSet()) { Wrapped.mainArtist(it.artist) }
+                val songs = plays.groupBy { it.videoId }.values.sortedByDescending { it.size }.map { it.first().toSong() }
+                if (songs.size >= MIN_SONGS && artists.size >= MIN_ARTISTS) out[genre] = songs
+            }
+        return out
+    }
+
     /** The same all day and different the next, with the favourites kept near the front. */
     private fun dailyOrder(songs: List<com.opentune.data.model.Song>, seed: Int): List<com.opentune.data.model.Song> {
         val r = Random(seed)
