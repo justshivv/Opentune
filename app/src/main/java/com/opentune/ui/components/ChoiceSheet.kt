@@ -100,10 +100,16 @@ fun <T> ChoiceSheet(
     label: (T) -> String,
     onSelect: (T) -> Unit,
     onDismiss: () -> Unit,
+    /** Options that can't be chosen here show dimmed and don't respond (their line says why). */
+    enabled: (T) -> Boolean = { true },
+    /** Stays open after a choice when this says so, for a choice that asks something more (a permission). */
+    keepOpen: (T) -> Boolean = { false },
+    /** Under the options: a note, or an action that goes with the current choice. */
+    footer: (@Composable () -> Unit)? = null,
 ) {
     val ui by AppSettings.ui.collectAsState()
     if (ui.choiceMenus == ChoiceMenuStyle.SCREEN) {
-        ChoiceScreen(title, options, selected, label, onSelect, onDismiss)
+        ChoiceScreen(title, options, selected, label, onSelect, onDismiss, enabled, keepOpen, footer)
         return
     }
     val still = ui.reduceAnimation
@@ -113,18 +119,22 @@ fun <T> ChoiceSheet(
     var done by remember { mutableStateOf(false) }
     FloatingCard(onDismiss = onDismiss, title = title, contentPadding = PaddingValues(0.dp)) {
         val card = LocalFloatingCard.current
-        Options(options, picked, label, still) { o ->
-            if (done) return@Options
-            done = true
-            if (o != picked) {
-                haptics.tick()
-                picked = o
-                onSelect(o)
+        Column {
+            Options(options, picked, label, still, enabled = enabled) { o ->
+                if (done) return@Options
+                if (o != picked) {
+                    haptics.tick()
+                    picked = o
+                    onSelect(o)
+                }
+                if (keepOpen(o)) return@Options
+                done = true
+                scope.launch {
+                    if (!still) delay(SETTLE_MS)
+                    card?.close() ?: onDismiss()
+                }
             }
-            scope.launch {
-                if (!still) delay(SETTLE_MS)
-                card?.close() ?: onDismiss()
-            }
+            footer?.invoke()
         }
     }
 }
@@ -142,6 +152,9 @@ private fun <T> ChoiceScreen(
     label: (T) -> String,
     onSelect: (T) -> Unit,
     onDismiss: () -> Unit,
+    enabled: (T) -> Boolean,
+    keepOpen: (T) -> Boolean,
+    footer: (@Composable () -> Unit)?,
 ) {
     val ui by AppSettings.ui.collectAsState()
     val still = ui.reduceAnimation
@@ -179,7 +192,7 @@ private fun <T> ChoiceScreen(
             translationX = (1f - progress.value) * size.width * 0.125f
             alpha = progress.value
         }) {
-            ChoicePage(title, options, selected, label, still, onSelect, onBack = ::close, onChosen = ::close)
+            ChoicePage(title, options, selected, label, still, onSelect, onBack = ::close, onChosen = ::close, enabled = enabled, keepOpen = keepOpen, footer = footer)
         }
     }
 }
@@ -195,6 +208,9 @@ internal fun <T> ChoicePage(
     onSelect: (T) -> Unit,
     onBack: () -> Unit,
     onChosen: () -> Unit,
+    enabled: (T) -> Boolean = { true },
+    keepOpen: (T) -> Boolean = { false },
+    footer: (@Composable () -> Unit)? = null,
 ) {
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
@@ -204,23 +220,33 @@ internal fun <T> ChoicePage(
         Column(Modifier.fillMaxSize().navigationBarsPadding()) {
             PageHeader(title, onBack = onBack)
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-                Options(options, picked, label, still, scrolls = false) { o ->
+                Options(options, picked, label, still, scrolls = false, enabled = enabled) { o ->
                     if (done) return@Options
-                    done = true
                     if (o != picked) {
                         haptics.tick()
                         picked = o
                         onSelect(o)
                     }
+                    if (keepOpen(o)) return@Options
+                    done = true
                     scope.launch { if (!still) delay(SETTLE_MS); onChosen() }
                 }
+                footer?.invoke()
             }
         }
     }
 }
 
 @Composable
-private fun <T> Options(options: List<T>, picked: T, label: (T) -> String, still: Boolean, scrolls: Boolean = true, onPick: (T) -> Unit) {
+private fun <T> Options(
+    options: List<T>,
+    picked: T,
+    label: (T) -> String,
+    still: Boolean,
+    scrolls: Boolean = true,
+    enabled: (T) -> Boolean = { true },
+    onPick: (T) -> Unit,
+) {
     val density = LocalDensity.current
     val scheme = MaterialTheme.colorScheme
     val tops = remember { mutableStateMapOf<Int, Float>() }
@@ -278,6 +304,7 @@ private fun <T> Options(options: List<T>, picked: T, label: (T) -> String, still
                     selected = o == picked,
                     index = i,
                     still = still,
+                    enabled = enabled(o),
                     modifier = Modifier.onGloballyPositioned {
                         tops[i] = it.positionInParent().y
                         heights[i] = it.size.height.toFloat()
@@ -289,7 +316,7 @@ private fun <T> Options(options: List<T>, picked: T, label: (T) -> String, still
 }
 
 @Composable
-private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolean, enabled: Boolean = true, modifier: Modifier, onClick: () -> Unit) {
     val (name, about) = text.split(" · ", limit = 2).let { it[0] to it.getOrNull(1) }
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -303,9 +330,11 @@ private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolea
             .graphicsLayer {
                 scaleX = press
                 scaleY = press
+                // An option that can't be chosen here stays readable, its line saying why.
+                if (!enabled) alpha = 0.45f
             }
             .clip(shape)
-            .clickable(interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(shape), onClick = onClick)
+            .clickable(enabled = enabled, interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(shape), onClick = onClick)
             .semantics { role = Role.RadioButton; this.selected = selected }
             .heightIn(min = 58.dp)
             .padding(start = 14.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
