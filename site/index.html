@@ -23,7 +23,7 @@
 <meta name="twitter:image" content="https://justshivv.github.io/Opentune/img/share-card-v3.jpg">
 <meta name="twitter:image:alt" content="OpenTune: free music, with the waveform logo and app screenshots">
 <meta name="robots" content="index,follow,max-image-preview:large">
-<meta name="theme-color" content="#131111">
+<meta name="theme-color" content="#07070a">
 <link rel="canonical" href="https://justshivv.github.io/Opentune/">
 <link rel="icon" href="/Opentune/favicon.ico?v=20261015" sizes="16x16 32x32 48x48">
 <link rel="icon" type="image/png" sizes="96x96" href="/Opentune/favicon-96x96.png?v=20261015">
@@ -34,7 +34,7 @@
 <link rel="sitemap" type="application/xml" href="sitemap.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@95..115,400..700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400..800&display=swap">
 <link rel="stylesheet" href="assets/site.css">
 <link rel="preload" as="image" href="img/app/fullcover.webp" type="image/webp">
 <script type="application/ld+json">
@@ -85,116 +85,100 @@
 
 <main id="main">
   <section class="hero">
-    <div class="wrap hero-grid">
-      <div class="hero-copy">
-        <a class="release-chip" href="#whats-new"><b id="ver-badge">Latest</b><span id="ver-note">Free and open source, updated often</span></a>
-        <h1>Every song.<br><span class="soft">No ads.</span><br>No account.</h1>
-        <p class="lede">OpenTune plays the YouTube Music catalogue with synced lyrics, offline downloads, live radio and podcasts, and never shows you an ad.</p>
-        <div class="btn-row">
-          <a class="btn btn-primary" href="https://github.com/justshivv/Opentune/releases/latest" data-latest-apk><svg aria-hidden="true"><use href="#i-down"/></svg>Download for Android <span class="sub" id="dl-size" hidden></span></a>
-          <a class="btn" href="player/"><svg aria-hidden="true"><use href="#i-play"/></svg>Listen in your browser</a>
-        </div>
-        <p class="hero-meta">Android 8.0 or newer · GPL-3.0 · <a href="https://github.com/justshivv/Opentune">Source on GitHub</a></p>
+    <div class="wrap hero-copy">
+      <a class="release-chip" href="#whats-new"><b id="ver-badge">New</b><span id="ver-note">Free and open source, updated often</span></a>
+      <h1>Every song.<br><span class="glow-text">No ads.</span></h1>
+      <p class="lede">OpenTune plays the whole YouTube Music catalogue with synced lyrics, offline downloads, live radio and podcasts. No account, no subscription.</p>
+      <div class="btn-row">
+        <a class="btn btn-primary" href="https://github.com/justshivv/Opentune/releases/latest" data-latest-apk><svg aria-hidden="true"><use href="#i-down"/></svg>Download for Android <span class="sub" id="dl-size" hidden></span></a>
+        <a class="btn" href="player/"><svg aria-hidden="true"><use href="#i-play"/></svg>Listen in your browser</a>
       </div>
-      <div class="stage">
-        <div class="phone"><img src="img/app/fullcover.webp" width="640" height="1387" alt="The OpenTune player showing Blinding Lights by The Weeknd, its cover filling the top of the screen, with the seek bar and play controls below." fetchpriority="high"></div>
-      </div>
+      <p class="hero-meta">Android 8.0 or newer · GPL-3.0 · <a href="https://github.com/justshivv/Opentune">Source on GitHub</a></p>
+    </div>
+    <div class="fan">
+      <div class="phone side left"><img src="img/app/lyrics.webp" width="640" height="1387" alt="Synced lyrics for Danny Boy by Johnny Cash, the line being sung in bright white."></div>
+      <div class="phone front"><img src="img/app/fullcover.webp" width="640" height="1387" alt="The OpenTune player showing Blinding Lights by The Weeknd, its cover filling the top of the screen." fetchpriority="high"></div>
+      <div class="phone side right"><img src="img/app/halo.webp" width="640" height="1387" alt="The halo player: a round cover ringed with light that moves with the music."></div>
     </div>
   </section>
 
   <div class="platforms" aria-label="Where OpenTune runs">
     <ul class="wrap">
-      <li><b>Android</b> phones and tablets</li>
-      <li><b>Android TV</b> and Google TV</li>
-      <li><b>Windows</b>, <b>macOS</b> and <b>Linux</b></li>
-      <li><b>Web player</b> in Chrome and Firefox</li>
-      <li><b>iPhone</b>, early build</li>
+      <li><b>Android</b> phones</li>
+      <li><b>Android TV</b></li>
+      <li><b>Windows</b> · <b>macOS</b> · <b>Linux</b></li>
+      <li><b>Web player</b></li>
+      <li><b>iPhone</b> early build</li>
     </ul>
   </div>
 
   <section class="section" id="features" aria-labelledby="features-title">
     <div class="wrap">
       <div class="section-head reveal">
-        <h2 id="features-title">Made for the way you listen.</h2>
-        <p>The player takes its colour from each cover, and everything else stays out of the way.</p>
+        <h2 id="features-title">Everything you listen to, in one app.</h2>
+        <p>Music, lyrics, radio and podcasts, with the player taking its colour from every cover.</p>
       </div>
-      <div class="tour">
-        <ol class="tour-list" id="tour">
-          <li class="tour-item" aria-current="true" data-shot="lyrics">
-            <button type="button"><h3>Lyrics that keep time</h3><span class="dot" aria-hidden="true"></span>
-              <p>Lines light up word by word as they're sung, from LRCLIB, Better Lyrics, KuGou, NetEase and more, tried in the order you choose. Tap a line to jump there.</p></button>
-            <img class="shot" src="img/app/lyrics.webp" width="640" height="1387" loading="lazy" alt="Synced lyrics for Danny Boy by Johnny Cash, the current line in bright white.">
-          </li>
-          <li class="tour-item" data-shot="together">
-            <button type="button"><h3>Listen together</h3><span class="dot" aria-hidden="true"></span>
-              <p>Share a room code and friends hear the same second of the same song on their own phones, kept in step over an encrypted connection.</p></button>
-            <img class="shot" src="img/app/together.webp" width="640" height="1387" loading="lazy" alt="A Listen together room with its code, three listeners and the song playing in the room.">
-          </li>
-          <li class="tour-item" data-shot="radio">
-            <button type="button"><h3>Live radio near you</h3><span class="dot" aria-hidden="true"></span>
-              <p>More than 50,000 stations, sorted by how close they are, with the stream's format and bitrate on every row.</p></button>
-            <img class="shot" src="img/app/radio.webp" width="640" height="1387" loading="lazy" alt="Radio stations near New Delhi, each with its distance, format and bitrate.">
-          </li>
-          <li class="tour-item" data-shot="podcasts">
-            <button type="button"><h3>Podcasts that remember</h3><span class="dot" aria-hidden="true"></span>
-              <p>Follow shows and every episode picks up where you stopped, in the same app as your music.</p></button>
-            <img class="shot" src="img/app/podcasts.webp" width="640" height="1387" loading="lazy" alt="The Podcasts page with a followed show and its latest episodes.">
-          </li>
-          <li class="tour-item" data-shot="halo">
-            <button type="button"><h3>A player that's yours</h3><span class="dot" aria-hidden="true"></span>
-              <p>Seven player layouts, from a full-screen cover to a vinyl, a cassette and a glowing halo, plus five button designs and backgrounds drawn from the art.</p></button>
-            <img class="shot" src="img/app/halo.webp" width="640" height="1387" loading="lazy" alt="The halo player layout: a round cover ringed with light that moves with the music.">
-          </li>
-        </ol>
-        <p class="tour-hint">Swipe for more screens.</p>
-        <div class="tour-stage" aria-hidden="true">
-          <div class="phone">
-            <img class="on" data-shot="lyrics" src="img/app/lyrics.webp" width="640" height="1387" alt="">
-            <img data-shot="together" src="img/app/together.webp" width="640" height="1387" alt="" loading="lazy">
-            <img data-shot="radio" src="img/app/radio.webp" width="640" height="1387" alt="" loading="lazy">
-            <img data-shot="podcasts" src="img/app/podcasts.webp" width="640" height="1387" alt="" loading="lazy">
-            <img data-shot="halo" src="img/app/halo.webp" width="640" height="1387" alt="" loading="lazy">
+      <div class="bento">
+        <article class="card feat wide t-rose reveal">
+          <h3>Lyrics that keep time</h3>
+          <p>Lines light up word by word as they're sung, from LRCLIB, Better Lyrics, KuGou, NetEase and more. Tap a line to jump there.</p>
+          <div class="shot"><img src="img/app/lyrics.webp" width="640" height="1387" loading="lazy" alt="Synced lyrics for Danny Boy, the current line in bright white."></div>
+        </article>
+        <article class="card feat wide t-violet reveal">
+          <h3>Listen together</h3>
+          <p>Share a room code and friends hear the same second of the same song on their own phones, kept in step over an encrypted connection.</p>
+          <div class="shot"><img src="img/app/together.webp" width="640" height="1387" loading="lazy" alt="A Listen together room with its code, three listeners and the song playing."></div>
+        </article>
+        <article class="card feat t-amber reveal">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.9 16.1a10 10 0 0 1 0-14.1M19.1 2a10 10 0 0 1 0 14.1M7.8 13.2a6 6 0 0 1 0-8.4M16.2 4.8a6 6 0 0 1 0 8.4"/><circle cx="12" cy="9" r="2"/><path d="m12 11-3 11m3-11 3 11"/></svg></div>
+          <h3>Live radio near you</h3>
+          <p>More than 50,000 stations, sorted by distance, with each stream's format and bitrate.</p>
+        </article>
+        <article class="card feat t-teal reveal">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg></div>
+          <h3>Podcasts that remember</h3>
+          <p>Follow shows and every episode picks up where you stopped, next to your music.</p>
+        </article>
+        <article class="card feat big t-coral reveal">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M21 12h-3M12 21v-3M3 12h3"/></svg></div>
+          <h3>A player that's yours</h3>
+          <p>Seven layouts, from a full-screen cover to vinyl, cassette and a glowing halo, with backgrounds drawn from the art.</p>
+        </article>
+        <article class="card sound t-violet reveal" id="sound">
+          <div>
+            <h3>Sound, taken seriously.</h3>
+            <p>Good defaults for everyone, and the controls a careful listener goes looking for.</p>
           </div>
-          <p class="tour-caption">Screens from the Android app.</p>
-        </div>
+          <dl class="specs">
+            <div><dt>The best stream first</dt><dd>Ranked by how it sounds, upgraded mid-song without a gap.</dd></div>
+            <div><dt>Lossless add-ons</dt><dd>Max quality looks for a lossless copy. <a href="addons/">How add-ons work</a>.</dd></div>
+            <div><dt>15-band EQ and AutoEq</dt><dd>Presets, plus corrections for more than 8,000 headphones.</dd></div>
+            <div><dt>Bit-perfect to a USB DAC</dt><dd>Each song at its own sample rate on Android 14 and newer.</dd></div>
+            <div><dt>One steady volume</dt><dd>Quiet and loud tracks levelled to the same loudness.</dd></div>
+            <div><dt>Crossfade and Automix</dt><dd>Songs blend, shaped by how one ends and the next begins.</dd></div>
+          </dl>
+        </article>
       </div>
-    </div>
-  </section>
-
-  <section class="section" id="sound" aria-labelledby="sound-title">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <h2 id="sound-title">Sound, taken seriously.</h2>
-        <p>Good defaults for everyone, and the controls a careful listener goes looking for.</p>
-      </div>
-      <dl class="specs">
-        <div><dt>The best stream first</dt><dd>Streams are ranked by how they sound, not raw bitrate, and a few seconds in OpenTune switches to a clearly better copy without a gap.</dd></div>
-        <div><dt>Lossless, from add-ons you choose</dt><dd>Add a compatible audio service and Max quality checks it for a lossless copy of the song. <a href="addons/">How add-ons work</a>.</dd></div>
-        <div><dt>15-band equalizer and AutoEq</dt><dd>Drag the bands or pick a preset, and correct your headphones from more than 8,000 AutoEq measurements before your own EQ.</dd></div>
-        <div><dt>Bit-perfect to a USB DAC</dt><dd>On Android 14 and newer, a DAC gets each song at its own sample rate, with no mixing or resampling on the way.</dd></div>
-        <div><dt>One steady volume</dt><dd>Loudness levelling uses YouTube's own measurement of each song, so a quiet track and a loud one sit at the same level.</dd></div>
-        <div><dt>Crossfade and Automix</dt><dd>Songs blend into each other, shaped by how one ends and the next begins, or play back to back if you prefer.</dd></div>
-      </dl>
-      <ul class="more" aria-label="Also in the app">
-        <li><b>Offline downloads</b> for songs, albums and playlists</li>
-        <li><b>Android Auto</b> and home-screen widgets</li>
-        <li><b>Cast</b> to Chromecast and DLNA speakers</li>
-        <li><b>Smart playlists</b> that update themselves</li>
-        <li><b>Spotify import</b> for your playlists</li>
-        <li><b>Last.fm</b> and <b>ListenBrainz</b> scrobbling</li>
-        <li><b>Discord</b> status while you listen</li>
-        <li><b>Sleep timer</b> that fades the music out</li>
-        <li><b>What's this song?</b> from the microphone</li>
-        <li><b>Daily mixes</b> made on your phone</li>
-        <li><b>Replay</b>, your listening year in stories</li>
-        <li><b>Your own files</b> and Subsonic servers</li>
+      <ul class="chips" aria-label="Also in the app">
+        <li><b>Offline</b> downloads</li>
+        <li><b>Android Auto</b></li>
+        <li><b>Cast</b> to speakers</li>
+        <li><b>Smart</b> playlists</li>
+        <li><b>Spotify</b> import</li>
+        <li><b>Last.fm</b> and <b>ListenBrainz</b></li>
+        <li><b>Discord</b> status</li>
+        <li><b>Sleep</b> timer</li>
+        <li><b>What's this song?</b></li>
+        <li><b>Daily</b> mixes</li>
+        <li><b>Replay</b> stories</li>
+        <li><b>Your own files</b> and Subsonic</li>
       </ul>
     </div>
   </section>
 
   <section class="section" id="download" aria-labelledby="download-title">
-    <div class="wrap download">
-      <div class="android">
+    <div class="wrap get">
+      <div class="card android reveal">
         <h2 id="download-title">Get OpenTune for Android.</h2>
         <p class="version" id="android-version">The latest release, straight from GitHub.</p>
         <div class="btn-row">
@@ -202,39 +186,39 @@
           <a class="btn" href="https://github.com/justshivv/Opentune/releases">All releases</a>
         </div>
         <ol class="steps">
-          <li><b>Download the APK</b><span>The button above gets the universal build, which runs on every phone with Android 8.0 or newer.</span></li>
-          <li><b>Allow the install</b><span>Open the file. If Android asks, let your browser or file manager install apps, just this once.</span></li>
-          <li><b>Press play</b><span>No sign-in needed. OpenTune checks for new versions once a day and can update itself from Settings.</span></li>
+          <li><b>Download the APK</b><span>The universal build runs on every phone with Android 8.0 or newer.</span></li>
+          <li><b>Allow the install</b><span>Open the file. If Android asks, let your browser install apps, just this once.</span></li>
+          <li><b>Press play</b><span>No sign-in needed. OpenTune checks for updates daily and can update itself.</span></li>
         </ol>
-        <p class="small-print">Every release lists the SHA-256 checksums of its APKs. You can also follow the repository with <a href="https://github.com/ImranR98/Obtainium">Obtainium</a>.</p>
+        <p class="small-print">Every release lists the SHA-256 checksums of its APKs. You can also follow it with <a href="https://github.com/ImranR98/Obtainium">Obtainium</a>.</p>
       </div>
       <ul class="elsewhere" id="everywhere">
-        <li>
+        <li class="card t-amber reveal">
           <h3>Android TV and Google TV</h3>
-          <p>The same APK opens a TV layout driven by the remote. Sign in by scanning a code with your phone.</p>
-          <a class="btn" href="https://github.com/justshivv/Opentune/releases/latest" data-latest-apk>Get the APK for your TV</a>
+          <p>The same APK opens a TV layout for the remote. Sign in by scanning a code with your phone.</p>
+          <a class="btn btn-sm" href="https://github.com/justshivv/Opentune/releases/latest" data-latest-apk>Get the APK for your TV</a>
         </li>
-        <li>
+        <li class="card t-violet reveal">
           <h3>Windows, macOS and Linux</h3>
-          <p>A desktop app with a sidebar, synced lyrics beside the page and the queue always in view.</p>
+          <p>A desktop app with a sidebar, lyrics beside the page and the queue in view.</p>
           <div class="btn-row">
-            <a class="btn" href="https://github.com/justshivv/Opentune/releases/latest" data-desktop="windows">Windows</a>
-            <a class="btn" href="https://github.com/justshivv/Opentune/releases/latest" data-desktop="mac">macOS</a>
-            <a class="btn" href="https://github.com/justshivv/Opentune/releases/latest" data-desktop="linux">Linux</a>
+            <a class="btn btn-sm" href="https://github.com/justshivv/Opentune/releases/latest" data-desktop="windows">Windows</a>
+            <a class="btn btn-sm" href="https://github.com/justshivv/Opentune/releases/latest" data-desktop="mac">macOS</a>
+            <a class="btn btn-sm" href="https://github.com/justshivv/Opentune/releases/latest" data-desktop="linux">Linux</a>
           </div>
           <p class="note">Not yet signed by Apple or Microsoft, so the first launch shows a warning. On a Mac, right-click the app and choose Open.</p>
         </li>
-        <li>
+        <li class="card t-teal reveal">
           <h3>In your browser</h3>
-          <p>Nothing to install except a small extension in Chrome, Edge, Brave or Firefox, which plays the music and connects your accounts.</p>
-          <a class="btn" href="player/"><svg aria-hidden="true"><use href="#i-play"/></svg>Open the web player</a>
+          <p>Chrome, Edge, Brave or Firefox, with a small extension that plays the music.</p>
+          <a class="btn btn-sm" href="player/"><svg aria-hidden="true"><use href="#i-play"/></svg>Open the web player</a>
         </li>
-        <li>
+        <li class="card t-rose reveal">
           <h3>iPhone and iPad <span class="muted">· early</span></h3>
-          <p>Apple doesn't allow OpenTune on the App Store, so it installs through SideStore or AltStore, signed with your own Apple ID. iOS 16 or newer.</p>
+          <p>Installs through SideStore or AltStore with your own Apple ID. iOS 16 or newer.</p>
           <div class="btn-row">
-            <a class="btn" href="sidestore://source?url=https://justshivv.github.io/Opentune/ios/source.json">Add to SideStore</a>
-            <a class="btn" href="altstore://source?url=https://justshivv.github.io/Opentune/ios/source.json">Add to AltStore</a>
+            <a class="btn btn-sm" href="sidestore://source?url=https://justshivv.github.io/Opentune/ios/source.json">Add to SideStore</a>
+            <a class="btn btn-sm" href="altstore://source?url=https://justshivv.github.io/Opentune/ios/source.json">Add to AltStore</a>
           </div>
           <p class="note" id="ios-ver">Source: <code>https://justshivv.github.io/Opentune/ios/source.json</code></p>
         </li>
@@ -243,42 +227,29 @@
   </section>
 
   <section class="section" id="whats-new" aria-labelledby="new-title">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <h2 id="new-title">What's new.</h2>
-        <p id="rel-intro">Every build, straight from GitHub Releases.</p>
+    <div class="wrap duo">
+      <div class="card t-coral reveal">
+        <h2 id="new-title">What's new</h2>
+        <p class="intro" id="rel-intro">The latest build, straight from GitHub Releases.</p>
+        <div class="releases" id="rel-list" aria-live="polite"></div>
+        <p class="rel-foot" id="rel-source"><a href="https://github.com/justshivv/Opentune/releases">See every release on GitHub</a></p>
       </div>
-      <div class="releases" id="rel-list" aria-live="polite"></div>
-      <p class="rel-foot" id="rel-source"><a href="https://github.com/justshivv/Opentune/releases">See every release on GitHub</a></p>
-    </div>
-  </section>
-
-  <section class="section" id="open" aria-labelledby="open-title">
-    <div class="wrap open-grid">
-      <div class="reveal">
-        <h2 id="open-title">Built in the open.</h2>
+      <div class="card open reveal">
+        <h2 id="open-title">Built in the open</h2>
         <p>Every line of OpenTune is on GitHub under GPL-3.0. Read it, build it yourself, report a problem or suggest what comes next.</p>
-        <div class="open-links">
-          <a class="btn" href="https://github.com/justshivv/Opentune"><svg aria-hidden="true"><use href="#i-gh"/></svg>Source <span class="sub" id="stars" hidden></span></a>
-          <a class="btn" href="https://github.com/justshivv/Opentune/issues/new">Report a problem</a>
-          <a class="btn" href="https://discord.gg/6udrCVh5n">Discord</a>
+        <div class="btn-row">
+          <a class="btn btn-sm" href="https://github.com/justshivv/Opentune"><svg aria-hidden="true"><use href="#i-gh"/></svg>Source <span class="sub" id="stars" hidden></span></a>
+          <a class="btn btn-sm" href="https://github.com/justshivv/Opentune/issues/new">Report a problem</a>
+          <a class="btn btn-sm" href="https://discord.gg/6udrCVh5n">Discord</a>
         </div>
-      </div>
-      <div>
-        <div class="count" id="cal-total">&nbsp;</div>
-        <p class="count-note" id="cal-note">contributions in the last year</p>
-        <div class="cal-scroll" id="cal-scroll">
-          <div class="cal" id="cal"><div class="cal-months" id="cal-months" aria-hidden="true"></div><div class="cal-grid" id="cal-grid" role="img" aria-label="A year of daily work on OpenTune, one square a day."></div></div>
-        </div>
-        <div class="cal-legend" aria-hidden="true">Less <i></i><i style="background:oklch(0.42 0.09 30)"></i><i style="background:oklch(0.54 0.13 30)"></i><i style="background:oklch(0.66 0.17 30)"></i><i style="background:oklch(0.78 0.15 35)"></i> More</div>
       </div>
     </div>
   </section>
 
   <section class="section" id="faq" aria-labelledby="faq-title">
-    <div class="wrap faq">
-      <h2 id="faq-title">Questions, answered.</h2>
-      <div>
+    <div class="wrap">
+      <div class="section-head reveal"><h2 id="faq-title">Questions, answered.</h2></div>
+      <div class="faq">
         <details><summary>Is OpenTune free and ad-free?</summary><p>Yes. OpenTune is free, open-source software under GPL-3.0, with no ads and no subscription. The source is on <a href="https://github.com/justshivv/Opentune">GitHub</a>.</p></details>
         <details><summary>Do I need an account?</summary><p>No. Search and play straight away. You can sign in to YouTube Music if you want your likes and playlists, and connect Spotify, Last.fm or ListenBrainz if you use them.</p></details>
         <details><summary>Can I listen offline?</summary><p>Yes. Download songs, albums or whole playlists from their menus, and play the music files already on your phone.</p></details>
