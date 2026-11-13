@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -72,7 +73,8 @@ class TvPointer {
 /** The arrow, drawn at the pointer; it fades after a few seconds still and comes back when it moves. */
 @Composable
 fun TvCursor(pointer: TvPointer) {
-    var now by mutableLongStateOf(SystemClock.uptimeMillis())
+    // Remembered: a new state object on every recomposition was one the timer below never wrote.
+    var now by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
     LaunchedEffect(pointer.lastActive) {
         while (true) { now = SystemClock.uptimeMillis(); delay(250); if (now - pointer.lastActive > CURSOR_FADE_START_MS + 600) break }
     }
