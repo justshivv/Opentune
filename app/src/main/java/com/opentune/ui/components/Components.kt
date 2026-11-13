@@ -31,6 +31,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -427,14 +428,64 @@ fun DownloadBadge(state: DownloadState, progress: Float) {
     }
 }
 
-/** A card as it shows lifted out over its long-press menu. */
+/**
+ * A shelf card as it shows lifted out over its long-press menu: the card's own
+ * content, laid out exactly as in the shelf, so the copy that settles back lands
+ * on the card without the cover or the text moving.
+ */
 @Composable
-internal fun CardPreview(title: String, subtitle: String, thumbnailUrl: String?, round: Boolean) {
-    Column(Modifier.fillMaxSize().padding(10.dp)) {
-        Artwork(thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), shape = if (round) CircleShape else MaterialTheme.shapes.medium)
-        Spacer(Modifier.height(6.dp))
-        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+internal fun CardPreview(title: String, subtitle: String, thumbnailUrl: String?, type: BrowseType?, explicit: Boolean = false) {
+    Column(Modifier.fillMaxSize().padding(CARD_INSET)) {
+        ItemCardBody(title, subtitle, thumbnailUrl, type, explicit, Modifier, null)
+    }
+}
+
+/** The inset of a shelf card's content, and the lifted card's corner that follows its cover's. */
+internal val CARD_INSET = 6.dp
+internal val CARD_LIFT_CORNER = CARD_INSET + 16.dp
+
+/** A shelf card's cover, title and subtitle, shared by the card and its lifted copy. */
+@Composable
+private fun ColumnScope.ItemCardBody(
+    title: String,
+    subtitle: String,
+    thumbnailUrl: String?,
+    type: BrowseType?,
+    explicit: Boolean,
+    imageModifier: Modifier,
+    onArtLoaded: ((Boolean) -> Unit)?,
+) {
+    val round = type == BrowseType.ARTIST
+    Artwork(
+        thumbnailUrl.artworkAt(CARD_ART_PX),
+        Modifier.fillMaxWidth().aspectRatio(1f),
+        shape = if (round) CircleShape else MaterialTheme.shapes.medium,
+        placeholder = when (type) {
+            BrowseType.ARTIST -> Icons.Filled.Person
+            BrowseType.ALBUM -> Icons.Filled.Album
+            BrowseType.PLAYLIST -> Icons.AutoMirrored.Filled.PlaylistPlay
+            else -> Icons.Filled.MusicNote
+        },
+        imageModifier = imageModifier,
+        onLoaded = onArtLoaded,
+    )
+    Spacer(Modifier.height(8.dp))
+    Text(
+        title,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        style = MaterialTheme.typography.titleSmall,
+        textAlign = if (round) TextAlign.Center else TextAlign.Start,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    if (subtitle.isNotBlank() || explicit) {
+        SubtitleLine(
+            subtitle,
+            explicit = explicit,
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = if (round) TextAlign.Center else TextAlign.Start,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -456,17 +507,16 @@ fun ItemCard(
     /** What a long press opens; nothing when null. */
     menu: CardMenu? = null,
 ) {
-    val round = type == BrowseType.ARTIST
     val anchor = remember { MenuAnchor() }
     val view = androidx.compose.ui.platform.LocalView.current
     val haptics = rememberHaptics()
     var contextOpen by remember { mutableStateOf(false) }
     val at = anchor.rect
     if (contextOpen && at != null && menu != null) {
-        val preview: @Composable () -> Unit = { CardPreview(title, subtitle, thumbnailUrl, round) }
+        val preview: @Composable () -> Unit = { CardPreview(title, subtitle, thumbnailUrl, type, explicit) }
         when (menu) {
-            is CardMenu.ForSong -> SongContextMenu(menu.song, at, onDismiss = { contextOpen = false }, preview = preview)
-            is CardMenu.ForList -> CollectionContextMenu(menu.list, at, onDismiss = { contextOpen = false }, preview = preview)
+            is CardMenu.ForSong -> SongContextMenu(menu.song, at, onDismiss = { contextOpen = false }, liftCorner = CARD_LIFT_CORNER, preview = preview)
+            is CardMenu.ForList -> CollectionContextMenu(menu.list, at, onDismiss = { contextOpen = false }, liftCorner = CARD_LIFT_CORNER, preview = preview)
         }
     }
     Column(
@@ -478,39 +528,9 @@ fun ItemCard(
                 if (menu == null) Modifier.clickable(onClick = onClick)
                 else Modifier.menuClickable(onClick = onClick, onLongClick = { haptics.press(); contextOpen = true }),
             )
-            .padding(6.dp),
+            .padding(CARD_INSET),
     ) {
-        Artwork(
-            thumbnailUrl.artworkAt(CARD_ART_PX),
-            Modifier.fillMaxWidth().aspectRatio(1f),
-            shape = if (round) CircleShape else MaterialTheme.shapes.medium,
-            placeholder = when (type) {
-                BrowseType.ARTIST -> Icons.Filled.Person
-                BrowseType.ALBUM -> Icons.Filled.Album
-                BrowseType.PLAYLIST -> Icons.AutoMirrored.Filled.PlaylistPlay
-                else -> Icons.Filled.MusicNote
-            },
-            imageModifier = imageModifier,
-            onLoaded = onArtLoaded,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            title,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.titleSmall,
-            textAlign = if (round) TextAlign.Center else TextAlign.Start,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        if (subtitle.isNotBlank() || explicit) {
-            SubtitleLine(
-                subtitle,
-                explicit = explicit,
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = if (round) TextAlign.Center else TextAlign.Start,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        ItemCardBody(title, subtitle, thumbnailUrl, type, explicit, imageModifier, onArtLoaded)
     }
 }
 

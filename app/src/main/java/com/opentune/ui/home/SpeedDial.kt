@@ -57,7 +57,6 @@ import com.opentune.data.model.artworkAt
 import com.opentune.ui.cardMenu
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.CardMenu
-import com.opentune.ui.components.CardPreview
 import com.opentune.ui.components.CollectionContextMenu
 import com.opentune.ui.components.ItemCard
 import com.opentune.ui.components.MenuAnchor
@@ -159,49 +158,62 @@ private fun SpeedDialTile(item: ShelfItem, onClick: () -> Unit, modifier: Modifi
     var menuOpen by remember { mutableStateOf(false) }
     val at = anchor.rect
     if (menuOpen && at != null && menu != null) {
-        val preview: @Composable () -> Unit = { CardPreview(item.title, item.subtitle, item.thumbnailUrl, round) }
+        // The tile itself lifts out, the same face in the same corners, so it lands back without a jump.
+        val preview: @Composable () -> Unit = {
+            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(TILE_CORNER)).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
+                SpeedDialTileFace(item, round)
+            }
+        }
         when (menu) {
-            is CardMenu.ForSong -> SongContextMenu(menu.song, at, onDismiss = { menuOpen = false }, preview = preview)
-            is CardMenu.ForList -> CollectionContextMenu(menu.list, at, onDismiss = { menuOpen = false }, preview = preview)
+            is CardMenu.ForSong -> SongContextMenu(menu.song, at, onDismiss = { menuOpen = false }, liftCorner = TILE_CORNER, preview = preview)
+            is CardMenu.ForList -> CollectionContextMenu(menu.list, at, onDismiss = { menuOpen = false }, liftCorner = TILE_CORNER, preview = preview)
         }
     }
     Box(
         modifier
             .menuAnchor(anchor, view)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(TILE_CORNER))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .then(
                 if (menu == null) Modifier.clickable(onClick = onClick)
                 else Modifier.menuClickable(onClick = onClick, onLongClick = { haptics.press(); menuOpen = true }),
             ),
     ) {
-        if (round) {
-            Artwork(
-                item.thumbnailUrl.artworkAt(CARD_ART_PX),
-                Modifier.fillMaxSize(0.86f).align(Alignment.TopCenter).padding(top = 8.dp).aspectRatio(1f),
-                CircleShape,
-                placeholder = Icons.Rounded.Person,
-            )
-        } else {
-            Artwork(item.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.fillMaxSize(), RectangleShape)
-        }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.8f))))
-        Row(
-            Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 10.dp, end = 6.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                item.title,
-                color = Color.White,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            // An album, playlist or artist opens a page rather than playing.
-            if (item.browseId != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(18.dp), tint = Color.White)
-        }
+        SpeedDialTileFace(item, round)
+    }
+}
+
+private val TILE_CORNER = 10.dp
+
+/** A tile's cover, shade and name, shared by the tile and its lifted copy. */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.SpeedDialTileFace(item: ShelfItem, round: Boolean) {
+    if (round) {
+        Artwork(
+            item.thumbnailUrl.artworkAt(CARD_ART_PX),
+            Modifier.fillMaxSize(0.86f).align(Alignment.TopCenter).padding(top = 8.dp).aspectRatio(1f),
+            CircleShape,
+            placeholder = Icons.Rounded.Person,
+        )
+    } else {
+        Artwork(item.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.fillMaxSize(), RectangleShape)
+    }
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.8f))))
+    Row(
+        Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 10.dp, end = 6.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            item.title,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        // An album, playlist or artist opens a page rather than playing.
+        if (item.browseId != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(18.dp), tint = Color.White)
     }
 }
 
