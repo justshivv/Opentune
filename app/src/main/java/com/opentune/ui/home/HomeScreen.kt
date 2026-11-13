@@ -176,6 +176,17 @@ fun HomeScreen(
     val mixes = remember(records, seeds, hidden) {
         com.opentune.data.reco.HomeSeed.mixes(com.opentune.data.history.DailyMixes.build(records, hidden = hidden), seeds, records.size)
     }
+    // One mix for each genre played most, from the artists' genres as they're learnt; the most
+    // played artists are looked up first, a few at a time, and kept.
+    val artistGenres by com.opentune.data.metadata.ArtistGenres.genres.collectAsState()
+    val genreMixes = remember(records, artistGenres, hidden) {
+        com.opentune.data.history.GenreMixes.build(records, { artistGenres[com.opentune.data.metadata.ArtistGenres.key(it)] }, hidden = hidden)
+    }
+    LaunchedEffect(records.size / 25, hidden) {
+        val top = hidden.records(records).groupBy { com.opentune.data.history.Wrapped.mainArtist(it.artist) }
+            .filterKeys { it.isNotBlank() }.toList().sortedByDescending { it.second.size }.take(GENRE_ARTISTS).map { it.first }
+        if (top.isNotEmpty()) com.opentune.data.metadata.ArtistGenres.learn(top)
+    }
     val ui by AppSettings.ui.collectAsState()
     // Spotify's own mixes for the listener, when Spotify is connected (see SpotifySync).
     val spotifyConnected by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
@@ -326,10 +337,16 @@ fun HomeScreen(
                     else if (picks != null) QuickPicks(picks.copy(title = title, subtitle = ""), onItemClick, historyAction)
                     else SectionHeader(title, action = historyAction)
                 }
-                "mixes" -> if (mixes.isNotEmpty()) item(key = "mixes") {
-                    val seededOnly = mixes.all { it.id.startsWith("seed:") }
-                    MixesShelf(mixes, actions, if (seededOnly) "From the artists you follow, until you've played more" else MIXES_LINE,
-                        title = runtime.title(section.id, "Made for you today"))
+                "mixes" -> {
+                    if (mixes.isNotEmpty()) item(key = "mixes") {
+                        val seededOnly = mixes.all { it.id.startsWith("seed:") }
+                        MixesShelf(mixes, actions, if (seededOnly) "From the artists you follow, until you've played more" else MIXES_LINE,
+                            title = runtime.title(section.id, "Made for you today"))
+                    }
+                    // Your listening sorted by genre, right under the daily mixes.
+                    if (genreMixes.isNotEmpty()) item(key = "genre-mixes") {
+                        MixesShelf(genreMixes, actions, GENRE_MIXES_LINE, title = "Your genres")
+                    }
                 }
                 "spotify-mixes" -> if (spotifyMixes.isNotEmpty()) item(key = "spotifyMixes") {
                     MixesShelf(spotifyMixes, actions, "Spotify's mixes for you, from your likes and listening there",
@@ -550,6 +567,9 @@ private fun QuickPicks(shelf: HomeShelf, onItemClick: (ShelfItem) -> Unit, actio
 }
 
 private const val MIXES_LINE = "Daily mixes from what you play, new each day"
+private const val GENRE_MIXES_LINE = "What you play, sorted by genre, in a new order each day"
+/** How many of the most played artists have their genre looked up. */
+private const val GENRE_ARTISTS = 40
 
 /** Today's mixes from this phone's listening, each a card of four covers. */
 @Composable
