@@ -58,6 +58,7 @@ import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Person
@@ -322,6 +323,10 @@ fun PlayerLayout(
     val current = state.song
     val theme = state.theme
     val sound = state.sound
+    val isEpisode = remember(current.videoId) {
+        com.opentune.data.podcasts.Podcasts.isEpisode(current.videoId) ||
+        com.opentune.data.audiobooks.Audiobooks.isChapter(current.videoId)
+    }
 
     var paneName by rememberSaveable { mutableStateOf(if (initialLyrics) Pane.LYRICS.name else Pane.COVER.name) }
     val pane = Pane.valueOf(paneName)
@@ -345,6 +350,7 @@ fun PlayerLayout(
         if (flight.toSmall) flight.progress else 1f - flight.progress
     } else listsShown.value
     var showRemix by remember { mutableStateOf(false) }
+    var showSpeed by remember { mutableStateOf(false) }
     var showCast by remember { mutableStateOf(false) }
     var showOutput by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
@@ -381,7 +387,7 @@ fun PlayerLayout(
     val artworkMotion = com.opentune.ui.components.rememberArtworkMotion(state.isPlaying && state.ui.movingCover && !state.ui.reduceAnimation)
     val focusable = state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
             ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
-    val sheetOpen = showMenu || showRemix || showSleep || showCast || showOffset || showLyricsSource || showDetails || showSignal
+    val sheetOpen = showMenu || showRemix || showSpeed || showSleep || showCast || showOffset || showLyricsSource || showDetails || showSignal
     LaunchedEffect(touchedAt, focusable, sheetOpen) {
         // A sheet opening or closing leaves the controls as they are, the tap that opened
         // it included: bringing them back resized the lyrics under the sheet as it slid
@@ -629,9 +635,20 @@ fun PlayerLayout(
         // "Playing from", whose room it is, or the remix pill.
         val statusLine: @Composable () -> Unit = {
             val room by Together.room.collectAsState()
-            AnimatedContent(sound.isDefault, label = "remixPill") { normal ->
+            AnimatedContent(sound.isDefault to isEpisode, label = "remixPill") { (normal, episode) ->
                 if (room != null) {
                     TogetherPill(room!!, actions.openTogether)
+                } else if (episode) {
+                    AssistChip(
+                        onClick = { showSpeed = true },
+                        label = { Text(if (sound.speed == 1f) "Speed: 1×" else "Speed: %.2f×".format(sound.speed)) },
+                        leadingIcon = { Icon(Icons.Rounded.Speed, null, Modifier.size(18.dp)) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (sound.speed != 1f) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            labelColor = if (sound.speed != 1f) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                            leadingIconContentColor = if (sound.speed != 1f) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        ),
+                    )
                 } else if (normal) {
                     if (!state.ui.hideSongStatus) SongStatus(state.source)
                 } else {
@@ -1239,6 +1256,8 @@ fun PlayerLayout(
                                 style = if (apple) com.opentune.data.settings.ControlStyle.BLOOM else state.ui.controlStyle,
                                 animate = !state.ui.reduceAnimation && state.loadingMessage?.startsWith("Offline") != true,
                                 progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
+                                onRewind10 = if (isEpisode) { { actions.seekTo((position() - 10_000L).coerceAtLeast(0L)) } } else null,
+                                onFastForward30 = if (isEpisode) { { actions.seekTo((position() + 30_000L).coerceAtMost(state.durationMs.coerceAtLeast(0L))) } } else null,
                             )
                             if (!state.ui.hideVolumeBar && !minimal && roomy) VolumeBar(Modifier.padding(vertical = 4.dp))
                             Spacer(Modifier.height(10.dp))
@@ -1433,6 +1452,7 @@ fun PlayerLayout(
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = (windDown * 0.55f).coerceIn(0f, 0.55f) }.background(Color.Black))
         }
         if (showRemix) RemixSheet(onDismiss = { showRemix = false })
+        if (showSpeed) PlaybackSpeedSheet(onDismiss = { showSpeed = false })
         if (showOutput) com.opentune.ui.cast.AudioOutputSheet(
             onDismiss = { showOutput = false },
             onCast = { showOutput = false; showCast = true },
@@ -1469,6 +1489,7 @@ fun PlayerLayout(
                         }
                     }
                     MenuRow(Icons.Rounded.Equalizer, "Equalizer") { close(); actions.openEqualizer() }
+                    MenuRow(Icons.Rounded.Speed, if (sound.speed != 1f) "Playback speed (%.2f×)".format(sound.speed) else "Playback speed") { close(); showSpeed = true }
                     MenuRow(Icons.Rounded.GraphicEq, "Remix") { close(); showRemix = true }
                 },
                 end = { close ->

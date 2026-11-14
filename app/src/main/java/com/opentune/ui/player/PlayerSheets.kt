@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -177,4 +178,46 @@ private fun semitones(pitch: Float): String {
 @Composable
 private fun Unsupported(text: String) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+}
+
+/**
+ * Fast playback speed picker for podcasts and spoken audio: one-tap speed
+ * presets (0.75x to 2x) and a fine-tune slider. Changes apply live to Media3/ExoPlayer.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun PlaybackSpeedSheet(onDismiss: () -> Unit) {
+    val sound by AppSettings.sound.collectAsState()
+    val presets = listOf(0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+
+    FloatingCard(
+        onDismiss = onDismiss,
+        title = "Playback speed",
+        icon = Icons.Rounded.Speed,
+        subtitle = "%.2f×".format(sound.speed),
+        actions = {
+            SheetButton("Reset", onClick = { AppSettings.updateSound { it.copy(speed = 1f) } }, modifier = Modifier.weight(1f), enabled = sound.speed != 1f)
+            SheetButton("Done", onClick = onDismiss, modifier = Modifier.weight(1f), tone = SheetTone.Primary, closes = true)
+        },
+    ) {
+        Column(
+            Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                presets.forEach { s ->
+                    val selected = kotlin.math.abs(sound.speed - s) < 0.02f
+                    FilterChip(
+                        selected = selected,
+                        onClick = { AppSettings.updateSound { it.copy(speed = s) } },
+                        label = { Text(if (s == 1f) "1× (Normal)" else "${s}×".replace(".0×", "×")) },
+                    )
+                }
+            }
+
+            ValueSlider("Fine tune", sound.speed, 0.5f..2.5f, format = { "%.2f×".format(it) }) { v ->
+                AppSettings.updateSound { it.copy(speed = v) }
+            }
+        }
+    }
 }
