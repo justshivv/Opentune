@@ -64,6 +64,35 @@ object DiscordRpc {
 
     enum class Status { Off, Connecting, Ready, Error }
 
+    /** The kind of activity the card heads itself with ("Listening to OpenTune"), as the web player offers. */
+    enum class ActivityType(val code: Int, val label: String) {
+        LISTENING(2, "Listening to"), PLAYING(0, "Playing"), WATCHING(3, "Watching"), COMPETING(5, "Competing in"),
+    }
+
+    /** The Discord status set while the card shows. */
+    enum class OnlineStatus(val value: String, val label: String) {
+        ONLINE("online", "Online"), IDLE("idle", "Idle"), DND("dnd", "Do Not Disturb"), INVISIBLE("invisible", "Invisible"),
+    }
+
+    /** What member lists show under the name: the activity's name, the artist, or the song. */
+    enum class Lead(val code: Int, val label: String) { NAME(0, "The name"), ARTIST(1, "The artist"), SONG(2, "The song") }
+
+    /**
+     * How the card reads. Button text can name {song_name}, {artist_name} and {album_name}; a web
+     * address as the second button's text makes that button open it. Empty text keeps the usual label.
+     */
+    data class Options(
+        val activityType: ActivityType = ActivityType.LISTENING,
+        val status: OnlineStatus = OnlineStatus.ONLINE,
+        val lead: Lead = Lead.NAME,
+        /** Replaces "OpenTune" after "Listening to"; empty keeps it. */
+        val activityName: String = "",
+        val button1Visible: Boolean = true,
+        val button1Text: String = "",
+        val button2Visible: Boolean = true,
+        val button2Text: String = "",
+    )
+
     private const val GATEWAY = "wss://gateway.discord.gg/?v=10&encoding=json"
     private const val API = "https://discord.com/api/v10"
     private const val PROJECT_URL = "https://github.com/justshivv/Opentune"
@@ -88,6 +117,8 @@ object DiscordRpc {
     val status: StateFlow<Status> = _status.asStateFlow()
     private val _problem = MutableStateFlow<String?>(null)
     val problem: StateFlow<String?> = _problem.asStateFlow()
+    private val _options = MutableStateFlow(Options())
+    val options: StateFlow<Options> = _options.asStateFlow()
 
     /** OpenTune's own Discord application, from the build; empty in a build without one. */
     private val applicationId: String get() = com.opentune.core.BuildConfig.DISCORD_APP_ID.takeIf { it.matches(APP_ID) }.orEmpty()
@@ -96,6 +127,7 @@ object DiscordRpc {
         val p = context.getSharedPreferences("discord", Context.MODE_PRIVATE)
         prefs = p
         _enabled.value = p.getBoolean("enabled", true)
+        _options.value = p.getString("options", null)?.let { runCatching { readOptions(JSONObject(it)) }.getOrNull() } ?: Options()
         val sealed = p.getString("account", null) ?: return
         runCatching {
             val json = JSONObject(open(sealed))
@@ -157,6 +189,33 @@ object DiscordRpc {
         } else last?.let { update(it) }
     }
 
+    /** Keeps [options] and shows the playing song's card with them straight away. */
+    fun setOptions(options: Options) {
+        _options.value = options
+        prefs?.edit()?.putString("options", writeOptions(options).toString())?.apply()
+        last?.let { update(it) }
+    }
+
+    private fun writeOptions(o: Options) = JSONObject()
+        .put("activityType", o.activityType.name).put("status", o.status.name).put("lead", o.lead.name)
+        .put("activityName", o.activityName)
+        .put("button1Visible", o.button1Visible).put("button1Text", o.button1Text)
+        .put("button2Visible", o.button2Visible).put("button2Text", o.button2Text)
+
+    internal fun readOptions(j: JSONObject): Options {
+        val d = Options()
+        return Options(
+            activityType = runCatching { ActivityType.valueOf(j.optString("activityType")) }.getOrDefault(d.activityType),
+            status = runCatching { OnlineStatus.valueOf(j.optString("status")) }.getOrDefault(d.status),
+            lead = runCatching { Lead.valueOf(j.optString("lead")) }.getOrDefault(d.lead),
+            activityName = j.optString("activityName", d.activityName),
+            button1Visible = j.optBoolean("button1Visible", d.button1Visible),
+            button1Text = j.optString("button1Text", d.button1Text),
+            button2Visible = j.optBoolean("button2Visible", d.button2Visible),
+            button2Text = j.optString("button2Text", d.button2Text),
+        )
+    }
+
     private var last: NowPlaying? = null
     private var gateway: Gateway? = null
     private var idle: Job? = null
@@ -215,7 +274,17 @@ object DiscordRpc {
         return asset
     }
 
-    internal fun presence(token: String, now: NowPlaying): JSONObject {
+    private fun resolve(text: String, now: NowPlaying) = text
+        .replace("{song_name}", now.title)
+        .replace("{artist_name}", now.artist)
+        .replace("{album_name}", now.album.orEmpty())
+
+    private fun isLink(text: String) = Regex("^https?://\\S+$", RegexOption.IGNORE_CASE).matches(text.trim())
+
+    /** A button's label: the text given, or the usual one when it's empty or is a web address. */
+    private fun label(text: String, fallback: String) = fit(if (text.isBlank() || isLink(text)) fallback else text, LABEL_MAX)
+
+    internal fun presence(token: String, now: NowPlaying, options: Options = _options.value): JSONObject {
         val wall = System.currentTimeMillis()
         val rate = if (now.rate > 0f) now.rate else 1f
         val watch = "https://music.youtube.com/watch?v=${now.videoId}"
@@ -225,11 +294,11 @@ object DiscordRpc {
             // A type-2 (Listening) activity, the way BitChord shows it: Discord heads
             // the card "Listening to OpenTune", draws the song's progress as a bar
             // from the timestamps, and puts details over state under the artwork.
-            .put("name", APP_NAME)
-            .put("type", 2)
+            .put("name", fit(options.activityName.trim().ifEmpty { APP_NAME }, TEXT_MAX))
+            .put("type", options.activityType.code)
             .put("details", fit(if (rate != 1f) "${now.title} [${"%.2f".format(rate)}x]" else now.title, TEXT_MAX))
             .put("state", fit(now.artist.ifBlank { "Unknown artist" }, TEXT_MAX))
-            .put("status_display_type", 0)
+            .put("status_display_type", options.lead.code)
             .put("assets", JSONObject().apply {
                 if (image != null) put("large_image", image)
                 now.album?.takeIf { it.isNotBlank() }?.let { put("large_text", fit(it, TEXT_MAX)) }
@@ -239,17 +308,25 @@ object DiscordRpc {
                 .put("start", wall - (now.positionMs / rate).toLong())
                 .put("end", wall + ((now.durationMs - now.positionMs).coerceAtLeast(0) / rate).toLong()))
         }
-        if (com.opentune.data.isYouTubeId(now.videoId)) {
-            activity.put("details_url", watch)
-            activity.put("buttons", JSONArray().put(fit("Listen on YouTube Music", LABEL_MAX)).put(fit("Get OpenTune", LABEL_MAX)))
-            activity.put("metadata", JSONObject().put("button_urls", JSONArray().put(watch).put(PROJECT_URL)))
+        val youTube = com.opentune.data.isYouTubeId(now.videoId)
+        if (youTube) activity.put("details_url", watch)
+        val buttons = mutableListOf<Pair<String, String>>()
+        if (youTube && options.button1Visible) buttons += label(resolve(options.button1Text, now), "Listen on YouTube Music") to watch
+        if (options.button2Visible) {
+            // A web address given as the second button's text is where the button goes.
+            val text = options.button2Text.trim()
+            buttons += label(resolve(text, now), "Get OpenTune") to (if (isLink(text)) text else PROJECT_URL)
+        }
+        if (buttons.isNotEmpty()) {
+            activity.put("buttons", JSONArray().apply { buttons.forEach { put(it.first) } })
+            activity.put("metadata", JSONObject().put("button_urls", JSONArray().apply { buttons.forEach { put(it.second) } }))
         }
         applicationId.takeIf { it.isNotEmpty() }?.let { activity.put("application_id", it) }
         return JSONObject()
             .put("activities", JSONArray().put(activity))
             .put("afk", true)
             .put("since", wall)
-            .put("status", "online")
+            .put("status", options.status.value)
     }
 
     private fun api(token: String, path: String, body: String? = null): String {
@@ -293,7 +370,7 @@ object DiscordRpc {
 
         @Synchronized
         fun clear() {
-            presence = JSONObject().put("activities", JSONArray()).put("afk", true).put("since", 0).put("status", "online")
+            presence = JSONObject().put("activities", JSONArray()).put("afk", true).put("since", 0).put("status", _options.value.status.value)
             deliver()
         }
 
