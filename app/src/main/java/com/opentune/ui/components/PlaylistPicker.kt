@@ -133,7 +133,8 @@ internal fun PlaylistPicker(
         fullFraction = 1f,
         openFraction = OPEN_FRACTION,
         header = {
-            AddingStrip(songs, Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp))
+            // Naming shows the songs as the new playlist's cover instead.
+            if (!naming) AddingStrip(songs, Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp))
             if (!naming && many) FindField(query, { query = it }, Modifier.padding(horizontal = 14.dp).padding(bottom = 8.dp))
         },
         actions = when {
@@ -156,7 +157,8 @@ internal fun PlaylistPicker(
         },
     ) {
         AnimatedContent(naming, transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }, label = "picker",
-            modifier = if (naming) Modifier else Modifier.weight(1f)) { isNaming ->
+            // Naming may shrink to what's left above the keyboard, and scrolls inside that.
+            modifier = if (naming) Modifier.weight(1f, fill = false) else Modifier.weight(1f)) { isNaming ->
             if (isNaming) {
                 NameStep(songs, name, { name = it }, online, saveOnline, { saveOnline = it }, privacy, { privacy = it })
             } else {
@@ -321,7 +323,11 @@ private fun TargetRow(t: PickTarget, adding: Int, picked: Boolean, choosing: Boo
     }
 }
 
-/** Naming a new playlist: what will be its cover, big, and its name under it. */
+/**
+ * Naming a new playlist: its cover (the songs' covers) with the name as it's typed beside it,
+ * the name field, and keeping a copy on YouTube Music. Compact, and scrolling inside the card,
+ * so with the keyboard up the YouTube Music choice is still reachable above the buttons.
+ */
 @Composable
 private fun NameStep(
     songs: List<Song>, name: String, onName: (String) -> Unit,
@@ -331,13 +337,27 @@ private fun NameStep(
     val c = MaterialTheme.colorScheme
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(132.dp).clip(RoundedCornerShape(24.dp))) {
-            PlaylistCover(name.ifBlank { "New playlist" }, songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), RectangleShape)
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // The covers only: the name is written beside it, as it's typed, not over the art.
+            Box(Modifier.size(88.dp).clip(RoundedCornerShape(18.dp))) {
+                PlaylistCover(name.ifBlank { "New playlist" }, songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), RectangleShape, named = false)
+            }
+            Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                Text(name.trim().ifEmpty { com.opentune.i18n.Tr.t("New playlist") }, style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    color = if (name.isBlank()) c.onSurfaceVariant else c.onSurface)
+                Text(
+                    if (songs.size == 1) "${songs[0].title} · ${songs[0].artist}"
+                    else com.opentune.i18n.Tr.f("{0} songs · {1}", songs.size, songs.map { it.artist }.distinct().take(2).joinToString(", ")),
+                    style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(16.dp))
         Box(
-            Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(18.dp)).background(c.onSurface.copy(alpha = FIELD_TINT)).padding(horizontal = 18.dp),
+            Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(18.dp)).background(c.onSurface.copy(alpha = FIELD_TINT)).padding(horizontal = 18.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             if (name.isEmpty()) Text("Name your playlist", style = MaterialTheme.typography.titleMedium, color = c.onSurfaceVariant)
@@ -345,7 +365,8 @@ private fun NameStep(
                 textStyle = MaterialTheme.typography.titleMedium.copy(color = c.onSurface, fontWeight = FontWeight.SemiBold),
                 cursorBrush = SolidColor(c.primary), modifier = Modifier.fillMaxWidth().focusRequester(focus))
         }
-        if (online) AccountCopyOptions(saveOnline, onSaveOnline, privacy, onPrivacy, Modifier.fillMaxWidth().padding(top = 14.dp))
+        if (online) AccountCopyOptions(saveOnline, onSaveOnline, privacy, onPrivacy, Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp, end = 4.dp))
+        Spacer(Modifier.height(4.dp))
     }
 }
 
