@@ -73,7 +73,6 @@ import androidx.compose.material.icons.rounded.SubtitlesOff
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.Upgrade
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Translate
@@ -1448,7 +1447,7 @@ fun PlayerLayout(
                 onDismiss = { showMenu = false },
                 asPage = true,
                 top = { close ->
-                    MenuRow(Icons.Rounded.Upgrade, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
+                    MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
                     // Always here: the Comments button setting only takes it out of the button pill.
                     MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }
                 },
