@@ -1227,7 +1227,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
         }
     }
     val selectionRows = remember(shown) { shown.map { it.videoId to it } }
-    if (moreOpen) LikedMoreSheet(songs, actions) { moreOpen = false }
+
     // The page's background as Settings ask for it: from the newest liked song's cover when the
     // Liked cover setting is on, or Liked Music's own purple.
     // With the setting off it is coloured from the heart cover's own purple, as the cover is.
@@ -1237,6 +1237,8 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
         null
     }
     com.opentune.ui.browse.ListPageTint(coverUrl = likedCoverUrl, seed = LIKED_SEED) {
+        // The page's menu is composed inside the tint, so its sheet wears the page's colours.
+        if (moreOpen) LikedMoreSheet(songs, actions) { moreOpen = false }
         androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
             com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
                 com.opentune.ui.browse.PlaylistSearchHeader(search) {
@@ -1634,14 +1636,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             onPrivacy = null,
         )
     }
-    if (moreOpen) LocalListMoreSheet(playlist, songs, actions,
-        onRefresh = {
-            // Reading the cookie starts the WebView engine: off the main thread.
-            if (playlist.spotifyId != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) { com.opentune.ui.spotify.SpotifyConnection.checkPlaylists() }
-            else if (signedIn && remoteId != null) PlaylistSync.refresh(id)
-        },
-        onAddSongs = { adding = true }, onRename = { renaming = true }, onDelete = { deleting = true },
-        onShare = share, onPrivacy = if (online) ({ choosingPrivacy = true }) else null, onDismiss = { moreOpen = false })
+
     // Where the playlist stands with YouTube Music, under its cover.
     val status: (@Composable () -> Unit)? = when {
         // A copy of a Spotify playlist: it follows Spotify, not YouTube Music.
@@ -1680,6 +1675,15 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     val selection = com.opentune.ui.components.rememberSongSelection()
     // The page's background as Settings ask for it, from the playlist's cover or its first song's.
     com.opentune.ui.browse.ListPageTint(coverUrl = playlist.coverUrl ?: playlist.songs.firstOrNull()?.thumbnailUrl) {
+        // The page's menu is composed inside the tint, so its sheet wears the page's colours.
+        if (moreOpen) LocalListMoreSheet(playlist, songs, actions,
+            onRefresh = {
+                // Reading the cookie starts the WebView engine: off the main thread.
+                if (playlist.spotifyId != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) { com.opentune.ui.spotify.SpotifyConnection.checkPlaylists() }
+                else if (signedIn && remoteId != null) PlaylistSync.refresh(id)
+            },
+            onAddSongs = { adding = true }, onRename = { renaming = true }, onDelete = { deleting = true },
+            onShare = share, onPrivacy = if (online) ({ choosingPrivacy = true }) else null, onDismiss = { moreOpen = false })
         androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
             com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
                 com.opentune.ui.browse.PlaylistSearchHeader(search) {

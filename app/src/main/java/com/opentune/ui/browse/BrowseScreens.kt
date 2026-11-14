@@ -894,7 +894,7 @@ fun CollectionScreen(
             ListOrder.Z_TO_A -> found.sortedByDescending { it.title.lowercase() }
         }
     }
-    if (moreOpen && loaded != null) ListMoreSheet(loaded, isAlbum, actions, onRefresh = { loader.reload() }, onDismiss = { moreOpen = false })
+
 
     // Songs picked together (long press, then Select): the bar over the top acts on them.
     val selection = com.opentune.ui.components.rememberSongSelection()
@@ -904,6 +904,8 @@ fun CollectionScreen(
         coverUrl = if (likes) null else loaded?.thumbnailUrl?.takeIf { it.isNotBlank() } ?: loaded?.songs?.firstOrNull()?.thumbnailUrl,
         seed = if (likes) com.opentune.ui.library.LIKED_SEED else null,
     ) {
+        // The page's menu is composed inside the tint, so its sheet wears the page's colours.
+        if (moreOpen && loaded != null) ListMoreSheet(loaded, isAlbum, actions, onRefresh = { loader.reload() }, onDismiss = { moreOpen = false })
         androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
             GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
                 PlaylistSearchHeader(search) {
