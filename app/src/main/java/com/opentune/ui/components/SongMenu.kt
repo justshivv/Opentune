@@ -512,32 +512,6 @@ fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     }
 }
 
-/** One playlist to pick in [AddToPlaylistDialog]: its cover, its name, how many songs, and a tick if the song is in it. */
-@Composable
-internal fun PlaylistPickRow(
-    title: String,
-    subtitle: String,
-    art: @Composable () -> Unit,
-    added: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(52.dp).clip(RoundedCornerShape(12.dp))) { art() }
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (added) Icon(Icons.Rounded.CheckCircle, "Already in this playlist", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-    }
-}
-
 /**
  * Picks one of the playlists made in the app, or makes a new one with [song]
  * in it. Signed in, the account's own YouTube Music playlists are listed too,
@@ -573,95 +547,41 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
             }
         }
     }
-    var naming by remember { mutableStateOf(playlists.isEmpty() && accountPlaylists.isEmpty()) }
-    var name by remember { mutableStateOf("") }
-    var saveOnline by remember { mutableStateOf(true) }
-    var privacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
-    FloatingDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (naming) "New playlist" else "Add to playlist") },
-        text = {
-            if (naming) {
-                Column {
-                    OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("Name") })
-                    if (online) AccountCopyOptions(saveOnline, { saveOnline = it }, privacy, { privacy = it }, Modifier.padding(top = 12.dp))
+    PlaylistPicker(
+        songs = listOf(song),
+        local = playlists.map { p ->
+            val has = p.songs.any { it.videoId == song.videoId }
+            localTarget(p, if (has) 1 else 0) {
+                if (has) {
+                    com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", p.name), context)
+                } else {
+                    LibraryStore.addToPlaylist(p.id, song)
+                    com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", p.name), context)
                 }
-            } else {
-                LazyColumn(Modifier.heightIn(max = 420.dp)) {
-                    item {
-                        PlaylistPickRow(
-                            title = "New playlist",
-                            subtitle = "With this song in it",
-                            art = {
-                                Box(
-                                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                                    contentAlignment = Alignment.Center,
-                                ) { Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp)) }
-                            },
-                            onClick = { naming = true },
-                        )
-                    }
-                    items(playlists, key = { it.id }) { p ->
-                        val has = p.songs.any { it.videoId == song.videoId }
-                        PlaylistPickRow(
-                            title = p.name,
-                            subtitle = if (has) "Already in it" else if (p.songs.size == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", p.songs.size),
-                            art = { PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), RectangleShape) },
-                            added = has,
-                            onClick = {
-                                if (has) {
-                                    com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", p.name), context)
-                                } else {
-                                    LibraryStore.addToPlaylist(p.id, song)
-                                    com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", p.name), context)
-                                }
-                                onDone()
-                            },
-                        )
-                    }
-                    if (accountPlaylists.isNotEmpty()) {
-                        item {
-                            Text(
-                                "On YouTube Music",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 4.dp),
-                            )
-                        }
-                        items(accountPlaylists, key = { "yt:${it.playlistId}" }) { p ->
-                            val has = inAccount[p.playlistId] == true
-                            PlaylistPickRow(
-                                title = p.title,
-                                subtitle = if (has) "Already in it" else p.subtitle.ifBlank { "YouTube Music" },
-                                art = { Artwork(p.thumbnailUrl, Modifier.fillMaxSize(), RectangleShape, placeholder = Icons.AutoMirrored.Rounded.QueueMusic) },
-                                added = has,
-                            ) {
-                                if (has) {
-                                    com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", p.title), context)
-                                    onDone()
-                                    return@PlaylistPickRow
-                                }
-                                PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
-                                    if (ok) com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", p.title), context)
-                                    else com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add it to {0}", p.title), context)
-                                }
-                                onDone()
-                            }
-                        }
-                    }
-                }
+                onDone()
             }
         },
-        confirmButton = {
-            if (naming) {
-                SheetButton("Create", onClick = {
-                    LibraryStore.createPlaylist(name, song, privacy.takeIf { online && saveOnline })
-                    com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", name.trim().ifEmpty { "New playlist" }), context)
-                    onDone()
-                })
+        account = accountPlaylists.map { p ->
+            val has = inAccount[p.playlistId]
+            accountTarget(p, has?.let { if (it) 1 else 0 }) {
+                if (has == true) {
+                    com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", p.title), context)
+                } else {
+                    PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
+                        if (ok) com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", p.title), context)
+                        else com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add it to {0}", p.title), context)
+                    }
+                }
+                onDone()
             }
         },
-        dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
+        online = online,
+        onCreate = { name, privacy ->
+            LibraryStore.createPlaylist(name, song, privacy)
+            com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", name), context)
+            onDone()
+        },
+        onDismiss = onDismiss,
     )
 }
 

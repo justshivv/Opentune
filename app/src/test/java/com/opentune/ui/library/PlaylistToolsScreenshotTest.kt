@@ -28,6 +28,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.performSemanticsAction
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -117,6 +118,19 @@ class PlaylistToolsScreenshotTest {
         } }
         compose.onNodeWithText("Spotify collection").assertDoesNotExist()
         compose.onNodeWithText("Late nights").assertExists()
+    }
+
+    /** Adding several songs to a playlist that has some of them: it says so, and only the missing ones go in. */
+    @Test fun addingSeveralSkipsTheOnesAlreadyThere() {
+        compose.setContent { OpenTuneTheme(ThemeSettings()) {
+            com.opentune.ui.components.AddAllToPlaylistDialog(songs, onDismiss = {}, onDone = {})
+        } }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("2 of 3 already in it · 2 songs").assertExists()
+        compose.onNode(androidx.compose.ui.test.hasClickAction() and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Late nights")), useUnmergedTree = true)
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(500)
+        org.junit.Assert.assertEquals(songs.map { it.videoId }, LibraryStore.playlist(id)!!.songs.map { it.videoId })
     }
 
     /**

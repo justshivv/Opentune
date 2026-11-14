@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -53,25 +54,34 @@ internal fun AudioAddonsSheet(onDismiss: () -> Unit) {
     var adding by remember { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var addError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(adding) { if (adding) addError = null }
     LaunchedEffect(Unit) { AddonRefresh.refresh() }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         AudioAddonsPage(onDismiss, onAdd = { adding = true }, notice = notice, onNotice = { notice = it })
     }
-    if (adding) AlertDialog(onDismissRequest = { if (!working) adding = false }, title = { com.opentune.ui.components.FrostBehind(enabled = !com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceBlur); Text("Add audio source") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Paste a service root or manifest URL. OpenTune loads its capabilities without installing executable code.")
-            OutlinedTextField(input, { input = it.take(2048) }, label = { Text("Add-on URL (HTTPS, or http on this device)") }, singleLine = true)
-            if (working) LinearProgressIndicator(Modifier.fillMaxWidth())
-            notice?.let { Text(it) }
-        }
-    }, confirmButton = { TextButton(enabled = input.isNotBlank() && !working, onClick = { scope.launch {
-        working = true; notice = null
-        try { val base = AddonProtocol.normalize(input); AddonStore.add(base, AddonClient.forBase(base).manifest()); input = ""; adding = false; notice = "Source added" }
-        catch (e: CancellationException) { throw e }
-        catch (e: AddonHttp.Failure) { notice = com.opentune.i18n.Tr.f("Service returned HTTP {0}", e.status) }
-        catch (_: Exception) { notice = "Could not load this manifest. Check the URL and connection." }
-        finally { working = false }
-    } }) { Text(com.opentune.ui.theme.tr("Add source")) } }, dismissButton = { TextButton(enabled = !working, onClick = { adding = false }) { Text(com.opentune.ui.theme.tr("Cancel")) } })
+    if (adding) AddSourceCard(
+        input = input,
+        onInput = { input = it.take(2048) },
+        working = working,
+        onDismiss = { if (!working) adding = false },
+        onAdd = { scope.launch {
+            working = true
+            addError = null
+            try {
+                val base = AddonProtocol.normalize(input)
+                AddonStore.add(base, AddonClient.forBase(base).manifest())
+                input = ""
+                adding = false
+                notice = "Source added"
+            } catch (e: CancellationException) { throw e }
+            catch (e: AddonHttp.Failure) { addError = com.opentune.i18n.Tr.f("The service answered with HTTP {0}. Check the link, or try again later.", e.status) }
+            catch (e: IllegalArgumentException) { addError = e.message?.takeIf { it.isNotBlank() && it.length < 120 } ?: "That link can't be used. It needs HTTPS, or http on this device." }
+            catch (_: Exception) { addError = "Couldn't read this source. Check the link and your connection." }
+            finally { working = false }
+        } },
+        error = addError,
+    )
 }
 
 /**
@@ -347,4 +357,84 @@ private fun SmallPill(label: String, danger: Boolean = false, onClick: () -> Uni
         Modifier.clip(RoundedCornerShape(50)).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
             .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 7.dp),
     ) { Text(label, style = MaterialTheme.typography.labelLarge, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface) }
+}
+
+/**
+ * Adding a source by its link: the link field with Paste beside it, what will happen in a line
+ * under it, and while the source is read, a spinner on the button; if it can't be added, why,
+ * in the card, so the link can be fixed there.
+ */
+@Composable
+internal fun AddSourceCard(input: String, onInput: (String) -> Unit, working: Boolean, onDismiss: () -> Unit, onAdd: () -> Unit, error: String?) {
+    val c = MaterialTheme.colorScheme
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val looksLikeLink = input.trim().let { it.startsWith("https://", true) || it.startsWith("http://", true) || (it.contains('.') && !it.contains(' ')) }
+    com.opentune.ui.components.FloatingCard(
+        onDismiss = onDismiss,
+        title = "Add an audio source",
+        icon = Icons.Rounded.Link,
+        dismissible = !working,
+        actions = {
+            Box(Modifier.weight(1f)) {
+                com.opentune.ui.components.SheetButton("Cancel", onClick = onDismiss, enabled = !working,
+                    tone = com.opentune.ui.components.SheetTone.Neutral, closes = true)
+            }
+            Box(Modifier.weight(1f)) {
+                com.opentune.ui.components.SheetButton(if (working) "Adding…" else "Add source", onClick = onAdd,
+                    enabled = looksLikeLink && !working, loading = working, tone = com.opentune.ui.components.SheetTone.Primary)
+            }
+        },
+    ) {
+        Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Paste the link to a source's service or its manifest. OpenTune reads what it offers. Nothing is installed.",
+                style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
+            Row(
+                Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(18.dp)).background(c.onSurface.copy(alpha = com.opentune.ui.components.FIELD_TINT))
+                    .then(if (error != null) Modifier.border(1.5.dp, c.error, RoundedCornerShape(18.dp)) else Modifier)
+                    .padding(start = 16.dp, end = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.Link, null, tint = c.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                Box(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    if (input.isEmpty()) Text("https://…", style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant)
+                    androidx.compose.foundation.text.BasicTextField(
+                        input, onInput, singleLine = true, enabled = !working,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.onSurface),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.primary),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (looksLikeLink && !working) onAdd() }),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                    )
+                }
+                if (input.isEmpty()) {
+                    // Paste straight from the clipboard: links are long and fiddly to type.
+                    Box(
+                        Modifier.clip(RoundedCornerShape(50)).background(c.onSurface)
+                            .clickable { clipboard.getText()?.text?.trim()?.let { onInput(it) } }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    ) { Text("Paste", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = c.surface) }
+                } else if (!working) {
+                    IconButton(onClick = { onInput("") }) { Icon(Icons.Rounded.Close, "Clear", Modifier.size(20.dp)) }
+                }
+            }
+            when {
+                error != null -> Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.errorContainer).padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.ErrorOutline, null, tint = c.onErrorContainer, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(error, style = MaterialTheme.typography.bodyMedium, color = c.onErrorContainer)
+                }
+                working -> Text("Reading the source…", style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
+                else -> Text("HTTPS, or http for a service on this device", style = MaterialTheme.typography.bodySmall,
+                    color = c.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
+            }
+        }
+    }
 }

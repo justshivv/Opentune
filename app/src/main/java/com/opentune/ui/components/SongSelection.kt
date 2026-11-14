@@ -208,8 +208,6 @@ internal fun AddAllToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit, on
     val context = LocalContext.current.applicationContext
     val all by LibraryStore.playlists.collectAsState()
     val playlists = remember(all) { all.filter { it.spotifyId == null } }
-    var naming by remember { mutableStateOf(playlists.isEmpty()) }
-    var name by remember { mutableStateOf("") }
     fun addTo(id: String, title: String) {
         val have = LibraryStore.playlist(id)?.songs?.map { it.videoId }?.toHashSet().orEmpty()
         val fresh = songs.filter { it.videoId !in have }
@@ -217,40 +215,13 @@ internal fun AddAllToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit, on
         com.opentune.data.Pills.done(if (fresh.isEmpty()) com.opentune.i18n.Tr.f("Already in {0}", title) else com.opentune.i18n.Tr.f("Added {0} to {1}", fresh.size, title), context)
         onDone()
     }
-    FloatingDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (naming) "New playlist" else com.opentune.i18n.Tr.f("Add {0} to a playlist", songs.size)) },
-        text = {
-            if (naming) androidx.compose.material3.OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("Name") })
-            else LazyColumn(Modifier.heightIn(max = 420.dp)) {
-                item {
-                    PlaylistPickRow(
-                        title = "New playlist",
-                        subtitle = "With these songs in it",
-                        art = {
-                            Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)), Alignment.Center) {
-                                Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
-                            }
-                        },
-                        onClick = { naming = true },
-                    )
-                }
-                items(playlists, key = { it.id }) { p ->
-                    PlaylistPickRow(
-                        title = p.name,
-                        subtitle = if (p.songs.size == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", p.songs.size),
-                        art = { PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.fillMaxWidth(), RectangleShape) },
-                        onClick = { addTo(p.id, p.name) },
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            if (naming) SheetButton("Create", onClick = {
-                val id = LibraryStore.createPlaylist(name.trim().ifEmpty { "New playlist" })
-                addTo(id, name.trim().ifEmpty { "New playlist" })
-            })
-        },
-        dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
+    val ids = remember(songs) { songs.mapTo(HashSet()) { it.videoId } }
+    PlaylistPicker(
+        songs = songs,
+        local = playlists.map { p -> localTarget(p, p.songs.count { it.videoId in ids }) { addTo(p.id, p.name) } },
+        account = emptyList(),
+        online = false,
+        onCreate = { name, _ -> addTo(LibraryStore.createPlaylist(name), name) },
+        onDismiss = onDismiss,
     )
 }
