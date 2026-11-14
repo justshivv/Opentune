@@ -364,12 +364,12 @@ fun FloatingCard(
                                         ),
                                     )
                                     .background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.07f else 0.18f), 0.35f to Color.White.copy(alpha = 0f)))
-                                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.22f else 0.6f), Color.White.copy(alpha = 0.04f))), shape)
+                                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = (if (dark) 0.22f else 0.6f) * edge), Color.White.copy(alpha = 0.04f * edge))), shape)
                             } else {
                                 Modifier
                                     // Solid, so its shadow never shows through.
                                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape)
+                                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f * edge), shape)
                             },
                         )
                         // Taps on the card stay on the card.
