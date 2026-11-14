@@ -1,8 +1,9 @@
 import { Radio, Shuffle } from 'lucide-react';
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useParams } from 'react-router';
 import { PlayIcon } from '@/components/icons/Transport';
 import { Artwork } from '@/components/music/Artwork';
+import { DetailBar } from '@/components/music/DetailBar';
 import { browseHref } from '@/components/music/links';
 import { playList, shuffleList } from '@/components/music/play';
 import { usePlayer } from '@/state/player';
@@ -28,12 +29,13 @@ function luminance(color: string): number {
  * logo has drawn, the name stands in, so the header is never left empty; a
  * logo that fails to load leaves the name.
  */
-function ArtistName({ name, apple }: { name: string; apple: AppleArtistArt | null }) {
+function ArtistName({ name, apple, heading }: { name: string; apple: AppleArtistArt | null; heading: React.RefObject<HTMLHeadingElement | null> }) {
   const logo = apple?.logoUrl ?? null;
   const [shown, setShown] = useState<string | null>(null);
   const logoShown = !!logo && shown === logo;
   return (
     <h1
+      ref={heading}
       className="type-header-emphasized text-[clamp(34px,5vw,64px)] leading-[1.05] [text-shadow:0_2px_20px_#00000059] data-logo:w-full data-logo:[text-shadow:none]"
       data-logo={logoShown || undefined}
     >
@@ -74,6 +76,7 @@ export default function ArtistPage() {
     [apple],
   );
   usePageTint(tint);
+  const heading = useRef<HTMLHeadingElement>(null);
 
   if (missing) return <NeedsExtension />;
   if (artist.isError) return <LoadError error={artist.error} onRetry={() => void artist.refetch()} />;
@@ -81,8 +84,19 @@ export default function ArtistPage() {
 
   const data = artist.data;
   const topSongs = { title: `${data.name}: Top Songs`, type: 'artist' as const, id: data.id };
+  const play = () => playList(data.topSongs, 0, { source: topSongs });
   return (
     <>
+      {/* Back, and once the name scrolls away, the artist's photo, name and Play along the top. */}
+      <DetailBar
+        title={data.name}
+        thumbnail={apple?.heroUrl ?? data.heroImage}
+        watch={heading}
+        onPlay={play}
+        canPlay={data.topSongs.length > 0}
+        round
+        overPhoto
+      />
       {/* The hero (report §4): full-bleed, ~1.93:1 of the content column, the name and actions centred near the bottom. */}
       <header className="relative max-h-[70vh] overflow-hidden">
         <div className="ot-parallax relative w-full">
@@ -105,7 +119,7 @@ export default function ArtistPage() {
           aria-hidden="true"
         />
         <div className="ot-detail-text absolute inset-x-0 bottom-6 flex flex-col items-center gap-1.5 px-(--body-gutter) text-center">
-          <ArtistName name={data.name} apple={apple} />
+          <ArtistName name={data.name} apple={apple} heading={heading} />
           {data.audience && <p className="type-callout-emphasized text-secondary">{data.audience}</p>}
           {/* Shuffle · Play · Radio: the artist's top songs in order or mixed, or a station built from them. */}
           <div className="mt-2.5 flex items-center gap-4">
@@ -130,7 +144,7 @@ export default function ArtistPage() {
               }
               aria-label={`Play ${data.name}`}
               disabled={!data.topSongs.length}
-              onClick={() => playList(data.topSongs, 0, { source: topSongs })}
+              onClick={play}
             >
               <PlayIcon size={26} />
             </button>

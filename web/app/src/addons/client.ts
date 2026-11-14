@@ -4,6 +4,7 @@ import { endpoint, flacInfo, manifestOf, matches, publicHttps, qualityParams, ty
 import { BridgeCallError } from '@opentune/shared/bridge';
 import { getBridge } from '@/extension/bridge';
 import { fetchPublished, mergeCatalog } from './catalog';
+import { askHost } from './hostAccess';
 import { needsVerification, verificationHeaders } from './verification';
 const KEY = 'opentune:audio-addons';
 const SAAVN_KEY = 'opentune:jiosaavn';
@@ -123,6 +124,11 @@ export async function allowSource(raw: string): Promise<void> {
   const bridge = getBridge(); if (!bridge) throw new Error('Install the OpenTune extension first');
   await bridge.call('addon.requestPermission', { url: publicHttps(raw).href });
 }
+/** Whether the extension may reach [origin] for add-ons and JioSaavn, or null without the extension. */
+export const hostAllowed = (origin: string): Promise<boolean | null> => {
+  const bridge = getBridge();
+  return askHost(bridge ? (method, params) => bridge.call(method, params) : null, origin);
+};
 /** Asks for every one of these sources' hosts on one extension page (an older extension asks for the first). */
 export async function allowSources(sources: Addon[]): Promise<void> {
   const bridge = getBridge(); if (!bridge) throw new Error('Install the OpenTune extension first');
