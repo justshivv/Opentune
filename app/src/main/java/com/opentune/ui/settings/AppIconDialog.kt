@@ -100,7 +100,7 @@ internal fun AppIconDialog(onDismiss: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Box(Modifier.size(84.dp).border(2.5.dp, ring, RoundedCornerShape(26.dp)).padding(6.dp), contentAlignment = Alignment.Center) {
-                                Image(bitmap, icon.title, Modifier.fillMaxSize().graphicsLayer { scaleX = scale; scaleY = scale })
+                                Image(bitmap, icon.title, Modifier.fillMaxSize().then(if (chosen) Modifier.clip(RoundedCornerShape(20.dp)) else Modifier).graphicsLayer { scaleX = scale; scaleY = scale })
                                 if (chosen) Box(
                                     Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 6.dp).size(24.dp).clip(CircleShape)
                                         .background(MaterialTheme.colorScheme.primary),
