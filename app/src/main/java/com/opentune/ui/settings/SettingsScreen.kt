@@ -1211,6 +1211,9 @@ private fun settingsSections(
                 Entry("Dock lens", "navigation bar dock tab highlight selection pill indicator jelly stretch glide") {
                     NavRow("Dock lens", { dockLensDialog = true }, summary = ui.dockLens.summary, icon = Icons.Rounded.Lens, value = ui.dockLens.label)
                 },
+                Entry("Dock slides away", "dock slides away hide navigation bar bottom pages liked playlist artist settings mini player") {
+                    ToggleRow("Dock slides away", ui.dockSlidesAway, { v -> AppSettings.updateUi { it.copy(dockSlidesAway = v) } }, summary = "On Liked, playlists, artist pages and Settings, the dock and Search slide away and the mini player has the bottom to itself", icon = Icons.Rounded.Dock)
+                },
                 Entry("Opening animation", "splash start launch intro logo reveal dive") {
                     ToggleRow(
                         "Opening animation",

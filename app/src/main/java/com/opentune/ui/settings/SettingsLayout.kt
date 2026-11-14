@@ -109,7 +109,7 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "motion", "Motion and feel", "Animations, haptics, smoothness and battery", Icons.Rounded.Animation,
         listOf(
-            "Dock" to listOf("Dock animation", "Dock lens"),
+            "Dock" to listOf("Dock animation", "Dock lens", "Dock slides away"),
             "Pages and player" to listOf("Opening animation", "Page transitions", "Player opening"),
             "Feel" to listOf("Haptic feedback"),
             "Smoothness" to listOf("Performance profile", "High performance mode", "Reduce animation"),
