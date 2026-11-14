@@ -118,7 +118,8 @@ private val QUEUE_ROW = 64.dp
 /**
  * The queue inside the player: now playing, then what's next. Rows drag by
  * their handle (or a long press) to reorder; the move is sent once, on drop.
- * With shuffle on, rows don't drag: the play order isn't the list order.
+ * Shuffle from the player's button reorders the queue itself ([shuffled]), so rows still drag.
+ * The player's own shuffle mode (from the notification, say) plays out of list order: no drag then.
  * Songs smart shuffle mixed in carry a small sparkle.
  */
 @Composable
@@ -133,6 +134,8 @@ fun QueuePane(
     onMove: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
     smartShuffle: Boolean = false,
+    /** Shuffled by reordering the queue: still in play order, so rows drag. */
+    shuffled: Boolean = false,
     /** Apple Music's words for what comes after the queue. */
     appleWords: Boolean = false,
 ) {
@@ -170,11 +173,12 @@ fun QueuePane(
             Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.AllInclusive, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
                 Column(Modifier.padding(start = 14.dp)) {
-                    Text(if (appleWords && autoplay && !shuffle && !smartShuffle) "AutoPlay" else "Up next",
+                    Text(if (appleWords && autoplay && !shuffle && !shuffled && !smartShuffle) "AutoPlay" else "Up next",
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
                         when {
                             shuffle -> "Shuffled · turn shuffle off to reorder"
+                            shuffled -> "Shuffled · drag to change the order"
                             smartShuffle -> "Smart shuffle · similar songs are marked with a sparkle"
                             autoplay && appleWords -> "Similar music will keep playing"
                             autoplay -> "Similar music keeps playing after these"

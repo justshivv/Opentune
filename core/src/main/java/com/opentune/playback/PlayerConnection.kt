@@ -3,6 +3,7 @@ package com.opentune.playback
 import android.content.ComponentName
 import android.content.Context
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Tracks
@@ -287,6 +288,7 @@ class PlayerConnection(private val context: Context) {
         endSmartShuffle()
         SmartShuffle.clear()
         val kept = handQueued(controller)
+        beforeShuffle = null
         controller.setMediaItems((listOf(song.copy(queueTier = QueueTier.CONTEXT)) + kept).map { it.toMediaItem() }, 0, 0L)
         controller.prepare()
         controller.play()
@@ -362,6 +364,8 @@ class PlayerConnection(private val context: Context) {
      */
     private fun setQueue(controller: MediaController, ordered: List<Song>, startIndex: Int, startPositionMs: Long): Job? {
         val stamp = ++queueStamp
+        // A new queue: a shuffle turned on for the last one has nothing to put back.
+        beforeShuffle = null
         val headSize = maxOf(QUEUE_CHUNK, startIndex + 1)
         val head = ordered.take(headSize)
         controller.setMediaItems(head.map { it.toMediaItem() }, startIndex.coerceIn(head.indices), startPositionMs)
@@ -383,7 +387,49 @@ class PlayerConnection(private val context: Context) {
 
     fun toggleShuffle() {
         val controller = controller ?: return
-        controller.shuffleModeEnabled = !controller.shuffleModeEnabled
+        if (_shuffleMode.value == ShuffleMode.OFF) shuffleUpcoming(controller) else unshuffleUpcoming(controller)
+        publishShuffle(controller)
+    }
+
+    /**
+     * The list's songs after the current one, in the order they had before shuffle took them,
+     * so turning it off puts them back. Null when shuffle isn't on this way.
+     */
+    private var beforeShuffle: List<MediaItem>? = null
+
+    /**
+     * Shuffle, as a new order for the songs still to come rather than the player's shuffle
+     * mode: the song playing is never touched, and the queue's order is the play order, so
+     * rows can still be dragged. Songs queued by hand stay first and AutoPlay's stay last;
+     * only the list's own songs (the album, the playlist) are mixed.
+     */
+    private fun shuffleUpcoming(controller: MediaController) {
+        controller.shuffleModeEnabled = false
+        val from = controller.currentMediaItemIndex + 1
+        val items = (from until controller.mediaItemCount).map(controller::getMediaItemAt)
+        val (mixed, before) = QueueShuffle.mix(items, { it.queueTier == QueueTier.CONTEXT })
+        beforeShuffle = before
+        if (mixed != items) replaceAfter(controller, from, mixed)
+    }
+
+    /** Puts the list's songs still to come back in their order; songs added since keep their places. */
+    private fun unshuffleUpcoming(controller: MediaController) {
+        controller.shuffleModeEnabled = false
+        val before = beforeShuffle ?: return
+        beforeShuffle = null
+        val from = controller.currentMediaItemIndex + 1
+        val items = (from until controller.mediaItemCount).map(controller::getMediaItemAt)
+        val restored = QueueShuffle.restore(items, { it.queueTier == QueueTier.CONTEXT }, before) { it.mediaId }
+        if (restored != items) replaceAfter(controller, from, restored)
+    }
+
+    /**
+     * Hands the player [items] as everything after the current song, in chunks for a long queue.
+     * The song playing stays where it is and keeps playing.
+     */
+    private fun replaceAfter(controller: MediaController, from: Int, items: List<MediaItem>) {
+        controller.removeMediaItems(from, controller.mediaItemCount)
+        items.chunked(QUEUE_CHUNK).forEach { controller.addMediaItems(it) }
     }
 
     /**
@@ -394,9 +440,10 @@ class PlayerConnection(private val context: Context) {
         val controller = controller ?: return _shuffleMode.value
         val from = _shuffleMode.value
         when (from.next(_smartShuffleAvailable.value)) {
-            ShuffleMode.ON -> controller.shuffleModeEnabled = true
-            ShuffleMode.SMART -> smartShuffleOn(controller)
-            ShuffleMode.OFF -> if (from == ShuffleMode.SMART) smartShuffleOff(controller) else controller.shuffleModeEnabled = false
+            ShuffleMode.ON -> shuffleUpcoming(controller)
+            // Smart shuffle makes its own order from the songs to come, whatever order they're in.
+            ShuffleMode.SMART -> { beforeShuffle = null; smartShuffleOn(controller) }
+            ShuffleMode.OFF -> if (from == ShuffleMode.SMART) smartShuffleOff(controller) else unshuffleUpcoming(controller)
         }
         publishShuffle(controller)
         return _shuffleMode.value
@@ -414,7 +461,7 @@ class PlayerConnection(private val context: Context) {
         _smartShuffleAvailable.value = fromList && AppSettings.playback.value.smartShuffle
         _shuffleMode.value = when {
             fromList && SmartShuffle.on.value -> ShuffleMode.SMART
-            player.shuffleModeEnabled -> ShuffleMode.ON
+            player.shuffleModeEnabled || beforeShuffle != null -> ShuffleMode.ON
             else -> ShuffleMode.OFF
         }
     }
