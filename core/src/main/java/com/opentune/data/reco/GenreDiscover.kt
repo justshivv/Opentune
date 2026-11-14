@@ -1,28 +1,21 @@
 package com.opentune.data.reco
 
-import android.content.Context
-import android.content.SharedPreferences
 import com.opentune.data.history.DailyMixes
+import com.opentune.data.history.MixSnapshots
 import com.opentune.data.history.Wrapped
 import com.opentune.data.library.HiddenList
 import com.opentune.data.model.Song
-import java.util.Calendar
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 
 /**
  * One Discover mix for each of your top genres: songs you haven't played, from the radios
  * of your favourites in that genre. Songs by artists filed under the same genre come first,
  * then ones whose genre isn't known yet; artists filed under another genre stay out. New
- * artists are mixed in among new songs from artists you know. Made once a day and kept on
- * the phone, so Home doesn't ask again each time it opens.
+ * artists are mixed in among new songs from artists you know. Made every twelve hours and kept
+ * on the phone, so Home doesn't ask again, or change, each time it opens.
  */
 object GenreDiscover {
     private const val MIN_SONGS = 8
@@ -30,27 +23,13 @@ object GenreDiscover {
     private const val MAX_GENRES = 4
     private const val SEEDS_PER_GENRE = 3
 
-    @Serializable
-    private data class Saved(val day: Int, val key: String, val mixes: List<SavedMix>)
-    @Serializable
-    private data class SavedMix(val id: String, val title: String, val subtitle: String, val songs: List<Song>)
-
-    private val json = Json { ignoreUnknownKeys = true }
-    private var prefs: SharedPreferences? = null
-    private val state = MutableStateFlow<List<DailyMixes.Mix>>(emptyList())
-    val mixes: StateFlow<List<DailyMixes.Mix>> = state.asStateFlow()
     private val gate = Mutex()
-
-    fun init(context: Context) {
-        val p = context.getSharedPreferences("genre_discover", Context.MODE_PRIVATE)
-        prefs = p
-        val saved = p.getString("today", null)?.let { runCatching { json.decodeFromString(Saved.serializer(), it) }.getOrNull() }
-        if (saved != null && saved.day == today()) state.value = saved.mixes.map { DailyMixes.Mix(it.id, it.title, it.subtitle, it.songs) }
-    }
+    /** The Discover mixes last made, kept for twelve hours (see [MixSnapshots]). */
+    val mixes: StateFlow<List<DailyMixes.Mix>> get() = MixSnapshots.mixes(MixSnapshots.DISCOVER)
 
     /**
-     * Makes today's Discover mixes from [seeds], each genre's best-loved songs, unless today's
-     * are already made from the same genres. [radio] gives a song's radio.
+     * Makes the Discover mixes from [seeds], each genre's best-loved songs, when the last ones
+     * are twelve hours old or a genre has no Discover mix yet. [radio] gives a song's radio.
      */
     suspend fun refresh(
         seeds: Map<String, List<Song>>,
@@ -61,9 +40,7 @@ object GenreDiscover {
         radio: suspend (Song) -> List<Song>,
     ) = gate.withLock {
         val genres = seeds.keys.take(MAX_GENRES)
-        val key = genres.joinToString("|")
-        val saved = prefs?.getString("today", null)?.let { runCatching { json.decodeFromString(Saved.serializer(), it) }.getOrNull() }
-        if (saved != null && saved.day == today() && saved.key == key) return@withLock
+        if (!MixSnapshots.due(MixSnapshots.DISCOVER, genres.map(::idOf))) return@withLock
         val made = genres.mapNotNull { genre ->
             val radios = seeds.getValue(genre).take(SEEDS_PER_GENRE).map { seed ->
                 try { radio(seed) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
@@ -72,19 +49,22 @@ object GenreDiscover {
             if (songs.size < MIN_SONGS) return@mapNotNull null
             val newArtists = songs.map { Wrapped.mainArtist(it.artist) }.filter { a -> knownArtists.none { it.equals(a, true) } }.distinct()
             DailyMixes.Mix(
-                "discover:${genre.lowercase()}",
+                idOf(genre),
                 com.opentune.i18n.Tr.f("Discover {0}", genre),
                 if (newArtists.isEmpty()) com.opentune.i18n.Tr.t("New songs from artists you know")
                 else com.opentune.i18n.Tr.f("New to you: {0}", newArtists.take(3).joinToString(", ")),
                 songs,
             )
         }
-        // A failed day (offline, say) keeps what there was rather than emptying the row.
-        if (made.isEmpty() && state.value.isNotEmpty()) return@withLock
-        state.value = made
-        prefs?.edit()?.putString("today", json.encodeToString(Saved.serializer(),
-            Saved(today(), key, made.map { SavedMix(it.id, it.title, it.subtitle, it.songs) })))?.apply()
+        // A failed try (offline, say) keeps what there was rather than emptying the row,
+        // and leaves it due, to be tried again next time.
+        if (made.isEmpty()) return@withLock
+        // A genre whose radios came back with nothing keeps the mix it had.
+        val ids = genres.map(::idOf)
+        MixSnapshots.save(MixSnapshots.DISCOVER, ids.mapNotNull { id -> made.firstOrNull { it.id == id } ?: mixes.value.firstOrNull { it.id == id } })
     }
+
+    private fun idOf(genre: String) = "discover:${genre.lowercase()}"
 
     /**
      * The new songs for [genre] from its seeds' [radios]: none played or hidden before, none by an
@@ -127,5 +107,4 @@ object GenreDiscover {
         return (out + unknown).take(MAX_SONGS)
     }
 
-    private fun today(): Int = Calendar.getInstance().let { it.get(Calendar.YEAR) * 1000 + it.get(Calendar.DAY_OF_YEAR) }
 }

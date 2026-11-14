@@ -47,7 +47,7 @@ object Core {
         com.opentune.data.history.ListenedCollections.init(app)
         com.opentune.data.covers.ArtistPhotos.init(app)
         com.opentune.data.metadata.ArtistGenres.init(app)
-        com.opentune.data.reco.GenreDiscover.init(app)
+        com.opentune.data.history.MixSnapshots.init(app)
         LoudnessStore.init(app)
         UpgradedTracks.init(app)
         QueueStore.init(app)

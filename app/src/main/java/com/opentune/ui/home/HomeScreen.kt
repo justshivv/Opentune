@@ -182,8 +182,22 @@ fun HomeScreen(
     // One mix for each genre played most, from the artists' genres as they're learnt; the most
     // played artists are looked up first, a few at a time, and kept.
     val artistGenres by com.opentune.data.metadata.ArtistGenres.genres.collectAsState()
-    val genreMixes = remember(records, artistGenres, hidden) {
-        com.opentune.data.history.GenreMixes.build(records, { artistGenres[com.opentune.data.metadata.ArtistGenres.key(it)] }, hidden = hidden)
+    // Kept as made for twelve hours (see MixSnapshots): playing a song or coming back to Home
+    // shows the same mixes in the same order. Made again once they're older, or when a genre
+    // turns up that has no mix yet.
+    val savedGenreMixes by com.opentune.data.history.MixSnapshots.mixes(com.opentune.data.history.MixSnapshots.GENRES).collectAsState()
+    LaunchedEffect(records.size / 10, artistGenres.size) {
+        val built = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            com.opentune.data.history.GenreMixes.build(records, { artistGenres[com.opentune.data.metadata.ArtistGenres.key(it)] }, hidden = hidden)
+        }
+        val key = com.opentune.data.history.MixSnapshots.GENRES
+        if (built.isNotEmpty() && com.opentune.data.history.MixSnapshots.due(key, built.map { it.id })) {
+            com.opentune.data.history.MixSnapshots.save(key, built)
+        }
+    }
+    // A song or artist hidden since stays out straight away.
+    val genreMixes = remember(savedGenreMixes, hidden) {
+        savedGenreMixes.mapNotNull { m -> hidden.songs(m.songs).takeIf { it.size >= 6 }?.let { m.copy(songs = it) } }
     }
     // The artists picked at the welcome count too, so a new install has genres from the start.
     val followed by com.opentune.data.releases.NewReleases.followed.collectAsState()

@@ -94,7 +94,9 @@ internal fun todaysMixSongs(nowMs: Long = System.currentTimeMillis()): List<Song
     val genreOf = { artist: String -> com.opentune.data.metadata.ArtistGenres.genreOf(artist) }
     val mixes = listOfNotNull(com.opentune.data.history.Daylist.build(records, genreOf, nowMs, hidden = hidden)) +
         com.opentune.data.history.DailyMixes.build(records, nowMs, hidden = hidden) +
-        com.opentune.data.history.GenreMixes.build(records, genreOf, nowMs, hidden = hidden) +
+        com.opentune.data.history.MixSnapshots.mixes(com.opentune.data.history.MixSnapshots.GENRES).value.ifEmpty {
+            com.opentune.data.history.GenreMixes.build(records, genreOf, nowMs, hidden = hidden)
+        } +
         com.opentune.data.reco.GenreDiscover.mixes.value
     return mixStarts(mixes.map { it.songs })
 }
