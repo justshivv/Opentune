@@ -444,12 +444,15 @@ private fun FollowButton(browseId: String, page: ArtistPage?, modifier: Modifier
             .clip(CircleShape)
             .clickable(enabled = page != null, onClickLabel = label) {
                 if (page == null) return@clickable
+                // Signed in, this subscribes or unsubscribes on YouTube Music too (ArtistSync).
                 if (following) {
                     haptics.pattern(Haptics.Pattern.OFF)
-                    NewReleases.unfollow(context, browseId)
+                    com.opentune.data.releases.ArtistSync.setFollowed(context, browseId, page.name ?: "Artist", page.thumbnailUrl, on = false)
                 } else {
                     haptics.pattern(Haptics.Pattern.LIKE)
-                    NewReleases.follow(context, browseId, page)
+                    com.opentune.data.releases.ArtistSync.setFollowed(context, browseId, page.name ?: "Artist", page.thumbnailUrl, on = true) {
+                        NewReleases.follow(context, browseId, page)
+                    }
                     if (!NewReleases.canNotify(context)) ask.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                 }
             },

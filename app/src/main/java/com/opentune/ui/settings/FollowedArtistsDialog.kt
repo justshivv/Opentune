@@ -70,6 +70,9 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
     var checking by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     val c = MaterialTheme.colorScheme
+    // Opening the page reads the account's YouTube Music subscriptions again (ArtistSync).
+    val sync by com.opentune.data.releases.ArtistSync.status.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(Unit) { com.opentune.data.releases.ArtistSync.sync() }
     FloatingCard(
         onDismiss = onDismiss,
         title = "Followed artists",
@@ -112,6 +115,16 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+            if (sync.signedIn) Text(
+                when {
+                    sync.running -> com.opentune.i18n.Tr.t("Reading your YouTube Music subscriptions…")
+                    sync.failed -> com.opentune.i18n.Tr.t("Couldn't reach YouTube Music; tried again next time")
+                    else -> com.opentune.i18n.Tr.t("In step with the artists you subscribe to on YouTube Music")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = c.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 28.dp).padding(bottom = 8.dp),
+            )
             if (shown.size > SEARCH_FROM) Row(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 8.dp).height(48.dp).clip(RoundedCornerShape(16.dp))
                     .background(c.onSurface.copy(alpha = FIELD_TINT)).padding(start = 14.dp, end = 4.dp),
@@ -156,12 +169,8 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
                         Modifier.clip(RoundedCornerShape(50))
                             .then(if (on) Modifier.border(1.dp, c.outline, RoundedCornerShape(50)) else Modifier.background(c.onSurface))
                             .clickable(role = Role.Button) {
-                                if (on) {
-                                    dropped = dropped.filterNot { it.browseId == a.browseId } + a
-                                    NewReleases.unfollow(context, a.browseId)
-                                } else {
-                                    NewReleases.follow(context, a.browseId, a.name, a.thumbnailUrl)
-                                }
+                                if (on) dropped = dropped.filterNot { it.browseId == a.browseId } + a
+                                com.opentune.data.releases.ArtistSync.setFollowed(context, a.browseId, a.name, a.thumbnailUrl, on = !on)
                             }
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
