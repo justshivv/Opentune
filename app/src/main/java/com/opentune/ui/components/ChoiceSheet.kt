@@ -117,10 +117,12 @@ fun <T> ChoiceSheet(
     val scope = rememberCoroutineScope()
     var picked by remember { mutableStateOf(selected) }
     var done by remember { mutableStateOf(false) }
-    FloatingCard(onDismiss = onDismiss, title = title, contentPadding = PaddingValues(0.dp)) {
+    FloatingCard(onDismiss = onDismiss, title = title, contentPadding = PaddingValues(0.dp), expandable = true, fullFraction = 1f) {
         val card = LocalFloatingCard.current
-        Column {
-            Options(options, picked, label, still, enabled = enabled) { o ->
+        // The options sit in the sheet's own scrolling column, not in a scroller of
+        // their own: two nested scrollers fought the card's growth and lagged.
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Options(options, picked, label, still, scrolls = false, enabled = enabled) { o ->
                 if (done) return@Options
                 if (o != picked) {
                     haptics.tick()

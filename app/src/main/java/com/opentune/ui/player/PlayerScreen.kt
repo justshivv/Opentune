@@ -1445,7 +1445,6 @@ fun PlayerLayout(
             SongMenuSheet(
                 current,
                 onDismiss = { showMenu = false },
-                asPage = true,
                 top = { close ->
                     MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
                     // Always here: the Comments button setting only takes it out of the button pill.

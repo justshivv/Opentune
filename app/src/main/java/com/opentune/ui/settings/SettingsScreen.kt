@@ -1992,7 +1992,7 @@ private fun ListenAsSheet(onDismiss: () -> Unit) {
     val profiles by androidx.compose.runtime.produceState<List<com.opentune.data.model.AccountChannel>?>(null) {
         value = withContext(Dispatchers.IO) { AccountStore.profiles() }
     }
-    com.opentune.ui.components.FloatingCard(onDismiss = onDismiss, title = "Listen as") {
+    com.opentune.ui.components.FloatingCard(onDismiss = onDismiss, title = "Listen as", expandable = true, fullFraction = 1f) {
         Column(Modifier.padding(bottom = 12.dp)) {
             val list = profiles
             when {

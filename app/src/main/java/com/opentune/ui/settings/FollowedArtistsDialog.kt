@@ -78,11 +78,10 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
             1 -> com.opentune.i18n.Tr.t("1 artist · alerts for new releases")
             else -> com.opentune.i18n.Tr.f("{0} artists · alerts for new releases", followed.size)
         },
-        // Opens most of the way up; dragged or scrolled up, it takes over the page.
+        // Opens at half height; dragged or scrolled up, it takes over the page.
         expandable = true,
         fitContent = false,
         fullFraction = 1f,
-        openFraction = com.opentune.ui.components.OPEN_FRACTION,
         header = {
             if (followed.isNotEmpty()) Row(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 8.dp).clip(RoundedCornerShape(18.dp))

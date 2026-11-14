@@ -292,14 +292,17 @@ fun HomeScreen(
                 .first { it }
             historyOpen = false
         }
-        androidx.compose.material3.ModalBottomSheet(onDismissRequest = { historyOpen = false }) {
-            // Frosted behind, like the long-press menus and the other sheets.
-            com.opentune.ui.components.FrostBehind(enabled = !com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceBlur)
+        com.opentune.ui.components.FloatingCard(
+            onDismiss = { historyOpen = false },
+            contentPadding = PaddingValues(0.dp),
+            expandable = true,
+            fitContent = true,
+            fullFraction = 1f,
+        ) {
             if (recents.isEmpty()) Text(com.opentune.ui.theme.tr("Your recently played songs will appear here"), Modifier.padding(24.dp))
             else Recents(recents, ui.recentsAsGrid, actions) {
                 AppSettings.updateUi { it.copy(recentsAsGrid = !it.recentsAsGrid) }
             }
-            Spacer(Modifier.height(24.dp))
         }
     }
 
@@ -320,24 +323,24 @@ fun HomeScreen(
     }
 
     // Which rows are on, and the order of the ones below Home's top (see homeOrder).
-        val on = runtime.sections.filter { it.enabled }.associateBy { it.id }
-        val showsCommunity = "featured-playlists" in on &&
+    val on = runtime.sections.filter { it.enabled }.associateBy { it.id }
+    val showsCommunity = "featured-playlists" in on &&
             com.opentune.data.config.HomeDismissals.showsPlaylists(runtime.playlists.map { it.id }, closedPlaylists)
-        val personal = buildList {
-            if ("mixes" in on && mixes.isNotEmpty()) add(com.opentune.data.reco.HomeLayout.Personal("mixes", 1.0))
-            if ("mixes" in on && genreMixes.isNotEmpty()) add(com.opentune.data.reco.HomeLayout.Personal("genres", 0.9))
-            if ("mixes" in on && discover.isNotEmpty()) add(com.opentune.data.reco.HomeLayout.Personal("discover", 0.8))
-            if ("spotify-mixes" in on && spotifyMixes.isNotEmpty()) add(com.opentune.data.reco.HomeLayout.Personal("spotify", 0.7))
-            if (showsCommunity) add(com.opentune.data.reco.HomeLayout.Personal("community", 0.3))
-        }
-        val shelves = if ("recommendations" in on && state is UiState.Success) (if (ui.liteMode) feed.cards.take(LITE_SHELVES) else feed.cards) else emptyList()
-        val order = homeOrder(personal, shelves, shuffleTurn)
-        // Shelves without repeats, in the order they're shown: a card already higher up is left off.
-        val shownShelves = remember(order, shelves) {
-            val ids = order.filter { it.startsWith(SHELF_ID) && shelves.getOrNull(it.removePrefix(SHELF_ID).toIntOrNull() ?: -1) != null }
-            val clean = com.opentune.data.reco.HomeLayout.withoutRepeats(ids.map { shelves[it.removePrefix(SHELF_ID).toInt()] })
-            ids.zip(clean).toMap()
-        }
+    val personal = buildList {
+        if ("mixes" in on && mixes.isNotEmpty()) add(com.opentune.data.reco.HomeLayout.Personal("mixes", 1.0))
+        if ("mixes" in on && genreMixes.isNotEmpty()) add(com.opentune.data.reco.HomeLayout.Personal("genres", 0.9))
+        if ("mixes" in on && discover.isNotEmpty()) add(com.opentune.data.reco.HomeLayout.Personal("discover", 0.8))
+        if ("spotify-mixes" in on && spotifyMixes.isNotEmpty()) add(com.opentune.data.reco.HomeLayout.Personal("spotify", 0.7))
+        if (showsCommunity) add(com.opentune.data.reco.HomeLayout.Personal("community", 0.3))
+    }
+    val shelves = if ("recommendations" in on && state is UiState.Success) (if (ui.liteMode) feed.cards.take(LITE_SHELVES) else feed.cards) else emptyList()
+    val order = homeOrder(personal, shelves, shuffleTurn)
+    // Shelves without repeats, in the order they're shown: a card already higher up is left off.
+    val shownShelves = remember(order, shelves) {
+        val ids = order.filter { it.startsWith(SHELF_ID) && shelves.getOrNull(it.removePrefix(SHELF_ID).toIntOrNull() ?: -1) != null }
+        val clean = com.opentune.data.reco.HomeLayout.withoutRepeats(ids.map { shelves[it.removePrefix(SHELF_ID).toInt()] })
+        ids.zip(clean).toMap()
+    }
     com.opentune.ui.components.MarkRefreshBox(
         isRefreshing = refreshing,
         onRefresh = refreshHome,
@@ -454,11 +457,11 @@ fun HomeScreen(
                             ShelfItem(it.title, "OpenTune picks", it.artwork, null, it.browseId)
                         }), { item -> com.opentune.data.reco.HomeEngagement.record("community"); onItemClick(item) },
                             songRows = false, covers = covers, coverKey = "featured-playlists", action = {
-                            // Closed until a playlist is added that wasn't there now.
-                            IconButton(onClick = { com.opentune.data.config.HomeDismissals.dismissPlaylists(runtime.playlists.map { it.id }) }, modifier = Modifier.size(48.dp)) {
-                                Icon(Icons.Rounded.Close, "Dismiss", Modifier.size(22.dp))
-                            }
-                        })
+                                // Closed until a playlist is added that wasn't there now.
+                                IconButton(onClick = { com.opentune.data.config.HomeDismissals.dismissPlaylists(runtime.playlists.map { it.id }) }, modifier = Modifier.size(48.dp)) {
+                                    Icon(Icons.Rounded.Close, "Dismiss", Modifier.size(22.dp))
+                                }
+                            })
                     }
                     id.startsWith(SHELF_ID) -> {
                         val i = id.removePrefix(SHELF_ID).toIntOrNull() ?: return@forEach
@@ -787,7 +790,7 @@ internal fun StreakPills(badges: List<com.opentune.data.history.Streaks.Badge>) 
                     Icons.Rounded.AutoAwesome to com.opentune.i18n.Tr.f("{0} new artists this week", b.count)
                 is com.opentune.data.history.Streaks.Badge.ArtistHours ->
                     Icons.Rounded.Headphones to (if (b.hours == 1) com.opentune.i18n.Tr.f("Your first hour of {0}", b.artist)
-                        else com.opentune.i18n.Tr.f("{0} hours of {1}", b.hours, b.artist))
+                    else com.opentune.i18n.Tr.f("{0} hours of {1}", b.hours, b.artist))
             }
             Row(
                 Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(start = 10.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),

@@ -70,7 +70,7 @@ fun CastSheet(onDismiss: () -> Unit) {
     val scanning by Cast.scanning.collectAsState()
     val session by Cast.session.collectAsState()
     LaunchedEffect(Unit) { Cast.scan(context) }
-    FloatingCard(onDismiss = onDismiss, title = "Play on", icon = Icons.Rounded.Cast) {
+    FloatingCard(onDismiss = onDismiss, title = "Play on", icon = Icons.Rounded.Cast, expandable = true, fullFraction = 1f) {
         Column(Modifier.verticalScroll(rememberScrollState()).animateContentSize().padding(bottom = 12.dp)) {
             session?.let { s ->
                 Column(

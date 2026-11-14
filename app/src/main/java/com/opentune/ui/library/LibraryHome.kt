@@ -1349,7 +1349,9 @@ private fun LikedMoreSheet(
     com.opentune.ui.components.FloatingCard(
         onDismiss = onDismiss,
         contentPadding = PaddingValues(0.dp),
-        startExpanded = true,
+        expandable = true,
+        startExpanded = false,
+        fullFraction = 1f,
         header = {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 com.opentune.ui.components.LikedPlaylistCover(Modifier.size(56.dp))
@@ -1816,7 +1818,9 @@ private fun LocalListMoreSheet(
     com.opentune.ui.components.FloatingCard(
         onDismiss = onDismiss,
         contentPadding = PaddingValues(0.dp),
-        startExpanded = true,
+        expandable = true,
+        startExpanded = false,
+        fullFraction = 1f,
         header = {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (playlist.coverUrl != null) Artwork(playlist.coverUrl.artworkAt(com.opentune.data.model.ROW_ART_PX), Modifier.size(56.dp))

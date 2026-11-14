@@ -223,7 +223,9 @@ fun FloatingCard(
                 // Start at full height when asked, so the whole menu shows at once; otherwise half.
                 val halfPx = if (startExpanded) fullPx else minOf(with(density) { (maxCard * openFraction).toPx() }, fullPx)
                 val range = (fullPx - halfPx).coerceAtLeast(0f)
-                val fullscreen = expandable && fullFraction >= 1f && !fitContent
+                // Full-screen treatment only for a card that can actually reach the full
+                // height: one capped by its content keeps its card shape at its top.
+                val fullscreen = expandable && fullFraction >= 1f && fullPx >= with(density) { maxCard.toPx() } - 1f
                 val expandedFraction = if (range > 0f) (extra / range).coerceIn(0f, 1f) else 1f
                 val edge = if (fullscreen) 1f - expandedFraction else 1f
                 val shape = RoundedCornerShape(32.dp * edge)

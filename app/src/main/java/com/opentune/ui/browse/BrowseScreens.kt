@@ -761,7 +761,9 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
     com.opentune.ui.components.FloatingCard(
         onDismiss = onDismiss,
         contentPadding = PaddingValues(0.dp),
-        startExpanded = true,
+        expandable = true,
+        startExpanded = false,
+        fullFraction = 1f,
         header = {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (com.opentune.ui.library.isYouTubeLikes(c.browseId)) {

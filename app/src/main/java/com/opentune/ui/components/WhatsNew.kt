@@ -225,6 +225,8 @@ fun WhatsNewSheet(notes: List<Pair<String, List<WhatsNew.Note>>>, version: Strin
     FloatingCard(
         onDismiss = onDismiss,
         title = com.opentune.i18n.Tr.f("What's new in {0}", version),
+        expandable = true,
+        fullFraction = 1f,
         actions = {
             Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)) { Text("Start listening") }
         },

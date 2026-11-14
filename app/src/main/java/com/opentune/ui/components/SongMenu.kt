@@ -140,6 +140,12 @@ fun SongMenuSheet(
     end: MenuRows? = null,
     /** Shown as a page of its own straight away (the player's "…"), instead of a card rising from the bottom. */
     asPage: Boolean = false,
+    /** Whether the card opens already at its full height, or at half height to be pulled up. */
+    startExpanded: Boolean = false,
+    /** How much of the screen the card takes pulled all the way up. */
+    fullFraction: Float = 1f,
+    /** Whether the card's expansion stops at the height its content needs. */
+    fitContent: Boolean = true,
 ) {
     val actions = LocalSongMenu.current
     val context = LocalContext.current
@@ -162,54 +168,54 @@ fun SongMenuSheet(
 
     // The song and its four quick actions stay put; the rest of the menu scrolls under them.
     val header: @Composable ColumnScope.() -> Unit = {
-            val card = LocalFloatingCard.current
-            val close: () -> Unit = { card?.close() ?: onDismiss() }
-            // The page shows the song larger itself.
-            if (!asPage) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(56.dp))
-                Spacer(Modifier.size(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(song.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+        val card = LocalFloatingCard.current
+        val close: () -> Unit = { card?.close() ?: onDismiss() }
+        // The page shows the song larger itself.
+        if (!asPage) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(56.dp))
+            Spacer(Modifier.size(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(song.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            // The four things done most often, one tap each.
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                QuickAction(if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (isLiked) "Liked" else "Like", active = isLiked) {
-                    LibraryStore.setLiked(song, !isLiked)
+        }
+        // The four things done most often, one tap each.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            QuickAction(if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (isLiked) "Liked" else "Like", active = isLiked) {
+                LibraryStore.setLiked(song, !isLiked)
+            }
+            if (!local) {
+                val (icon, label) = when (download?.state) {
+                    DownloadState.DONE -> Icons.Rounded.DeleteOutline to "Remove"
+                    DownloadState.QUEUED -> Icons.Rounded.Close to if (Downloads.waitingForWifi(context)) "Needs Wi-Fi" else "Waiting"
+                    DownloadState.DOWNLOADING -> Icons.Rounded.Close to "${(download.progress * 100).toInt()}%"
+                    DownloadState.FAILED -> Icons.Rounded.Download to "Retry"
+                    null -> Icons.Rounded.Download to "Download"
                 }
-                if (!local) {
-                    val (icon, label) = when (download?.state) {
-                        DownloadState.DONE -> Icons.Rounded.DeleteOutline to "Remove"
-                        DownloadState.QUEUED -> Icons.Rounded.Close to if (Downloads.waitingForWifi(context)) "Needs Wi-Fi" else "Waiting"
-                        DownloadState.DOWNLOADING -> Icons.Rounded.Close to "${(download.progress * 100).toInt()}%"
-                        DownloadState.FAILED -> Icons.Rounded.Download to "Retry"
-                        null -> Icons.Rounded.Download to "Download"
-                    }
-                    val ring = when (download?.state) {
-                        DownloadState.DOWNLOADING -> download.progress
-                        DownloadState.QUEUED -> -1f
-                        else -> null
-                    }
-                    QuickAction(icon, label, active = download?.state == DownloadState.DONE, progress = ring) {
-                        when (download?.state) {
-                            DownloadState.DONE, DownloadState.QUEUED, DownloadState.DOWNLOADING -> Downloads.remove(context, song.videoId)
-                            DownloadState.FAILED -> Downloads.retry(context, song.videoId)
-                            null -> Downloads.enqueue(context, song)
-                        }
-                    }
+                val ring = when (download?.state) {
+                    DownloadState.DOWNLOADING -> download.progress
+                    DownloadState.QUEUED -> -1f
+                    else -> null
                 }
-                QuickAction(Icons.AutoMirrored.Rounded.PlaylistAdd, "Playlist", active = false) { pickPlaylist = true }
-                if (!local) {
-                    QuickAction(Icons.Rounded.Share, "Share", active = false) {
-                        // The link goes with a picture of the song, like a now-playing card.
-                        val (at, length) = actions?.progressOf?.invoke(song) ?: (0L to 0L)
-                        com.opentune.ui.share.ShareCard.share(context, song, at, length)
-                        close()
+                QuickAction(icon, label, active = download?.state == DownloadState.DONE, progress = ring) {
+                    when (download?.state) {
+                        DownloadState.DONE, DownloadState.QUEUED, DownloadState.DOWNLOADING -> Downloads.remove(context, song.videoId)
+                        DownloadState.FAILED -> Downloads.retry(context, song.videoId)
+                        null -> Downloads.enqueue(context, song)
                     }
                 }
             }
-            HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            QuickAction(Icons.AutoMirrored.Rounded.PlaylistAdd, "Playlist", active = false) { pickPlaylist = true }
+            if (!local) {
+                QuickAction(Icons.Rounded.Share, "Share", active = false) {
+                    // The link goes with a picture of the song, like a now-playing card.
+                    val (at, length) = actions?.progressOf?.invoke(song) ?: (0L to 0L)
+                    com.opentune.ui.share.ShareCard.share(context, song, at, length)
+                    close()
+                }
+            }
+        }
+        HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
     }
     val body: @Composable ColumnScope.() -> Unit = {
         // Menu picks play the card out as they act.
@@ -275,8 +281,9 @@ fun SongMenuSheet(
             onDismiss = onDismiss,
             contentPadding = PaddingValues(0.dp),
             expandable = true,
-            // Open fully so the whole menu shows at once; the content lifts to make room, no scrolling needed.
-            startExpanded = true,
+            startExpanded = startExpanded,
+            fullFraction = fullFraction,
+            fitContent = fitContent,
             header = header,
             content = body,
         )
@@ -394,33 +401,33 @@ private fun SongMenuPage(
                             onDragStopped = { v -> release(v) },
                         ),
                     ) {
-                    Box(
-                        Modifier.fillMaxWidth().height(28.dp)
-                            // Tapping the bar closes the page, with no ripple across the strip.
-                            .clickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null,
-                                onClickLabel = "Close", role = androidx.compose.ui.semantics.Role.Button, onClick = onDismiss,
-                            )
-                            .semantics { contentDescription = "Close" },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(Modifier.size(width = 44.dp, height = 5.dp).clip(CircleShape).background(colors.onSurface.copy(alpha = 0.55f)))
-                    }
-                    Row(
-                        Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(84.dp), RoundedCornerShape(16.dp))
-                        Spacer(Modifier.size(18.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(song.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                song.artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
-                            )
+                        Box(
+                            Modifier.fillMaxWidth().height(28.dp)
+                                // Tapping the bar closes the page, with no ripple across the strip.
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null,
+                                    onClickLabel = "Close", role = androidx.compose.ui.semantics.Role.Button, onClick = onDismiss,
+                                )
+                                .semantics { contentDescription = "Close" },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(Modifier.size(width = 44.dp, height = 5.dp).clip(CircleShape).background(colors.onSurface.copy(alpha = 0.55f)))
                         }
-                    }
+                        Row(
+                            Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(84.dp), RoundedCornerShape(16.dp))
+                            Spacer(Modifier.size(18.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(song.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    song.artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
+                        }
                     }
                     header()
                     body()

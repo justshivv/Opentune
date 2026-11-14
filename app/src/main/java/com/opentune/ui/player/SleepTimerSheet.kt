@@ -81,6 +81,8 @@ fun SleepTimerDialog(onDismiss: () -> Unit) {
         title = "Sleep timer",
         icon = Icons.Rounded.Bedtime,
         subtitle = label ?: "Pick when the music stops",
+        expandable = true,
+        fullFraction = 1f,
     ) {
         val ui by AppSettings.ui.collectAsState()
         val still = ui.reduceAnimation

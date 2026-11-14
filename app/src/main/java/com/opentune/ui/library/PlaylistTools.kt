@@ -233,11 +233,10 @@ fun AddSongsSheet(playlistId: String, onDismiss: () -> Unit) {
         onDismiss = onDismiss,
         title = "Add songs",
         icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
-        // Opens most of the way up; dragged or scrolled up, it takes over the page.
+        // Opens at half height; dragged or scrolled up, it takes over the page.
         expandable = true,
         fitContent = false,
         fullFraction = 1f,
-        openFraction = com.opentune.ui.components.OPEN_FRACTION,
         header = {
             OutlinedTextField(
                 value = query,

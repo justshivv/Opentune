@@ -140,11 +140,10 @@ internal fun PlaylistPicker(
     FloatingCard(
         onDismiss = onDismiss,
         title = if (naming) "New playlist" else if (single != null) "Add to playlist" else com.opentune.i18n.Tr.f("Add {0} songs", songs.size),
-        // The list opens most of the way up; dragged or scrolled up, it takes over the page.
+        // The list opens at half height; dragged or scrolled up, it takes over the page.
         expandable = !naming,
         fitContent = naming,
         fullFraction = 1f,
-        openFraction = OPEN_FRACTION,
         header = {
             // Naming shows the songs as the new playlist's cover instead.
             if (!naming) AddingStrip(songs, Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp))
