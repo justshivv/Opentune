@@ -334,6 +334,12 @@
   .ot-side[data-folded='true'] .ot-side-header { height: 1px; margin: 12px 4px; padding: 0; color: transparent; background: var(--labelDivider); transition: height .38s var(--ot-ease-settle), margin .38s var(--ot-ease-settle), padding .38s var(--ot-ease-settle), color .1s ease, background-color .2s ease .15s; }
   .ot-side[data-folded='true'] :is(.ot-side-extra, .ot-side-full) { max-height: 0; opacity: 0; transition: max-height .38s var(--ot-ease-settle), opacity .12s ease; }
   .ot-side[data-folded='true'] .ot-side-compact { max-height: 48px; opacity: 1; }
+  /* Folded, the extension icon, the account photo and Settings share one centre line down the rail:
+     the Android link next to Settings takes no room, so Settings no longer sits off to the right. */
+  .ot-side-android { max-width: 240px; transition: opacity .22s ease .14s, visibility 0s linear 0s, max-width .38s var(--ot-ease-settle); }
+  .ot-side[data-folded='true'] .ot-side-android { max-width: 0; padding: 0; }
+  .ot-side[data-folded='true'] .ot-side-foot { justify-content: center; }
+  .ot-side[data-folded='true'] .ot-side-compact { align-items: center; }
   .ot-side[data-folded='true'] .ot-side-badge { position: absolute; top: 5px; right: 9px; width: 8px; height: 8px; padding: 0; border-radius: 50%; font-size: 0; }
 }
 :root[data-motion='false'] { transition: none !important; }
