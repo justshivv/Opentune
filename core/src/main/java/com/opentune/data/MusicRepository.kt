@@ -41,6 +41,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
 
 /** An album or playlist page, ready to show. */
+/** YouTube Music answered a library request as though nobody were signed in on this phone. */
+class LibrarySignedOut : Exception("YouTube Music says this phone isn't signed in")
+
 @Serializable
 data class Collection(
     val browseId: String,
@@ -104,7 +107,7 @@ object MusicRepository {
         homeFile = f
         val text = runCatching { f.readText() }.getOrNull() ?: return null
         val saved = runCatching { json.decodeFromString(SavedHome.serializer(), text) }.getOrNull()
-            // Copies saved before Home had more pages were a bare list.
+        // Copies saved before Home had more pages were a bare list.
             ?: runCatching { SavedHome(json.decodeFromString(ListSerializer(HomeShelf.serializer()), text)) }.getOrNull()
             ?: return null
         _homeMore.value = saved.more
@@ -331,12 +334,12 @@ object MusicRepository {
         // What the last shelf showed goes to the back, and the order changes with each refresh.
         val (seen, unseen) = fresh.partition { it.videoId in lastPicks }
         val songs = if (engine == Recommender.SPOTIFY) fresh.take(20)
-            else (unseen.shuffled(kotlin.random.Random(launchShuffle + turn)) + seen).take(20)
+        else (unseen.shuffled(kotlin.random.Random(launchShuffle + turn)) + seen).take(20)
         if (songs.isEmpty() || (engine != Recommender.SPOTIFY && songs.size < 4)) return emptyList()
         lastPicks = songs.mapTo(HashSet()) { it.videoId }
         val items = songs.map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
-        val by = if (result.engine == Recommender.YOUTUBE) "Picked for you" else "Picked by ${result.engine.label}"
-        return listOf(HomeShelf("Because you played ${last.title}", items, by))
+        val by = if (result.engine == Recommender.YOUTUBE) "Picked for you" else com.opentune.i18n.Tr.f("Picked by {0}", result.engine.label)
+        return listOf(HomeShelf(com.opentune.i18n.Tr.f("Because you played {0}", last.title), items, by))
     }
 
     /**
@@ -380,18 +383,18 @@ object MusicRepository {
         }))
         topShelf + top.map { entry ->
             async {
-              try {
-                val song = entry.song ?: return@async emptyList()
-                val id = artistIdFor(song) ?: return@async emptyList()
-                val page = personalArtistPage(id)
-                val name = page.name ?: entry.title
-                page.sections
-                    // Cards that open a page: albums, singles, playlists, artists.
-                    .filter { shelf -> shelf.items.isNotEmpty() && shelf.items.all { it.browseId != null } }
-                    .take(3)
-                    .map { it.copy(subtitle = "Because you like $name") }
-              } catch (e: CancellationException) { throw e }
-              catch (_: Exception) { emptyList<HomeShelf>() }
+                try {
+                    val song = entry.song ?: return@async emptyList()
+                    val id = artistIdFor(song) ?: return@async emptyList()
+                    val page = personalArtistPage(id)
+                    val name = page.name ?: entry.title
+                    page.sections
+                        // Cards that open a page: albums, singles, playlists, artists.
+                        .filter { shelf -> shelf.items.isNotEmpty() && shelf.items.all { it.browseId != null } }
+                        .take(3)
+                        .map { it.copy(subtitle = com.opentune.i18n.Tr.f("Because you like {0}", name)) }
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) { emptyList<HomeShelf>() }
             }
         }.awaitAll().flatten()
     }
@@ -554,7 +557,7 @@ object MusicRepository {
     /** A mix read as the player's queue for it, or null when that has no songs either. */
     private suspend fun mixCollection(browseId: String, playlistId: String): Collection? {
         val response = Innertube.mixQueue(playlistId)
-        val songs = ContentFilter.songs(InnertubeParser.parseWatchQueue(response))
+        val songs = ContentFilter.songs(InnertubeParser.parseWatchQueue(response, songsOnly = com.opentune.data.settings.AppSettings.playback.value.songsOnly))
         if (songs.isEmpty()) return null
         val title = InnertubeParser.mixTitle(response)
         return Collection(
@@ -597,6 +600,48 @@ object MusicRepository {
         )
     }
 
+    /**
+     * The signed-in account's liked songs, whole, for the liked sync.
+     * Unlike [collection] nothing is filtered out, since a hidden or
+     * explicit row is still a like on the account; and unlike
+     * [remotePlaylist] a page whose playlist shelf won't read still gives
+     * up its songs to the deep read, as the Liked page itself does — a
+     * shelf that won't parse must not read as "nothing is liked".
+     */
+    suspend fun accountLikedSongs(): List<Song> = io {
+        val response = Innertube.browse("VLLM")
+        val page = InnertubeParser.parsePlaylistShelf(response)
+        val first = page?.songs?.takeIf { it.isNotEmpty() } ?: InnertubeParser.collectSongsDeep(response)
+        if (page == null && first.isEmpty()) error("no liked songs on the page")
+        (first + laterPages(page?.continuation)).distinctBy { it.videoId }
+    }
+
+    /**
+     * The signed-in account's listening history on YouTube Music, in its own
+     * sections, newest first, repeats kept. Read live for the Remote tab of
+     * Listening history; nothing is stored, so a listen the app already
+     * recorded is never counted twice. A first page that won't read is an
+     * error; a later one just ends the list there.
+     */
+    suspend fun accountHistory(): InnertubeParser.HistoryPage = io {
+        val first = InnertubeParser.parseHistoryPage(Innertube.browse("FEmusic_history"))
+            ?: error("no history on the page")
+        val sections = first.sections.toMutableList()
+        var token = first.continuation
+        val seen = HashSet<String>()
+        while (token != null && seen.add(token) && seen.size <= 10) {
+            val next = try {
+                InnertubeParser.parseHistoryPage(Innertube.browseContinuation(token))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            } ?: break
+            sections += next.sections
+            token = next.continuation
+        }
+        InnertubeParser.HistoryPage(sections, null)
+    }
     suspend fun artist(browseId: String): ArtistPage = io {
         ContentFilter.artist(InnertubeParser.parseArtistPage(Innertube.browse(browseId)))
     }
@@ -622,22 +667,61 @@ object MusicRepository {
 
     /** The signed-in account's playlists on YouTube Music, without the "New playlist" tile. */
     suspend fun libraryPlaylists(): List<ShelfItem> = io {
+        // Whose these are is the session that asked. The account's profile (and so its email, which names
+        // the cache) can arrive while this is still running; asking again at the end for who owns the
+        // cache finds the right one, and only a different session in between drops the result.
+        val session = Innertube.cookie
+        // Every page of them: YouTube Music sends a library's playlists a page at a time, and
+        // reading only the first left Show all short of the account's later playlists.
+        val firstJson = Innertube.browse("FEmusic_liked_playlists")
+        val first = InnertubeParser.parseLibraryItemPage(firstJson)
+        val all = LinkedHashMap<String, ShelfItem>()
+        first.items.forEach { item -> item.browseId?.let { all.putIfAbsent(it, item) } }
+        var token = first.continuation
+        var pages = 0
+        while (token != null && pages++ < LIBRARY_PAGES) {
+            val page = runCatching { InnertubeParser.parseLibraryItemPage(Innertube.browseContinuation(token!!)) }
+                .onFailure { if (it is CancellationException) throw it }.getOrNull() ?: break
+            val before = all.size
+            page.items.forEach { item -> item.browseId?.let { all.putIfAbsent(it, item) } }
+            // A page with nothing new (or the same token again) is the end.
+            if (all.size == before || page.continuation == token) break
+            token = page.continuation
+        }
+        var items = all.values.toList()
+        if (items.isEmpty()) {
+            // Nothing found. Say what the page held, for "Copy log", then try other layouts and pages.
+            DebugLog.w("Library", "No playlists on the library page: " + InnertubeParser.describeLibrary(firstJson))
+            items = InnertubeParser.looseLibraryPlaylists(firstJson)
+            if (items.isEmpty()) {
+                val landing = runCatching { Innertube.browse("FEmusic_library_landing") }
+                    .onFailure { if (it is CancellationException) throw it }.getOrNull()
+                if (landing != null) {
+                    DebugLog.d("Library", "Library landing page: " + InnertubeParser.describeLibrary(landing))
+                    items = InnertubeParser.parseLibraryItemPage(landing).items
+                        .filter { it.browseId?.startsWith("VL") == true }
+                        .ifEmpty { InnertubeParser.looseLibraryPlaylists(landing) }
+                }
+            }
+            if (items.isEmpty() && InnertubeParser.answeredSignedOut(firstJson)) throw LibrarySignedOut()
+            if (items.isNotEmpty()) DebugLog.d("Library", "Found ${items.size} playlists in another layout")
+        }
+        if (Innertube.cookie != session) return@io items
         val owner = com.opentune.data.library.LibraryCache.owner()
-        InnertubeParser.parseLibraryItems(Innertube.browse("FEmusic_liked_playlists")).filter { it.browseId != null }
-            .also { items ->
-                com.opentune.data.library.LibraryCache.savePlaylists(items, owner)
-                // Fill saved playlists one at a time, without blocking the Library screen.
-                libraryWarmJob?.cancel()
-                libraryWarmJob = scope.launch {
-                    for (item in items) {
-                        val id = item.browseId ?: continue
-                        if (com.opentune.data.library.LibraryCache.owner() != owner) break
-                        if (!com.opentune.data.library.LibraryCache.fresh(id, owner)) {
-                            try { collection(id) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
-                        }
+        items.also {
+            com.opentune.data.library.LibraryCache.savePlaylists(it, owner)
+            // Fill saved playlists one at a time, without blocking the Library screen.
+            libraryWarmJob?.cancel()
+            libraryWarmJob = scope.launch {
+                for (item in it) {
+                    val id = item.browseId ?: continue
+                    if (com.opentune.data.library.LibraryCache.owner() != owner) break
+                    if (!com.opentune.data.library.LibraryCache.fresh(id, owner)) {
+                        try { collection(id) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
                     }
                 }
             }
+        }
     }
 
     /**
@@ -645,9 +729,16 @@ object MusicRepository {
      * is always kept, even when hidden, since it was asked for.
      */
     suspend fun watchQueue(videoId: String): List<Song> = io {
-        val queue = InnertubeParser.parseWatchQueue(Innertube.next(videoId))
-        queue.filter { it.videoId == videoId } +
-            com.opentune.data.library.LibraryStore.hidden.value.songs(ContentFilter.songs(queue.filter { it.videoId != videoId }))
+        val response = Innertube.next(videoId)
+        val queue = InnertubeParser.parseWatchQueue(response, songsOnly = com.opentune.data.settings.AppSettings.playback.value.songsOnly)
+        // The song asked for is kept as it is, whichever version it was.
+        val asked = queue.filter { it.videoId == videoId }.ifEmpty {
+            InnertubeParser.parseWatchQueue(response, allVersions = true).filter { it.videoId == videoId }
+        }
+        asked +
+                com.opentune.data.library.LibraryStore.hidden.value.songs(ContentFilter.songs(
+                    com.opentune.data.reco.SongIdentity.distinct(queue.filter { it.videoId != videoId }, asked),
+                ))
     }
 
     /**
@@ -656,7 +747,7 @@ object MusicRepository {
      * for the name.
      */
     suspend fun artistIdFor(song: Song): String? = song.artistId ?: io {
-        runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId)).firstOrNull { it.videoId == song.videoId }?.artistId }
+        runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId), allVersions = true).firstOrNull { it.videoId == song.videoId }?.artistId }
             .getOrNull()
             ?: runCatching {
                 val name = song.artist.split(", ", " & ").first().trim()
@@ -699,7 +790,7 @@ object MusicRepository {
         song.albumId?.let { return it }
         synchronized(albumIds) { albumIds[song.videoId] }?.let { return it }
         val found = io {
-            runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId)).firstOrNull { it.videoId == song.videoId }?.albumId }
+            runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId), allVersions = true).firstOrNull { it.videoId == song.videoId }?.albumId }
                 .getOrNull()
                 ?: runCatching {
                     val first = song.artist.split(", ", " & ").first().trim()
@@ -729,9 +820,12 @@ object MusicRepository {
         browseId.startsWith("UC") -> BrowseType.ARTIST
         browseId.startsWith("MPREb") -> BrowseType.ALBUM
         browseId.startsWith("VL") || browseId.startsWith("PL") || browseId.startsWith("RD") ||
-            browseId.startsWith("OLAK") || browseId.startsWith("MPSP") -> BrowseType.PLAYLIST
+                browseId.startsWith("OLAK") || browseId.startsWith("MPSP") -> BrowseType.PLAYLIST
         else -> BrowseType.OTHER
     }
 
     private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
+
+    /** The most pages of library playlists read: a few thousand playlists. */
+    private const val LIBRARY_PAGES = 25
 }

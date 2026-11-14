@@ -37,12 +37,12 @@ class LinkDeviceScreenTest {
                 Surface { LinkDeviceScreen(PaddingValues(), onBack = { }, onSignIn = { }, onTogether = { }) }
             }
         }
-        compose.onNodeWithText("Install OpenTune on the TV").assertExists()
+        compose.onNodeWithText("Install OpenTune for TV").assertExists()
         shot("tv")
         compose.onNodeWithText("Computer").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Open the web player").assertExists()
-        compose.onNodeWithText("Install OpenTune on the TV").assertDoesNotExist()
+        compose.onNodeWithText("Install OpenTune for TV").assertDoesNotExist()
         shot("computer")
         compose.onNodeWithText("Speaker").performClick()
         compose.waitForIdle()

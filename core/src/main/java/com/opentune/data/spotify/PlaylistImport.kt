@@ -60,7 +60,7 @@ object PlaylistImport {
      */
     fun startAll(playlists: List<Pair<String, suspend () -> List<Spotify.Track>>>) {
         if (running || playlists.isEmpty()) return
-        val title = if (playlists.size == 1) playlists.first().first else "${playlists.size} playlists"
+        val title = if (playlists.size == 1) playlists.first().first else com.opentune.i18n.Tr.f("{0} playlists", playlists.size)
         _progress.value = Progress(title, total = 0)
         job = scope.launch {
             try {
@@ -69,7 +69,7 @@ object PlaylistImport {
                 val gate = Semaphore(PARALLEL)
                 var lastId: String? = null
                 lists.forEachIndexed { i, (name, list) ->
-                    if (lists.size > 1) _progress.update { it?.copy(name = "$name (${i + 1} of ${lists.size})") }
+                    if (lists.size > 1) _progress.update { it?.copy(name = com.opentune.i18n.Tr.f("{0} ({1} of {2})", name, i + 1, lists.size)) }
                     val found = list.map { t ->
                         async {
                             val song = gate.withPermit { runCatching { match(t) }.getOrNull() }

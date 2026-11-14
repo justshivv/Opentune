@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.CheckCircleOutline
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.BookmarkRemove
@@ -52,10 +53,10 @@ import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.ThumbDownOffAlt
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -124,7 +125,14 @@ class MenuEntry(val label: String, val icon: ImageVector, val group: Int = 1, va
  * menu goes.
  */
 @Composable
-fun ContextMenu(anchor: Rect, onDismiss: () -> Unit, entries: List<MenuEntry>, preview: @Composable () -> Unit) {
+fun ContextMenu(
+    anchor: Rect,
+    onDismiss: () -> Unit,
+    entries: List<MenuEntry>,
+    /** The lifted card's corners: a card or tile passes its own, so its content sits in it the same way. */
+    liftCorner: androidx.compose.ui.unit.Dp = 26.dp,
+    preview: @Composable () -> Unit,
+) {
     val ui by AppSettings.ui.collectAsState()
     val still = ui.reduceAnimation
     val scope = rememberCoroutineScope()
@@ -160,6 +168,12 @@ fun ContextMenu(anchor: Rect, onDismiss: () -> Unit, entries: List<MenuEntry>, p
             LaunchedEffect(got) { frost = got }
         }
         val view = LocalView.current
+        // The menu plays its own opening and closing. The window's own animation (a shrink
+        // and fade on Xiaomi and others) ran on top of it after the item had landed, so the
+        // item jittered at the very end.
+        androidx.compose.runtime.SideEffect {
+            (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.setWindowAnimations(0)
+        }
         val density = LocalDensity.current
         // Where this dialog's own window sits on the screen, to place the item where it was.
         var origin by remember { mutableStateOf<Offset?>(null) }
@@ -188,7 +202,7 @@ fun ContextMenu(anchor: Rect, onDismiss: () -> Unit, entries: List<MenuEntry>, p
                             Modifier
                                 .graphicsLayer {
                                     val k = shown.coerceIn(0f, 1f)
-                                    shape = RoundedCornerShape(26.dp * k)
+                                    shape = RoundedCornerShape(liftCorner * k)
                                     clip = true
                                     shadowElevation = 18.dp.toPx() * k
                                 }
@@ -199,7 +213,7 @@ fun ContextMenu(anchor: Rect, onDismiss: () -> Unit, entries: List<MenuEntry>, p
                                 .drawWithContent {
                                     drawContent()
                                     val k = shown.coerceIn(0f, 1f)
-                                    val r = 26.dp.toPx() * k
+                                    val r = liftCorner.toPx() * k
                                     drawRoundRect(
                                         edge.copy(alpha = edge.alpha * k),
                                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(r),
@@ -217,22 +231,28 @@ fun ContextMenu(anchor: Rect, onDismiss: () -> Unit, entries: List<MenuEntry>, p
                     val gap = 12.dp.roundToPx()
                     val top = insets.getTop(this) + 8.dp.roundToPx()
                     val bottom = h - insets.getBottom(this) - 12.dp.roundToPx()
-                    // A full-width row lifts out as a card inside the side margins, not edge to edge.
-                    val itemX = item.left.toInt().coerceAtLeast(margin)
-                    val itemW = (minOf(item.right.toInt(), w - margin) - itemX).coerceIn(1, w)
-                    val itemH = item.height.toInt().coerceIn(1, h)
+                    // A full-width row lifts out as a card inside the side margins, not edge to
+                    // edge. Anything narrower (a card in a shelf, a tile) keeps its own place and
+                    // size the whole way: re-measured narrower frame by frame, a shelf's first
+                    // card reflowed its cover as it lifted and landed.
+                    val fullWidth = item.width > w - 2 * margin
+                    val baseX = item.left.roundToInt()
+                    val baseW = item.width.roundToInt().coerceIn(1, w)
+                    val itemX = if (fullWidth) item.left.toInt().coerceAtLeast(margin) else baseX
+                    val itemW = if (fullWidth) (minOf(item.right.toInt(), w - margin) - itemX).coerceIn(1, w) else baseW
+                    val itemH = item.height.roundToInt().coerceIn(1, h)
                     // Drawn into the margins as it lifts and back out as it lands, so the
                     // last frame matches the row in the list exactly.
                     val k = shown.coerceIn(0f, 1f)
-                    val liftX = (item.left + (itemX - item.left) * k).roundToInt()
-                    val liftW = (item.width + (itemW - item.width) * k).roundToInt().coerceIn(1, w)
+                    val liftX = if (fullWidth) (item.left + (itemX - item.left) * k).roundToInt() else baseX
+                    val liftW = if (fullWidth) (item.width + (itemW - item.width) * k).roundToInt().coerceIn(1, w) else baseW
                     val itemPlaceable = measurables[0].measure(Constraints.fixed(liftW, itemH))
                     val menuW = minOf((w * 0.7f).toInt().coerceAtLeast(260.dp.roundToPx()), w - margin * 2)
                     val roomForMenu = (bottom - top - itemH - gap).coerceAtLeast(200.dp.roundToPx())
                     val menuPlaceable = measurables[1].measure(Constraints(minWidth = menuW, maxWidth = menuW, maxHeight = roomForMenu))
                     val menuH = menuPlaceable.height
 
-                    val startY = item.top.toInt()
+                    val startY = item.top.roundToInt()
                     val below = startY + itemH + gap + menuH <= bottom
                     val above = startY - gap - menuH >= top
                     // Where the item settles: in place when the menu fits beside it, else slid just enough.
@@ -245,10 +265,15 @@ fun ContextMenu(anchor: Rect, onDismiss: () -> Unit, entries: List<MenuEntry>, p
                         .coerceIn(margin, (w - margin - menuW).coerceAtLeast(margin))
                     val menuOnTop = !below && above
                     layout(w, h) {
-                        // The slide is a float translation, not whole-pixel steps.
-                        val slide = (startY - itemY) * (1f - shown)
+                        // The slide is a float translation, not whole-pixel steps, and it lands on
+                        // the item's exact sub-pixel place rather than the nearest whole pixel.
+                        // The spring's overshoot is kept out of it: the item lifts and grows with a
+                        // little bounce, but its position comes in straight, without a wobble.
+                        val slide = (item.top - itemY) * (1f - k)
+                        val nudgeX = (item.left - liftX) * (1f - k)
                         itemPlaceable.placeWithLayer(liftX, itemY) {
                             translationY = slide
+                            translationX = nudgeX
                             val lift = 1f + 0.025f * shown
                             scaleX = lift
                             scaleY = lift
@@ -324,6 +349,9 @@ fun SongContextMenu(
     onDismiss: () -> Unit,
     /** Inside one of your own playlists: takes this song out of it. */
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    /** On a page where songs can be picked together: starts picking, with this one. */
+    onSelect: (() -> Unit)? = null,
+    liftCorner: androidx.compose.ui.unit.Dp = 26.dp,
     preview: @Composable () -> Unit,
 ) {
     val actions = LocalSongMenu.current
@@ -343,6 +371,7 @@ fun SongContextMenu(
     // Kept audio, separate from a download: the song cache that makes replays instant.
     val cached = remember(song.videoId) { !local && com.opentune.playback.AudioCache.holds(context, song.videoId) }
     val entries = buildList {
+        onSelect?.let { add(MenuEntry("Select", Icons.Rounded.CheckCircleOutline, 0) { it() }) }
         add(MenuEntry(if (isLiked) "Remove from Liked Music" else "Like", if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, 0) { LibraryStore.setLiked(song, !isLiked) })
         if (actions != null) add(MenuEntry("Dislike", Icons.Rounded.ThumbDownOffAlt, 0) { actions.dislike(song) })
         add(MenuEntry("Add to playlist", Icons.AutoMirrored.Rounded.PlaylistAdd, 0) { next = "playlist" })
@@ -375,7 +404,7 @@ fun SongContextMenu(
         })
         add(MenuEntry("More options", Icons.Rounded.MoreHoriz) { next = "more" })
     }
-    ContextMenu(anchor, onDismiss = { if (next == null) onDismiss() }, entries = entries, preview = preview)
+    ContextMenu(anchor, onDismiss = { if (next == null) onDismiss() }, entries = entries, liftCorner = liftCorner, preview = preview)
 }
 
 /** What a long-press on an album or playlist can do; built by the app shell. */
@@ -394,7 +423,13 @@ class MenuList(val browseId: String, val title: String, val subtitle: String, va
 
 /** An album's or playlist's long-press menu: play, shuffle, queue, download, open, share, save. */
 @Composable
-fun CollectionContextMenu(list: MenuList, anchor: Rect, onDismiss: () -> Unit, preview: @Composable () -> Unit) {
+fun CollectionContextMenu(
+    list: MenuList,
+    anchor: Rect,
+    onDismiss: () -> Unit,
+    liftCorner: androidx.compose.ui.unit.Dp = 26.dp,
+    preview: @Composable () -> Unit,
+) {
     val actions = LocalCollectionMenu.current
     val context = LocalContext.current
     val saved by LibraryStore.savedLists.collectAsState()
@@ -407,7 +442,7 @@ fun CollectionContextMenu(list: MenuList, anchor: Rect, onDismiss: () -> Unit, p
             add(MenuEntry("Play next", Icons.AutoMirrored.Rounded.PlaylistPlay) { actions.playNext(list.browseId) })
             add(MenuEntry("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic) { actions.addToQueue(list.browseId) })
             add(MenuEntry("Download all", Icons.Rounded.Download) { actions.downloadAll(list.browseId) })
-            add(MenuEntry("Open $kind", Icons.AutoMirrored.Rounded.KeyboardArrowRight) { actions.open(list.browseId, list.type) })
+            add(MenuEntry(com.opentune.i18n.Tr.f("Open {0}", kind), Icons.AutoMirrored.Rounded.KeyboardArrowRight) { actions.open(list.browseId, list.type) })
         }
         add(MenuEntry("Share", Icons.Rounded.Share) { com.opentune.ui.share.ListShare.shareList(context, list.title, list.browseId, listOf(list.thumbnailUrl), list.subtitle) })
         add(
@@ -416,5 +451,5 @@ fun CollectionContextMenu(list: MenuList, anchor: Rect, onDismiss: () -> Unit, p
             },
         )
     }
-    ContextMenu(anchor, onDismiss, entries, preview)
+    ContextMenu(anchor, onDismiss, entries, liftCorner, preview)
 }

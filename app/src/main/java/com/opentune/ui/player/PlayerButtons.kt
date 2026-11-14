@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import com.opentune.data.settings.ControlStyle
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.abs
 import kotlin.math.sin
 
 /**
@@ -508,19 +509,24 @@ fun OutlinedPlayPauseGlyph(playing: Boolean, color: Color, animate: Boolean, mod
     )
     val path = remember { Path() }
     Canvas(modifier) {
-        val t = p.coerceIn(-0.06f, 1.06f)
+        // As the filled glyph: the shape stays between play and pause (carried past play, the
+        // tip's corners crossed), and the spring's overshoot is a brief swell in size.
+        val t = p.coerceIn(0f, 1f)
+        val swell = 1f + 0.6f * abs(p - t)
         val w = size.minDimension
-        drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), androidx.compose.ui.graphics.Paint())
-        for ((from, to) in OUTER) {
-            quad(path, from, to, t, w)
-            drawPath(path, color)
+        scale(swell, swell) {
+            drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), androidx.compose.ui.graphics.Paint())
+            for ((from, to) in OUTER) {
+                quad(path, from, to, t, w)
+                drawPath(path, color)
+            }
+            // The hollow is cut out of what was just drawn.
+            for ((from, to) in INNER) {
+                quad(path, from, to, t, w)
+                drawPath(path, Color.Black, blendMode = androidx.compose.ui.graphics.BlendMode.Clear)
+            }
+            drawContext.canvas.restore()
         }
-        // The hollow is cut out of what was just drawn.
-        for ((from, to) in INNER) {
-            quad(path, from, to, t.coerceIn(0f, 1f), w)
-            drawPath(path, Color.Black, blendMode = androidx.compose.ui.graphics.BlendMode.Clear)
-        }
-        drawContext.canvas.restore()
     }
 }
 
@@ -591,7 +597,7 @@ fun PlayPauseGlyph(playing: Boolean, color: Color, animate: Boolean, modifier: M
         if (animate) spring(dampingRatio = 0.62f, stiffness = 420f) else snap(),
         label = "playPause",
     )
-    Canvas(modifier) { drawPlayPause(p.coerceIn(-0.1f, 1.1f), color) }
+    Canvas(modifier) { drawPlayPause(p, color) }
 }
 
 // The two pieces, as points in a unit square: top-left, top-right, bottom-right, bottom-left.
@@ -603,15 +609,21 @@ private val PAUSE_RIGHT = floatArrayOf(0.61f, 0.14f, 0.79f, 0.14f, 0.79f, 0.86f,
 
 private fun DrawScope.drawPlayPause(p: Float, color: Color) {
     val w = size.minDimension
+    // The shape only ever goes from play to pause. The spring carries [p] a little past
+    // either end; carried past play, the triangle's tip corners passed each other and the
+    // outline crossed itself, its round joins balling up into a dot at the point. The
+    // overshoot now shows as a brief swell in size instead, with the shape held at its end.
+    val shape = p.coerceIn(0f, 1f)
+    val swell = 1f + 0.6f * abs(p - shape)
     // A slight squeeze through the middle of the fold.
-    val squeeze = 1f - 0.07f * sin(PI.toFloat() * p.coerceIn(0f, 1f))
+    val squeeze = (1f - 0.07f * sin(PI.toFloat() * shape)) * swell
     val stroke = Stroke(width = w * 0.09f, join = StrokeJoin.Round)
     scale(squeeze, squeeze) {
         for ((from, to) in listOf(PLAY_LEFT to PAUSE_LEFT, PLAY_RIGHT to PAUSE_RIGHT)) {
             val path = Path()
             for (i in 0 until 4) {
-                val x = (from[2 * i] + (to[2 * i] - from[2 * i]) * p) * w
-                val y = (from[2 * i + 1] + (to[2 * i + 1] - from[2 * i + 1]) * p) * w
+                val x = (from[2 * i] + (to[2 * i] - from[2 * i]) * shape) * w
+                val y = (from[2 * i + 1] + (to[2 * i + 1] - from[2 * i + 1]) * shape) * w
                 if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
             path.close()

@@ -37,10 +37,10 @@ import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -191,7 +191,7 @@ fun EqualizerScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
                 NavRow(
                     hp?.name ?: "Correct for your headphones",
                     { picking = true },
-                    summary = hp?.let { "AutoEq correction measured by ${it.source} · ${it.filters.size} filters, ${formatDb(it.preampDb)} preamp" }
+                    summary = hp?.let { com.opentune.i18n.Tr.f("AutoEq correction measured by {0} · {1} filters, {2} preamp", it.source, it.filters.size, formatDb(it.preampDb)) }
                         ?: "Pick your model from AutoEq's thousands of measurements",
                     icon = com.opentune.ui.player.PlayerIcons.Headphones,
                 )

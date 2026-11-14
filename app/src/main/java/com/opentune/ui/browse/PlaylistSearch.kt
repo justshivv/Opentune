@@ -1,8 +1,6 @@
 package com.opentune.ui.browse
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -68,24 +66,71 @@ internal fun PlaylistSearchField(search: PlaylistSearch, modifier: Modifier = Mo
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     androidx.activity.compose.BackHandler { search.close(); focus.clearFocus(); keyboard?.hide() }
-    ListSearchField(search.query, { search.query = it }, {
-        search.close(); focus.clearFocus(); keyboard?.hide()
-    }, modifier.onGloballyPositioned { search.bounds = it.boundsInRoot() }, autoFocus = true)
+    // The field's X empties it and keeps the keyboard; the bar's X closes the search.
+    ListSearchField(search.query, { search.query = it }, { search.query = "" }, modifier.onGloballyPositioned { search.bounds = it.boundsInRoot() }, autoFocus = true)
 }
 
-/** The search field belongs to the fixed toolbar, never to the scrolling cover header. */
+/**
+ * The search field belongs to the fixed toolbar, never to the scrolling cover header. The bar's
+ * own frost reaches down behind the field, so the two read as one surface: a solid page-colour
+ * band of its own under the field ended in a hard line against the bar's lighter frost.
+ */
 @Composable
 internal fun PlaylistSearchHeader(search: PlaylistSearch, toolbar: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth()
-        .then(if (search.open) Modifier.background(MaterialTheme.colorScheme.background) else Modifier)
-        .onSizeChanged { search.headerHeight = it.height }) {
-        toolbar()
-        PlaylistSearchField(search, Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+    Column(Modifier.fillMaxWidth().onSizeChanged { search.headerHeight = it.height }) {
+        CompositionLocalProvider(com.opentune.ui.library.LocalNavFrostBelow provides if (search.open) SEARCH_FIELD_ROOM else 0.dp) {
+            toolbar()
+        }
+        PlaylistSearchField(search, Modifier.padding(horizontal = 20.dp, vertical = SEARCH_FIELD_GAP))
     }
 }
+
+private val SEARCH_FIELD_GAP = 8.dp
+/** The field and the gap above and below it. */
+private val SEARCH_FIELD_ROOM = SEARCH_FIELD_HEIGHT + SEARCH_FIELD_GAP * 2
 
 /** Constrain the results viewport above the IME, leaving the fixed search header visible. */
 internal fun Modifier.playlistSearchResults(search: PlaylistSearch): Modifier = composed {
     if (search.open) padding(top = with(LocalDensity.current) { search.headerHeight.toDp() }).imePadding()
     else this
+}
+
+/**
+ * Puts the list back where it was before a search, the moment the search closes. Searching
+ * jumps the list to the top of the results, so on closing, for one frame, the list still read
+ * as being at its top: the bar drew its see-through glass pill (as it does over the cover),
+ * then the songs came back past the cover and the bar went solid again, a flash. The place is
+ * put back in that same frame, and the result is true (keep the bar solid) for the few frames
+ * the list takes to report it, when that place is past the cover.
+ */
+@Composable
+internal fun rememberSearchReturn(
+    search: PlaylistSearch,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    pastHero: (index: Int, offset: Int) -> Boolean,
+): Boolean {
+    val memo = remember { SearchReturn(search.open) }
+    var hold by remember { mutableStateOf(false) }
+    val open = search.open
+    if (open != memo.wasOpen) {
+        if (open) {
+            memo.index = listState.firstVisibleItemIndex
+            memo.offset = listState.firstVisibleItemScrollOffset
+        } else {
+            listState.requestScrollToItem(memo.index, memo.offset)
+            hold = pastHero(memo.index, memo.offset)
+        }
+        memo.wasOpen = open
+    }
+    androidx.compose.runtime.LaunchedEffect(hold) {
+        if (!hold) return@LaunchedEffect
+        repeat(2) { androidx.compose.runtime.withFrameNanos { } }
+        hold = false
+    }
+    return hold
+}
+
+private class SearchReturn(var wasOpen: Boolean) {
+    var index = 0
+    var offset = 0
 }

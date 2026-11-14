@@ -42,6 +42,64 @@ enum class PaletteStyleOption(val label: String) {
     Monochrome("Monochrome"),
 }
 
+/**
+ * How hard Automix works reading songs ahead of a blend: how many songs it reads at
+ * once, how early it starts, and how long a reading may take. More reads sooner and
+ * surer, at the cost of a warmer phone and some battery.
+ */
+@Serializable
+enum class AutomixPerformance(val label: String, val summary: String, val threads: Int) {
+    EFFICIENT("Efficient", "1 thread · lowest heat and battery use · reading a song may take longer", 1),
+    BALANCED("Balanced", "2 threads · reads both songs at once · the recommended balance", 2),
+    PERFORMANCE("Performance", "4 threads · starts sooner and reads the most · warmer and uses more battery", 4),
+}
+
+/**
+ * How much OpenTune spends on smoothness and moving extras, against battery. Choosing one
+ * sets the switches behind it at once ([performanceApplied]); any of them can be changed after.
+ */
+@Serializable
+enum class PerformanceProfile(val label: String, val summary: String) {
+    BATTERY_SAVER("Battery saver", "60 Hz screen, still player backgrounds and covers, no Canvas or animated covers, plain lyrics, and Automix reading one song at a time"),
+    BALANCED("Balanced", "The screen at the phone's own rate, moving backgrounds, animated covers on Wi-Fi only"),
+    PERFORMANCE("High performance", "The fastest refresh rate and everything moving, at the cost of battery"),
+}
+
+/** [ui] and [pb] as [profile] sets them; everything it doesn't touch is kept. */
+fun performanceApplied(ui: InterfaceSettings, pb: PlaybackSettings, profile: PerformanceProfile): Pair<InterfaceSettings, PlaybackSettings> {
+    val d = InterfaceSettings()
+    return when (profile) {
+        PerformanceProfile.BATTERY_SAVER -> ui.copy(
+            performanceProfile = profile, highRefreshRate = false, stillBackdrops = true,
+            animatedCovers = false, spotifyCanvas = false, movingCover = false, homeMovingCovers = false, blurLyrics = false,
+        ) to pb.copy(automixPerformance = AutomixPerformance.EFFICIENT)
+        PerformanceProfile.BALANCED -> ui.copy(
+            performanceProfile = profile, highRefreshRate = false, stillBackdrops = false,
+            animatedCovers = d.animatedCovers, animatedCoversWifiOnly = true, spotifyCanvas = d.spotifyCanvas,
+            movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics,
+        ) to pb.copy(automixPerformance = AutomixPerformance.BALANCED)
+        PerformanceProfile.PERFORMANCE -> ui.copy(
+            performanceProfile = profile, highRefreshRate = true, stillBackdrops = false,
+            animatedCovers = d.animatedCovers, spotifyCanvas = d.spotifyCanvas,
+            movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics,
+        ) to pb.copy(automixPerformance = AutomixPerformance.PERFORMANCE)
+    }
+}
+
+/** How music reaches the DAC unchanged. */
+@Serializable
+enum class BitPerfectOutput(val label: String, val summary: String) {
+    OFF("Off", "Audio goes through Android's mixer and OpenTune's effects"),
+    USB_ANDROID("USB DAC", "Android 14 opens the DAC at each track's own rate and bit depth, without mixing or resampling"),
+    USB_DIRECT("USB DAC (direct driver)", "OpenTune drives the DAC itself, on any Android version, at each track's own rate. Asks for USB permission"),
+    BUILT_IN("Built-in DAC (exclusive)", "For phones and players with their own DAC: the headphone or line output opened exclusively at each track's rate. Not every device allows it"),
+    HEADPHONE_JACK("Headphone jack", "The phone's own 3.5 mm jack at each track's rate and bit depth: Android 14's bit-perfect path where the phone offers it for the jack, otherwise the jack opened exclusively. Not every phone allows it"),
+}
+
+/** The bit-perfect path in use: the chosen one, or the Android 14 switch from before there was a choice. */
+val PlaybackSettings.bitPerfectMode: BitPerfectOutput
+    get() = if (bitPerfectOutput != BitPerfectOutput.OFF) bitPerfectOutput else if (bitPerfectUsb) BitPerfectOutput.USB_ANDROID else BitPerfectOutput.OFF
+
 @Serializable
 enum class PlayerBackground(val label: String) {
     /** The cover itself, blurred smooth and drifting slowly, as the album and playlist pages' headers. */
@@ -96,7 +154,7 @@ data class ThemeSettings(
     val customFontId: String = "",
     val customFontName: String = "",
 
-)
+    )
 
 /** Reverb presets map onto android.media.audiofx.PresetReverb's. */
 @Serializable
@@ -292,10 +350,18 @@ data class PlaybackSettings(
     val autoplay: Boolean = true,
     /** Autoplay won't add anything already played or queued this session. */
     val noRepeatInSession: Boolean = false,
+    /**
+     * Radio and mixes play the song, not its music video, when YouTube Music
+     * has both: its own Song/Video switch, set to Song. Never a guessed match:
+     * only the version YouTube Music pairs with the video.
+     */
+    val songsOnly: Boolean = true,
     /** Whose suggestions autoplay and Home's "Because you played" follow. */
     val recommender: Recommender = Recommender.YOUTUBE,
     val listeningHistoryTarget: com.opentune.data.history.ListeningHistoryTarget = com.opentune.data.history.ListeningHistoryTarget.YOUTUBE_MUSIC,
     val pauseListeningHistory: Boolean = false,
+    /** Listens made in YouTube Music or other apps on the account come into OpenTune's history. */
+    val importAccountHistory: Boolean = true,
     /**
      * Smart shuffle can be chosen: the player's shuffle button gets a third
      * state, and a long press on a playlist or album's Shuffle starts it.
@@ -321,8 +387,18 @@ data class PlaybackSettings(
     val qobuzRelayUrl: String = "",
     /** Overlap the end of a song with the start of the next; 0 is off. */
     val crossfadeSeconds: Int = 0,
+    /**
+     * Automix: read the end of each song and the start of the next, and blend
+     * them where and for as long as suits the two, on the beat when there is
+     * one. Takes over from [crossfadeSeconds] while on.
+     */
+    val automix: Boolean = false,
+    /** How hard Automix works reading the songs ahead of each blend. */
+    val automixPerformance: AutomixPerformance = AutomixPerformance.BALANCED,
     /** Bit-perfect output to a USB DAC (Android 14+): no mixing, effects or resampling. */
     val bitPerfectUsb: Boolean = false,
+    /** Which bit-perfect path, if any (see [BitPerfectOutput]); [bitPerfectUsb] is the Android 14 one. */
+    val bitPerfectOutput: BitPerfectOutput = BitPerfectOutput.OFF,
     /** Let the phone's own effects (Dolby, SoundAlive, system EQ) process playback. */
     val systemEffects: Boolean = true,
     /** Carry on playing when headphones are plugged in or a Bluetooth device connects. */
@@ -344,16 +420,40 @@ data class InterfaceSettings(
     val playlistList: Boolean = false,
     /** Playlists pinned to the top of Library, first pinned first: a local playlist's id, or a YouTube Music browse id. */
     val pinnedPlaylists: List<String> = emptyList(),
-    /** On a TV, the heavy effects have been turned down once; they can be turned back on by hand. */
-    val tvTuned: Boolean = false,
+    /** The phone as a TV remote: how far the TV's cursor moves for a finger's move, 0.5 to 2.5 times. */
+    val remotePointerSpeed: Float = 1f,
+    /** Two fingers drag the page along with them, as on a phone; off, the other way. */
+    val remoteNaturalScroll: Boolean = true,
+    /** A tap on the trackpad clicks. */
+    val remoteTapToClick: Boolean = true,
+    /** The remote opens on the trackpad; off, on the buttons. The last one used is kept. */
+    val remoteStartOnTrackpad: Boolean = true,
+    /** The phone's volume buttons change the TV's volume while the remote is open. */
+    val remoteVolumeKeys: Boolean = true,
+    /**
+     * Lite mode: the same pages and layout, without the effects a TV or an older phone
+     * can't draw smoothly (glass, blur, glows, moving and animated covers, canvases),
+     * and fewer shelves on Home. Turned on once by itself on those devices.
+     */
+    val liteMode: Boolean = false,
+    /** Lite mode has been offered on this device (turned on if it suited), after which it's the listener's. */
+    val liteChecked: Boolean = false,
     val reduceAnimation: Boolean = false,
     /** The mark's dive into the app when it starts. */
     val openingAnimation: Boolean = true,
     /** Solid fills instead of frosted glass. */
     val reduceBlur: Boolean = false,
     val fullScreenCover: Boolean = false,
+    /** Playlist and album pages open with their cover filling the top of the page, edge to edge. */
+    val fullScreenListCover: Boolean = false,
+    /** How round the player's cover is, in dp: 0 is a square with sharp corners. Not used with [fullScreenCover]. */
+    val coverCornerDp: Int = 28,
+    val coverColorBackground: Boolean = false,
     val hideVolumeBar: Boolean = false,
     val hideSongStatus: Boolean = false,
+    val hideOutputDevice: Boolean = false,
+    /** The Comments button in the player (in the pill beside the audio output) and in the song's menu. */
+    val commentsButton: Boolean = true,
     /** Show the current lyric above the controls, independently of the player layout. */
     val lyricsPreview: Boolean = true,
     val syncedLyrics: Boolean = true,
@@ -364,10 +464,16 @@ data class InterfaceSettings(
     val miniPlayerTint: Boolean = true,
     /** An artist's page is washed with a deep shade of their photo's colour; off keeps the theme's own. */
     val artistPageTint: Boolean = true,
+    /** How deep that wash is: a soft wash of the photo's colour, or the deep shade alone. */
+    val artistShade: ArtistShade = ArtistShade.LIGHT,
+    /** What is behind a playlist, album or Liked page: the cover's colour and blur, or the theme's plain background. */
+    val listBackground: ListBackground = ListBackground.AMBIENT,
     val statsForNerds: Boolean = false,
     val recentsAsGrid: Boolean = false,
     /** Speed dial at the top of Home: the most-played songs, albums and artists. */
     val speedDial: Boolean = true,
+    /** Listening streaks and small milestones under Home's greeting. */
+    val homeStreaks: Boolean = true,
     /** Refracting Liquid Glass on Android 13+; frosted blur otherwise. */
     val liquidGlass: Boolean = true,
     /** Draw the played part of the seek bar as a moving wave. */
@@ -432,6 +538,8 @@ data class InterfaceSettings(
     val countUsage: Boolean = true,
     /** How the glass of the dock, buttons and bars looks. */
     val glassStyle: GlassStyle = GlassStyle.LIQUID,
+    /** Whether a list of choices in Settings opens as a page of its own or a popup sheet. */
+    val choiceMenus: ChoiceMenuStyle = ChoiceMenuStyle.SCREEN,
     /** Pages blur and fade out as they scroll under the status bar. */
     val frostedTopEdge: Boolean = true,
     /** How the dock's highlight travels between tabs. */
@@ -443,6 +551,10 @@ data class InterfaceSettings(
     val lyricsGlow: Boolean = false,
     /** High performance mode: ask for a fast refresh rate while the app is open. */
     val highRefreshRate: Boolean = true,
+    /** The profile last chosen (Settings › Performance profile); the switches it set may have been changed since. */
+    val performanceProfile: PerformanceProfile = PerformanceProfile.PERFORMANCE,
+    /** Player backgrounds and their glow hold still instead of drifting (Battery saver). */
+    val stillBackdrops: Boolean = false,
     /** The rate high performance mode asks for, in Hz; 0 for the screen's fastest. */
     val refreshRateHz: Int = 0,
     /** How the full player rises over the page and drops away. */
@@ -510,6 +622,28 @@ enum class GlassStyle(val label: String, val summary: String) {
     LIQUID("Liquid", "Apple's Liquid Glass: softly frosted, the edges bend and split the light, with a bright rim (Android 13+)"),
 }
 
+/** How strongly an artist's page takes the colour of their photo. */
+@Serializable
+enum class ArtistShade(val label: String, val summary: String) {
+    LIGHT("Light", "A soft wash of the photo's colour over the whole page"),
+    DARK("Dark", "A deep shade of the photo's colour, close to black"),
+}
+
+/** What sits behind the songs on playlist, album and Liked pages. */
+@Serializable
+enum class ListBackground(val label: String, val summary: String) {
+    AMBIENT("Ambient colours", "The cover's colours wash down the page and fade out at the very bottom, like the artist page"),
+    COVER("Cover blur", "The cover's colour fades down the page, over a soft blur of the cover"),
+    PLAIN("Plain", "The app's own light or dark background"),
+}
+
+/** How a choice in Settings (quality, glass style, and so on) is picked from a list. */
+@Serializable
+enum class ChoiceMenuStyle(val label: String, val summary: String) {
+    SCREEN("Full screen", "Opens a page of its own to choose from"),
+    POPUP("Popup", "A sheet that slides up over the page"),
+}
+
 /** How the dock's highlight moves to the tab you pick. */
 @Serializable
 enum class DockLens(val label: String, val summary: String) {
@@ -541,6 +675,11 @@ data class LibrarySettings(
     val songCacheMb: Int = 512,
     val downloadQuality: AudioQuality = AudioQuality.MAX,
     val downloadWifiOnly: Boolean = true,
+    val smartDownloads: Boolean = false,
+    val smartDownloadLimit: Int = 250,
+    val smartDownloadMinBattery: Int = 25,
+    /** Smart downloads also keep the start of today's mixes (daylist, daily, genre and Discover). */
+    val smartDownloadMixes: Boolean = true,
     /** Also copy each download into the phone's Music folder, in a format other apps play; see [com.opentune.data.download.DownloadExport]. */
     val exportDownloads: Boolean = false,
     /** Leave out songs and albums marked explicit; see [com.opentune.data.ContentFilter]. */
@@ -597,7 +736,7 @@ enum class DockMotion(val label: String, val summary: String) {
 enum class CanvasLook(val label: String, val summary: String) {
     TINT("Tint", "From the title down the Canvas fades into the song's own colour"),
     SHADE("Dark", "From the title down the Canvas fades to near black"),
-    FROST("Frosted", "From the title down the Canvas blurs into frosted glass, where the phone can blur video"),
+    FROST("Frosted", "From the title down the Canvas blurs into frosted glass"),
     NONE("Plain", "Only a light darkening behind the controls"),
 }
 
@@ -770,7 +909,7 @@ object AppSettings {
         val cm = connectivity ?: return true
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     fun onMeteredNetwork(): Boolean {
@@ -882,3 +1021,18 @@ object AppSettings {
     private const val K_STATE = "state_v2"
 }
 
+
+
+/** [ui] as Lite mode sets it ([on]) or as it's set without it. */
+fun liteModeApplied(ui: InterfaceSettings, on: Boolean): InterfaceSettings {
+    val d = InterfaceSettings()
+    return if (on) ui.copy(
+        liteMode = true, reduceBlur = true, liquidGlass = false, frostedTopEdge = false, coverGlow = false,
+        movingCover = false, homeMovingCovers = false, blurLyrics = false, wavySeekbar = false, openingAnimation = false,
+        animatedCovers = false, spotifyCanvas = false,
+    ) else ui.copy(
+        liteMode = false, reduceBlur = d.reduceBlur, liquidGlass = d.liquidGlass, frostedTopEdge = d.frostedTopEdge, coverGlow = d.coverGlow,
+        movingCover = d.movingCover, homeMovingCovers = d.homeMovingCovers, blurLyrics = d.blurLyrics, openingAnimation = d.openingAnimation,
+        animatedCovers = d.animatedCovers, spotifyCanvas = d.spotifyCanvas,
+    )
+}

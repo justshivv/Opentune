@@ -5,7 +5,6 @@ import com.opentune.data.model.Song
 import java.text.Normalizer
 import java.time.Instant
 import java.util.Locale
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
@@ -44,7 +43,6 @@ object AppleTrackMetadataRepository {
     private data class Entry(val value: AppleTrackMetadata?, val release: AppleRelease?, val at: Long)
     internal data class Candidate(val track: AppleTrackMetadata, val albumId: Long?, val artworkUrl: String?)
     private val gate = Mutex()
-    private var lastRequest = 0L
     private val cache = object : LinkedHashMap<String, Entry>() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>?) = size > 200
     }
@@ -67,14 +65,11 @@ object AppleTrackMetadataRepository {
         var track: AppleTrackMetadata? = null
         var release: AppleRelease? = null
         for (store in listOf(storefront, "US").distinct()) {
-            val elapsed = System.nanoTime() / 1_000_000 - lastRequest
-            if (lastRequest != 0L && elapsed < 3_100) delay(3_100 - elapsed)
             val url = "https://itunes.apple.com/search".toHttpUrl().newBuilder()
                 .addQueryParameter("term", "${song.title} ${song.artist}")
                 .addQueryParameter("country", store).addQueryParameter("media", "music")
                 .addQueryParameter("entity", "song").addQueryParameter("limit", "25").build()
-            val response = try { LosslessHttp.text(url.toString()) }
-                finally { lastRequest = System.nanoTime() / 1_000_000 }
+            val response = AppleSearchGate.paced { LosslessHttp.text(url.toString()) }
             val found = candidates(Json.parseToJsonElement(response).jsonObject, song, durationMs)
             track = track ?: single(found)
             release = release ?: releaseOf(found, store)

@@ -58,7 +58,7 @@ object HomeSeed {
         val seeded = seeds.filter { it.name.lowercase() !in led }.mapNotNull { a ->
             val songs = ExploreFeed.weave(listOf(a.top, a.radio)).distinctBy { it.videoId }.take(MIX_MAX)
             if (songs.size < MIX_MIN) null
-            else DailyMixes.Mix("seed:${a.browseId}", "${a.name} mix", "${a.name} and artists like them", songs)
+            else DailyMixes.Mix("seed:${a.browseId}", com.opentune.i18n.Tr.f("{0} mix", a.name), com.opentune.i18n.Tr.f("{0} and artists like them", a.name), songs)
         }
         return fromHistory + seeded
     }
@@ -67,8 +67,8 @@ object HomeSeed {
     fun names(names: List<String>): String = when (names.size) {
         0 -> "these artists"
         1 -> names[0]
-        2 -> "${names[0]} and ${names[1]}"
-        3 -> "${names[0]}, ${names[1]} and ${names[2]}"
-        else -> "${names[0]}, ${names[1]} and ${names.size - 2} more"
+        2 -> com.opentune.i18n.Tr.f("{0} and {1}", names[0], names[1])
+        3 -> com.opentune.i18n.Tr.f("{0}, {1} and {2}", names[0], names[1], names[2])
+        else -> com.opentune.i18n.Tr.f("{0}, {1} and {2} more", names[0], names[1], names.size - 2)
     }
 }

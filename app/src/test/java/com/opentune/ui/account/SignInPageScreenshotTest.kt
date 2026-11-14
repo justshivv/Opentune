@@ -10,6 +10,10 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertEquals
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.test.core.app.ApplicationProvider
@@ -49,6 +53,12 @@ class SignInPageScreenshotTest {
             }
         }
         compose.waitForIdle()
+        val page = compose.onNodeWithTag("sign-in-page").fetchSemanticsNode().boundsInRoot
+        val browser = compose.onNodeWithTag("sign-in-browser").fetchSemanticsNode().boundsInRoot
+        val toolbar = 56f * compose.activity.resources.displayMetrics.density
+        assertEquals(page.width, browser.width, 1f)
+        assertEquals(page.bottom, browser.bottom, 1f)
+        assertEquals(page.height - toolbar, browser.height, 1f)
     }
 
     @Test fun spotify() {
@@ -61,6 +71,22 @@ class SignInPageScreenshotTest {
         show(spotify = false)
         compose.onNodeWithText("YouTube Music").assertIsDisplayed()
         save("sign-in-youtube-music")
+    }
+
+    @Test @Config(qualifiers = "w891dp-h411dp-xxhdpi") fun landscapeUsesAllAvailableWidth() {
+        show(spotify = false)
+    }
+
+    @Test fun helpDoesNotShrinkTheBrowser() {
+        show(spotify = true)
+        val before = compose.onNodeWithTag("sign-in-browser").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Your playlists in Library, each song's Canvas, and suggestions made for you").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Sign-in help").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithText("Your playlists in Library, each song's Canvas, and suggestions made for you").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(before, compose.onNodeWithTag("sign-in-browser").fetchSemanticsNode().boundsInRoot)
     }
 
     private fun save(name: String) {

@@ -64,11 +64,11 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.Podcasts
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -354,7 +354,7 @@ private fun BoxScope.WelcomeTopBar(step: WelcomeStep, onBack: () -> Unit, onSkip
 private fun StepDots(step: WelcomeStep, reduceMotion: Boolean, modifier: Modifier = Modifier) {
     Row(
         modifier.semantics(mergeDescendants = true) {
-            contentDescription = "Step ${step.ordinal + 1} of ${WelcomeStep.entries.size}"
+            contentDescription = com.opentune.i18n.Tr.f("Step {0} of {1}", step.ordinal + 1, WelcomeStep.entries.size)
         },
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -388,7 +388,7 @@ private fun BoxScope.WelcomeBottomBar(step: WelcomeStep, picks: List<ExploreFeed
             WelcomeStep.ARTISTS -> when {
                 picked < MIN_PICKS -> "Pick an artist to start"
                 picked == 1 -> "Done · 1 artist"
-                else -> "Done · $picked artists"
+                else -> com.opentune.i18n.Tr.f("Done · {0} artists", picked)
             }
             WelcomeStep.LOOK -> "Continue"
             WelcomeStep.SIGN_IN -> if (signedIn) "Start listening" else "Sign in to YouTube Music"
@@ -492,7 +492,7 @@ private fun ArtistsStep(
         val place = country?.let { runCatching { Locale.Builder().setRegion(it).build().displayCountry }.getOrNull()?.takeIf(String::isNotBlank) }
         StepTitle(
             "Pick artists you like",
-            (if (place != null) "Starting with what's popular in $place. " else "") +
+            (if (place != null) com.opentune.i18n.Tr.f("Starting with what's popular in {0}. ", place) else "") +
                 "Each one you pick brings in more like them. Keep going as long as you like, then tap Done.",
         )
         TextField(
@@ -522,7 +522,7 @@ private fun ArtistsStep(
                 shown.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }, key = "empty") {
                     Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            if (searching) "No artists found for \"${query.trim()}\"." else "Couldn't load popular artists. Search for any artist above.",
+                            if (searching) com.opentune.i18n.Tr.f("No artists found for \"{0}\".", query.trim()) else "Couldn't load popular artists. Search for any artist above.",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -650,7 +650,7 @@ private fun ArtistChoice(
         )
         if (because != null) {
             Text(
-                "Like $because",
+                com.opentune.i18n.Tr.f("Like {0}", because),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center,
@@ -753,7 +753,7 @@ internal fun LookPreview(picks: List<ExploreFeed.Artist>, modifier: Modifier = M
     val song = remember(lead) {
         Song(
             videoId = "welcome-preview",
-            title = lead?.let { "${it.name} mix" } ?: "Your first song",
+            title = lead?.let { com.opentune.i18n.Tr.f("{0} mix", it.name) } ?: com.opentune.i18n.Tr.t("Your first song"),
             artist = picks.take(3).joinToString(", ") { it.name }.ifEmpty { "OpenTune" },
             thumbnailUrl = lead?.thumbnailUrl.artworkAt(240),
         )
@@ -833,7 +833,7 @@ private fun SignInStep() {
         Spacer(Modifier.height(topInset()))
         StepTitle(
             "Sign in",
-            if (signedIn) "You're signed in${account?.name?.let { " as $it" }.orEmpty()}. Your playlists and liked songs are in Library."
+            if (signedIn) com.opentune.i18n.Tr.f("You're signed in{0}. Your playlists and liked songs are in Library.", account?.name?.let { " as $it" }.orEmpty())
             else "Sign in to YouTube Music to bring your playlists, liked songs and recommendations. It's optional, and you can do it later in Settings › Account.",
         )
         Box(Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {

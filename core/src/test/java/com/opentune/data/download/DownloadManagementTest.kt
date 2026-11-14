@@ -59,6 +59,20 @@ class DownloadManagementTest {
         assertNotNull(Downloads.entryNow(songs[3].videoId))
     }
 
+    @Test fun smartCleanupRechecksManualOwnershipAndCompletedState() {
+        val id = songs[0].videoId
+        Downloads.put(id) { entry(0, DownloadState.QUEUED).copy(smartDownload = true) }
+        // A manual save promotes the row after automatic cleanup collected its IDs.
+        Downloads.put(id) { it!!.copy(smartDownload = false) }
+        Downloads.removeSmart(context, id)
+        assertNotNull(Downloads.entryNow(id))
+        Downloads.put(id) { it!!.copy(smartDownload = true, state = DownloadState.DONE) }
+        Downloads.removeSmart(context, id, onlyPending = true)
+        assertNotNull(Downloads.entryNow(id))
+        Downloads.removeSmart(context, id)
+        assertNull(Downloads.entryNow(id))
+    }
+
     @Test fun selectionDeduplicatesSongsAndExcludesDeviceFiles() {
         val local = Song("local:123", "Device song", "Artist", null)
         val selected = downloadSelection(songs + songs[0] + local, mapOf(

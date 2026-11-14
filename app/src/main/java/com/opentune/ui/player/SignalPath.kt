@@ -22,9 +22,9 @@ import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -103,7 +103,8 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.
     val bits = format?.bitDepth ?: source?.bits
     val rate = format?.sampleRateHz ?: source?.sampleRate
     val channels = format?.channels
-    val kbps = format?.bitrateKbps ?: source?.kbps
+    val measured by com.opentune.playback.MeasuredBitrate.kbps.collectAsState()
+    val kbps = com.opentune.playback.bestKbps(format, measured, source?.kbps)
     val pcmKbps = if (isLossless && bits != null && rate != null && channels != null) bits.toLong() * rate * channels / 1000 else null
     val trackRate = pipe.outputSampleRateHz ?: rate
     val resampled = trackRate != null && mixerRate != null && trackRate != mixerRate
@@ -129,7 +130,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.
                         codec,
                         if (isLossless) bits?.let { "$it-bit" } else null,
                         rate?.let(::khz),
-                        kbps?.takeIf { it > 0 }?.let { "$it kbps" },
+                        kbps?.takeIf { it > 0 }?.let { com.opentune.i18n.Tr.f("{0} kbps", it) },
                         channels?.let(::channelLabel),
                     ),
                     pcmKbps = pcmKbps,
@@ -169,7 +170,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.
                 },
                 "Dither" to if (pb.floatOutput) "Bypassed (float)" else "TPDF, noise shaped",
                 "System effects" to if (pb.systemEffects) "Open" else "Closed",
-                pipe.bufferMs?.let { ms -> "Buffer" to "$ms ms" + (pipe.bufferFrames?.let { " ($it frames)" } ?: "") },
+                pipe.bufferMs?.let { ms -> "Buffer" to com.opentune.i18n.Tr.f("{0} ms", ms) + (pipe.bufferFrames?.let { com.opentune.i18n.Tr.f(" ({0} frames)", it) } ?: "") },
             ),
         ),
         Stage(
@@ -178,15 +179,15 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.
             listOfNotNull(
                 "Device" to device,
                 "AudioTrack" to listOfNotNull(pipe.outputEncoding ?: if (pb.floatOutput) "Float32" else "16-bit PCM", trackRate?.let(::khz)).joinToString(" / "),
-                mixerRate?.let { "System" to "AudioFlinger mixer, ${khz(it)}" },
+                mixerRate?.let { "System" to com.opentune.i18n.Tr.f("AudioFlinger mixer, {0}", khz(it)) },
                 when (val bp = bitPerfect) {
-                    is BitPerfectUsb.Status.Active -> "Bit-perfect" to "${bp.device}, ${khz(bp.sampleRate)} ${bp.bits}-bit"
-                    is BitPerfectUsb.Status.NoMatch -> "Bit-perfect" to "DAC lacks ${khz(bp.sampleRate)}"
+                    is BitPerfectUsb.Status.Active -> "Bit-perfect" to com.opentune.i18n.Tr.f("{0}, {1} {2}-bit", bp.device, khz(bp.sampleRate), bp.bits)
+                    is BitPerfectUsb.Status.NoMatch -> "Bit-perfect" to com.opentune.i18n.Tr.f("DAC lacks {0}", khz(bp.sampleRate))
                     BitPerfectUsb.Status.NoDac -> "Bit-perfect" to "Waiting for a USB DAC"
                     BitPerfectUsb.Status.Unsupported -> "Bit-perfect" to "Needs Android 14"
                     BitPerfectUsb.Status.Off -> null
                 },
-                if (volume != null && maxVolume != null) "Volume" to "$volume of $maxVolume" else null,
+                if (volume != null && maxVolume != null) "Volume" to com.opentune.i18n.Tr.f("{0} of {1}", volume, maxVolume) else null,
             ),
         ),
     )
@@ -273,7 +274,7 @@ private fun TrackInfo(source: String, specs: List<String>, pcmKbps: Long?, picke
             }
         }
         if (pcmKbps != null) {
-            Text("$pcmKbps kbps of PCM once decoded", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            Text(com.opentune.i18n.Tr.f("{0} kbps of PCM once decoded", pcmKbps), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         }
         val answers = picked?.let(::sourceAnswers).orEmpty()
         if (answers.isNotEmpty()) {
@@ -311,12 +312,12 @@ private fun TrackInfo(source: String, specs: List<String>, pcmKbps: Long?, picke
     }
 }
 
-private fun khz(hz: Int): String = "${String.format(Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0")} kHz"
+private fun khz(hz: Int): String = com.opentune.i18n.Tr.f("{0} kHz", String.format(Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0"))
 
 private fun channelLabel(n: Int) = when (n) {
     1 -> "Mono"
     2 -> "Stereo"
-    else -> "$n (Surround)"
+    else -> com.opentune.i18n.Tr.f("{0} (Surround)", n)
 }
 
 private val RAIL_WIDTH = 44.dp
@@ -529,17 +530,17 @@ private fun StageRow(stage: Stage, last: Boolean, reportNodeY: (LayoutCoordinate
 }
 
 /** Reports the selected media format; output mixer precision is shown separately. */
-internal fun signalQuality(format: AudioFormatInfo?, source: NerdStats.Source?): String {
+internal fun signalQuality(format: AudioFormatInfo?, source: NerdStats.Source?, measured: Int? = null): String {
     val codec = format?.codec
     val bits = format?.bitDepth ?: source?.bits
     val rate = format?.sampleRateHz ?: source?.sampleRate
-    val kbps = format?.bitrateKbps ?: source?.kbps
+    val kbps = com.opentune.playback.bestKbps(format, measured, source?.kbps)
     return listOfNotNull(
         codec,
         bits?.let { "$it-bit" },
-        rate?.let { "$it Hz" },
-        format?.channels?.let { if (it == 2) "stereo" else "$it ch" },
-        kbps?.let { "$it kbps" },
+        rate?.let { com.opentune.i18n.Tr.f("{0} Hz", it) },
+        format?.channels?.let { if (it == 2) "stereo" else com.opentune.i18n.Tr.f("{0} ch", it) },
+        kbps?.let { com.opentune.i18n.Tr.f("{0} kbps", it) },
         if (codec?.contains("FLAC", true) == true) "lossless" else null,
         if (codec != null && kbps == null) "bitrate not reported" else null,
     ).joinToString(" · ").ifEmpty { "Waiting for the actual stream format" }

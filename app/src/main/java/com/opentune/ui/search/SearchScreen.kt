@@ -39,20 +39,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.NorthWest
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -138,6 +138,17 @@ fun SearchScreen(
     var focused by remember { mutableStateOf(false) }
     // The search button tapped again while here: the cursor goes into the bar, keyboard up.
     val field = remember { androidx.compose.ui.focus.FocusRequester() }
+    // The bar's text as the field keeps it, cursor included. The query lives
+    // in the view model as a plain String, which can't say where the cursor
+    // goes: a change from outside (a suggestion filling the bar, the clear
+    // button) lands here with the cursor put at the end of the new text,
+    // where typing carries on. Typing itself never rewrites it.
+    var fieldValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(query, androidx.compose.ui.text.TextRange(query.length))) }
+    androidx.compose.runtime.LaunchedEffect(query) {
+        if (fieldValue.text != query) {
+            fieldValue = androidx.compose.ui.text.input.TextFieldValue(query, androidx.compose.ui.text.TextRange(query.length))
+        }
+    }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     androidx.compose.runtime.LaunchedEffect(Unit) {
         SearchFocus.requests.collect {
@@ -148,7 +159,6 @@ fun SearchScreen(
     // The sources under the bar, focused from it with the remote: the bar is still in use.
     var sourcesFocused by remember { mutableStateOf(false) }
     val searching = explore == null || focused || sourcesFocused || query.isNotEmpty()
-    val tv = com.opentune.ui.tv.LocalIsTv.current
 
     fun submit(q: String) {
         focus.clearFocus()
@@ -161,7 +171,7 @@ fun SearchScreen(
         vm.remember(query)
         scope.launch {
             val song = vm.songFor(hit)
-            if (song != null) onPlay(song) else com.opentune.data.Pills.error("Couldn't find \"${hit.track.title}\" to play")
+            if (song != null) onPlay(song) else com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't find \"{0}\" to play", hit.track.title))
         }
     }
 
@@ -174,25 +184,11 @@ fun SearchScreen(
 
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
         TextField(
-            value = query,
-            onValueChange = vm::onQueryChange,
+            value = fieldValue,
+            onValueChange = { fieldValue = it; vm.onQueryChange(it.text) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
                 .focusRequester(field)
-                .onFocusChanged { focused = it.isFocused }
-                // A remote's arrows: up and down leave the bar (to the sources and results), and
-                // left and right do once there's nothing typed. A text field otherwise keeps them all.
-                .then(if (!tv) Modifier else Modifier.onPreviewKeyEvent { e ->
-                    if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    val direction = when (e.key) {
-                        androidx.compose.ui.input.key.Key.DirectionDown -> androidx.compose.ui.focus.FocusDirection.Down
-                        androidx.compose.ui.input.key.Key.DirectionUp -> androidx.compose.ui.focus.FocusDirection.Up
-                        androidx.compose.ui.input.key.Key.DirectionLeft -> androidx.compose.ui.focus.FocusDirection.Left.takeIf { query.isEmpty() }
-                        androidx.compose.ui.input.key.Key.DirectionRight -> androidx.compose.ui.focus.FocusDirection.Right.takeIf { query.isEmpty() }
-                        else -> null
-                    } ?: return@onPreviewKeyEvent false
-                    keyboard?.hide()
-                    focus.moveFocus(direction)
-                }),
+                .onFocusChanged { focused = it.isFocused },
             singleLine = true,
             shape = CircleShape,
             placeholder = { Text(source.placeholder) },
@@ -322,7 +318,7 @@ private fun Typing(
             items(shownSuggestions, key = { "s:$it" }) { s ->
                 QueryRow(s, Icons.Filled.Search, onClick = { onPick(s) }) {
                     IconButton(onClick = { onFill(s) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, "Use this", modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.NorthWest, "Use this", modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -562,8 +558,7 @@ internal fun SourceBar(selected: SearchSource, onSelect: (SearchSource) -> Unit,
                 Box(
                     Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
                         // Not focusable, so tapping a tab leaves the keyboard and the bar as they are.
-                        .then(if (com.opentune.ui.tv.LocalIsTv.current) Modifier.clickable { onSelect(s) }
-                            else Modifier.pointerInput(s) { detectTapGestures { onSelect(s) } })
+                        .pointerInput(s) { detectTapGestures { onSelect(s) } }
                         .semantics { role = Role.Tab; this.selected = on; contentDescription = s.label },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -611,7 +606,7 @@ private fun LibraryResults(
         }
         when {
             query.isBlank() || found == null -> item { SourceHint("Search your playlists, liked songs, downloads and the songs in your Local Music folder.") }
-            found.isEmpty() && lists.isEmpty() -> item { SourceHint("Nothing in your library matches \"${query.trim()}\".") }
+            found.isEmpty() && lists.isEmpty() -> item { SourceHint(com.opentune.i18n.Tr.f("Nothing in your library matches \"{0}\".", query.trim())) }
             else -> items(found, key = { "lib:${it.videoId}" }) { song ->
                 SongListItem(
                     song = song,
@@ -688,7 +683,7 @@ private fun AddonResults(
             }
             is com.opentune.data.model.UiState.Error -> item { SourceHint(found.message) }
             is com.opentune.data.model.UiState.Success ->
-                if (found.data.isEmpty()) item { SourceHint("None of your add-ons has \"${query.trim()}\".") }
+                if (found.data.isEmpty()) item { SourceHint(com.opentune.i18n.Tr.f("None of your add-ons has \"{0}\".", query.trim())) }
                 else items(found.data, key = { "ah:${it.addon.key}:${it.track.id}" }) { hit -> AddonRow(hit, onClick = { onPlay(hit) }) }
         }
     }

@@ -72,7 +72,7 @@ internal fun resolveTrack(dataSpec: DataSpec): DataSpec {
     } catch (e: IOException) {
         throw e
     } catch (e: Exception) {
-        throw IOException(e.message ?: "Couldn't resolve a stream for $videoId", e)
+        throw IOException(e.message ?: com.opentune.i18n.Tr.f("Couldn't resolve a stream for {0}", videoId), e)
     }
     // googlevideo expects the media request to look like the client that
     // minted the URL; these are also the headers StreamResolver probed with.

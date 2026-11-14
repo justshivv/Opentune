@@ -67,7 +67,7 @@ class LandscapeScreenshotTest {
 
     private fun shoot(name: String, initialLyrics: Boolean) {
         val state = PlayerUiState(
-            song = song, isPlaying = true, isBuffering = false, hasNext = true, shuffle = false, repeatMode = Player.REPEAT_MODE_OFF,
+            song = song, isPlaying = true, isSounding = true, isBuffering = false, hasNext = true, shuffle = false, repeatMode = Player.REPEAT_MODE_OFF,
             durationMs = 180_000, lyrics = lyrics, queue = listOf(song), currentIndex = 0, upNext = emptyList(),
             sound = SoundSettings(), theme = ThemeSettings(), ui = InterfaceSettings(liquidGlass = false, reduceAnimation = true),
         )

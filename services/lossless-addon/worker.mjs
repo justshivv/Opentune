@@ -48,6 +48,8 @@ function unpack(value) {
 }
 function text(value) { return typeof value === 'string' ? value.trim() : ''; }
 function names(value) { return (Array.isArray(value) ? value : [value]).map(v => typeof v === 'string' ? v : v?.name || v?.displayName || '').filter(Boolean).join(', '); }
+/** Internet Archive labels FLAC as "Flac", or "24bit Flac" for hi-res files; both are real FLAC, measured before playback. */
+function isFlac(format) { return /^(24bit )?flac$/i.test(format || ''); }
 function safeFile(value) {
   return typeof value === 'string' && value.length <= 500 && !value.includes('\\') && !/[\x00-\x1f]/.test(value) &&
     value.split('/').every(p => p && p !== '.' && p !== '..');
@@ -201,7 +203,7 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
     const terms = normalize(q).match(/[\p{L}\p{N}]+/gu) || [];
     if (!terms.length) return [];
     return data.files.flatMap(f => {
-      if (!/^flac$/i.test(f.format || '') || !safeFile(f.name)) return [];
+      if (!isFlac(f.format) || !safeFile(f.name)) return [];
       // This curated collection uses descriptive filenames, unlike arbitrary Archive uploads.
       const title = text(f.title) || f.name.split('/').at(-1).replace(/\.flac$/i, '');
       const artist = names(f.creator || f.artist || data.metadata?.creator);
@@ -229,7 +231,7 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
       const id = item.identifier;
       if (!/^[\w.-]{1,160}$/.test(id) || id === '.' || id === '..') return [];
       const data = await archiveMetadata(id, signal);
-      const files = (data.files || []).filter(f => /^flac$/i.test(f.format || '') && safeFile(f.name));
+      const files = (data.files || []).filter(f => isFlac(f.format) && safeFile(f.name));
       return files.flatMap(f => {
         const title = text(f.title) || (files.length === 1 ? text(data.metadata?.title) : '');
         const artist = names(f.creator || f.artist || data.metadata?.creator);
@@ -259,7 +261,7 @@ export function createAddon({ fetcher = fetch, now = Date.now } = {}) {
       if (id.length !== 3 || typeof id[1] !== 'string' || !/^[\w.-]{1,160}$/.test(id[1]) || ['.', '..'].includes(id[1]) || !safeFile(id[2])) throw new SourceError('Invalid recording ID', 400);
       if (source === 'musopen' && id[1] !== MUSOPEN_ITEM) throw new SourceError('Invalid Musopen collection', 400);
       const data = await archiveMetadata(id[1]);
-      if (!data.files?.some(f => f.name === id[2] && /^flac$/i.test(f.format || ''))) throw new SourceError('FLAC recording not found', 404);
+      if (!data.files?.some(f => f.name === id[2] && isFlac(f.format))) throw new SourceError('FLAC recording not found', 404);
       url = archiveMedia(id[1], id[2]);
     }
     const measured = await request(url, { media: true, neteaseMedia: source === 'netease' });

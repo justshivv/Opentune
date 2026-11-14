@@ -44,10 +44,10 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -173,6 +173,7 @@ internal fun ArtistPageView(
     onShowAll: (HomeShelf) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val appearance by AppSettings.ui.collectAsState()
     // One portrait per artist for a day (see ArtistPhotos), so going back or coming again shows
     // the picture already in the image cache. Better artwork is downloaded for a later visit
     // rather than replacing a visible face and leaving its palette tied to the previous one.
@@ -208,7 +209,12 @@ internal fun ArtistPageView(
             },
         ) {
             val band = com.opentune.ui.components.rememberRubberBand()
-            LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize(), overscrollEffect = band) {
+            LazyColumn(state = listState, contentPadding = contentPadding,
+                // Light lays a soft wash of the photo's colour over the page's deep shade; Dark leaves the deep shade alone.
+                modifier = Modifier.fillMaxSize().then(
+                    if (appearance.artistPageTint && appearance.artistShade == com.opentune.data.settings.ArtistShade.LIGHT) Modifier.coverWash(rememberCoverTint(photo), photo) else Modifier,
+                ),
+                overscrollEffect = band) {
                 item(key = "hero", contentType = "hero") { ArtistHero(browseId, page, photo, listState, actions, band) }
                 if (page == null) {
                     item(key = "latest-placeholder") {

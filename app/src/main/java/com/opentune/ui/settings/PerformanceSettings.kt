@@ -12,8 +12,8 @@ import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Icon
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
@@ -74,7 +74,7 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
             AppSettings.updateUi { it.copy(highRefreshRate = v) }
             if (v && !unrestricted) { askedThisRun = true; askBattery = true }
         },
-        summary = if (ui.highRefreshRate) "$chosen Hz requested. Android may lower it when needed." else "Runs the screen at a faster rate while OpenTune is open, for smoother scrolling",
+        summary = if (ui.highRefreshRate) com.opentune.i18n.Tr.f("{0} Hz requested. Android may lower it when needed.", chosen) else "Runs the screen at a faster rate while OpenTune is open, for smoother scrolling",
         icon = Icons.Rounded.Speed,
     )
     if (ui.highRefreshRate && rates.size > 1) {
@@ -83,7 +83,7 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
             PillSegmented(
                 options = rates,
                 selected = chosen,
-                label = { "$it Hz" },
+                label = { com.opentune.i18n.Tr.f("{0} Hz", it) },
                 onSelect = { hz -> AppSettings.updateUi { it.copy(refreshRateHz = hz) } },
             )
         })

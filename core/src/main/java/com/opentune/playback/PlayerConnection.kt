@@ -88,6 +88,10 @@ class PlayerConnection(private val context: Context) {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
 
+    private val _isSounding = MutableStateFlow(false)
+    /** Really sounding right now — playing and ready, not merely meant to play while a stream loads. The Canvas follows this, so it waits frozen until the song itself starts. */
+    val isSounding = _isSounding.asStateFlow()
+
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering = _isBuffering.asStateFlow()
     private val _loadingMessage = MutableStateFlow<String?>(null)
@@ -96,13 +100,18 @@ class PlayerConnection(private val context: Context) {
     private var connectionWatch: Job? = null
 
     private fun refreshLoading(player: Player) {
-        val buffering = player.playbackState == Player.STATE_BUFFERING && PlaybackRequests.soundingPosition == null
-        val waiting = player.playWhenReady && (buffering || player.playerError != null)
+        val stalled = player.playbackState == Player.STATE_BUFFERING && PlaybackRequests.soundingPosition == null
         val online = AppSettings.isOnline()
         val now = android.os.SystemClock.elapsedRealtime()
-        if (buffering && player.playWhenReady && online) {
+        if (stalled && player.playWhenReady && online) {
             if (bufferingSince == 0L) bufferingSince = now
         } else bufferingSince = 0L
+        // Only a stall that lasts shows: a moment's rebuffer never flashes the spinner. Around a
+        // quality upgrade it has to last longer, as the switch rebuffers the silent player and
+        // this side hears of the player's state a moment late, so the spinner came and went.
+        val switching = PlaybackRequests.switchingStream || now - PlaybackRequests.switchEndedAt < SWITCH_SETTLE_MS
+        val buffering = stalled && bufferingSince != 0L && now - bufferingSince >= if (switching) SWITCH_STALL_MS else STALL_MS
+        val waiting = player.playWhenReady && (buffering || player.playerError != null)
         _isBuffering.value = waiting && buffering && online
         _loadingMessage.value = when {
             waiting && !online -> "Offline · waiting for connection"
@@ -156,7 +165,16 @@ class PlayerConnection(private val context: Context) {
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            val dolby = controller?.currentTracks?.groups?.firstOrNull { it.type == C.TRACK_TYPE_AUDIO }?.getTrackFormat(0)?.sampleMimeType
+                ?.let { it in DOLBY_MIMES } == true
             _error.value = when (error.errorCode) {
+                // A Dolby stream (Atmos, Digital Plus) on a phone with no Dolby decoder, and no receiver to pass it to.
+                PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+                PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+                PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+                PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+                    -> if (dolby) "This phone can't decode Dolby audio. It plays through a Dolby-capable receiver or TV over HDMI or eARC."
+                else error.cause?.message ?: error.message
                 PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
                 PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED ->
                     "This audio copy could not be read. Saved downloads will be repaired when connected."
@@ -172,6 +190,7 @@ class PlayerConnection(private val context: Context) {
                 val flac = LosslessAudioPolicy.streamInfo(it)
                 AudioFormatInfo(
                     codec = (it.codecs ?: it.sampleMimeType?.substringAfter('/'))?.uppercase(),
+                    mime = it.sampleMimeType,
                     bitrateKbps = it.bitrate.takeIf { b -> b > 0 }?.div(1000),
                     sampleRateHz = flac?.rate ?: it.sampleRate.takeIf { r -> r > 0 },
                     channels = flac?.channels ?: it.channelCount.takeIf { c -> c > 0 },
@@ -206,9 +225,11 @@ class PlayerConnection(private val context: Context) {
         _connected.value = true
         connectionWatch?.cancel()
         connectionWatch = scope.launch {
+            // A mix starting or ending changes the song shown.
+            launch { MixState.showing.collect { if (controller === newController) refresh(newController) } }
             while (controller === newController) {
                 refreshLoading(newController)
-                kotlinx.coroutines.delay(1_000)
+                kotlinx.coroutines.delay(LOADING_TICK_MS)
             }
         }
     }
@@ -223,9 +244,11 @@ class PlayerConnection(private val context: Context) {
 
     private fun refresh(player: Player) {
         _queue.value = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toSong() }
-        _currentIndex.value = player.currentMediaItemIndex
-        _currentSong.value = player.currentMediaItem?.toSong()
-        _upNext.value = player.upcomingPlayOrder().drop(1)
+        // A mix under way shows the song coming in, from the moment it starts.
+        val mixing = MixState.showing.value?.takeIf { it.index in 0 until player.mediaItemCount }
+        _currentIndex.value = mixing?.index ?: player.currentMediaItemIndex
+        _currentSong.value = (mixing?.item ?: player.currentMediaItem)?.toSong()
+        _upNext.value = player.upcomingPlayOrder().drop(1).let { up -> if (mixing != null) up.dropWhile { it != mixing.index }.drop(1) else up }
         _hasNext.value = player.hasNextMediaItem()
         _shuffleEnabled.value = player.shuffleModeEnabled
         publishShuffle(player)
@@ -233,8 +256,8 @@ class PlayerConnection(private val context: Context) {
         // The same song swapped onto another stream (a quality switch, a recovery) has no
         // length until the new one loads; it keeps the one it had, so the seek bar and
         // times don't empty to "--:--" while it plays on.
-        val id = player.currentMediaItem?.mediaId
-        val duration = player.duration.takeIf { it > 0 }
+        val id = mixing?.item?.mediaId ?: player.currentMediaItem?.mediaId
+        val duration = (if (mixing != null) mixing.durationMs().takeIf { it > 0 } else player.duration.takeIf { it > 0 })
             ?: _durationOf.value.takeIf { id != null && it.first == id }?.second
             ?: 0L
         _durationMs.value = duration
@@ -243,6 +266,7 @@ class PlayerConnection(private val context: Context) {
         // loading its stream, a stall), still counts as playing: the button
         // flipped to play and back for that moment at every upgrade.
         _isPlaying.value = player.isPlaying || (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING)
+        _isSounding.value = player.isPlaying
         // A quality switch rebuffers the main player while the song plays on (another player
         // sounding it, or a moment's silence between streams): no spinner on the button for that.
         refreshLoading(player)
@@ -320,14 +344,41 @@ class PlayerConnection(private val context: Context) {
             }
         }
         controller.shuffleModeEnabled = false
-        controller.setMediaItems(
-            ordered.map { it.toMediaItem() },
-            if (shuffled) 0 else startIndex.coerceIn(songs.indices),
-            startPositionMs.coerceAtLeast(0L),
-        )
+        val startAt = if (shuffled) 0 else startIndex.coerceIn(songs.indices)
+        val landing = setQueue(controller, ordered, startAt, startPositionMs.coerceAtLeast(0L))
         controller.prepare()
         controller.play()
-        if (mixing) startSmartShuffle(origin, songs, seed)
+        if (mixing) startSmartShuffle(origin, songs, seed, landing)
+    }
+
+    /** Stamps each queue hand-over; a newer playAll supersedes one still landing. */
+    private var queueStamp = 0
+
+    /**
+     * Hands [ordered] to the player in chunks: the head — with the start
+     * song in it — goes up at once, so playback begins without waiting for
+     * a long list to cross to the playback service, and the rest follows
+     * behind it. However long the list, the first song starts the same.
+     */
+    private fun setQueue(controller: MediaController, ordered: List<Song>, startIndex: Int, startPositionMs: Long): Job? {
+        val stamp = ++queueStamp
+        val headSize = maxOf(QUEUE_CHUNK, startIndex + 1)
+        val head = ordered.take(headSize)
+        controller.setMediaItems(head.map { it.toMediaItem() }, startIndex.coerceIn(head.indices), startPositionMs)
+        if (ordered.size <= head.size) return null
+        return scope.launch {
+            var at = head.size
+            while (at < ordered.size) {
+                if (stamp != queueStamp) return@launch
+                // The queue was cleared or replaced meanwhile (a dismiss, a
+                // radio): stop landing instead of refilling it.
+                if (controller.mediaItemCount < at) return@launch
+                val chunk = ordered.subList(at, minOf(at + QUEUE_CHUNK, ordered.size))
+                controller.addMediaItems(at, chunk.map { it.toMediaItem() })
+                at += chunk.size
+                kotlinx.coroutines.delay(QUEUE_CHUNK_MS)
+            }
+        }
     }
 
     fun toggleShuffle() {
@@ -357,7 +408,7 @@ class PlayerConnection(private val context: Context) {
         // Anything else may have replaced the queue since (Android Auto, a
         // shared link); the list still counts while one of its songs plays.
         val fromList = origin != null && origin.canMix && current != null &&
-            (current.mediaId in origin.songIds || current.toSong().smartShuffle)
+                (current.mediaId in origin.songIds || current.toSong().smartShuffle)
         // With the setting off the button only offers smart shuffle to turn
         // off one already running.
         _smartShuffleAvailable.value = fromList && AppSettings.playback.value.smartShuffle
@@ -416,12 +467,13 @@ class PlayerConnection(private val context: Context) {
     }
 
     /** Finds the picks for [list] and slots them into the queue where [SmartShuffle.mix] places them. */
-    private fun startSmartShuffle(origin: SmartShuffle.Origin, list: List<Song>, seed: Long) {
+    private fun startSmartShuffle(origin: SmartShuffle.Origin, list: List<Song>, seed: Long, landed: Job? = null) {
         SmartShuffle.setOn(true)
         controller?.let(::publishShuffle)
         smartJob?.cancel()
         smartJob = scope.launch {
             val found = SmartShuffle.recommendationsFor(list, seed)
+            landed?.join()
             val controller = controller ?: return@launch
             if (SmartShuffle.origin.value?.token != origin.token || !SmartShuffle.on.value) return@launch
             val queued = (0 until controller.mediaItemCount).mapTo(HashSet()) { controller.getMediaItemAt(it).mediaId }
@@ -435,13 +487,19 @@ class PlayerConnection(private val context: Context) {
             // Counted from the song playing now, which may have moved on while the picks were found.
             val currentId = controller.currentMediaItem?.mediaId
             val after = mixed.drop(mixed.indexOfFirst { !it.smartShuffle && it.videoId == currentId } + 1)
-            val plan = SmartShuffle.insertions(upcoming.map { it.videoId }, after)
+            if (SmartShuffle.insertions(upcoming.map { it.videoId }, after) != null) {
+                // The queue is still the list as mixed: swap everything after
+                // the playing song for the mixed tail in two calls, instead of
+                // a call - and a queue rebuild - per added song.
+                controller.removeMediaItems(from, controller.mediaItemCount)
+                controller.addMediaItems(from, after.map { it.toMediaItem() })
+            } else {
                 // The queue was changed meanwhile: slot the picks into it as it is now.
-                ?: upcoming.takeIf { u -> u.none { it.smartShuffle } }?.let { u ->
+                val plan = upcoming.takeIf { u -> u.none { it.smartShuffle } }?.let { u ->
                     SmartShuffle.insertions(u.map { it.videoId }, SmartShuffle.interleave(u, after.filter { it.smartShuffle }))
-                }
-                ?: return@launch
-            plan.forEach { (at, song) -> controller.addMediaItem(from + at, song.toMediaItem()) }
+                } ?: return@launch
+                plan.forEach { (at, song) -> controller.addMediaItem(from + at, song.toMediaItem()) }
+            }
         }
     }
 
@@ -497,6 +555,13 @@ class PlayerConnection(private val context: Context) {
         controller?.pause()
     }
 
+    /** Stops playback and clears the queue entirely: nothing is left playing. */
+    fun dismiss() {
+        val controller = controller ?: return
+        controller.stop()
+        controller.clearMediaItems()
+    }
+
     /** Swaps everything after the current track for [songs], leaving the current one playing. */
     fun replaceUpcoming(songs: List<Song>) {
         val controller = controller ?: return
@@ -513,12 +578,17 @@ class PlayerConnection(private val context: Context) {
     }
 
     fun skipNext() {
-        controller?.seekToNext()
+        val controller = controller ?: return
+        // Mixing: the song shown is the one coming in, so next is the one after it.
+        MixState.showing.value?.let { controller.seekTo(it.index, 0); controller.seekToNext(); return }
+        controller.seekToNext()
     }
 
     /** Restarts the current track, or goes back one if it has only just begun. */
     fun skipPrevious() {
-        controller?.seekToPrevious()
+        val controller = controller ?: return
+        MixState.showing.value?.let { controller.seekTo(it.index, 0); return }
+        controller.seekToPrevious()
     }
 
     /**
@@ -557,10 +627,13 @@ class PlayerConnection(private val context: Context) {
     }
 
     fun seekTo(positionMs: Long) {
-        controller?.seekTo(positionMs)
+        val controller = controller ?: return
+        // Mixing: a seek is in the song shown, the one coming in.
+        MixState.showing.value?.let { controller.seekTo(it.index, positionMs.coerceAtLeast(0L)); return }
+        controller.seekTo(positionMs)
     }
 
-    fun currentPositionMs(): Long = controller?.currentPosition ?: 0L
+    fun currentPositionMs(): Long = MixState.showing.value?.positionMs?.invoke() ?: controller?.currentPosition ?: 0L
 
     /**
      * Plays at [rate] times the Remix speed, pitch unchanged. Listening
@@ -575,6 +648,55 @@ class PlayerConnection(private val context: Context) {
     }
 
     fun bufferedPositionMs(): Long = controller?.bufferedPosition ?: 0L
+
+    private companion object {
+        /** How long a stall lasts before the spinner shows. */
+        const val STALL_MS = 600L
+        /** The same during a quality switch and just after it. */
+        const val SWITCH_STALL_MS = 2_500L
+        const val SWITCH_SETTLE_MS = 3_000L
+        const val LOADING_TICK_MS = 250L
+
+        /** Songs per chunk when a queue is handed to the player; see setQueue. */
+        const val QUEUE_CHUNK = 150
+        const val QUEUE_CHUNK_MS = 50L
+        val DOLBY_MIMES = setOf("audio/ac3", "audio/eac3", "audio/eac3-joc", "audio/ac4")
+    }
 }
 
-data class AudioFormatInfo(val codec: String?, val bitrateKbps: Int?, val sampleRateHz: Int?, val channels: Int?, val bitDepth: Int? = null)
+data class AudioFormatInfo(
+    val codec: String?, val bitrateKbps: Int?, val sampleRateHz: Int?, val channels: Int?, val bitDepth: Int? = null,
+    /** The stream's own MIME type, e.g. "audio/eac3-joc" for Dolby Atmos in E-AC-3. */
+    val mime: String? = null,
+)
+
+/**
+ * The playing song's bitrate in kbps, best figure first: measured from the audio as it's
+ * decoded ([measured], see MeasuredBitrate), exact for uncompressed PCM (rate × depth ×
+ * channels), then what the stream or file says, then what the source said.
+ */
+fun bestKbps(info: AudioFormatInfo?, measured: Int?, sourceKbps: Int?): Int? {
+    val pcm = info?.mime == "audio/raw" || info?.codec?.equals("RAW", ignoreCase = true) == true
+    if (pcm) {
+        val bits = info?.bitDepth; val rate = info?.sampleRateHz; val ch = info?.channels
+        if (bits != null && rate != null && ch != null) return (bits.toLong() * rate * ch / 1000).toInt()
+    }
+    return measured?.takeIf { it > 0 } ?: info?.bitrateKbps?.takeIf { it > 0 } ?: sourceKbps?.takeIf { it > 0 }
+}
+
+/**
+ * What Dolby format [info] is, as the player names it, or null when it isn't Dolby:
+ * Atmos for E-AC-3 with objects (JOC) and for AC-4, Dolby Digital Plus for plain
+ * E-AC-3, Dolby Digital for AC-3.
+ */
+fun dolbyName(info: AudioFormatInfo?): String? {
+    val mime = info?.mime?.lowercase().orEmpty()
+    val codec = info?.codec?.lowercase().orEmpty()
+    return when {
+        mime == "audio/eac3-joc" || codec.startsWith("ec+3") || codec.contains("joc") -> "Dolby Atmos"
+        mime == "audio/ac4" || codec.startsWith("ac-4") -> "Dolby Atmos"
+        mime == "audio/eac3" || codec.startsWith("ec-3") || codec == "eac3" -> "Dolby Digital Plus"
+        mime == "audio/ac3" || codec.startsWith("ac-3") || codec == "ac3" -> "Dolby Digital"
+        else -> null
+    }
+}

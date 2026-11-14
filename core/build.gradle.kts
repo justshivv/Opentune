@@ -26,14 +26,28 @@ fun lastFmCredential(name: String): String {
 
 android {
     namespace = "com.opentune.core"
+    ndkVersion = "27.2.12479018"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
     compileSdk = 37
 
     defaultConfig {
         minSdk = 26
+        // OpenTune's own bit-perfect outputs (src/main/cpp): the USB driver and exclusive AAudio.
+        externalNativeBuild { cmake { cppFlags += "-std=c++17" } }
         buildConfigField("String", "VERSION_NAME", "\"$appVersionName\"")
         buildConfigField("int", "VERSION_CODE", appVersionCode)
         buildConfigField("String", "LASTFM_API_KEY", lastFmCredential("LASTFM_API_KEY"))
         buildConfigField("String", "LASTFM_API_SECRET", lastFmCredential("LASTFM_API_SECRET"))
+        // OpenTune's Discord application (named "OpenTune"), which heads the phone's Discord card.
+        buildConfigField("String", "DISCORD_APP_ID", providers.environmentVariable("DISCORD_APP_ID").orNull.orEmpty().trim().let { id ->
+            require(id.isEmpty() || id.matches(Regex("[0-9]{17,20}"))) { "DISCORD_APP_ID must be a Discord application id" }
+            "\"$id\""
+        })
         consumerProguardFiles("consumer-rules.pro")
     }
     compileOptions {

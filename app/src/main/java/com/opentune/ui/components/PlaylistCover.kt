@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -28,6 +31,16 @@ import androidx.compose.ui.unit.sp
 import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.artworkAt
 
+/** YouTube does not always return an image for its special LM playlist. */
+@Composable
+fun LikedPlaylistCover(modifier: Modifier = Modifier, shape: Shape = RoundedCornerShape(14.dp)) {
+    Box(modifier.clip(shape).background(Brush.verticalGradient(listOf(Color(0xFF8C6AF0), Color(0xFFF95AAE)))),
+        contentAlignment = Alignment.Center) {
+        androidx.compose.material3.Icon(Icons.Rounded.ThumbUp, "Liked Music artwork",
+            Modifier.fillMaxSize(0.35f), tint = Color.White)
+    }
+}
+
 /**
  * A cover for a playlist made in the app, made from its songs' covers: four
  * or more make a 2×2 collage, two or three split the square, one fills it.
@@ -37,7 +50,14 @@ import com.opentune.data.model.artworkAt
  * two playlists rarely alike. A large cover carries the name.
  */
 @Composable
-fun PlaylistCover(name: String, covers: List<String?>, modifier: Modifier = Modifier, shape: Shape = RoundedCornerShape(14.dp)) {
+fun PlaylistCover(
+    name: String,
+    covers: List<String?>,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(14.dp),
+    /** False where the name is written just below anyway (a page's full-width cover). */
+    named: Boolean = true,
+) {
     val distinct = remember(covers) { covers.filterNotNull().distinct().take(4) }
     val (from, to) = remember(name) { gradientFor(name) }
     val wave = remember(name) { waveFor(name) }
@@ -85,7 +105,7 @@ fun PlaylistCover(name: String, covers: List<String?>, modifier: Modifier = Modi
                 }
             }
         }
-        if (large) {
+        if (large && named) {
             // A shade at the foot for the name to sit on.
             if (distinct.isNotEmpty()) {
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.72f))))

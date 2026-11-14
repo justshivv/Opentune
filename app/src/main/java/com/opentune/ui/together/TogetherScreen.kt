@@ -80,12 +80,12 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -286,7 +286,7 @@ internal fun StartRoom(
                         when {
                             turnedAway -> "Room codes never use 0, 1, I or O"
                             parsed != null && name.isBlank() -> "Add your name above to join"
-                            parsed != null -> "Ready to join ${parsed.pretty}"
+                            parsed != null -> com.opentune.i18n.Tr.f("Ready to join {0}", parsed.pretty)
                             else -> "Type the code, or paste the code or invite link"
                         },
                         Modifier.padding(start = 4.dp, top = 8.dp),
@@ -554,7 +554,7 @@ internal fun RoomView(r: Together.Room, onBack: () -> Unit, contentPadding: Padd
             state = list,
             contentPadding = PaddingValues(bottom = listBottom),
         ) {
-            item { PageHeader(if (r.hosting) "Your room" else "${r.hostName ?: "Friend"}'s room", onBack = onBack) }
+            item { PageHeader(if (r.hosting) "Your room" else com.opentune.i18n.Tr.f("{0}'s room", r.hostName ?: com.opentune.i18n.Tr.t("Friend")), onBack = onBack) }
             item { CodeCard(r, onInvite = { inviting = true }, onCopy = { copyCode(context, r.code) }) }
             item { NowInRoom(r) }
             if (r.holding) {
@@ -570,10 +570,10 @@ internal fun RoomView(r: Together.Room, onBack: () -> Unit, contentPadding: Padd
                 }
             }
             if (r.hosting && r.requests.isNotEmpty()) {
-                item { SectionHeader("Asking to join", subtitle = "${r.requests.size} waiting") }
+                item { SectionHeader("Asking to join", subtitle = com.opentune.i18n.Tr.f("{0} waiting", r.requests.size)) }
                 items(r.requests.size, key = { "req:" + r.requests[it].id }) { i -> RequestRow(r.requests[i]) }
             }
-            item { SectionHeader("Listening", subtitle = "${r.members.size} in the room") }
+            item { SectionHeader("Listening", subtitle = com.opentune.i18n.Tr.f("{0} in the room", r.members.size)) }
             item { Members(r.members, r.myId, canRemove = r.hosting, speaking = speaking) }
             item { SectionHeader("Settings") }
             item { RoomSettings(r) }
@@ -737,13 +737,13 @@ private fun islandText(r: Together.Room, speaking: Set<String>, open: Boolean, m
     val talkers = r.members.filter { it.id in speaking && it.id != r.myId }.map { it.name }
     val talking = when (talkers.size) {
         0 -> null
-        1 -> "${talkers[0]} is talking"
-        2 -> "${talkers[0]} and ${talkers[1]} are talking"
-        else -> "${talkers[0]} and ${talkers.size - 1} more are talking"
+        1 -> com.opentune.i18n.Tr.f("{0} is talking", talkers[0])
+        2 -> com.opentune.i18n.Tr.f("{0} and {1} are talking", talkers[0], talkers[1])
+        else -> com.opentune.i18n.Tr.f("{0} and {1} more are talking", talkers[0], talkers.size - 1)
     }
     val others = r.members.size - 1
     val rest = when {
-        message.isNotBlank() && !open -> "Draft: $message"
+        message.isNotBlank() && !open -> com.opentune.i18n.Tr.f("Draft: {0}", message)
         open -> if (r.phase == Together.Phase.Live) "Hold the mic to talk, or call" else "Write to the room"
         others <= 0 && r.hosting && r.phase == Together.Phase.Live -> "Share the code to bring friends in"
         else -> "Tap to chat"
@@ -751,7 +751,7 @@ private fun islandText(r: Together.Room, speaking: Set<String>, open: Boolean, m
     return when {
         r.phase == Together.Phase.Connecting -> "Connecting…" to rest
         r.phase == Together.Phase.FindingHost -> "Looking for the host…" to rest
-        r.phase == Together.Phase.Waiting -> "Waiting to be let in…" to "${r.hostName ?: "The host"} has to say yes"
+        r.phase == Together.Phase.Waiting -> "Waiting to be let in…" to com.opentune.i18n.Tr.f("{0} has to say yes", r.hostName ?: com.opentune.i18n.Tr.t("The host"))
         r.phase == Together.Phase.LostHost -> "Lost touch with the host" to "Still trying…"
         recording == true -> "You're talking" to "Let go to stop"
         recording == false -> "Recording a voice note" to "Let go to send it"
@@ -762,7 +762,7 @@ private fun islandText(r: Together.Room, speaking: Set<String>, open: Boolean, m
         }
         talking != null -> talking to if (talkMuted) "Talk is off for you" else rest
         others <= 0 -> "Just you here" to rest
-        else -> "${r.members.size} listening" to rest
+        else -> com.opentune.i18n.Tr.f("{0} listening", r.members.size) to rest
     }
 }
 
@@ -977,8 +977,8 @@ private fun LiveStatus(r: Together.Room) {
     val (text, busy) = when (r.phase) {
         Together.Phase.Connecting -> "Connecting…" to true
         Together.Phase.FindingHost -> "Looking for the host…" to true
-        Together.Phase.Waiting -> "Waiting for ${r.hostName ?: "the host"} to let you in…" to true
-        Together.Phase.Live -> (if (r.hosting) "Live · ${r.members.size - 1} joined" else "In step with ${r.hostName ?: "the host"}") to false
+        Together.Phase.Waiting -> com.opentune.i18n.Tr.f("Waiting for {0} to let you in…", r.hostName ?: com.opentune.i18n.Tr.t("the host")) to true
+        Together.Phase.Live -> (if (r.hosting) com.opentune.i18n.Tr.f("Live · {0} joined", r.members.size - 1) else com.opentune.i18n.Tr.f("In step with {0}", r.hostName ?: com.opentune.i18n.Tr.t("the host"))) to false
         Together.Phase.LostHost -> "Lost touch with the host. Still trying…" to true
         Together.Phase.Ended -> (r.endedReason ?: "The room has ended") to false
     }
@@ -1005,7 +1005,7 @@ private fun LiveStatus(r: Together.Room) {
         }
         Spacer(Modifier.width(8.dp))
         Text(
-            text + if (r.relays > 0 && r.phase != Together.Phase.Ended) " · ${r.relays} relays" else "",
+            text + if (r.relays > 0 && r.phase != Together.Phase.Ended) com.opentune.i18n.Tr.f(" · {0} relays", r.relays) else "",
             style = MaterialTheme.typography.labelLarge,
             color = if (live) tone else scheme.onSurfaceVariant,
             maxLines = 2,
@@ -1080,7 +1080,7 @@ private fun RoomSettings(r: Together.Room) {
                 summary = when {
                     !playNow -> "Off: songs you pick go into the room's queue"
                     r.open -> "On: a song you pick starts for everyone"
-                    else -> "On, once ${r.hostName ?: "the host"} lets guests control playback. Until then songs go into the queue"
+                    else -> com.opentune.i18n.Tr.f("On, once {0} lets guests control playback. Until then songs go into the queue", r.hostName ?: com.opentune.i18n.Tr.t("the host"))
                 },
                 icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
             )
@@ -1126,7 +1126,7 @@ private fun Members(members: List<Member>, myId: String?, canRemove: Boolean, sp
     removing?.let { m ->
         com.opentune.ui.components.FloatingDialog(
             onDismissRequest = { removing = null },
-            title = { Text("Remove ${m.name}?") },
+            title = { Text(com.opentune.i18n.Tr.f("Remove {0}?", m.name)) },
             text = { Text("They leave the room, and the room moves to a new key, so their phone can't follow along or read the chat any more.") },
             confirmButton = { com.opentune.ui.components.SheetButton("Remove", tone = com.opentune.ui.components.SheetTone.Danger, onClick = { Together.remove(m.id); removing = null }) },
             dismissButton = { com.opentune.ui.components.SheetButton("Cancel", onClick = { removing = null }, closes = true) },

@@ -46,6 +46,9 @@ object Core {
         History.init(app)
         com.opentune.data.history.ListenedCollections.init(app)
         com.opentune.data.covers.ArtistPhotos.init(app)
+        com.opentune.data.metadata.ArtistGenres.init(app)
+        com.opentune.data.history.MixSnapshots.init(app)
+        com.opentune.data.reco.HomeEngagement.init(app)
         LoudnessStore.init(app)
         UpgradedTracks.init(app)
         QueueStore.init(app)
@@ -53,6 +56,10 @@ object Core {
         LastFm.init(app)
         Subsonic.init(app)
         ListenBrainz.init(app)
+        com.opentune.data.discord.DiscordRpc.init(app)
+        com.opentune.data.config.HomeDismissals.init(app)
+        com.opentune.data.reco.TasteModel.init(app)
+        com.opentune.data.audiobooks.Audiobooks.init(app)
         com.opentune.data.radio.Radio.init(app)
         if (phone) {
             com.opentune.data.addons.AddonRefreshWorker.schedule(app)
@@ -75,11 +82,13 @@ object Core {
         com.opentune.data.library.LibraryArtwork.init(app)
         LibraryStore.init(app)
         Downloads.init(app)
+        if (phone) com.opentune.data.download.SmartDownloads.init(app)
         com.opentune.data.download.DownloadedLists.init(app)
         AccountStore.init(app)
         com.opentune.data.library.LibraryCache.init(app)
         // After library and account: it sends playlist changes still waiting, when signed in.
         com.opentune.data.library.PlaylistSync.init(app)
+        com.opentune.data.library.LikedSync.init()
         InnerTubeXResolver.init(app)
     }
 

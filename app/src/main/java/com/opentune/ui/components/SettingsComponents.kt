@@ -3,6 +3,7 @@ package com.opentune.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,23 +20,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 
 /** Small gray uppercase label above a group. */
@@ -146,14 +154,25 @@ fun ToggleRow(
 }
 
 @Composable
-fun NavRow(title: String, onClick: () -> Unit, summary: String? = null, icon: ImageVector? = null, value: String? = null, dot: Boolean = false, leading: (@Composable () -> Unit)? = null) {
-    SettingRow(title, summary = summary, icon = icon, onClick = onClick, leading = leading, trailing = {
+fun NavRow(
+    title: String,
+    onClick: () -> Unit,
+    summary: String? = null,
+    icon: ImageVector? = null,
+    value: String? = null,
+    dot: Boolean = false,
+    leading: (@Composable () -> Unit)? = null,
+    /** Off where the setting has no effect: dimmed, value and arrow too, and it doesn't open. */
+    enabled: Boolean = true,
+) {
+    val alpha = if (enabled) 1f else 0.45f
+    SettingRow(title, summary = summary, icon = icon, enabled = enabled, onClick = onClick, leading = leading, trailing = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (dot) UpdateDot(Modifier.padding(end = 6.dp))
             if (value != null) {
-                Text(com.opentune.ui.theme.tr(value), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(com.opentune.ui.theme.tr(value), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
             }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
         }
     })
 }
@@ -194,34 +213,47 @@ fun AppSwitch(checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = 
 /** A segmented choice drawn as a sliding light pill on a dark track. */
 @Composable
 fun <T> PillSegmented(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
+    if (options.isEmpty()) return
     val c = MaterialTheme.colorScheme
-    BoxWithConstraints(
-        modifier
-            .fillMaxWidth()
-            .height(48.dp)
+    val reduced = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val labels = options.map { com.opentune.ui.theme.tr(label(it)) }
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val segment = (maxWidth - 10.dp) / options.size
+        val labelHeight = labels.maxOf { text ->
+            measurer.measure(text, MaterialTheme.typography.labelLarge,
+                // Weighted rows round each segment to whole pixels. Measure
+                // conservatively so a one-pixel difference cannot add a clipped line.
+                constraints = Constraints(maxWidth = with(density) { (segment - 16.dp).toPx().toInt().minus(1).coerceAtLeast(1) })).size.height
+        }
+        // Keep the whole label at larger font sizes instead of silently clipping it.
+        val height = maxOf(58.dp, with(density) { labelHeight.toDp() } + 26.dp)
+        Box(Modifier.fillMaxWidth().height(height)
             .clip(RoundedCornerShape(16.dp))
             .background(c.surfaceContainerHighest.copy(alpha = 0.7f))
-            .padding(5.dp),
-    ) {
-        val index = options.indexOf(selected).coerceAtLeast(0)
-        val segment = maxWidth / options.size
-        val x by animateDpAsState(segment * index, spring(dampingRatio = 0.8f, stiffness = 500f), label = "pill")
-        Box(
-            Modifier
-                .offset { IntOffset(x.roundToPx(), 0) }
-                .width(segment)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(12.dp))
-                .background(c.onSurface),
-        )
-        Row(Modifier.fillMaxWidth().fillMaxHeight(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            options.forEachIndexed { i, option ->
-                val color by animateColorAsState(if (i == index) c.background else c.onSurfaceVariant, label = "pillText")
-                Box(
-                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp)).clickable { onSelect(option) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(com.opentune.ui.theme.tr(label(option)), color = color, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center, maxLines = 1)
+            .padding(5.dp)) {
+            val index = options.indexOf(selected).coerceAtLeast(0)
+            val x by animateDpAsState(segment * index, if (reduced) snap() else spring(dampingRatio = 1f, stiffness = 500f), label = "pill")
+            Box(
+                Modifier
+                    .offset { IntOffset(x.roundToPx(), 0) }
+                    .width(segment)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(c.onSurface),
+            )
+            Row(Modifier.fillMaxWidth().fillMaxHeight().selectableGroup(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                options.forEachIndexed { i, option ->
+                    val color by animateColorAsState(if (i == index) c.background else c.onSurfaceVariant, if (reduced) snap() else spring(), label = "pillText")
+                    Box(
+                        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                            .selectable(selected = i == index, role = Role.RadioButton, onClick = { onSelect(option) })
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(labels[i], color = color, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
+                    }
                 }
             }
         }

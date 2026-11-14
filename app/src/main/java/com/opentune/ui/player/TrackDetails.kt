@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -77,7 +77,7 @@ internal fun TrackDetailsDialog(song: Song, durationMs: Long, onDismiss: () -> U
                     "cleaned" -> "Clean version"
                     else -> "Not marked explicit"
                 }) }
-                data.trackNumber?.let { Detail("Track", listOfNotNull(data.discNumber?.let { disc -> "Disc $disc" }, "Track $it").joinToString(" · ")) }
+                data.trackNumber?.let { Detail("Track", listOfNotNull(data.discNumber?.let { disc -> com.opentune.i18n.Tr.f("Disc {0}", disc) }, com.opentune.i18n.Tr.f("Track {0}", it)).joinToString(" · ")) }
                 SheetButton("View on Apple", onClick = { uri.openUri(data.url) })
             }
             Text(appleMessage, style = MaterialTheme.typography.bodySmall)

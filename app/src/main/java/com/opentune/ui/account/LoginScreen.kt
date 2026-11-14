@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -136,8 +136,18 @@ fun LoginScreen(onDone: () -> Unit) {
                             if (!gone.get()) check(view, url)
                         }
                     }
-                    loadUrl(SIGN_IN_URL)
                     web.set(this)
+                    // A fresh start every time: the web view still held the last account's Google
+                    // session, so Google sent the page straight back signed in as that account and it
+                    // was taken again, with no way to pick another. The accounts already added keep
+                    // their own sessions in AccountStore, so nothing is signed out; Spotify's sign-in,
+                    // in the same cookie store, is put back.
+                    com.opentune.ui.spotify.SpotifyConnection.keepingSpotify { done ->
+                        CookieManager.getInstance().removeAllCookies { removed ->
+                            done.onReceiveValue(removed)
+                            main.post { if (!gone.get()) loadUrl(SIGN_IN_URL) }
+                        }
+                    }
                 }
             },
             // Taken down only once it's off the screen: destroying it while still attached,

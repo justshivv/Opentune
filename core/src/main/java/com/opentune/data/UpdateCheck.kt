@@ -263,7 +263,7 @@ object UpdateCheck {
         if (!com.opentune.data.releases.NewReleases.canNotify(context)) return
         val nm = context.getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "App updates", NotificationManager.IMPORTANCE_DEFAULT))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, com.opentune.i18n.Tr.t("App updates"), NotificationManager.IMPORTANCE_DEFAULT))
         }
         // Opening the app offers the update, from what this check remembered.
         val open = PendingIntent.getActivity(
@@ -273,8 +273,8 @@ object UpdateCheck {
         )
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(com.opentune.core.R.drawable.ic_stat_opentune)
-            .setContentTitle("OpenTune ${release.version} is out")
-            .setContentText("Tap to update from ${BuildConfig.VERSION_NAME}")
+            .setContentTitle(com.opentune.i18n.Tr.f("OpenTune {0} is out", release.version))
+            .setContentText(com.opentune.i18n.Tr.f("Tap to update from {0}", BuildConfig.VERSION_NAME))
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()

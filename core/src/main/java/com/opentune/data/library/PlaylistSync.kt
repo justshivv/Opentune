@@ -111,19 +111,70 @@ object PlaylistSync {
      * Adds [song] straight to one of the account's own playlists, for one
      * with no copy here; [done] hears, on the main thread, whether it went.
      */
-    fun addToAccountPlaylist(playlistId: String, song: Song, done: (Boolean) -> Unit) {
+    fun addToAccountPlaylist(playlistId: String, song: Song, done: (Boolean) -> Unit) =
+        addAllToAccountPlaylist(playlistId, listOf(song), done)
+
+    /** [addToAccountPlaylist] for several songs at once, in one request. */
+    fun addAllToAccountPlaylist(playlistId: String, songs: List<Song>, done: (Boolean) -> Unit) {
+        val ids = songs.map { it.videoId }.filter { com.opentune.data.isYouTubeId(it) }.distinct()
+        if (ids.isEmpty()) { done(false); return }
         scope.launch {
             val ok = try {
-                Innertube.addToPlaylist(playlistId, listOf(song.videoId))
+                Innertube.addToPlaylist(playlistId, ids)
                 true
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "Couldn't add ${song.videoId} to $playlistId", e)
+                Log.w(TAG, "Couldn't add ${ids.size} songs to $playlistId", e)
                 false
             }
             withContext(Dispatchers.Main) { done(ok) }
         }
+    }
+
+    /**
+     * Takes [songs] out of one of the account's own playlists on YouTube Music, for one with no
+     * copy here: each entry's id is read off the playlist first, as removing needs it.
+     */
+    fun removeFromAccountPlaylist(playlistId: String, songs: List<Song>, done: (Boolean) -> Unit) {
+        val ids = songs.mapTo(HashSet()) { it.videoId }
+        scope.launch {
+            val ok = try {
+                val entries = MusicRepository.remotePlaylist(playlistId).songs
+                    .filter { it.videoId in ids }
+                    .mapNotNull { s -> s.setVideoId?.let { it to s.videoId } }
+                if (entries.isNotEmpty()) Innertube.removeFromPlaylist(playlistId, entries)
+                entries.isNotEmpty()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't remove ${ids.size} songs from $playlistId", e)
+                false
+            }
+            withContext(Dispatchers.Main) { done(ok) }
+        }
+    }
+
+    /**
+     * Takes a playlist or album someone else made out of the account's library on YouTube Music
+     * (on every device), and out of the library list kept here. [playlistId] is the id the page
+     * names for it (an album's is not its browse id). True if YouTube Music took it.
+     */
+    suspend fun removeFromAccountLibrary(browseId: String, playlistId: String): Boolean {
+        val ok = try {
+            Innertube.ratePlaylist(playlistId, saved = false)
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Couldn't remove $playlistId from the library", e)
+            false
+        }
+        if (ok) {
+            val key = browseId.removePrefix("VL")
+            LibraryCache.savePlaylists(LibraryCache.playlists.value.filterNot { it.browseId?.removePrefix("VL") == key }, LibraryCache.owner())
+        }
+        return ok
     }
 
     private fun currentAccount(): String? = AccountStore.account.value?.email?.takeIf { it.isNotBlank() }

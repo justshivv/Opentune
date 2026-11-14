@@ -30,6 +30,18 @@ internal class SettingsCategory(
  */
 internal val FOLDED_GROUPS = mapOf("Seek bar" to 2)
 
+/** Subsections drawn as a card with no heading over it: the page's title already says what it is. */
+internal val UNLABELLED_GROUPS = setOf("YouTube Music")
+
+/** Settings shown as a row on the main Settings page instead of on their category's page; search still finds them. */
+internal val MAIN_PAGE_ONLY = setOf("Audio sources")
+
+/** A short line under a subsection's card, saying what it's for. */
+internal val GROUP_NOTES = mapOf(
+    "YouTube Music" to "A Google account can have Personal and Brand profiles. Each has its own library, likes and history.",
+    "Connected services" to "Each one is optional. Spotify brings over your playlists; songs still play through OpenTune's own sources.",
+)
+
 /**
  * Where every setting lives. Each page is named for what someone opening it is looking for,
  * and each setting is on the page they'd try first: everything about a service with that
@@ -39,31 +51,30 @@ internal val FOLDED_GROUPS = mapOf("Seek bar" to 2)
  */
 internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
-        "account", "Accounts and services", "YouTube Music, Spotify, scrobbling and your other devices", Icons.Rounded.Person,
+        "account", "Account & integrations", "YouTube Music, Spotify, scrobbling, Discord and your other devices", Icons.Rounded.Person,
         listOf(
-            "YouTube Music" to listOf("YouTube Music account", "Add another account", "Sign out"),
-            "Spotify" to listOf("Spotify account", "Spotify"),
-            "Scrobbling" to listOf("Last.fm scrobbling", "Disconnect Last.fm", "ListenBrainz", "Disconnect ListenBrainz"),
-            "Your music server" to listOf("Music server", "Disconnect server"),
+            "YouTube Music" to listOf("YouTube Music account", "Listen as", "Other accounts", "Add another account", "Sign out"),
+            "Connected services" to listOf("Spotify account", "Show on Discord", "Last.fm scrobbling", "ListenBrainz", "Music server"),
+            "Spotify" to listOf("Spotify"),
             "Other devices" to listOf("Link a device"),
         ),
     ),
     SettingsCategory(
-        "audio", "Sound and quality", "Streaming and download quality, add-ons, loudness, effects and output", Icons.Rounded.GraphicEq,
+        "audio", "Sound and quality", "Streaming quality, lossless, loudness, effects and bit-perfect output", Icons.Rounded.GraphicEq,
         listOf(
             "Streaming quality" to listOf("On Wi-Fi", "On mobile data", "Upgrade quality while playing"),
+            "Lossless" to listOf("Lossless streaming", "Audio sources", "Unmetered networks only"),
             "Download quality" to listOf("Download quality", "Download on Wi-Fi only"),
-            "Audio add-ons" to listOf("Audio add-ons", "Lossless streaming", "Unmetered networks only"),
             "Loudness" to listOf("Loudness normalization", "Volume level", "Normalize on the phone speaker"),
             "Effects" to listOf("Equalizer", "Clarity", "Spatial audio", "System audio effects"),
-            "Output" to listOf("Output precision", "Prefer USB DAC", "Bit-perfect USB output"),
+            "Output and bit-perfect" to listOf("Bit-perfect output", "Output precision", "Prefer USB DAC"),
         ),
     ),
     SettingsCategory(
-        "playback", "Playback", "Between songs, autoplay, headphones and music videos", Icons.Rounded.PlayCircle,
+        "playback", "Playback", "Automix and crossfade, autoplay, headphones and music videos", Icons.Rounded.PlayCircle,
         listOf(
-            "Between songs" to listOf("Crossfade", "Skip silence", "Preload upcoming songs"),
-            "Autoplay and suggestions" to listOf("Autoplay", "Recommendations", "Don't repeat songs in current session", "Smart shuffle"),
+            "Between songs" to listOf("Automix", "Automix performance", "Crossfade", "Skip silence", "Preload upcoming songs"),
+            "Autoplay and suggestions" to listOf("Autoplay", "Recommendations", "Songs, not music videos", "Smart shuffle", "Don't repeat songs in current session"),
             "Headphones and the app" to listOf("Resume when headphones connect", "Pause at zero volume", "Background playback", "Stop music on close from recents"),
             "Music videos" to listOf("SponsorBlock", "SponsorBlock categories"),
         ),
@@ -80,35 +91,35 @@ internal val SETTINGS_CATEGORIES = listOf(
         "look", "Appearance", "Theme, colour, glass, language and icon", Icons.Rounded.Palette,
         listOf(
             "Theme" to listOf("Theme", "Pure black", "Fonts & readability"),
-            "Colour" to listOf("Color from artwork", "Mini player takes the cover's colour", "Artist pages take the photo's colour", "Material You", "Accent color", "Palette style"),
-            "Glass" to listOf("Liquid Glass", "Glass style", "Frosted top edge", "Reduce dynamic blur"),
+            "Colour" to listOf("Color from artwork", "Mini player takes the cover's colour", "Artist pages take the photo's colour", "Artist page shade", "Playlist page background", "Material You", "Accent color", "Palette style"),
+            "Glass" to listOf("Lite mode", "Liquid Glass", "Glass style", "Frosted top edge", "Reduce dynamic blur", "Lighter Liquid Glass"),
             "Language and icon" to listOf("App language", "App icon"),
         ),
     ),
     SettingsCategory(
-        "player", "Player", "Layout, cover art, seek bar and what it shows", Icons.Rounded.Album,
+        "player", "Player", "Layout, background, cover art, Canvas, seek bar and what it shows", Icons.Rounded.Album,
         listOf(
-            "Layout" to listOf("Player layout", "Player buttons", "Player background", "Player beside the page"),
-            "Cover art" to listOf("Full-screen cover art", "Moving cover art", "Glow under the cover", "Song change", "Album covers", "Double-tap to skip 10 seconds"),
-            "Animated covers" to listOf("Animated covers", "Animated covers on Wi-Fi only", "Moving covers on Home"),
+            "Layout" to listOf("Player layout", "Player background", "Player buttons", "Player beside the page"),
+            "Cover art" to listOf("Full-screen cover art", "Match background to cover", "Cover corners", "Moving cover art", "Glow under the cover", "Song change", "Album covers", "Double-tap to skip 10 seconds"),
+            "Animated covers and Canvas" to listOf("Animated covers", "Animated covers on Wi-Fi only", "Moving covers on Home"),
             "Seek bar" to listOf("Wavy seek bar", "Lyric preview while seeking", "Seek bar thickness", "Seek bar handle", "Seek bar colour", "Seek bar time", "Song part marks"),
-            "On the player" to listOf("Lyrics preview", "Audio quality label", "Audio details page", "Skip to chorus", "Hide volume bar", "Hide song status", "Show stats for nerds"),
+            "On the player" to listOf("Lyrics preview", "Audio quality label", "Audio details page", "Comments button", "Skip to chorus", "Hide volume bar", "Hide song status", "Hide output device", "Show stats for nerds"),
         ),
     ),
     SettingsCategory(
-        "motion", "Motion and feel", "Animations, haptics and smoothness", Icons.Rounded.Animation,
+        "motion", "Motion and feel", "Animations, haptics, smoothness and battery", Icons.Rounded.Animation,
         listOf(
             "Dock" to listOf("Dock animation", "Dock lens"),
             "Pages and player" to listOf("Opening animation", "Page transitions", "Player opening"),
             "Feel" to listOf("Haptic feedback"),
-            "Smoothness" to listOf("High performance mode", "High refresh rate", "Reduce animation"),
+            "Smoothness" to listOf("Performance profile", "High performance mode", "Reduce animation"),
         ),
     ),
     SettingsCategory(
-        "library", "Home and Library", "Tabs, playlists, artist pages and what's hidden", Icons.Rounded.LibraryMusic,
+        "library", "Home and Library", "Tabs, playlists and their covers, artist pages and what's hidden", Icons.Rounded.LibraryMusic,
         listOf(
-            "Home and tabs" to listOf("Separate Explore tab", "Speed dial", "Wide-screen layout"),
-            "Playlists and songs" to listOf("Playlists in Library", "Import a playlist", "Swipe songs to queue them"),
+            "Home and tabs" to listOf("Separate Explore tab", "Speed dial", "Streaks on Home", "Wide-screen layout"),
+            "Playlists and songs" to listOf("Playlists in Library", "Full-screen playlist covers", "Import a playlist", "Swipe songs to queue them"),
             "Artist pages" to listOf("Artist signatures"),
             "New releases" to listOf("New-release alerts", "Followed artists"),
             "What's hidden" to listOf("Hide explicit content", "Hidden songs and artists"),
@@ -117,7 +128,7 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "data", "Downloads and storage", "Downloads, music on this phone, space used and backups", Icons.Rounded.Storage,
         listOf(
-            "Downloads" to listOf("Downloaded songs", "Stream downloads when online", "Export compatible downloads"),
+            "Downloads" to listOf("Downloaded songs", "Smart downloads", "Keep today's mixes offline", "Smart download limit", "Smart download battery", "Stream downloads when online", "Export compatible downloads"),
             "Music on this phone" to listOf("Local music folder", "Filter non-music audio"),
             "Space used" to listOf("Song cache limit", "Clear song cache", "Clear image cache", "Delete downloaded updates"),
             "Backup" to listOf("Export data", "Import data"),
@@ -127,7 +138,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         "history", "Listening history", "Replay, Wrapped, syncing and clearing what you've played", Icons.Rounded.History,
         listOf(
             "Your year" to listOf("Replay", "Wrapped"),
-            "Syncing" to listOf("Sync listening history", "Pause account sync"),
+            "Syncing" to listOf("Sync listening history", "Pause account sync", "Listens from YouTube Music"),
             "Clear" to listOf("Clear listening history"),
         ),
     ),
@@ -136,6 +147,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         listOf(
             "Updates" to listOf("What's new", "Check for updates", "Check for updates automatically"),
             "Community" to listOf("OpenTune community", "Support OpenTune", "Star on GitHub", "Source code"),
+            "Developers" to listOf("justshivv", "aerluc"),
             "Help" to listOf("Show the welcome again", "Count this phone in usage numbers", "Export diagnostics"),
         ),
     ),
@@ -165,6 +177,7 @@ internal val SECTION_HOME = mapOf(
     "Your data" to "data",
     "Your music server" to "account",
     "Last.fm (optional)" to "account",
+    "Discord" to "account",
     "ListenBrainz (optional)" to "account",
     "Import" to "library",
     "Miscellaneous" to "player",

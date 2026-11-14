@@ -26,14 +26,14 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Podcasts
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -84,7 +84,7 @@ private enum class SearchKind(val label: String) { SHOWS("Shows"), EPISODES("Epi
  * try, from YouTube Music.
  */
 @Composable
-fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenShow: (String) -> Unit, onOpenSettings: (() -> Unit)? = null) {
+fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenShow: (String) -> Unit, onOpenSettings: (() -> Unit)? = null, onOpenAudiobooks: (() -> Unit)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
     var kind by rememberSaveable { mutableStateOf(SearchKind.SHOWS) }
     val loader = rememberLoader("podcasts:home:${com.opentune.data.innertube.Innertube.currentRegion}") { Podcasts.home() }
@@ -124,6 +124,7 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
     ) {
         LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
             item { PageHeader(com.opentune.ui.theme.tr("Podcasts"), actions = onOpenSettings?.let { open -> { com.opentune.ui.components.AccountButton(open) } }) }
+            if (onOpenAudiobooks != null) item(key = "audiobooks") { AudiobooksEntry(onOpenAudiobooks) }
             item {
                 TextField(
                     value = query,
@@ -266,7 +267,7 @@ private fun ContinueCard(p: Podcasts.Progress, onPlay: () -> Unit) {
 private fun remaining(p: Podcasts.Progress): String {
     if (p.durationMs <= 0) return "In progress"
     val minutes = ((p.durationMs - p.positionMs) / 60_000).coerceAtLeast(1)
-    return if (minutes >= 60) "${minutes / 60} hr ${minutes % 60} min left" else "$minutes min left"
+    return if (minutes >= 60) com.opentune.i18n.Tr.f("{0} hr {1} min left", minutes / 60, minutes % 60) else com.opentune.i18n.Tr.f("{0} min left", minutes)
 }
 
 @Composable
@@ -428,7 +429,7 @@ fun PodcastShowScreen(browseId: String, contentPadding: PaddingValues, actions: 
                         )
                     }
                 }
-                item { SectionHeader("Episodes", subtitle = "${all.size}${if (token != null) "+" else ""} episodes") }
+                item { SectionHeader("Episodes", subtitle = com.opentune.i18n.Tr.f("{0}{1} episodes", all.size, if (token != null) "+" else "")) }
                 items(all.size, key = { all[it].videoId }) { i ->
                     EpisodeRow(all[i], actions, showShow = false, onOpenShow = onOpenShow) { actions.playEpisodes(all, i, show.title) }
                     if (i == all.lastIndex && token != null && !loadingMore) LaunchedEffect(all.size) { wantMore++ }

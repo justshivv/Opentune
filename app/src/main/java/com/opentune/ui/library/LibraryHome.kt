@@ -1,19 +1,28 @@
 package com.opentune.ui.library
 
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
+import dev.chrisbanes.haze.hazeEffect
+import androidx.compose.animation.core.animateTo
 import com.opentune.ui.components.pinnedToTop
 import com.opentune.ui.components.menuClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import com.opentune.ui.components.glass
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.PlayArrow
+import com.opentune.ui.components.icon
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +43,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -58,11 +69,11 @@ import com.opentune.ui.browse.playlistSearchResults
 import com.opentune.ui.browse.coverWash
 import com.opentune.ui.browse.dismissPlaylistSearch
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -94,9 +105,11 @@ import com.opentune.data.history.History
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.library.PlaylistLinks
 import com.opentune.data.library.PlaylistSync
+import com.opentune.data.library.LikedSync
 import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.PlaylistPrivacy
 import com.opentune.data.model.ShelfItem
+import com.opentune.data.model.Song
 import com.opentune.data.model.artworkAt
 import com.opentune.data.model.HEADER_ART_PX
 import com.opentune.data.subsonic.Subsonic
@@ -137,8 +150,14 @@ class LibraryNav(
     val history: () -> Unit = {},
     /** Every playlist, from Show all. */
     val allPlaylists: () -> Unit = {},
+    /** The playlists brought over from Spotify, on their own page. */
+    val spotify: () -> Unit = {},
     /** An album or playlist downloaded as a whole, by its id. */
     val downloaded: (String) -> Unit = {},
+    /** A smart playlist, by its id. */
+    val smart: (String) -> Unit = {},
+    /** Making a new smart playlist. */
+    val newSmart: () -> Unit = {},
 )
 
 private data class LibraryPlaylistRow(
@@ -153,6 +172,12 @@ private data class LibraryPlaylistRow(
     val onClick: () -> Unit,
 )
 
+/** Liked Music's own colour (the purple of its cover), for the page behind it. */
+internal val LIKED_SEED = Color(0xFF8C6AF0)
+
+/** YouTube Music's Liked Music playlist, by its browse id ("VLLM") or playlist id ("LM"). */
+internal fun isYouTubeLikes(browseId: String?): Boolean = browseId == "VLLM" || browseId == "LM"
+
 /** Pinning playlists to the top of Library. */
 internal object LibraryPins {
     fun pinned(key: String) = key in AppSettings.ui.value.pinnedPlaylists
@@ -162,7 +187,7 @@ internal object LibraryPins {
     fun toggle(key: String) {
         val pins = AppSettings.ui.value.pinnedPlaylists
         if (key !in pins && pins.size >= MAX) {
-            com.opentune.data.Pills.info("Up to $MAX playlists can be pinned. Unpin one first")
+            com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Up to {0} playlists can be pinned. Unpin one first", MAX))
             return
         }
         AppSettings.updateUi { ui ->
@@ -194,7 +219,7 @@ private fun rememberPlaylistRows(nav: LibraryNav): List<LibraryPlaylistRow> {
     val ytPlaylists = if (signedIn) remember(cachedPlaylists, playlists) { PlaylistLinks.unlinked(cachedPlaylists, playlists) } else emptyList()
     val playCounts = remember(records) { records.groupingBy { it.videoId }.eachCount() }
     val rows = mutableListOf<LibraryPlaylistRow>()
-    for (p in playlists) {
+    for (p in playlists.filterNot { isYouTubeLikes(it.remoteId) || isYouTubeLikes(it.id) }) {
         val source = when {
             p.spotifyId != null && spotifyConnected -> "Spotify"
             p.spotifyId == null && p.synced -> "YouTube Music"
@@ -202,14 +227,15 @@ private fun rememberPlaylistRows(nav: LibraryNav): List<LibraryPlaylistRow> {
         }
         val saved = p.songs.count { downloadEntries[it.videoId]?.state == DownloadState.DONE }
         rows += LibraryPlaylistRow(p.id, p.name,
-            (if (p.songs.size == 1) "1 song" else "${p.songs.size} songs") + if (saved > 0) " · $saved downloaded" else "",
+            (if (p.songs.size == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", p.songs.size)) + if (saved > 0) com.opentune.i18n.Tr.f(" · {0} downloaded", saved) else "",
             p.coverUrl, p, pin = p.id, source = source,
             plays = p.songs.sumOf { playCounts[it.videoId] ?: 0 }, onClick = { nav.playlist(p.id) })
     }
-    for (h in hearted) {
+    // YouTube Music's own Liked Music is the app's Liked tile (which opens it too), so it isn't listed twice.
+    for (h in hearted.filterNot { isYouTubeLikes(it.browseId) }) {
         rows += LibraryPlaylistRow("saved:${h.browseId}", h.title, h.subtitle, h.thumbnailUrl, pin = h.browseId, source = "YouTube Music", onClick = { nav.browse(h.browseId) })
     }
-    for (p in ytPlaylists.filter { p -> hearted.none { it.browseId == p.browseId } }) {
+    for (p in ytPlaylists.filter { p -> hearted.none { it.browseId == p.browseId } && !isYouTubeLikes(p.browseId) }) {
         val browseId = p.browseId ?: continue
         rows += LibraryPlaylistRow("yt:$browseId", p.title, p.subtitle, p.thumbnailUrl, pin = browseId, source = "YouTube Music", onClick = { nav.browse(browseId) })
     }
@@ -247,7 +273,12 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 try {
                     val sync = PlaylistSync.refresh()
                     runCatching { MusicRepository.libraryPlaylists() }.onFailure {
-                        com.opentune.data.Pills.error("Couldn't refresh your YouTube Music playlists", context)
+                        if (it is kotlinx.coroutines.CancellationException) throw it
+                        com.opentune.data.Pills.error(
+                            if (it is com.opentune.data.LibrarySignedOut) "YouTube Music says this phone isn't signed in. Sign in again from Settings"
+                            else "Couldn't refresh your YouTube Music playlists",
+                            context,
+                        )
                     }
                     sync.join()
                 } finally {
@@ -264,10 +295,12 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     val rows = rememberPlaylistRows(nav)
     // In the list, which sources show all their playlists rather than the first few.
     val openGroups = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
-    // The pinned ones, then the most played; Show all has the rest.
-    val top = remember(rows, libraryUi.pinnedPlaylists) {
-        val pinned = rows.filter { it.pin in libraryUi.pinnedPlaylists }
-        (pinned + rows.filter { it !in pinned }.sortedByDescending { it.plays }).take(5)
+    // The pinned ones, then the most played; Show all has the rest. Spotify's have their own
+    // page (the Spotify row above), so they show here only when pinned.
+    val shownRows = remember(rows, libraryUi.pinnedPlaylists) { rows.filter { it.source != "Spotify" || it.pin in libraryUi.pinnedPlaylists } }
+    val top = remember(shownRows, libraryUi.pinnedPlaylists) {
+        val pinned = shownRows.filter { it.pin in libraryUi.pinnedPlaylists }
+        (pinned + shownRows.filter { it !in pinned }.sortedByDescending { it.plays }).take(5)
     }
 
     val page: @Composable () -> Unit = { LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -292,8 +325,8 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Shortcut(Icons.Rounded.Favorite, "Liked", "${liked.size} songs", nav.liked, Modifier.weight(1f))
-                    Shortcut(Icons.Rounded.Download, "Downloads", if (doneCount == 0) "Offline songs" else "$doneCount songs", nav.downloads, Modifier.weight(1f))
+                    Shortcut(Icons.Rounded.Favorite, "Liked", com.opentune.i18n.Tr.f("{0} songs", liked.size), nav.liked, Modifier.weight(1f))
+                    Shortcut(Icons.Rounded.Download, "Downloads", if (doneCount == 0) "Offline songs" else com.opentune.i18n.Tr.f("{0} songs", doneCount), nav.downloads, Modifier.weight(1f))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Shortcut(Icons.Rounded.LibraryMusic, "On this phone", "Local files", nav.local, Modifier.weight(1f))
@@ -315,10 +348,33 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     Shortcut(
                         Icons.Rounded.Groups,
                         "Listen together",
-                        room?.let { if (it.hosting) "Your room · ${it.members.size} in" else "In ${it.hostName ?: "a friend"}'s room" } ?: "Rooms with friends, in sync",
+                        room?.let { if (it.hosting) com.opentune.i18n.Tr.f("Your room · {0} in", it.members.size) else com.opentune.i18n.Tr.f("In {0}'s room", it.hostName ?: com.opentune.i18n.Tr.t("a friend")) } ?: com.opentune.i18n.Tr.t("Rooms with friends, in sync"),
                         nav.together,
                         Modifier.weight(1f),
                     )
+                }
+                // Spotify: a row of its own, its playlists on their own page.
+                val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+                val spotifyLists by LibraryStore.playlists.collectAsState()
+                val fromSpotify = remember(spotifyLists) { spotifyLists.count { it.spotifyId != null } }
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).pressable(nav.spotify, 0.98f)
+                        .padding(start = 4.dp, end = 2.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(40.dp))
+                    Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                        Text("Spotify", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            when {
+                                fromSpotify > 0 -> if (fromSpotify == 1) "1 playlist" else com.opentune.i18n.Tr.f("{0} playlists", fromSpotify)
+                                spotifyOn -> "Your playlists"
+                                else -> "Connect or import"
+                            },
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -344,14 +400,14 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(30.dp))
                 })
             }
-            playlistGroups(rows, libraryUi.pinnedPlaylists).forEach { (group, inGroup) ->
+            playlistGroups(shownRows, libraryUi.pinnedPlaylists).forEach { (group, inGroup) ->
                 item(key = "group:$group") { GroupLabel(group) }
                 val open = group == PINNED || openGroups[group] == true
                 val visible = if (open) inGroup else inGroup.take(LIST_FOLD)
                 items(visible, key = { "$group:${it.key}" }) { row -> PlaylistLine(row, Modifier.animateItem()) }
                 if (group != PINNED && inGroup.size > LIST_FOLD) item(key = "fold:$group") {
                     TextButton(onClick = { openGroups[group] = !open }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (open) "Show less" else "Show more (${inGroup.size - LIST_FOLD})")
+                        Text(if (open) "Show less" else com.opentune.i18n.Tr.f("Show more ({0})", inGroup.size - LIST_FOLD))
                     }
                 }
             }
@@ -371,6 +427,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 items(top, key = { it.key }) { row -> PlaylistTile(row, Modifier.width(TILE_WIDTH).animateItem()) }
             }
         }
+        item(key = "smart-playlists") { SmartPlaylistsRow(nav.smart, nav.newSmart, TILE_WIDTH) }
     } }
 
     // Pull to refresh only when there's an account to refresh from.
@@ -396,7 +453,13 @@ private enum class PlaylistOrder(val label: String) {
 
 /** Every playlist, two to a row, from "Show all" on Library. */
 @Composable
-fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: () -> Unit) {
+fun AllPlaylistsScreen(
+    contentPadding: PaddingValues,
+    nav: LibraryNav,
+    onBack: () -> Unit,
+    /** Only Spotify's playlists, on the Spotify page; otherwise every playlist but Spotify's, which have that page. */
+    spotify: Boolean = false,
+) {
     val liked by LibraryStore.liked.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     val pinned = AppSettings.ui.collectAsState().value.pinnedPlaylists
@@ -404,7 +467,38 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
     var sorting by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf(false) }
     if (naming) NewPlaylistDialog(signedIn, onDismiss = { naming = false }) { name, privacy -> naming = false; nav.playlist(LibraryStore.createPlaylist(name, privacy = privacy)) }
-    val rows = rememberPlaylistRows(nav)
+    // The Spotify page: Spotify's playlists. Show all: the rest, and a Spotify one only when pinned.
+    val rows = rememberPlaylistRows(nav).filter { if (spotify) it.source == "Spotify" else it.source != "Spotify" || it.pin in pinned }
+    val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+    // Show all brings the account's YouTube Music playlists up to date as it opens, behind what's
+    // already here, and says so plainly when it can't, rather than leaving the page looking empty.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var library by remember { mutableStateOf<YouTubeLoad>(YouTubeLoad.Idle) }
+    val loadLibrary: () -> Unit = {
+        if (signedIn && !spotify && library != YouTubeLoad.Loading) scope.launch {
+            library = YouTubeLoad.Loading
+            library = try {
+                MusicRepository.libraryPlaylists()
+                YouTubeLoad.Done
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: com.opentune.data.LibrarySignedOut) {
+                YouTubeLoad.Failed("YouTube Music says this phone isn't signed in any more. Sign in again from Settings.")
+            } catch (_: Exception) {
+                YouTubeLoad.Failed("Couldn't reach YouTube Music just now. Check the connection and try again.")
+            }
+        }
+    }
+    LaunchedEffect(signedIn, spotify) { loadLibrary() }
+    // The Spotify page asks Spotify what changed as it opens, behind the list already here, so it
+    // shows at once; only playlists added or changed there are read, and removed ones go.
+    val spotifySync by com.opentune.data.spotify.SpotifySync.status.collectAsState()
+    if (spotify) LaunchedEffect(spotifyOn) {
+        if (spotifyOn) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.opentune.ui.spotify.SpotifyConnection.checkPlaylists()
+        }
+    }
     val shown = remember(rows, order, pinned) {
         val top = rows.filter { it.pin in pinned }
         top + order.sort(rows.filter { it !in top })
@@ -430,50 +524,96 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
     )
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to accent, 0.6f to accent,
         1f to androidx.compose.ui.graphics.lerp(background, accent, 0.45f)))) {
-    coverUrl?.let { CoverWash(it, accent, Modifier.fillMaxWidth().height(440.dp)) }
-    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-        state = grid,
-        // Two tiles to a row, or one playlist to a line when Library shows them as a list.
-        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(if (asList) 1 else 2),
-        contentPadding = contentPadding,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(if (asList) 0.dp else 10.dp),
-        modifier = Modifier.fillMaxSize().padding(horizontal = if (asList) 0.dp else 10.dp),
-    ) {
-        item(key = "header", span = { full }) {
-            PageHeader(com.opentune.ui.theme.tr("Playlists"), onBack = onBack, actions = {
-                // Sorting and the account in one glass pill, as on Library.
-                Row(
-                    Modifier.height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box {
-                        IconButton(onClick = { sorting = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort playlists") }
-                        androidx.compose.material3.DropdownMenu(sorting, { sorting = false }, shape = RoundedCornerShape(20.dp)) {
-                            PlaylistOrder.entries.forEach { o ->
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(o.label, fontWeight = if (o == order) FontWeight.SemiBold else null) },
-                                    trailingIcon = if (o == order) ({ Icon(Icons.Rounded.Check, null) }) else null,
-                                    onClick = { order = o; sorting = false },
-                                )
+        coverUrl?.let { CoverWash(it, accent, Modifier.fillMaxWidth().height(440.dp)) }
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            state = grid,
+            // Two tiles to a row, or one playlist to a line when Library shows them as a list.
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(if (asList) 1 else 2),
+            contentPadding = contentPadding,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (asList) 0.dp else 10.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = if (asList) 0.dp else 10.dp),
+        ) {
+            item(key = "header", span = { full }) {
+                PageHeader(if (spotify) "Spotify" else com.opentune.ui.theme.tr("Playlists"), onBack = onBack, actions = {
+                    // Sorting and the account in one glass pill, as on Library.
+                    Row(
+                        Modifier.height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box {
+                            IconButton(onClick = { sorting = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort playlists") }
+                            androidx.compose.material3.DropdownMenu(sorting, { sorting = false }, shape = RoundedCornerShape(20.dp)) {
+                                PlaylistOrder.entries.forEach { o ->
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(o.label, fontWeight = if (o == order) FontWeight.SemiBold else null) },
+                                        trailingIcon = if (o == order) ({ Icon(Icons.Rounded.Check, null) }) else null,
+                                        onClick = { order = o; sorting = false },
+                                    )
+                                }
                             }
                         }
+                        com.opentune.ui.components.AccountButton(nav.settings, plain = true)
                     }
-                    com.opentune.ui.components.AccountButton(nav.settings, plain = true)
+                })
+            }
+            // What the check is doing, in a small pill under the title; then what it found, briefly.
+            if (spotify) item(key = "syncing", span = { full }) { com.opentune.ui.spotify.SpotifySyncPill(spotifySync) }
+            // The same for YouTube Music's: a bar while it loads, and a line with a way to try again when it didn't.
+            if (!spotify && library == YouTubeLoad.Loading) item(key = "yt-loading", span = { full }) {
+                androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(2.dp))
+            }
+            if (!spotify && signedIn && library != YouTubeLoad.Loading) {
+                val ytRows = shown.count { it.source == "YouTube Music" }
+                val problem = (library as? YouTubeLoad.Failed)?.reason
+                    ?: if (ytRows == 0 && library == YouTubeLoad.Done) "No YouTube Music playlists were found on this account." else null
+                if (problem != null) item(key = "yt-problem", span = { full }) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(start = 16.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(problem, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        androidx.compose.material3.TextButton(onClick = {
+                            loadLibrary()
+                            if (library is YouTubeLoad.Failed && (library as YouTubeLoad.Failed).reason.contains("signed in")) nav.settings()
+                        }) { Text(if ((library as? YouTubeLoad.Failed)?.reason?.contains("signed in") == true) "Settings" else "Try again") }
+                    }
                 }
-            })
-        }
-        if (asList) {
-            item(key = "new") { ActionLine(Icons.Rounded.Add, "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
-            item(key = "liked") { ActionLine(Icons.Rounded.Favorite, "Liked songs", "${liked.size} songs", onClick = nav.liked) }
-            items(shown.size, key = { shown[it].key }) { i -> PlaylistLine(shown[i], Modifier.animateItem()) }
-        } else {
-            item(key = "new") { NewPlaylistTile(signedIn, { naming = true }) }
-            item(key = "liked") { LikedTile(liked.size, nav.liked) }
-            items(shown.size, key = { shown[it].key }) { i -> PlaylistTile(shown[i], Modifier.animateItem()) }
+            }
+            if (spotify) {
+                if (shown.isEmpty()) item(key = "spotify-empty", span = { full }) {
+                    Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(72.dp))
+                        Text(
+                            if (spotifyOn) "Your Spotify playlists appear here after the next sync." else "Connect Spotify to bring your playlists here, or import one from a link.",
+                            style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                        androidx.compose.material3.Button(onClick = nav.importPlaylist) { Text(if (spotifyOn) "Import a playlist" else "Connect or import") }
+                    }
+                }
+                if (asList) items(shown.size, key = { shown[it].key }) { i -> PlaylistLine(shown[i], Modifier.animateItem()) }
+                else items(shown.size, key = { shown[it].key }) { i -> PlaylistTile(shown[i], Modifier.animateItem()) }
+            } else if (asList) {
+                item(key = "new") { ActionLine(Icons.Rounded.Add, "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
+                item(key = "liked") { ActionLine(Icons.Rounded.Favorite, "Liked songs", com.opentune.i18n.Tr.f("{0} songs", liked.size), onClick = nav.liked) }
+                items(shown.size, key = { shown[it].key }) { i -> PlaylistLine(shown[i], Modifier.animateItem()) }
+            } else {
+                item(key = "new") { NewPlaylistTile(signedIn, { naming = true }) }
+                item(key = "liked") { LikedTile(liked.size, nav.liked) }
+                items(shown.size, key = { shown[it].key }) { i -> PlaylistTile(shown[i], Modifier.animateItem()) }
+            }
         }
     }
-    }
+}
+
+/** Where bringing the account's YouTube Music playlists up to date has got to, for the Show all page. */
+private sealed interface YouTubeLoad {
+    data object Idle : YouTubeLoad
+    data object Loading : YouTubeLoad
+    data object Done : YouTubeLoad
+    data class Failed(val reason: String) : YouTubeLoad
 }
 
 /**
@@ -481,7 +621,7 @@ fun AllPlaylistsScreen(contentPadding: PaddingValues, nav: LibraryNav, onBack: (
  * can't blur, a tiny copy of it stretched to fill gives the same soft wash.
  */
 @Composable
-private fun CoverWash(url: String, into: Color, modifier: Modifier) {
+internal fun CoverWash(url: String, into: Color, modifier: Modifier) {
     Box(modifier.clipToBounds()) {
         val blurs = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
         androidx.compose.animation.Crossfade(url, animationSpec = androidx.compose.animation.core.tween(800), label = "coverWash") { u ->
@@ -526,7 +666,7 @@ private fun NewPlaylistTile(signedIn: Boolean, onClick: () -> Unit, modifier: Mo
 /** Liked songs as a playlist, in purple running into pink. */
 @Composable
 private fun LikedTile(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    ActionTile("Liked Music", if (count == 0) "Auto playlist" else "Auto playlist · $count songs", onClick, modifier,
+    ActionTile("Liked Music", if (count == 0) "Auto playlist" else com.opentune.i18n.Tr.f("Auto playlist · {0} songs", count), onClick, modifier,
         background = Brush.verticalGradient(listOf(Color(0xFF8C6AF0), Color(0xFFF95AAE)))) {
         Icon(Icons.Rounded.ThumbUp, null, Modifier.size(72.dp), tint = Color.White)
     }
@@ -541,7 +681,7 @@ private fun TileText(title: String, subtitle: String) {
 
 /** One of the four library shortcuts: an accent badge, a name and a count. */
 @Composable
-private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier) {
+private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier, logo: Int? = null) {
     Row(
         modifier
             .height(72.dp)
@@ -551,7 +691,10 @@ private fun Shortcut(icon: ImageVector, title: String, subtitle: String, onClick
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(MaterialTheme.colorScheme.primary), Alignment.Center) {
+        if (logo != null) {
+            // A service's own mark, in its own colours.
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(logo), null, Modifier.size(40.dp))
+        } else Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(MaterialTheme.colorScheme.primary), Alignment.Center) {
             Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onPrimary)
         }
         Column(Modifier.padding(start = 12.dp)) {
@@ -740,7 +883,7 @@ private fun SaveToAccountDialog(name: String, onDismiss: () -> Unit, onSave: (Pl
         title = { Text("Save to YouTube Music") },
         text = {
             Column {
-                Text("Makes a copy of $name on YouTube Music, songs and all. Changes you make here go there too.")
+                Text(com.opentune.i18n.Tr.f("Makes a copy of {0} on YouTube Music, songs and all. Changes you make here go there too.", name))
                 com.opentune.ui.components.PillSegmented(PlaylistPrivacy.entries, privacy, { it.label }, { privacy = it }, Modifier.padding(top = 16.dp))
                 Text(privacy.meaning, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
             }
@@ -767,7 +910,7 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
     if (confirmRemove && saved != null) com.opentune.ui.components.FloatingDialog(
         onDismissRequest = { confirmRemove = false },
         title = { Text("Remove this download?") },
-        text = { Text("Deletes the downloaded songs of ${saved.title} from this phone and takes it out of your library's downloads.") },
+        text = { Text(com.opentune.i18n.Tr.f("Deletes the downloaded songs of {0} from this phone and takes it out of your library's downloads.", saved.title)) },
         confirmButton = { com.opentune.ui.components.SheetButton("Remove", tone = com.opentune.ui.components.SheetTone.Danger, onClick = {
             Downloads.removeAll(context, inList.map { it.song.toSong() })
             com.opentune.data.download.DownloadedLists.remove(saved.id)
@@ -776,6 +919,10 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
         }) },
         dismissButton = { com.opentune.ui.components.SheetButton("Keep", onClick = { confirmRemove = false }, closes = true) },
     )
+    // The page's background as Settings ask for it, from the downloaded list's cover.
+    com.opentune.ui.browse.ListPageTint(coverUrl = saved?.thumbnailUrl) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    com.opentune.ui.browse.ListPageWash()
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader(saved?.title ?: "Downloaded", onBack = onBack) }
         if (saved == null || inList.isEmpty()) {
@@ -788,7 +935,7 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     if (saved.subtitle.isNotBlank()) Text(saved.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-                    Text("${ready.size} of ${saved.songIds.size} songs downloaded", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(com.opentune.i18n.Tr.f("{0} of {1} songs downloaded", ready.size, saved.songIds.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     TextButton(onClick = { confirmRemove = true }, contentPadding = PaddingValues(0.dp)) { Text("Remove download") }
                 }
             }
@@ -807,7 +954,7 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
                 song = when (e.state) {
                     DownloadState.FAILED -> song.copy(durationText = "Failed · tap to retry")
                     DownloadState.QUEUED -> song.copy(durationText = if (com.opentune.data.download.Downloads.waitingForWifi(context)) "Waiting for Wi-Fi" else "Waiting")
-                    DownloadState.DOWNLOADING -> song.copy(durationText = "Downloading ${(e.progress * 100).toInt()}%")
+                    DownloadState.DOWNLOADING -> song.copy(durationText = com.opentune.i18n.Tr.f("Downloading {0}%", (e.progress * 100).toInt()))
                     else -> song
                 },
                 onClick = {
@@ -824,6 +971,8 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
                 onAddToQueue = { actions.addToQueue(song) },
             )
         }
+    }
+    }
     }
 }
 
@@ -861,7 +1010,7 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
                     message = "Use Download on a playlist or album page to keep the whole list offline.")
             }
             items(lists, key = { "list:${it.first.id}" }) { (l, have) ->
-                PlaylistRow(l.thumbnailUrl, l.title, "$have of ${l.songIds.size} downloaded · plays offline", { onOpenList(l.id) }, Modifier.animateItem())
+                PlaylistRow(l.thumbnailUrl, l.title, com.opentune.i18n.Tr.f("{0} of {1} downloaded · plays offline", have, l.songIds.size), { onOpenList(l.id) }, Modifier.animateItem())
             }
             return@LazyColumn
         }
@@ -896,48 +1045,441 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
 private enum class DownloadsTab {
     SONGS, PLAYLISTS;
     fun label(songs: Int, lists: Int) = when (this) {
-        SONGS -> "Songs · $songs"
-        PLAYLISTS -> "Playlists · $lists"
+        SONGS -> com.opentune.i18n.Tr.f("Songs · {0}", songs)
+        PLAYLISTS -> com.opentune.i18n.Tr.f("Playlists · {0}", lists)
     }
 }
 
+/**
+ * The playlist pages' top bar: transparent over a page's hero, then solid —
+ * status bar included — once [solid] says the hero has scrolled away. One
+ * small box fading between two colours, so it costs nothing per frame.
+ */
+@Composable
+fun TopNavBar(
+    title: String,
+    solid: Boolean,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
+) {
+    // Once the hero has scrolled away the bar frosts in: the songs under it blur and take the
+    // page's colour, and the frost thins out over a short tail below the bar rather than
+    // ending at a hard line. Where blur is off, a near-solid wash of the page colour instead.
+    val frost by androidx.compose.animation.core.animateFloatAsState(if (solid) 1f else 0f, androidx.compose.animation.core.tween(240), label = "topNavFrost")
+    val haze = com.opentune.ui.components.LocalHazeState.current
+    val page = MaterialTheme.colorScheme.background
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    var tall by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val below = LocalNavFrostBelow.current
+    Box(modifier.fillMaxWidth()) {
+    if (frost > 0f) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .layout { measurable, constraints ->
+                    // Drawn taller than the bar by the tail, and by whatever sits under it as part
+                    // of it (a list's search field); the bar's own size is unchanged.
+                    val h = constraints.maxHeight + below.roundToPx() + NAV_FROST_TAIL.roundToPx()
+                    val p = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                    layout(constraints.maxWidth, constraints.maxHeight) { p.place(0, 0) }
+                }
+                .onSizeChanged { tall = it.height }
+                .then(
+                    if (haze == null) {
+                        Modifier.graphicsLayer { alpha = frost }.drawBehind {
+                            drawRect(Brush.verticalGradient(0f to page.copy(alpha = 0.95f), 0.72f to page.copy(alpha = 0.88f), 1f to page.copy(alpha = 0f)))
+                        }
+                    } else {
+                        Modifier.hazeEffect(haze) {
+                            alpha = frost
+                            backgroundColor = page
+                            tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.5f)))
+                            blurRadius = 28.dp
+                            noiseFactor = 0.03f
+                            progressive = dev.chrisbanes.haze.HazeProgressive.verticalGradient(
+                                easing = androidx.compose.animation.core.EaseIn,
+                                startY = tall - NAV_FROST_TAIL.value * density * 1.6f,
+                                startIntensity = 1f,
+                                endY = tall.toFloat(),
+                                endIntensity = 0f,
+                            )
+                        }
+                    },
+                ),
+        )
+    }
+    Column(Modifier.fillMaxWidth()) {
+        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        Row(
+            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(48.dp)
+                    .then(if (solid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape))
+                    .clickable(onClickLabel = "Back", onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface)
+            }
+            if (solid) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+            actions()
+        }
+    }
+    }
+}
+
+/** How far a top bar's frost reaches below it, thinning out. */
+private val NAV_FROST_TAIL = 22.dp
+
+/**
+ * How far below the top bar its frost reaches before its soft tail: the height of what sits
+ * under the bar as part of it, a list's search field. One frost for both, so the field doesn't
+ * sit on a band of its own colour with a hard line where the bar's frost ends.
+ */
+internal val LocalNavFrostBelow = androidx.compose.runtime.compositionLocalOf { 0.dp }
+
 /** Songs liked in the app (and on YouTube Music, when signed in). */
 @Composable
-fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit, onOpenYouTubeLikes: () -> Unit) {
+fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
     val liked by LibraryStore.liked.collectAsState()
+    val storeReady by LibraryStore.ready.collectAsState()
+    val likedSync by LikedSync.status.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
+    LaunchedEffect(signedIn) { if (signedIn) LikedSync.sync() }
     val songs = remember(liked) { liked.map { it.toSong() } }
-    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item { PageHeader("Liked Music", onBack = onBack) }
-        if (signedIn) {
-            item {
-                TextButton(onClick = onOpenYouTubeLikes, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Liked on YouTube Music") }
+    // The library's whole length, from the same durations the rows show.
+    val totalSeconds = remember(songs) {
+        songs.sumOf { song ->
+            val parts = song.durationText?.split(':')?.mapNotNull { it.trim().toLongOrNull() } ?: return@sumOf 0L
+            when (parts.size) {
+                1 -> parts[0]
+                2 -> parts[0] * 60 + parts[1]
+                3 -> parts[0] * 3_600 + parts[1] * 60 + parts[2]
+                else -> 0L
             }
         }
-        if (songs.isEmpty()) {
-            item {
-                MessageState(Icons.Rounded.Favorite, "No liked songs", Modifier.padding(top = 32.dp), message = "Tap the heart in the player, or Like in a song's menu.")
+    }
+    // The library is revealed a page at a time: with a thousand songs, laying
+    // out every row up front is what makes the page stutter. A loader at the
+    // end of what's shown brings in the next page, then moves down with it.
+    // Not keyed on the library: a sync landing mid-scroll re-emits it, and
+    // resetting the count there would collapse the list back to one page.
+    var shownCount by remember { androidx.compose.runtime.mutableIntStateOf(PAGE_SIZE) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // The top bar turns solid once the hero's title zone has scrolled under it:
+    // a derived flag, so it costs a recomposition only when it flips.
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val heroHeightPx = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * HERO_FRACTION).dp.toPx() }
+    val barHeightPx = with(density) { 56.dp.toPx() }
+    // Keyed on the sizes, so turning the phone works the threshold out again.
+    val barSolid by remember(heroHeightPx, barHeightPx) {
+        androidx.compose.runtime.derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > heroHeightPx - barHeightPx
+        }
+    }
+    val selection = com.opentune.ui.components.rememberSongSelection()
+    val context = LocalContext.current
+    // Looking through the library, its order, and the page's own menu, as the
+    // playlist pages have them.
+    val search = remember { com.opentune.ui.browse.PlaylistSearch() }
+    val searching = search.open
+    val query = search.query
+    var order by remember { mutableStateOf(com.opentune.ui.browse.ListOrder.DEFAULT) }
+    var sortOpen by remember { mutableStateOf(false) }
+    var moreOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(searching, query) {
+        if (searching) listState.scrollToItem(0)
+    }
+    val shown = remember(songs, query, order) {
+        val q = query.trim()
+        val found = if (q.isEmpty()) songs else songs.filter { it.title.contains(q, true) || it.artist.contains(q, true) }
+        when (order) {
+            com.opentune.ui.browse.ListOrder.DEFAULT -> found
+            com.opentune.ui.browse.ListOrder.A_TO_Z -> found.sortedBy { it.title.lowercase() }
+            com.opentune.ui.browse.ListOrder.Z_TO_A -> found.sortedByDescending { it.title.lowercase() }
+        }
+    }
+    val selectionRows = remember(shown) { shown.map { it.videoId to it } }
+    if (moreOpen) LikedMoreSheet(songs, actions) { moreOpen = false }
+    // The page's background as Settings ask for it: from the newest liked song's cover, or Liked Music's own purple.
+    // Coloured from the heart cover's own purple, as the cover is.
+    com.opentune.ui.browse.ListPageTint(coverUrl = null, seed = LIKED_SEED) {
+    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
+        com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
+            com.opentune.ui.browse.PlaylistSearchHeader(search) {
+                val returning = com.opentune.ui.browse.rememberSearchReturn(search, listState) { i, o -> i > 0 || o > heroHeightPx - barHeightPx }
+                val topSolid = searching || barSolid || returning
+                TopNavBar("Liked Music", topSolid, onBack) {
+                    Row(Modifier.height(48.dp).then(if (topSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { if (searching) search.close() else search.open = true }) {
+                            Icon(if (searching) Icons.Rounded.Close else Icons.Rounded.Search, "Search this list")
+                        }
+                        Box {
+                            IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
+                            androidx.compose.material3.DropdownMenu(sortOpen, { sortOpen = false }) {
+                                com.opentune.ui.browse.ListOrder.entries.forEach { value ->
+                                    androidx.compose.material3.DropdownMenuItem(text = { Text(value.label) }, onClick = { order = value; sortOpen = false })
+                                }
+                            }
+                        }
+                        IconButton(onClick = { moreOpen = true }) { Icon(Icons.Rounded.MoreHoriz, "More") }
+                    }
+                }
             }
-            return@LazyColumn
-        }
-        item {
-            PlayButtons(
-                onPlay = { actions.playAll(songs, 0, false, "Liked Music") },
-                onShuffle = { actions.playAll(songs, 0, true, "Liked Music") },
-                onSmartShuffle = { actions.smartShuffle(songs, "Liked Music") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            com.opentune.ui.components.SongSelectionBar(
+                selection,
+                rows = selectionRows,
+                onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+                modifier = Modifier.align(Alignment.TopCenter),
+                onRemove = { keys ->
+                    val gone = songs.filter { it.videoId in keys }
+                    gone.forEach { LibraryStore.setLiked(it, false) }
+                    com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Removed {0} from Liked", gone.size), context)
+                },
+                removeLabel = "Unlike",
             )
+        }) {
+            // The cover's blur and fade behind the songs, when Settings ask for the cover-coloured page.
+            com.opentune.ui.browse.ListPageWash()
+            // The hero runs to the very top of the screen, so the list keeps only the
+            // bottom inset (room for the dock); the hero carries its own top shade.
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                modifier = Modifier.fillMaxSize().playlistSearchResults(search),
+            ) {
+                if (!storeReady) {
+                    item { LikedSkeleton() }
+                    items(8) { com.opentune.ui.components.SongRowPlaceholder() }
+                    return@LazyColumn
+                }
+                if (!searching) item(key = "liked-hero") {
+                    LikedHero(
+                        songs.firstOrNull(), songs.size, totalSeconds,
+                        onPlay = { actions.playAll(shown, 0, false, "Liked Music") },
+                        onShuffle = { actions.playAll(shown, 0, true, "Liked Music") },
+                        onSmartShuffle = { actions.smartShuffle(shown, "Liked Music") },
+                    )
+                }
+                if (!searching) item(key = "liked-sync") { LikedSyncPill(likedSync) }
+                if (songs.isEmpty()) {
+                    item {
+                        MessageState(Icons.Rounded.Favorite, "No liked songs", Modifier.padding(top = 32.dp), message = "Tap the heart in the player, or Like in a song's menu.")
+                    }
+                    return@LazyColumn
+                }
+                if (shown.isEmpty()) item { Text(com.opentune.ui.theme.tr("No matching songs"), Modifier.padding(24.dp)) }
+                itemsIndexed(shown.take(shownCount), key = { _, s -> s.videoId }) { i, song ->
+                    SongListItem(
+                        song = song,
+                        onClick = { actions.playAll(shown, i, false, "Liked Music") },
+                        modifier = Modifier.animateItem(),
+                        isCurrent = song.videoId == actions.currentVideoId,
+                        isPlaying = actions.isPlaying,
+                        onPlayNext = { actions.playNext(song) },
+                        onAddToQueue = { actions.addToQueue(song) },
+                    )
+                }
+                if (shownCount < shown.size) {
+                    item(key = "liked-more") {
+                        // Reached the end of what's shown: the app's loader turns
+                        // for a beat, the next page lands, and the loader moves
+                        // down with the end (or is gone, on the last page).
+                        LaunchedEffect(shownCount) {
+                            kotlinx.coroutines.delay(700)
+                            shownCount = minOf(shownCount + PAGE_SIZE, shown.size)
+                        }
+                        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                            androidx.compose.material3.CircularProgressIndicator()
+                        }
+                    }
+                }
+            }
         }
-        itemsIndexed(songs, key = { _, s -> s.videoId }) { i, song ->
-            SongListItem(
-                song = song,
-                onClick = { actions.playAll(songs, i, false, "Liked Music") },
-                modifier = Modifier.animateItem(),
-                isCurrent = song.videoId == actions.currentVideoId,
-                isPlaying = actions.isPlaying,
-                onPlayNext = { actions.playNext(song) },
-                onAddToQueue = { actions.addToQueue(song) },
+    }
+    }
+}
+
+/**
+ * The Liked page's own menu, as a playlist page's menu: the cover and the
+ * name, then what can be done with the whole library.
+ */
+@Composable
+private fun LikedMoreSheet(
+    songs: List<Song>,
+    actions: SongActions,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    com.opentune.ui.components.FloatingCard(
+        onDismiss = onDismiss,
+        contentPadding = PaddingValues(0.dp),
+        startExpanded = true,
+        header = {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                com.opentune.ui.components.LikedPlaylistCover(Modifier.size(56.dp))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Liked Music", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(com.opentune.ui.share.ListShare.countLine(songs.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+            }
+            androidx.compose.material3.HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        },
+    ) {
+        val card = com.opentune.ui.components.LocalFloatingCard.current
+        val close: () -> Unit = { card?.close() ?: onDismiss() }
+        Column {
+            com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") {
+                close()
+                songs.asReversed().forEach(actions.playNext)
+            }
+            com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue") {
+                close()
+                songs.forEach(actions.addToQueue)
+            }
+            com.opentune.ui.components.MenuRow(Icons.Rounded.Download, "Download all") {
+                close()
+                songs.forEach { com.opentune.data.download.Downloads.enqueue(context, it) }
+                com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size), context)
+            }
+            com.opentune.ui.components.MenuRow(Icons.Rounded.Share, "Share") {
+                close()
+                com.opentune.ui.share.ListShare.shareLocal(context, "Liked Music", songs)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/**
+ * The Liked page while the stored library is still being read: the hero's
+ * shape as a skeleton - the cover across the whole top, fading at its foot,
+ * with the title, the counts and the two buttons as bars over the fade.
+ */
+@Composable
+private fun LikedSkeleton() {
+    com.opentune.ui.browse.ListHero(cover = { m -> com.opentune.ui.components.Placeholder(m, androidx.compose.ui.graphics.RectangleShape) }) {
+        run {
+            com.opentune.ui.components.Placeholder(Modifier.width(200.dp).height(26.dp))
+            com.opentune.ui.components.Placeholder(Modifier.padding(top = 10.dp).width(140.dp).height(16.dp))
+            Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                com.opentune.ui.components.Placeholder(Modifier.weight(1f).height(52.dp), androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
+                com.opentune.ui.components.Placeholder(Modifier.weight(1f).height(52.dp), androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+/** How many liked songs the page lays out at a time; see LikedScreen. */
+private const val PAGE_SIZE = 50
+
+/** How much of the screen's height the Liked hero takes. */
+private const val HERO_FRACTION = 0.68f
+
+/**
+ * The Liked page's hero: Liked Music's own cover (the thumb on its purple-pink
+ * gradient), full-bleed or framed as Settings ask, with the title and the
+ * library's size and the play buttons.
+ */
+@Composable
+private fun LikedHero(
+    latest: Song?, count: Int, totalSeconds: Long,
+    onPlay: () -> Unit, onShuffle: () -> Unit, onSmartShuffle: () -> Unit,
+) {
+    // Liked Music's own heart cover, as on YouTube Music, not the newest song's art.
+    com.opentune.ui.browse.ListHero(
+        cover = { m -> com.opentune.ui.components.LikedPlaylistCover(m, androidx.compose.ui.graphics.RectangleShape) },
+        footPadding = 18.dp,
+    ) {
+        run {
+            Text(
+                "Liked Music",
+                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
             )
+            if (count > 0) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    com.opentune.i18n.Tr.f("{0} songs", count) + "  \u2022  " + formatTotalDuration(totalSeconds),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(18.dp))
+                PlayButtons(
+                    onPlay = onPlay,
+                    onShuffle = onShuffle,
+                    onSmartShuffle = onSmartShuffle,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+/** A library's whole length the way playlist pages show it: "3d 4h 12m", "4h 12m", "12m". */
+private fun formatTotalDuration(totalSeconds: Long): String {
+    val days = totalSeconds / 86_400
+    val hours = totalSeconds % 86_400 / 3_600
+    val minutes = totalSeconds % 3_600 / 60
+    return when {
+        days > 0 -> "${days}d ${hours}h ${minutes}m"
+        hours > 0 -> "${hours}h ${minutes}m"
+        else -> "${minutes}m"
+    }
+}
+
+/**
+ * A playlist's hero, in the Liked page's shape: the cover across the whole
+ * top, the name and counts over its fade, then every action the page has —
+ * the play row, the tools and the status line — inside it.
+ */
+@Composable
+private fun PlaylistHero(
+    name: String,
+    source: String,
+    meta: String,
+    coverUrl: String?,
+    songs: List<Song>,
+    buttons: @Composable () -> Unit,
+    tools: @Composable (Modifier) -> Unit,
+    status: (@Composable () -> Unit)?,
+) {
+    com.opentune.ui.browse.ListHero(
+        cover = { m ->
+            if (coverUrl != null) Artwork(coverUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX), m, shape = androidx.compose.ui.graphics.RectangleShape)
+            else com.opentune.ui.components.PlaylistCover(name, songs.map { it.thumbnailUrl }, m, androidx.compose.ui.graphics.RectangleShape, named = false)
+        },
+    ) {
+        run {
+            Text(name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (source.isNotBlank()) Text(source, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+            Text(meta, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+            Spacer(Modifier.height(20.dp))
+            buttons()
+            tools(Modifier.fillMaxWidth().padding(top = 12.dp))
+            if (status != null) {
+                Spacer(Modifier.height(10.dp))
+                status()
+            }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
@@ -1000,7 +1542,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         var everywhere by remember { mutableStateOf(false) }
         FloatingDialog(
             onDismissRequest = { deleting = false },
-            title = { Text("Delete \"${playlist.name}\"?") },
+            title = { Text(com.opentune.i18n.Tr.f("Delete \"{0}\"?", playlist.name)) },
             text = {
                 Column {
                     Text("The songs stay where they are; only this list goes.")
@@ -1051,20 +1593,21 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         ListTools(
             songs,
             onAddSongs = if (playlist.spotifyId == null) ({ adding = true }) else null,
-            onShare = share,
+            onShare = null,
             modifier = modifier,
+            showDownload = false,
             privacy = playlist.privacy,
-            onPrivacy = if (online) ({ choosingPrivacy = true }) else null,
+            onPrivacy = null,
         )
     }
     if (moreOpen) LocalListMoreSheet(playlist, songs, actions,
         onRefresh = {
             // Reading the cookie starts the WebView engine: off the main thread.
-            if (playlist.spotifyId != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) { com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true) }
+            if (playlist.spotifyId != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) { com.opentune.ui.spotify.SpotifyConnection.checkPlaylists() }
             else if (signedIn && remoteId != null) PlaylistSync.refresh(id)
         },
         onAddSongs = { adding = true }, onRename = { renaming = true }, onDelete = { deleting = true },
-        onShare = share, onDismiss = { moreOpen = false })
+        onShare = share, onPrivacy = if (online) ({ choosingPrivacy = true }) else null, onDismiss = { moreOpen = false })
     // Where the playlist stands with YouTube Music, under its cover.
     val status: (@Composable () -> Unit)? = when {
         // A copy of a Spotify playlist: it follows Spotify, not YouTube Music.
@@ -1091,7 +1634,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             Text(
                 when {
                     pending.any { it.playlist == id && it.kind == com.opentune.data.library.PlaylistEdit.Kind.CREATE } -> "Saving to YouTube Music…"
-                    waiting > 0 -> "On YouTube Music · ${if (waiting == 1) "1 change" else "$waiting changes"} to send"
+                    waiting > 0 -> com.opentune.i18n.Tr.f("On YouTube Music · {0} to send", if (waiting == 1) "1 change" else "$waiting changes")
                     else -> "On YouTube Music"
                 },
                 style = MaterialTheme.typography.bodyMedium,
@@ -1099,78 +1642,121 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             )
         })
     }
-    com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
-        com.opentune.ui.browse.PlaylistSearchHeader(search) {
-        com.opentune.ui.browse.CollapsingBar(playlist.name, listState, onBack, forceCollapsed = searching,
-            artworkBehind = !(playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).isNullOrBlank()) {
-            Row(Modifier.height(48.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { if (searching) search.close() else search.open = true }) {
-                    Icon(if (searching) Icons.Rounded.Close else Icons.Rounded.Search, "Search this list")
-                }
-                Box {
-                    IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
-                    androidx.compose.material3.DropdownMenu(sortOpen, { sortOpen = false }) {
-                        com.opentune.ui.browse.ListOrder.entries.forEach { value ->
-                            androidx.compose.material3.DropdownMenuItem(text = { Text(value.label) }, onClick = { order = value; sortOpen = false })
-                        }
+    // Songs picked together (long press, then Select): the bar over the top acts on them.
+    val selection = com.opentune.ui.components.rememberSongSelection()
+    // The page's background as Settings ask for it, from the playlist's cover or its first song's.
+    com.opentune.ui.browse.ListPageTint(coverUrl = playlist.coverUrl ?: playlist.songs.firstOrNull()?.thumbnailUrl) {
+    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
+        com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
+            com.opentune.ui.browse.PlaylistSearchHeader(search) {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val heroPx = with(density) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * HERO_FRACTION).dp.roundToPx() }
+                val pastHero by remember(listState, heroPx) {
+                    androidx.compose.runtime.derivedStateOf {
+                        listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > heroPx - with(density) { 56.dp.roundToPx() }
                     }
                 }
-                IconButton(onClick = { moreOpen = true }) { Icon(Icons.Rounded.MoreHoriz, "More") }
+                val returning = com.opentune.ui.browse.rememberSearchReturn(search, listState) { i, o -> i > 0 || o > heroPx - with(density) { 56.dp.roundToPx() } }
+                val barSolid = searching || pastHero || returning
+                TopNavBar(playlist.name, barSolid, onBack) {
+                    Row(Modifier.height(48.dp).then(if (barSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { if (searching) search.close() else search.open = true }) {
+                            Icon(if (searching) Icons.Rounded.Close else Icons.Rounded.Search, "Search this list")
+                        }
+                        Box {
+                            IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
+                            androidx.compose.material3.DropdownMenu(sortOpen, { sortOpen = false }) {
+                                com.opentune.ui.browse.ListOrder.entries.forEach { value ->
+                                    androidx.compose.material3.DropdownMenuItem(text = { Text(value.label) }, onClick = { order = value; sortOpen = false })
+                                }
+                            }
+                        }
+                        IconButton(onClick = { moreOpen = true }) { Icon(Icons.Rounded.MoreHoriz, "More") }
+                    }
+                }
             }
-        }
-        }
-    }) {
-    val tint = com.opentune.ui.browse.rememberCoverTint((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(CARD_ART_PX))
-    val band = com.opentune.ui.components.rememberRubberBand()
-    LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else contentPadding,
-        modifier = Modifier.fillMaxSize().coverWash(tint).playlistSearchResults(search), overscrollEffect = band) {
-        if (!searching) item(key = "header") {
-            Box {
-                com.opentune.ui.browse.HeaderBackdrop((playlist.coverUrl ?: songs.firstOrNull()?.thumbnailUrl).artworkAt(HEADER_ART_PX), Modifier.matchParentSize().pinnedToTop(band), into = tint)
-                Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(top = 64.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    com.opentune.ui.browse.PlaylistHeading(playlist.name,
-                        if (playlist.spotifyId != null) "Spotify" else if (playlist.synced) "YouTube Music" else "On this phone",
-                        playlist.coverUrl, songs, cover = if (playlist.coverUrl == null) ({
-                            com.opentune.ui.components.PlaylistCover(playlist.name, songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), MaterialTheme.shapes.large)
-                        }) else null)
-                    com.opentune.ui.browse.ListPlayRow(shown.isNotEmpty(), false,
-                        onPlay = { actions.playAll(shown, 0, false, playlist.name) },
-                        onShuffle = { actions.playAll(shown, 0, true, playlist.name) },
-                        onSmartShuffle = { actions.smartShuffle(shown, playlist.name) },
-                        onSave = null,
-                        modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 12.dp))
-                    // The same row of tools as a YouTube Music playlist's page.
-                    tools(Modifier.fillMaxWidth().padding(bottom = 12.dp))
-                    if (status != null && playlist.spotifyId == null) status()
+            val selectKeys = remember(songs) { songKeys(songs) }
+            com.opentune.ui.components.SongSelectionBar(
+                selection,
+                rows = shown.indices.map { i -> selectKeys[matching[i]] to shown[i] },
+                onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+                modifier = Modifier.align(Alignment.TopCenter),
+                // Out of this playlist, from the bottom up so each place still points at its song.
+                onRemove = if (playlist.spotifyId == null) ({ keys ->
+                    val at = songs.indices.filter { selectKeys[it] in keys }.sortedDescending()
+                    at.forEach { LibraryStore.removeFromPlaylist(id, it) }
+                    com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Removed {0} from {1}", at.size, playlist.name), context)
+                }) else null,
+                removeLabel = "Remove",
+            )
+        }) {
+            // The cover's blur and fade behind the songs, when Settings ask for the cover-coloured page.
+            com.opentune.ui.browse.ListPageWash()
+            var shownCount by remember { androidx.compose.runtime.mutableIntStateOf(PAGE_SIZE) }
+            val paged = shown.take(shownCount)
+            LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                modifier = Modifier.fillMaxSize().playlistSearchResults(search)) {
+                if (!searching) item(key = "header") {
+                    PlaylistHero(
+                        name = playlist.name,
+                        source = if (playlist.spotifyId != null) "Spotify" else if (playlist.synced) "YouTube Music" else "On this phone",
+                        meta = com.opentune.ui.browse.playlistMeta(songs),
+                        coverUrl = playlist.coverUrl,
+                        songs = songs,
+                        buttons = {
+                            com.opentune.ui.browse.ListPlayRow(
+                                enabled = shown.isNotEmpty(),
+                                saved = false,
+                                onPlay = { actions.playAll(shown, 0, false, playlist.name) },
+                                onShuffle = { actions.playAll(shown, 0, true, playlist.name) },
+                                onSmartShuffle = { actions.smartShuffle(shown, playlist.name) },
+                                onSave = if (playlist.spotifyId == null) ({ adding = true }) else null,
+                                modifier = Modifier.fillMaxWidth(),
+                                actionLabel = "Add songs",
+                            )
+                        },
+                        tools = tools,
+                        status = if (playlist.spotifyId == null) status else null,
+                    )
+                }
+                if (songs.isEmpty()) {
+                    item {
+                        MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "Nothing here yet", Modifier.padding(top = 32.dp), message = if (playlist.spotifyId != null) "Songs added in Spotify appear after the next sync." else "Add songs here, or use Add to playlist in any song's menu.")
+                    }
+                    return@LazyColumn
+                }
+                // Keyed by the song (and which copy of it), not its place, so a row taken out pops
+                // alone and the rows below slide up rather than every row after it being redrawn.
+                if (shown.isEmpty()) item { Text(com.opentune.ui.theme.tr("No matching songs"), Modifier.padding(24.dp)) }
+                val keys = songKeys(songs)
+                itemsIndexed(paged, key = { i, _ -> keys[matching[i]] }) { i, song ->
+                    SongListItem(
+                        song = song,
+                        onClick = { actions.playAll(shown, i, false, playlist.name) },
+                        modifier = Modifier.animateItem(),
+                        isCurrent = song.videoId == actions.currentVideoId,
+                        isPlaying = actions.isPlaying,
+                        onPlayNext = { actions.playNext(song) },
+                        onAddToQueue = { actions.addToQueue(song) },
+                        onRemoveFromPlaylist = if (playlist.spotifyId == null) ({ removeWithUndo(id, matching[i]) }) else null,
+                        // Swipe right to add to the queue, left to take it out of the playlist.
+                        onSwipeRemove = if (playlist.spotifyId == null) ({ removeWithUndo(id, matching[i]) }) else null,
+                        selectKey = keys[matching[i]],
+                    )
+                }
+                if (shownCount < shown.size) item(key = "playlist-more") {
+                    LaunchedEffect(shownCount) {
+                        kotlinx.coroutines.delay(700)
+                        shownCount += PAGE_SIZE
+                    }
+                    Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
                 }
             }
         }
-        if (songs.isEmpty()) {
-            item {
-                MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "Nothing here yet", Modifier.padding(top = 32.dp), message = if (playlist.spotifyId != null) "Songs added in Spotify appear after the next sync." else "Add songs here, or use Add to playlist in any song's menu.")
-            }
-            return@LazyColumn
-        }
-        // Keyed by the song (and which copy of it), not its place, so a row taken out pops
-        // alone and the rows below slide up rather than every row after it being redrawn.
-        if (shown.isEmpty()) item { Text(com.opentune.ui.theme.tr("No matching songs"), Modifier.padding(24.dp)) }
-        val keys = songKeys(songs)
-        itemsIndexed(shown, key = { i, _ -> keys[matching[i]] }) { i, song ->
-            SongListItem(
-                song = song,
-                onClick = { actions.playAll(shown, i, false, playlist.name) },
-                modifier = Modifier.animateItem(),
-                isCurrent = song.videoId == actions.currentVideoId,
-                isPlaying = actions.isPlaying,
-                onPlayNext = { actions.playNext(song) },
-                onAddToQueue = { actions.addToQueue(song) },
-                onRemoveFromPlaylist = if (playlist.spotifyId == null) ({ removeWithUndo(id, matching[i]) }) else null,
-                // Swipe right to add to the queue, left to take it out of the playlist.
-                onSwipeRemove = if (playlist.spotifyId == null) ({ removeWithUndo(id, matching[i]) }) else null,
-            )
-        }
     }
-}
+    }
 }
 
 /**
@@ -1188,6 +1774,7 @@ private fun LocalListMoreSheet(
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onShare: () -> Unit,
+    onPrivacy: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -1220,13 +1807,17 @@ private fun LocalListMoreSheet(
             com.opentune.ui.components.MenuRow(Icons.Rounded.Download, "Download all") {
                 close()
                 songs.forEach { Downloads.enqueue(context, it) }
-                com.opentune.data.Pills.done("Downloading ${songs.size} songs", context)
+                com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size), context)
             }
             if (!spotify) {
                 com.opentune.ui.components.MenuRow(Icons.Rounded.Add, "Add songs") { close(); onAddSongs() }
                 com.opentune.ui.components.MenuRow(Icons.Rounded.Edit, "Rename") { close(); onRename() }
             }
             com.opentune.ui.components.MenuRow(Icons.Rounded.Share, "Share") { close(); onShare() }
+            val privacyTap = onPrivacy
+            if (privacyTap != null) {
+                com.opentune.ui.components.MenuRow((playlist.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).icon, (playlist.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).meaning) { close(); privacyTap() }
+            }
             com.opentune.ui.components.MenuRow(Icons.Rounded.PushPin, if (pinned) "Unpin from Library" else "Pin to the top of Library") { close(); LibraryPins.toggle(playlist.id) }
             if (!spotify) com.opentune.ui.components.MenuRow(Icons.Rounded.DeleteOutline, "Delete") { close(); onDelete() }
             Spacer(Modifier.height(8.dp))
@@ -1246,5 +1837,5 @@ internal fun songKeys(songs: List<com.opentune.data.model.Song>): List<String> {
 /** Takes the song at [index] out of playlist [id], with a few seconds to Undo it. */
 private fun removeWithUndo(id: String, index: Int) {
     val removed = LibraryStore.removeUndoably(id, index) ?: return
-    com.opentune.data.Pills.withAction("Removed \"${removed.song.title}\"", "Undo") { LibraryStore.undoRemove(removed) }
+    com.opentune.data.Pills.withAction(com.opentune.i18n.Tr.f("Removed \"{0}\"", removed.song.title), "Undo") { LibraryStore.undoRemove(removed) }
 }

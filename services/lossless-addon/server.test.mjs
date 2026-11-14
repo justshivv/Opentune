@@ -67,3 +67,32 @@ test('callers cannot pick the address they are limited by', async () => {
     assert.deepEqual(statuses, [200, 200, 200, 429, 429]);
   } finally { server.stop(); }
 });
+
+test('without the dashboards it runs the add-on alone: manifests answer, /control/ and /v1/app-config do not', async () => {
+  const { mkdtempSync, copyFileSync, rmSync } = await import('node:fs');
+  const dir = mkdtempSync(join(tmpdir(), 'opentune-addon-only-'));
+  for (const f of ['server.mjs', 'worker.mjs', 'cache.mjs', 'pool.mjs', 'auth.mjs', 'security.mjs', 'attestation.mjs']) {
+    copyFileSync(new URL('./' + f, import.meta.url).pathname, join(dir, f));
+  }
+  const data = mkdtempSync(join(tmpdir(), 'opentune-addon-only-data-'));
+  const port = 20000 + Math.floor(Math.random() * 20000);
+  const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', join(dir, 'server.mjs')], {
+    env: { ...process.env, PORT: String(port), DATA_DIR: data, PUBLIC_HOST: 'addon.example', APP_CERT_SHA256: 'a'.repeat(64), USAGE_ENABLED: 'false' },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      child.stdout.on('data', d => { if (String(d).includes('OpenTune add-on on')) resolve(); });
+      child.on('exit', code => reject(new Error('server exited ' + code)));
+    });
+    const base = `http://127.0.0.1:${port}`;
+    assert.equal((await fetch(base + '/monochrome/manifest.json')).status, 200);
+    assert.equal((await fetch(base + '/auth/challenge')).status, 200);
+    // The dashboard and the app configuration are not there.
+    // (An unknown path from an unsigned caller is turned away, 401 or 404; what matters is that none is served.)
+    const refused = async path => { const r = await fetch(base + path); return [401, 404].includes(r.status) && !(r.headers.get('content-type') || '').startsWith('text/html'); };
+    assert.ok(await refused('/control/'), '/control/ is not served');
+    assert.ok(await refused('/v1/app-config'), '/v1/app-config is not served');
+    assert.ok(await refused('/usage/summary'), '/usage is not served');
+  } finally { child.kill(); rmSync(dir, { recursive: true, force: true }); rmSync(data, { recursive: true, force: true }); }
+});

@@ -35,6 +35,9 @@ class Dlna(
     override val status: StateFlow<RemoteStatus> = _status
     @Volatile private var loadedId: String? = null
     @Volatile private var played = false
+    /** The renderer's position has been seen to move, so it can be believed. */
+    @Volatile private var positionMoved = false
+    @Volatile private var lastReported: Long? = null
     /** Until when the renderer's reports are ignored, while it takes in a command. */
     @Volatile private var quietUntil = 0L
 
@@ -58,6 +61,8 @@ class Dlna(
     override suspend fun load(media: CastMedia, positionMs: Long, play: Boolean) = withContext(Dispatchers.IO) {
         loadedId = media.id
         played = false
+        positionMoved = false
+        lastReported = null
         quietUntil = SystemClock.elapsedRealtime() + QUIET_MS
         _status.value = RemoteStatus(RemoteState.LOADING, positionMs, SystemClock.elapsedRealtime(), _status.value.volume, media.id)
         runCatching { transport("Stop") }
@@ -108,7 +113,12 @@ class Dlna(
         val position = transport("GetPositionInfo")
         if (SystemClock.elapsedRealtime() < quietUntil) return
         val at = SystemClock.elapsedRealtime()
-        val ms = parseClock(tag(position, "RelTime")) ?: _status.value.positionMs
+        val reported = parseClock(tag(position, "RelTime"))
+        // Believed once it has been seen to move while playing: some renderers say 0:00 throughout.
+        val playingNow = tag(info, "CurrentTransportState") == "PLAYING"
+        if (playingNow && reported != null && lastReported != null && reported > lastReported!!) positionMoved = true
+        if (playingNow) lastReported = reported
+        val ms = reported ?: _status.value.positionMs
         val state = when (tag(info, "CurrentTransportState")) {
             "PLAYING" -> RemoteState.PLAYING.also { played = true }
             "PAUSED_PLAYBACK", "PAUSED_RECORDING" -> RemoteState.PAUSED
@@ -120,7 +130,7 @@ class Dlna(
         val volume = renderingUrl?.let { url ->
             runCatching { tag(soap(url, RENDERING, "GetVolume", "<InstanceID>0</InstanceID><Channel>Master</Channel>"), "CurrentVolume")?.toFloatOrNull()?.div(100f) }.getOrNull()
         } ?: _status.value.volume
-        _status.value = RemoteStatus(state, ms, at, volume, loadedId)
+        _status.value = RemoteStatus(state, ms, at, volume, loadedId, positionKnown = positionMoved)
     }
 
     private fun transport(action: String, args: String = ""): String =

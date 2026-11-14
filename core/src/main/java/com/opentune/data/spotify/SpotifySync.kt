@@ -42,6 +42,8 @@ object SpotifySync {
     private const val PARALLEL = 4
     /** How often opening the app looks for changes on Spotify. */
     private const val EVERY_MS = 6 * 60 * 60_000L
+    /** Looking again sooner than this, even when asked to look now, finds nothing new. */
+    private const val MIN_GAP_MS = 60_000L
 
     data class Status(
         val running: Boolean = false,
@@ -52,6 +54,10 @@ object SpotifySync {
         val lastSynced: Long = 0,
         val error: String? = null,
         val retryable: Boolean = false,
+        /** Asking Spotify which playlists changed, before reading any. */
+        val checking: Boolean = false,
+        /** How many playlists the last sync found new or changed and read again. */
+        val changed: Int = 0,
     )
 
     /** One of Spotify's mixes made for the listener, with its songs found on YouTube Music. */
@@ -100,41 +106,45 @@ object SpotifySync {
     }
 
     /**
-     * Brings the library over, unless it was done within the last few hours
-     * and [force] isn't set. [onSignedOut] hears when Spotify no longer
-     * accepts [cookie].
+     * Brings the library over, unless it was done within the last few hours.
+     * [now] looks for changes at once (a minute after the last look at the
+     * earliest), still reading only playlists Spotify says changed; [force]
+     * reads every playlist again whatever Spotify says. [withMixes] also
+     * brings Spotify's mixes for Home. [onSignedOut] hears when Spotify no
+     * longer accepts [cookie].
      */
-    fun sync(cookie: String, force: Boolean = false, onSignedOut: (String?) -> Unit = {}) {
+    fun sync(cookie: String, force: Boolean = false, onSignedOut: (String?) -> Unit = {}, now: Boolean = false, withMixes: Boolean = true) {
         if (job?.isActive == true) return
-        if (!force && _status.value.error == null && System.currentTimeMillis() - _status.value.lastSynced < EVERY_MS) return
+        val since = System.currentTimeMillis() - _status.value.lastSynced
+        if (!force && _status.value.error == null && since < (if (now) MIN_GAP_MS else EVERY_MS)) return
         job = scope.launch {
-            _status.update { it.copy(running = true, current = null, index = 0, count = 0, error = null, retryable = false) }
+            _status.update { it.copy(running = true, current = null, index = 0, count = 0, error = null, retryable = false, checking = true, changed = 0) }
             try {
                 recoverSpotifyRead(
                     online = com.opentune.data.settings.AppSettings::isOnline,
                     connected = { SpotifyWebPlayer.account() == cookie },
                     onRetry = { e -> _status.update { it.copy(current = null, error = spotifySyncError(e), retryable = true) } },
-                ) { run(cookie, force) }
-                val now = System.currentTimeMillis()
-                _status.update { it.copy(running = false, current = null, lastSynced = now, error = null, retryable = false) }
-                save(now)
+                ) { run(cookie, force, withMixes) }
+                val done = System.currentTimeMillis()
+                _status.update { it.copy(running = false, current = null, lastSynced = done, error = null, retryable = false, checking = false) }
+                save(done)
             } catch (e: CancellationException) {
-                _status.update { it.copy(running = false, current = null) }
+                _status.update { it.copy(running = false, current = null, checking = false) }
                 throw e
             } catch (e: SpotifyWebPlayer.SignedOut) {
-                _status.update { it.copy(running = false, current = null, error = e.message, retryable = false) }
+                _status.update { it.copy(running = false, current = null, error = e.message, retryable = false, checking = false) }
                 onSignedOut(e.message)
             } catch (e: Exception) {
                 Log.w(TAG, "sync failed", e)
-                _status.update { it.copy(running = false, current = null, error = spotifySyncError(e), retryable = spotifyConnectionFailure(e)) }
+                _status.update { it.copy(running = false, current = null, error = spotifySyncError(e), retryable = spotifyConnectionFailure(e), checking = false) }
             }
         }
     }
 
     fun cancel() = job?.cancel()
 
-    private suspend fun run(cookie: String, force: Boolean) {
-        if (com.opentune.data.settings.AppSettings.ui.value.spotifyMixes) {
+    private suspend fun run(cookie: String, force: Boolean, withMixes: Boolean) {
+        if (withMixes && com.opentune.data.settings.AppSettings.ui.value.spotifyMixes) {
             try {
                 syncMixes(cookie, force)
             } catch (e: CancellationException) {
@@ -147,26 +157,35 @@ object SpotifySync {
                 Log.w(TAG, "mixes failed", e)
             }
         }
+        _status.update { it.copy(checking = true, current = null) }
         val lists = SpotifyLibrary.playlists(cookie)
         val have = LibraryStore.playlists.value.filter { it.spotifyId != null }.associateBy { it.spotifyId }
-        lists.forEachIndexed { i, list ->
-            _status.update { it.copy(current = list.name, index = i + 1, count = lists.size) }
-            val mine = have[list.id]
-            if (mine != null && !force) {
-                val revision = SpotifyLibrary.revision(cookie, list.id)
-                if (revision != null && revision == mine.spotifyRevision) {
+        // First only ask which ones changed: one small read each, several at a time. A playlist
+        // whose version is the one kept here isn't read again, only renamed or re-covered.
+        val gate = Semaphore(PARALLEL)
+        val stale = coroutineScope {
+            lists.map { list ->
+                async {
+                    val mine = have[list.id] ?: return@async list
+                    if (force) return@async list
+                    val revision = gate.withPermit { SpotifyLibrary.revision(cookie, list.id) }
+                    if (revision == null || revision != mine.spotifyRevision) return@async list
                     if (mine.name != list.name || mine.coverUrl != list.imageUrl) {
                         LibraryStore.putSpotifyPlaylist(list.id, list.name, mine.songs.map { it.toSong() }, revision, list.imageUrl)
                     }
-                    return@forEachIndexed
+                    null
                 }
-            }
+            }.awaitAll().filterNotNull()
+        }
+        _status.update { it.copy(checking = false, changed = stale.size) }
+        stale.forEachIndexed { i, list ->
+            _status.update { it.copy(current = list.name, index = i + 1, count = stale.size) }
             val (items, revision) = SpotifyLibrary.tracks(cookie, list.id)
             val songs = matchAll(items)
             LibraryStore.putSpotifyPlaylist(list.id, list.name, songs.map { it.toSong() }, revision, list.imageUrl)
             save(_status.value.lastSynced)
         }
-        // Only after the whole library was read: a failed read must not empty Library.
+        // Only after the whole library was listed: a failed read must not empty Library.
         LibraryStore.dropSpotifyPlaylists(lists.mapTo(HashSet()) { it.id })
     }
 

@@ -20,7 +20,10 @@ object ExternalStreams {
         val trackId: String? = null, val tier: String? = null, val codec: String? = null)
     // The source selected by playback can outlive the short startup lookup cache.
     @Volatile private var playing: Pair<String, String>? = null
+    @Volatile internal var playingVideoId: String? = null
+        private set
     fun playing(videoId: String?, key: String?) {
+        playingVideoId = videoId
         playing = if (videoId != null && key != null) videoId to key else null
     }
     fun downloadPreference(videoId: String): Rendition? =
@@ -121,7 +124,7 @@ object ExternalStreams {
     fun swapFailed(videoId: String, why: List<String> = emptyList()) {
         val picked = reports[videoId]?.substringBefore("\nCouldn't switch") ?: return
         val reasons = if (why.isEmpty()) "" else why.joinToString("\n", prefix = "\n")
-        report(videoId, "$picked\nCouldn't switch to it: its stream didn't load after a few tries.$reasons\nThe current stream keeps playing; Upgrade quality tries again.")
+        report(videoId, com.opentune.i18n.Tr.f("{0}\nCouldn't switch to it: its stream didn't load after a few tries.{1}\nThe current stream keeps playing; Upgrade quality tries again.", picked, reasons))
     }
 
     /** The switch went through after all (a later try, or a better file): the note that it hadn't is taken off. */
@@ -138,6 +141,9 @@ object ExternalStreams {
     }
 
     private val losslessInFlight = ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Rendition?>>()
+
+    internal fun awaitingFirstLossless(videoId: String): Boolean =
+        losslessInFlight[videoId]?.isActive == true && cached(videoId)?.lossless != true
 
     /**
      * The best external stream for [song]. A FLAC search already running for it (one readying
@@ -272,7 +278,7 @@ object ExternalStreams {
                     fun score(x: Rendition) = com.opentune.data.addons.AddonResolver.qualityScore(x.bits, x.sampleRate)
                     if (chosen == null || score(r) > score(chosen)) {
                         remember(videoId, r)
-                        report(videoId, (reports[videoId]?.let { "$it\n" } ?: "") + "${later.provider}: answered later with higher quality")
+                        report(videoId, (reports[videoId]?.let { "$it\n" } ?: "") + com.opentune.i18n.Tr.f("{0}: answered later with higher quality", later.provider))
                         _improved.tryEmit(videoId)
                     }
                 }
@@ -290,7 +296,7 @@ object ExternalStreams {
             if (losslessSearched.size > 512) losslessSearched.clear()
             losslessSearched += videoId
         }
-        if (earlier != null && earlier === held && fresh == null) detail += "${earlier.provider}: verified FLAC, found earlier and available for playback"
+        if (earlier != null && earlier === held && fresh == null) detail += com.opentune.i18n.Tr.f("{0}: verified FLAC, found earlier and available for playback", earlier.provider)
         if (allowed(true)) detail += if (track == null && earlier == null) "FLAC: no verified matching stream available" else "Verified FLAC available; the track info above shows the source currently playing"
         val askedSaavn = !losslessOnly && track == null && earlier == null && allowed(false) && !saavnMissed && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
         val saavn = if (askedSaavn) JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
@@ -366,7 +372,7 @@ object ExternalStreams {
         saavnMissUntil.remove(videoId)
         saavnReports.remove(videoId)
         remember(videoId, rendition)
-        report(videoId, "${stream.provider}: picked in Search")
+        report(videoId, com.opentune.i18n.Tr.f("{0}: picked in Search", stream.provider))
         return rendition
     }
 

@@ -7,12 +7,18 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -114,7 +120,7 @@ private fun SignatureImage(sig: ArtistSignature, name: String, onDrawn: () -> Un
     val height = if (sig.aspect >= 1.4f) 120.dp else 150.dp
     AsyncImage(
         request,
-        contentDescription = "$name's signature",
+        contentDescription = com.opentune.i18n.Tr.f("{0}'s signature", name),
         contentScale = ContentScale.Fit,
         onSuccess = { onDrawn() },
         onError = { if (vector) vector = false else onFailed() },
@@ -144,9 +150,9 @@ internal object WhiteInk : Transformation() {
  * OpenTune's default service.
  */
 @Composable
-internal fun ArtistSignatureSettings() {
+internal fun ArtistSignatureSettings(startEditing: Boolean = false) {
     val ui by AppSettings.ui.collectAsState()
-    var editing by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(startEditing) }
     com.opentune.ui.components.ToggleRow(
         "Artist signatures", ui.artistSignatures, { v -> AppSettings.updateUi { it.copy(artistSignatures = v) } },
         summary = "An artist's handwritten signature over their photo, in place of their name, when there's one",
@@ -156,61 +162,71 @@ internal fun ArtistSignatureSettings() {
     if (ui.artistSignatures) {
         com.opentune.ui.components.SettingRow(
             "Signature service",
-            summary = ui.signatureApi.removePrefix("https://").removePrefix("http://"),
+            summary = ArtistSignatures.shown(ui.signatureApi).removePrefix("https://").removePrefix("http://"),
             icon = androidx.compose.material.icons.Icons.Rounded.Link,
             onClick = { editing = true },
         )
     }
     if (editing) {
-        var address by remember { mutableStateOf(ui.signatureApi) }
+        var address by remember { mutableStateOf(ArtistSignatures.shown(ui.signatureApi)) }
         var problem by remember { mutableStateOf<String?>(null) }
         var checking by remember { mutableStateOf(false) }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { if (!checking) editing = false },
-            title = {
-                com.opentune.ui.components.FrostBehind(enabled = !ui.reduceBlur)
-                Text("Signature service")
-            },
-            text = {
-                Column {
-                    Text("An artist-signature service, asked for each artist's signature by name.", style = MaterialTheme.typography.bodyMedium)
-                    androidx.compose.material3.OutlinedTextField(
-                        address, { address = it; problem = null },
-                        singleLine = true,
-                        placeholder = { Text(ArtistSignatures.DEFAULT_API) },
-                        isError = problem != null,
-                        supportingText = problem?.let { p -> { Text(p) } },
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    )
+        fun save() {
+            val chosen = address.trim().ifEmpty { ArtistSignatures.DEFAULT_API }
+            val base = ArtistSignatures.normalize(chosen)
+            if (base == null) {
+                problem = "Use an address starting with https://"
+                return
+            }
+            checking = true
+            problem = null
+            scope.launch {
+                val ok = ArtistSignatures.reachable(base)
+                checking = false
+                if (ok) {
+                    ArtistSignatures.clear()
+                    AppSettings.updateUi { it.copy(signatureApi = base) }
+                    editing = false
+                } else {
+                    problem = "That service didn't answer. Check the address, or use the standard one."
                 }
-            },
-            confirmButton = {
-                androidx.compose.material3.TextButton(
-                    enabled = !checking,
-                    onClick = {
-                        val chosen = address.trim().ifEmpty { ArtistSignatures.DEFAULT_API }
-                        val base = ArtistSignatures.normalize(chosen)
-                        if (base == null) {
-                            problem = "Use an address starting with https://"
-                            return@TextButton
-                        }
-                        checking = true
-                        scope.launch {
-                            val ok = ArtistSignatures.reachable(base)
-                            checking = false
-                            if (ok) {
-                                ArtistSignatures.clear()
-                                AppSettings.updateUi { it.copy(signatureApi = base) }
-                                editing = false
-                            } else {
-                                problem = "That service didn't answer"
-                            }
-                        }
-                    },
-                ) { Text(if (checking) "Checking…" else "Save") }
-            },
-            dismissButton = { androidx.compose.material3.TextButton(onClick = { editing = false }, enabled = !checking) { Text("Cancel") } },
+            }
+        }
+        com.opentune.ui.components.LinkEntryCard(
+            title = "Signature service",
+            description = "The service that draws each artist's signature, asked by the artist's name. Any service that answers the same way works.",
+            input = address,
+            onInput = { address = it.take(2048); problem = null },
+            working = checking,
+            error = problem,
+            hint = "HTTPS only. Leave it empty for the standard service",
+            workingLine = "Checking that it answers…",
+            confirm = "Save", confirming = "Checking…",
+            onConfirm = ::save,
+            onDismiss = { if (!checking) editing = false },
+            icon = androidx.compose.material.icons.Icons.Rounded.Draw,
+            blankAllowed = true,
+            extra = if (ArtistSignatures.normalize(address.trim()) != ArtistSignatures.normalize(ArtistSignatures.DEFAULT_API)) ({
+                // One tap back to the standard service, shown while another is typed in.
+                Row(
+                    Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                        .clickable(enabled = !checking) { address = ArtistSignatures.DEFAULT_API; problem = null }
+                        .padding(horizontal = 4.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Restore, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    androidx.compose.foundation.layout.Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Use the standard service", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        Text(ArtistSignatures.DEFAULT_API.removePrefix("https://").removeSuffix("/"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }) else null,
         )
     }
 }
+
+/** The signature service card on its own, open, for tests. */
+@Composable
+internal fun SignatureCardPreview() = ArtistSignatureSettings(startEditing = true)

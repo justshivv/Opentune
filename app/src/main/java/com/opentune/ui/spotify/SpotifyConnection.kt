@@ -37,6 +37,15 @@ object SpotifyConnection {
         com.opentune.data.spotify.SpotifySync.sync(cookie, force, onSignedOut = ::lost)
     }
 
+    /**
+     * Looks at once for playlists added, changed or removed on Spotify, reading only those;
+     * [withMixes] also looks at Spotify's mixes for Home.
+     */
+    fun checkPlaylists(withMixes: Boolean = false) {
+        val cookie = cookie() ?: return
+        com.opentune.data.spotify.SpotifySync.sync(cookie, onSignedOut = ::lost, now = true, withMixes = withMixes)
+    }
+
     /** A validated connection returned, or the app resumed: retry a failed read without signing out. */
     fun retryFailedSync() {
         val status = com.opentune.data.spotify.SpotifySync.status.value

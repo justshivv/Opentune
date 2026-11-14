@@ -49,7 +49,13 @@ object AccountStore {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     @Serializable
-    private data class Stored(val id: String, val cookie: String, val name: String = "", val email: String = "", val photo: String? = null)
+    private data class Stored(
+        val id: String, val cookie: String, val name: String = "", val email: String = "", val photo: String? = null,
+        /** The profile listened as ("Listen as"): a Brand channel's ids, or none for the account's own. */
+        val pageId: String? = null,
+        val dataSyncId: String? = null,
+        val channelName: String? = null,
+    )
 
     private val saved = mutableListOf<Stored>()
     private var activeId: String? = null
@@ -59,6 +65,41 @@ object AccountStore {
 
     private val _account = MutableStateFlow<Account?>(null)
     val account: StateFlow<Account?> = _account.asStateFlow()
+
+    private val _listeningAs = MutableStateFlow<String?>(null)
+    /** The Brand profile the active account listens as, by name; null for the account's own. */
+    val listeningAs: StateFlow<String?> = _listeningAs.asStateFlow()
+
+    /**
+     * The profiles the active account can listen as: its own and any Brand
+     * channel it owns, each with its own library, likes and history. Asked of
+     * youtube.com's switcher first, then of YouTube Music's own list.
+     */
+    suspend fun profiles(): List<com.opentune.data.model.AccountChannel> {
+        if (!_signedIn.value) return emptyList()
+        val fromSwitcher = runCatching { InnertubeParser.parseAccountChannels(Innertube.accountSwitcher()) }.getOrDefault(emptyList())
+        if (fromSwitcher.isNotEmpty()) return fromSwitcher
+        return runCatching { InnertubeParser.parseAccountChannels(Innertube.accountsList()) }.getOrDefault(emptyList())
+    }
+
+    /** Listens as [channel] from now on, on the active account; remembered for it. */
+    fun listenAs(channel: com.opentune.data.model.AccountChannel, own: Boolean) {
+        val id = activeId ?: return
+        val i = saved.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return
+        saved[i] = if (own) saved[i].copy(pageId = null, dataSyncId = null, channelName = null)
+            else saved[i].copy(pageId = channel.pageId, dataSyncId = channel.dataSyncId, channelName = channel.name)
+        persist()
+        loading?.cancel()
+        applyActive(announce = true)
+        publish()
+        refreshProfile()
+    }
+
+    /** Takes a saved account off this phone; the active one is signed out as [signOut] does. */
+    fun remove(id: String) {
+        if (id == activeId) { signOut(); return }
+        if (saved.removeAll { it.id == id }) { persist(); publish() }
+    }
 
     private val _accounts = MutableStateFlow<List<SavedAccount>>(emptyList())
     /** Every saved account, newest sign-in last, with the active one flagged. */
@@ -98,6 +139,8 @@ object AccountStore {
         activeId = id
         fresh = false
         Innertube.cookie = cookie
+        Innertube.selectChannel(null, null)
+        _listeningAs.value = null
         // Verdicts and client stand-downs made under another session don't hold now.
         StreamResolver.onSessionChanged()
         _signedIn.value = true
@@ -137,12 +180,17 @@ object AccountStore {
         if (a == null) {
             activeId = null
             Innertube.cookie = null
+            Innertube.selectChannel(null, null)
+            _listeningAs.value = null
             if (announce) StreamResolver.onSessionChanged()
             _signedIn.value = false
             _account.value = null
             return
         }
         Innertube.cookie = a.cookie
+        // The account's chosen profile; its own when none was chosen.
+        Innertube.selectChannel(a.pageId, a.dataSyncId)
+        _listeningAs.value = a.channelName
         if (announce) StreamResolver.onSessionChanged()
         _signedIn.value = true
         _account.value = if (a.name.isNotBlank()) Account(a.name, a.email, a.photo) else null
@@ -188,7 +236,7 @@ object AccountStore {
                     record(target, a)
                     return@launch
                 }
-                val why = "Couldn't read the account profile (try ${attempt + 1})"
+                val why = com.opentune.i18n.Tr.f("Couldn't read the account profile (try {0})", attempt + 1)
                 result.exceptionOrNull()?.let { Log.w(TAG, why, it) } ?: Log.w(TAG, "$why: no profile in the answer")
             }
         }

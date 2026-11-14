@@ -57,6 +57,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val upNext = player.upNext
     val hasNext = player.hasNext
     val isPlaying = player.isPlaying
+    val isSounding = player.isSounding
     val isBuffering = player.isBuffering
     val loadingMessage = player.loadingMessage
     val shuffleEnabled = player.shuffleEnabled
@@ -100,8 +101,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // Clips are only fetched where they may play: motion allowed, and off mobile data when asked.
                 val moving = !ui.reduceAnimation && !(ui.animatedCoversWifiOnly && AppSettings.onMeteredNetwork())
                 val motion = moving && ui.animatedCovers
-                val cookie = if (moving && ui.spotifyCanvas) com.opentune.ui.spotify.SpotifyConnection.cookie() else null
-                if (!ui.albumCovers && !motion && cookie == null) return@collectLatest
+                if (!ui.albumCovers && !motion && !(moving && ui.spotifyCanvas)) return@collectLatest
                 // A sharper cover found for this song before: straight away once it's shown to load,
                 // rather than after waiting for the song's length.
                 if (ui.albumCovers) com.opentune.data.covers.AlbumCovers.cached(song)?.let {
@@ -121,13 +121,39 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     if (motion && duration > 0) launch {
                         com.opentune.data.covers.AppleMotionArt.forSong(song, duration)?.let { motionFound.value = song.videoId to it }
                     }
-                    if (cookie != null && duration > 0) launch {
-                        try {
-                            com.opentune.data.spotify.SpotifyWebPlayer.canvasFor(song, duration, cookie)?.let { canvasFound.value = song.videoId to it }
-                        } catch (e: com.opentune.data.spotify.SpotifyWebPlayer.SignedOut) {
-                            com.opentune.ui.spotify.SpotifyConnection.lost(e.message)
-                        } catch (e: java.io.IOException) {
-                            com.opentune.data.DebugLog.w("Canvas", "no canvas for ${song.videoId}", e)
+                    if (moving && ui.spotifyCanvas) launch {
+                        // Canvas waits for the length without the cap above: on a
+                        // slow connection the player may take far longer than
+                        // 20s to prepare the song, and a capped wait meant the
+                        // Canvas was skipped for good. collectLatest cancels
+                        // this wait the moment the song changes, so waiting is
+                        // safe. The cookie is read after the wait, and a failed
+                        // fetch is retried instead of given up on.
+                        val d = player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
+                        val cookie = withTimeoutOrNull(30_000) {
+                            var found = com.opentune.ui.spotify.SpotifyConnection.cookie()
+                            while (found == null) {
+                                kotlinx.coroutines.delay(500)
+                                found = com.opentune.ui.spotify.SpotifyConnection.cookie()
+                            }
+                            found
+                        } ?: return@launch
+                        var attempt = 0
+                        while (true) {
+                            try {
+                                com.opentune.data.spotify.SpotifyWebPlayer.canvasFor(song, d, cookie)?.let { canvasFound.value = song.videoId to it }
+                                break
+                            } catch (e: com.opentune.data.spotify.SpotifyWebPlayer.SignedOut) {
+                                com.opentune.ui.spotify.SpotifyConnection.lost(e.message)
+                                break
+                            } catch (e: java.io.IOException) {
+                                attempt++
+                                if (attempt >= 3) {
+                                    com.opentune.data.DebugLog.w("Canvas", "no canvas for ${song.videoId}", e)
+                                    break
+                                }
+                                kotlinx.coroutines.delay(3_000)
+                            }
                         }
                     }
                 }
@@ -173,9 +199,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             // has to be this song's: right after a change the player can
             // still report the last one's, and lyrics found with that are
             // another version's, out of step from the first line.
-            val duration = withTimeoutOrNull(20_000) {
-                player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
-            } ?: 0L
+            // Apple, Deezer and Spotify are matched on the exact length, so wait for the player's.
+            // No giving up after a while: a song restored at app start may not be
+            // played until long after it became current, and its length only
+            // arrives once it is; a timed-out wait skipped the clips for good,
+            // until the song was left and returned to. collectLatest cancels
+            // this wait when the song changes, so waiting is safe.
+            val duration = player.durationOf.first { (id, ms) -> id == song.videoId && ms > 0 }.second
             // Plain text often means a synced source was busy just then; the
             // repository asks again a little later and sends better lyrics on.
             LyricsRepository.lyricsUpdates(song.videoId, song.title, song.artist, duration).collect { found ->
@@ -199,6 +229,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun addToQueue(song: Song) { if (!toRoom(song)) player.addToQueue(song) }
     // In someone else's room these go to the host instead (see Together.intercept).
     fun togglePlayPause() { if (!Together.intercept(Together.Control.PlayPause)) player.togglePlayPause() }
+    fun dismiss() = player.dismiss()
     fun skipNext() { if (!Together.intercept(Together.Control.Next)) player.skipNext() }
     fun skipPrevious() { if (!Together.intercept(Together.Control.Previous)) player.skipPrevious() }
     fun toggleShuffle() = player.toggleShuffle()
@@ -209,7 +240,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun removeQueueItem(index: Int) = player.removeQueueItem(index)
     fun moveQueueItem(from: Int, to: Int) = player.moveQueueItem(from, to)
     /** A song on its own; the service follows it with radio. */
-    fun startRadio(song: Song) { if (!toRoom(song)) player.play(song, "${song.title} radio") }
+    fun startRadio(song: Song) { if (!toRoom(song)) player.play(song, com.opentune.i18n.Tr.f("{0} radio", song.title)) }
     fun seekTo(positionMs: Long) { if (!Together.intercept(Together.Control.Seek(positionMs))) player.seekTo(positionMs) }
     fun positionMs(): Long = player.currentPositionMs()
     fun bufferedPositionMs(): Long = player.bufferedPositionMs()

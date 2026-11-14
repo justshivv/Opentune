@@ -40,9 +40,9 @@ import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Smartphone
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -91,12 +91,19 @@ object LyricCard {
         val square = cover?.let(ShareCard::centerSquare)
         val tone = square?.let(::averageColour) ?: Color.rgb(70, 60, 90)
 
-        // The background: the cover's colour at the top, deepening to near black.
-        paint.shader = LinearGradient(0f, 0f, 0f, h, intArrayOf(shade(tone, 0.55f), shade(tone, 0.28f), Color.rgb(14, 12, 14)), floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
-        c.drawRect(0f, 0f, w, h, paint)
-        // A soft glow of the colour from the top corner, so it isn't a flat fill.
-        paint.shader = RadialGradient(w * 0.15f, 0f, w * 0.9f, Color.argb(70, Color.red(tone), Color.green(tone), Color.blue(tone)), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-        c.drawRect(0f, 0f, w, h, paint)
+        if (square != null) {
+            // The background: the cover, blurred over the whole card, darkened enough that
+            // white lines read on any cover, and most at the foot where the title sits.
+            ShareCard.drawBlurredCover(c, square, w, h)
+            paint.shader = LinearGradient(0f, 0f, 0f, h, intArrayOf(Color.argb(95, 0, 0, 0), Color.argb(120, 0, 0, 0), Color.argb(190, 0, 0, 0)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+            c.drawRect(0f, 0f, w, h, paint)
+        } else {
+            // No cover: a colour deepening to near black, with a soft glow from the top corner.
+            paint.shader = LinearGradient(0f, 0f, 0f, h, intArrayOf(shade(tone, 0.55f), shade(tone, 0.28f), Color.rgb(14, 12, 14)), floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+            c.drawRect(0f, 0f, w, h, paint)
+            paint.shader = RadialGradient(w * 0.15f, 0f, w * 0.9f, Color.argb(70, Color.red(tone), Color.green(tone), Color.blue(tone)), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+            c.drawRect(0f, 0f, w, h, paint)
+        }
         paint.shader = null
 
         val margin = w * 0.075f
@@ -216,7 +223,7 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
         subtitle = when {
             !pickable -> "The lines you picked, laid out on a card with the cover."
             picked.isEmpty() -> "Tap the lines to put on the card"
-            else -> "${picked.size} of ${LyricCard.MAX_LINES} lines picked"
+            else -> com.opentune.i18n.Tr.f("{0} of {1} lines picked", picked.size, LyricCard.MAX_LINES)
         },
         startExpanded = !pickable,
         actions = {

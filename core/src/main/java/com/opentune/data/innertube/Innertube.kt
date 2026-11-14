@@ -726,7 +726,7 @@ object Innertube {
     }
 
     class UnplayableException(private val reason: String) :
-        IllegalStateException("Track unavailable: $reason") {
+        IllegalStateException(com.opentune.i18n.Tr.f("Track unavailable: {0}", reason)) {
 
         /**
          * Whether this is Google doubting the client rather than the track
@@ -1015,7 +1015,7 @@ object Innertube {
         }
         response["error"]?.let { error ->
             val message = error.jsonObject["message"]?.jsonPrimitive?.contentOrNull
-            error("YouTube Music refused the rating: ${message ?: error}")
+            error(com.opentune.i18n.Tr.f("YouTube Music refused the rating: {0}", message ?: error))
         }
         // YouTube states what it did in the toast it would have shown. Worth
         // keeping: a rating it declines to act on still answers 200, and this
@@ -1046,7 +1046,7 @@ object Innertube {
         // As in [rate]: a refusal arrives as HTTP 200 with an error in the body.
         response["error"]?.let { error ->
             val message = error.jsonObject["message"]?.jsonPrimitive?.contentOrNull
-            error("YouTube Music refused the change: ${message ?: error}")
+            error(com.opentune.i18n.Tr.f("YouTube Music refused the change: {0}", message ?: error))
         }
         Log.d(TAG, "$endpoint $playlistId -> ${findString(response, "text") ?: "no confirmation"}")
     }
@@ -1070,7 +1070,7 @@ object Innertube {
         }
         response["error"]?.let { error ->
             val message = error.jsonObject["message"]?.jsonPrimitive?.contentOrNull
-            error("YouTube Music refused the change: ${message ?: error}")
+            error(com.opentune.i18n.Tr.f("YouTube Music refused the change: {0}", message ?: error))
         }
         Log.d(TAG, "$endpoint $channelId -> ${findString(response, "text") ?: "no confirmation"}")
     }
@@ -1141,7 +1141,7 @@ object Innertube {
         }
         val status = response["status"]?.jsonPrimitive?.contentOrNull
         if (status != null && status != "STATUS_SUCCEEDED") {
-            error("YouTube Music refused the edit ($status)")
+            error(com.opentune.i18n.Tr.f("YouTube Music refused the edit ({0})", status))
         }
         return response
     }
@@ -1313,6 +1313,73 @@ object Innertube {
                 ?.get("visitorData")?.jsonPrimitive?.content
         }
         return response
+    }
+
+    // ---- Comments, from YouTube itself ----------------------------------------
+
+    private const val WEB_BASE = "https://www.youtube.com/youtubei/v1"
+    private const val WEB_ORIGIN = "https://www.youtube.com"
+    private const val WEB_VERSION = "2.20251101.00.00"
+
+    /** A video's watch page as YouTube's site has it, for where its comments start. */
+    suspend fun webNext(videoId: String): JsonObject = postWeb("next") { put("videoId", videoId) }
+
+    /** The next page of a video's comments, from a continuation [token]. */
+    suspend fun webContinuation(token: String): JsonObject = postWeb("next") { put("continuation", token) }
+
+    /** Posts [text] as a comment, with the parameters YouTube gave the signed-in comment box. */
+    suspend fun createComment(params: String, text: String): JsonObject = postWeb("comment/create_comment", attempts = 1) {
+        put("commentText", text)
+        put("createCommentParams", params)
+    }
+
+    /**
+     * A request to YouTube's own site API (the WEB client) rather than YouTube Music's, for
+     * comments, which YouTube Music doesn't show. Signed with the same sign-in when there is
+     * one, for youtube.com, so a comment box comes back and a comment can be posted.
+     */
+    private suspend fun postWeb(
+        endpoint: String,
+        /** One for a post: a retried one could leave the same comment twice. */
+        attempts: Int = 3,
+        bodyExtras: JsonObjectBuilder.() -> Unit,
+    ): JsonObject {
+        if (cookie != null) ensureSessionScope()
+        val session = scope
+        return withRetry(attempts) {
+            client.post("$WEB_BASE/$endpoint") {
+                contentType(ContentType.Application.Json)
+                parameter("prettyPrint", "false")
+                header("Accept-Language", acceptLanguageHeader)
+                header("X-Origin", WEB_ORIGIN)
+                header("Origin", WEB_ORIGIN)
+                header("Referer", "$WEB_ORIGIN/")
+                header("X-YouTube-Client-Name", "1")
+                header("X-YouTube-Client-Version", WEB_VERSION)
+                visitorData?.let { header("X-Goog-Visitor-Id", it) }
+                cookie?.let { c ->
+                    header("Cookie", c)
+                    header("X-Goog-AuthUser", authUserFor(session))
+                    pageIdFor(session)?.let { header("X-Goog-PageId", it) }
+                    sapisidFrom(c)?.let { header("Authorization", sapisidHash(it, WEB_ORIGIN)) }
+                }
+                setBody(
+                    buildJsonObject {
+                        putJsonObject("context") {
+                            putJsonObject("client") {
+                                put("clientName", "WEB")
+                                put("clientVersion", WEB_VERSION)
+                                put("hl", currentLanguage)
+                                put("gl", currentRegion)
+                                visitorData?.let { put("visitorData", it) }
+                            }
+                            putJsonObject("user") { put("lockedSafetyMode", false) }
+                        }
+                        bodyExtras()
+                    },
+                )
+            }.body<JsonObject>()
+        }
     }
 
     /**

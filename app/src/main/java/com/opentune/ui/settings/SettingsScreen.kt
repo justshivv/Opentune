@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Devices
+import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.automirrored.rounded.Logout
@@ -46,13 +48,17 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Animation
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.RoundedCorner
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.BlurOff
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Check
+import com.opentune.data.settings.bitPerfectMode
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
@@ -72,10 +78,13 @@ import androidx.compose.material.icons.rounded.FormatAlignCenter
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Gradient
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lens
@@ -113,12 +122,12 @@ import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material.icons.rounded.WavingHand
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -159,6 +168,7 @@ import com.opentune.data.local.LocalMusic
 import com.opentune.data.releases.NewReleases
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.AudioQuality
+import com.opentune.data.settings.ChoiceMenuStyle
 import com.opentune.data.settings.ControlStyle
 import com.opentune.data.settings.CoverChange
 import com.opentune.data.settings.DockLens
@@ -226,26 +236,22 @@ fun SettingsScreen(
     onOpenDownloads: () -> Unit = {},
     onOpenSpotify: () -> Unit = {},
     onOpenDevices: () -> Unit = {},
+    onOpenDiscord: () -> Unit = {},
+    /** A page to open on (its key, "account" for Account & integrations); the main list when null. */
+    startPage: String? = null,
 ) {
+    val motion by AppSettings.ui.collectAsState()
     var query by rememberSaveable { mutableStateOf("") }
-    var openKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var openKey by rememberSaveable { mutableStateOf(startPage) }
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val updatePending = com.opentune.ui.components.updatePending()
-    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onOpenWrapped, onSignIn, onOpenDownloads, onOpenSpotify, onOpenDevices)
+    val sections = settingsSections(onOpenEqualizer, onOpenReplay, onOpenWrapped, onSignIn, onOpenDownloads, onOpenSpotify, onOpenDevices, onOpenDiscord)
     val placed = remember(sections) { place(sections) }
+    var sourcesOpen by rememberSaveable { mutableStateOf(false) }
+    if (sourcesOpen) AudioAddonsSheet { sourcesOpen = false }
     val open = SETTINGS_CATEGORIES.firstOrNull { it.key == openKey }
     androidx.activity.compose.BackHandler(enabled = open != null) { openKey = null }
-    // Back from a page on a TV: the remote's focus goes back to the row that opened it,
-    // not to wherever it fell when the page went (the rail's first button).
-    val tv = com.opentune.ui.tv.LocalIsTv.current
-    var cameFrom by rememberSaveable { mutableStateOf<String?>(null) }
-    val returnTo = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(open) {
-        if (!tv || open != null || cameFrom == null) return@LaunchedEffect
-        repeat(3) { androidx.compose.runtime.withFrameNanos { } }
-        runCatching { returnTo.requestFocus() }
-    }
     val q = query.trim()
     val languageContext = LocalContext.current
     // Kept out here, so coming back from a page finds the main list where it was left.
@@ -255,11 +261,16 @@ fun SettingsScreen(
 
     androidx.compose.animation.AnimatedContent(
         open,
+        modifier = Modifier.fillMaxSize(),
+        contentKey = { it?.key ?: "settings-root" },
         transitionSpec = {
             val forward = targetState != null
-            (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
-                androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { if (forward) it / 8 else -it / 8 }) togetherWith
+            val enter = if (motion.reduceAnimation) androidx.compose.animation.EnterTransition.None else
+                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
+                    androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { if (forward) it / 8 else -it / 8 }
+            val exit = if (motion.reduceAnimation) androidx.compose.animation.ExitTransition.None else
                 androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160))
+            (enter togetherWith exit).using(null)
         },
         label = "settingsPage",
     ) { page ->
@@ -270,11 +281,13 @@ fun SettingsScreen(
         ) {
             if (page != null) {
                 item { PageHeader(com.opentune.ui.theme.tr(page.title), onBack = { openKey = null }) }
-                placed.filter { it.category == page }.groupBy { it.group }.forEach { (group, rows) ->
-                    item(key = "label:$group") { GroupLabel(group) }
+                placed.filter { it.category == page && it.entry.title !in MAIN_PAGE_ONLY }.groupBy { it.group }.forEach { (group, rows) ->
+                    item(key = "label:$group") {
+                        if (group in UNLABELLED_GROUPS) androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp)) else GroupLabel(group)
+                    }
                     item(key = "card:$group") {
                         val shown = FOLDED_GROUPS[group]?.takeIf { group !in unfolded && it < rows.size }
-                        GroupCard(Modifier.animateContentSize(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow))) {
+                        GroupCard(if (motion.reduceAnimation) Modifier else Modifier.animateContentSize(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow))) {
                             rows.take(shown ?: rows.size).forEachIndexed { i, row ->
                                 if (i > 0) RowDivider()
                                 row.entry.content()
@@ -285,6 +298,14 @@ fun SettingsScreen(
                                     unfolded = if (group in unfolded) unfolded - group else unfolded + group
                                 }
                             }
+                        }
+                    }
+                    GROUP_NOTES[group]?.let { note ->
+                        item(key = "note:$group") {
+                            Text(
+                                note, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 10.dp),
+                            )
                         }
                     }
                 }
@@ -310,11 +331,12 @@ fun SettingsScreen(
                 }
                 if (q.isNotEmpty()) {
                     val hits = placed.filter {
-                        it.entry.title.contains(q, true) || com.opentune.ui.theme.translated(languageContext, it.entry.title).contains(q, true) || it.entry.summary.contains(q, true) ||
-                            it.group.contains(q, true) || it.category.title.contains(q, true)
+                        // In English and in the app's language, so a search in either finds it.
+                        listOf(it.entry.title, it.entry.summary, it.group, it.category.title)
+                            .any { text -> text.contains(q, true) || com.opentune.i18n.Tr.t(text).contains(q, true) }
                     }
                     if (hits.isEmpty()) {
-                        item { Text("No settings match \"$q\".", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp)) }
+                        item { Text(com.opentune.i18n.Tr.f("No settings match \"{0}\".", q), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp)) }
                     }
                     hits.groupBy { "${it.category.title} · ${it.group}" }.forEach { (where, rows) ->
                         item(key = "hit:$where") { GroupLabel(where) }
@@ -335,6 +357,11 @@ fun SettingsScreen(
                             GroupCard {
                                 cats.forEachIndexed { i, c ->
                                     if (i > 0) RowDivider()
+                                    // Audio sources sits on the main page, just above the sound settings.
+                                    if (c.key == "audio") {
+                                        NavRow("Audio sources", { sourcesOpen = true }, summary = audioSourcesSummary(), icon = Icons.Rounded.Extension)
+                                        RowDivider()
+                                    }
                                     val summary = if (c.key == "account") {
                                         if (signedIn) account?.name ?: "Signed in to YouTube Music" else "Not signed in"
                                     } else {
@@ -342,16 +369,14 @@ fun SettingsScreen(
                                     }
                                     // The account row wears the signed-in Google photo in place of the icon.
                                     val avatar = account?.thumbnailUrl?.takeIf { c.key == "account" && signedIn }
-                                    androidx.compose.foundation.layout.Box(if (c.key == cameFrom) Modifier.focusRequester(returnTo) else Modifier) {
                                     NavRow(
                                         c.title,
-                                        { cameFrom = c.key; openKey = c.key },
+                                        { openKey = c.key },
                                         summary = summary,
                                         icon = if (avatar == null) c.icon else null,
                                         dot = c.key == "about" && updatePending,
                                         leading = avatar?.let { url -> { Artwork(url, Modifier.size(28.dp), CircleShape) } },
                                     )
-                                    }
                                 }
                             }
                         }
@@ -359,7 +384,7 @@ fun SettingsScreen(
                 }
                 item {
                     Text(
-                        "OpenTune ${BuildConfig.VERSION_NAME} • GNU GPL v3 • Lyrics from LRCLIB",
+                        com.opentune.i18n.Tr.f("OpenTune {0} • GNU GPL v3 • Lyrics from LRCLIB", BuildConfig.VERSION_NAME),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(28.dp),
@@ -367,6 +392,18 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+/** What the Audio sources row says: how many lossless sources are on, or that there are none yet. */
+@Composable
+private fun audioSourcesSummary(): String {
+    val addons by com.opentune.data.addons.AddonStore.addons.collectAsState()
+    val on = addons.count { it.enabled && !it.ownerOff }
+    return when {
+        addons.isEmpty() -> com.opentune.i18n.Tr.t("Add lossless sources and choose their order")
+        on == 1 -> com.opentune.i18n.Tr.t("1 lossless source on · choose the order")
+        else -> com.opentune.i18n.Tr.f("{0} lossless sources on · choose the order", on)
     }
 }
 
@@ -379,7 +416,7 @@ private fun SeeMoreRow(open: Boolean, hidden: Int, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            if (open) "See less" else "See $hidden more",
+            if (open) "See less" else com.opentune.i18n.Tr.f("See {0} more", hidden),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(1f),
@@ -422,13 +459,19 @@ private fun settingsSections(
     onOpenDownloads: () -> Unit,
     onOpenSpotify: () -> Unit,
     onOpenDevices: () -> Unit,
+    onOpenDiscord: () -> Unit,
 ): List<Section> {
+    val discord by com.opentune.data.discord.DiscordRpc.account.collectAsState()
+    val discordOn by com.opentune.data.discord.DiscordRpc.enabled.collectAsState()
+    val discordStatus by com.opentune.data.discord.DiscordRpc.status.collectAsState()
+    val discordProblem by com.opentune.data.discord.DiscordRpc.problem.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val accounts by AccountStore.accounts.collectAsState()
     val done by Downloads.done.collectAsState(Downloads.doneNow())
     var downloadQualityDialog by remember { mutableStateOf(false) }
     var lyricsSourcesDialog by remember { mutableStateOf(false) }
+    var bitPerfectSheet by remember { mutableStateOf(false) }
     var lastFmDialog by remember { mutableStateOf(false) }
     var serverDialog by remember { mutableStateOf(false) }
     var listenBrainzDialog by remember { mutableStateOf(false) }
@@ -439,6 +482,8 @@ private fun settingsSections(
     val pendingUpdate by UpdateCheck.pending.collectAsState()
     var updateBytes by remember { mutableStateOf(0L) }
     var playerStyleDialog by remember { mutableStateOf(false) }
+    var automixPerformanceDialog by remember { mutableStateOf(false) }
+    var profileDialog by remember { mutableStateOf(false) }
     var appIconDialog by remember { mutableStateOf(false) }
     var fontDialog by remember { mutableStateOf(false) }
     var languageDialog by remember { mutableStateOf(false) }
@@ -455,6 +500,9 @@ private fun settingsSections(
     var dockMotionDialog by remember { mutableStateOf(false) }
     var dockLensDialog by remember { mutableStateOf(false) }
     var glassStyleDialog by remember { mutableStateOf(false) }
+    var choiceMenusDialog by remember { mutableStateOf(false) }
+    var artistShadeDialog by remember { mutableStateOf(false) }
+    var listBackgroundDialog by remember { mutableStateOf(false) }
     var pageTransitionDialog by remember { mutableStateOf(false) }
     var playerMotionDialog by remember { mutableStateOf(false) }
     var coverChangeDialog by remember { mutableStateOf(false) }
@@ -463,6 +511,8 @@ private fun settingsSections(
     val scrobblesWaiting by LastFm.queued.collectAsState()
     val lyricsSettings by AppSettings.lyrics.collectAsState()
     var confirmSignOut by remember { mutableStateOf(false) }
+    var listenAsOpen by remember { mutableStateOf(false) }
+    if (listenAsOpen) ListenAsSheet(onDismiss = { listenAsOpen = false })
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     LaunchedEffect(update) { updateBytes = withContext(Dispatchers.IO) { Updater.cachedBytes(context) } }
@@ -498,7 +548,7 @@ private fun settingsSections(
                     context.contentResolver.openOutputStream(uri)?.use { it.write(doc.toString().toByteArray()) }
                 }
                 "Exported settings, history, likes and playlists."
-            }.getOrElse { "Export failed: ${it.message}" }
+            }.getOrElse { com.opentune.i18n.Tr.f("Export failed: {0}", it.message) }
         }
     }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -512,7 +562,7 @@ private fun settingsSections(
                 doc["history"]?.let(History::importJson)
                 doc["library"]?.let(LibraryStore::importJson)
                 "Imported settings, history, likes and playlists."
-            }.getOrElse { "Import failed: ${it.message}" }
+            }.getOrElse { com.opentune.i18n.Tr.f("Import failed: {0}", it.message) }
         }
     }
 
@@ -541,13 +591,44 @@ private fun settingsSections(
     if (hiddenDialog) HiddenDialog(onDismiss = { hiddenDialog = false })
     if (appIconDialog) AppIconDialog { appIconDialog = false }
     if (fontDialog) com.opentune.ui.theme.FontSettingsSheet { fontDialog = false }
+    if (profileDialog) {
+        ChoiceSheet(
+            title = "Performance profile",
+            options = com.opentune.data.settings.PerformanceProfile.entries,
+            selected = ui.performanceProfile,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { profile ->
+                val (newUi, newPb) = com.opentune.data.settings.performanceApplied(AppSettings.ui.value, AppSettings.playback.value, profile)
+                AppSettings.updateUi { newUi }
+                AppSettings.updatePlayback { newPb }
+                // The glass's costlier layers go with Battery saver, and come back with High performance.
+                when (profile) {
+                    com.opentune.data.settings.PerformanceProfile.BATTERY_SAVER -> com.opentune.ui.components.GlassPerformance.choose(true)
+                    com.opentune.data.settings.PerformanceProfile.PERFORMANCE -> com.opentune.ui.components.GlassPerformance.choose(false)
+                    else -> Unit
+                }
+            },
+            onDismiss = { profileDialog = false },
+        )
+    }
+    if (automixPerformanceDialog) {
+        ChoiceSheet(
+            title = "Automix performance",
+            options = com.opentune.data.settings.AutomixPerformance.entries,
+            selected = pb.automixPerformance,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { v -> AppSettings.updatePlayback { it.copy(automixPerformance = v) } },
+            onDismiss = { automixPerformanceDialog = false },
+        )
+    }
     if (playerStyleDialog) {
         ChoiceSheet(
             title = "Player layout",
             options = PlayerStyle.entries,
             selected = ui.playerStyle,
             label = { "${it.label} · ${it.summary}" },
-            onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v) } },
+            // The Apple-inspired style is edge-to-edge artwork, so choosing it turns that on; it can be turned off after.
+            onSelect = { v -> AppSettings.updateUi { it.copy(playerStyle = v, fullScreenCover = it.fullScreenCover || v == PlayerStyle.APPLE_MUSIC) } },
             onDismiss = { playerStyleDialog = false },
         )
     }
@@ -585,7 +666,7 @@ private fun settingsSections(
             onDismiss = { recommenderDialog = false },
         )
     }
-    if (controlStyleDialog) {
+    if (controlStyleDialog && ui.playerStyle != PlayerStyle.APPLE_MUSIC) {
         ChoiceSheet(
             title = "Player buttons",
             options = ControlStyle.entries,
@@ -613,6 +694,36 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { l -> AppSettings.updateUi { it.copy(dockLens = l) } },
             onDismiss = { dockLensDialog = false },
+        )
+    }
+    if (artistShadeDialog) {
+        ChoiceSheet(
+            title = "Artist page shade",
+            options = com.opentune.data.settings.ArtistShade.entries,
+            selected = ui.artistShade,
+            label = { "${com.opentune.i18n.Tr.t(it.label)} · ${com.opentune.i18n.Tr.t(it.summary)}" },
+            onSelect = { m -> AppSettings.updateUi { it.copy(artistShade = m) } },
+            onDismiss = { artistShadeDialog = false },
+        )
+    }
+    if (listBackgroundDialog) {
+        ChoiceSheet(
+            title = "Playlist page background",
+            options = com.opentune.data.settings.ListBackground.entries,
+            selected = ui.listBackground,
+            label = { "${com.opentune.i18n.Tr.t(it.label)} · ${com.opentune.i18n.Tr.t(it.summary)}" },
+            onSelect = { m -> AppSettings.updateUi { it.copy(listBackground = m) } },
+            onDismiss = { listBackgroundDialog = false },
+        )
+    }
+    if (choiceMenusDialog) {
+        ChoiceSheet(
+            title = "Choice menus",
+            options = ChoiceMenuStyle.entries,
+            selected = ui.choiceMenus,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { m -> AppSettings.updateUi { it.copy(choiceMenus = m) } },
+            onDismiss = { choiceMenusDialog = false },
         )
     }
     if (glassStyleDialog) {
@@ -716,65 +827,72 @@ private fun settingsSections(
         Section(
             "Account",
             listOfNotNull(
-                Entry("YouTube Music account", "sign in login google profile switch add") {
-                    if (signedIn) {
+                Entry("YouTube Music account", "sign in login google profile switch add youtube") {
+                    val active = accounts.firstOrNull { it.active }
+                    if (signedIn && active != null) YouTubeMusicHero(active.name, active.email, active.thumbnailUrl, onSignIn)
+                    else YouTubeMusicHero(null, null, null, onSignIn)
+                },
+                if (signedIn) {
+                    Entry("Listen as", "listen as brand channel profile personal switch identity library") {
+                        val listeningAs by AccountStore.listeningAs.collectAsState()
+                        val own = accounts.firstOrNull { it.active }?.name.orEmpty()
+                        NavRow("Listen as", { listenAsOpen = true }, summary = listeningAs ?: own.ifBlank { "Your own profile" }, icon = Icons.Rounded.AccountCircle)
+                    }
+                } else null,
+                if (signedIn && accounts.size > 1) {
+                    Entry("Other accounts", "switch google account multiple other remove") {
                         Column {
-                            accounts.forEachIndexed { i, acc ->
+                            accounts.filterNot { it.active }.forEachIndexed { i, acc ->
                                 if (i > 0) RowDivider()
                                 SettingRow(
                                     acc.name.ifBlank { "Signed in" },
-                                    summary = acc.email.ifBlank { "YouTube Music" },
-                                    onClick = if (acc.active) null else ({ AccountStore.switchTo(acc.id) }),
-                                    leading = { Artwork(acc.thumbnailUrl, Modifier.size(40.dp), CircleShape) },
-                                    trailing = if (acc.active) ({ Icon(Icons.Rounded.Check, "Active account", tint = MaterialTheme.colorScheme.primary) }) else null,
+                                    summary = acc.email.ifBlank { "Tap to switch" },
+                                    onClick = { AccountStore.switchTo(acc.id) },
+                                    leading = { Artwork(acc.thumbnailUrl, Modifier.size(32.dp), CircleShape) },
+                                    trailing = {
+                                        androidx.compose.material3.IconButton(onClick = { AccountStore.remove(acc.id) }) {
+                                            Icon(Icons.Rounded.Close, com.opentune.i18n.Tr.f("Remove {0}", acc.name.ifBlank { acc.email }))
+                                        }
+                                    },
                                 )
                             }
                         }
-                    } else {
-                        NavRow("Sign in to YouTube Music", onSignIn, summary = "Your playlists, liked songs and recommendations", icon = Icons.Rounded.AccountCircle)
-                    }
-                },
-                if (signedIn) {
-                    Entry("Add another account", "add switch google account multiple") {
-                        NavRow("Add another account", onSignIn, summary = "Sign in to a second YouTube Music account and switch between them", icon = Icons.Rounded.PersonAdd)
                     }
                 } else null,
-                Entry("Spotify account", "spotify connect sign in login account playlists library sync disconnect") {
-                    if (spotifyConnected) {
-                        Column {
-                            SettingRow(
-                                "Spotify",
-                                summary = when {
-                                    spotifySync.running && spotifySync.error != null -> "Connected · Connection interrupted. Retrying…"
-                                    spotifySync.running && spotifySync.current != null -> "Connected · bringing over ${spotifySync.current} (${spotifySync.index} of ${spotifySync.count})"
-                                    spotifySync.running -> "Connected · reading your Spotify library…"
-                                    spotifySync.error != null -> "Connected · ${spotifySync.error}. Tap to try again"
-                                    spotifySync.lastSynced > 0 -> "Connected · playlists in Library, checked " +
-                                        android.text.format.DateUtils.getRelativeTimeSpanString(spotifySync.lastSynced) + ". Tap to check now"
-                                    else -> "Connected · tap to bring your playlists into Library"
-                                },
-                                leading = { SpotifyMark() },
-                                enabled = !spotifySync.running,
-                                onClick = { com.opentune.ui.spotify.SpotifyConnection.syncPlaylists(force = true) },
-                            )
-                            RowDivider()
-                            SettingRow("Disconnect Spotify", summary = "Signs out of Spotify inside OpenTune. Playlists already brought over stay in Library", icon = Icons.Rounded.Close, onClick = { com.opentune.ui.spotify.SpotifyConnection.disconnect() })
-                        }
-                    } else {
-                        NavRow(
-                            "Connect Spotify",
-                            { context.startActivity(android.content.Intent(context, com.opentune.ui.spotify.SpotifyConnectActivity::class.java)) },
-                            summary = spotifyProblem?.let { "$it. Sign in again" } ?: "Your playlists in Library, each song's Canvas, and suggestions made for you",
-                            leading = { SpotifyMark() },
-                        )
+                if (signedIn) {
+                    Entry("Add another account", "add switch google account multiple") {
+                        NavRow("Add another account", onSignIn, summary = "Switch between YouTube Music accounts", icon = Icons.Rounded.PersonAdd)
                     }
+                } else null,
+                Entry("Spotify account", "spotify connect sign in login account playlists library sync disconnect canvas video loop likes mixes") {
+                    ServiceRow(
+                        ServiceKind.Spotify, "Spotify",
+                        connectedAs = if (spotifyConnected) "Connected" else null,
+                        detail = when {
+                            !spotifyConnected -> spotifyProblem?.let { com.opentune.i18n.Tr.f("{0}. Sign in again", it) } ?: com.opentune.i18n.Tr.t("Your playlists in Library, each song's Canvas, and mixes made for you")
+                            spotifySync.running && spotifySync.error != null -> "Connection interrupted. Retrying…"
+                            spotifySync.running && spotifySync.current != null -> com.opentune.i18n.Tr.f("Bringing over {0} ({1} of {2})", spotifySync.current, spotifySync.index, spotifySync.count)
+                            spotifySync.running -> "Reading your Spotify library…"
+                            spotifySync.error != null -> com.opentune.i18n.Tr.f("{0}. Tap Sync now to try again", spotifySync.error)
+                            else -> "Playlists in Library. Playback uses YouTube Music"
+                        },
+                        onClick = {
+                            if (spotifyConnected) { if (!spotifySync.running) com.opentune.ui.spotify.SpotifyConnection.checkPlaylists(withMixes = true) }
+                            else context.startActivity(android.content.Intent(context, com.opentune.ui.spotify.SpotifyConnectActivity::class.java))
+                        },
+                        actions = listOf(
+                            ServiceAction(if (spotifySync.running) "Syncing…" else "Sync now") { if (!spotifySync.running) com.opentune.ui.spotify.SpotifyConnection.checkPlaylists(withMixes = true) },
+                            ServiceAction("Disconnect", danger = true) { com.opentune.ui.spotify.SpotifyConnection.disconnect() },
+                        ),
+                        chevron = false,
+                    )
                 },
                 Entry("Link a device", "tv television web browser computer cast speaker chromecast watch wear together qr pairing sign in with your phone platforms") {
-                    NavRow("Link a device", onOpenDevices, summary = "Sign in your TV, the web player, speakers and more", icon = Icons.Rounded.Devices)
+                    NavRow("Link a device", onOpenDevices, summary = "Sign in your TV, the web player, speakers and more", leading = { ServiceMark(ServiceKind.Devices) })
                 },
                 if (signedIn) {
                     Entry("Sign out", "logout account") {
-                        SettingRow(if (accounts.size > 1) "Sign out of this account" else "Sign out", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { confirmSignOut = true })
+                        CentredAction(if (accounts.size > 1) "Sign out of this account" else "Sign out", danger = true) { confirmSignOut = true }
                     }
                 } else null,
             ),
@@ -806,26 +924,31 @@ private fun settingsSections(
                 Entry("Unmetered networks only", "flac saavn mobile wifi data") {
                     ToggleRow("Unmetered networks only", pb.losslessUnmeteredOnly, { v -> AppSettings.updatePlayback { it.copy(losslessUnmeteredOnly = v) } }, summary = "When on, mobile data uses YouTube even with Lossless selected. Turn off to try FLAC and JioSaavn on mobile data", icon = Icons.Rounded.Wifi)
                 },
-                Entry("Audio add-ons", "source URL manifest order priority lossless flac high res") {
-                    SettingRow("Audio add-ons", icon = Icons.Rounded.HighQuality, summary = "Add service URLs and choose source priority", onClick = { audioAddons = true })
+                // On the main Settings page; here only so searching finds it.
+                Entry("Audio sources", "audio add-ons addons source URL manifest order priority lossless flac high res") {
+                    NavRow("Audio sources", { audioAddons = true }, summary = audioSourcesSummary(), icon = Icons.Rounded.Extension)
                 },
-                Entry("Bit-perfect USB output", "dac exclusive mode usb audio player pro hiby passthrough hi-fi audiophile mixer bypass sample rate switching") {
+                Entry("Bit-perfect output", "dac exclusive mode usb audio player pro hiby passthrough hi-fi audiophile mixer bypass sample rate switching direct driver aaudio built-in") {
                     val usb by BitPerfectUsb.status.collectAsState()
-                    ToggleRow(
-                        "Exclusive USB output",
-                        pb.bitPerfectUsb,
-                        { v -> AppSettings.updatePlayback { it.copy(bitPerfectUsb = v) } },
-                        summary = if (!BitPerfectUsb.supported) "Needs Android 14 or newer"
-                        else when (val s = usb) {
-                            is BitPerfectUsb.Status.Active -> "Exclusive on ${s.device}: ${s.format.ifEmpty { "${s.bits}-bit" }} at ${s.sampleRate / 1000.0} kHz, bit for bit"
-                            is BitPerfectUsb.Status.NoMatch -> "On. The DAC lists no bit-perfect mode for ${s.sampleRate / 1000.0} kHz, so this song goes through Android's mixer"
-                            BitPerfectUsb.Status.NoDac -> "On. Plug in a USB DAC and the music moves to it"
-                            else -> "The DAC plays only OpenTune, switched to each song's own sample rate and bit depth: no mixing, resampling or effects. Volume is applied by the app; at full volume the signal is bit-exact"
+                    val direct by com.opentune.playback.nativeout.UsbDirect.status.collectAsState()
+                    val mode = pb.bitPerfectMode
+                    NavRow(
+                        "Bit-perfect output",
+                        { bitPerfectSheet = true },
+                        summary = when (val s = usb) {
+                            is BitPerfectUsb.Status.Active -> com.opentune.i18n.Tr.f("{0}: {1} at {2} kHz, bit for bit", s.device, s.format.ifEmpty { "${s.bits}-bit" }, s.sampleRate / 1000.0)
+                            is BitPerfectUsb.Status.NoMatch -> com.opentune.i18n.Tr.f("The DAC has no bit-perfect mode for {0} kHz, so this song goes through Android's mixer", s.sampleRate / 1000.0)
+                            else -> when (val d = direct) {
+                                is com.opentune.playback.nativeout.UsbDirect.Status.NeedsPermission -> com.opentune.i18n.Tr.f("Tap to allow {0}", d.device)
+                                is com.opentune.playback.nativeout.UsbDirect.Status.Failed -> "${d.device}: ${d.why}"
+                                com.opentune.playback.nativeout.UsbDirect.Status.NoDac -> "Plug in a USB DAC and the music moves to it"
+                                else -> mode.summary
+                            }
                         },
                         icon = Icons.Rounded.Usb,
-                        enabled = BitPerfectUsb.supported,
-                        beta = true,
+                        value = mode.label,
                     )
+                    if (bitPerfectSheet) BitPerfectSheet(mode, onDismiss = { bitPerfectSheet = false })
                 },
                 Entry("System audio effects", "dolby atmos soundalive equalizer device effects") {
                     ToggleRow("System audio effects", pb.systemEffects, { v -> AppSettings.updatePlayback { it.copy(systemEffects = v) } }, summary = "Let the phone's own effects (Dolby, SoundAlive, system equalizer) process playback", icon = Icons.Rounded.SurroundSound)
@@ -871,10 +994,28 @@ private fun settingsSections(
                 Entry("Upgrade quality while playing", "better stream premium 256 opus swap") {
                     ToggleRow("Upgrade quality while playing", pb.qualityUpgrade, { v -> AppSettings.updatePlayback { it.copy(qualityUpgrade = v) } }, summary = "If a clearly better stream turns up a few seconds in, switch to it without stopping", icon = Icons.Rounded.HighQuality, beta = true)
                 },
+                Entry("Automix", "auto mix dj blend beat transition seamless") {
+                    ToggleRow(
+                        "Automix",
+                        pb.automix,
+                        { v -> AppSettings.updatePlayback { it.copy(automix = v) } },
+                        summary = if (pb.automix) "Each song blends into the next where it suits them: across a fade-out, on the beat, trading the bass over"
+                        else "Off: songs end and start as set below",
+                        icon = Icons.Rounded.AutoAwesome,
+                        beta = true,
+                    )
+                },
+                if (pb.automix) Entry("Automix performance", "automix threads analysis speed battery heat efficient balanced performance") {
+                    NavRow("Automix performance", { automixPerformanceDialog = true }, summary = pb.automixPerformance.summary, icon = Icons.Rounded.Speed, value = pb.automixPerformance.label)
+                } else null,
                 Entry("Crossfade", "fade blend transition overlap") {
                     SettingRow(
                         "Crossfade",
-                        summary = if (pb.crossfadeSeconds == 0) "Off: songs play back to back" else "Blend each song into the next over ${pb.crossfadeSeconds} s",
+                        summary = when {
+                            pb.automix -> "Automix is choosing how long each blend lasts"
+                            pb.crossfadeSeconds == 0 -> "Off: songs play back to back"
+                            else -> com.opentune.i18n.Tr.f("Blend each song into the next over {0} s", pb.crossfadeSeconds)
+                        },
                         icon = Icons.Rounded.Animation,
                         below = {
                             Slider(
@@ -882,6 +1023,7 @@ private fun settingsSections(
                                 onValueChange = { v -> AppSettings.updatePlayback { it.copy(crossfadeSeconds = v.toInt()) } },
                                 valueRange = 0f..12f,
                                 steps = 11,
+                                enabled = !pb.automix,
                             )
                         },
                     )
@@ -921,8 +1063,19 @@ private fun settingsSections(
                         summary = "Pause sending new listens to YouTube Music. Your local history, listening stats and personal recommendations keep updating. Paused listens are never sent later; likes and connected scrobblers keep their own settings.",
                         icon = Icons.Rounded.History)
                 },
+                Entry("Listens from YouTube Music", "import sync history youtube music other apps outside recents") {
+                    ToggleRow("Listens from YouTube Music", pb.importAccountHistory,
+                        { v -> AppSettings.updatePlayback { it.copy(importAccountHistory = v) }; if (v) com.opentune.data.history.AccountHistory.syncSoon(force = true) },
+                        summary = "What you play in YouTube Music or other apps on your account shows in your history, Recents and Replay here",
+                        icon = Icons.Rounded.History)
+                },
                 Entry("Don't repeat songs in current session", "autoplay duplicates") {
                     ToggleRow("Don't repeat songs in current session", pb.noRepeatInSession, { v -> AppSettings.updatePlayback { it.copy(noRepeatInSession = v) } }, summary = "Autoplay won't add a song already played or queued this session", icon = Icons.Rounded.History)
+                },
+                Entry("Songs, not music videos", "audio only music video version omv atv song video switch") {
+                    ToggleRow("Songs, not music videos", pb.songsOnly, { v -> AppSettings.updatePlayback { it.copy(songsOnly = v) } },
+                        summary = "Radio and mixes play the song where YouTube Music also has its video, so the same song never comes twice in two versions",
+                        icon = Icons.Rounded.MusicNote)
                 },
                 Entry("Smart shuffle", "shuffle similar songs mix recommendations playlist album sparkle") {
                     ToggleRow("Smart shuffle", pb.smartShuffle, { v -> AppSettings.updatePlayback { it.copy(smartShuffle = v) } }, summary = "Mixes a similar song in after every four. Tap the player's shuffle button twice, or long-press Shuffle on a playlist or album", icon = Icons.Rounded.AutoAwesome)
@@ -934,8 +1087,8 @@ private fun settingsSections(
                         { hiddenDialog = true },
                         summary = if (count == 0) "Kept out of autoplay, radio and Home. Nothing hidden yet"
                         else listOfNotNull(
-                            hidden.songs.size.takeIf { it > 0 }?.let { if (it == 1) "1 song" else "$it songs" },
-                            hidden.artists.size.takeIf { it > 0 }?.let { if (it == 1) "1 artist" else "$it artists" },
+                            hidden.songs.size.takeIf { it > 0 }?.let { if (it == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", it) },
+                            hidden.artists.size.takeIf { it > 0 }?.let { if (it == 1) "1 artist" else com.opentune.i18n.Tr.f("{0} artists", it) },
                         ).joinToString(" and ") + " kept out of suggestions",
                         icon = Icons.Rounded.VisibilityOff,
                     )
@@ -959,7 +1112,7 @@ private fun settingsSections(
         ),
         Section(
             "Appearance",
-            listOf(
+            listOfNotNull(
                 Entry("Theme", "dark light system") {
                     SettingRow("Theme", icon = Icons.Rounded.Palette, below = {
                         PillSegmented(ThemeMode.entries, theme.mode, { it.label }, { m -> AppSettings.updateTheme { it.copy(mode = m) } })
@@ -973,6 +1126,13 @@ private fun settingsSections(
                 },
                 Entry("Artist pages take the photo's colour", "artist page tint colour photo background") {
                     ToggleRow("Artist pages take the photo's colour", ui.artistPageTint, { v -> AppSettings.updateUi { it.copy(artistPageTint = v) } }, summary = "Off keeps artist pages in the app's own colours", icon = Icons.Rounded.AutoAwesome)
+                },
+                Entry("Artist page shade", "artist page tint light dark deep soft shade colour photo background") {
+                    NavRow("Artist page shade", { artistShadeDialog = true }, summary = if (ui.artistPageTint) ui.artistShade.summary else "Turn on Artist pages take the photo's colour first",
+                        icon = Icons.Rounded.AutoAwesome, value = ui.artistShade.label)
+                },
+                Entry("Playlist page background", "playlist album liked spotify page background cover colour accent blur fade plain dark light") {
+                    NavRow("Playlist page background", { listBackgroundDialog = true }, summary = ui.listBackground.summary, icon = Icons.Rounded.AutoAwesome, value = ui.listBackground.label)
                 },
                 Entry("Material You", "wallpaper dynamic color") {
                     val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -1036,7 +1196,14 @@ private fun settingsSections(
                     )
                 },
                 Entry("Player buttons", "play pause next previous skip controls buttons design morph disc squircle glass") {
-                    NavRow("Player buttons", { controlStyleDialog = true }, summary = ui.controlStyle.summary, icon = Icons.Rounded.PlayCircle, value = ui.controlStyle.label)
+                    // The Apple Music inspired player always draws its own buttons, so the design
+                    // chosen here does nothing there: shown dimmed, and kept for the other layouts.
+                    val appleStyle = ui.playerStyle == PlayerStyle.APPLE_MUSIC
+                    NavRow(
+                        "Player buttons", { controlStyleDialog = true },
+                        summary = if (appleStyle) "Not with the Apple Music inspired player, which has buttons of its own" else ui.controlStyle.summary,
+                        icon = Icons.Rounded.PlayCircle, value = ui.controlStyle.label, enabled = !appleStyle,
+                    )
                 },
                 Entry("Dock animation", "navigation bar dock fold hide scroll animation motion squash pop") {
                     NavRow("Dock animation", { dockMotionDialog = true }, summary = ui.dockMotion.summary, icon = Icons.Rounded.Dock, value = ui.dockMotion.label)
@@ -1060,7 +1227,11 @@ private fun settingsSections(
                     ToggleRow("Double-tap to skip 10 seconds", ui.doubleTapSeek, { v -> AppSettings.updateUi { it.copy(doubleTapSeek = v) } }, summary = "Double-tap the left of the cover to go back 10 seconds, the right to go on", icon = Icons.Rounded.TouchApp)
                 },
                 Entry("Glow under the cover", "glow shadow light cover colour bass pulse") {
-                    ToggleRow("Glow under the cover", ui.coverGlow, { v -> AppSettings.updateUi { it.copy(coverGlow = v) } }, summary = "A soft light in the cover's colours under it, swelling a little with the bass", icon = Icons.Rounded.AutoAwesome)
+                    // Nor does the Apple Music inspired player draw the glow.
+                    val appleStyle = ui.playerStyle == PlayerStyle.APPLE_MUSIC
+                    ToggleRow("Glow under the cover", ui.coverGlow && !appleStyle, { v -> AppSettings.updateUi { it.copy(coverGlow = v) } },
+                        summary = if (appleStyle) "Not with the Apple Music inspired player" else "A soft light in the cover's colours under it, swelling a little with the bass",
+                        icon = Icons.Rounded.AutoAwesome, enabled = !appleStyle)
                 },
                 Entry("Song change", "cover change next song skip animation flip carousel deck fade") {
                     NavRow("Song change", { coverChangeDialog = true }, summary = ui.coverChange.summary, icon = Icons.Rounded.SwapHoriz, value = ui.coverChange.label)
@@ -1083,11 +1254,41 @@ private fun settingsSections(
                 Entry("Moving covers on Home", "motion artwork animated cover drift zoom home cards mixes") {
                     ToggleRow("Moving covers on Home", ui.homeMovingCovers, { v -> AppSettings.updateUi { it.copy(homeMovingCovers = v) } }, summary = "Song and album covers on Home drift and zoom slowly, one or two at a time, while you're not scrolling. Off in battery saver", icon = Icons.Rounded.Animation)
                 },
+                Entry("Full-screen playlist covers", "playlist album cover art edge full screen header") {
+                    ToggleRow("Full-screen playlist covers", ui.fullScreenListCover, { v -> AppSettings.updateUi { it.copy(fullScreenListCover = v) } }, summary = "Playlists and albums open with their cover across the top of the page, edge to edge", icon = Icons.Rounded.Fullscreen)
+                },
                 Entry("Full-screen cover art", "artwork edge") {
                     ToggleRow("Full-screen cover art", ui.fullScreenCover, { v -> AppSettings.updateUi { it.copy(fullScreenCover = v) } }, summary = "Runs the cover to the edges of the player instead of a square sleeve", icon = Icons.Rounded.Fullscreen)
                 },
+                Entry("Cover corners", "artwork corner radius round square sharp shape thumbnail") {
+                    SettingRow(
+                        "Cover corners",
+                        summary = when {
+                            ui.fullScreenCover -> "Turn off Full-screen cover art to shape the cover"
+                            ui.coverCornerDp == 0 -> "Square, with sharp corners"
+                            else -> com.opentune.i18n.Tr.f("Rounded by {0} dp", ui.coverCornerDp)
+                        },
+                        icon = Icons.Rounded.RoundedCorner,
+                        below = {
+                            Slider(
+                                value = ui.coverCornerDp.toFloat(),
+                                onValueChange = { v -> AppSettings.updateUi { it.copy(coverCornerDp = (v / 4).roundToInt() * 4) } },
+                                valueRange = 0f..40f,
+                                steps = 9,
+                                enabled = !ui.fullScreenCover,
+                            )
+                        },
+                    )
+                },
+                Entry("Match background to cover", "background colour seamless") {
+                    ToggleRow("Match background to cover", ui.coverColorBackground, { v -> AppSettings.updateUi { it.copy(coverColorBackground = v) } }, summary = "Paints the player's background in the cover's own colour, so the full-screen cover blends into it", icon = Icons.Rounded.Palette)
+                },
                 Entry("Wavy seek bar", "wave progress slider") {
-                    ToggleRow("Wavy seek bar", ui.wavySeekbar, { v -> AppSettings.updateUi { it.copy(wavySeekbar = v) } }, summary = "The played part of the bar ripples while music plays", icon = Icons.Rounded.Waves)
+                    // The Apple Music inspired player keeps its bar plain, so there it's shown off and can't be turned on.
+                    val appleStyle = ui.playerStyle == PlayerStyle.APPLE_MUSIC
+                    ToggleRow("Wavy seek bar", ui.wavySeekbar && !appleStyle, { v -> AppSettings.updateUi { it.copy(wavySeekbar = v) } },
+                        summary = if (appleStyle) "Not with the Apple Music inspired player, whose bar stays plain" else "The played part of the bar ripples while music plays",
+                        icon = Icons.Rounded.Waves, enabled = !appleStyle)
                 },
                 Entry("Lyric preview while seeking", "scrub seek bar lyric line preview bubble drag") {
                     ToggleRow("Lyric preview while seeking", ui.lyricScrubPreview, { v -> AppSettings.updateUi { it.copy(lyricScrubPreview = v) } }, summary = "Dragging the seek bar shows the line sung at that point above your finger", icon = Icons.Rounded.Lyrics)
@@ -1145,19 +1346,18 @@ private fun settingsSections(
                         })
                     }
                 },
-                Entry("Spotify", "spotify canvas video loop background likes mixes home") {
-                    // Connecting is in Account; these only do something while Spotify is connected.
-                    val off = if (spotifyConnected) null else "Connect Spotify in Account first"
-                    ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = off ?: "When a song has a Canvas on Spotify, it loops silently behind the player", icon = Icons.Rounded.Animation, enabled = spotifyConnected)
+                // Shown once Spotify is connected; before that the Spotify row above says what it adds.
+                if (spotifyConnected) Entry("Spotify", "spotify canvas video loop background likes mixes home") {
+                    ToggleRow("Spotify Canvas", ui.spotifyCanvas, { v -> AppSettings.updateUi { it.copy(spotifyCanvas = v) } }, summary = "When a song has a Canvas on Spotify, it loops silently behind the player", icon = Icons.Rounded.Animation)
                     RowDivider()
-                    SettingRow("Behind the title and controls", summary = off ?: ui.canvasLook.summary, icon = Icons.Rounded.BlurOn, below = {
+                    SettingRow("Behind the title and controls", summary = ui.canvasLook.summary, icon = Icons.Rounded.BlurOn, below = {
                         PillSegmented(com.opentune.data.settings.CanvasLook.entries, ui.canvasLook, { it.label }, { v -> AppSettings.updateUi { it.copy(canvasLook = v) } })
                     })
                     RowDivider()
-                    ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = off ?: "Likes are saved to Spotify. Listening here does not add plays to Spotify history", icon = Icons.Rounded.Favorite, enabled = spotifyConnected)
+                    ToggleRow("Save likes to Spotify", ui.spotifySaveLikes, { v -> AppSettings.updateUi { it.copy(spotifySaveLikes = v) } }, summary = "Likes are saved to Spotify. Listening here does not add plays to Spotify history", icon = Icons.Rounded.Favorite)
                     RowDivider()
-                    ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = off ?: "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = Icons.Rounded.Album, enabled = spotifyConnected)
-                },
+                    ToggleRow("Spotify mixes on Home", ui.spotifyMixes, { v -> AppSettings.updateUi { it.copy(spotifyMixes = v) } }, summary = "Your Daily Mixes, Discover Weekly and Release Radar from Spotify, found on YouTube Music", icon = Icons.Rounded.Album)
+                } else null,
                 Entry("Animated covers on Wi-Fi only", "mobile data metered save data wifi animated covers canvas video") {
                     ToggleRow("Animated covers on Wi-Fi only", ui.animatedCoversWifiOnly, { v -> AppSettings.updateUi { it.copy(animatedCoversWifiOnly = v) } }, summary = "Animated covers and Canvas don't load on mobile data", icon = Icons.Rounded.Wifi, enabled = ui.animatedCovers || (spotifyConnected && ui.spotifyCanvas))
                 },
@@ -1178,11 +1378,21 @@ private fun settingsSections(
                 Entry("Glass style", "glass frosted blur clear heavy tinted smoke theme material") {
                     NavRow("Glass style", { glassStyleDialog = true }, summary = ui.glassStyle.summary, icon = Icons.Rounded.BlurOn, value = ui.glassStyle.label)
                 },
+                Entry("Choice menus", "popup sheet screen page list select choose menu dialog") {
+                    NavRow("Choice menus", { choiceMenusDialog = true }, summary = ui.choiceMenus.summary, icon = Icons.Rounded.Tune, value = ui.choiceMenus.label)
+                },
                 Entry("Frosted top edge", "status bar blur fade top scroll glass") {
                     ToggleRow("Frosted top edge", ui.frostedTopEdge, { v -> AppSettings.updateUi { it.copy(frostedTopEdge = v) } }, summary = "Pages blur and fade as they scroll under the status bar", icon = Icons.Rounded.Gradient)
                 },
+                Entry("Performance profile", "battery saver drain power performance profile balanced smooth heat") {
+                    NavRow("Performance profile", { profileDialog = true }, summary = ui.performanceProfile.summary, icon = Icons.Rounded.Speed, value = ui.performanceProfile.label)
+                },
                 Entry("High performance mode", "120hz 90hz smooth fps refresh rate frame rate scrolling performance battery unrestricted lag") {
                     HighPerformanceRows(ui)
+                },
+                Entry("Streaks on Home", "streak badges milestones hours artists new week home") {
+                    ToggleRow("Streaks on Home", ui.homeStreaks, { v -> AppSettings.updateUi { it.copy(homeStreaks = v) } },
+                        summary = "Days in a row you've listened, new artists this week and hours with an artist, under the greeting", icon = Icons.Rounded.LocalFireDepartment)
                 },
                 Entry("Speed dial", "home most played quick grid shortcuts favourites top") {
                     ToggleRow("Speed dial", ui.speedDial, { v -> AppSettings.updateUi { it.copy(speedDial = v) } }, summary = "Your most-played songs, albums and artists at the top of Home", icon = Icons.Rounded.GridView)
@@ -1208,12 +1418,30 @@ private fun settingsSections(
                 Entry("Reduce dynamic blur", "glass frosted performance") {
                     ToggleRow("Reduce dynamic blur", ui.reduceBlur, { v -> AppSettings.updateUi { it.copy(reduceBlur = v) } }, summary = "Swaps frosted glass for solid fills across the app", icon = Icons.Rounded.BlurOff)
                 },
+                Entry("Lite mode", "performance tv old phone lag smooth light simple fast low end") {
+                    ToggleRow(
+                        "Lite mode",
+                        ui.liteMode,
+                        { v -> AppSettings.updateUi { com.opentune.data.settings.liteModeApplied(it, v) } },
+                        summary = "The same app without glass, blur, glows, moving and animated covers, and fewer shelves on Home. On by itself on TVs and older phones",
+                        icon = Icons.Rounded.Speed,
+                    )
+                },
+                Entry("Lighter Liquid Glass", "glass performance lag smooth slow phone frame") {
+                    ToggleRow(
+                        "Lighter Liquid Glass",
+                        com.opentune.ui.components.GlassPerformance.lite,
+                        { v -> com.opentune.ui.components.GlassPerformance.choose(v) },
+                        summary = "Leaves out the colour fringe and inner shade, which slower phones can't draw every frame. Turns on by itself when frames run late",
+                        icon = Icons.Rounded.Speed,
+                    )
+                },
                 Entry("Haptic feedback", "vibration haptics strength tap buzz intensity") {
                     val haptics = com.opentune.ui.components.rememberHaptics()
                     SettingRow(
                         "Haptic feedback",
                         summary = com.opentune.ui.components.Haptics.label(ui.hapticStrength) +
-                            if (ui.hapticStrength > 0f) " · ${(ui.hapticStrength * 100).roundToInt()}%" else " · No taps or buzzes",
+                                if (ui.hapticStrength > 0f) " · ${(ui.hapticStrength * 100).roundToInt()}%" else " · No taps or buzzes",
                         icon = Icons.Rounded.Vibration,
                         below = {
                             Slider(
@@ -1293,7 +1521,7 @@ private fun settingsSections(
                     )
                 },
                 Entry("Followed artists", "follow artists unfollow") {
-                    NavRow("Followed artists", { followedDialog = true }, summary = if (followedArtists.isEmpty()) "Follow from an artist's page" else "${followedArtists.size} artists", icon = Icons.Rounded.Person)
+                    NavRow("Followed artists", { followedDialog = true }, summary = if (followedArtists.isEmpty()) "Follow from an artist's page" else com.opentune.i18n.Tr.f("{0} artists", followedArtists.size), icon = Icons.Rounded.Person)
                 },
             ),
         ),
@@ -1318,9 +1546,39 @@ private fun settingsSections(
                     NavRow(
                         "Downloaded songs",
                         onOpenDownloads,
-                        summary = "${done.size} songs · ${Formatter.formatShortFileSize(context, done.sumOf { it.bytes })}",
+                        summary = com.opentune.i18n.Tr.f("{0} songs · {1}", done.size, Formatter.formatShortFileSize(context, done.sumOf { it.bytes })),
                         icon = Icons.Rounded.DownloadDone,
                     )
+                },
+                Entry("Smart downloads", "automatic offline favorite wifi battery") {
+                    ToggleRow("Smart downloads", lib.smartDownloads,
+                        { enabled -> AppSettings.updateLibrary { it.copy(smartDownloads = enabled) } },
+                        summary = "Save your liked and most-listened music on unmetered Wi-Fi with sufficient battery. Manual downloads are kept separately.",
+                        icon = Icons.Rounded.DownloadDone)
+                },
+                Entry("Keep today's mixes offline", "smart download mixes daylist discover genre offline automatic") {
+                    ToggleRow("Keep today's mixes offline", lib.smartDownloadMixes,
+                        { v -> AppSettings.updateLibrary { it.copy(smartDownloadMixes = v) } },
+                        summary = "Smart downloads also save the first songs of each mix on Home: your daylist, daily, genre and Discover mixes",
+                        icon = Icons.Rounded.AutoAwesome, enabled = lib.smartDownloads)
+                },
+                Entry("Smart download limit", "automatic offline songs storage threshold") {
+                    var limit by remember(lib.smartDownloadLimit) { mutableStateOf(lib.smartDownloadLimit.coerceIn(10, 500).toFloat()) }
+                    SettingRow("Smart download limit", icon = Icons.Rounded.Storage,
+                        summary = "${limit.toInt()} songs · Space used depends on download quality", below = {
+                            Slider(value = limit, onValueChange = { limit = (kotlin.math.round(it / 10f) * 10f).coerceIn(10f, 500f) },
+                                onValueChangeFinished = { AppSettings.updateLibrary { it.copy(smartDownloadLimit = limit.toInt()) } },
+                                valueRange = 10f..500f, steps = 48, enabled = lib.smartDownloads)
+                        })
+                },
+                Entry("Smart download battery", "automatic offline battery threshold charging") {
+                    var minimum by remember(lib.smartDownloadMinBattery) { mutableStateOf(lib.smartDownloadMinBattery.coerceIn(15, 80).toFloat()) }
+                    SettingRow("Smart download battery", icon = Icons.Rounded.BatteryFull,
+                        summary = "At least ${minimum.toInt()}% battery, or while charging", below = {
+                            Slider(value = minimum, onValueChange = { minimum = (kotlin.math.round(it / 5f) * 5f).coerceIn(15f, 80f) },
+                                onValueChangeFinished = { AppSettings.updateLibrary { it.copy(smartDownloadMinBattery = minimum.toInt()) } },
+                                valueRange = 15f..80f, steps = 12, enabled = lib.smartDownloads)
+                        })
                 },
                 Entry("Download quality", "offline bitrate") {
                     NavRow("Download quality", { downloadQualityDialog = true }, icon = Icons.Rounded.Download, value = lib.downloadQuality.label)
@@ -1342,9 +1600,9 @@ private fun settingsSections(
                             if (v) scope.launch {
                                 val (copied, skipped) = com.opentune.data.download.Downloads.exportExisting(context.applicationContext)
                                 val note = buildString {
-                                    append(if (copied == 1) "1 song" else "$copied songs")
+                                    append(if (copied == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", copied))
                                     append(" copied to Music/OpenTune")
-                                    if (skipped > 0) append("; $skipped in a format other apps can't play, download them again to export")
+                                    if (skipped > 0) append(com.opentune.i18n.Tr.f("; {0} in a format other apps can't play, download them again to export", skipped))
                                 }
                                 if (copied > 0 || skipped > 0) com.opentune.data.Pills.done(note, context)
                             }
@@ -1395,7 +1653,7 @@ private fun settingsSections(
                             withContext(Dispatchers.IO) { AudioCache.clear(context) }
                             cacheBytes = withContext(Dispatchers.IO) { AudioCache.usedBytes(context) }
                         }
-                    }, summary = "Using ${Formatter.formatShortFileSize(context, cacheBytes)}", icon = Icons.Rounded.DeleteSweep)
+                    }, summary = com.opentune.i18n.Tr.f("Using {0}", Formatter.formatShortFileSize(context, cacheBytes)), icon = Icons.Rounded.DeleteSweep)
                 },
                 Entry("Delete downloaded updates", "apk update installer free space") {
                     NavRow("Delete downloaded updates", {
@@ -1404,7 +1662,7 @@ private fun settingsSections(
                             updateBytes = 0
                             message = "Downloaded updates deleted."
                         }
-                    }, summary = if (updateBytes > 0) "Using ${Formatter.formatShortFileSize(context, updateBytes)}" else "None kept", icon = Icons.Rounded.DeleteSweep)
+                    }, summary = if (updateBytes > 0) com.opentune.i18n.Tr.f("Using {0}", Formatter.formatShortFileSize(context, updateBytes)) else "None kept", icon = Icons.Rounded.DeleteSweep)
                 },
                 Entry("Clear image cache", "artwork") {
                     NavRow("Clear image cache", {
@@ -1439,62 +1697,82 @@ private fun settingsSections(
         Section(
             "Your music server",
             listOfNotNull(
-                Entry("Music server", "subsonic navidrome gonic airsonic jellyfin flac lossless server") {
+                Entry("Music server", "subsonic navidrome gonic airsonic jellyfin flac lossless server sign out disconnect") {
                     val connected = musicServer
-                    if (connected == null) {
-                        NavRow("Connect a server", { serverDialog = true }, summary = "Stream your own FLAC and hi-res files from any Subsonic server", icon = Icons.Rounded.Dns)
-                    } else {
-                        NavRow(
-                            "${connected.user} on ${connected.url.substringAfter("://")}",
-                            { serverDialog = true },
-                            summary = "Streams stored files as they are. Tap to sign in again.",
-                            icon = Icons.Rounded.Dns,
-                        )
-                    }
+                    ServiceRow(
+                        ServiceKind.Server, "Music server",
+                        connectedAs = connected?.let { com.opentune.i18n.Tr.f("{0} on {1}", it.user, it.url.substringAfter("://")) },
+                        detail = if (connected == null) "Stream your own FLAC and hi-res files from any Subsonic server" else "Streams stored files as they are",
+                        onClick = { serverDialog = true },
+                        actions = listOf(
+                            ServiceAction("Sign in again") { serverDialog = true },
+                            ServiceAction("Disconnect", danger = true) { Subsonic.disconnect() },
+                        ),
+                        chevron = false,
+                    )
                 },
-                if (musicServer != null) Entry("Disconnect server", "sign out subsonic") {
-                    SettingRow("Disconnect server", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { Subsonic.disconnect() })
-                } else null,
+            ),
+        ),
+        Section(
+            "Discord",
+            listOfNotNull(
+                Entry("Show on Discord", "discord rich presence status listening activity profile sign out disconnect") {
+                    val who = discord
+                    ServiceRow(
+                        ServiceKind.Discord, "Discord",
+                        connectedAs = who?.let { com.opentune.i18n.Tr.f("Connected as {0}", it.name) },
+                        detail = when {
+                            who == null -> "Show the song you play on your Discord profile"
+                            !discordOn -> "Off: nothing shows on your profile"
+                            discordProblem != null -> discordProblem!!
+                            discordStatus == com.opentune.data.discord.DiscordRpc.Status.Ready -> "Showing what you play on your profile"
+                            else -> "Shows what you play on your profile while music plays"
+                        },
+                        onClick = { if (who == null) onOpenDiscord() else com.opentune.data.discord.DiscordRpc.setEnabled(!discordOn) },
+                        actions = listOf(ServiceAction("Disconnect", danger = true) { com.opentune.data.discord.DiscordRpc.signOut() }),
+                        trailing = if (who != null) { { AppSwitch(discordOn, { v -> com.opentune.data.discord.DiscordRpc.setEnabled(v) }) } } else null,
+                    )
+                },
             ),
         ),
         Section(
             "Last.fm (optional)",
             listOfNotNull(
-                Entry("Last.fm scrobbling", "scrobble lastfm audioscrobbler history") {
+                Entry("Last.fm scrobbling", "scrobble lastfm audioscrobbler history sign out disconnect") {
                     val who = lastFm
-                    if (who == null) {
-                        NavRow("Connect Last.fm", { lastFmDialog = true }, summary = "Scrobble what you play with your own Last.fm API account", icon = Icons.Rounded.History)
-                    } else {
-                        SettingRow(
-                            "Scrobbling as ${who.user}",
-                            summary = if (scrobblesWaiting > 0) "$scrobblesWaiting scrobbles waiting to send" else "Songs are scrobbled after half their length or 4 minutes",
-                            icon = Icons.Rounded.History,
-                        )
-                    }
+                    ServiceRow(
+                        ServiceKind.LastFm, "Last.fm",
+                        connectedAs = who?.let { com.opentune.i18n.Tr.f("Scrobbling as {0}", it.user) },
+                        detail = when {
+                            who == null -> "Scrobble what you play with your own Last.fm API account"
+                            scrobblesWaiting > 0 -> com.opentune.i18n.Tr.f("{0} scrobbles waiting to send", scrobblesWaiting)
+                            else -> "Songs count after half their length or 4 minutes"
+                        },
+                        onClick = { if (who == null) lastFmDialog = true },
+                        actions = listOf(ServiceAction("Disconnect", danger = true) { LastFm.signOut() }),
+                        chevron = false,
+                    )
                 },
-                if (lastFm != null) Entry("Disconnect Last.fm", "sign out lastfm") {
-                    SettingRow("Disconnect Last.fm", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { LastFm.signOut() })
-                } else null,
             ),
         ),
         Section(
             "ListenBrainz (optional)",
             listOfNotNull(
-                Entry("ListenBrainz", "listenbrainz scrobble history recommendations metabrainz") {
+                Entry("ListenBrainz", "listenbrainz scrobble history recommendations metabrainz sign out disconnect") {
                     val who = listenBrainz
-                    if (who == null) {
-                        NavRow("Connect ListenBrainz", { listenBrainzDialog = true }, summary = "Free, open listening history, and recommendations on Home", icon = Icons.Rounded.History)
-                    } else {
-                        SettingRow(
-                            "Sending listens as ${who.user}",
-                            summary = if (listensWaiting > 0) "$listensWaiting listens waiting to send" else "Recommendations from your listens show on Home",
-                            icon = Icons.Rounded.History,
-                        )
-                    }
+                    ServiceRow(
+                        ServiceKind.ListenBrainz, "ListenBrainz",
+                        connectedAs = who?.let { com.opentune.i18n.Tr.f("Sending listens as {0}", it.user) },
+                        detail = when {
+                            who == null -> "Free, open listening history, and recommendations on Home"
+                            listensWaiting > 0 -> com.opentune.i18n.Tr.f("{0} listens waiting to send", listensWaiting)
+                            else -> "Recommendations from your listens show on Home"
+                        },
+                        onClick = { if (who == null) listenBrainzDialog = true },
+                        actions = listOf(ServiceAction("Disconnect", danger = true) { ListenBrainz.signOut() }),
+                        chevron = false,
+                    )
                 },
-                if (listenBrainz != null) Entry("Disconnect ListenBrainz", "sign out listenbrainz") {
-                    SettingRow("Disconnect ListenBrainz", icon = Icons.AutoMirrored.Rounded.Logout, onClick = { ListenBrainz.signOut() })
-                } else null,
             ),
         ),
         Section(
@@ -1523,8 +1801,14 @@ private fun settingsSections(
                     ToggleRow("Lyrics preview", ui.lyricsPreview, { v -> AppSettings.updateUi { it.copy(lyricsPreview = v) } },
                         summary = "Show the current lyric on the player in every theme", icon = Icons.Rounded.Lyrics)
                 },
+                Entry("Comments button", "comments youtube button pill remove hide") {
+                    ToggleRow("Comments button", ui.commentsButton, { v -> AppSettings.updateUi { it.copy(commentsButton = v) } }, summary = "A button in the player's pill for the song's comments from YouTube. Off, they're still in the player's menu", icon = Icons.Rounded.ChatBubbleOutline)
+                },
                 Entry("Hide song status", "playing from") {
                     ToggleRow("Hide song status", ui.hideSongStatus, { v -> AppSettings.updateUi { it.copy(hideSongStatus = v) } }, summary = "Hides the \"Playing from\" line in the player", icon = Icons.Rounded.VisibilityOff)
+                },
+                Entry("Hide output device", "output device name speaker bluetooth headphones") {
+                    ToggleRow("Hide output device", ui.hideOutputDevice, { v -> AppSettings.updateUi { it.copy(hideOutputDevice = v) } }, summary = "Hides the output device's name at the bottom of the player", icon = Icons.Rounded.VisibilityOff)
                 },
             ),
         ),
@@ -1532,7 +1816,7 @@ private fun settingsSections(
             "Advanced",
             listOf(
                 Entry("What's new", "release notes changelog version highlights") {
-                    NavRow("What's new", { showWhatsNew = true }, summary = "Highlights and improvements in ${BuildConfig.VERSION_NAME}", icon = Icons.Rounded.SystemUpdate)
+                    NavRow("What's new", { showWhatsNew = true }, summary = com.opentune.i18n.Tr.f("Highlights and improvements in {0}", BuildConfig.VERSION_NAME), icon = Icons.Rounded.SystemUpdate)
                 },
                 Entry("Show the welcome again", "welcome onboarding first run start intro pick artists setup") {
                     NavRow("Show the welcome again", { com.opentune.data.Welcome.showAgain() }, summary = "Pick artists, choose a look and sign in, as on the first start", icon = Icons.Rounded.WavingHand)
@@ -1544,12 +1828,12 @@ private fun settingsSections(
                         scope.launch {
                             when (val r = UpdateCheck.checkNow(context)) {
                                 is UpdateCheck.Result.Newer -> update = r.release
-                                UpdateCheck.Result.UpToDate -> message = "You have the latest version (${BuildConfig.VERSION_NAME})."
+                                UpdateCheck.Result.UpToDate -> message = com.opentune.i18n.Tr.f("You have the latest version ({0}).", BuildConfig.VERSION_NAME)
                                 UpdateCheck.Result.NoReleases -> message = "No releases are published yet. Builds are on the GitHub branch for now."
-                                is UpdateCheck.Result.Failed -> message = "Couldn't check: ${r.reason}"
+                                is UpdateCheck.Result.Failed -> message = com.opentune.i18n.Tr.f("Couldn't check: {0}", r.reason)
                             }
                         }
-                    }, summary = pendingUpdate?.let { "OpenTune ${it.version} is ready to install. You have ${BuildConfig.VERSION_NAME}." } ?: "Current version: ${BuildConfig.VERSION_NAME}", icon = Icons.Rounded.SystemUpdate, dot = pendingUpdate != null)
+                    }, summary = pendingUpdate?.let { com.opentune.i18n.Tr.f("OpenTune {0} is ready to install. You have {1}.", it.version, BuildConfig.VERSION_NAME) } ?: com.opentune.i18n.Tr.f("Current version: {0}", BuildConfig.VERSION_NAME), icon = Icons.Rounded.SystemUpdate, dot = pendingUpdate != null)
                 },
                 Entry("Check for updates automatically", "update new version release auto") {
                     ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Looks for a new release on GitHub every few hours, in the background too, and offers to install it", icon = Icons.Rounded.SystemUpdate)
@@ -1577,12 +1861,36 @@ private fun settingsSections(
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/justshivv/Opentune".toUri())) }
                     }, summary = "github.com/justshivv/Opentune · GPL v3", icon = Icons.Rounded.Code)
                 },
+                Entry("justshivv", "github developer creator justshivv") {
+                    SettingRow(
+                        "justshivv",
+                        icon = null,
+                        leading = { Artwork("https://avatars.githubusercontent.com/u/78946189?v=4", Modifier.size(28.dp), CircleShape) },
+                        trailing = {
+                            IconButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/justshivv".toUri())) } }) {
+                                Icon(githubLogo, "GitHub", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        },
+                    )
+                },
+                Entry("aerluc", "github developer aerluc") {
+                    SettingRow(
+                        "aerluc",
+                        icon = null,
+                        leading = { Artwork("https://avatars.githubusercontent.com/u/122277259?v=4", Modifier.size(28.dp), CircleShape) },
+                        trailing = {
+                            IconButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/aerluc".toUri())) } }) {
+                                Icon(githubLogo, "GitHub", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        },
+                    )
+                },
                 Entry("Export diagnostics", "log share troubleshooting bug report") {
                     NavRow("Export diagnostics", {
                         scope.launch {
                             val log = LogExport.recent()
                             val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                                .putExtra(Intent.EXTRA_SUBJECT, "OpenTune ${BuildConfig.VERSION_NAME} log")
+                                .putExtra(Intent.EXTRA_SUBJECT, com.opentune.i18n.Tr.f("OpenTune {0} log", BuildConfig.VERSION_NAME))
                                 .putExtra(Intent.EXTRA_TEXT, log)
                             context.startActivity(Intent.createChooser(send, "Share log"))
                         }
@@ -1603,11 +1911,102 @@ private fun outputSummary(context: Context, float: Boolean): String {
     return "AudioTrack · ${Build.MODEL} · $khz · ${if (float) "32-bit float" else "16-bit PCM"}"
 }
 
-private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 1024f) else "$mb MB"
+private fun formatMb(mb: Int): String = if (mb >= 1024) "%.1f GB".format(mb / 1024f) else com.opentune.i18n.Tr.f("{0} MB", mb)
 
 /** Spotify's green disc, for its rows in Account. */
+/**
+ * The four bit-perfect paths, each with what it does, and USB access for the direct driver.
+ * A choice like any other in Settings: a sheet or a page of its own, as Choice menus says.
+ * The Android-14 path shows dimmed where it isn't there; picking the direct driver stays
+ * open until USB access is given, with the button to ask for it again.
+ */
 @Composable
-private fun SpotifyMark() {
-    // Spotify's own mark, in its own colours.
-    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), "Spotify", Modifier.size(40.dp))
+private fun BitPerfectSheet(mode: com.opentune.data.settings.BitPerfectOutput, onDismiss: () -> Unit) {
+    val direct by com.opentune.playback.nativeout.UsbDirect.status.collectAsState()
+    val needsUsb = { o: com.opentune.data.settings.BitPerfectOutput ->
+        o == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT &&
+            com.opentune.playback.nativeout.UsbDirect.status.value is com.opentune.playback.nativeout.UsbDirect.Status.NeedsPermission
+    }
+    val available = { o: com.opentune.data.settings.BitPerfectOutput ->
+        o != com.opentune.data.settings.BitPerfectOutput.USB_ANDROID || BitPerfectUsb.supported
+    }
+    com.opentune.ui.components.ChoiceSheet(
+        title = "Bit-perfect output",
+        options = com.opentune.data.settings.BitPerfectOutput.entries,
+        selected = mode,
+        label = { o ->
+            com.opentune.i18n.Tr.t(o.label) + " · " +
+                com.opentune.i18n.Tr.t(if (available(o)) o.summary else "Needs Android 14 or newer")
+        },
+        onSelect = { option ->
+            AppSettings.updatePlayback {
+                it.copy(bitPerfectOutput = option, bitPerfectUsb = option == com.opentune.data.settings.BitPerfectOutput.USB_ANDROID)
+            }
+            if (option == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT) com.opentune.playback.nativeout.UsbDirect.requestPermission()
+        },
+        onDismiss = onDismiss,
+        enabled = available,
+        keepOpen = needsUsb,
+        footer = {
+            Column {
+                if (mode == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT && direct is com.opentune.playback.nativeout.UsbDirect.Status.NeedsPermission) {
+                    androidx.compose.material3.Button(
+                        onClick = { com.opentune.playback.nativeout.UsbDirect.requestPermission() },
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    ) { Text("Allow USB access") }
+                }
+                Text(
+                    "Sends the track to the DAC unchanged. The equalizer, loudness normalization, crossfade, Automix and playback speed are bypassed; the volume is set by the app.",
+                    Modifier.padding(horizontal = 20.dp, vertical = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+}
+
+/** A card's own action, as plain centred text across the row: Sign out, Disconnect. */
+@Composable
+private fun CentredAction(label: String, danger: Boolean = false, onClick: () -> Unit) {
+    Box(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 18.dp), contentAlignment = Alignment.Center) {
+        Text(label, style = MaterialTheme.typography.titleMedium, color = if (danger) MaterialTheme.colorScheme.error else Color.Unspecified)
+    }
+}
+
+/**
+ * The profiles the signed-in Google account can listen as, its own and any Brand channel it
+ * owns, read from YouTube when opened; the one chosen is remembered for the account.
+ */
+@Composable
+private fun ListenAsSheet(onDismiss: () -> Unit) {
+    val listeningAs by AccountStore.listeningAs.collectAsState()
+    val profiles by androidx.compose.runtime.produceState<List<com.opentune.data.model.AccountChannel>?>(null) {
+        value = withContext(Dispatchers.IO) { AccountStore.profiles() }
+    }
+    com.opentune.ui.components.FloatingCard(onDismiss = onDismiss, title = "Listen as") {
+        Column(Modifier.padding(bottom = 12.dp)) {
+            val list = profiles
+            when {
+                list == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
+                }
+                list.isEmpty() -> Text(
+                    "YouTube didn't list any other profiles for this account.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                )
+                else -> list.forEachIndexed { i, p ->
+                    // The account's own profile is the one that isn't a delegated page.
+                    val own = p.pageId == null
+                    val chosen = if (listeningAs == null) own else p.name == listeningAs
+                    SettingRow(
+                        p.name,
+                        summary = p.subtitle.ifBlank { if (own) "Personal" else "Brand" },
+                        leading = { Artwork(p.thumbnailUrl, Modifier.size(40.dp), CircleShape) },
+                        trailing = if (chosen) ({ Icon(Icons.Rounded.Check, "In use", tint = MaterialTheme.colorScheme.primary) }) else null,
+                        onClick = { if (!chosen) AccountStore.listenAs(p, own); onDismiss() },
+                    )
+                }
+            }
+        }
+    }
 }

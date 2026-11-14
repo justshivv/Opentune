@@ -28,11 +28,13 @@ internal class CollectionLoader(
 ) : ViewModel() {
     private val _state = MutableStateFlow<UiState<Collection>>(UiState.Loading)
     val state = _state.asStateFlow()
-    private val _preview = MutableStateFlow<Collection?>(null)
+    // Seeded from the session's memory: a playlist opened before in this
+    // session paints in its first frame, with no skeleton at all.
+    private val _preview = MutableStateFlow(LibraryCache.peek(browseId, owner)?.let { it.copy(songs = ContentFilter.songs(it.songs)) })
     val preview = _preview.asStateFlow()
     private var job: Job? = null
 
-    private var completePreview = false
+    private var completePreview = _preview.value != null
     init { reload(force = false) }
 
     fun reload(force: Boolean = true) {

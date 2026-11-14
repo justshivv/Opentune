@@ -53,6 +53,12 @@ object BitPerfectUsb {
     @Volatile var wanted = false
         private set
 
+    /** The phone's own headphone jack instead of a USB DAC (Settings › Bit-perfect output › Headphone jack). */
+    @Volatile var jack = false
+        private set
+
+    fun setJack(on: Boolean) { jack = on }
+
     /**
      * The decoder's own sample format (a [C] PCM encoding) for the song whose
      * output is about to open, so the DAC is asked for a format that holds it whole.
@@ -116,11 +122,7 @@ object BitPerfectUsb {
             _status.value = Status.NoDac
             return null
         }
-        val mask = when (channels) {
-            1 -> AudioFormat.CHANNEL_OUT_MONO
-            2 -> AudioFormat.CHANNEL_OUT_STEREO
-            else -> return null.also { clear(am); _status.value = Status.NoMatch(sampleRate, bitsOf(source)) }
-        }
+        val mask = channelMask(channels) ?: return null.also { clear(am); _status.value = Status.NoMatch(sampleRate, bitsOf(source)) }
         val offered = runCatching { am.getSupportedMixerAttributes(dac) }.getOrDefault(emptyList())
             .filter { it.mixerBehavior == AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT && it.format.sampleRate == sampleRate && it.format.channelMask == mask }
         // The first format, in order, that holds the song's samples whole.
@@ -145,12 +147,52 @@ object BitPerfectUsb {
             appliedKey = key
         }
         val encoding = choice.format.encoding
-        _status.value = Status.Active(dac.productName?.toString()?.takeIf { it.isNotBlank() } ?: "USB DAC", sampleRate, bitsOf(encoding), label(encoding))
+        _status.value = Status.Active(if (jack) "Headphone jack" else dac.productName?.toString()?.takeIf { it.isNotBlank() } ?: "USB DAC", sampleRate, bitsOf(encoding), label(encoding))
         return encoding
     }
 
-    private fun usbDac(am: AudioManager): AudioDeviceInfo? = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+    private fun usbDac(am: AudioManager): AudioDeviceInfo? = if (jack) wiredJack(am) else am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
         .firstOrNull { it.type == AudioDeviceInfo.TYPE_USB_DEVICE || it.type == AudioDeviceInfo.TYPE_USB_HEADSET }
+
+    /**
+     * Android's channel layout for a song with [channels] channels, in the order decoders
+     * give them (front left, front right, centre, LFE, then the rears and sides): mono to
+     * 7.1. Null for a count with no standard layout.
+     */
+    internal fun channelMask(channels: Int): Int? = when (channels) {
+        1 -> AudioFormat.CHANNEL_OUT_MONO
+        2 -> AudioFormat.CHANNEL_OUT_STEREO
+        3 -> AudioFormat.CHANNEL_OUT_STEREO or AudioFormat.CHANNEL_OUT_FRONT_CENTER
+        4 -> AudioFormat.CHANNEL_OUT_QUAD
+        5 -> AudioFormat.CHANNEL_OUT_QUAD or AudioFormat.CHANNEL_OUT_FRONT_CENTER
+        6 -> AudioFormat.CHANNEL_OUT_5POINT1
+        7 -> AudioFormat.CHANNEL_OUT_5POINT1 or AudioFormat.CHANNEL_OUT_BACK_CENTER
+        8 -> AudioFormat.CHANNEL_OUT_7POINT1_SURROUND
+        else -> null
+    }
+
+    /** Headphones (or a line out) in the phone's own 3.5 mm jack, when plugged in. */
+    fun wiredJack(am: AudioManager? = audioManager): AudioDeviceInfo? = am?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        ?.firstOrNull { it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_LINE_ANALOG }
+
+    /**
+     * Whether Android offers its bit-perfect mixer on the jack for this song's rate and
+     * channels (Android 14 and up, where the phone's audio setup allows it for the jack).
+     */
+    fun jackMixerOffers(sampleRate: Int, channels: Int): Boolean {
+        if (!supported) return false
+        val am = audioManager ?: return false
+        val jack = wiredJack(am) ?: return false
+        return runCatching { jackOffersApi34(am, jack, sampleRate, channels) }.getOrDefault(false)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    private fun jackOffersApi34(am: AudioManager, jack: AudioDeviceInfo, sampleRate: Int, channels: Int): Boolean {
+        val mask = channelMask(channels) ?: return false
+        return am.getSupportedMixerAttributes(jack).any {
+            it.mixerBehavior == AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT && it.format.sampleRate == sampleRate && it.format.channelMask == mask
+        }
+    }
 
     private fun clear(am: AudioManager) {
         val dac = applied ?: return
@@ -201,6 +243,16 @@ object BitPerfectUsb {
         val v = am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
         if (v <= 0f) return SILENT_DB
         return (-62f + 62f * v.pow(0.75f)).coerceAtMost(0f)
+    }
+
+    /**
+     * What OpenTune's own outputs (the USB driver, the exclusive built-in DAC)
+     * report as they open a song, so the rest of the app treats it as bit-perfect:
+     * effects off, no crossfade, the volume applied by the app. Null when none is
+     * in use.
+     */
+    fun reportNative(status: Status?) {
+        _status.value = status ?: if (wanted) _status.value.takeUnless { it is Status.Active } ?: Status.Off else Status.Off
     }
 
     private const val TAG = "BitPerfectUsb"

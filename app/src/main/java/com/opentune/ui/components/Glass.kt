@@ -1,6 +1,21 @@
 package com.opentune.ui.components
 
 import android.os.Build
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.geometry.isUnspecified
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
@@ -28,10 +43,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -109,7 +124,7 @@ fun liquidGlassOn(): Boolean {
  * Every grade keeps a hairline edge so the shape reads on any background.
  */
 @Composable
-fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surfaceContainerHigh): Modifier {
+fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surfaceContainerHigh, touchResponse: Boolean = true, swell: Boolean = true): Modifier {
     val ui by AppSettings.ui.collectAsState()
     val haze = LocalHazeState.current
     val backdrop = LocalBackdrop.current
@@ -118,6 +133,25 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     val look = glassLook(ui.glassStyle)
     // A caller's own see-through tint wins; otherwise the style colours the glass.
     val colour = if (tint.alpha < 1f) tint else styleTint(ui.glassStyle, tint, MaterialTheme.colorScheme.primary, dark)
+    // On a phone whose frames ran late under Liquid Glass, its two costliest touches are left out.
+    val lite = GlassPerformance.lite
+    // Liquid Glass answers a finger: it swells a little toward it, settles back with a small
+    // wobble, and a pool of light follows the touch. Left out in Lite mode and with motion reduced.
+    val touch = remember { LiquidTouch() }
+    val liquid = backdrop != null && liquidGlassOn()
+    val live = liquid && !lite && !ui.reduceAnimation && touchResponse
+    val press by animateFloatAsState(
+        if (live && touch.down) 1f else 0f,
+        spring(dampingRatio = 0.5f, stiffness = 320f),
+        label = "liquidPress",
+    )
+    val body = if (live) this.liquidTouch(touch, swell) { press } else this
+    if (backdrop != null && liquidGlassOn()) {
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            GlassPerformance.glassShowing++
+            onDispose { GlassPerformance.glassShowing-- }
+        }
+    }
     if (backdrop != null && liquidGlassOn() && ui.glassStyle == GlassStyle.LIQUID) {
         // Apple's material: what's behind is softly frosted, so colours read
         // as glowing fields rather than detail; a deep lens at the edges that
@@ -125,7 +159,7 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
         // colours glow through; a bright specular rim and a soft inner shade
         // that give the glass depth.
         val film = if (tint.alpha < 1f) tint else (if (dark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.2f))
-        return this.drawBackdrop(
+        return body.drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
             effects = {
@@ -137,12 +171,26 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
                 // past the middle of a short pill, where the top and bottom bands
                 // would meet in a hard line across it.
                 val depth = lensDepth(30.dp.toPx(), size.minDimension)
-                lens(depth, 62.dp.toPx() * depth / 30.dp.toPx(), depthEffect = true, chromaticAberration = true)
+                lens(depth, 62.dp.toPx() * depth / 30.dp.toPx(), depthEffect = true, chromaticAberration = !lite)
             },
             highlight = { Highlight.Default },
             shadow = { Shadow.Default },
-            innerShadow = { InnerShadow.Default },
-            onDrawSurface = { drawRect(film) },
+            innerShadow = if (lite) null else ({ InnerShadow.Default }),
+            onDrawSurface = {
+                drawRect(film)
+                // Light falling across the top of the glass, fading out by its middle: the
+                // sheen that makes Apple's glass read as a solid, curved piece.
+                drawRect(Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = if (dark) 0.10f else 0.18f),
+                    0.5f to Color.Transparent,
+                ))
+                // And light gathering at the lower edge, where a thick piece of glass catches it.
+                drawRect(Brush.verticalGradient(
+                    0.72f to Color.Transparent,
+                    1f to Color.White.copy(alpha = if (dark) 0.07f else 0.12f),
+                ))
+                touchLight(touch, press, dark)
+            },
         ).border(
             1.1.dp,
             // A lit rim, brightest where light would catch it (top left and bottom
@@ -165,7 +213,7 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
             ui.glassStyle == GlassStyle.FROSTED -> lerp(neutral, MaterialTheme.colorScheme.primary, 0.14f).copy(alpha = look.filmAlpha)
             else -> lerp(neutral, colour, 0.6f).copy(alpha = look.filmAlpha)
         }
-        return this.drawBackdrop(
+        return body.drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
             effects = {
@@ -174,11 +222,11 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
                 colorControls(saturation = look.saturation)
                 blur(look.liquidBlur.toPx())
                 val depth = lensDepth(24.dp.toPx(), size.minDimension)
-                lens(depth, depth, depthEffect = true, chromaticAberration = true)
+                lens(depth, depth, depthEffect = true, chromaticAberration = !lite)
             },
             highlight = { Highlight.Default },
             shadow = { Shadow.Default },
-            onDrawSurface = { drawRect(film) },
+            onDrawSurface = { drawRect(film); touchLight(touch, press, dark) },
         ).border(0.5.dp, Color.White.copy(alpha = 0.10f), shape)
     }
     if (backdrop != null && backdropBlurOn()) {
@@ -199,7 +247,11 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     }
     val base = this.clip(shape)
     val filled = if (haze == null || ui.reduceBlur) {
-        base.background(if (tint.alpha < 1f) tint else colour.copy(alpha = 0.96f))
+        // Nothing blurred behind (Lite mode, blur reduced): a see-through tint, meant to sit on
+        // frosted glass, is laid over the solid surface instead, so the mini player and the dock
+        // have a body rather than letting the page show through them.
+        val face = if (tint.alpha < 1f) lerp(MaterialTheme.colorScheme.surfaceContainerHigh, tint.copy(alpha = 1f), tint.alpha) else colour
+        base.background(face)
     } else {
         base.hazeEffect(
             state = haze,
@@ -238,8 +290,74 @@ fun GlassPage(modifier: Modifier = Modifier, overlay: @Composable BoxScope.() ->
         CompositionLocalProvider(
             LocalHazeState provides haze.takeIf { !ui.reduceBlur },
             LocalBackdrop provides backdrop.takeIf { sampled },
-        ) { overlay() }
+        ) {
+            // The page's own frost, under its overlay: drawn at the root it
+            // would sit over the whole NavHost and blur the top bar itself,
+            // so AppRoot skips its strip on these pages.
+            TopEdgeFrost(Modifier.align(Alignment.TopCenter))
+            overlay()
+        }
     }
+}
+
+/** Where a finger is on a piece of Liquid Glass, and whether it's down. */
+@Stable
+internal class LiquidTouch {
+    var down by mutableStateOf(false)
+    var at by mutableStateOf(Offset.Unspecified)
+}
+
+/**
+ * Watches touches on the glass without taking them (the buttons on it still get every tap), and
+ * swells it toward the finger by [press], 0 at rest to 1 while held. [press] runs on a spring,
+ * so letting go sends it a little past rest and back: the glass settles like a drop.
+ */
+private fun Modifier.liquidTouch(touch: LiquidTouch, swell: Boolean, press: () -> Float): Modifier {
+    val tracked = this.pointerInput(touch) {
+        awaitEachGesture {
+            // The first pass sees the touch before anything on the glass does, and leaves it alone.
+            val first = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.pressed } ?: return@awaitEachGesture
+            touch.at = first.position
+            touch.down = true
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val still = event.changes.firstOrNull { it.pressed }
+                if (still == null) break
+                touch.at = still.position
+            }
+            touch.down = false
+        }
+    }
+    // A card that is itself dragged (the mini player) keeps the light under
+    // the finger but not the swell: swelling a layer while it is being
+    // pulled around draws it past its own face and shaves its corners.
+    if (!swell) return tracked
+    return tracked.graphicsLayer {
+        val p = press()
+        if (p == 0f || size.width <= 0f || size.height <= 0f) return@graphicsLayer
+        // About 8 dp wider and 5 dp taller at most, whatever the size: a big bar swells no more than a small button.
+        scaleX = 1f + minOf(LIQUID_SWELL, 8.dp.toPx() / size.width) * p
+        scaleY = 1f + minOf(LIQUID_SWELL, 5.dp.toPx() / size.height) * p
+        val at = touch.at
+        if (at.isSpecified) transformOrigin = TransformOrigin((at.x / size.width).coerceIn(0f, 1f), (at.y / size.height).coerceIn(0f, 1f))
+    }
+}
+
+private const val LIQUID_SWELL = 0.05f
+
+/** A soft pool of light under the finger, as large as the glass, gone when the finger is. */
+private fun DrawScope.touchLight(touch: LiquidTouch, press: Float, dark: Boolean) {
+    val at = touch.at
+    val strength = press.coerceIn(0f, 1f)
+    if (strength < 0.01f || at.isUnspecified) return
+    drawRect(
+        Brush.radialGradient(
+            0f to Color.White.copy(alpha = (if (dark) 0.30f else 0.42f) * strength),
+            1f to Color.Transparent,
+            center = at,
+            radius = maxOf(size.width, size.height) * 0.62f,
+        ),
+    )
 }
 
 /** How deep a lens may bend at the edge: [wanted], kept to under half the shape's short side. */

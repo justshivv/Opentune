@@ -33,9 +33,27 @@ data class AddonStream(val url: String, val codec: String, val transport: String
 private fun JSONObject.text(key: String): String = opt(key)?.takeUnless { it == JSONObject.NULL }?.toString().orEmpty()
 
 object AddonProtocol {
+    /**
+     * Add-ons are reached over HTTPS, except one running on this device itself (Termux, say, at
+     * http://127.0.0.1:8787): that traffic never leaves the phone, so plain http is no weaker there.
+     */
     fun url(raw: String): HttpUrl = requireNotNull(raw.toHttpUrlOrNull()?.takeIf {
-        it.isHttps && it.username.isEmpty() && it.password.isEmpty() && it.fragment == null
-    }) { "Enter an HTTPS add-on URL without a username, password or fragment." }
+        (it.isHttps || onThisDevice(it)) && it.username.isEmpty() && it.password.isEmpty() && it.fragment == null
+    }) { "Enter an HTTPS add-on URL without a username, password or fragment (plain http only for one on this device, such as http://127.0.0.1:8787)." }
+
+    /** An address that is this device: `localhost`, `127.x.x.x` or `::1`, whatever port. */
+    fun localHost(host: String): Boolean = host == "localhost" || host == "::1" || LOOPBACK_V4.matches(host)
+    private val LOOPBACK_V4 = Regex("""127(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}""")
+
+    /** A plain-http [url] to an add-on on this device. */
+    fun onThisDevice(url: HttpUrl): Boolean = url.scheme == "http" && localHost(url.host)
+
+    /**
+     * Whether a request for [first] may be sent on to [next] by a redirect. An add-on out on the
+     * internet must not be able to turn the app toward this device's own services, so a redirect
+     * may only reach the device if the add-on was on it to begin with.
+     */
+    fun redirectAllowed(first: HttpUrl, next: HttpUrl): Boolean = !localHost(next.host) || localHost(first.host)
     fun normalize(raw: String): String {
         val input = url(raw.trim())
         val segments = input.encodedPath.trimEnd('/').split('/').toMutableList()

@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -38,10 +40,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -49,11 +51,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -81,6 +83,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -126,6 +130,12 @@ fun FloatingCard(
     expandable: Boolean = false,
     /** Opens already at full content height (up to 90% of the screen), so nothing needs scrolling to reach. */
     startExpanded: Boolean = false,
+    /** How much of the screen an [expandable] card takes pulled all the way up: 1 takes over the page. */
+    fullFraction: Float = 0.9f,
+    /** How much of the screen an [expandable] card opens at, unless [startExpanded]. */
+    openFraction: Float = 0.5f,
+    /** False for asynchronously loaded lists: loading and empty states must not cap expansion. */
+    fitContent: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val ui by AppSettings.ui.collectAsState()
@@ -205,15 +215,18 @@ fun FloatingCard(
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 val maxCard = maxHeight
-                val shape = RoundedCornerShape(32.dp)
                 val density = LocalDensity.current
                 // The card's own height with everything shown, measured as it lays out;
                 // an expandable card never grows past it, so a short menu has no empty foot.
                 var naturalPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
-                val fullPx = minOf(with(density) { (maxCard * 0.9f).toPx() }, naturalPx)
+                val fullPx = minOf(with(density) { (maxCard * fullFraction).toPx() }, if (fitContent) naturalPx else Float.MAX_VALUE)
                 // Start at full height when asked, so the whole menu shows at once; otherwise half.
-                val halfPx = if (startExpanded || com.opentune.ui.tv.LocalIsTv.current) fullPx else minOf(with(density) { (maxCard * 0.5f).toPx() }, fullPx)
+                val halfPx = if (startExpanded) fullPx else minOf(with(density) { (maxCard * openFraction).toPx() }, fullPx)
                 val range = (fullPx - halfPx).coerceAtLeast(0f)
+                val fullscreen = expandable && fullFraction >= 1f && !fitContent
+                val expandedFraction = if (range > 0f) (extra / range).coerceIn(0f, 1f) else 1f
+                val edge = if (fullscreen) 1f - expandedFraction else 1f
+                val shape = RoundedCornerShape(32.dp * edge)
                 fun settle(velocity: Float) {
                     settling?.cancel()
                     settling = scope.launch {
@@ -256,33 +269,59 @@ fun FloatingCard(
                         }
 
                         override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                            if (!expandable || source != NestedScrollSource.UserInput || available.y <= 0 || extra <= 0f) return Offset.Zero
+                            if (!expandable || source != NestedScrollSource.UserInput || available.y <= 0) return Offset.Zero
                             settling?.cancel()
+                            if (extra <= 0f) {
+                                // Back at half with the list at its top: the pull carries the card down, to close it.
+                                if (!dismissible) return Offset.Zero
+                                drag += available.y
+                                return Offset(0f, available.y)
+                            }
                             val take = minOf(available.y, extra)
                             extra -= take
                             return Offset(0f, take)
                         }
 
                         override suspend fun onPreFling(available: Velocity): Velocity {
-                            if (!expandable || extra <= 0f || extra >= range) return Velocity.Zero
+                            if (!expandable) return Velocity.Zero
+                            // Carried down from the list: far enough or fast enough closes it, else back up.
+                            if (drag > 0f) {
+                                if (drag > with(density) { 110.dp.toPx() } || available.y > 1400f) card.close() else settle(available.y)
+                                return available
+                            }
+                            if (extra <= 0f || extra >= range) return Velocity.Zero
                             settle(available.y)
                             return available
                         }
+
+                        override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                            // A slow pull let go of: settles the card back or closes it.
+                            if (expandable && drag > 0f) {
+                                if (drag > with(density) { 110.dp.toPx() }) card.close() else settle(0f)
+                            }
+                            return Velocity.Zero
+                        }
                     }
                 }
+                // Pulled up to the whole page, the card runs under the status and navigation bars, edge
+                // to edge: the room kept for them outside it goes as it grows, and comes back inside
+                // it instead, so nothing of it sits under the clock. Kept outside, it left a hard band
+                // of the page above and below a card that was meant to be the page.
+                val barsTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                val barsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                val inside = if (fullscreen) 1f - edge else 0f
                 Column(
                     Modifier
-                        .statusBarsPadding()
-                        .navigationBarsPadding()
+                        .padding(top = barsTop * (1f - inside), bottom = barsBottom * (1f - inside))
                         .imePadding()
-                        .padding(12.dp)
-                        .widthIn(max = 560.dp)
+                        .padding(12.dp * edge)
+                        .widthIn(max = if (fullscreen) maxWidth else 560.dp)
                         .fillMaxWidth()
                         .then(
                             if (expandable) {
                                 Modifier.layout { measurable, constraints ->
                                     // Lists that can't be measured whole (lazy ones) just take the height asked for.
-                                    val natural = runCatching { measurable.maxIntrinsicHeight(constraints.maxWidth) }.getOrNull()
+                                    val natural = if (fitContent) runCatching { measurable.maxIntrinsicHeight(constraints.maxWidth) }.getOrNull() else null
                                     if (natural != null && natural.toFloat() != naturalPx) naturalPx = natural.toFloat()
                                     measured = true
                                     val want = (halfPx + extra).roundToInt()
@@ -335,7 +374,7 @@ fun FloatingCard(
                         )
                         // Taps on the card stay on the card.
                         .pointerInput(Unit) { detectTapGestures { } }
-                        .padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 14.dp),
+                        .padding(start = 10.dp, end = 10.dp, top = 10.dp + barsTop * inside, bottom = 14.dp + barsBottom * inside),
                 ) {
                     // The handle and title pull the card down; content below keeps its own gestures.
                     Column(
@@ -353,10 +392,20 @@ fun FloatingCard(
                         ),
                     ) {
                         Box(
-                            Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp)
-                                .size(width = 36.dp, height = 4.dp).clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)),
-                        )
+                            Modifier.fillMaxWidth().height(24.dp)
+                                // A tap on the bar expands or collapses the sheet, with no ripple across the strip.
+                                .then(if (expandable) Modifier.clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null,
+                                    onClickLabel = if (extra < range / 2) "Expand sheet" else "Collapse sheet",
+                                    role = Role.Button,
+                                ) { settle(if (extra < range / 2) -FLING - 1 else FLING + 1) } else Modifier)
+                                .semantics { contentDescription = "Sheet drag handle" },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(Modifier.size(width = 36.dp, height = 4.dp).clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)))
+                        }
                         if (title != null) {
                             Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (icon != null) {

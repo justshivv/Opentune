@@ -83,6 +83,42 @@ class RangedFetchTest {
         rejectsResponse("bytes 0-15/16", ByteArray(16), "text/html")
     }
 
+    @Test fun unknownLengthDownloadStopsWithoutRetryWhenSmartPolicyChanges() = runBlocking {
+        var requests = 0
+        val whole = OkHttpClient.Builder().addInterceptor { chain ->
+            requests++
+            val body = object : okhttp3.ResponseBody() {
+                override fun contentType(): okhttp3.MediaType? = null
+                override fun contentLength() = -1L
+                override fun source(): okio.BufferedSource = okio.Buffer().write(data)
+            }
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body(body).build()
+        }.build()
+        val part = File.createTempFile("smart-policy", ".part")
+        try {
+            val failure = runCatching {
+                RangedFetch.fetch(whole, "https://media.invalid/file.flac", emptyMap(), part) { throw SmartDownloadDeferred() }
+            }.exceptionOrNull()
+            assertTrue(failure is SmartDownloadDeferred)
+            assertEquals("one size probe and one download, without retrying a policy pause", 2, requests)
+            assertTrue(!part.exists())
+        } finally { part.delete() }
+    }
+
+    @Test fun rangedDownloadDoesNotRetryAPolicyPause() = runBlocking {
+        val part = File.createTempFile("smart-range-policy", ".part")
+        try {
+            val failure = runCatching {
+                RangedFetch.fetch(client, "https://media.invalid/audio?clen=${data.size}", emptyMap(), part, parallel = 1) {
+                    throw SmartDownloadDeferred()
+                }
+            }.exceptionOrNull()
+            assertTrue(failure is SmartDownloadDeferred)
+            assertEquals(1, ranges.size)
+        } finally { part.delete() }
+    }
+
     private suspend fun rejectsResponse(range: String, bytes: ByteArray, type: String) {
         val bad = OkHttpClient.Builder().addInterceptor { chain ->
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(206).message("Partial")

@@ -57,7 +57,7 @@ jobs:
       - uses: android-actions/setup-android@v3
         if: steps.version.outputs.skip != 'true'
         with:
-          packages: platform-tools platforms;android-37.0 build-tools;36.0.0
+          packages: platform-tools platforms;android-37.0 build-tools;36.0.0 ndk;27.2.12479018 cmake;3.22.1
 
       - uses: gradle/actions/setup-gradle@v4
         if: steps.version.outputs.skip != 'true'
@@ -89,7 +89,7 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          for apk in app/build/outputs/apk/release/*.apk; do
+          for apk in app/build/outputs/apk/release/*.apk tv/build/outputs/apk/release/*.apk; do
             certificate="$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk")"
             printf '%s\n' "$certificate" | grep -F 'Signer #1 certificate SHA-256 digest: 23e77142d7f0ae4d65e5e5a3dccb8e735c0042e93ffd29ab5fafe2521ab5d5a2'
             "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | sed -n '1p' > "$RUNNER_TEMP/apk-version.txt"
@@ -106,6 +106,8 @@ jobs:
             abi=$(basename "$f" .apk | sed -e 's/^app-//' -e 's/-release$//')
             cp "$f" "dist/OpenTune-${TAG}-${abi}.apk"
           done
+          # The TV app is its own APK, for Android TV and Google TV.
+          cp tv/build/outputs/apk/release/tv-release.apk "dist/OpenTune-TV-${TAG}.apk"
           (cd dist && sha256sum *.apk > SHA256SUMS.txt)
 
       - name: GitHub release

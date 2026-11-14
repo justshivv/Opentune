@@ -855,7 +855,7 @@ object StreamResolver {
         val stream = downloadStream(videoId, maxKbps, requireM4a)
         val allowed = if (requireM4a) setOf("m4a") else setOf("m4a", "webm")
         check(stream.downloadExtension in allowed) {
-            "Can't save ${stream.mimeType} — try again"
+            com.opentune.i18n.Tr.f("Can't save {0} — try again", stream.mimeType)
         }
         return stream
     }

@@ -25,7 +25,7 @@ private const val TRACK_SCHEME = "opentune"
 private const val TRACK_HOST = "track"
 private const val EXTRA_DURATION_TEXT = "durationText"
 private const val EXTRA_ALBUM = "album"
-private const val EXTRA_THUMB = "thumb"
+internal const val EXTRA_THUMB = "thumb"
 private const val EXTRA_EXPLICIT = "explicit"
 private const val EXTRA_ARTIST_ID = "artistId"
 private const val EXTRA_SMART_SHUFFLE = "smartShuffle"
@@ -42,6 +42,8 @@ fun trackUri(videoId: String): Uri = when {
     Subsonic.isSubsonic(videoId) -> Subsonic.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
     // A station streams from its own server.
     Radio.isRadio(videoId) -> Radio.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
+    // An audiobook's chapter plays straight from the Internet Archive.
+    com.opentune.data.audiobooks.Audiobooks.isChapter(videoId) -> Uri.parse(com.opentune.data.audiobooks.Audiobooks.urlOf(videoId))
     // A download is played from its file offline; with internet it streams, so it starts
     // in the best quality found (the file is YouTube's audio as saved), unless that's off.
     else -> Downloads.fileFor(videoId)

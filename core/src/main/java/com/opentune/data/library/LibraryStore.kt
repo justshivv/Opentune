@@ -104,6 +104,12 @@ private data class LibraryDocument(
     val hiddenSongs: List<HiddenSong> = emptyList(),
     /** "Don't play [artist]": their songs kept out of suggestions, newest first. */
     val hiddenArtists: List<HiddenArtist> = emptyList(),
+    /** Lists that fill themselves from rules; see [SmartPlaylists]. */
+    val smartPlaylists: List<SmartPlaylist> = emptyList(),
+    /** The account the liked sync last ran for; null before the first run. */
+    val likedSyncOwner: String? = null,
+    /** The liked ids this phone and YouTube Music last agreed on. */
+    val likedSyncedIds: Set<String> = emptySet(),
 )
 
 /**
@@ -121,6 +127,14 @@ object LibraryStore {
     /** Newest like first. */
     val liked: StateFlow<List<SongRef>> = _liked.asStateFlow()
 
+    private val _ready = MutableStateFlow(false)
+    /**
+     * True once the stored library has been read at startup. Before that,
+     * an empty list can mean "not read yet" rather than "nothing there",
+     * so a page can show a skeleton instead of an empty state.
+     */
+    val ready: StateFlow<Boolean> = _ready.asStateFlow()
+
     private val _playlists = MutableStateFlow<List<LocalPlaylist>>(emptyList())
     val playlists: StateFlow<List<LocalPlaylist>> = _playlists.asStateFlow()
 
@@ -131,6 +145,25 @@ object LibraryStore {
     private val _disliked = MutableStateFlow<Set<String>>(emptySet())
     /** The videoIds marked "Dislike". */
     val disliked: StateFlow<Set<String>> = _disliked.asStateFlow()
+
+    private val _smart = MutableStateFlow<List<SmartPlaylist>>(emptyList())
+    /** Smart playlists, newest first. */
+    val smartPlaylists: StateFlow<List<SmartPlaylist>> = _smart.asStateFlow()
+
+    fun smartPlaylist(id: String): SmartPlaylist? = _smart.value.firstOrNull { it.id == id }
+
+    /** A new smart playlist; returns its id. */
+    fun createSmartPlaylist(name: String, rules: SmartRules): String {
+        val id = UUID.randomUUID().toString()
+        update { d -> d.copy(smartPlaylists = listOf(SmartPlaylist(id, name.trim().ifEmpty { "Smart playlist" }, rules)) + d.smartPlaylists) }
+        return id
+    }
+
+    fun updateSmartPlaylist(id: String, name: String, rules: SmartRules) = update { d ->
+        d.copy(smartPlaylists = d.smartPlaylists.map { if (it.id == id) it.copy(name = name.trim().ifEmpty { it.name }, rules = rules) else it })
+    }
+
+    fun deleteSmartPlaylist(id: String) = update { d -> d.copy(smartPlaylists = d.smartPlaylists.filterNot { it.id == id }) }
 
     private val _hidden = MutableStateFlow(HiddenList.EMPTY)
     /** Songs and artists kept out of autoplay, radio, smart shuffle and Home's picks. */
@@ -173,6 +206,7 @@ object LibraryStore {
         val f = com.opentune.data.SavedFile(File(context.filesDir, "library.json"), "LibraryStore").also { saved = it }
         // A library that won't read is kept aside, never saved over with an empty one.
         publish(f.read(LibraryDocument()) { json.decodeFromString(LibraryDocument.serializer(), it) })
+        _ready.value = true
         scope.launch {
             doc.drop(1).onEach { f.dirty = true }.debounce(800).collect { d ->
                 runCatching { f.write(json.encodeToString(LibraryDocument.serializer(), d)) }
@@ -191,6 +225,7 @@ object LibraryStore {
         _savedLists.value = d.savedLists
         _hidden.value = HiddenList(d.hiddenSongs, d.hiddenArtists)
         _disliked.value = d.disliked
+        _smart.value = d.smartPlaylists
         LibraryArtwork.keep(d.liked.map { it.thumbnailUrl } + d.playlists.flatMap { p -> p.songs.map { it.thumbnailUrl } })
     }
 
@@ -290,6 +325,13 @@ object LibraryStore {
         editPlaylist(id) { p -> p.copy(songs = p.songs.filterIndexed { i, _ -> i != index }) }
         if (!isYouTubeId(gone.videoId)) return
         mirror(id) { remote -> PlaylistEdit(PlaylistEdit.Kind.REMOVE, id, remote, videoIds = listOf(gone.videoId), setVideoId = gone.setVideoId) }
+    }
+
+    /** Takes every copy of the songs [videoIds] out of playlist [id], as [removeFromPlaylist] would one by one. */
+    @Synchronized
+    fun removeSongsFromPlaylist(id: String, videoIds: Collection<String>) {
+        val p = playlist(id) ?: return
+        p.songs.withIndex().filter { it.value.videoId in videoIds }.map { it.index }.sortedDescending().forEach { removeFromPlaylist(id, it) }
     }
 
     /** A song just taken out of a playlist, which [undoRemove] can put back where it was. */
@@ -473,6 +515,15 @@ object LibraryStore {
         val merged = PlaylistMerge.pull(p, remote)
         if (merged != p) editPlaylist(id) { merged }
     }
+
+    /** What the liked sync last agreed with YouTube Music: the account key, and the ids both sides shared. */
+    fun likedSyncState(): Pair<String?, Set<String>> =
+        doc.value.let { it.likedSyncOwner to it.likedSyncedIds }
+
+    /** Records a finished liked sync: the reconciled list, and the ids both sides share now. */
+    @Synchronized
+    internal fun applyLikedSync(owner: String, startedWith: List<SongRef>, liked: List<SongRef>, agreed: Set<String>) =
+        update { d -> d.copy(liked = keepLikedEdits(startedWith, d.liked, liked), likedSyncOwner = owner, likedSyncedIds = agreed) }
 
     fun exportJson(): JsonElement = json.encodeToJsonElement(LibraryDocument.serializer(), doc.value)
 

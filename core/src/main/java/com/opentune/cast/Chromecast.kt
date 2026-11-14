@@ -93,7 +93,7 @@ class Chromecast(
             delay(500)
             app = runCatching { request(RECEIVER, NS_RECEIVER, JSONObject().put("type", "GET_STATUS")) }.getOrNull()?.let(::runningApp)
         }
-        checkNotNull(app) { "$name didn't start its player" }
+        checkNotNull(app) { com.opentune.i18n.Tr.f("{0} didn't start its player", name) }
         transportId = app.getString("transportId")
         sessionId = app.getString("sessionId")
         send(transportId!!, NS_CONNECTION, JSONObject().put("type", "CONNECT"))

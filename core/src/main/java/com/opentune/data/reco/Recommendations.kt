@@ -114,7 +114,7 @@ object Recommendations {
     private fun artistKey(artist: String) = mainArtist(artist).lowercase().filter { it.isLetterOrDigit() }
 
     suspend fun youtube(videoId: String): List<Song> = withContext(Dispatchers.IO) {
-        LibraryStore.hidden.value.songs(ContentFilter.songs(InnertubeParser.parseWatchQueue(Innertube.next(videoId))))
+        LibraryStore.hidden.value.songs(ContentFilter.songs(InnertubeParser.parseWatchQueue(Innertube.next(videoId), songsOnly = com.opentune.data.settings.AppSettings.playback.value.songsOnly)))
     }
 
     /** An engine's picks; [exact] when each comes with its length, to match on YouTube Music. */

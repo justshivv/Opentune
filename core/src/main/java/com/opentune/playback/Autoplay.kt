@@ -16,6 +16,41 @@ object Autoplay {
      */
     const val TRACKS_BEFORE_END = 3
 
+    /** Rounds of asking for radio at their quick pace, before it slows to once a minute. */
+    const val EAGER_ROUNDS = 4
+
+    /**
+     * How long to wait before round [round] of asking for radio: none for the first, then 10,
+     * 20 and 30 seconds, then a minute each time, for as long as the queue still needs it.
+     */
+    fun radioPause(round: Int): Long = when (round) {
+        0 -> 0L
+        1 -> 10_000L
+        2 -> 20_000L
+        3 -> 30_000L
+        else -> 60_000L
+    }
+
+    /**
+     * When every song the radios have is in the queue already: your own most played songs that
+     * aren't ([excluded] says which can't go), those by the queue's own artists first, so the
+     * music carries on in the same vein instead of stopping.
+     */
+    fun fromHistory(
+        records: List<com.opentune.data.history.PlayRecord>,
+        queue: List<Song>,
+        limit: Int = 20,
+        excluded: (Song) -> Boolean,
+    ): List<Song> {
+        val queueArtists = queue.mapTo(HashSet()) { artistKey(it) }
+        val songs = records.groupBy { it.videoId }.values
+            .sortedByDescending { it.size }
+            .map { it.first().toSong() }
+            .filterNot(excluded)
+        val (near, rest) = songs.partition { artistKey(it) in queueArtists }
+        return spreadArtists((near + rest).take(limit))
+    }
+
     /** Use ready, playable recommendations without waiting for every secondary seed. */
     internal suspend fun readyRadios(
         requests: List<kotlinx.coroutines.Deferred<List<Song>>>,

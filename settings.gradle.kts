@@ -19,4 +19,5 @@ rootProject.name = "OpenTune"
 include(":app")
 include(":core")
 include(":wear")
+include(":tv")
 include(":desktop")

@@ -4,7 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,42 +38,6 @@ object PairingLinks {
 }
 
 @Composable
-internal fun ReceiveSessionSheet(onDismiss: () -> Unit) {
-    var receiver by remember { mutableStateOf<PairingReceiver?>(null) }
-    var status by remember { mutableStateOf("Preparing a private connection…") }
-    var complete by remember { mutableStateOf(false) }
-    var generation by remember { mutableIntStateOf(0) }
-    DisposableEffect(generation) { onDispose { receiver?.close() } }
-    LaunchedEffect(generation) {
-        receiver = null
-        complete = false
-        try {
-            val current = withContext(Dispatchers.IO) { PairingReceiver() }
-            receiver = current
-            status = "Scan with your signed-in OpenTune phone. Keep both devices on the same Wi-Fi. This code expires in two minutes."
-            withContext(Dispatchers.IO) {
-                current.receive { cookie -> AccountStore.signIn(cookie); true }
-            }
-            complete = AccountStore.signedIn.value
-            status = if (complete) "YouTube Music is connected on this device." else "Pairing closed. Try a new code."
-        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (_: Exception) { status = "Could not complete pairing. Use the same Wi-Fi, allow local network access, and generate a new code. Guest networks may block device connections." }
-        finally { receiver?.close(); receiver = null }
-    }
-    FloatingCard(onDismiss = onDismiss, title = "Sign in with your phone") {
-        Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(status, style = MaterialTheme.typography.bodyMedium)
-            receiver?.takeUnless { complete }?.let { current ->
-                Box(Modifier.size(240.dp).background(Color.White).padding(16.dp)) { QrCode(current.offer.link, Modifier.fillMaxSize()) }
-                Text("Only approve the code displayed on your own TV. The session transfers directly between your devices, encrypted.", style = MaterialTheme.typography.bodySmall)
-            }
-            if (receiver == null && !complete) SheetButton("Generate a new code", onClick = { generation++ })
-            SheetButton(if (complete) "Done" else "Cancel", onClick = onDismiss, closes = true)
-        }
-    }
-}
-
-@Composable
 fun ConfirmPairing() {
     val offer by PairingLinks.pending.collectAsState()
     val current = offer ?: return
@@ -91,7 +55,7 @@ fun ConfirmPairing() {
     }
     FloatingCard(onDismiss = { if (!busy) PairingLinks.dismiss() }, title = "Connect your TV") {
         Column(Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Share your YouTube Music session with the device at ${current.host}? Approve only if you just scanned the QR code on your own TV.")
+            Text(com.opentune.i18n.Tr.f("Share your YouTube Music session with the device at {0}? Approve only if you just scanned the QR code on your own TV.", current.host))
             Text(account?.email?.takeIf { it.isNotBlank() } ?: if (signedIn) "Your signed-in YouTube Music account" else "Sign in on this phone first.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             status?.let { Text(it) }
             if (!signedIn) SheetButton("Sign in to YouTube Music", onClick = { login = true }, tone = SheetTone.Primary)

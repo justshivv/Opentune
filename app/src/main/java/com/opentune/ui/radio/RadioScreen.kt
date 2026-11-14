@@ -31,12 +31,12 @@ import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -295,7 +295,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                         action = {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(onClick = { attempt++ }) { Text("Try again") }
-                                toCountry?.let { OutlinedButton(onClick = it) { Text("$countryName instead") } }
+                                toCountry?.let { OutlinedButton(onClick = it) { Text(com.opentune.i18n.Tr.f("{0} instead", countryName)) } }
                             }
                         },
                     )
@@ -308,19 +308,19 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                                 Icons.Rounded.Radio,
                                 "No stations listed near you",
                                 message = "Radio Browser has no stations for this area yet.",
-                                action = toCountry?.let { { OutlinedButton(onClick = it) { Text("Stations in $countryName") } } },
+                                action = toCountry?.let { { OutlinedButton(onClick = it) { Text(com.opentune.i18n.Tr.f("Stations in {0}", countryName)) } } },
                             )
                         }
                     }
                     if (n.stations.isNotEmpty()) {
                         val reach = Radio.formatDistance(n.stations.maxOf { it.distanceKm }).removePrefix("Under ")
-                        item { SectionHeader("Live near you", subtitle = "${n.stations.size} stations within $reach") }
+                        item { SectionHeader("Live near you", subtitle = com.opentune.i18n.Tr.f("{0} stations within {1}", n.stations.size, reach)) }
                         items(n.stations, key = { "n:${it.station.uuid}" }) {
                             StationRow(it.station, actions.currentVideoId == it.station.id, ::play, details = it.station.nearbyDetails(it.distanceKm))
                         }
                     }
                     if (n.area.isNotEmpty()) {
-                        item { SectionHeader(n.areaName?.let { "More in $it" } ?: "More around you", subtitle = "Listed for your area, without a map location") }
+                        item { SectionHeader(n.areaName?.let { com.opentune.i18n.Tr.f("More in {0}", it) } ?: com.opentune.i18n.Tr.t("More around you"), subtitle = "Listed for your area, without a map location") }
                         items(n.area, key = { "a:${it.uuid}" }) {
                             StationRow(it, actions.currentVideoId == it.id, ::play, details = it.nearbyDetails(null))
                         }
@@ -408,7 +408,7 @@ internal fun NearbyPrompt(
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (refused) Button(onClick = onOpenSettings) { Text("Open settings") }
                 else Button(onClick = onAllow) { Text("Use my location") }
-                if (onCountry != null && countryName != null) OutlinedButton(onClick = onCountry) { Text("Stations in $countryName") }
+                if (onCountry != null && countryName != null) OutlinedButton(onClick = onCountry) { Text(com.opentune.i18n.Tr.f("Stations in {0}", countryName)) }
             }
         },
     )

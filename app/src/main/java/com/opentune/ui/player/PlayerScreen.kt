@@ -52,6 +52,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Cast
@@ -68,16 +69,20 @@ import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.SubtitlesOff
+import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.Route
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -97,9 +102,11 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -177,6 +184,7 @@ fun rememberPlaybackPosition(vm: PlayerViewModel): () -> Long {
 data class PlayerUiState(
     val song: Song,
     val isPlaying: Boolean,
+    val isSounding: Boolean,
     val isBuffering: Boolean,
     val hasNext: Boolean,
     val shuffle: Boolean,
@@ -234,6 +242,7 @@ fun PlayerScreen(
     val theme by AppSettings.theme.collectAsState()
     val sound by AppSettings.sound.collectAsState()
     val isPlaying by vm.isPlaying.collectAsState()
+    val isSounding by vm.isSounding.collectAsState()
     val isBuffering by vm.isBuffering.collectAsState()
     val loadingMessage by vm.loadingMessage.collectAsState()
     val hasNext by vm.hasNext.collectAsState()
@@ -270,7 +279,7 @@ fun PlayerScreen(
     }
     PlayerLayout(
         PlayerUiState(
-            shown, isPlaying, isBuffering, hasNext, shuffle, repeat, duration,
+            shown, isPlaying, isSounding, isBuffering, hasNext, shuffle, repeat, duration,
             lyrics, queue, currentIndex, upNext, sound, theme, ui, source, audioFormat,
             shuffleMode, smartShuffleAvailable, coverVideo, canvasVideo, loadingMessage,
         ),
@@ -328,11 +337,19 @@ fun PlayerLayout(
     // so it can travel with the cover into the header and back.
     var bigTitle by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val flight = remember { PaneFlight() }
+    // The one clock of the cover <-> lists change, 0 on the cover and 1 on the lists: the
+    // finger or the flight while the cover moves, else a short ease. The page, the status
+    // line, the grab pill and the button pill all read it, so they move as one.
+    val listsShown = remember { androidx.compose.animation.core.Animatable(if (pane == Pane.COVER) 0f else 1f) }
+    fun paneProgress(): Float = if (flight.active) {
+        if (flight.toSmall) flight.progress else 1f - flight.progress
+    } else listsShown.value
     var showRemix by remember { mutableStateOf(false) }
     var showCast by remember { mutableStateOf(false) }
     var showOutput by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
+    var showComments by remember { mutableStateOf(false) }
     var showOffset by remember { mutableStateOf(false) }
     var showLyricsSource by remember { mutableStateOf(false) }
     var showDetails by remember { mutableStateOf(false) }
@@ -354,7 +371,7 @@ fun PlayerLayout(
     val syncLine: (Long) -> Unit = { lineStart ->
         val shift = lineStart - position()
         AppSettings.setLyricsOffset(current.videoId, shift)
-        com.opentune.data.Pills.info("Lyrics moved %+.1f s for this song".format(shift / 1000f), context)
+        com.opentune.data.Pills.info(com.opentune.i18n.Tr.t("Lyrics moved %+.1f s for this song").format(shift / 1000f), context)
     }
     // Lyrics take the screen: the controls go after LYRICS_FOCUS_MS untouched while
     // synced lyrics play on the lyrics view, and come back at the next touch.
@@ -362,10 +379,8 @@ fun PlayerLayout(
     var controlsAway by remember { mutableStateOf(false) }
     var seenTouch by remember { mutableLongStateOf(touchedAt) }
     val artworkMotion = com.opentune.ui.components.rememberArtworkMotion(state.isPlaying && state.ui.movingCover && !state.ui.reduceAnimation)
-    val television = com.opentune.ui.tv.LocalIsTv.current
-    val focusable = !television && state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
-        ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
-    androidx.activity.compose.BackHandler(enabled = television && pane != Pane.COVER) { paneName = Pane.COVER.name }
+    val focusable = state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
+            ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
     val sheetOpen = showMenu || showRemix || showSleep || showCast || showOffset || showLyricsSource || showDetails || showSignal
     LaunchedEffect(touchedAt, focusable, sheetOpen) {
         // A sheet opening or closing leaves the controls as they are, the tap that opened
@@ -435,19 +450,20 @@ fun PlayerLayout(
     val windowHeight = with(LocalDensity.current) { androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height.toDp() }
     val roomy = !docked || windowHeight >= DOCKED_ROOMY_HEIGHT
     // On its side the player has its own layout.
-    val landscape = !docked && (television || LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE)
+    val landscape = !docked && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Full-screen cover only fits the layouts built around a plain square cover.
-    val fullCover = !landscape && !amoled && (apple || state.ui.fullScreenCover) && pane == Pane.COVER && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    // The Full-screen cover art switch decides, in the Apple-inspired style too (choosing that style turns it on).
+    val fullCover = !landscape && !amoled && state.ui.fullScreenCover && pane == Pane.COVER && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     // Where the cover area ends, measured from the top of the player, so a
     // full-screen cover can run down to the title on any screen height.
     var playerCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     var coverBottomPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     // The plain cover flies, square or edge to edge; the vinyl, cassette and other designs just change view.
-    val fullStyle = !landscape && !amoled && (apple || state.ui.fullScreenCover) && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
+    val fullStyle = !landscape && !amoled && state.ui.fullScreenCover && (apple || style == PlayerStyle.CLASSIC || style == PlayerStyle.MINIMAL)
     val flies = !state.ui.reduceAnimation && !docked && !landscape &&
-        style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
-        style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST
+            style != PlayerStyle.VINYL && style != PlayerStyle.CASSETTE && style != PlayerStyle.HALO &&
+            style != PlayerStyle.POLAROID && style != PlayerStyle.LYRICS_FIRST
     // The playing cover, fetched at both sizes as soon as it's known: with a Canvas showing
     // nothing else draws it, so the small cover in the lyrics and queue header and the cover
     // flying to it showed an empty frame until it had loaded.
@@ -589,7 +605,50 @@ fun PlayerLayout(
         }
     }
 
+    val headerIn = remember {
+        androidx.compose.animation.core.Animatable(if (com.opentune.ui.components.PlayerMorph.expanding && !state.ui.reduceAnimation) 0f else 1f)
+    }
+    // Run in the page's own scope: the open's flag clears when the cover lands, a little
+    // before this has finished, and that mustn't cut it short.
+    val headerScope = rememberCoroutineScope()
+    LaunchedEffect(com.opentune.ui.components.PlayerMorph.expanding) {
+        if (!com.opentune.ui.components.PlayerMorph.expanding) return@LaunchedEffect
+        headerScope.launch {
+            if (state.ui.reduceAnimation) { headerIn.snapTo(1f); return@launch }
+            headerIn.snapTo(0f)
+            headerIn.animateTo(1f, androidx.compose.animation.core.tween(
+                com.opentune.ui.components.SHEET_OPEN_MS, delayMillis = com.opentune.ui.components.SHEET_OPEN_MS / 4,
+                easing = com.opentune.ui.components.SHEET_EASING))
+        }
+    }
+
+    val listsGone by remember { androidx.compose.runtime.derivedStateOf { paneProgress() <= 0.001f } }
+    val listsFull by remember { androidx.compose.runtime.derivedStateOf { paneProgress() >= 0.999f } }
+
     PlayerTheme(seed = rememberArtworkSeed(current.thumbnailUrl), settings = theme, neutral = apple) {
+        // "Playing from", whose room it is, or the remix pill.
+        val statusLine: @Composable () -> Unit = {
+            val room by Together.room.collectAsState()
+            AnimatedContent(sound.isDefault, label = "remixPill") { normal ->
+                if (room != null) {
+                    TogetherPill(room!!, actions.openTogether)
+                } else if (normal) {
+                    if (!state.ui.hideSongStatus) SongStatus(state.source)
+                } else {
+                    AssistChip(
+                        onClick = { showRemix = true },
+                        label = { Text(RemixPreset.matching(sound)?.label ?: "Custom remix") },
+                        leadingIcon = { Icon(Icons.Rounded.GraphicEq, null, Modifier.size(18.dp)) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                    )
+                }
+            }
+        }
+
         Box(
             Modifier
                 .fillMaxSize()
@@ -612,6 +671,7 @@ fun PlayerLayout(
                     orientation = Orientation.Vertical,
                     enabled = !docked,
                     state = rememberDraggableState { delta ->
+                        // Back down after a swipe up: the cover comes back with the finger first.
                         var d = delta
                         // Back down after a swipe up: the cover comes back with the finger first.
                         if (upPull < 0f && d > 0f) {
@@ -624,6 +684,11 @@ fun PlayerLayout(
                         dragOffset = (dragOffset + d).coerceAtLeast(0f)
                         // The card shrinks toward the mini player under the finger.
                         if (com.opentune.ui.components.PlayerMorph.sheetMorph) com.opentune.ui.components.PlayerMorph.sheetDrag = dragOffset
+                        // The swipe has turned into a close: end the follow now,
+                        // not at release, so the close runs on the plain state
+                        // and the flight stops holding the cover and the lists
+                        // where the swipe left them.
+                        if (dragOffset > 0f && flight.following) flight.end()
                         followUp()
                         // When the cover itself can't fly with the finger, the whole cover page
                         // lifts with it instead, so a swipe up always moves something.
@@ -687,6 +752,18 @@ fun PlayerLayout(
                             }
                             upPull = 0f
                         } else if (dragOffset > dismissPx || velocity > 2_000f) {
+                            // Closing from a list: the player goes back to its cover
+                            // first, so the shrink starts from the cover page and the
+                            // player reopens whole — not with the list's header, its
+                            // cover and info, left stuck at the top.
+                            if (pane != Pane.COVER) {
+                                liftSettle?.cancel()
+                                coverSettle?.cancel()
+                                coverLift = 0f
+                                upPull = 0f
+                                paneName = Pane.COVER.name
+                                returnPane = null
+                            }
                             val size = playerCoords?.takeIf { it.isAttached }?.size
                             if (com.opentune.ui.components.PlayerMorph.sheetMorph && size != null) {
                                 // The card is already part of the way to the mini player, under
@@ -717,7 +794,7 @@ fun PlayerLayout(
                     theme.playerBackground,
                     current.thumbnailUrl,
                     Modifier.fillMaxSize(),
-                    animate = !state.ui.reduceAnimation,
+                    animate = !state.ui.reduceAnimation && !state.ui.stillBackdrops,
                     // While it flies the cover is drawn by the flight, not here as well.
                     fullCover = fullStyle,
                     fullCoverVisible = fullCover && !flight.active,
@@ -725,10 +802,12 @@ fun PlayerLayout(
                     fullCoverBottom = with(LocalDensity.current) { coverBottomPx.takeIf { it > 0f }?.toDp() },
                     movingCover = state.ui.movingCover && !state.ui.reduceAnimation,
                     playing = state.isPlaying,
+                    canvasPlaying = state.isSounding,
                     change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
                     index = state.currentIndex,
                     songId = current.videoId,
                     canvas = state.canvasVideo,
+                    video = state.coverVideo,
                     titleTop = with(LocalDensity.current) { bigTitle?.top?.takeIf { it > 0f }?.toDp() },
                     // Lyrics and the queue are read over the whole page, so the Canvas frosts top to bottom.
                     canvasBehindText = pane != Pane.COVER,
@@ -747,7 +826,7 @@ fun PlayerLayout(
                 AmbientLights(
                     listOf(scheme.primary, scheme.tertiary, scheme.secondary, scheme.inversePrimary, scheme.primaryContainer),
                     playing = state.isPlaying,
-                    animate = !state.ui.reduceAnimation,
+                    animate = !state.ui.reduceAnimation && !state.ui.stillBackdrops,
                     modifier = Modifier.fillMaxSize(),
                     field = true,
                 )
@@ -760,500 +839,499 @@ fun PlayerLayout(
                 LocalBackdrop provides backdrop,
                 LocalHazeState provides null,
             ) {
-            // On its side the cover goes left and the rest stacks on the right;
-            // lyrics and the queue open in the cover's place.
-            if (landscape) {
-                LandscapePlayer(
-                    state, position, lyricsPosition, actions,
-                    liked = isLiked,
-                    device = sleepLabel ?: device,
-                    onLike = { LibraryStore.setLiked(current, !isLiked) },
-                    onMore = { showMenu = true },
-                    onSignal = { showSignal = true },
-                    onLyrics = { toggle(Pane.LYRICS) },
-                    onQueue = { toggle(Pane.QUEUE) },
-                    showLines = state.ui.lyricsPreview && pane != Pane.LYRICS,
-                    side = when (pane) {
-                        Pane.COVER -> null
-                        Pane.LYRICS -> { ->
-                            LyricsView(
-                                state.lyrics,
-                                lyricsPosition,
-                                onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
-                                modifier = Modifier.fillMaxSize().nestedScroll(lyricsScroll).focusIn(!state.ui.reduceAnimation),
-                                synced = state.ui.syncedLyrics,
-                                blur = state.ui.blurLyrics,
-                                shareSong = current,
-                                onSyncLine = syncLine,
-                                playing = lyricsPlaying,
-                                seeks = lyricsSeeks,
-                            )
-                        }
-                        Pane.QUEUE -> { ->
-                            QueuePane(
-                                queue = state.queue,
-                                currentIndex = state.currentIndex,
-                                upNext = state.upNext,
-                                isPlaying = state.isPlaying,
-                                shuffle = state.shuffle,
-                                smartShuffle = state.shuffleMode == com.opentune.playback.ShuffleMode.SMART,
-                                onPlayIndex = actions.playIndex,
-                                onRemoveIndex = actions.removeIndex,
-                                onMove = actions.moveIndex,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    },
-                )
-            } else Column(
-                Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(horizontal = 24.dp)
-                    // Every touch anywhere on the player, seen before the parts under it
-                    // handle it and never taken from them: it counts as being looked at.
-                    .pointerInput(Unit) {
-                        awaitPointerEventScope {
-                            while (true) {
-                                val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-                                val now = System.currentTimeMillis()
-                                // A few times a second is plenty, and keeps a drag from recomposing the player each frame.
-                                // Controls that are away come back when the finger lifts, so a tap that opens a
-                                // sheet (seen in the same event) leaves them where they are.
-                                if (controlsAway) {
-                                    if (e.changes.any { it.previousPressed && !it.pressed }) touchedAt = now
-                                } else if (e.changes.any { it.pressed } && now - touchedAt > 250) touchedAt = now
+                // On its side the cover goes left and the rest stacks on the right;
+                // lyrics and the queue open in the cover's place.
+                if (landscape) {
+                    LandscapePlayer(
+                        state, position, lyricsPosition, actions,
+                        liked = isLiked,
+                        device = sleepLabel ?: device.takeIf { !state.ui.hideOutputDevice } ?: "",
+                        onLike = { LibraryStore.setLiked(current, !isLiked) },
+                        onMore = { showMenu = true },
+                        onSignal = { showSignal = true },
+                        onLyrics = { toggle(Pane.LYRICS) },
+                        onQueue = { toggle(Pane.QUEUE) },
+                        showLines = state.ui.lyricsPreview && pane != Pane.LYRICS,
+                        side = when (pane) {
+                            Pane.COVER -> null
+                            Pane.LYRICS -> { ->
+                                LyricsView(
+                                    state.lyrics,
+                                    lyricsPosition,
+                                    onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
+                                    modifier = Modifier.fillMaxSize().nestedScroll(lyricsScroll).focusIn(!state.ui.reduceAnimation),
+                                    synced = state.ui.syncedLyrics,
+                                    blur = state.ui.blurLyrics,
+                                    shareSong = current,
+                                    onSyncLine = syncLine,
+                                    playing = lyricsPlaying,
+                                    seeks = lyricsSeeks,
+                                )
                             }
-                        }
-                    },
-            ) {
-                // "Playing from", whose room it is, or the remix pill.
-                val statusLine: @Composable () -> Unit = {
-                    val room by Together.room.collectAsState()
-                    AnimatedContent(sound.isDefault, label = "remixPill") { normal ->
-                        if (room != null) {
-                            TogetherPill(room!!, actions.openTogether)
-                        } else if (normal) {
-                            if (!state.ui.hideSongStatus) SongStatus(state.source)
-                        } else {
-                            AssistChip(
-                                onClick = { showRemix = true },
-                                label = { Text(RemixPreset.matching(sound)?.label ?: "Custom remix") },
-                                leadingIcon = { Icon(Icons.Rounded.GraphicEq, null, Modifier.size(18.dp)) },
-                                colors = AssistChipDefaults.assistChipColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                ),
-                            )
-                        }
-                    }
-                }
-                // Grab handle. Docked, there's nothing to pull down: a button at the end folds the pane away.
-                Column(Modifier.fillMaxWidth().padding(top = if (docked) 0.dp else 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (!docked) Box(
-                        Modifier.size(width = 40.dp, height = 5.dp).clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
-                            .clickable(onClick = actions.collapse),
-                    )
-                    // Docked, the line stays in the header beside the hide button; otherwise it sits
-                    // over the top of the pages and goes as the lyrics or queue come in.
-                    if (docked) Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
-                        Box(
-                            Modifier.align(Alignment.CenterEnd).size(40.dp).clip(CircleShape).clickable(onClick = actions.collapse),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Hide player", Modifier.size(26.dp))
-                        }
-                        Box(Modifier.padding(horizontal = 44.dp)) { statusLine() }
-                    }
-                }
-
-                // Cover mode: the art fills the space and the title sits below it.
-                // Lyrics and queue: a compact header, then the list.
-                // Lyrics and queue share one layout (the header stays put and only the
-                // list below it changes), so the outer change is cover against list.
-                // While a swipe up carries the cover, the change to the lists is scrubbed by
-                // the finger, so the lists come in as the cover shrinks rather than after
-                // letting go; let go, it plays on from there, or back if it's short.
-                val outerPane = if (pane == Pane.COVER) Pane.COVER else Pane.LYRICS
-                // Like BitChord: the cover page and the lists are both kept built and only
-                // their layers move, on one value from 0 (the cover) to 1 (the lists) that the
-                // finger or a 420ms ease drives. Nothing is composed while it moves: the lists,
-                // the heaviest thing here, are built out of sight a moment after the player
-                // settles, and fade up behind the cover as it reaches the header.
-                val listsShown = remember { androidx.compose.animation.core.Animatable(if (outerPane == Pane.COVER) 0f else 1f) }
-                var listsBuilt by remember { mutableStateOf(outerPane != Pane.COVER) }
-                LaunchedEffect(Unit) { delay(LISTS_PREWARM_MS); listsBuilt = true }
-                LaunchedEffect(outerPane, flight.following, flight.active) {
-                    val target = if (outerPane == Pane.COVER) 0f else 1f
-                    if (flight.following && outerPane == Pane.COVER) {
-                        listsBuilt = true
-                        androidx.compose.runtime.snapshotFlow { flight.pull }.collect { listsShown.snapTo(it.coerceIn(0f, 1f)) }
-                    } else if (state.ui.reduceAnimation || flight.active) {
-                        listsBuilt = listsBuilt || target == 1f
-                        listsShown.snapTo(target)
-                    } else {
-                        listsBuilt = listsBuilt || target == 1f
-                        val left = kotlin.math.abs(target - listsShown.value)
-                        listsShown.animateTo(target, tween((PANE_SWITCH_MS * left).toInt().coerceAtLeast(120), easing = FastOutSlowInEasing))
-                    }
-                }
-                // A flying cover and the page beneath it share a clock, including the
-                // first layout frames. The list must not finish fading in ahead of it.
-                fun paneProgress(): Float = if (flight.active) {
-                    if (flight.toSmall) flight.progress else 1f - flight.progress
-                } else listsShown.value
-                val listsGone by remember { androidx.compose.runtime.derivedStateOf { paneProgress() <= 0.001f } }
-                val listsFull by remember { androidx.compose.runtime.derivedStateOf { paneProgress() >= 0.999f } }
-                val paneBody: @Composable (Pane, Boolean) -> Unit = { p, hidden ->
-                    Column(
-                        Modifier.fillMaxSize().graphicsLayer {
-                            // The cover page, carried up by a swipe that's still under the finger.
-                            if (p == Pane.COVER) {
-                                val k = coverLift
-                                translationY = -k * size.height * COVER_LIFT_RISE
-                                val sc = 1f - COVER_LIFT_SHRINK * k
-                                scaleX = sc
-                                scaleY = sc
-                                transformOrigin = TransformOrigin(0.5f, 0f)
-                                alpha = 1f - COVER_LIFT_FADE * k
+                            Pane.QUEUE -> { ->
+                                QueuePane(
+                                    queue = state.queue,
+                                    currentIndex = state.currentIndex,
+                                    upNext = state.upNext,
+                                    isPlaying = state.isPlaying,
+                                    shuffle = state.shuffle,
+                                    smartShuffle = state.shuffleMode == com.opentune.playback.ShuffleMode.SMART,
+                                    onPlayIndex = actions.playIndex,
+                                    onRemoveIndex = actions.removeIndex,
+                                    onMove = actions.moveIndex,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
                             }
                         },
-                    ) {
-                        if (p == Pane.COVER && style == PlayerStyle.LYRICS_FIRST) {
-                            // The lyrics are the page; the cover shrinks to the header.
-                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Artwork(current.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(84.dp), RoundedCornerShape(14.dp))
-                                Spacer(Modifier.width(16.dp))
-                                TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true }, compact = true)
-                            }
-                            LyricsView(
-                                state.lyrics,
-                                lyricsPosition,
-                                onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
-                                modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(lyricsScroll),
-                                synced = state.ui.syncedLyrics,
-                                blur = state.ui.blurLyrics,
-                                shareSong = current,
-                                onSyncLine = syncLine,
-                                playing = lyricsPlaying,
-                                seeks = lyricsSeeks,
-                                controlsVisible = !controlsHidden,
-                            )
-                        } else if (p == Pane.COVER) {
-                            val seekBy: (Long) -> Unit = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) }
-                            Box(Modifier.weight(1f).fillMaxWidth().then(if (docked) Modifier.fitSquare() else Modifier), contentAlignment = Alignment.Center) {
-                                // The plain cover has the taps built in; every other design is wrapped in them here.
-                                val ownTaps = !fullCover && style !in listOf(PlayerStyle.VINYL, PlayerStyle.CASSETTE, PlayerStyle.HALO, PlayerStyle.POLAROID)
-                                val design: @Composable () -> Unit = {
-                                when {
-                                    // Keep the full-cover layout mounted while its exit animates.
-                                    fullStyle ->
-                                        ArtworkSwipeArea(
-                                            onSwipeNext = actions.next,
-                                            onSwipePrevious = actions.previous,
-                                            modifier = Modifier.fillMaxSize().onGloballyPositioned { c ->
-                                                val root = playerCoords ?: return@onGloballyPositioned
-                                                if (root.isAttached && c.isAttached) {
-                                                    coverBottomPx = root.localPositionOf(c, androidx.compose.ui.geometry.Offset(0f, c.size.height.toFloat())).y
-                                                }
-                                            },
-                                        )
-                                    style == PlayerStyle.VINYL ->
-                                        VinylPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
-                                    style == PlayerStyle.CASSETTE ->
-                                        CassettePane(
-                                            current, state.isPlaying,
-                                            progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
-                                            onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation,
-                                        )
-                                    style == PlayerStyle.HALO ->
-                                        HaloPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
-                                    style == PlayerStyle.POLAROID ->
-                                        PolaroidPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
-                                    else ->
-                                        ArtworkPane(
-                                            current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous,
-                                            moving = state.ui.movingCover && !state.ui.reduceAnimation,
-                                            artworkMotion = artworkMotion,
-                                            change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
-                                            index = state.currentIndex,
-                                            onSeekBy = seekBy.takeIf { state.ui.doubleTapSeek },
-                                            glow = state.ui.coverGlow && !state.ui.reduceAnimation && !amoled && !apple,
-                                            video = state.coverVideo,
-                                            canvasShowing = state.canvasVideo != null,
-                                        )
+                    )
+                } else Column(
+                    Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(horizontal = 24.dp)
+                        // Every touch anywhere on the player, seen before the parts under it
+                        // handle it and never taken from them: it counts as being looked at.
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                    val now = System.currentTimeMillis()
+                                    // A few times a second is plenty, and keeps a drag from recomposing the player each frame.
+                                    // Controls that are away come back when the finger lifts, so a tap that opens a
+                                    // sheet (seen in the same event) leaves them where they are.
+                                    if (controlsAway) {
+                                        if (e.changes.any { it.previousPressed && !it.pressed }) touchedAt = now
+                                    } else if (e.changes.any { it.pressed } && now - touchedAt > 250) touchedAt = now
                                 }
-                                }
-                                if (state.ui.doubleTapSeek && !ownTaps) SeekTaps(seekBy, 1f, Modifier.matchParentSize()) { design() } else design()
                             }
-                            Spacer(Modifier.height(16.dp))
-                            TitleRow(
-                                current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true },
-                                Modifier
-                                    .onGloballyPositioned { if (!flight.active && coverLift == 0f && dragOffset == 0f) bigTitle = it.boundsInRoot() }
-                                    .graphicsLayer { alpha = if (flight.active && bigTitle != null) 0f else 1f },
-                            )
+                        },
+                ) {
+                    // As the player opens, its top comes in after the cover rather than being there from the
+                    // first frame: the grab handle slides down a little into place, and "Playing from"
+                    // follows from just under it. Both on the sheet's own clock, so they settle with it.
+                    // Hidden from its first frame when the player is built as it opens, so it never flashes in first.
+                    // Grab handle. Docked, there's nothing to pull down: a button at the end folds the pane away.
+                    Column(Modifier.fillMaxWidth().padding(top = if (docked) 0.dp else 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        // The grab pill's room; the pill itself is drawn over everything, below.
+                        if (!docked) Spacer(Modifier.size(width = 40.dp, height = 5.dp))
+                        // Docked, the line stays in the header beside the hide button; otherwise it sits
+                        // over the top of the pages and goes as the lyrics or queue come in.
+                        if (docked) Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+                            Box(
+                                Modifier.align(Alignment.CenterEnd).size(40.dp).clip(CircleShape).clickable(onClick = actions.collapse),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Hide player", Modifier.size(26.dp))
+                            }
+                            Box(Modifier.padding(horizontal = 44.dp)) { statusLine() }
+                        }
+                    }
+
+                    // Cover mode: the art fills the space and the title sits below it.
+                    // Lyrics and queue: a compact header, then the list.
+                    // Lyrics and queue share one layout (the header stays put and only the
+                    // list below it changes), so the outer change is cover against list.
+                    // While a swipe up carries the cover, the change to the lists is scrubbed by
+                    // the finger, so the lists come in as the cover shrinks rather than after
+                    // letting go; let go, it plays on from there, or back if it's short.
+                    val outerPane = if (pane == Pane.COVER) Pane.COVER else Pane.LYRICS
+                    // Like BitChord: the cover page and the lists are both kept built and only
+                    // their layers move, on one value from 0 (the cover) to 1 (the lists) that the
+                    // finger or a 420ms ease drives. Nothing is composed while it moves: the lists,
+                    // the heaviest thing here, are built out of sight a moment after the player
+                    // settles, and fade up behind the cover as it reaches the header.
+                    var listsBuilt by remember { mutableStateOf(outerPane != Pane.COVER) }
+                    LaunchedEffect(Unit) { delay(LISTS_PREWARM_MS); listsBuilt = true }
+                    LaunchedEffect(outerPane, flight.following, flight.active) {
+                        val target = if (outerPane == Pane.COVER) 0f else 1f
+                        if (flight.following && outerPane == Pane.COVER) {
+                            listsBuilt = true
+                            androidx.compose.runtime.snapshotFlow { flight.pull }.collect { listsShown.snapTo(it.coerceIn(0f, 1f)) }
+                        } else if (state.ui.reduceAnimation || flight.active) {
+                            listsBuilt = listsBuilt || target == 1f
+                            listsShown.snapTo(target)
                         } else {
-                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Artwork(
-                                    current.thumbnailUrl.artworkAt(ROW_ART_PX),
-                                    Modifier.size(64.dp)
-                                        // Not while parked out of sight: that place isn't where it shows.
-                                        .onGloballyPositioned { if (!hidden) { smallCover = it.boundsInRoot(); flight.lastSmall = smallCover } }
-                                        .graphicsLayer { alpha = if (flight.active) 0f else 1f }
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .clickable(onClickLabel = "Show the cover") { expandCover() },
-                                    RoundedCornerShape(10.dp),
-                                )
-                                Spacer(Modifier.width(14.dp))
-                                Row(Modifier.weight(1f).graphicsLayer { alpha = if (flight.active && bigTitle != null) 0f else 1f }, verticalAlignment = Alignment.CenterVertically) {
+                            listsBuilt = listsBuilt || target == 1f
+                            val left = kotlin.math.abs(target - listsShown.value)
+                            listsShown.animateTo(target, tween((PANE_SWITCH_MS * left).toInt().coerceAtLeast(120), easing = FastOutSlowInEasing))
+                        }
+                    }
+                    // A flying cover and the page beneath it share a clock, including the
+                    // first layout frames. The list must not finish fading in ahead of it.
+                    val paneBody: @Composable (Pane, Boolean) -> Unit = { p, hidden ->
+                        Column(
+                            Modifier.fillMaxSize().graphicsLayer {
+                                // The cover page, carried up by a swipe that's still under the finger.
+                                if (p == Pane.COVER) {
+                                    val k = coverLift
+                                    translationY = -k * size.height * COVER_LIFT_RISE
+                                    val sc = 1f - COVER_LIFT_SHRINK * k
+                                    scaleX = sc
+                                    scaleY = sc
+                                    transformOrigin = TransformOrigin(0.5f, 0f)
+                                    alpha = 1f - COVER_LIFT_FADE * k
+                                }
+                            },
+                        ) {
+                            if (p == Pane.COVER && style == PlayerStyle.LYRICS_FIRST) {
+                                // The lyrics are the page; the cover shrinks to the header.
+                                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Artwork(current.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(84.dp), RoundedCornerShape(14.dp))
+                                    Spacer(Modifier.width(16.dp))
                                     TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true }, compact = true)
                                 }
-                            }
-                            // Between lyrics and queue the new list slides up from below on a soft
-                            // spring while the old one lifts a little and fades, under a still header.
-                            // Both stay composed once shown, and only their layers move: switching
-                            // never builds a list (or scrolls the lyrics to their line) mid-slide.
-                            // On the cover, mid-swipe: the list the swipe goes to. Leaving: the one that was up.
-                            val list = pane.takeIf { it != Pane.COVER }
-                                ?: if (flight.following) returnPane?.let { runCatching { Pane.valueOf(it) }.getOrNull() }?.takeIf { it != Pane.COVER } ?: Pane.QUEUE
-                                else runCatching { Pane.valueOf(lastList) }.getOrDefault(Pane.LYRICS)
-                            val toQueue = remember { androidx.compose.animation.core.Animatable(if (list == Pane.QUEUE) 1f else 0f) }
-                            LaunchedEffect(list, state.ui.reduceAnimation) {
-                                val target = if (list == Pane.QUEUE) 1f else 0f
-                                if (state.ui.reduceAnimation) toQueue.snapTo(target)
-                                else toQueue.animateTo(target, spring(dampingRatio = 1f, stiffness = 320f, visibilityThreshold = 0.001f))
-                            }
-                            var lyricsBuilt by remember { mutableStateOf(list == Pane.LYRICS) }
-                            var queueBuilt by remember { mutableStateOf(list == Pane.QUEUE) }
-                            if (list == Pane.LYRICS) lyricsBuilt = true else queueBuilt = true
-                            // The other one is built a moment after this view opens, out of sight,
-                            // so the first switch to it is as smooth as the rest.
-                            LaunchedEffect(Unit) { delay(700); lyricsBuilt = true; queueBuilt = true }
-                            Box(Modifier.weight(1f).fillMaxWidth()) {
-                                for (shown in listOf(Pane.LYRICS, Pane.QUEUE)) {
-                                    if (!(if (shown == Pane.LYRICS) lyricsBuilt else queueBuilt)) continue
-                                    val queueSide = shown == Pane.QUEUE
-                                    Column(
-                                        Modifier.fillMaxSize()
-                                            // The one in view is on top, and takes the touches.
-                                            .zIndex(if (shown == list) 1f else 0f)
-                                            .graphicsLayer {
-                                                val q = toQueue.value
-                                                val inView = if (queueSide) q else 1f - q
-                                                alpha = inView
-                                                // Faded per draw, not through a buffer the size of the pane,
-                                                // which would cut the blurred lines off at the page margin.
-                                                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
-                                                // The queue sits below the lyrics: going to it, the lyrics lift a
-                                                // little as the queue rises in; coming back, the reverse. Placed by
-                                                // the one value both share, so a switch mid-slide turns back
-                                                // smoothly from wherever they are.
-                                                translationY = if (queueSide) size.height * 0.18f * (1f - q) else -size.height * 0.06f * q
-                                            },
-                                    ) {
-                                    if (shown == Pane.LYRICS) {
-                                        LyricsView(
-                                            state.lyrics,
-                                            // Parked behind the cover, the lyrics follow once a second rather than
-                                            // drawing every frame; they stay on their line, so coming in needs no scroll.
-                                            if (hidden) ({ lyricsPosition() / HIDDEN_LYRICS_STEP_MS * HIDDEN_LYRICS_STEP_MS }) else lyricsPosition,
-                                            onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
-                                            modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(lyricsScroll).focusIn(!state.ui.reduceAnimation),
-                                            synced = state.ui.syncedLyrics,
-                                            blur = state.ui.blurLyrics,
-                                            shareSong = current,
-                                            onSyncLine = syncLine,
-                                            playing = lyricsPlaying,
-                                            seeks = lyricsSeeks,
-                                            controlsVisible = !controlsHidden,
-                                        )
-                                    } else {
-                                        Text(com.opentune.ui.theme.tr("Queue"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
-                                        QueuePane(
-                                            queue = state.queue,
-                                            currentIndex = state.currentIndex,
-                                            upNext = state.upNext,
-                                            isPlaying = state.isPlaying,
-                                            shuffle = state.shuffle,
-                                            smartShuffle = state.shuffleMode == com.opentune.playback.ShuffleMode.SMART,
-                                            onPlayIndex = actions.playIndex,
-                                            onRemoveIndex = actions.removeIndex,
-                                            onMove = actions.moveIndex,
-                                            modifier = Modifier.weight(1f).fillMaxWidth(),
-                                            appleWords = apple,
-                                        )
+                                LyricsView(
+                                    state.lyrics,
+                                    lyricsPosition,
+                                    onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
+                                    modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(lyricsScroll),
+                                    synced = state.ui.syncedLyrics,
+                                    blur = state.ui.blurLyrics,
+                                    shareSong = current,
+                                    onSyncLine = syncLine,
+                                    playing = lyricsPlaying,
+                                    seeks = lyricsSeeks,
+                                    controlsVisible = !controlsHidden,
+                                )
+                            } else if (p == Pane.COVER) {
+                                val seekBy: (Long) -> Unit = { d -> actions.seekTo((position() + d).coerceIn(0L, state.durationMs.coerceAtLeast(0L))) }
+                                Box(Modifier.weight(1f).fillMaxWidth().then(if (docked) Modifier.fitSquare() else Modifier), contentAlignment = Alignment.Center) {
+                                    // The plain cover has the taps built in; every other design is wrapped in them here.
+                                    val ownTaps = !fullCover && style !in listOf(PlayerStyle.VINYL, PlayerStyle.CASSETTE, PlayerStyle.HALO, PlayerStyle.POLAROID)
+                                    val design: @Composable () -> Unit = {
+                                        when {
+                                            // Keep the full-cover layout mounted while its exit animates.
+                                            fullStyle ->
+                                                ArtworkSwipeArea(
+                                                    onSwipeNext = actions.next,
+                                                    onSwipePrevious = actions.previous,
+                                                    modifier = Modifier.fillMaxSize().onGloballyPositioned { c ->
+                                                        // Scaled down under the lists: not its place.
+                                                        if (hidden) return@onGloballyPositioned
+                                                        val root = playerCoords ?: return@onGloballyPositioned
+                                                        if (root.isAttached && c.isAttached) {
+                                                            coverBottomPx = root.localPositionOf(c, androidx.compose.ui.geometry.Offset(0f, c.size.height.toFloat())).y
+                                                        }
+                                                    },
+                                                )
+                                            style == PlayerStyle.VINYL ->
+                                                VinylPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                            style == PlayerStyle.CASSETTE ->
+                                                CassettePane(
+                                                    current, state.isPlaying,
+                                                    progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
+                                                    onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation,
+                                                )
+                                            style == PlayerStyle.HALO ->
+                                                HaloPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                            style == PlayerStyle.POLAROID ->
+                                                PolaroidPane(current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous, animate = !state.ui.reduceAnimation)
+                                            else ->
+                                                ArtworkPane(
+                                                    current, state.isPlaying, onSwipeNext = actions.next, onSwipePrevious = actions.previous,
+                                                    moving = state.ui.movingCover && !state.ui.reduceAnimation,
+                                                    artworkMotion = artworkMotion,
+                                                    change = if (state.ui.reduceAnimation) com.opentune.data.settings.CoverChange.FADE else state.ui.coverChange,
+                                                    index = state.currentIndex,
+                                                    onSeekBy = seekBy.takeIf { state.ui.doubleTapSeek },
+                                                    glow = state.ui.coverGlow && !state.ui.reduceAnimation && !amoled && !apple,
+                                                    video = state.coverVideo,
+                                                    canvasShowing = state.canvasVideo != null,
+                                                    corner = state.ui.coverCornerDp.dp,
+                                                )
+                                        }
                                     }
+                                    if (state.ui.doubleTapSeek && !ownTaps) SeekTaps(seekBy, 1f, Modifier.matchParentSize()) { design() } else design()
+                                }
+                                Spacer(Modifier.height(16.dp))
+                                TitleRow(
+                                    current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true },
+                                    Modifier
+                                        .onGloballyPositioned { if (!hidden && !flight.active && coverLift == 0f && dragOffset == 0f) bigTitle = it.boundsInRoot() }
+                                        .graphicsLayer { alpha = if (flight.active && bigTitle != null) 0f else 1f },
+                                )
+                            } else {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Artwork(
+                                        current.thumbnailUrl.artworkAt(ROW_ART_PX),
+                                        Modifier.size(64.dp)
+                                            // Not while parked out of sight: that place isn't where it shows.
+                                            .onGloballyPositioned { if (!hidden) { smallCover = it.boundsInRoot(); flight.lastSmall = smallCover } }
+                                            .graphicsLayer { alpha = if (flight.active) 0f else 1f }
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .clickable(onClickLabel = "Show the cover") { expandCover() },
+                                        RoundedCornerShape(10.dp),
+                                    )
+                                    Spacer(Modifier.width(14.dp))
+                                    Row(Modifier.weight(1f).graphicsLayer { alpha = if (flight.active && bigTitle != null) 0f else 1f }, verticalAlignment = Alignment.CenterVertically) {
+                                        TitleRow(current, isLiked, onLike = { LibraryStore.setLiked(current, !isLiked) }, onMore = { showMenu = true }, compact = true)
+                                    }
+                                }
+                                // Between lyrics and queue the new list slides up from below on a soft
+                                // spring while the old one lifts a little and fades, under a still header.
+                                // Both stay composed once shown, and only their layers move: switching
+                                // never builds a list (or scrolls the lyrics to their line) mid-slide.
+                                // On the cover, mid-swipe: the list the swipe goes to. Leaving: the one that was up.
+                                val list = pane.takeIf { it != Pane.COVER }
+                                    ?: if (flight.following) returnPane?.let { runCatching { Pane.valueOf(it) }.getOrNull() }?.takeIf { it != Pane.COVER } ?: Pane.QUEUE
+                                    else runCatching { Pane.valueOf(lastList) }.getOrDefault(Pane.LYRICS)
+                                val toQueue = remember { androidx.compose.animation.core.Animatable(if (list == Pane.QUEUE) 1f else 0f) }
+                                LaunchedEffect(list, state.ui.reduceAnimation) {
+                                    val target = if (list == Pane.QUEUE) 1f else 0f
+                                    if (state.ui.reduceAnimation) toQueue.snapTo(target)
+                                    else toQueue.animateTo(target, spring(dampingRatio = 1f, stiffness = 320f, visibilityThreshold = 0.001f))
+                                }
+                                var lyricsBuilt by remember { mutableStateOf(list == Pane.LYRICS) }
+                                var queueBuilt by remember { mutableStateOf(list == Pane.QUEUE) }
+                                if (list == Pane.LYRICS) lyricsBuilt = true else queueBuilt = true
+                                // The other one is built a moment after this view opens, out of sight,
+                                // so the first switch to it is as smooth as the rest.
+                                // A moment, not long: opened in that gap, the other list was built on the
+                                // first frame of its own opening.
+                                LaunchedEffect(Unit) { delay(200); lyricsBuilt = true; queueBuilt = true }
+                                Box(Modifier.weight(1f).fillMaxWidth()) {
+                                    for (shown in listOf(Pane.LYRICS, Pane.QUEUE)) {
+                                        if (!(if (shown == Pane.LYRICS) lyricsBuilt else queueBuilt)) continue
+                                        val queueSide = shown == Pane.QUEUE
+                                        Column(
+                                            Modifier.fillMaxSize()
+                                                // The one in view is on top, and takes the touches.
+                                                .zIndex(if (shown == list) 1f else 0f)
+                                                .graphicsLayer {
+                                                    val q = toQueue.value
+                                                    val inView = if (queueSide) q else 1f - q
+                                                    alpha = inView
+                                                    // Faded per draw, not through a buffer the size of the pane,
+                                                    // which would cut the blurred lines off at the page margin.
+                                                    compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
+                                                    // The queue sits below the lyrics: going to it, the lyrics lift a
+                                                    // little as the queue rises in; coming back, the reverse. Placed by
+                                                    // the one value both share, so a switch mid-slide turns back
+                                                    // smoothly from wherever they are.
+                                                    translationY = if (queueSide) size.height * 0.18f * (1f - q) else -size.height * 0.06f * q
+                                                },
+                                        ) {
+                                            if (shown == Pane.LYRICS) {
+                                                // Parked behind the cover, the lyrics follow once a second rather than
+                                                // drawing every frame; they stay on their line, so coming in needs no scroll.
+                                                // One clock that asks whether they're parked: handing over a different one
+                                                // as they came out rebuilt the whole lyrics on the opening's first frame.
+                                                val parkedNow by androidx.compose.runtime.rememberUpdatedState(hidden)
+                                                val lyricsClock = remember(lyricsPosition) {
+                                                    { if (parkedNow) lyricsPosition() / HIDDEN_LYRICS_STEP_MS * HIDDEN_LYRICS_STEP_MS else lyricsPosition() }
+                                                }
+                                                LyricsView(
+                                                    state.lyrics,
+                                                    lyricsClock,
+                                                    onSeek = { actions.seekTo((it - offsetMs).coerceAtLeast(0)) },
+                                                    modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(lyricsScroll).focusIn(!state.ui.reduceAnimation),
+                                                    synced = state.ui.syncedLyrics,
+                                                    blur = state.ui.blurLyrics,
+                                                    shareSong = current,
+                                                    onSyncLine = syncLine,
+                                                    playing = lyricsPlaying,
+                                                    seeks = lyricsSeeks,
+                                                    controlsVisible = !controlsHidden,
+                                                )
+                                            } else {
+                                                Text(com.opentune.ui.theme.tr("Queue"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+                                                QueuePane(
+                                                    queue = state.queue,
+                                                    currentIndex = state.currentIndex,
+                                                    upNext = state.upNext,
+                                                    isPlaying = state.isPlaying,
+                                                    shuffle = state.shuffle,
+                                                    smartShuffle = state.shuffleMode == com.opentune.playback.ShuffleMode.SMART,
+                                                    onPlayIndex = actions.playIndex,
+                                                    onRemoveIndex = actions.removeIndex,
+                                                    onMove = actions.moveIndex,
+                                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                                    appleWords = apple,
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-                // Not clipped: a blurred lyric line spreads past the page's side margin.
-                Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { paneCoords = it }) {
-                    val switchDp = with(LocalDensity.current) { 26.dp.toPx() }
-                    // The cover page: only while it's in sight, so its cover reports its own place.
-                    if (outerPane == Pane.COVER || !listsFull) {
-                        Box(
-                            Modifier.fillMaxSize().zIndex(if (outerPane == Pane.COVER) 1f else 0f)
-                                .padding(top = if (docked) 0.dp else STATUS_ROOM)
-                                .graphicsLayer {
-                                val v = paneProgress()
-                                alpha = (1f - v * 1.6f).coerceIn(0f, 1f)
-                                val sc = 1f - 0.06f * v
-                                scaleX = sc
-                                scaleY = sc
-                                // Faded through a layer, the page would be cut to its own box, and the
-                                // glow spilling above the cover would end in a straight line.
-                                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
-                            },
-                        ) { paneBody(Pane.COVER, false) }
+                    // Not clipped: a blurred lyric line spreads past the page's side margin.
+                    Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { paneCoords = it }) {
+                        val switchDp = with(LocalDensity.current) { 26.dp.toPx() }
+                        // The cover page: only while it's in sight, so its cover reports its own place.
+                        val coverHidden = outerPane != Pane.COVER && listsFull
+                        if (outerPane == Pane.COVER || !listsFull || fullStyle) {
+                            Box(
+                                Modifier.fillMaxSize().zIndex(if (outerPane == Pane.COVER) 1f else 0f)
+                                    // Kept built under the lists but out of reach: no touches, nothing read out.
+                                    .then(if (coverHidden) Modifier.clearAndSetSemantics { } else Modifier)
+                                    .padding(top = if (docked) 0.dp else STATUS_ROOM)
+                                    .graphicsLayer {
+                                        val v = paneProgress()
+                                        alpha = (1f - v * 1.6f).coerceIn(0f, 1f)
+                                        val sc = 1f - 0.06f * v
+                                        scaleX = sc
+                                        scaleY = sc
+                                        // Faded through a layer, the page would be cut to its own box, and the
+                                        // glow spilling above the cover would end in a straight line.
+                                        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
+                                    },
+                            ) { paneBody(Pane.COVER, coverHidden) }
+                        }
+                        // The lists: built once, then parked far off to the side while the cover is up,
+                        // so they never take its touches or cost a frame when they come in.
+                        if (listsBuilt) {
+                            val parked = outerPane == Pane.COVER && !flight.following && listsGone
+                            Box(
+                                Modifier.fillMaxSize()
+                                    .zIndex(if (outerPane == Pane.COVER) 0f else 1f)
+                                    .offset { if (parked) androidx.compose.ui.unit.IntOffset(100_000, 0) else androidx.compose.ui.unit.IntOffset.Zero }
+                                    .graphicsLayer {
+                                        val v = paneProgress()
+                                        alpha = ((v - 0.4f) / 0.6f).coerceIn(0f, 1f)
+                                        translationY = (1f - v) * switchDp
+                                        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
+                                    },
+                            ) { paneBody(Pane.LYRICS, parked) }
+                        }
                     }
-                    // The lists: built once, then parked far off to the side while the cover is up,
-                    // so they never take its touches or cost a frame when they come in.
-                    if (listsBuilt) {
-                        val parked = outerPane == Pane.COVER && !flight.following && listsGone
-                        Box(
-                            Modifier.fillMaxSize()
-                                .zIndex(if (outerPane == Pane.COVER) 0f else 1f)
-                                .offset { if (parked) androidx.compose.ui.unit.IntOffset(100_000, 0) else androidx.compose.ui.unit.IntOffset.Zero }
-                                .graphicsLayer {
-                                    val v = paneProgress()
-                                    alpha = ((v - 0.4f) / 0.6f).coerceIn(0f, 1f)
-                                    translationY = (1f - v) * switchDp
-                                    compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
-                                },
-                        ) { paneBody(Pane.LYRICS, parked) }
-                    }
-                    // The status line over the top: on the cover page it has its own room; as the
-                    // lists come in it lifts away and fades on their clock, so nothing under it
-                    // moves, and comes back down the same way with the cover.
-                    if (!docked && !listsFull) {
-                        val lift = with(LocalDensity.current) { 14.dp.toPx() }
-                        Box(
-                            Modifier.fillMaxWidth().height(STATUS_ROOM).zIndex(2f).graphicsLayer {
-                                val v = paneProgress()
-                                alpha = (1f - v * 2.2f).coerceIn(0f, 1f)
-                                translationY = -lift * v
-                            },
-                            contentAlignment = Alignment.Center,
-                        ) { statusLine() }
-                    }
-                }
 
-                val synced = (state.lyrics as? LyricsState.Found)?.lyrics as? com.opentune.data.lyrics.Lyrics.Synced
-                // Lyrics are timed against the song shifted by the offset; the bar is the song's own time.
-                val choruses = remember(synced, offsetMs) { synced?.let { com.opentune.data.lyrics.SongParts.choruses(it).map { ms -> ms - offsetMs } }.orEmpty() }
-                val marks = remember(synced, offsetMs) { synced?.let { com.opentune.data.lyrics.SongParts.marks(it).map { ms -> ms - offsetMs } }.orEmpty() }
-                val nextChorus by androidx.compose.runtime.produceState<Long?>(null, choruses) {
-                    while (true) {
-                        value = com.opentune.data.lyrics.SongParts.nextChorus(choruses, position())
-                        kotlinx.coroutines.delay(500)
+                    val synced = (state.lyrics as? LyricsState.Found)?.lyrics as? com.opentune.data.lyrics.Lyrics.Synced
+                    // Lyrics are timed against the song shifted by the offset; the bar is the song's own time.
+                    val choruses = remember(synced, offsetMs) { synced?.let { com.opentune.data.lyrics.SongParts.choruses(it).map { ms -> ms - offsetMs } }.orEmpty() }
+                    val marks = remember(synced, offsetMs) { synced?.let { com.opentune.data.lyrics.SongParts.marks(it).map { ms -> ms - offsetMs } }.orEmpty() }
+                    val nextChorus by androidx.compose.runtime.produceState<Long?>(null, choruses) {
+                        while (true) {
+                            value = com.opentune.data.lyrics.SongParts.nextChorus(choruses, position())
+                            kotlinx.coroutines.delay(500)
+                        }
                     }
-                }
-                // Lyrics with nothing in the way: a few seconds untouched while they
-                // play, and the controls slide down out of sight.
-                AnimatedVisibility(
-                    !controlsHidden,
-                    enter = expandVertically(spring(dampingRatio = 0.9f, stiffness = 380f), expandFrom = Alignment.Top) + slideInVertically(spring(dampingRatio = 0.9f, stiffness = 380f)) { it / 2 } + fadeIn(tween(220)),
-                    exit = shrinkVertically(tween(520, easing = FastOutSlowInEasing), shrinkTowards = Alignment.Top) + slideOutVertically(tween(520, easing = FastOutSlowInEasing)) { it / 2 } + fadeOut(tween(360)),
-                ) {
-                Column {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    AnimatedVisibility(state.ui.skipToChorus && nextChorus != null, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
-                        SkipToChorus { nextChorus?.let { actions.seekTo((it - 250).coerceAtLeast(0)) } }
-                    }
-                }
-                if (pane != Pane.LYRICS && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
-                    LyricPreview(state.lyrics, lyricsPosition, onOpen = { toggle(Pane.LYRICS) }, Modifier.padding(top = 4.dp), plain = apple)
-                }
-                Spacer(Modifier.height(8.dp))
-                // The line at a point of the song, for the bubble shown while the bar is dragged.
-                val lyricAt: ((Long) -> String?)? = if (state.ui.lyricScrubPreview && synced != null) {
-                    { ms -> synced.lines.lastOrNull { it.startMs <= ms + offsetMs }?.text?.takeIf { it.isNotBlank() } }
-                } else null
-                SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation && !apple, playing = state.isPlaying, lyricAt = lyricAt, marks = marks, quality = { if (state.ui.sourcePill) SourceQualityBadge(current.videoId, state.audioFormat, onClick = { showSignal = true }) })
-                if (state.ui.statsForNerds) {
-                    Box(Modifier.clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
-                }
-                PlayerControls(
-                    isPlaying = state.isPlaying,
-                    isBuffering = state.isBuffering,
-                    hasNext = state.hasNext,
-                    onTogglePlay = actions.togglePlay,
-                    onNext = actions.next,
-                    onPrevious = actions.previous,
-                    // Apple Music's bare glyphs, whatever buttons are chosen for the other layouts.
-                    style = if (apple) com.opentune.data.settings.ControlStyle.BLOOM else state.ui.controlStyle,
-                    animate = !state.ui.reduceAnimation && state.loadingMessage?.startsWith("Offline") != true,
-                    progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
-                )
-                if (!state.ui.hideVolumeBar && !minimal && roomy) VolumeBar(Modifier.padding(vertical = 4.dp))
-                Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    GlassToggle(PlayerIcons.Lyrics, "Lyrics", pane == Pane.LYRICS, { toggle(Pane.LYRICS) })
-                    // One pill that morphs between sleep and output, and the queue's modes.
-                    val inQueueNow = pane == Pane.QUEUE
-                    MorphPill(
-                        second = inQueueNow,
-                        animate = !state.ui.reduceAnimation,
-                        firstFill = Color.White.copy(alpha = 0.14f),
-                        secondFill = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        modifier = Modifier.weight(1f),
-                        first = { enabled ->
-                            // Its two halves split by a hairline; the fill is the morphing one behind.
-                            Row(Modifier.height(52.dp).clip(RoundedCornerShape(30.dp)), verticalAlignment = Alignment.CenterVertically) {
-                                // Each half is the button: a press fills the half, not a circle round the icon.
-                                // Apple Music's has where it's playing, then who's listening with you.
-                                if (!apple) {
-                                    PillButton(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true }, enabled = enabled)
-                                    Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
-                                }
-                                PillButton(
-                                    outputRoute.icon,
-                                    "Audio output",
-                                    // Headphones only change the icon; lit up is for casting, a session to notice.
-                                    outputRoute == OutputRoute.CAST,
-                                    { showOutput = true },
-                                    enabled = enabled,
-                                )
-                                if (apple) {
-                                    val room by Together.room.collectAsState()
-                                    Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
-                                    PillButton(Icons.Rounded.Person, "Listen together", room != null, actions.openTogether, enabled = enabled)
+                    // Lyrics with nothing in the way: a few seconds untouched while they
+                    // play, and the controls slide down out of sight.
+                    AnimatedVisibility(
+                        !controlsHidden,
+                        enter = expandVertically(spring(dampingRatio = 0.9f, stiffness = 380f), expandFrom = Alignment.Top) + slideInVertically(spring(dampingRatio = 0.9f, stiffness = 380f)) { it / 2 } + fadeIn(tween(220)),
+                        exit = shrinkVertically(tween(520, easing = FastOutSlowInEasing), shrinkTowards = Alignment.Top) + slideOutVertically(tween(520, easing = FastOutSlowInEasing)) { it / 2 } + fadeOut(tween(360)),
+                    ) {
+                        Column {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                AnimatedVisibility(state.ui.skipToChorus && nextChorus != null, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
+                                    SkipToChorus { nextChorus?.let { actions.seekTo((it - 250).coerceAtLeast(0)) } }
                                 }
                             }
-                        },
-                        secondContent = { enabled ->
-                            ModesPill(state.shuffleMode, state.smartShuffleAvailable, state.repeatMode, actions.toggleShuffle, actions.cycleRepeat, filled = false, enabled = enabled)
-                        },
-                    )
-                    GlassToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
-                }
-                if (!minimal && roomy) Text(
-                    sleepLabel ?: device,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
-                )
-                }
-                }
-                // Where the controls went: a faint handle, and a swipe or touch brings them back.
-                AnimatedVisibility(controlsHidden, enter = fadeIn(tween(400)), exit = fadeOut(tween(150))) {
-                    Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp), contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(width = 44.dp, height = 5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)))
+                            if (pane != Pane.LYRICS && state.ui.lyricsPreview && !(pane == Pane.COVER && style == PlayerStyle.LYRICS_FIRST)) {
+                                LyricPreview(state.lyrics, lyricsPosition, onOpen = { toggle(Pane.LYRICS) }, Modifier.padding(top = 4.dp), plain = apple)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            // The line at a point of the song, for the bubble shown while the bar is dragged.
+                            val lyricAt: ((Long) -> String?)? = if (state.ui.lyricScrubPreview && synced != null) {
+                                { ms -> synced.lines.lastOrNull { it.startMs <= ms + offsetMs }?.text?.takeIf { it.isNotBlank() } }
+                            } else null
+                            SeekBar(position, buffered, state.durationMs, onSeek = actions.seekTo, wavy = state.ui.wavySeekbar && !state.ui.reduceAnimation && !apple, playing = state.isPlaying, lyricAt = lyricAt, marks = marks, quality = { if (state.ui.sourcePill) SourceQualityBadge(current.videoId, state.audioFormat, onClick = { showSignal = true }) })
+                            if (state.ui.statsForNerds) {
+                                Box(Modifier.fillMaxWidth().clickable { showSignal = true }) { NerdStatsLine(state.audioFormat) }
+                            }
+                            PlayerControls(
+                                isPlaying = state.isPlaying,
+                                isBuffering = state.isBuffering,
+                                hasNext = state.hasNext,
+                                onTogglePlay = actions.togglePlay,
+                                onNext = actions.next,
+                                onPrevious = actions.previous,
+                                // Apple Music's bare glyphs, whatever buttons are chosen for the other layouts.
+                                style = if (apple) com.opentune.data.settings.ControlStyle.BLOOM else state.ui.controlStyle,
+                                animate = !state.ui.reduceAnimation && state.loadingMessage?.startsWith("Offline") != true,
+                                progress = { if (state.durationMs > 0) position() / state.durationMs.toFloat() else 0f },
+                            )
+                            if (!state.ui.hideVolumeBar && !minimal && roomy) VolumeBar(Modifier.padding(vertical = 4.dp))
+                            Spacer(Modifier.height(10.dp))
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                GlassToggle(PlayerIcons.Lyrics, "Lyrics", pane == Pane.LYRICS, { toggle(Pane.LYRICS) })
+                                // One pill that morphs between sleep and output, and the queue's modes.
+                                val inQueueNow = pane == Pane.QUEUE
+                                MorphPill(
+                                    second = inQueueNow,
+                                    animate = !state.ui.reduceAnimation,
+                                    // Between the cover and the queue, on the cover's own clock (the finger's
+                                    // while a swipe carries it), so the pill changes as the cover moves
+                                    // rather than in a second animation after it lands.
+                                    progress = {
+                                        val queueSide = when {
+                                            pane == Pane.QUEUE -> true
+                                            pane == Pane.LYRICS -> false
+                                            flight.following -> (returnPane ?: Pane.QUEUE.name) == Pane.QUEUE.name
+                                            else -> lastList == Pane.QUEUE.name
+                                        }
+                                        if (queueSide && (flight.active || listsShown.isRunning)) paneProgress() else null
+                                    },
+                                    firstFill = Color.White.copy(alpha = 0.14f),
+                                    secondFill = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    modifier = Modifier.weight(1f),
+                                    first = { enabled ->
+                                        // Its two halves split by a hairline; the fill is the morphing one behind.
+                                        // Rounded by the morphing pill's own outline, so its lit end buttons reach that edge.
+                                        Row(Modifier.height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            // Each half is the button: a press fills the half, not a circle round the icon.
+                                            // Apple Music's has where it's playing, then who's listening with you.
+                                            if (!apple) {
+                                                PillButton(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true }, enabled = enabled)
+                                                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                            }
+                                            PillButton(
+                                                outputRoute.icon,
+                                                "Audio output",
+                                                // Headphones only change the icon; lit up is for casting, a session to notice.
+                                                outputRoute == OutputRoute.CAST,
+                                                { showOutput = true },
+                                                enabled = enabled,
+                                            )
+                                            if (state.ui.commentsButton) {
+                                                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                                PillButton(Icons.Rounded.ChatBubbleOutline, "Comments", showComments, { showComments = true }, enabled = enabled)
+                                            }
+                                            if (apple) {
+                                                val room by Together.room.collectAsState()
+                                                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                                PillButton(Icons.Rounded.Person, "Listen together", room != null, actions.openTogether, enabled = enabled)
+                                            }
+                                        }
+                                    },
+                                    secondContent = { enabled ->
+                                        ModesPill(state.shuffleMode, state.smartShuffleAvailable, state.repeatMode, actions.toggleShuffle, actions.cycleRepeat, filled = false, enabled = enabled)
+                                    },
+                                )
+                                GlassToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
+                            }
+                            if (!minimal && roomy && (sleepLabel != null || !state.ui.hideOutputDevice)) Text(
+                                sleepLabel ?: device,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
+                            )
+                        }
+                    }
+                    // Where the controls went: a faint handle, and a swipe or touch brings them back.
+                    AnimatedVisibility(controlsHidden, enter = fadeIn(tween(400)), exit = fadeOut(tween(150))) {
+                        Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(width = 44.dp, height = 5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)))
+                        }
                     }
                 }
             }
-            }
-            // The cover on its way between the header and the full cover, over the rest.
-            if (flight.active) {
-                val from = flight.from
-                // Before the header is back (a swipe still under the finger), where it was last.
-                val to = flight.target(smallCover, bigCover())
+            // The cover on its way between the header and the full cover, over the rest. Kept built
+            // between flights, out of sight and out of reach, wherever both its ends are known:
+            // built only as a fold began, its first frame (the cover, both its images, the title and
+            // its buttons all made at once) took several frames' time and the cover stalled.
+            val flying = flight.active
+            val from = if (flying) flight.from else bigCover()
+            // Before the header is back (a swipe still under the finger), where it was last.
+            val to = if (flying) flight.target(smallCover, bigCover()) else (smallCover ?: flight.lastSmall)
+            if (from != null && to != null && (flying || flies)) {
                 val origin = playerCoords?.takeIf { it.isAttached }?.positionInRoot() ?: androidx.compose.ui.geometry.Offset.Zero
-                if (from != null && to != null) {
+                Box(
+                    Modifier
+                        .offset { if (flight.active) androidx.compose.ui.unit.IntOffset.Zero else androidx.compose.ui.unit.IntOffset(100_000, 0) }
+                        .graphicsLayer { alpha = if (flight.active) 1f else 0f }
+                        .then(if (flying) Modifier else Modifier.clearAndSetSemantics { }),
+                ) {
                     // Progress is read in the layer only: the finger or the runner, frame by frame.
                     com.opentune.ui.components.MorphBox(
                         current.thumbnailUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX),
@@ -1264,20 +1342,87 @@ fun PlayerLayout(
                         endCornerDp = if (flight.toSmall) 10f else (if (fullStyle) 0f else 28f),
                         origin = origin,
                         fullBleed = fullStyle,
-                        contentModifier = Modifier.testTag("pane-cover-flight"),
-                        artworkMotion = artworkMotion.takeIf { state.ui.movingCover && !state.ui.reduceAnimation },
+                        contentModifier = if (flying) Modifier.testTag("pane-cover-flight") else Modifier,
+                        artworkMotion = artworkMotion.takeIf { flying && state.ui.movingCover && !state.ui.reduceAnimation },
+                        // The animated cover flies too, on the same player as the cover it leaves or
+                        // lands on, so the still cover never shows for a moment on the way.
+                        // With a Spotify Canvas behind, the big cover is the video: the still cover
+                        // flies in only as it shrinks, so it never covers the Canvas on the way.
+                        bigAlpha = if (state.canvasVideo != null) 0f else 1f,
+                        overlay = state.coverVideo?.takeIf { flying && state.canvasVideo == null && !fullStyle }?.let { video ->
+                            {
+                                val quality = state.ui.motionQuality
+                                LoopingVideo(video.url, state.isPlaying, Modifier.matchParentSize(), fallbackUrl = video.fallbackUrl, maxPx = quality.maxPx, maxBitrate = quality.maxBitrate)
+                            }
+                        },
                     )
                     // Drawn outside the player's own colours, so given them here: the title and
                     // its buttons changed colour as they flew.
                     bigTitle?.let { title -> CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                         TitleFlight(
                             current, isLiked, title,
-                            big = if (flight.toSmall) from else to,
-                            small = if (flight.toSmall) to else from,
+                            big = if (flight.toSmall || !flying) from else to,
+                            small = if (flight.toSmall || !flying) to else from,
                             q = { flight.progress.let { if (flight.toSmall) it else 1f - it }.coerceIn(0f, 1f) },
                             origin = origin,
+                            onLike = { LibraryStore.setLiked(current, !isLiked) },
+                            onMore = { showMenu = true },
                         )
                     } }
+                }
+            }
+            // The grab pill and the "Playing from" line under it, drawn over everything, the flying
+            // cover included, so neither goes under the cover and pops back out when it lands. As the
+            // cover folds away the line is drawn up into the pill and goes in under it; as the cover
+            // grows back it drifts out from under the pill. The pill itself only drifts a little.
+            // All of it on the cover's own clock.
+            if (!docked && !landscape) {
+                val pillColour = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                Column(
+                    Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 24.dp, end = 24.dp, top = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        Modifier
+                            .testTag("grab-handle")
+                            .zIndex(1f)
+                            .graphicsLayer {
+                                val p = headerIn.value
+                                alpha = p
+                                translationY = -10.dp.toPx() * (1f - p) + PILL_DRIFT.toPx() * paneProgress().coerceIn(0f, 1f)
+                            }
+                            .size(width = 40.dp, height = 5.dp).clip(CircleShape)
+                            .background(pillColour)
+                            // Tapping the pill closes the player, without a ripple on it.
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null,
+                                onClick = actions.collapse,
+                            ),
+                    )
+                    Box(
+                        Modifier.fillMaxWidth().height(STATUS_ROOM)
+                            // Kept built, parked aside over the lists so it takes none of their touches.
+                            .offset { if (listsFull) androidx.compose.ui.unit.IntOffset(100_000, 0) else androidx.compose.ui.unit.IntOffset.Zero }
+                            // What rises past the top goes in under the pill.
+                            .clipToBounds(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            Modifier.testTag("status-line").graphicsLayer {
+                                val v = paneProgress().coerceIn(0f, 1f)
+                                val tuck = v * v * (3f - 2f * v)
+                                // Opening the player: a beat after the pill, out from just under it.
+                                val opened = ((headerIn.value - 0.3f) / 0.7f).coerceIn(0f, 1f)
+                                transformOrigin = TransformOrigin(0.5f, 0f)
+                                translationY = -STATUS_ROOM.toPx() * 0.8f * tuck - 8.dp.toPx() * (1f - opened)
+                                val sc = 1f - 0.12f * tuck
+                                scaleX = sc
+                                scaleY = sc
+                                alpha = (1f - tuck * 0.7f) * opened
+                            },
+                        ) { statusLine() }
+                    }
                 }
             }
         }
@@ -1295,19 +1440,25 @@ fun PlayerLayout(
         )
         if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
         if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })
+        if (showComments) CommentsSheet(current, onDismiss = { showComments = false })
         if (showMenu) {
             SongMenuSheet(
                 current,
                 onDismiss = { showMenu = false },
-                top = { close -> MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() } },
+                asPage = true,
+                top = { close ->
+                    MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
+                    // Always here: the Comments button setting only takes it out of the button pill.
+                    MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }
+                },
                 tools = { close ->
-                    MenuRow(Icons.Rounded.HighQuality, "Track details") { close(); showDetails = true }
-                    MenuRow(Icons.Rounded.GraphicEq, "Signal path") { close(); showSignal = true }
+                    MenuRow(Icons.Rounded.Info, "Track details") { close(); showDetails = true }
+                    MenuRow(Icons.Rounded.Route, "Signal path") { close(); showSignal = true }
                     MenuRow(Icons.Rounded.Groups, "Listen together") { close(); actions.openTogether() }
                     MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
                     MenuRow(Icons.Rounded.Tune, "Lyrics offset") { close(); showOffset = true }
                     MenuRow(Icons.Rounded.Lyrics, "Lyrics source") { close(); showLyricsSource = true }
-                    MenuRow(Icons.Rounded.Lyrics, if (state.ui.lyricsPreview) "Hide lyrics preview" else "Show lyrics preview") {
+                    MenuRow(if (state.ui.lyricsPreview) Icons.Rounded.SubtitlesOff else Icons.Rounded.Subtitles, if (state.ui.lyricsPreview) "Hide lyrics preview" else "Show lyrics preview") {
                         close()
                         AppSettings.updateUi { it.copy(lyricsPreview = !it.lyricsPreview) }
                     }
@@ -1450,10 +1601,11 @@ private fun TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, onMore: () 
  * comes round to its right as the cover reaches the header, shrinking to the header's size.
  */
 @Composable
-private fun TitleFlight(
+internal fun TitleFlight(
     song: Song, liked: Boolean, bigTitle: androidx.compose.ui.geometry.Rect,
     big: androidx.compose.ui.geometry.Rect, small: androidx.compose.ui.geometry.Rect,
     q: () -> Float, origin: androidx.compose.ui.geometry.Offset,
+    onLike: () -> Unit, onMore: () -> Unit,
 ) {
     val sideGap = with(LocalDensity.current) { 14.dp.toPx() }
     val under = bigTitle.top - big.bottom
@@ -1481,10 +1633,10 @@ private fun TitleFlight(
         },
     ) {
         Row(Modifier.fillMaxWidth().align(Alignment.CenterStart).graphicsLayer { alpha = 1f - side(q()) }, verticalAlignment = Alignment.CenterVertically) {
-            TitleRow(song, liked, onLike = {}, onMore = {}, compact = false)
+            TitleRow(song, liked, onLike = onLike, onMore = onMore, compact = false)
         }
         Row(Modifier.fillMaxWidth().align(Alignment.CenterStart).graphicsLayer { alpha = side(q()) }, verticalAlignment = Alignment.CenterVertically) {
-            TitleRow(song, liked, onLike = {}, onMore = {}, compact = true)
+            TitleRow(song, liked, onLike = onLike, onMore = onMore, compact = true)
         }
     }
 }
@@ -1633,6 +1785,8 @@ private val DOCKED_ROOMY_HEIGHT = 720.dp
 
 /** Room kept at the top of the cover page for the "Playing from" line over it. */
 private val STATUS_ROOM = 40.dp
+/** How far the grab pill drifts down as the lyrics or queue come in. */
+private val PILL_DRIFT = 3.dp
 
 /** How long the lyrics view goes untouched before the controls slide away. */
 private const val LYRICS_FOCUS_MS = 5_000L
@@ -1661,6 +1815,7 @@ fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier 
         onNext = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.NEXT); vm.skipNext() },
         onPrevious = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.PREVIOUS); vm.skipPrevious() },
         onClick = onExpand,
+        onDismiss = { vm.dismiss() },
         modifier = modifier,
         inline = inline,
         replica = replica,
@@ -1675,9 +1830,9 @@ private fun TogetherPill(room: Together.Room, onClick: () -> Unit) {
         label = {
             Text(
                 when {
-                    room.hosting -> "Your room · ${room.members.size} listening"
-                    room.holding -> "Paused for you · ${room.hostName ?: "room"}"
-                    room.phase == Together.Phase.Live -> "With ${room.hostName ?: "the host"} · ${room.members.size} listening"
+                    room.hosting -> com.opentune.i18n.Tr.f("Your room · {0} listening", room.members.size)
+                    room.holding -> com.opentune.i18n.Tr.f("Paused for you · {0}", room.hostName ?: com.opentune.i18n.Tr.t("room"))
+                    room.phase == Together.Phase.Live -> com.opentune.i18n.Tr.f("With {0} · {1} listening", room.hostName ?: com.opentune.i18n.Tr.t("the host"), room.members.size)
                     else -> "Listening together"
                 },
             )
@@ -1820,6 +1975,9 @@ internal class PaneFlight {
     fun endRun(run: Int) { if (run == runs) end() }
 
     fun end() {
+        // Held where it got to: dropping primed alone put the cover back at its start for
+        // the one frame before it was taken away, a flash of the big cover after folding.
+        startAt = progress
         active = false
         primed = false
         following = false

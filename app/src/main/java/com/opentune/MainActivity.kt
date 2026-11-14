@@ -35,10 +35,10 @@ class MainActivity : ComponentActivity() {
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(com.opentune.ui.theme.AppLanguages.wrap(newBase))
     }
-    private var tv = false
 
     override fun onStop() {
         super.onStop()
+        com.opentune.ui.components.GlassPerformance.unwatch(this)
         // Off the screen, the app can be closed at any moment: a like or a playlist change made
         // just before was still waiting for its save, and was lost.
         Thread { com.opentune.data.Core.flush() }.start()
@@ -51,43 +51,29 @@ class MainActivity : ComponentActivity() {
         }.getOrNull() ?: android.content.res.Resources.getSystem().configuration.locales[0].country.takeIf { it.length == 2 }
         java.util.Locale.setDefault(resources.configuration.locales[0])
         enableEdgeToEdge()
+        com.opentune.ui.components.GlassPerformance.init(this)
         if (savedInstanceState == null) receive(intent)
-        tv = com.opentune.ui.tv.Tv.isTv(this)
-        if (tv) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        // A TV's graphics are a phone's from years back driving a far bigger picture: live blur,
-        // glass and moving covers made every press of the remote land late. Turned down the
-        // first time the app opens on one, after which they're the viewer's to turn back on.
-        if (tv && !AppSettings.ui.value.tvTuned) AppSettings.updateUi {
-            it.copy(
-                tvTuned = true,
-                reduceBlur = true,
-                liquidGlass = false,
-                frostedTopEdge = false,
-                coverGlow = false,
-                movingCover = false,
-                blurLyrics = false,
-                wavySeekbar = false,
-                openingAnimation = false,
-            )
+        // An older Android or a phone short of memory: Lite mode, once, before the first frame.
+        if (!AppSettings.ui.value.liteChecked) {
+            val memory = getSystemService(android.app.ActivityManager::class.java)
+            val info = android.app.ActivityManager.MemoryInfo().also { memory?.getMemoryInfo(it) }
+            val slow = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q ||
+                memory?.isLowRamDevice == true || info.totalMem in 1 until LITE_MEMORY_BYTES
+            AppSettings.updateUi { (if (slow) com.opentune.data.settings.liteModeApplied(it, true) else it).copy(liteChecked = true) }
         }
         setContent {
             val vm: PlayerViewModel = viewModel()
             val theme by AppSettings.theme.collectAsState()
             val ui by AppSettings.ui.collectAsState()
-            LaunchedEffect(ui.highRefreshRate, ui.refreshRateHz) { preferRefreshRate(ui.highRefreshRate, ui.refreshRateHz) }
-            // A TV dims and starts its screensaver after a few minutes without a key press;
-            // while music plays from here, the cover and lyrics stay on screen instead.
-            val playing by vm.isPlaying.collectAsState()
-            LaunchedEffect(playing) {
-                if (!tv) return@LaunchedEffect
-                if (playing) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            // Battery saver holds the screen at 60 Hz while OpenTune is open; otherwise as chosen.
+            val saver = ui.performanceProfile == com.opentune.data.settings.PerformanceProfile.BATTERY_SAVER
+            LaunchedEffect(ui.highRefreshRate, ui.refreshRateHz, saver) {
+                if (saver) preferRefreshRate(true, 60) else preferRefreshRate(ui.highRefreshRate, ui.refreshRateHz)
             }
             val song by vm.currentSong.collectAsState()
             OpenTuneTheme(theme, artworkSeed = rememberArtworkSeed(song?.thumbnailUrl)) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    // Some TVs crop the picture's edges: keep pages and buttons inside the safe area.
-                    androidx.compose.foundation.layout.Box(if (tv) Modifier.padding(horizontal = 28.dp, vertical = 16.dp) else Modifier) {
+                    androidx.compose.foundation.layout.Box {
                     // More than two releases behind, the app is only its update screen until it's updated.
                     val required by com.opentune.data.UpdateLock.required.collectAsState()
                     val behind by com.opentune.data.UpdateLock.behind.collectAsState()
@@ -111,7 +97,7 @@ class MainActivity : ComponentActivity() {
                         val page: @androidx.compose.runtime.Composable () -> Unit = {
                             if (welcome) WelcomeScreen(onDone = {}) else AppRoot(vm)
                         }
-                        if (tv) com.opentune.ui.tv.TvRemoteSurface(page) else page()
+                        page()
                     }
                     }
                     com.opentune.ui.account.ConfirmPairing()
@@ -123,6 +109,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        com.opentune.ui.components.GlassPerformance.watch(this)
+        com.opentune.data.history.AccountHistory.syncSoon()
         // The process may have started in the background, offline (after an update, say).
         AccountStore.ensureProfile()
         lifecycleScope.launchWhenStarted {
@@ -170,3 +158,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+/** Phones with less memory than this start in Lite mode: about 3 GB, the low end today. */
+private const val LITE_MEMORY_BYTES = 3_300_000_000L

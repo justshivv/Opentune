@@ -47,6 +47,37 @@ class PaneTransitionTest {
         }.coroutineContext(Dispatchers.Unconfined).build())
     }
 
+    /**
+     * The pill turns straight into the other one: its width goes directly from one set's to
+     * the other's (never drawing in), every frame shows a row of buttons, and no place in the
+     * pill ever shows both sets at once.
+     */
+    @Test fun pillTransformsWithoutAnEmptyMomentOrOverlap() {
+        val (a, b) = 300f to 420f
+        for (step in 0..100) {
+            val p = step / 100f
+            var shown = 0f
+            for (k in 0..200) {
+                val u = k / 200f
+                val old = sweepOld(p, u)
+                val new = sweepNew(p, u)
+                org.junit.Assert.assertFalse("both sets show at p=$p u=$u", old > 0f && new > 0f)
+                shown += maxOf(old, new) / 201f
+            }
+            // Only the soft edge and the sliver between the sets is ever dim: most of the row shows.
+            org.junit.Assert.assertTrue("the pill is mostly empty at $p ($shown)", shown > 0.7f)
+            val w = pillWidth(a, b, p)
+            org.junit.Assert.assertTrue("narrower than both sets at $p", w >= minOf(a, b) - 0.01f && w <= maxOf(a, b) + 0.01f)
+        }
+        for (k in 0..20) {
+            val u = k / 20f
+            org.junit.Assert.assertEquals(1f, sweepOld(0f, u), 0.0001f)
+            org.junit.Assert.assertEquals(0f, sweepNew(0f, u), 0.0001f)
+            org.junit.Assert.assertEquals(0f, sweepOld(1f, u), 0.0001f)
+            org.junit.Assert.assertEquals(1f, sweepNew(1f, u), 0.0001f)
+        }
+    }
+
     @Test fun classicLyricsShrinksBeforeReachingTheHeader() = transition(PlayerStyle.CLASSIC, "Lyrics")
     @Test fun classicQueueShrinksBeforeReachingTheHeader() = transition(PlayerStyle.CLASSIC, "Queue")
     @Test fun appleLyricsShrinksBeforeReachingTheHeader() = transition(PlayerStyle.APPLE_MUSIC, "Lyrics")
@@ -56,7 +87,7 @@ class PaneTransitionTest {
     private fun transition(style: PlayerStyle, pane: String, fullCover: Boolean = false) {
         val song = Song("test", "Test track", "Test artist", "https://covers.invalid/test.jpg", "3:00")
         val state = PlayerUiState(
-            song = song, isPlaying = true, isBuffering = false, hasNext = true,
+            song = song, isPlaying = true, isSounding = true, isBuffering = false, hasNext = true,
             shuffle = false, repeatMode = Player.REPEAT_MODE_OFF, durationMs = 180_000,
             lyrics = LyricsState.NotFound, queue = listOf(song), currentIndex = 0, upNext = emptyList(),
             sound = SoundSettings(), theme = ThemeSettings(), source = null,

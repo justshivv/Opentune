@@ -12,7 +12,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** Shelf cards can omit runtime. Fetch metadata for the exact video before choosing audio. */
 internal object CatalogMetadata {
     suspend fun duration(song: Song, known: Long, fetch: suspend (String) -> List<Song> = {
-        InnertubeParser.parseWatchQueue(Innertube.next(it))
+        InnertubeParser.parseWatchQueue(Innertube.next(it), allVersions = true)
     }): Long {
         if (known > 0) return known
         return try {

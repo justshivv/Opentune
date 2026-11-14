@@ -64,6 +64,20 @@ class AddonResolverTest {
         calls.clear(); AddonStore.move(AddonStore.addons.value.last().key, -2)
         assertEquals("last", resolve()!!.provider)
     }
+
+    @Test fun verifiesFlacFromOnlyItsStreamInfoHeader() = runBlocking {
+        add("precise")
+        val sizes = mutableListOf<Int>()
+        val result = AddonResolver.resolve(song, 180000, clientFor = ::client,
+            probe = { _, size, prefix ->
+                assertTrue(prefix)
+                sizes += size
+                header(24, 96_000).copyOf(size)
+            })!!
+        assertEquals(listOf(42), sizes)
+        assertEquals(24, result.bits)
+        assertEquals(96_000, result.sampleRate)
+    }
     @Test fun disabledGatedAndStreamingOnlySourcesReceiveNoDownloadRequests() = runBlocking {
         add("disabled"); AddonStore.enable(AddonStore.addons.value.first().key, false)
         add("gated", gated = true); add("streaming", downloads = false); add("good")

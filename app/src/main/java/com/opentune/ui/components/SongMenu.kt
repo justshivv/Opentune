@@ -1,9 +1,23 @@
 package com.opentune.ui.components
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.layout.height
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,6 +52,7 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PersonOff
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -46,10 +61,10 @@ import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.ThumbDownOffAlt
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -123,6 +138,8 @@ fun SongMenuSheet(
     top: MenuRows? = null,
     tools: MenuRows? = null,
     end: MenuRows? = null,
+    /** Shown as a page of its own straight away (the player's "…"), instead of a card rising from the bottom. */
+    asPage: Boolean = false,
 ) {
     val actions = LocalSongMenu.current
     val context = LocalContext.current
@@ -143,17 +160,12 @@ fun SongMenuSheet(
     var ringtone by remember { mutableStateOf(false) }
     val close = onDismiss
 
-    FloatingCard(
-        onDismiss = onDismiss,
-        contentPadding = PaddingValues(0.dp),
-        expandable = true,
-        // Open fully so the whole menu shows at once; the content lifts to make room, no scrolling needed.
-        startExpanded = true,
-        // The song and its four quick actions stay put; the rest of the menu scrolls under them.
-        header = {
+    // The song and its four quick actions stay put; the rest of the menu scrolls under them.
+    val header: @Composable ColumnScope.() -> Unit = {
             val card = LocalFloatingCard.current
             val close: () -> Unit = { card?.close() ?: onDismiss() }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The page shows the song larger itself.
+            if (!asPage) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(56.dp))
                 Spacer(Modifier.size(14.dp))
                 Column(Modifier.weight(1f)) {
@@ -198,8 +210,8 @@ fun SongMenuSheet(
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-        },
-    ) {
+    }
+    val body: @Composable ColumnScope.() -> Unit = {
         // Menu picks play the card out as they act.
         val card = LocalFloatingCard.current
         val close: () -> Unit = { card?.close() ?: onDismiss() }
@@ -246,9 +258,9 @@ fun SongMenuSheet(
                 if (artist.isNotBlank()) {
                     val entry = hidden.artists.firstOrNull { it.key == HiddenList.normalize(artist) }
                     if (entry != null) {
-                        MenuRow(Icons.Rounded.Person, "Suggest $artist again") { LibraryStore.unhideArtist(entry.key); close() }
+                        MenuRow(Icons.Rounded.PersonAdd, com.opentune.i18n.Tr.f("Suggest {0} again", artist)) { LibraryStore.unhideArtist(entry.key); close() }
                     } else {
-                        MenuRow(Icons.Rounded.PersonOff, "Don't play $artist") { close(); actions.dontPlayArtist(song) }
+                        MenuRow(Icons.Rounded.PersonOff, com.opentune.i18n.Tr.f("Don't play {0}", artist)) { close(); actions.dontPlayArtist(song) }
                     }
                 }
             }
@@ -256,8 +268,166 @@ fun SongMenuSheet(
             Spacer(Modifier.size(12.dp))
         }
     }
+    if (asPage) {
+        SongMenuPage(song, onDismiss, header, body)
+    } else {
+        FloatingCard(
+            onDismiss = onDismiss,
+            contentPadding = PaddingValues(0.dp),
+            expandable = true,
+            // Open fully so the whole menu shows at once; the content lifts to make room, no scrolling needed.
+            startExpanded = true,
+            header = header,
+            content = body,
+        )
+    }
     if (ringtone) RingtoneDialog(song, onDismiss = { ringtone = false; close() })
     if (pickPlaylist) AddToPlaylistDialog(song, onDone = { pickPlaylist = false; close() }, onDismiss = { pickPlaylist = false })
+}
+
+/**
+ * The song menu as a page of its own over the player: there at once, with no motion, and gone
+ * at once. The cover, softly blurred and dimmed, fills the back; the song sits large at the top
+ * with a button to close, then the quick actions and the rest of the menu, which scrolls.
+ */
+@Composable
+private fun SongMenuPage(
+    song: com.opentune.data.model.Song,
+    onDismiss: () -> Unit,
+    header: @Composable ColumnScope.() -> Unit,
+    body: @Composable ColumnScope.() -> Unit,
+) {
+    val dismiss by androidx.compose.runtime.rememberUpdatedState(onDismiss)
+    // Picks close the page straight away too, then do what they do.
+    val card = remember { FloatingCardScope { after -> (after ?: dismiss)() } }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        val view = androidx.compose.ui.platform.LocalView.current
+        androidx.compose.runtime.DisposableEffect(view) {
+            // No window animation and no dimming: the page is simply there.
+            (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.let { window ->
+                window.setWindowAnimations(0)
+                window.setDimAmount(0f)
+            }
+            onDispose { }
+        }
+        val colors = MaterialTheme.colorScheme
+        val dark = colors.background.luminance() < 0.5f
+        // Solid, whatever the theme's surfaces are, so the player never shows through.
+        val base = colors.background.compositeOver(if (dark) Color.Black else Color.White)
+        val canBlur = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        // Pulled down by its bar (or by the list once it's at its top), the page follows the
+        // finger; let go far enough or fast enough and it slides away, else it springs back.
+        var drag by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+        var pageHeight by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        var settle by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+        fun release(velocity: Float) {
+            settle?.cancel()
+            settle = scope.launch {
+                if (drag > pageHeight * 0.22f || velocity > 1_600f) {
+                    androidx.compose.animation.core.animate(drag, pageHeight, velocity, androidx.compose.animation.core.tween(200)) { v, _ -> drag = v }
+                    dismiss()
+                } else {
+                    androidx.compose.animation.core.animate(drag, 0f, velocity, androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 520f)) { v, _ -> drag = v }
+                }
+            }
+        }
+        val pullDown = remember {
+            object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                    // Pushed back up: the page goes back up before the list scrolls.
+                    if (drag <= 0f || available.y >= 0f) return androidx.compose.ui.geometry.Offset.Zero
+                    val take = maxOf(available.y, -drag)
+                    drag += take
+                    return androidx.compose.ui.geometry.Offset(0f, take)
+                }
+                override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                    // The list at its top and still pulled down: the page comes with it.
+                    if (available.y <= 0f || source != androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) return androidx.compose.ui.geometry.Offset.Zero
+                    settle?.cancel()
+                    drag += available.y
+                    return androidx.compose.ui.geometry.Offset(0f, available.y)
+                }
+                override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                    if (drag <= 0f) return androidx.compose.ui.unit.Velocity.Zero
+                    release(available.y)
+                    return available
+                }
+            }
+        }
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides colors.onSurface,
+            LocalFloatingCard provides card,
+        ) {
+            Box(
+                Modifier.fillMaxSize()
+                    .onSizeChanged { pageHeight = it.height.toFloat().coerceAtLeast(1f) }
+                    .graphicsLayer { translationY = drag }
+                    .background(base)
+                    .nestedScroll(pullDown),
+            ) {
+                // The cover behind, where the phone can blur it; a plain page where it can't.
+                if (canBlur && !song.thumbnailUrl.isNullOrBlank()) {
+                    Artwork(
+                        song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.fillMaxSize().blur(72.dp),
+                        shape = RectangleShape,
+                    )
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                0f to base.copy(alpha = if (dark) 0.62f else 0.66f),
+                                0.45f to base.copy(alpha = if (dark) 0.84f else 0.86f),
+                                1f to base.copy(alpha = 0.96f),
+                            ),
+                        ),
+                    )
+                }
+                Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                    // The bar and the song under it pull the page down.
+                    val headerDrag = androidx.compose.foundation.gestures.rememberDraggableState { d -> settle?.cancel(); drag = (drag + d).coerceAtLeast(0f) }
+                    Column(
+                        Modifier.fillMaxWidth().draggable(
+                            headerDrag, androidx.compose.foundation.gestures.Orientation.Vertical,
+                            onDragStopped = { v -> release(v) },
+                        ),
+                    ) {
+                    Box(
+                        Modifier.fillMaxWidth().height(28.dp)
+                            // Tapping the bar closes the page, with no ripple across the strip.
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null,
+                                onClickLabel = "Close", role = androidx.compose.ui.semantics.Role.Button, onClick = onDismiss,
+                            )
+                            .semantics { contentDescription = "Close" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(Modifier.size(width = 44.dp, height = 5.dp).clip(CircleShape).background(colors.onSurface.copy(alpha = 0.55f)))
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(84.dp), RoundedCornerShape(16.dp))
+                        Spacer(Modifier.size(18.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(song.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                song.artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                    }
+                    }
+                    header()
+                    body()
+                }
+            }
+        }
+    }
 }
 
 /** A round quick action with its label underneath; filled when [active]. */
@@ -343,32 +513,6 @@ fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     }
 }
 
-/** One playlist to pick in [AddToPlaylistDialog]: its cover, its name, how many songs, and a tick if the song is in it. */
-@Composable
-private fun PlaylistPickRow(
-    title: String,
-    subtitle: String,
-    art: @Composable () -> Unit,
-    added: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(52.dp).clip(RoundedCornerShape(12.dp))) { art() }
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (added) Icon(Icons.Rounded.CheckCircle, "Already in this playlist", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-    }
-}
-
 /**
  * Picks one of the playlists made in the app, or makes a new one with [song]
  * in it. Signed in, the account's own YouTube Music playlists are listed too,
@@ -404,95 +548,36 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
             }
         }
     }
-    var naming by remember { mutableStateOf(playlists.isEmpty() && accountPlaylists.isEmpty()) }
-    var name by remember { mutableStateOf("") }
-    var saveOnline by remember { mutableStateOf(true) }
-    var privacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
-    FloatingDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (naming) "New playlist" else "Add to playlist") },
-        text = {
-            if (naming) {
-                Column {
-                    OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("Name") })
-                    if (online) AccountCopyOptions(saveOnline, { saveOnline = it }, privacy, { privacy = it }, Modifier.padding(top = 12.dp))
-                }
-            } else {
-                LazyColumn(Modifier.heightIn(max = 420.dp)) {
-                    item {
-                        PlaylistPickRow(
-                            title = "New playlist",
-                            subtitle = "With this song in it",
-                            art = {
-                                Box(
-                                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                                    contentAlignment = Alignment.Center,
-                                ) { Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp)) }
-                            },
-                            onClick = { naming = true },
-                        )
-                    }
-                    items(playlists, key = { it.id }) { p ->
-                        val has = p.songs.any { it.videoId == song.videoId }
-                        PlaylistPickRow(
-                            title = p.name,
-                            subtitle = if (has) "Already in it" else if (p.songs.size == 1) "1 song" else "${p.songs.size} songs",
-                            art = { PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, Modifier.fillMaxSize(), RectangleShape) },
-                            added = has,
-                            onClick = {
-                                if (has) {
-                                    com.opentune.data.Pills.info("Already in ${p.name}", context)
-                                } else {
-                                    LibraryStore.addToPlaylist(p.id, song)
-                                    com.opentune.data.Pills.done("Added to ${p.name}", context)
-                                }
-                                onDone()
-                            },
-                        )
-                    }
-                    if (accountPlaylists.isNotEmpty()) {
-                        item {
-                            Text(
-                                "On YouTube Music",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 4.dp),
-                            )
-                        }
-                        items(accountPlaylists, key = { "yt:${it.playlistId}" }) { p ->
-                            val has = inAccount[p.playlistId] == true
-                            PlaylistPickRow(
-                                title = p.title,
-                                subtitle = if (has) "Already in it" else p.subtitle.ifBlank { "YouTube Music" },
-                                art = { Artwork(p.thumbnailUrl, Modifier.fillMaxSize(), RectangleShape, placeholder = Icons.AutoMirrored.Rounded.QueueMusic) },
-                                added = has,
-                            ) {
-                                if (has) {
-                                    com.opentune.data.Pills.info("Already in ${p.title}", context)
-                                    onDone()
-                                    return@PlaylistPickRow
-                                }
-                                PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
-                                    if (ok) com.opentune.data.Pills.done("Added to ${p.title}", context)
-                                    else com.opentune.data.Pills.error("Couldn't add it to ${p.title}", context)
-                                }
-                                onDone()
-                            }
-                        }
-                    }
-                }
-            }
+    PlaylistPicker(
+        songs = listOf(song),
+        local = playlists.map { p ->
+            localTarget(p, if (p.songs.any { it.videoId == song.videoId }) 1 else 0,
+                add = { LibraryStore.addToPlaylist(p.id, song) },
+                remove = { LibraryStore.removeSongsFromPlaylist(p.id, listOf(song.videoId)) })
         },
-        confirmButton = {
-            if (naming) {
-                SheetButton("Create", onClick = {
-                    LibraryStore.createPlaylist(name, song, privacy.takeIf { online && saveOnline })
-                    com.opentune.data.Pills.done("Added to ${name.trim().ifEmpty { "New playlist" }}", context)
-                    onDone()
+        account = accountPlaylists.map { p ->
+            accountTarget(p, inAccount[p.playlistId]?.let { if (it) 1 else 0 },
+                add = {
+                    inAccount[p.playlistId] = true
+                    PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
+                        if (!ok) { inAccount[p.playlistId] = false; com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add it to {0}", p.title), context) }
+                    }
+                },
+                remove = {
+                    inAccount[p.playlistId] = false
+                    PlaylistSync.removeFromAccountPlaylist(p.playlistId, listOf(song)) { ok ->
+                        if (!ok) { inAccount[p.playlistId] = true; com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't take it out of {0}", p.title), context) }
+                    }
                 })
-            }
         },
-        dismissButton = { SheetButton("Cancel", onClick = onDismiss, closes = true) },
+        online = online,
+        onCreate = { name, privacy ->
+            LibraryStore.createPlaylist(name, song, privacy)
+            com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", name), context)
+            onDone()
+        },
+        onDone = onDone,
+        onDismiss = onDismiss,
     )
 }
 

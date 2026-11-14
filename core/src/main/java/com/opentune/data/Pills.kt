@@ -41,7 +41,7 @@ object Pills {
     private fun post(pill: Pill, context: Context?) {
         if (_posted.subscriptionCount.value > 0 && _posted.tryEmit(pill)) return
         val app = context?.applicationContext ?: return
-        val toast = { Toast.makeText(app, pill.text, Toast.LENGTH_SHORT).show() }
+        val toast = { Toast.makeText(app, com.opentune.i18n.Tr.t(pill.text), Toast.LENGTH_SHORT).show() }
         if (Looper.myLooper() == Looper.getMainLooper()) toast() else Handler(Looper.getMainLooper()).post(toast)
     }
 }

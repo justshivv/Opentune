@@ -94,6 +94,8 @@ class ArtistSignaturesTest {
         assertNull(ArtistSignatures.parse("not json", "A"))
         assertNull(ArtistSignatures.parse("""{"signatures":[]}""", "A"))
         assertNull(ArtistSignatures.normalize("ftp://x"))
-        assertEquals("https://proud-cascade-1654.de.deplexo.com", ArtistSignatures.normalize(" https://proud-cascade-1654.de.deplexo.com/ "))
+        assertEquals("https://example.org/sig", ArtistSignatures.normalize(" https://example.org/sig/ "))
+        // The service's old address follows it to its new one.
+        assertEquals("https://artistsignature.velixir.run", ArtistSignatures.normalize(" https://proud-cascade-1654.de.deplexo.com/ "))
     }
 }

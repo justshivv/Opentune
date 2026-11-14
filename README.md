@@ -19,6 +19,8 @@
   <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+">
   <img src="https://img.shields.io/badge/Kotlin-Compose-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin and Jetpack Compose">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0"></a>
+  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Dinstallations%26label%3Dinstalls&cacheSeconds=300" alt="Installations reported"></a>
+  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Ddaily%26label%3Dlistening%2520today&cacheSeconds=300" alt="Installations active today"></a>
   <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Flabel%3Dactive%2520this%2520month&cacheSeconds=300" alt="Active installations this month"></a>
 </p>
 
@@ -137,19 +139,25 @@ lyrics from LRCLIB only.
 
 ### Android TV
 
-The phone APK runs on Android TV too, and shows up in the TV's row of
-apps. You drive it with the remote, and the screen stays on while music
-plays.
+OpenTune for TV is a separate app, made for the remote and a screen across
+the room. Install `OpenTune-TV-<version>.apk` from the
+[releases](https://github.com/justshivv/Opentune/releases) page; it shows
+up in the TV's row of apps. The phone APK doesn't run as a TV app.
 
 Typing a password with a remote is no fun, so you sign the TV in from
 your phone instead:
 
-1. Install the same APK on the TV, from the
-   [releases](https://github.com/justshivv/Opentune/releases) page.
-2. On the TV, open Settings → Account and choose Sign in with your phone.
-3. Scan the QR code with a phone that has OpenTune, on the same Wi-Fi,
-   and approve sharing your YouTube Music session. The code expires after
-   two minutes.
+1. On the TV, open Settings → Account and choose Sign in.
+2. Scan the QR code with a phone that has OpenTune (Settings → Link a
+   device → TV), on the same Wi-Fi, and approve sharing your YouTube
+   Music session. The code expires after two minutes.
+
+Your phone can also be the remote: a trackpad that moves a cursor on the
+TV, with taps, drags, two-finger scrolling and Back and Home gestures, or a
+pad of buttons. Pair it once from the TV's Settings and the phone's Link a
+device page.
+
+More in [docs/android-tv.md](docs/android-tv.md).
 
 The phone and the TV each keep their own local library.
 
@@ -355,10 +363,11 @@ on your own connection with no hosted proxy.
   OpenTune"), and tap a song to play its list from there. Sideloaded
   builds show up in Android Auto once "Unknown sources" is turned on in
   Android Auto's developer settings.
-- **Android TV.** The same APK shows up in the TV's row of apps. The remote
-  moves between rows and buttons with a clear highlight, OK opens or plays,
-  and left and right on the seek bar skip through the song. The screen stays
-  on while music plays.
+- **Android TV.** A separate TV app (`tv/`) with Home, Explore, Library
+  and Search, album and artist pages, and a Now Playing screen with synced
+  lyrics, the queue and the format of what's playing. The remote moves a
+  clear focus ring, OK plays, and left and right on the seek bar skip
+  through the song. You sign in by scanning a code with your phone.
 - **Wear OS.** A separate watch app (`wear/`) that plays on the watch
   itself, over its Wi-Fi or LTE and Bluetooth headphones, with no phone
   needed. Search by voice or keyboard, play your liked and recent songs on
@@ -410,6 +419,12 @@ on your own connection with no hosted proxy.
   phone and Replay, your playlists from the app and from YouTube in one
   list, and the last five songs you played, with the rest behind
   "Show all".
+- **Smart playlists:** lists that fill themselves from rules and change as
+  you listen. Start from On repeat, Forgotten favourites, New to you,
+  All-time top 100 or Lossless on this phone, or set your own: where the
+  songs come from (played, liked, downloaded or all), how often and how
+  lately they were played, liked, downloaded or lossless only, one artist,
+  the order and how many. Save as playlist keeps a copy as it is now.
 - **Replay:** top songs, artists and albums from this device's history.
 - **Wrapped:** your listening as a quiet animated story. Each page is a
   flat field of colour with one large shape drifting slowly on it (a low
@@ -662,6 +677,12 @@ on your own connection with no hosted proxy.
   feedback switch.
 - **Themes:** light, dark or system, Material You, accent colors, palette
   styles, pure black, color from artwork, and reduced motion and blur.
+- **36 languages, the whole app.** Settings › Appearance › App language (or the
+  phone's own language) changes every screen: buttons, settings, menus,
+  notices, notifications and Android Auto. The TV app follows the TV's
+  language. Translations live in `core/src/main/assets/i18n/`, one file per
+  language keyed by the English text, and `scripts/i18n/extract.py` lists
+  what a language still lacks.
 
 YouTube's audio is lossy, so there's no lossless or Dolby Atmos stream
 option from YouTube. Lossless can come from your own music server or the
@@ -677,7 +698,7 @@ playlists in Library and the personal Spotify suggestions; Spotify's
 terms don't allow that use, so it stays off
 until you connect Spotify yourself.
 
-Not built yet: lyric translation and an in-app language setting.
+Not built yet: lyric translation.
 
 ## Usage counts
 

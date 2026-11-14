@@ -291,7 +291,7 @@ internal class RoomSession(
                 if (gone.isNotEmpty()) {
                     gone.forEach { (id, m) -> members.remove(id); dropped[id] = m.name }
                     while (dropped.size > 50) dropped.remove(dropped.keys.first())
-                    gone.values.forEach { addChat(ChatLine("", "${it.name} left", system = true)) }
+                    gone.values.forEach { addChat(ChatLine("", com.opentune.i18n.Tr.f("{0} left", it.name), system = true)) }
                     update { it.copy(members = memberList()) }
                 }
             }
@@ -311,7 +311,7 @@ internal class RoomSession(
         requests.remove(id)
         members[id] = Member0(name, now)
         admit(id)
-        addChat(ChatLine("", "$name joined", system = true))
+        addChat(ChatLine("", com.opentune.i18n.Tr.f("{0} joined", name), system = true))
         update { it.copy(members = memberList(), requests = requestList()) }
         sendState()
     }
@@ -322,7 +322,7 @@ internal class RoomSession(
         requests.remove(id)
         members[id] = Member0(name, now)
         admit(id)
-        addChat(ChatLine("", "$name is back", system = true))
+        addChat(ChatLine("", com.opentune.i18n.Tr.f("{0} is back", name), system = true))
         update { it.copy(members = memberList(), requests = requestList()) }
         sendState()
     }
@@ -351,7 +351,7 @@ internal class RoomSession(
         epoch++
         send(Msg.Deny(id, removed = true, host = myName))
         members.keys.forEach(::admit)
-        addChat(ChatLine("", "${m.name} was removed", system = true))
+        addChat(ChatLine("", com.opentune.i18n.Tr.f("{0} was removed", m.name), system = true))
         update { it.copy(members = memberList()) }
         sendState()
     }
@@ -412,7 +412,7 @@ internal class RoomSession(
                         if (known == null) {
                             requests[from] = Member0(name, now)
                             update { it.copy(requests = requestList()) }
-                            notice("$name wants to join")
+                            notice(com.opentune.i18n.Tr.f("{0} wants to join", name))
                         } else known.lastSeen = now
                         send(Msg.Pending(from, myName))
                     }
@@ -421,7 +421,7 @@ internal class RoomSession(
             is Msg.Here -> members[from]?.lastSeen = now
             // A goodbye is signed by whoever leaves, so it can't be faked for someone else.
             Msg.Bye -> if (requests.remove(from) != null) update { it.copy(requests = requestList()) } else members.remove(from)?.let { m ->
-                addChat(ChatLine("", "${m.name} left", system = true))
+                addChat(ChatLine("", com.opentune.i18n.Tr.f("{0} left", m.name), system = true))
                 update { it.copy(members = memberList()) }
                 sendState()
             }
@@ -433,7 +433,7 @@ internal class RoomSession(
                     val t = msg.track ?: return
                     t.station?.let(Radio::played)
                     p.addToQueue(t.toSong())
-                    addChat(ChatLine("", "$who added ${t.title}", system = true))
+                    addChat(ChatLine("", com.opentune.i18n.Tr.f("{0} added {1}", who, t.title), system = true))
                     return
                 }
                 if (msg.action == "now") {
@@ -441,7 +441,7 @@ internal class RoomSession(
                     val t = msg.track ?: return
                     t.station?.let(Radio::played)
                     p.playNow(t.toSong())
-                    addChat(ChatLine("", "$who played ${t.title}", system = true))
+                    addChat(ChatLine("", com.opentune.i18n.Tr.f("{0} played {1}", who, t.title), system = true))
                     return
                 }
                 if (!open) return
@@ -531,7 +531,7 @@ internal class RoomSession(
             }
             is Msg.Deny -> if (msg.to == me && (hostKey == null || from == hostKey)) {
                 val host = msg.host.ifBlank { state.value?.hostName ?: "The host" }
-                update { it.copy(phase = Phase.Ended, endedReason = if (msg.removed) "$host removed you from the room" else "$host didn't let you in") }
+                update { it.copy(phase = Phase.Ended, endedReason = if (msg.removed) com.opentune.i18n.Tr.f("{0} removed you from the room", host) else com.opentune.i18n.Tr.f("{0} didn't let you in", host)) }
                 stop(saying = false)
             }
             is Msg.State -> {
@@ -548,17 +548,17 @@ internal class RoomSession(
                         track = msg.track, hostPrivate = msg.private,
                     )
                 }
-                if (first) addChat(ChatLine("", "You joined ${msg.host}'s room", system = true))
+                if (first) addChat(ChatLine("", com.opentune.i18n.Tr.f("You joined {0}'s room", msg.host), system = true))
                 else if (before != null) {
                     // Comings and goings, from the host's list of who's in.
-                    msg.members.filter { it.id !in before && it.id != me }.forEach { addChat(ChatLine("", "${it.name} joined", system = true)) }
+                    msg.members.filter { it.id !in before && it.id != me }.forEach { addChat(ChatLine("", com.opentune.i18n.Tr.f("{0} joined", it.name), system = true)) }
                     val now2 = msg.members.map { it.id }.toSet()
-                    state.value?.members?.filter { it.id in before && it.id !in now2 && it.id != me }?.forEach { addChat(ChatLine("", "${it.name} left", system = true)) }
+                    state.value?.members?.filter { it.id in before && it.id !in now2 && it.id != me }?.forEach { addChat(ChatLine("", com.opentune.i18n.Tr.f("{0} left", it.name), system = true)) }
                 }
                 follow(msg, fresh = true)
             }
             Msg.End -> if (from == hostKey) {
-                update { it.copy(phase = Phase.Ended, endedReason = "${it.hostName ?: "The host"} ended the room") }
+                update { it.copy(phase = Phase.Ended, endedReason = com.opentune.i18n.Tr.f("{0} ended the room", it.hostName ?: com.opentune.i18n.Tr.t("The host"))) }
                 stop(saying = false)
             }
             is Msg.Pong -> if (from == hostKey && msg.to == me) {
@@ -688,7 +688,7 @@ internal class RoomSession(
                     last?.let { follow(it, fresh = true) }
                 }
             }
-            else -> notice("Only ${r.hostName ?: "the host"} can change the song")
+            else -> notice(com.opentune.i18n.Tr.f("Only {0} can change the song", r.hostName ?: com.opentune.i18n.Tr.t("the host")))
         }
         return true
     }
@@ -713,15 +713,15 @@ internal class RoomSession(
         when {
             now && r.open -> {
                 send(Msg.Ask("now", track = t))
-                notice("Playing \"${song.title}\" for everyone")
+                notice(com.opentune.i18n.Tr.f("Playing \"{0}\" for everyone", song.title))
             }
             now -> {
                 send(Msg.Ask("add", track = t))
-                notice("Added \"${song.title}\" to the queue. ${r.hostName ?: "The host"} hasn't let guests control playback")
+                notice(com.opentune.i18n.Tr.f("Added \"{0}\" to the queue. {1} hasn't let guests control playback", song.title, r.hostName ?: com.opentune.i18n.Tr.t("The host")))
             }
             else -> {
                 send(Msg.Ask("add", track = t))
-                notice("Sent \"${song.title}\" to the room")
+                notice(com.opentune.i18n.Tr.f("Sent \"{0}\" to the room", song.title))
             }
         }
         return true

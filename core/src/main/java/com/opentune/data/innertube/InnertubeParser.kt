@@ -473,7 +473,7 @@ object InnertubeParser {
      * subscribers" and is left as it is.
      */
     internal fun subscriberLabel(count: String): String =
-        if (count.matches(BARE_COUNT)) "$count subscribers" else count
+        if (count.matches(BARE_COUNT)) com.opentune.i18n.Tr.f("{0} subscribers", count) else count
 
     /** "3.4M monthly listeners", off the same header as [subscriberCount]. */
     private fun monthlyListeners(header: JsonElement?): String? =
@@ -540,6 +540,35 @@ object InnertubeParser {
         walk(root)
         return out.values.toList()
     }
+
+    /** One section of the account's history: its heading ("Today", a date…) and its rows in order. */
+    data class HistorySection(val title: String, val songs: List<Song>)
+
+    /** A page of the account's history: its sections as YouTube Music shows them, and the token for the rest. */
+    data class HistoryPage(val sections: List<HistorySection>, val continuation: String?)
+
+    /**
+     * The account's history page (FEmusic_history): a run of headed shelves.
+     * Every row is kept, in order — a song played three times is three rows,
+     * as in the history itself. Null when the page carries no history shelves
+     * at all, so a cut-down answer can't read as an empty history.
+     */
+    fun parseHistoryPage(root: JsonElement): HistoryPage? {
+        val shelves = collectRenderers(root, "musicShelfRenderer")
+        if (shelves.isEmpty()) return null
+        val credit = pageCredit(root)
+        val sections = shelves.map { shelf ->
+            HistorySection(
+                title = shelf.o("title").runs(),
+                songs = collectRenderers(shelf, "musicResponsiveListItemRenderer").mapNotNull { parseResponsiveListItem(it, credit) },
+            )
+        }.filter { it.songs.isNotEmpty() }
+        if (sections.isEmpty()) return null
+        val token = collectRenderers(root, "continuationItemRenderer").lastOrNull()
+            .o("continuationEndpoint").o("continuationCommand").s("token")
+        return HistoryPage(sections, token)
+    }
+
 
     /** A playlist page's own tracks, the ones YouTube suggests adding, and the token for the rest. */
     data class PlaylistShelfPage(val songs: List<Song>, val suggested: List<Song>, val continuation: String?)
@@ -648,6 +677,86 @@ object InnertubeParser {
             )
         }
         return LibraryItemPage(out.values.toList(), continuationToken(root))
+    }
+
+    /**
+     * Whether YouTube answered as though nobody is signed in: its own tracking
+     * parameters carry `logged_in` = 0. False when it says 1, or says nothing, so
+     * a layout change can't be mistaken for a sign-out.
+     */
+    fun answeredSignedOut(root: JsonElement): Boolean {
+        val params = root.o("responseContext").a("serviceTrackingParams").orEmpty()
+            .flatMap { it.a("params").orEmpty() }
+        val loggedIn = params.firstOrNull { it.s("key") == "logged_in" }?.s("value") ?: return false
+        return loggedIn == "0"
+    }
+
+    /**
+     * Playlists on a library page in a layout the card parsers above don't know. Used only
+     * when they found nothing: any playlist page link with a name beside it, in the classic
+     * renderers or in the newer `lockupViewModel` cards (whose id and name sit in different
+     * places). Each playlist once, in page order.
+     */
+    fun looseLibraryPlaylists(root: JsonElement): List<ShelfItem> {
+        val out = LinkedHashMap<String, ShelfItem>()
+        fun playlistId(id: String?): String? = when {
+            id == null -> null
+            id.startsWith("VL") -> id
+            id.startsWith("PL") || id.startsWith("RD") || id.startsWith("OLAK") -> "VL$id"
+            else -> null
+        }
+        fun firstBrowseId(node: JsonElement): String? = when (node) {
+            is JsonObject -> node.o("browseEndpoint").s("browseId")?.let { playlistId(it) }
+                ?: node.values.firstNotNullOfOrNull { firstBrowseId(it) }
+            is JsonArray -> node.firstNotNullOfOrNull { firstBrowseId(it) }
+            else -> null
+        }
+        fun firstThumbnail(node: JsonElement): String? = when (node) {
+            is JsonObject -> (node["thumbnails"] as? JsonArray)?.best()
+                ?: (node["sources"] as? JsonArray)?.lastOrNull().s("url")
+                ?: node.values.firstNotNullOfOrNull { firstThumbnail(it) }
+            is JsonArray -> node.firstNotNullOfOrNull { firstThumbnail(it) }
+            else -> null
+        }
+        fun walk(node: JsonElement) {
+            when (node) {
+                is JsonObject -> {
+                    // The newer card: a lockup, its name under metadata.
+                    (node["lockupViewModel"] as? JsonObject)?.let { lockup ->
+                        val id = playlistId(lockup.s("contentId")) ?: firstBrowseId(lockup)
+                        val meta = lockup.o("metadata").o("lockupMetadataViewModel")
+                        val title = meta.o("title").s("content") ?: meta.o("title").runs().takeIf { it.isNotBlank() }
+                        if (id != null && !title.isNullOrBlank()) {
+                            val subtitle = meta?.findString("content")?.takeIf { it != title }.orEmpty()
+                            out.putIfAbsent(id, ShelfItem(title, subtitle, firstThumbnail(lockup.o("contentImage") ?: lockup), null, id))
+                        }
+                    }
+                    // The classic ones: a name in the same object as a link to a playlist page.
+                    val link = node.o("navigationEndpoint").o("browseEndpoint").s("browseId")?.let { playlistId(it) }
+                    if (link != null) {
+                        val title = node.o("title").runs().ifBlank { node.o("title").s("simpleText").orEmpty() }
+                            .ifBlank { node.a("flexColumns")?.firstOrNull().o("musicResponsiveListItemFlexColumnRenderer").o("text").runs() }
+                        if (title.isNotBlank()) {
+                            val subtitle = node.o("subtitle").runs()
+                            out.putIfAbsent(link, ShelfItem(title, subtitle, firstThumbnail(node), null, link))
+                        }
+                    }
+                    node.values.forEach(::walk)
+                }
+                is JsonArray -> node.forEach(::walk)
+                else -> Unit
+            }
+        }
+        walk(root)
+        return out.values.toList()
+    }
+
+    /** What a library response held, in one line, for the log: how it was answered and what kinds of card it had. */
+    fun describeLibrary(root: JsonElement): String {
+        val keys = (root as? JsonObject)?.keys?.joinToString(",").orEmpty()
+        val counts = listOf("musicTwoRowItemRenderer", "musicResponsiveListItemRenderer", "lockupViewModel", "gridRenderer", "musicShelfRenderer")
+            .joinToString(" ") { "$it=${collectRenderers(root, it).size}" }
+        return "keys=[$keys] $counts signedOut=${answeredSignedOut(root)}"
     }
 
     /**
@@ -1079,13 +1188,75 @@ object InnertubeParser {
             ?: panel.o("title").runs().takeIf { it.isNotBlank() }
     }
 
-    /** Tracks of a watch queue (`next` response) — the AutoPlay radio mix. */
-    fun parseWatchQueue(root: JsonElement): List<Song> {
+    /**
+     * The rows of a watch queue, each with its other version when it has one.
+     * YouTube Music lists a song that has both a catalogue track and a music
+     * video once, as a wrapper holding the version it plays and the other
+     * ("counterpart"), which its Song/Video switch flips to. Read as two rows,
+     * both versions were queued, one straight after the other.
+     */
+    /** The account's listening history page (`FEmusic_history`), by its sections: "Today", "Yesterday"... */
+    fun parseHistory(root: JsonElement): List<Pair<String, List<Song>>> =
+        collectRenderers(root, "musicShelfRenderer").mapNotNull { shelf ->
+            val title = shelf.o("title").runs().takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            title to collectRenderers(shelf, "musicResponsiveListItemRenderer").mapNotNull { parseResponsiveListItem(it) }.distinctBy { it.videoId }
+        }
+
+    private fun watchRows(root: JsonElement): List<Pair<JsonObject, JsonObject?>> {
+        val out = mutableListOf<Pair<JsonObject, JsonObject?>>()
+        fun walk(node: JsonElement) {
+            when (node) {
+                is JsonObject -> {
+                    val wrapper = node["playlistPanelVideoWrapperRenderer"] as? JsonObject
+                    val row = node["playlistPanelVideoRenderer"] as? JsonObject
+                    if (wrapper != null) {
+                        val primary = wrapper.o("primaryRenderer").o("playlistPanelVideoRenderer")
+                        val other = wrapper.a("counterpart").orEmpty().firstNotNullOfOrNull {
+                            (it as? JsonObject).o("counterpartRenderer").o("playlistPanelVideoRenderer")
+                        }
+                        if (primary != null) out += primary to other
+                    }
+                    if (row != null) out += row to null
+                    node.forEach { (key, value) ->
+                        if (key != "playlistPanelVideoWrapperRenderer" && key != "playlistPanelVideoRenderer") walk(value)
+                    }
+                }
+                is JsonArray -> node.forEach(::walk)
+                else -> Unit
+            }
+        }
+        walk(root)
+        return out
+    }
+
+    /**
+     * Tracks of a watch queue (`next` response) — the AutoPlay radio mix. One
+     * version of each song: the one YouTube Music would play, or with
+     * [songsOnly] the catalogue track over its music video when it has one.
+     */
+    fun parseWatchQueue(root: JsonElement, songsOnly: Boolean = false, allVersions: Boolean = false): List<Song> {
         val out = LinkedHashMap<String, Song>()
-        collectRenderers(root, "playlistPanelVideoRenderer").forEach { renderer ->
-            val videoId = renderer.s("videoId") ?: return@forEach
+        watchRows(root).forEach { (primary, other) ->
+            val song = watchSong(primary) ?: return@forEach
+            val alt = other?.let(::watchSong)
+            // Looking a track up by its id: either version may be the one asked about.
+            if (allVersions) {
+                out.putIfAbsent(song.videoId, song)
+                alt?.let { out.putIfAbsent(it.videoId, it) }
+                return@forEach
+            }
+            val chosen = if (songsOnly && song.isVideo && alt != null && !alt.isVideo) alt else song
+            if (alt != null && (alt.videoId in out)) return@forEach
+            out.putIfAbsent(chosen.videoId, chosen)
+        }
+        return out.values.toList()
+    }
+
+    private fun watchSong(renderer: JsonObject): Song? {
+        run {
+            val videoId = renderer.s("videoId") ?: return null
             val title = renderer.o("title").runs()
-            if (title.isBlank()) return@forEach
+            if (title.isBlank()) return null
             // The byline packs artist, views and likes into one run list; only
             // the leading runs before the first bullet are the credit.
             val bylineRuns = renderer.o("longBylineText").a("runs").orEmpty()
@@ -1095,7 +1266,7 @@ object InnertubeParser {
             // Those same runs link out to the artist and album pages, which is
             // how a track started from the queue knows where it came from.
             val credits = creditsOf(bylineRuns + renderer.o("shortBylineText").a("runs").orEmpty())
-            out[videoId] = Song(
+            return Song(
                 videoId = videoId,
                 title = title,
                 artist = com.opentune.data.model.preferredArtist(artist, shortArtist, credits.artistName),
@@ -1110,7 +1281,6 @@ object InnertubeParser {
                 isExplicit = renderer.hasExplicitBadge(),
             )
         }
-        return out.values.toList()
     }
 
     /**

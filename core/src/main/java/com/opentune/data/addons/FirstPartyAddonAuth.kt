@@ -5,6 +5,8 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -12,6 +14,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -23,6 +28,9 @@ import java.security.SecureRandom
 import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Only OpenTune's own add-on servers receive proofs. No APK-wide shared secret.
@@ -40,13 +48,13 @@ object FirstPartyAddonAuth {
     private const val ALIAS = "opentune.addon.attestation.v1"
     /** The Worker keeps the key and session made before there were two servers. */
     private fun aliasFor(origin: String) = if (origin == WORKER_ORIGIN) ALIAS else "$ALIAS.${origin.removePrefix("https://")}"
-    private val mutex = Mutex()
+    private val mutexes = ConcurrentHashMap<String, Mutex>()
     private lateinit var dir: File
     private val http by lazy { OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
         .callTimeout(25, TimeUnit.SECONDS).build() }
     private val store get() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-    private val blockedUntil = HashMap<String, Long>()
-    private val blockedReason = HashMap<String, String>()
+    private val blockedUntil = ConcurrentHashMap<String, Long>()
+    private val blockedReason = ConcurrentHashMap<String, String>()
     fun init(context: Context) { dir = context.noBackupFilesDir }
     private fun fileFor(origin: String) = File(dir, if (origin == WORKER_ORIGIN) "addon-device-session.json" else "addon-device-session-${origin.removePrefix("https://")}.json")
     fun protects(url: okhttp3.HttpUrl): Boolean = url.scheme == "https" && url.host in HOSTS && url.port == 443 &&
@@ -56,7 +64,19 @@ object FirstPartyAddonAuth {
     private fun sign(alias: String, value: String): String = Signature.getInstance("SHA256withECDSA").run {
         initSign(store.getKey(alias, null) as java.security.PrivateKey); update(value.toByteArray(Charsets.UTF_8)); b64(sign())
     }
-    private fun call(request: Request): JSONObject = http.newCall(request).execute().use { response ->
+    /** Cancellable even while an enrollment server is stalled. */
+    internal suspend fun call(request: Request, client: OkHttpClient = http): JSONObject = suspendCancellableCoroutine { continuation ->
+        val call = client.newCall(request)
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) { continuation.resumeWithException(e) }
+            override fun onResponse(call: Call, response: Response) {
+                try { continuation.resume(response.use { parseReply(request, it) }) }
+                catch (e: Exception) { continuation.resumeWithException(e) }
+            }
+        })
+    }
+    private fun parseReply(request: Request, response: Response): JSONObject {
         val source = response.body?.source() ?: throw IOException("Empty verification response")
         source.request(80_001); if (source.buffer.size > 80_000) throw IOException("Invalid verification response")
         val data = runCatching { JSONObject(source.readUtf8()) }.getOrElse { throw IOException("Device verification is unavailable") }
@@ -69,10 +89,10 @@ object FirstPartyAddonAuth {
             val code = data.optString("code").takeIf { it.matches(Regex("[A-Z0-9_]{3,64}")) }
             throw VerificationFailure("$stage failed (HTTP ${response.code}${code?.let { "; $it" }.orEmpty()}); retry on a supported, locked device")
         }
-        data
+        return data
     }
     private fun post(origin: String, path: String, body: String) = Request.Builder().url(origin + path).post(body.toRequestBody("application/json".toMediaType())).build()
-    private fun session(origin: String): JSONObject {
+    private suspend fun session(origin: String): JSONObject {
         check(::dir.isInitialized) { "OpenTune verification has not initialized" }
         val file = fileFor(origin)
         val alias = aliasFor(origin)
@@ -98,6 +118,9 @@ object FirstPartyAddonAuth {
             val temporary = File(file.parentFile, file.name + ".tmp")
             temporary.writeText(result.toString()); check(temporary.renameTo(file))
             return result
+        } catch (e: CancellationException) {
+            // Skipping a song or a lookup deadline is not a failed device proof.
+            throw e
         } catch (e: Exception) {
             blockedUntil[origin] = System.currentTimeMillis() + 60_000
             val reason = when (e) {
@@ -114,7 +137,7 @@ object FirstPartyAddonAuth {
     suspend fun authorize(request: Request, body: String = ""): Request = withContext(Dispatchers.IO) {
         val origin = "https://${request.url.host}"
         require(request.url.scheme == "https" && request.url.port == 443 && origin in ORIGINS) { "Device proofs cannot leave OpenTune's source" }
-        mutex.withLock {
+        mutexes.computeIfAbsent(origin) { Mutex() }.withLock {
             val alias = aliasFor(origin)
             val session = session(origin)
             val token = session.getString("session")

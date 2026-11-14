@@ -16,7 +16,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -168,8 +168,8 @@ private fun semitones(pitch: Float): String {
     val st = 12 * kotlin.math.ln(pitch.toDouble()) / kotlin.math.ln(2.0)
     val r = (st * 10).roundToInt() / 10.0
     return when {
-        r > 0 -> "+$r st"
-        r < 0 -> "$r st"
+        r > 0 -> com.opentune.i18n.Tr.f("+{0} st", r)
+        r < 0 -> com.opentune.i18n.Tr.f("{0} st", r)
         else -> "0 st"
     }
 }

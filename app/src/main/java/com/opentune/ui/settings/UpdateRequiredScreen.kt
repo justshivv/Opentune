@@ -16,7 +16,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -47,21 +47,21 @@ fun UpdateRequiredScreen(found: UpdateCheck.Release, behind: Int) {
             Column(Modifier.widthIn(max = 520.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Update OpenTune to keep listening", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "You have ${BuildConfig.VERSION_NAME}, which is $behind versions behind. Versions this old stop working as YouTube Music and " +
+                    com.opentune.i18n.Tr.f("You have {0}, which is {1} versions behind. Versions this old stop working as YouTube Music and ", BuildConfig.VERSION_NAME, behind) +
                         "the add-ons change, so OpenTune needs the update before it opens. Your library, downloads and settings stay as they are.",
                     style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                ReleaseHero(release.version, "Required update · you have ${BuildConfig.VERSION_NAME}")
+                ReleaseHero(release.version, com.opentune.i18n.Tr.f("Required update · you have {0}", BuildConfig.VERSION_NAME))
                 Button(
                     enabled = progress == null,
                     onClick = { if (release.apk == null) install.openReleasePage() else install.start() },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                 ) {
-                    Text(if (progress != null) "Downloading…" else if (release.apk == null) "Open release page" else "Update to ${release.version}")
+                    Text(if (progress != null) "Downloading…" else if (release.apk == null) "Open release page" else com.opentune.i18n.Tr.f("Update to {0}", release.version))
                 }
                 progress?.let { p ->
                     LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth())
-                    Text("Downloading · ${(p * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
+                    Text(com.opentune.i18n.Tr.f("Downloading · {0}%", (p * 100).toInt()), style = MaterialTheme.typography.labelMedium)
                     TextButton(onClick = install::cancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel download") }
                 }
                 install.error?.let {

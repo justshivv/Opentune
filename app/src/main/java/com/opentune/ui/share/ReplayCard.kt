@@ -269,7 +269,7 @@ object ReplayCard {
         fun header() {
             val titlePaint = text(64f, white, black, -0.01f)
             c.drawText(content.title, margin, 150f, titlePaint)
-            val line = listOfNotNull(content.name, content.period).joinToString(" · ").uppercase()
+            val line = listOfNotNull(content.name, com.opentune.ui.theme.tr(content.period)).joinToString(" · ").uppercase()
             val brandPaint = text(32f, white, bold)
             val brandW = brandPaint.measureText("OpenTune")
             val logo = 46f
@@ -528,7 +528,7 @@ fun ReplayShareSheet(summary: ReplaySummary, period: String, onDismiss: () -> Un
                     val b = card ?: return@SheetButton
                     haptics.press()
                     scope.launch {
-                        ShareCard.sendImage(context, b, "OpenTune-Replay.png", "My ${content.title} on OpenTune · ${content.period}", "Replay")
+                        ShareCard.sendImage(context, b, "OpenTune-Replay.png", com.opentune.i18n.Tr.f("My {0} on OpenTune · {1}", content.title, content.period), "Replay")
                     }
                 },
             )

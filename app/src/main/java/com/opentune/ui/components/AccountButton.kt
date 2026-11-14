@@ -6,10 +6,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.opentune.data.account.AccountStore
@@ -25,6 +26,13 @@ fun AccountButton(
     plain: Boolean = false,
 ) {
     val account by AccountStore.account.collectAsState()
+    // In the app shell the button opens the account menu (switch, add, manage, Settings); elsewhere it opens Settings.
+    val menu = LocalAccountMenu.current
+    val menuOpenState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var menuOpen by menuOpenState
+    if (menuOpen && menu != null) AccountMenu(menu, onDismiss = { menuOpen = false })
+    @Suppress("NAME_SHADOWING")
+    val onClick: () -> Unit = if (menu != null) ({ menuOpen = true }) else onClick
     if (plain) {
         WithUpdateDot {
             androidx.compose.foundation.layout.Box(

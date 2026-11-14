@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,10 +36,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -50,16 +51,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -73,13 +79,16 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import com.opentune.data.settings.AppSettings
+import com.opentune.data.settings.ChoiceMenuStyle
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Pick one of a few options, in a [FloatingCard]. Each option is a tile
- * with its name and, after " · " in [label], a line about it. A tinted lens marks the current choice; tapping
+ * Pick one of a few options: on a page of its own, or in a [FloatingCard] sheet, as chosen in
+ * Settings (Choice menus). Either way the options sit in one rimmed
+ * tray, each with a ring at its start, its name and, after " · " in [label], a
+ * line about it. A filled lens marks the current choice; tapping
  * another slides the lens there on a spring, pops a check in and closes a
  * moment later, so the change is seen to land.
  */
@@ -91,8 +100,18 @@ fun <T> ChoiceSheet(
     label: (T) -> String,
     onSelect: (T) -> Unit,
     onDismiss: () -> Unit,
+    /** Options that can't be chosen here show dimmed and don't respond (their line says why). */
+    enabled: (T) -> Boolean = { true },
+    /** Stays open after a choice when this says so, for a choice that asks something more (a permission). */
+    keepOpen: (T) -> Boolean = { false },
+    /** Under the options: a note, or an action that goes with the current choice. */
+    footer: (@Composable () -> Unit)? = null,
 ) {
     val ui by AppSettings.ui.collectAsState()
+    if (ui.choiceMenus == ChoiceMenuStyle.SCREEN) {
+        ChoiceScreen(title, options, selected, label, onSelect, onDismiss, enabled, keepOpen, footer)
+        return
+    }
     val still = ui.reduceAnimation
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
@@ -100,25 +119,136 @@ fun <T> ChoiceSheet(
     var done by remember { mutableStateOf(false) }
     FloatingCard(onDismiss = onDismiss, title = title, contentPadding = PaddingValues(0.dp)) {
         val card = LocalFloatingCard.current
-        Options(options, picked, label, still) { o ->
-            if (done) return@Options
-            done = true
-            if (o != picked) {
-                haptics.tick()
-                picked = o
-                onSelect(o)
+        Column {
+            Options(options, picked, label, still, enabled = enabled) { o ->
+                if (done) return@Options
+                if (o != picked) {
+                    haptics.tick()
+                    picked = o
+                    onSelect(o)
+                }
+                if (keepOpen(o)) return@Options
+                done = true
+                scope.launch {
+                    if (!still) delay(SETTLE_MS)
+                    card?.close() ?: onDismiss()
+                }
             }
-            scope.launch {
-                if (!still) delay(SETTLE_MS)
-                card?.close() ?: onDismiss()
+            footer?.invoke()
+        }
+    }
+}
+
+/**
+ * The same choice as a page of its own: a header with Back, then the options. It slides in
+ * over Settings, and slides away when an option is chosen (after a moment for the choice to be
+ * seen to land) or Back is pressed.
+ */
+@Composable
+private fun <T> ChoiceScreen(
+    title: String,
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    onDismiss: () -> Unit,
+    enabled: (T) -> Boolean,
+    keepOpen: (T) -> Boolean,
+    footer: (@Composable () -> Unit)?,
+) {
+    val ui by AppSettings.ui.collectAsState()
+    val still = ui.reduceAnimation
+    val progress = remember { Animatable(if (still) 1f else 0f) }
+    var closing by remember { mutableStateOf(false) }
+    val dismiss by rememberUpdatedState(onDismiss)
+    fun close() { closing = true }
+    Dialog(
+        onDismissRequest = ::close,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        val view = LocalView.current
+        DisposableEffect(view) {
+            // Only Compose moves the page; Android's dialog animation must not move it again.
+            (view.parent as? DialogWindowProvider)?.window?.let { window ->
+                window.setWindowAnimations(0)
+                window.setDimAmount(0f)
+            }
+            onDispose { }
+        }
+        LaunchedEffect(closing, still) {
+            if (still) progress.snapTo(if (closing) 0f else 1f)
+            else {
+                if (!closing) {
+                    // Build and measure the full page before revealing it.
+                    withFrameNanos { }
+                    withFrameNanos { }
+                }
+                progress.animateTo(if (closing) 0f else 1f,
+                    tween(if (closing) PAGE_OUT_MS else PAGE_IN_MS, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            }
+            if (closing) dismiss()
+        }
+        Box(Modifier.fillMaxSize().testTag("choice-screen").graphicsLayer {
+            translationX = (1f - progress.value) * size.width * 0.125f
+            alpha = progress.value
+        }) {
+            ChoicePage(title, options, selected, label, still, onSelect, onBack = ::close, onChosen = ::close, enabled = enabled, keepOpen = keepOpen, footer = footer)
+        }
+    }
+}
+
+/** The page itself, without the window around it. [onChosen] is called once the choice has had its moment. */
+@Composable
+internal fun <T> ChoicePage(
+    title: String,
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    still: Boolean,
+    onSelect: (T) -> Unit,
+    onBack: () -> Unit,
+    onChosen: () -> Unit,
+    enabled: (T) -> Boolean = { true },
+    keepOpen: (T) -> Boolean = { false },
+    footer: (@Composable () -> Unit)? = null,
+) {
+    val haptics = rememberHaptics()
+    val scope = rememberCoroutineScope()
+    var picked by remember { mutableStateOf(selected) }
+    var done by remember { mutableStateOf(false) }
+    androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize().navigationBarsPadding()) {
+            PageHeader(title, onBack = onBack)
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+                Options(options, picked, label, still, scrolls = false, enabled = enabled) { o ->
+                    if (done) return@Options
+                    if (o != picked) {
+                        haptics.tick()
+                        picked = o
+                        onSelect(o)
+                    }
+                    if (keepOpen(o)) return@Options
+                    done = true
+                    scope.launch { if (!still) delay(SETTLE_MS); onChosen() }
+                }
+                footer?.invoke()
             }
         }
     }
 }
 
 @Composable
-private fun <T> Options(options: List<T>, picked: T, label: (T) -> String, still: Boolean, onPick: (T) -> Unit) {
+private fun <T> Options(
+    options: List<T>,
+    picked: T,
+    label: (T) -> String,
+    still: Boolean,
+    scrolls: Boolean = true,
+    enabled: (T) -> Boolean = { true },
+    onPick: (T) -> Unit,
+) {
     val density = LocalDensity.current
+    val scheme = MaterialTheme.colorScheme
     val tops = remember { mutableStateMapOf<Int, Float>() }
     val heights = remember { mutableStateMapOf<Int, Float>() }
     val lensTop = remember { Animatable(0f) }
@@ -133,29 +263,48 @@ private fun <T> Options(options: List<T>, picked: T, label: (T) -> String, still
             lensHeight.snapTo(height)
             placed = true
         } else {
-            launch { lensTop.animateTo(top, spring(dampingRatio = 0.72f, stiffness = 420f)) }
-            launch { lensHeight.animateTo(height, spring(dampingRatio = 0.9f, stiffness = 420f)) }
+            launch { lensTop.animateTo(top, spring(dampingRatio = 1f, stiffness = 420f)) }
+            launch { lensHeight.animateTo(height, spring(dampingRatio = 1f, stiffness = 420f)) }
         }
     }
-    Box(Modifier.heightIn(max = 470.dp).verticalScroll(rememberScrollState())) {
+    // The options sit together in one rimmed tray; the choice is a filled lens inside it.
+    val tray = RoundedCornerShape(28.dp)
+    Box(
+        Modifier
+            .padding(horizontal = 14.dp)
+            .padding(bottom = 4.dp)
+            .clip(tray)
+            .background(scheme.onSurface.copy(alpha = 0.05f))
+            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.03f))), tray)
+            .then(if (scrolls) Modifier.heightIn(max = 470.dp).verticalScroll(rememberScrollState()) else Modifier)
+            .padding(5.dp),
+    ) {
         if (placed) {
             Box(
                 Modifier
                     .offset { IntOffset(0, lensTop.value.roundToInt()) }
                     .fillMaxWidth()
                     .height(with(density) { lensHeight.value.toDp() })
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
-                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), RoundedCornerShape(22.dp)),
+                    .clip(RoundedCornerShape(23.dp))
+                    .background(Brush.horizontalGradient(listOf(scheme.primary.copy(alpha = 0.30f), scheme.primary.copy(alpha = 0.14f)))),
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column {
             options.forEachIndexed { i, o ->
+                // A hairline between two rows, hidden where the lens is next to it.
+                if (i > 0) {
+                    val near = i == index || i - 1 == index
+                    Box(
+                        Modifier.padding(start = 62.dp, end = 18.dp).fillMaxWidth().height(1.dp)
+                            .background(scheme.onSurface.copy(alpha = if (near) 0f else 0.07f)),
+                    )
+                }
                 OptionRow(
                     text = label(o),
                     selected = o == picked,
                     index = i,
                     still = still,
+                    enabled = enabled(o),
                     modifier = Modifier.onGloballyPositioned {
                         tops[i] = it.positionInParent().y
                         heights[i] = it.size.height.toFloat()
@@ -167,60 +316,35 @@ private fun <T> Options(options: List<T>, picked: T, label: (T) -> String, still
 }
 
 @Composable
-private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolean, enabled: Boolean = true, modifier: Modifier, onClick: () -> Unit) {
     val (name, about) = text.split(" · ", limit = 2).let { it[0] to it.getOrNull(1) }
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val press by animateFloatAsState(if (pressed) 0.97f else 1f, spring(dampingRatio = 0.6f, stiffness = 700f), label = "press")
-    // Rows rise in one after another as the sheet opens.
-    val appear = remember { Animatable(if (still) 1f else 0f) }
-    LaunchedEffect(Unit) {
-        if (still) return@LaunchedEffect
-        delay(60L + index * 28L)
-        appear.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 320f))
-    }
     val check by animateFloatAsState(if (selected) 1f else 0f, if (still) snap() else spring(dampingRatio = 0.5f, stiffness = 520f), label = "check")
     val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(23.dp)
     Row(
         modifier
             .fillMaxWidth()
             .graphicsLayer {
-                alpha = appear.value.coerceIn(0f, 1f)
-                translationY = (1f - appear.value) * 18.dp.toPx()
                 scaleX = press
                 scaleY = press
+                // An option that can't be chosen here stays readable, its line saying why.
+                if (!enabled) alpha = 0.45f
             }
-            .clip(RoundedCornerShape(22.dp))
-            .clickable(interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(RoundedCornerShape(22.dp)), onClick = onClick)
+            .clip(shape)
+            .clickable(enabled = enabled, interactionSource = interaction, indication = com.opentune.ui.components.FocusRing(shape), onClick = onClick)
             .semantics { role = Role.RadioButton; this.selected = selected }
-            .heightIn(min = 60.dp)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .heightIn(min = 58.dp)
+            .padding(start = 14.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = if (selected) scheme.primary else scheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (about != null) {
-                Text(
-                    about,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (selected) scheme.onSurface.copy(alpha = 0.8f) else scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        // An empty ring that fills with the accent and a check as it's chosen.
-        Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
+        // A ring that fills with the accent and a check as it's chosen, at the start of the row.
+        Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
             Box(
                 Modifier.matchParentSize().clip(CircleShape)
-                    .border(2.dp, scheme.onSurfaceVariant.copy(alpha = 0.45f * (1f - check)), CircleShape),
+                    .border(2.dp, scheme.onSurfaceVariant.copy(alpha = 0.4f * (1f - check)), CircleShape),
             )
             Box(
                 Modifier.matchParentSize()
@@ -231,7 +355,26 @@ private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolea
                 Icon(
                     Icons.Rounded.Check, null,
                     tint = scheme.onPrimary,
-                    modifier = Modifier.size(17.dp).graphicsLayer { rotationZ = (1f - check) * -40f },
+                    modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = (1f - check) * -40f },
+                )
+            }
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = scheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (about != null) {
+                Text(
+                    about,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (selected) scheme.onSurface.copy(alpha = 0.78f) else scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
         }
@@ -240,3 +383,5 @@ private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolea
 
 /** How long the lens and check get to land before the sheet closes. */
 private const val SETTLE_MS = 300L
+private const val PAGE_IN_MS = 300
+private const val PAGE_OUT_MS = 220

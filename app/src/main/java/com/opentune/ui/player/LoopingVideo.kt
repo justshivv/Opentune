@@ -17,8 +17,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -34,32 +34,51 @@ import androidx.media3.exoplayer.ExoPlayer
  * [playing] and the app is in front, and tries [fallbackUrl] once if [url]
  * won't play. Its own player takes no audio focus and has no sound track.
  */
+/**
+ * One player per clip, shared by every place that shows it at once, and kept a
+ * moment after the last one goes. The player's cover and the cover flying to
+ * and from the lyrics and queue show the same clip: each starting its own
+ * player showed the still cover for a second while the new one loaded and
+ * faded in. Only one view can show a player's picture, so the one most
+ * recently put on screen has it, and it goes back to the one before when that
+ * one leaves.
+ */
 @OptIn(UnstableApi::class)
-@Composable
-internal fun LoopingVideo(
-    url: String,
-    playing: Boolean,
-    modifier: Modifier = Modifier,
-    fallbackUrl: String? = null,
-    /** The largest picture worth fetching, in pixels each way (see MotionQuality). */
-    maxPx: Int = 1080,
-    /** The most bits a second worth spending on a silent loop. */
-    maxBitrate: Int = 4_000_000,
-) {
-    val context = LocalContext.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    var drawn by remember(url) { mutableStateOf(false) }
-    var size by remember(url) { mutableStateOf(VideoSize.UNKNOWN) }
-    // Black bands some clips carry in the picture itself (a wide video padded to a tall
-    // frame): found from a few frames, then cropped away with the rest.
-    var bars by remember(url) { mutableStateOf(Bars.NONE) }
-    var view by remember { mutableStateOf<TextureView?>(null) }
-    val fade by animateFloatAsState(if (drawn) 1f else 0f, tween(700), label = "loopingVideo")
-    val player = remember(url) {
-        ExoPlayer.Builder(context)
+internal object SharedLoops {
+    class Entry(val key: String, val player: ExoPlayer) {
+        var users = 0
+        /** The clip's picture has been drawn at least once: a view showing it again needs no fade. */
+        val drawn = mutableStateOf(false)
+        val size = mutableStateOf(VideoSize.UNKNOWN)
+        val views = ArrayList<TextureView>()
+        var linger: Runnable? = null
+    }
+
+    private val entries = HashMap<String, Entry>()
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private const val LINGER_MS = 2_500L
+
+    fun acquire(context: android.content.Context, url: String, fallbackUrl: String?, maxPx: Int, maxBitrate: Int): Entry {
+        val key = "$url|$maxPx|$maxBitrate"
+        entries[key]?.let { e ->
+            e.linger?.let(main::removeCallbacks)
+            e.linger = null
+            e.users++
+            return e
+        }
+        val player = ExoPlayer.Builder(context.applicationContext)
+            .setRenderersFactory(
+                // Some hardware decoders refuse these tall canvas files at
+                // start-up though they claim to support them: fall back to
+                // another decoder instead of showing nothing.
+                androidx.media3.exoplayer.DefaultRenderersFactory(context.applicationContext)
+                    .setEnableDecoderFallback(true)
+            )
             // Kept on disk, so each turn of the loop plays from the phone rather than downloading again.
             .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(LoopCache.dataSource(context)))
-            .build().apply {
+            .build()
+        val entry = Entry(key, player)
+        player.apply {
             volume = 0f
             repeatMode = Player.REPEAT_MODE_ONE
             // The sharpest version that fits the screen and the bitrate cap, straight away. Left to adapt,
@@ -75,8 +94,8 @@ internal fun LoopingVideo(
                 .build()
             var retried = false
             addListener(object : Player.Listener {
-                override fun onRenderedFirstFrame() { drawn = true }
-                override fun onVideoSizeChanged(videoSize: VideoSize) { size = videoSize }
+                override fun onRenderedFirstFrame() { entry.drawn.value = true }
+                override fun onVideoSizeChanged(videoSize: VideoSize) { entry.size.value = videoSize }
                 override fun onPlayerError(error: PlaybackException) {
                     if (retried || fallbackUrl == null) return
                     retried = true
@@ -87,8 +106,88 @@ internal fun LoopingVideo(
             setMediaItem(MediaItem.fromUri(url))
             prepare()
         }
+        entry.users = 1
+        entries[key] = entry
+        return entry
     }
-    LaunchedEffect(player, playing) { player.playWhenReady = playing && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) }
+
+    fun release(entry: Entry) {
+        entry.users--
+        if (entry.users > 0) return
+        val r = Runnable {
+            if (entry.users > 0) return@Runnable
+            entries.remove(entry.key)
+            entry.player.release()
+        }
+        entry.linger = r
+        main.postDelayed(r, LINGER_MS)
+    }
+
+    fun show(entry: Entry, view: TextureView) {
+        entry.views.remove(view)
+        entry.views.add(view)
+        entry.player.setVideoTextureView(view)
+    }
+
+    fun hide(entry: Entry, view: TextureView) {
+        val wasShowing = entry.views.lastOrNull() === view
+        entry.views.remove(view)
+        if (!wasShowing) return
+        entry.player.clearVideoTextureView(view)
+        entry.views.lastOrNull()?.let { entry.player.setVideoTextureView(it) }
+    }
+
+    /** Whether any place on screen wants [entry] playing. */
+    private val wanted = HashMap<Entry, Int>()
+
+    fun want(entry: Entry, on: Boolean) {
+        val n = (wanted[entry] ?: 0) + if (on) 1 else -1
+        if (n <= 0) wanted.remove(entry) else wanted[entry] = n
+        entry.player.playWhenReady = n > 0
+    }
+}
+
+/**
+ * A silent clip on a loop, filling its box and cropped to it: Apple's
+ * animated covers (HLS) and Spotify's Canvas (MP4). The first time a clip is
+ * shown it fades in on its first frame, so until then whatever is under it
+ * shows; shown again while its player is still around (the cover flying to
+ * the lyrics, say), it's there at once. It plays only while [playing] and the
+ * app is in front, and tries [fallbackUrl] once if [url] won't play. Its
+ * player takes no audio focus and has no sound track.
+ */
+@OptIn(UnstableApi::class)
+@Composable
+internal fun LoopingVideo(
+    url: String,
+    playing: Boolean,
+    modifier: Modifier = Modifier,
+    fallbackUrl: String? = null,
+    /** The largest picture worth fetching, in pixels each way (see MotionQuality). */
+    maxPx: Int = 1080,
+    /** The most bits a second worth spending on a silent loop. */
+    maxBitrate: Int = 4_000_000,
+    /** Told of the view the picture is drawn in (null once it's gone), for a frost made from its frames. */
+    onView: ((TextureView?) -> Unit)? = null,
+) {
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val entry = remember(url, maxPx, maxBitrate) { SharedLoops.acquire(context, url, fallbackUrl, maxPx, maxBitrate) }
+    val drawn by entry.drawn
+    val size by entry.size
+    // Black bands some clips carry in the picture itself (a wide video padded to a tall
+    // frame): found from a few frames, then cropped away with the rest.
+    var bars by remember(url) { mutableStateOf(Bars.NONE) }
+    var view by remember { mutableStateOf<TextureView?>(null) }
+    // Already drawn elsewhere: no fade, the picture is simply there.
+    val alreadyDrawn = remember(entry) { entry.drawn.value }
+    val fade by animateFloatAsState(if (drawn) 1f else 0f, if (alreadyDrawn) tween(0) else tween(700), label = "loopingVideo")
+    val lifecycleState by lifecycle.currentStateAsState()
+    val active = playing && lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+    DisposableEffect(entry, active) {
+        if (active) SharedLoops.want(entry, true)
+        onDispose { if (active) SharedLoops.want(entry, false) }
+    }
     LaunchedEffect(url, drawn) {
         if (!drawn) return@LaunchedEffect
         // A band has to be there in every look, so a dark scene isn't taken for one.
@@ -102,26 +201,20 @@ internal fun LoopingVideo(
             bars = found
         }
     }
-    DisposableEffect(player, lifecycle) {
-        val watch = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> player.playWhenReady = playing
-                Lifecycle.Event.ON_STOP -> player.playWhenReady = false
-                else -> Unit
-            }
-        }
-        lifecycle.addObserver(watch)
+    DisposableEffect(entry) {
         onDispose {
-            lifecycle.removeObserver(watch)
-            player.release()
+            view?.let { SharedLoops.hide(entry, it) }
+            onView?.invoke(null)
+            SharedLoops.release(entry)
         }
     }
     AndroidView(
         factory = { c ->
             TextureView(c).also { v ->
-                player.setVideoTextureView(v)
-                v.addOnLayoutChangeListener { l, _, _, _, _, _, _, _, _ -> crop(l as TextureView, size, bars) }
+                SharedLoops.show(entry, v)
+                v.addOnLayoutChangeListener { l, _, _, _, _, _, _, _, _ -> crop(l as TextureView, entry.size.value, bars) }
                 view = v
+                onView?.invoke(v)
             }
         },
         update = { v -> crop(v, size, bars) },

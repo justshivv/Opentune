@@ -24,6 +24,13 @@ import com.opentune.ui.browse.SongActions
 import com.opentune.ui.theme.OpenTuneTheme
 import java.io.File
 import org.junit.Before
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.semantics.getOrNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,7 +63,44 @@ class PlaylistToolsScreenshotTest {
         songs.forEach { History.record(it, 200_000) }
     }
 
+    /** Long press, Select, then a second song: both ticked, the bar over the top saying so; Remove takes both out. */
+    @Test fun pickSeveral() {
+        val songsIn = { LibraryStore.playlist(id)!!.songs.size }
+        LibraryStore.addToPlaylist(id, songs[2])
+        compose.setContent { OpenTuneTheme(ThemeSettings()) { Surface(color = MaterialTheme.colorScheme.background) {
+            LocalPlaylistScreen(id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {})
+        } } }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.onNodeWithText("Husn").performTouchInput { longClick() }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("Select").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("Blinding Lights").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("2 selected").assertExists()
+        compose.waitForIdle()
+        val view = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bitmap))
+        File("build/screenshots/playlist/select.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        compose.onNodeWithText("Remove").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        org.junit.Assert.assertEquals(1, songsIn())
+        org.junit.Assert.assertEquals("Kesariya", LibraryStore.playlist(id)!!.songs.single().title)
+    }
+
     @Test fun page() = shoot("playlist/page") { LocalPlaylistScreen(id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {}) }
+
+    /** With Settings › Full-screen playlist covers on, the cover runs across the top of the page. */
+    @Test fun fullCover() {
+        val before = com.opentune.data.settings.AppSettings.ui.value
+        com.opentune.data.settings.AppSettings.updateUi { it.copy(fullScreenListCover = true) }
+        try {
+            shoot("playlist/full-cover") { LocalPlaylistScreen(id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {}) }
+        } finally {
+            com.opentune.data.settings.AppSettings.updateUi { before }
+        }
+    }
 
     @Test fun spotifyUsesTheSamePlaylistLayout() {
         LibraryStore.putSpotifyPlaylist("1234567890123456789012", "Late nights", songs, "revision", null)
@@ -76,6 +120,83 @@ class PlaylistToolsScreenshotTest {
         } }
         compose.onNodeWithText("Spotify collection").assertDoesNotExist()
         compose.onNodeWithText("Late nights").assertExists()
+    }
+
+    /** Adding several songs to a playlist that has some of them: it says so, and only the missing ones go in. */
+    @Test fun addingSeveralSkipsTheOnesAlreadyThere() {
+        compose.setContent { OpenTuneTheme(ThemeSettings()) {
+            com.opentune.ui.components.AddAllToPlaylistDialog(songs, onDismiss = {}, onDone = {})
+        } }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText("2 of 3 already in it · 2 songs").assertExists()
+        compose.onNode(androidx.compose.ui.test.hasClickAction() and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Late nights")), useUnmergedTree = true)
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(500)
+        org.junit.Assert.assertEquals(songs.map { it.videoId }, LibraryStore.playlist(id)!!.songs.map { it.videoId })
+    }
+
+    /** Picking two playlists with their round buttons, then adding to both at once. */
+    @Test fun addingToSeveralPlaylistsAtOnce() {
+        val gym = LibraryStore.createPlaylist("Gym")
+        compose.setContent { OpenTuneTheme(ThemeSettings()) {
+            com.opentune.ui.components.AddAllToPlaylistDialog(songs, onDismiss = {}, onDone = {})
+        } }
+        compose.mainClock.advanceTimeBy(1_000)
+        fun clickLabelled(label: String) = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher(label) {
+            it.config.getOrNull(androidx.compose.ui.semantics.SemanticsActions.OnClick)?.label == label
+        }).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        clickLabelled("Pick Gym")
+        clickLabelled("Pick Late nights")
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNode(androidx.compose.ui.test.hasClickAction() and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Add to 2 playlists")), useUnmergedTree = true)
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(500)
+        org.junit.Assert.assertEquals(songs.map { it.videoId }, LibraryStore.playlist(gym)!!.songs.map { it.videoId })
+        org.junit.Assert.assertEquals(songs.map { it.videoId }, LibraryStore.playlist(id)!!.songs.map { it.videoId })
+    }
+
+    /** A playlist that has the song already keeps its tick while others are picked, can't be picked, and its tick takes the song out. */
+    @Test fun aPlaylistWithTheSongCantBePickedAgain() {
+        val gym = LibraryStore.createPlaylist("Gym")
+        compose.setContent { OpenTuneTheme(ThemeSettings()) {
+            com.opentune.ui.components.AddToPlaylistDialog(songs[0], onDone = {}, onDismiss = {})
+        } }
+        compose.mainClock.advanceTimeBy(1_000)
+        fun clickLabelled(label: String) = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher(label) {
+            it.config.getOrNull(androidx.compose.ui.semantics.SemanticsActions.OnClick)?.label == label
+        }).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        clickLabelled("Pick Gym")
+        compose.mainClock.advanceTimeBy(500)
+        // The one with the song keeps its tick, and offers to take the song out rather than be picked.
+        compose.onAllNodesWithContentDescription("In this playlist", useUnmergedTree = true).assertCountEquals(1)
+        compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher("pick late nights") {
+            it.config.getOrNull(androidx.compose.ui.semantics.SemanticsActions.OnClick)?.label == "Pick Late nights"
+        }).assertCountEquals(0)
+        compose.onNode(androidx.compose.ui.test.hasClickAction() and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Add to 1 playlist")), useUnmergedTree = true).assertExists()
+        org.junit.Assert.assertTrue(LibraryStore.playlist(gym)!!.songs.isEmpty())
+        // Its tick taken off: the song comes out of it.
+        clickLabelled("Remove from Late nights")
+        compose.mainClock.advanceTimeBy(500)
+        org.junit.Assert.assertEquals(listOf(songs[1].videoId), LibraryStore.playlist(id)!!.songs.map { it.videoId })
+    }
+
+    /**
+     * Searching a list: the field sits on the bar's own frost (no band of another colour behind
+     * it), and has no X of its own until something is typed; the bar's X closes the search.
+     */
+    @Test fun searchOpen() {
+        compose.setContent { OpenTuneTheme(ThemeSettings()) { Surface(color = MaterialTheme.colorScheme.background) {
+            LocalPlaylistScreen(id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {})
+        } } }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithContentDescription("Search this list").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onAllNodesWithContentDescription("Clear search").assertCountEquals(0)
+        val view = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bitmap))
+        val file = File("build/screenshots/playlist/search.png").apply { parentFile!!.mkdirs() }
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     @Test fun addSheet() = shoot("playlist/add") { AddSongsSheet(id, onDismiss = {}) }

@@ -38,10 +38,10 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -115,7 +115,7 @@ fun DownloadAllButton(songs: List<Song>, modifier: Modifier = Modifier, list: Do
         list?.let { com.opentune.data.download.DownloadedLists.save(it.id, it.title, it.subtitle, it.thumbnailUrl, songs.map { s -> s.videoId }) }
     }
     if (options) FloatingCard(onDismiss = { options = false }, title = "Playlist downloads", icon = Icons.Rounded.Download) {
-        Text("$done of ${wanted.size} songs saved · $going pending", Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+        Text(com.opentune.i18n.Tr.f("{0} of {1} songs saved · {2} pending", done, wanted.size, going), Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
             style = MaterialTheme.typography.bodyMedium)
         if (done + going < wanted.size) MenuRow(Icons.Rounded.Download, "Download remaining songs") {
             downloadRemaining()
@@ -166,8 +166,8 @@ fun DownloadAllButton(songs: List<Song>, modifier: Modifier = Modifier, list: Do
         Text(
             when {
                 all -> "Downloaded · Manage"
-                going > 0 -> "Downloading · $done/${wanted.size}"
-                done > 0 -> "Download the other ${wanted.size - done}"
+                going > 0 -> com.opentune.i18n.Tr.f("Downloading · {0}/{1}", done, wanted.size)
+                done > 0 -> com.opentune.i18n.Tr.f("Download the other {0}", wanted.size - done)
                 else -> "Download all"
             },
             style = MaterialTheme.typography.labelLarge,
@@ -233,7 +233,11 @@ fun AddSongsSheet(playlistId: String, onDismiss: () -> Unit) {
         onDismiss = onDismiss,
         title = "Add songs",
         icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+        // Opens most of the way up; dragged or scrolled up, it takes over the page.
         expandable = true,
+        fitContent = false,
+        fullFraction = 1f,
+        openFraction = com.opentune.ui.components.OPEN_FRACTION,
         header = {
             OutlinedTextField(
                 value = query,
@@ -248,7 +252,7 @@ fun AddSongsSheet(playlistId: String, onDismiss: () -> Unit) {
         },
     ) {
         val list = results ?: recent
-        Column(Modifier.weight(1f, fill = false).heightIn(min = 120.dp).verticalScroll(rememberScrollState())) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Text(
                 when {
                     searching -> "Searching…"
@@ -373,12 +377,14 @@ fun ListTools(
     /** For a playlist on the account's YouTube Music: who can see it, and changing that. */
     privacy: com.opentune.data.model.PlaylistPrivacy? = null,
     onPrivacy: (() -> Unit)? = null,
+    /** False when the page's own button row already offers the download, as the hero pages' does. */
+    showDownload: Boolean = true,
 ) {
     androidx.compose.foundation.layout.FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (saved != null) ListHeart(saved, onSave)
         if (onPrivacy != null) com.opentune.ui.components.PrivacyButton(privacy, onPrivacy)
         if (onAddSongs != null) AddSongsButton(onAddSongs)
-        if (songs.isNotEmpty()) DownloadAllButton(songs, list = list)
+        if (showDownload && songs.isNotEmpty()) DownloadAllButton(songs, list = list)
         if (onShare != null) RoundToolButton(Icons.Rounded.Share, "Share", onShare)
     }
 }

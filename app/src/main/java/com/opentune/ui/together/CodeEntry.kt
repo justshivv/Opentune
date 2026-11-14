@@ -23,7 +23,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -181,7 +181,7 @@ internal fun CodeField(
             .graphicsLayer { translationX = offset.value * density }
             .semantics {
                 contentDescription = "Room code"
-                stateDescription = if (raw.isEmpty()) "Empty, 12 characters" else "${CodeEntry.pretty(raw)}, ${raw.length} of 12"
+                stateDescription = if (raw.isEmpty()) "Empty, 12 characters" else com.opentune.i18n.Tr.f("{0}, {1} of 12", CodeEntry.pretty(raw), raw.length)
                 if (flash) error("That isn't part of a room code")
             },
         decorationBox = { field ->

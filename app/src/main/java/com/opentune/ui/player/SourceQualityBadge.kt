@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -18,7 +18,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -43,12 +43,87 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.ui.unit.sp
 import com.opentune.data.NerdStats
 import com.opentune.playback.AudioFormatInfo
 import java.util.Locale
 
 @Composable
 internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    // While two songs blend, "Mixing" stands where the quality is, then gives way to it again.
+    val mix by com.opentune.playback.MixState.now.collectAsState()
+    var transition by remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.animation.Crossfade(mix != null, animationSpec = tween(450), label = "mixBadge") { mixing ->
+        if (mixing) MixBadge(modifier, onClick = { transition = true }) else QualityBadge(mediaId, format, onClick, modifier)
+    }
+    if (transition) AutomixSheet(onDismiss = { transition = false })
+}
+
+/**
+ * "Mixing" with a beam of light running across it, faster and brighter the
+ * nearer the next song is to taking over, so the label itself shows the songs
+ * moving into each other.
+ */
+@Composable
+private fun MixBadge(modifier: Modifier, onClick: () -> Unit) {
+    val mix by com.opentune.playback.MixState.now.collectAsState()
+    val shown = remember { androidx.compose.runtime.mutableStateOf(mix ?: com.opentune.playback.MixState.Mix("Mixing", 0f)) }
+    mix?.let { shown.value = it }
+    val colors = MaterialTheme.colorScheme
+    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+    // The beam's place, moved on each frame by a speed that rises with the blend.
+    val beam = remember { androidx.compose.runtime.mutableFloatStateOf(-0.2f) }
+    androidx.compose.runtime.LaunchedEffect(still) {
+        if (still) return@LaunchedEffect
+        var last = 0L
+        while (true) {
+            androidx.compose.runtime.withFrameNanos { now ->
+                if (last != 0L) {
+                    val p = shown.value.progress
+                    // Slow as the next song starts coming in, racing as it takes over.
+                    val sweepsPerSecond = 0.5f + 3.6f * p * p
+                    beam.floatValue = ((beam.floatValue + 0.2f + sweepsPerSecond * (now - last) / 1e9f * 1.4f) % 1.4f) - 0.2f
+                }
+                last = now
+            }
+        }
+    }
+    androidx.compose.foundation.layout.Row(
+        modifier.widthIn(max = 280.dp).fillMaxWidth().heightIn(min = 40.dp)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = com.opentune.i18n.Tr.f("{0}: blending into the next song. Open the transition", shown.value.label) },
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Icon(androidx.compose.material.icons.Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = colors.primary)
+        Spacer(Modifier.width(6.dp))
+        Text(shown.value.label, style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, letterSpacing = 0.6.sp,
+            modifier = Modifier.graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }.drawWithCache {
+                onDrawWithContent {
+                    drawContent()
+                    if (still) return@onDrawWithContent
+                    val x = beam.floatValue * size.width
+                    // Narrower and keener as it speeds up.
+                    val half = size.width * (0.26f - 0.1f * shown.value.progress)
+                    // The light, in the accent at its edges and white at its heart, over the letters only.
+                    drawRect(androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        0f to colors.primary.copy(alpha = 0f),
+                        0.3f to colors.primary.copy(alpha = 0.9f),
+                        0.5f to colors.onSurface,
+                        0.7f to colors.primary.copy(alpha = 0.9f),
+                        1f to colors.primary.copy(alpha = 0f),
+                        startX = x - half, endX = x + half),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+                }
+            })
+    }
+}
+
+@Composable
+private fun QualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val reported by NerdStats.playbackSource.collectAsState()
     val upgrading by NerdStats.upgrading.collectAsState()
     val source = reported?.takeIf { it.mediaId == mediaId }
@@ -60,7 +135,7 @@ internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onCli
     val lossless = isHighestQuality(source, format)
     val phase = if (ui.reduceAnimation || !lossless) null else rememberInfiniteTransition(label = "quality light")
         .animateFloat(-0.15f, 1.15f, infiniteRepeatable(tween(2800, easing = LinearEasing)), label = "quality sweep")
-    TextButton(onClick = onClick, modifier = modifier.widthIn(max = 280.dp).fillMaxWidth().heightIn(min = 40.dp).semantics { contentDescription = "$label. Open signal path" },
+    TextButton(onClick = onClick, modifier = modifier.widthIn(max = 280.dp).fillMaxWidth().heightIn(min = 40.dp).semantics { contentDescription = com.opentune.i18n.Tr.f("{0}. Open signal path", label) },
         colors = ButtonDefaults.textButtonColors(contentColor = colors.onSurfaceVariant),
         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) {
         // Lossless gets the waveform; a lossy stream the plain HQ mark (a headphone read as the output, not the quality).
@@ -92,6 +167,11 @@ internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onCli
 
 internal fun qualityStatusLabel(source: NerdStats.Source?, format: AudioFormatInfo?, upgrading: Boolean): String {
     if (source == null || source.provider.startsWith("Checking highest")) return if (upgrading) "Upgrading quality" else "Preparing audio"
+    // Dolby: its name, and the channels it carries ("Dolby Atmos · 7.1").
+    com.opentune.playback.dolbyName(format)?.let { dolby ->
+        val layout = when (format?.channels) { 6 -> "5.1"; 8 -> "7.1"; 10 -> "7.1.2"; 12 -> "7.1.4"; 16 -> "9.1.6"; else -> null }
+        return listOfNotNull(dolby, layout).joinToString(" · ")
+    }
     val lossless = isHighestQuality(source, format)
     val kbps = format?.bitrateKbps ?: source.kbps ?: 0
     // JioSaavn and YouTube Music streams are named by their tier alone, without the bitrate.
@@ -113,16 +193,15 @@ internal fun qualityStatusLabel(source: NerdStats.Source?, format: AudioFormatIn
             val rate = format?.sampleRateHz ?: source.sampleRate
             listOfNotNull(bits?.let { "$it-bit" }, rate?.let { khzLabel(it) }).joinToString("/").ifEmpty { null }
         }
-        saavn || youTube -> null
-        else -> kbps.takeIf { it > 0 }?.let { "$it kbps" }
+        else -> kbps.takeIf { it > 0 }?.let { com.opentune.i18n.Tr.f("{0} kbps", it) }
     }
     val label = listOfNotNull(tier, detail).joinToString(" · ")
-    return if (upgrading) "$label · upgrading" else label
+    return if (upgrading) com.opentune.i18n.Tr.f("{0} · upgrading", label) else label
 }
 
 /** A sample rate in Hz as "44.1 kHz" or "96 kHz", trimming a trailing ".0". */
 private fun khzLabel(hz: Int): String =
-    "${String.format(Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0")} kHz"
+    com.opentune.i18n.Tr.f("{0} kHz", String.format(Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0"))
 
 /** Whether [source] is the best there is: lossless, rather than a lossy stream at any bitrate. */
 internal fun isHighestQuality(source: NerdStats.Source?, format: AudioFormatInfo?): Boolean {
@@ -215,7 +294,7 @@ internal fun sourceQualityLabel(source: NerdStats.Source?, format: AudioFormatIn
     val rate = format?.sampleRateHz ?: source.sampleRate
     val quality = if (codec?.contains("FLAC", ignoreCase = true) == true) {
         listOfNotNull("FLAC", bits?.let { "$it-bit" }, rate?.let { khzLabel(it) }).joinToString(" · ")
-    } else listOfNotNull(codec, (format?.bitrateKbps ?: source.kbps)?.let { "$it kbps" }).joinToString(" · ")
+    } else listOfNotNull(codec, (format?.bitrateKbps ?: source.kbps)?.let { com.opentune.i18n.Tr.f("{0} kbps", it) }).joinToString(" · ")
     return "$provider · ${quality.ifEmpty { "quality pending" }}"
 }
 

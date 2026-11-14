@@ -22,6 +22,24 @@ class AddonProtocolTest {
         assertThrows(IllegalArgumentException::class.java) { AddonProtocol.normalize("http://addon.example") }
         assertThrows(IllegalArgumentException::class.java) { AddonProtocol.normalize("https://user:password@addon.example") }
     }
+    @Test fun acceptsPlainHttpOnlyForAnAddonOnThisDevice() {
+        assertEquals("http://127.0.0.1:8787/monochrome/", AddonProtocol.normalize("http://127.0.0.1:8787/monochrome/manifest.json"))
+        assertEquals("http://localhost:8787/", AddonProtocol.normalize("http://localhost:8787/manifest.json"))
+        assertEquals("http://[::1]:8787/", AddonProtocol.normalize("http://[::1]:8787"))
+        assertEquals("https://addon.example/", AddonProtocol.normalize("https://addon.example/manifest.json"))
+        for (refused in listOf(
+            "http://example.com", "http://192.168.1.5:8787", "http://10.0.0.2", "http://0.0.0.0:8787",
+            "http://127.0.0.1.example.com", "http://127.0.0.256", "http://user:pw@127.0.0.1:8787", "http://127.0.0.1:8787/#x",
+        )) assertThrows(refused, IllegalArgumentException::class.java) { AddonProtocol.url(refused) }
+    }
+    @Test fun anAddonOnTheInternetCannotRedirectToThisDevice() {
+        val web = AddonProtocol.url("https://addon.example/a")
+        val device = AddonProtocol.url("http://127.0.0.1:8787/a")
+        assertFalse(AddonProtocol.redirectAllowed(web, device))
+        assertFalse(AddonProtocol.redirectAllowed(web, AddonProtocol.url("http://localhost/a")))
+        assertTrue(AddonProtocol.redirectAllowed(web, AddonProtocol.url("https://cdn.example/a")))
+        assertTrue(AddonProtocol.redirectAllowed(device, AddonProtocol.url("http://127.0.0.1:8787/b")))
+    }
     @Test fun honorsSwitchesDefaultsAndQualityNegotiation() {
         val m = AddonProtocol.manifest(manifest)
         assertFalse(m.downloads); assertTrue(m.outputRequired)

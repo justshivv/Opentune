@@ -1,5 +1,9 @@
 package com.opentune.ui.player
 
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onPlaced
+import kotlinx.coroutines.flow.first
 import android.content.Context
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
@@ -46,10 +50,10 @@ import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -81,6 +85,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -130,7 +136,9 @@ fun QueuePane(
     /** Apple Music's words for what comes after the queue. */
     appleWords: Boolean = false,
 ) {
-    val autoplay = AppSettings.playback.collectAsState().value.autoplay
+    // A song started on its own carries on with its radio even with AutoPlay off (see PlaybackService.radioWanted).
+    val autoplay = AppSettings.playback.collectAsState().value.autoplay ||
+        queue.count { it.queueTier != com.opentune.data.model.QueueTier.AUTOPLAY } == 1
     val haptics = com.opentune.ui.components.rememberHaptics()
     val rowPx = with(LocalDensity.current) { QUEUE_ROW.toPx() }
     // A local copy of the upcoming order, so a drag can move rows before the player hears of it.
@@ -149,7 +157,6 @@ fun QueuePane(
         }
     }
     val list = rememberLazyListState()
-    val television = com.opentune.ui.tv.LocalIsTv.current
     val canDrag = !shuffle
 
     LazyColumn(modifier, state = list, contentPadding = PaddingValues(bottom = 12.dp)) {
@@ -193,7 +200,7 @@ fun QueuePane(
                     }
                     .then(if (isDragged) Modifier else Modifier.animateItem())
                     .then(
-                        if (!canDrag || television) Modifier else Modifier.pointerInput(index) {
+                        if (!canDrag) Modifier else Modifier.pointerInput(index) {
                             detectDragGesturesAfterLongPress(
                                 onDragStart = {
                                     haptics.press()
@@ -229,11 +236,7 @@ fun QueuePane(
                     ),
             ) {
                 Column {
-                    QueueRow(song, isCurrent = false, isPlaying = false, handle = canDrag && !com.opentune.ui.tv.LocalIsTv.current, onClick = { onPlayIndex(index) }, onRemove = { onRemoveIndex(index) })
-                    if (com.opentune.ui.tv.LocalIsTv.current && canDrag) Row {
-                        androidx.compose.material3.TextButton(onClick = { onMove(index, order[pos - 1]) }, enabled = pos > 0) { Text("Move up") }
-                        androidx.compose.material3.TextButton(onClick = { onMove(index, order[pos + 1]) }, enabled = pos < order.lastIndex) { Text("Move down") }
-                    }
+                    QueueRow(song, isCurrent = false, isPlaying = false, handle = canDrag, onClick = { onPlayIndex(index) }, onRemove = { onRemoveIndex(index) })
                 }
             }
             if (pos == order.lastIndex) Spacer(Modifier.height(8.dp))
@@ -417,7 +420,7 @@ fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () 
     val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val scale = pressScale(press, selected)
     Box(
-        Modifier.fillMaxHeight().width(width).background(bg)
+        Modifier.fillMaxHeight().width(width).segmentFill(bg)
             .clickable(press, androidx.compose.material3.ripple(), enabled = enabled, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -428,12 +431,14 @@ fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () 
 
 /**
  * One pill that morphs between two sets of buttons, [first] and [second]
- * (shown when [second] is true). Its fill stretches or narrows to the new
- * set's width and takes its colour, the buttons are clipped to it as it
- * goes, and the old set fades out as the new one fades in. All of that is
- * read from one value each frame, so the parts can't drift apart, and a tap
- * back mid-way turns it round from where it is, at the speed it had. Only
- * the set that's coming in takes taps: each gets whether it's enabled.
+ * (shown when [second] is true). Its fill stretches or narrows straight to the
+ * new set's width and takes its colour, and the buttons change over in a sweep
+ * across it: each place in the pill turns from the old set to the new as the
+ * edge passes, so there's always a full row of buttons, some old and some new,
+ * and the two sets never show over each other. All of that is read from one
+ * value each frame, so the parts can't drift apart, and a tap back mid-way
+ * turns it round from where it is, at the speed it had. Only the set that's
+ * coming in takes taps: each gets whether it's enabled.
  */
 @Composable
 fun MorphPill(
@@ -442,50 +447,168 @@ fun MorphPill(
     firstFill: Color,
     secondFill: Color,
     modifier: Modifier = Modifier,
+    /** When the cover is flying, the pill follows that same transition clock. */
+    progress: (() -> Float?)? = null,
     first: @Composable (enabled: Boolean) -> Unit,
     secondContent: @Composable (enabled: Boolean) -> Unit,
 ) {
     val morph = remember { androidx.compose.animation.core.Animatable(if (second) 1f else 0f) }
+    // The caller's lambda is new on each of its recompositions; one watcher reads the latest,
+    // rather than a watcher started again every time the player redraws.
+    val driver by androidx.compose.runtime.rememberUpdatedState(progress)
+    // While something else drives the pill, its own value follows along, so when that ends the
+    // pill carries on from exactly where it was instead of jumping to a second animation's place.
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { driver?.invoke() }.collect { v -> if (v != null) morph.snapTo(v.coerceIn(0f, 1f)) }
+    }
     LaunchedEffect(second, animate) {
         val target = if (second) 1f else 0f
-        if (!animate) morph.snapTo(target) else morph.animateTo(target, spring(dampingRatio = 1f, stiffness = 340f))
+        // Driven from outside: wait for that to finish, then settle from where it left off.
+        androidx.compose.runtime.snapshotFlow { driver?.invoke() == null }.first { it }
+        if (!animate) morph.snapTo(target) else morph.animateTo(target, androidx.compose.animation.core.tween(440, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)))
     }
-    var firstWidth by remember { mutableFloatStateOf(0f) }
-    var secondWidth by remember { mutableFloatStateOf(0f) }
-    Box(
-        modifier.height(52.dp).drawWithContent {
-            if (firstWidth <= 0f || secondWidth <= 0f) return@drawWithContent
-            val p = morph.value
-            val w = androidx.compose.ui.util.lerp(firstWidth, secondWidth, p)
-            val left = (size.width - w) / 2f
-            val path = androidx.compose.ui.graphics.Path().apply {
-                addRoundRect(androidx.compose.ui.geometry.RoundRect(left, 0f, left + w, size.height, androidx.compose.ui.geometry.CornerRadius(size.height / 2f)))
+    // Set while measuring, before this frame draws; onSizeChanged used to leave a blank frame.
+    val widths = remember { FloatArray(2) }
+    val currentProgress = { (driver?.invoke() ?: morph.value).coerceIn(0f, 1f) }
+    androidx.compose.ui.layout.Layout(
+        modifier = modifier.height(52.dp)
+            // Clipped by the layer's own rounded outline, which the GPU does cheaply, not by a path
+            // made and clipped to on every frame of the change.
+            .graphicsLayer {
+                val w = pillWidth(widths[0], widths[1], currentProgress())
+                shape = PillOutline((size.width - w) / 2f, w)
+                clip = true
             }
-            drawPath(path, androidx.compose.ui.graphics.lerp(firstFill, secondFill, p))
-            clipPath(path) { this@drawWithContent.drawContent() }
+            .drawBehind {
+                val p = currentProgress()
+                val w = pillWidth(widths[0], widths[1], p)
+                drawRoundRect(
+                    androidx.compose.ui.graphics.lerp(firstFill, secondFill, pillEase(p)),
+                    topLeft = androidx.compose.ui.geometry.Offset((size.width - w) / 2f, 0f),
+                    size = androidx.compose.ui.geometry.Size(w, size.height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f),
+                )
+            },
+        content = {
+            // Each set's lit end segments reach out to the pill's edge as it stretches or narrows:
+            // stopping at their own ends, a lit button showed a second edge inside the pill's.
+            fun overhang(i: Int): Float =
+                (pillWidth(widths[0], widths[1], currentProgress()) - widths[i]) / 2f
+            Box(Modifier.zIndex(if (second) 0f else 1f).sweepMask(old = true, set = 0, widths, currentProgress)) {
+                androidx.compose.runtime.CompositionLocalProvider(LocalPillOverhang provides { overhang(0) }) { first(!second) }
+            }
+            Box(Modifier.zIndex(if (second) 1f else 0f).sweepMask(old = false, set = 1, widths, currentProgress)) {
+                androidx.compose.runtime.CompositionLocalProvider(LocalPillOverhang provides { overhang(1) }) { secondContent(second) }
+            }
         },
-        contentAlignment = Alignment.Center,
-    ) {
-        // The coming-in set is on top, so it's the one under the finger.
-        Box(
-            Modifier.zIndex(if (second) 0f else 1f)
-                .onSizeChanged { firstWidth = it.width.toFloat() }
-                .graphicsLayer { alpha = morphShown(1f - morph.value) },
-        ) { first(!second) }
-        Box(
-            Modifier.zIndex(if (second) 1f else 0f)
-                .onSizeChanged { secondWidth = it.width.toFloat() }
-                .graphicsLayer { alpha = morphShown(morph.value) },
-        ) { secondContent(second) }
+    ) { measurables, constraints ->
+        val children = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        widths[0] = children[0].width.toFloat()
+        widths[1] = children[1].width.toFloat()
+        val width = constraints.constrainWidth(children.maxOf { it.width })
+        val height = constraints.constrainHeight(children.maxOf { it.height })
+        layout(width, height) {
+            children.forEach { it.placeRelative((width - it.width) / 2, (height - it.height) / 2) }
+        }
     }
 }
 
+/** A morphing pill's outline: a capsule [width] wide from [left], as tall as the pill. */
+private class PillOutline(private val left: Float, private val width: Float) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density) =
+        androidx.compose.ui.graphics.Outline.Rounded(
+            androidx.compose.ui.geometry.RoundRect(left, 0f, left + width, size.height, androidx.compose.ui.geometry.CornerRadius(size.height / 2f)),
+        )
+}
+
 /**
- * How visible a set is at [p] of the way to it: nothing until 42%, then an
- * ease in to fully there by 95%. The old set is all but gone by the middle
- * when the new one starts, so their icons never sit on top of each other.
+ * Shows one set of a morphing pill only where the sweep says: the old set ahead of the
+ * edge, the new one behind it. Measured across the pill as it is this frame, from its left
+ * end (0) to its right (1). Not drawn at all while nothing of it shows, and no off-screen
+ * buffer while all of it does.
  */
-internal fun morphShown(p: Float): Float = ((p - 0.42f) / 0.53f).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+private fun Modifier.sweepMask(old: Boolean, set: Int, widths: FloatArray, progress: () -> Float): Modifier = this
+    .graphicsLayer {
+        val p = progress()
+        val whole = if (old) p <= 0f else p >= 1f
+        val none = if (old) p >= 1f else p <= 0f
+        alpha = if (none) 0f else 1f
+        compositingStrategy = if (whole || none) androidx.compose.ui.graphics.CompositingStrategy.Auto
+            else androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+    }
+    .drawWithContent {
+        val p = progress()
+        if (if (old) p >= 1f else p <= 0f) return@drawWithContent
+        drawContent()
+        if (if (old) p <= 0f else p >= 1f) return@drawWithContent
+        // The pill's ends this frame, in this set's own coordinates (both are centred).
+        val w = pillWidth(widths[0], widths[1], p)
+        val start = (widths[set] - w) / 2f
+        val stops = Array(SWEEP_SAMPLES + 1) { i ->
+            val u = i / SWEEP_SAMPLES.toFloat()
+            u to androidx.compose.ui.graphics.Color.Black.copy(alpha = if (old) sweepOld(p, u) else sweepNew(p, u))
+        }
+        drawRect(
+            androidx.compose.ui.graphics.Brush.horizontalGradient(*stops, startX = start, endX = start + w),
+            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+        )
+    }
+
+/** How far a morphing pill's outline reaches past the set of buttons inside it, each side, in px. */
+internal val LocalPillOverhang = androidx.compose.runtime.staticCompositionLocalOf<() -> Float> { { 0f } }
+
+/**
+ * A segment's lit fill. At either end of its pill it reaches on out to the pill's outline
+ * while a morphing pill is wider than the segments, so a lit end button and the pill share
+ * one edge all the way through the change.
+ */
+@Composable
+internal fun Modifier.segmentFill(color: Color): Modifier {
+    val overhang = LocalPillOverhang.current
+    // At the start or end of its row: set as it's placed, read as it's drawn.
+    val ends = remember { BooleanArray(2) }
+    return this
+        .onPlaced { c ->
+            val parent = c.parentLayoutCoordinates ?: return@onPlaced
+            val x = c.positionInParent().x
+            ends[0] = x <= 0.5f
+            ends[1] = parent.size.width - (x + c.size.width) <= 0.5f
+        }
+        .drawBehind {
+            if (color.alpha <= 0f) return@drawBehind
+            val o = overhang().coerceAtLeast(0f)
+            val l = if (ends[0]) o else 0f
+            val r = if (ends[1]) o else 0f
+            drawRect(color, androidx.compose.ui.geometry.Offset(-l, 0f), androidx.compose.ui.geometry.Size(size.width + l + r, size.height))
+        }
+}
+
+/*
+ * The pill's morph, as shares of the way from the first set (0) to the second (1). Its width
+ * and colour go straight from one to the other. The buttons change over in a sweep from left
+ * to right (and back the same way on the return): ahead of the edge the old set, behind it
+ * the new, with a soft edge [SWEEP_FEATHER] of the pill wide and, between the two, a sliver
+ * [SWEEP_GAP] wide where neither shows, so no place in the pill ever shows both sets at once
+ * (they used to cross-fade over each other, a jumble of both sets' icons half-way).
+ */
+private const val SWEEP_FEATHER = 0.22f
+private const val SWEEP_GAP = 0.03f
+private const val SWEEP_SAMPLES = 24
+
+private fun smooth(edge0: Float, edge1: Float, x: Float): Float =
+    ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+
+/** Ease in and out: the pill's own width and colour change, and the sweep's pace. */
+internal fun pillEase(p: Float): Float = smooth(0f, 1f, p)
+/** Where the old set's edge is, across the pill (0 its left end, 1 its right). */
+private fun sweepEdge(p: Float): Float =
+    -SWEEP_FEATHER + (1f + 2f * SWEEP_FEATHER + SWEEP_GAP) * pillEase(p)
+/** How much of the old set shows at [u] across the pill. */
+internal fun sweepOld(p: Float, u: Float): Float = sweepEdge(p).let { e -> smooth(e, e + SWEEP_FEATHER, u) }
+/** How much of the new set shows at [u] across the pill. */
+internal fun sweepNew(p: Float, u: Float): Float = (sweepEdge(p) - SWEEP_GAP).let { e -> 1f - smooth(e - SWEEP_FEATHER, e, u) }
+/** The pill's width: straight from one set's width to the other's. */
+internal fun pillWidth(from: Float, to: Float, p: Float): Float = androidx.compose.ui.util.lerp(from, to, pillEase(p))
 
 /**
  * Shuffle, repeat and autoplay in one glass pill, split by hairlines. Each
@@ -509,7 +632,8 @@ fun ModesPill(
     val context = LocalContext.current
     val shape = RoundedCornerShape(30.dp)
     Row(
-        Modifier.height(52.dp).clip(shape).then(if (filled) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier),
+        // In a morphing pill the pill's own outline does the rounding, so the lit end segments can reach it.
+        Modifier.height(52.dp).then(if (filled) Modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHigh) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Like repeat beside it, shuffle has a third state for a queue from a
@@ -588,7 +712,7 @@ private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motio
         kick.snapTo(0f)
     }
     Box(
-        Modifier.fillMaxHeight().width(60.dp).background(bg).clickable(enabled = enabled) { taps++; onClick() },
+        Modifier.fillMaxHeight().width(60.dp).segmentFill(bg).clickable(enabled = enabled) { taps++; onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -628,7 +752,7 @@ fun rememberOutputDeviceName(): String {
         onDispose { am?.unregisterAudioDeviceCallback(cb) }
     }
     val cast by com.opentune.cast.Cast.session.collectAsState()
-    return cast?.let { if (it.receiver == null) "Connecting to ${it.target.name}…" else "Playing on ${it.target.name}" } ?: name
+    return cast?.let { if (it.receiver == null) com.opentune.i18n.Tr.f("Connecting to {0}…", it.target.name) else com.opentune.i18n.Tr.f("Playing on {0}", it.target.name) } ?: name
 }
 
 private fun outputName(context: Context, am: AudioManager?): String {
@@ -709,7 +833,7 @@ fun sleepTimerLabel(): String? {
         SleepTimer.State.EndOfTrack -> "Stops at end of song"
         is SleepTimer.State.At -> {
             val left = ((s.endsAtMs - now) / 1000).coerceAtLeast(0)
-            "Stops in %d:%02d".format(left / 60, left % 60)
+            com.opentune.i18n.Tr.t("Stops in %d:%02d").format(left / 60, left % 60)
         }
     }
 }

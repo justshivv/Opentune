@@ -1,5 +1,13 @@
 package com.opentune.ui.player
 
+import androidx.compose.animation.togetherWith
+
+import androidx.compose.foundation.layout.widthIn
+
+import androidx.compose.foundation.border
+
+import androidx.compose.ui.draw.shadow
+
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -63,10 +71,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -224,34 +232,70 @@ fun LyricsView(
     }
 }
 
-/** The bar floating over the lyrics while lines are being picked for a card: Cancel and Share. */
+/**
+ * The pill floating over the lyrics while lines are being picked for a card: a
+ * close button, how many lines are picked (or what to do when none are), and
+ * Share in the accent, lit once there's something to share.
+ */
 @Composable
-private fun SelectionBar(count: Int, onCancel: () -> Unit, onShare: () -> Unit, modifier: Modifier = Modifier) {
+internal fun SelectionBar(count: Int, onCancel: () -> Unit, onShare: () -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val pill = RoundedCornerShape(32.dp)
+    val ready = count > 0
+    val shareFill by androidx.compose.animation.animateColorAsState(
+        if (ready) scheme.primary else Color.White.copy(alpha = 0.12f), tween(220), label = "shareFill",
+    )
+    val shareInk by androidx.compose.animation.animateColorAsState(
+        if (ready) scheme.onPrimary else Color.White.copy(alpha = 0.45f), tween(220), label = "shareInk",
+    )
     Row(
         modifier
-            .clip(RoundedCornerShape(30.dp))
-            .background(Color(0xF0141416))
-            .padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .widthIn(max = 440.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .shadow(24.dp, pill, clip = false, ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.5f))
+            .clip(pill)
+            .background(Color(0xEB16161A))
+            .border(1.dp, androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f))), pill)
+            .padding(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.height(52.dp).width(130.dp).clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = 0.12f)).clickable(onClick = onCancel),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Rounded.Close, null, tint = Color.White, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(com.opentune.ui.theme.tr("Cancel"), color = Color.White, style = MaterialTheme.typography.titleMedium)
+        Box(
+            Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f)).clickable(onClick = onCancel),
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Rounded.Close, com.opentune.ui.theme.tr("Cancel"), tint = Color.White, modifier = Modifier.size(22.dp)) }
+        androidx.compose.animation.AnimatedContent(
+            targetState = count,
+            transitionSpec = {
+                val up = targetState > initialState
+                (androidx.compose.animation.slideInVertically { if (up) it / 2 else -it / 2 } + fadeIn(tween(180)))
+                    .togetherWith(androidx.compose.animation.slideOutVertically { if (up) -it / 2 else it / 2 } + fadeOut(tween(140)))
+            },
+            label = "pickedCount",
+            modifier = Modifier.weight(1f).padding(horizontal = 14.dp),
+        ) { n ->
+            Column {
+                Text(
+                    when (n) { 0 -> "Pick lines"; 1 -> "1 line selected"; else -> com.opentune.i18n.Tr.f("{0} lines selected", n) },
+                    color = Color.White, style = MaterialTheme.typography.titleSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1,
+                )
+                Text(
+                    if (n == 0) "Tap the lines to share" else "Tap a line again to leave it out",
+                    color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall, maxLines = 1,
+                )
+            }
         }
         Row(
-            Modifier.height(52.dp).width(130.dp).clip(RoundedCornerShape(24.dp)).background(Color.White).clickable(enabled = count > 0, onClick = onShare),
+            Modifier.height(48.dp).clip(RoundedCornerShape(24.dp)).background(shareFill)
+                .clickable(enabled = ready, onClick = onShare).padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.IosShare, null, tint = Color.Black, modifier = Modifier.size(20.dp))
+            Icon(Icons.Rounded.IosShare, null, tint = shareInk, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
-            Text(com.opentune.ui.theme.tr("Share"), color = Color.Black, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text(com.opentune.ui.theme.tr("Share"), color = shareInk, style = MaterialTheme.typography.titleSmall,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
         }
     }
 }
@@ -430,8 +474,22 @@ private fun SyncedLyrics(
 
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(top = anchor, bottom = maxHeight * 0.6f),
-            modifier = Modifier.fillMaxSize().softEdges(top = EDGE_FADE_TOP, bottom = EDGE_FADE_BOTTOM),
+            contentPadding = PaddingValues(top = anchor, bottom = maxHeight * 0.6f, start = SIDE_BLEED, end = SIDE_BLEED),
+            // Drawn SIDE_BLEED wider than the room it's given on each side, the lines held back
+            // by as much: the faded edges are drawn into a layer the list's size, and at the
+            // list's own width a blurred line and the sung line's glow were cut off in a straight
+            // edge down the left, which showed as a shadow. The lines sit where they did.
+            modifier = Modifier
+                .layout { measurable, constraints ->
+                    val bleed = SIDE_BLEED.roundToPx()
+                    val p = measurable.measure(constraints.copy(
+                        minWidth = constraints.minWidth + bleed * 2,
+                        maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth + bleed * 2 else constraints.maxWidth,
+                    ))
+                    layout((p.width - bleed * 2).coerceAtLeast(0), p.height) { p.place(-bleed, 0) }
+                }
+                .fillMaxSize()
+                .softEdges(top = EDGE_FADE_TOP, bottom = EDGE_FADE_BOTTOM),
         ) {
             item(key = "intro") {
                 val firstStart = lines.firstOrNull()?.startMs ?: 0L
@@ -544,6 +602,8 @@ private fun Modifier.softEdges(top: androidx.compose.ui.unit.Dp, bottom: android
             )
         }
 
+/** How far a line's blur and glow may spread past the lyrics' sides. */
+private val SIDE_BLEED = 24.dp
 private val EDGE_FADE_TOP = 18.dp
 private val EDGE_FADE_BOTTOM = 96.dp
 
@@ -677,28 +737,31 @@ private fun buildLyricRows(lines: List<LyricLine>): List<LyricRow> {
  */
 @Composable
 private fun GapDots(visible: Boolean, progress: () -> Float) {
-    val shown by animateFloatAsState(if (visible) 1f else 0f, tween(if (visible) 420 else 260), label = "gapShown")
-    run {
-        val transition = rememberInfiniteTransition(label = "gap")
-        val breath by transition.animateFloat(0.92f, 1.08f, infiniteRepeatable(tween(1_200), RepeatMode.Reverse), label = "breath")
-        val ink = MaterialTheme.colorScheme.onSurface
-        Row(
-            Modifier
-                .padding(vertical = 18.dp)
-                .graphicsLayer { scaleX = breath; scaleY = breath; alpha = shown; transformOrigin = TransformOrigin(0f, 0.5f) },
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            repeat(3) { i ->
-                Box(
-                    Modifier
-                        .size(14.dp)
-                        .drawWithContent {
-                            // Each dot takes a third of the break to light, from dim to full.
-                            val lit = (progress() * 3f - i).coerceIn(0f, 1f)
-                            drawCircle(ink.copy(alpha = 0.3f + 0.7f * lit))
-                        },
-                )
-            }
+    val shown = animateFloatAsState(if (visible) 1f else 0f, tween(if (visible) 420 else 260), label = "gapShown")
+    // The breathing runs only while the dots can be seen: every break's row in the list kept a
+    // frame loop going for dots at zero opacity, and kept the screen redrawing while paused.
+    val breathing by remember { derivedStateOf { shown.value > 0f } }
+    val breath = if (breathing) {
+        rememberInfiniteTransition(label = "gap").animateFloat(0.92f, 1.08f, infiniteRepeatable(tween(1_200), RepeatMode.Reverse), label = "breath")
+    } else remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    val ink = MaterialTheme.colorScheme.onSurface
+    Row(
+        Modifier
+            .padding(vertical = 18.dp)
+            // Read while drawing only, so the breathing never recomposes the row.
+            .graphicsLayer { scaleX = breath.value; scaleY = breath.value; alpha = shown.value; transformOrigin = TransformOrigin(0f, 0.5f) },
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        repeat(3) { i ->
+            Box(
+                Modifier
+                    .size(14.dp)
+                    .drawWithContent {
+                        // Each dot takes a third of the break to light, from dim to full.
+                        val lit = (progress() * 3f - i).coerceIn(0f, 1f)
+                        drawCircle(ink.copy(alpha = 0.3f + 0.7f * lit))
+                    },
+            )
         }
     }
 }
@@ -812,6 +875,19 @@ internal fun LyricLineView(
             .background(card, MaterialTheme.shapes.medium)
             .combinedClickable(remember { MutableInteractionSource() }, indication = com.opentune.ui.components.FocusRing(MaterialTheme.shapes.medium), onLongClick = onLongClick, onClick = onClick)
             .padding(vertical = 10.dp, horizontal = cardPad)
+            // The fade and the size sit outside the blur. Inside it, each frame of a line
+            // change's 420 ms fade changed the blurred layer's content, so every visible
+            // line was blurred again on every frame of every line change: the stutter as
+            // the song moved on. Outside, the blurred picture is kept and only scaled and
+            // faded, which costs next to nothing. The fade is still applied to what's
+            // drawn (ModulateAlpha), with no buffer of its own to clip the blur's edge.
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = alpha
+                compositingStrategy = CompositingStrategy.ModulateAlpha
+                transformOrigin = TransformOrigin(origin, 0.5f)
+            }
             // Android blurs a layer inside a buffer its own size, so whatever the
             // blur would spread past the line was cut off in a hard box. The
             // blurred layer is made BLUR_BLEED larger on every side, with that
@@ -842,14 +918,7 @@ internal fun LyricLineView(
                         }
                         .padding(BLUR_BLEED)
                 } else Modifier,
-            )
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = alpha
-                compositingStrategy = CompositingStrategy.ModulateAlpha
-                transformOrigin = TransformOrigin(origin, 0.5f)
-            },
+            ),
     ) {
         // Keep one text node and one shaping/layout result through activation. Replacing
         // the node made the first active frame draw without its word mask, then flash dim.
@@ -872,7 +941,10 @@ internal fun LyricLineView(
                     ))
                     layout((p.width - bleed * 2).coerceAtLeast(0), (p.height - bleed * 2).coerceAtLeast(0)) { p.place(-bleed, -bleed) }
                 }
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                // Only the line being swept needs a buffer of its own, for the sweep to dim
+                // its words and nothing behind them; every other line drew through one for
+                // nothing, a dozen extra buffers composited on every frame.
+                .graphicsLayer { compositingStrategy = if (sweep) CompositingStrategy.Offscreen else CompositingStrategy.Auto }
                 .padding(GLOW_BLEED)
                 .drawWithCache {
                     val boxes = wordBoxesOf(layout.value, line, text)
@@ -880,7 +952,11 @@ internal fun LyricLineView(
                         drawContent()
                         if (sweep) sweepDim(line, boxes, position(), 0.4f, rtl)
                     }
-                },
+                }
+                // The words (and the sung line's glow) recorded once in a layer of their own:
+                // the sweep above redraws every frame, and without this the text and its
+                // blurred glow were laid down again with it each time.
+                .graphicsLayer(),
         )
         // Backing vocals, smaller and softer, under the line they're sung with.
         line.background?.let {
@@ -972,14 +1048,16 @@ internal fun SungLine(line: LyricLine, position: () -> Long, style: androidx.com
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         onTextLayout = { layout.value = it },
         modifier = modifier
-            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .graphicsLayer { compositingStrategy = if (line.wordSynced) CompositingStrategy.Offscreen else CompositingStrategy.Auto }
             .drawWithCache {
                 val boxes = wordBoxesOf(layout.value, line, text)
                 onDrawWithContent {
                     drawContent()
                     if (line.wordSynced) sweepDim(line, boxes, position(), 0.55f, rtl)
                 }
-            },
+            }
+            // The words in a layer of their own, so the sweep's per-frame redraw doesn't lay them down again.
+            .graphicsLayer(),
     )
 }
 
@@ -1050,25 +1128,25 @@ internal fun SettingUpBadge(modifier: Modifier = Modifier) {
 /** Three dots breathing in sequence while an intro plays; like [GapDots], they fade but keep their room. */
 @Composable
 private fun IntroDots(visible: Boolean) {
-    val shown by animateFloatAsState(if (visible) 1f else 0f, tween(if (visible) 420 else 260), label = "introShown")
-    run {
-        val transition = rememberInfiniteTransition(label = "intro")
-        Row(Modifier.padding(vertical = 18.dp).graphicsLayer { alpha = shown }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            repeat(3) { i ->
-                val s by transition.animateFloat(
-                    0.6f,
-                    1f,
-                    infiniteRepeatable(tween(600, delayMillis = i * 200), RepeatMode.Reverse),
-                    label = "dot",
-                )
-                Box(
-                    Modifier
-                        .size(14.dp)
-                        .graphicsLayer { scaleX = s; scaleY = s; alpha = s }
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurface),
-                )
-            }
+    val shown = animateFloatAsState(if (visible) 1f else 0f, tween(if (visible) 420 else 260), label = "introShown")
+    // Pulsing only while they can be seen; the intro row stays in the list after the singing starts.
+    val pulsing by remember { derivedStateOf { shown.value > 0f } }
+    Row(Modifier.padding(vertical = 18.dp).graphicsLayer { alpha = shown.value }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        val transition = if (pulsing) rememberInfiniteTransition(label = "intro") else null
+        repeat(3) { i ->
+            val s = transition?.animateFloat(
+                0.6f,
+                1f,
+                infiniteRepeatable(tween(600, delayMillis = i * 200), RepeatMode.Reverse),
+                label = "dot",
+            ) ?: remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+            Box(
+                Modifier
+                    .size(14.dp)
+                    .graphicsLayer { scaleX = s.value; scaleY = s.value; alpha = s.value }
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface),
+            )
         }
     }
 }
@@ -1077,7 +1155,7 @@ private fun IntroDots(visible: Boolean) {
 private fun Credit(source: String) {
     Spacer(Modifier.height(24.dp))
     Text(
-        "Lyrics from $source",
+        com.opentune.i18n.Tr.f("Lyrics from {0}", source),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

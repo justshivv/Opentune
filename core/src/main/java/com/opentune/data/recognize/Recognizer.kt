@@ -124,7 +124,7 @@ object Recognizer {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "listening failed", e)
-                _state.value = State.Failed("Couldn't listen: ${e.message ?: "unknown error"}")
+                _state.value = State.Failed(com.opentune.i18n.Tr.f("Couldn't listen: {0}", e.message ?: com.opentune.i18n.Tr.t("unknown error")))
             } finally {
                 runCatching { record.stop() }
                 record.release()

@@ -14,9 +14,16 @@ PORT=8787
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ "$(id -u)" -ne 0 ]; then echo "Run it as root: sudo bash install.sh"; exit 1; fi
-for f in server.mjs worker.mjs cache.mjs pool.mjs usage-server.mjs auth.mjs security.mjs attestation.mjs control.mjs control.html control.js control.css; do
+# The add-on itself. The owner dashboard (control.*) and the usage dashboard (usage-*) come with the
+# complete package and are left out of the add-on-only one, which is marked by an ADDON_ONLY file.
+for f in server.mjs worker.mjs cache.mjs pool.mjs auth.mjs security.mjs attestation.mjs; do
   [ -f "$HERE/$f" ] || { echo "Missing $f next to install.sh"; exit 1; }
 done
+if [ ! -f "$HERE/ADDON_ONLY" ]; then
+  for f in usage-server.mjs control.mjs control.html control.js control.css; do
+    [ -f "$HERE/$f" ] || { echo "Missing $f next to install.sh"; exit 1; }
+  done
+fi
 
 echo "==> Packages"
 export DEBIAN_FRONTEND=noninteractive
@@ -47,7 +54,13 @@ fi
 echo "==> App"
 id -u opentune >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell /usr/sbin/nologin opentune
 mkdir -p "$APP_DIR" "$DATA_DIR"
-install -m 0644 "$HERE"/server.mjs "$HERE"/worker.mjs "$HERE"/cache.mjs "$HERE"/pool.mjs "$HERE"/usage-server.mjs "$HERE"/auth.mjs "$HERE"/security.mjs "$HERE"/attestation.mjs "$HERE"/control.mjs "$HERE"/control.html "$HERE"/control.js "$HERE"/control.css "$APP_DIR"/
+install -m 0644 "$HERE"/server.mjs "$HERE"/worker.mjs "$HERE"/cache.mjs "$HERE"/pool.mjs "$HERE"/auth.mjs "$HERE"/security.mjs "$HERE"/attestation.mjs "$APP_DIR"/
+if [ -f "$HERE/ADDON_ONLY" ]; then
+  # Over an earlier full install, the dashboards go, so the server really runs the add-on alone.
+  rm -rf "$APP_DIR"/control.mjs "$APP_DIR"/control.html "$APP_DIR"/control.js "$APP_DIR"/control.css "$APP_DIR"/usage-server.mjs "$APP_DIR"/usage-api "$APP_DIR"/import-usage.mjs
+else
+  install -m 0644 "$HERE"/usage-server.mjs "$HERE"/control.mjs "$HERE"/control.html "$HERE"/control.js "$HERE"/control.css "$APP_DIR"/
+fi
 if [ -d "$HERE/usage-api" ]; then
   mkdir -p "$APP_DIR/usage-api"
   cp -R "$HERE/usage-api/." "$APP_DIR/usage-api/"
@@ -65,7 +78,9 @@ fi
 
 # Upgrade existing settings without overwriting credentials, certificate pins or domain.
 if ! grep -q '^ADDON_WORKERS=' "$ENV_FILE"; then printf '\nADDON_WORKERS=1\n' >> "$ENV_FILE"; fi
-if [ -d "$HERE/usage-api" ] && ! grep -q '^USAGE_ENABLED=' "$ENV_FILE"; then printf '\nUSAGE_ENABLED=true\n' >> "$ENV_FILE"; fi
+if [ -f "$HERE/ADDON_ONLY" ]; then
+  if grep -q '^USAGE_ENABLED=' "$ENV_FILE"; then sed -i 's/^USAGE_ENABLED=.*/USAGE_ENABLED=false/' "$ENV_FILE"; else printf '\nUSAGE_ENABLED=false\n' >> "$ENV_FILE"; fi
+elif [ -d "$HERE/usage-api" ] && ! grep -q '^USAGE_ENABLED=' "$ENV_FILE"; then printf '\nUSAGE_ENABLED=true\n' >> "$ENV_FILE"; fi
 
 cat > /etc/systemd/system/$SERVICE.service <<UNIT
 [Unit]

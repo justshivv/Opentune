@@ -181,11 +181,11 @@ class CarLibrary(private val context: Context) {
 
     private suspend fun libraryItems(): List<MediaItem> = buildList {
         val liked = LibraryStore.liked.value
-        add(folder(LIKED, "Liked songs", subtitle = "${liked.size} songs", artwork = liked.firstOrNull()?.thumbnailUrl))
+        add(folder(LIKED, "Liked songs", subtitle = com.opentune.i18n.Tr.f("{0} songs", liked.size), artwork = liked.firstOrNull()?.thumbnailUrl))
         val downloads = Downloads.doneNow()
-        add(folder(DOWNLOADS, "Downloads", subtitle = "${downloads.size} songs", artwork = downloads.firstOrNull()?.song?.thumbnailUrl))
+        add(folder(DOWNLOADS, "Downloads", subtitle = com.opentune.i18n.Tr.f("{0} songs", downloads.size), artwork = downloads.firstOrNull()?.song?.thumbnailUrl))
         LibraryStore.playlists.value.forEach { p ->
-            add(folder("$PLAYLIST${p.id}", p.name, subtitle = "${p.songs.size} songs", artwork = p.songs.firstOrNull()?.thumbnailUrl, type = MediaMetadata.MEDIA_TYPE_PLAYLIST))
+            add(folder("$PLAYLIST${p.id}", p.name, subtitle = com.opentune.i18n.Tr.f("{0} songs", p.songs.size), artwork = p.songs.firstOrNull()?.thumbnailUrl, type = MediaMetadata.MEDIA_TYPE_PLAYLIST))
         }
         if (radioStations().isNotEmpty()) {
             add(folder(RADIO, "Radio", subtitle = "Your stations", artwork = radioStations().firstOrNull()?.favicon))
@@ -208,7 +208,7 @@ class CarLibrary(private val context: Context) {
             folder("$SERVER_ALBUM${a.id}", a.name, a.artist, a.cover, MediaMetadata.MEDIA_TYPE_ALBUM, group = "Recently added")
         }
         val playlists = runCatching { Subsonic.playlists() }.getOrDefault(emptyList()).map { p ->
-            folder("$SERVER_PLAYLIST${p.id}", p.name, "${p.songCount} songs", p.cover, MediaMetadata.MEDIA_TYPE_PLAYLIST, group = "Playlists")
+            folder("$SERVER_PLAYLIST${p.id}", p.name, com.opentune.i18n.Tr.f("{0} songs", p.songCount), p.cover, MediaMetadata.MEDIA_TYPE_PLAYLIST, group = "Playlists")
         }
         return albums + playlists
     }
@@ -271,14 +271,15 @@ class CarLibrary(private val context: Context) {
         .setMediaId(id)
         .setMediaMetadata(
             MediaMetadata.Builder()
-                .setTitle(title)
-                .setSubtitle(subtitle?.takeIf { it.isNotBlank() })
+                // The car draws these itself, so they're put in the app's language here.
+                .setTitle(com.opentune.i18n.Tr.t(title))
+                .setSubtitle(subtitle?.takeIf { it.isNotBlank() }?.let(com.opentune.i18n.Tr::t))
                 .setArtworkUri(CarArtwork.uriFor(context, null, artwork))
                 .setIsPlayable(false)
                 .setIsBrowsable(true)
                 .setMediaType(type)
                 .setExtras(
-                    groupExtras(group).apply {
+                    groupExtras(group?.let(com.opentune.i18n.Tr::t)).apply {
                         browsableStyle?.let { putInt(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_BROWSABLE, it) }
                     },
                 )

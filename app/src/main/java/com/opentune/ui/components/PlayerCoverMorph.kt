@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -119,7 +120,11 @@ object PlayerMorph {
      * second, negative toward the mini player).
      */
     var sheetDrag by mutableFloatStateOf(0f)
+    /** Px the mini player is pulled down toward dismissal, 0 at rest; while it is pulled, the chrome draws it behind the dock. */
+    var miniDismiss by mutableFloatStateOf(0f)
     var sheetFling = 0f
+    /** Px per second the pull up was travelling when it let go, upward positive; the sheet's open carries on at that pace. */
+    var pullFlingPx = 0f
     /** Where the player's card was when a drag down let go, in the root, and its corner in px. */
     internal var cardFrom by mutableStateOf<Rect?>(null)
     internal var cardCornerPx = 0f
@@ -244,12 +249,21 @@ internal fun MorphBox(
     fullBleed: Boolean = false,
     contentModifier: Modifier = Modifier,
     artworkMotion: ArtworkMotion? = null,
+    /** Drawn over the cover as it flies: the animated cover, so the still one doesn't show through. */
+    overlay: (@Composable androidx.compose.foundation.layout.BoxScope.() -> Unit)? = null,
+    /**
+     * How much of the still cover shows at full size. Under a Spotify Canvas the big
+     * cover is the video itself and the still one is hidden there, so it's 0: the
+     * flying cover appears only as it shrinks into the header, and goes as it grows.
+     */
+    bigAlpha: Float = 1f,
 ) {
     val big = if (from.width >= to.width) from else to
     val small = if (big === from) to else from
     if (big.width <= 0f || big.height <= 0f) return
     val density = LocalDensity.current
-    val shadowPx = with(density) { 28.dp.toPx() }
+    // As light as the player cover's own, so the cover lands without its shadow changing.
+    val shadowPx = with(density) { 16.dp.toPx() }
     val startCorner = with(density) { startCornerDp.dp.toPx() }
     val endCorner = with(density) { endCornerDp.dp.toPx() }
     // Where the player's own fade to the page begins, as a share of the art's height.
@@ -269,8 +283,12 @@ internal fun MorphBox(
                 layout(minOf(w, constraints.maxWidth), minOf(h, constraints.maxHeight)) { placeable.place(0, 0) }
             }
             .graphicsLayer {
-                if (fullBleed) compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
                 val t = p()
+                // Its own buffer, the size of the whole cover, only while the soft foot is drawn
+                // (more than half grown): rendered off screen on every frame, it was the flight's
+                // costliest part.
+                compositingStrategy = if (fullBleed && grownAt(t) > 0.5f) androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                    else androidx.compose.ui.graphics.CompositingStrategy.Auto
                 fun lerp(a: Float, b: Float) = a + (b - a) * t
                 val w = lerp(from.width, to.width)
                 transformOrigin = TransformOrigin(0f, 0f)
@@ -282,15 +300,27 @@ internal fun MorphBox(
                 shape = RoundedCornerShape(lerp(startCorner, endCorner) / scaleX.coerceAtLeast(0.01f))
                 clip = true
                 // Deepest at full size, none on the small cover.
-                shadowElevation = if (fullBleed) 0f else shadowPx * grownAt(t)
+                shadowElevation = if (fullBleed || bigAlpha < 1f) 0f else shadowPx * grownAt(t)
+                ambientShadowColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.22f)
+                spotShadowColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.16f)
+                if (bigAlpha < 1f) alpha = bigAlpha + (1f - bigAlpha) * (1f - grownAt(t)).let { it * it * (3 - 2 * it) }
             }
             .then(
                 if (!fullBleed) Modifier
                 else Modifier.drawWithContent {
                     drawContent()
+                    // The full cover's own shade along the top, for the status bar, grown with the
+                    // cover: without it the shade appeared all at once as the cover landed.
+                    val grown = grownAt(p())
+                    if (grown > 0f) drawRect(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            0f to androidx.compose.ui.graphics.Color.Black.copy(alpha = FULL_COVER_TOP_SHADE * grown),
+                            0.2f to androidx.compose.ui.graphics.Color.Transparent,
+                        ),
+                    )
                     // Full at full size, gone well before the cover is small.
-                    val fade = ((grownAt(p()) - 0.5f) * 2f).coerceIn(0f, 1f)
-                    drawRect(
+                    val fade = ((grown - 0.5f) * 2f).coerceIn(0f, 1f)
+                    if (fade > 0f) drawRect(
                         androidx.compose.ui.graphics.Brush.verticalGradient(solid to androidx.compose.ui.graphics.Color.Black, 1f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 1f - fade)),
                         blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
                     )
@@ -300,6 +330,7 @@ internal fun MorphBox(
         // The mini player's own copy underneath, already loaded, so it never shows empty.
         if (smallUrl != null) Artwork(smallUrl, Modifier.matchParentSize(), RectangleShape)
         Artwork(url, Modifier.matchParentSize(), RectangleShape, imageModifier = Modifier.livingArt(true, artworkMotion != null, artworkMotion) { grownAt(p()) })
+        overlay?.invoke(this)
     }
 }
 
@@ -321,6 +352,9 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
             val left = 1f - openT.value
             // On the card's own timing and curve (see PlayerSheet), so the cover and the card move as one.
             openT.animateTo(1f, tween((SHEET_OPEN_MS * left).roundToInt().coerceAtLeast(180), easing = SHEET_EASING))
+            // Riding the card (below), it lands when the card does, not before.
+            var waited = 0
+            while (PlayerMorph.sheetMorph && (PlayerMorph.sheetProgress?.invoke() ?: 1f) < 0.999f && waited++ < 60) withFrameNanos { }
         } finally {
             PlayerMorph.endOpen()
         }
@@ -333,6 +367,8 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
             closeT.snapTo(PlayerMorph.closeAt())
             val left = 1f - closeT.value
             closeT.animateTo(1f, tween((SHEET_CLOSE_MS * left).roundToInt().coerceAtLeast(160), easing = SHEET_EASING))
+            var waited = 0
+            while (PlayerMorph.sheetMorph && (PlayerMorph.sheetProgress?.invoke() ?: 0f) > 0.001f && waited++ < 60) withFrameNanos { }
         } finally {
             PlayerMorph.endClose()
         }
@@ -347,34 +383,47 @@ fun CoverMorph(url: String?, smallUrl: String? = null) {
         val top = 150.dp.toPx()
         Rect(24.dp.toPx(), top, 24.dp.toPx() + side, top + side)
     }
+    // The player cover's own corner, as set in Appearance (the full-screen cover keeps the usual one).
+    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    val coverCorner = if (ui.fullScreenCover) 28f else ui.coverCornerDp.toFloat()
     fun roundStart(from: Rect) = if (PlayerMorph.round()) with(density) { from.width.toDp().value / 2f } else 12f
     // Only whether a finger is on it decides what's drawn; how far it has gone
     // is read in the layer alone, so a swipe doesn't recompose this every frame.
     val pulled by remember { derivedStateOf { PlayerMorph.pulling > 0f } }
     val dragged by remember { derivedStateOf { PlayerMorph.dragging > 0f } }
+    // While the player grows out of (or folds into) the mini player as a card, the cover rides
+    // the card's own progress rather than a clock of its own: the card runs straight between the
+    // mini player and the screen and the cover straight between the mini cover and the player's,
+    // each inside the other at both ends, so on one progress the cover is always inside the card.
+    // On separate clocks (the card and the cover each wait their own frames to start) the cover
+    // ran ahead of the card and spilled out past its edge.
+    val sheet = PlayerMorph.sheetProgress.takeIf { PlayerMorph.sheetMorph }
     when {
         PlayerMorph.expanding -> {
             val from = PlayerMorph.openFrom() ?: return
             val to = (PlayerMorph.playerCover ?: PlayerMorph.lastPlayerCover)?.let(PlayerMorph::scaled) ?: guess
-            MorphBox(url, smallUrl, from, to, { openT.value }, startCornerDp = roundStart(from), endCornerDp = 28f)
+            MorphBox(url, smallUrl, from, to, if (sheet != null) ({ sheet().coerceIn(0f, 1f) }) else ({ openT.value }), startCornerDp = roundStart(from), endCornerDp = coverCorner)
         }
         PlayerMorph.collapsing -> {
             val from = PlayerMorph.closeFrom() ?: return
             val to = PlayerMorph.miniCover ?: return
-            MorphBox(url, smallUrl, from, to, { closeT.value }, startCornerDp = 28f, endCornerDp = 12f)
+            MorphBox(url, smallUrl, from, to, if (sheet != null) ({ 1f - sheet().coerceIn(0f, 1f) }) else ({ closeT.value }), startCornerDp = coverCorner, endCornerDp = 12f)
         }
         pulled -> {
             val from = PlayerMorph.miniCover ?: return
             val to = PlayerMorph.lastPlayerCover?.let(PlayerMorph::scaled) ?: guess
-            MorphBox(url, smallUrl, from, to, { PlayerMorph.pulling }, startCornerDp = roundStart(from), endCornerDp = 28f)
+            MorphBox(url, smallUrl, from, to, { PlayerMorph.pulling }, startCornerDp = roundStart(from), endCornerDp = coverCorner)
         }
         dragged -> {
             val from = PlayerMorph.dragRest() ?: return
             val to = PlayerMorph.miniCover ?: return
-            MorphBox(url, smallUrl, from, to, { PlayerMorph.dragging }, startCornerDp = 28f, endCornerDp = 12f)
+            MorphBox(url, smallUrl, from, to, { PlayerMorph.dragging }, startCornerDp = coverCorner, endCornerDp = 12f)
         }
     }
 }
 
 /** The last stretch of the card's way (0..1) over which it hands over to the real mini player. */
 internal const val MINI_HANDOVER = 0.06f
+
+/** How dark the full-screen cover's shade along the top is, where the status bar sits. */
+internal const val FULL_COVER_TOP_SHADE = 0.35f

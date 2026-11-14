@@ -11,6 +11,6 @@ import androidx.activity.result.ActivityResultLauncher
  */
 fun <I> ActivityResultLauncher<I>.launchSafely(context: Context, input: I) {
     runCatching { launch(input) }.onFailure {
-        Toast.makeText(context, "No app on this device can open that", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, com.opentune.i18n.Tr.t("No app on this device can open that"), Toast.LENGTH_SHORT).show()
     }
 }

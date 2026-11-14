@@ -22,6 +22,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import com.opentune.data.settings.AudioQuality
+import com.opentune.data.settings.ChoiceMenuStyle
+import org.junit.After
+import org.junit.Before
+import androidx.compose.ui.test.onNodeWithContentDescription
 import com.opentune.playback.SleepTimer
 import com.opentune.ui.components.ChoiceSheet
 import com.opentune.ui.components.FloatingDialog
@@ -48,7 +52,16 @@ import org.robolectric.shadows.ShadowDialog
 class ChoiceSheetScreenshotTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
+    @Before fun setUp() {
+        com.opentune.data.settings.AppSettings.init(compose.activity)
+    }
+
+    @After fun tearDown() {
+        com.opentune.data.settings.AppSettings.updateUi { it.copy(choiceMenus = ChoiceMenuStyle.SCREEN) }
+    }
+
     @Test fun pick() {
+        com.opentune.data.settings.AppSettings.updateUi { it.copy(choiceMenus = ChoiceMenuStyle.POPUP) }
         var quality by mutableStateOf(AudioQuality.entries.first())
         var open by mutableStateOf(true)
         compose.setContent {
@@ -76,6 +89,62 @@ class ChoiceSheetScreenshotTest {
         compose.waitForIdle()
         assertEquals(target, quality)
         assertTrue(!open)
+    }
+
+    /** As a page of its own: a header with the title and Back, the options, and a pick lands and closes it. */
+    @Test fun pickOnAScreen() {
+        com.opentune.data.settings.AppSettings.updateUi { it.copy(choiceMenus = ChoiceMenuStyle.SCREEN) }
+        var quality by mutableStateOf(AudioQuality.entries.first())
+        var open by mutableStateOf(true)
+        compose.setContent {
+            MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65), onPrimary = Color(0xFF3A1206))) {
+                Surface(color = Color(0xFF0B0B0E)) {
+                    if (open) ChoiceSheet(
+                        title = "Quality on Wi-Fi",
+                        options = AudioQuality.entries,
+                        selected = quality,
+                        label = { "${it.label} · ${it.summary}" },
+                        onSelect = { quality = it },
+                        onDismiss = { open = false },
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        compose.onNodeWithText("Quality on Wi-Fi").assertIsDisplayed()
+        AudioQuality.entries.forEach { compose.onNodeWithText(it.label).assertIsDisplayed() }
+        val page = ShadowDialog.getLatestDialog().window!!.decorView
+        val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+        page.draw(Canvas(bitmap))
+        File("build/screenshots/choice_screen.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val target = AudioQuality.entries.last()
+        compose.onNodeWithText(target.label).performClick()
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        assertEquals(target, quality)
+        assertTrue(!open)
+    }
+
+    /** Back on the page closes it without changing anything. */
+    @Test fun backOnTheScreenClosesWithoutChoosing() {
+        com.opentune.data.settings.AppSettings.updateUi { it.copy(choiceMenus = ChoiceMenuStyle.SCREEN) }
+        var quality by mutableStateOf(AudioQuality.entries.first())
+        var open by mutableStateOf(true)
+        compose.setContent {
+            MaterialTheme(darkColorScheme()) {
+                Surface(color = Color(0xFF0B0B0E)) {
+                    if (open) ChoiceSheet("Quality", AudioQuality.entries, quality, { it.label }, { quality = it }, { open = false })
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        assertTrue(!open)
+        assertEquals(AudioQuality.entries.first(), quality)
     }
 
     @Test fun sleepTimer() {

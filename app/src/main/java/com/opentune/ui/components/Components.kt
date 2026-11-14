@@ -31,6 +31,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -40,9 +41,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -58,11 +61,13 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
+import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -95,6 +100,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.clipToBounds
 
 /**
  * Artwork with a tinted placeholder icon while it loads or when there is none.
@@ -113,10 +119,12 @@ fun Artwork(
     imageModifier: Modifier = Modifier,
     /** Hears whether the cover is showing (loaded, so cached) each time that changes. */
     onLoaded: ((Boolean) -> Unit)? = null,
+    contentScale: ContentScale = ContentScale.Crop,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
 ) {
     var loaded by remember(url) { mutableStateOf(false) }
     Box(
-        modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        modifier.clip(shape).background(containerColor),
         contentAlignment = Alignment.Center,
     ) {
         if (!loaded) {
@@ -131,7 +139,7 @@ fun Artwork(
             AsyncImage(
                 model = url,
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
+                contentScale = contentScale,
                 modifier = Modifier.matchParentSize().then(imageModifier),
                 onState = {
                     loaded = it is AsyncImagePainter.State.Success
@@ -288,8 +296,14 @@ fun SongListItem(
      * takes the song out, and toward the end adds it to the queue.
      */
     onSwipeRemove: (() -> Unit)? = null,
+    /** This row's own key in the page's selection (see [LocalSongSelection]); the song's id unless it's in the list twice. */
+    selectKey: String = song.videoId,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
+    // On a page where songs can be picked together: picking, a tap ticks the row instead of playing it.
+    val selection = LocalSongSelection.current
+    val selecting = selection?.active == true
+    val picked = selecting && selection!!.picked.containsKey(selectKey)
     var menuOpen by remember { mutableStateOf(false) }
     // A long press lifts the row out with its menu beside it; the ⋮ opens the full menu.
     var contextOpen by remember { mutableStateOf(false) }
@@ -301,24 +315,27 @@ fun SongListItem(
         .collectAsState(Downloads.entryNow(song.videoId))
     if (menuOpen) SongMenuSheet(song, onDismiss = { menuOpen = false })
     val at = anchor.rect
-    if (contextOpen && at != null) SongContextMenu(song, at, onDismiss = { contextOpen = false }, onRemoveFromPlaylist = onRemoveFromPlaylist) { SongPreview(song) }
+    if (contextOpen && at != null) SongContextMenu(song, at, onDismiss = { contextOpen = false }, onRemoveFromPlaylist = onRemoveFromPlaylist,
+        onSelect = selection?.let { s -> { contextOpen = false; s.start(selectKey, song) } }) { SongPreview(song) }
     val playback by AppSettings.playback.collectAsState()
     // Toward the end of the line plays next, toward the start adds to the queue.
-    val swipes = swipeToQueue && playback.swipeToQueue
+    val swipes = swipeToQueue && playback.swipeToQueue && !selecting
     SwipeToQueueRow(
         title = song.title,
         onPlayNext = onPlayNext.takeIf { swipes },
-        onAddToQueue = onAddToQueue.takeIf { swipes || onSwipeRemove != null },
-        modifier = modifier.fillMaxWidth(),
-        onRemove = onSwipeRemove,
+        onAddToQueue = onAddToQueue.takeIf { (swipes || onSwipeRemove != null) && !selecting },
+        modifier = modifier.fillMaxWidth()
+            .then(if (picked) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)) else Modifier),
+        onRemove = onSwipeRemove.takeIf { !selecting },
     ) { swipeActions ->
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(swipeActions)
                 .menuAnchor(anchor, view)
-                .menuClickable(onClick = onClick, onLongClick = {
-                    if (hasMenu) {
+                .menuClickable(onClick = { if (selecting) selection!!.toggle(selectKey, song) else onClick() }, onLongClick = {
+                    if (selecting) selection!!.toggle(selectKey, song)
+                    else if (hasMenu) {
                         haptics.press()
                         if (anchor.rect != null) contextOpen = true else menuOpen = true
                     }
@@ -357,11 +374,15 @@ fun SongListItem(
                     explicit = song.isExplicit == true,
                 )
             }
-            trailing()
-            download?.let { DownloadBadge(it.state, it.progress) }
-            if (hasMenu) {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+            if (selecting) {
+                SelectionTick(picked)
+            } else {
+                trailing()
+                download?.let { DownloadBadge(it.state, it.progress) }
+                if (hasMenu) {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+                    }
                 }
             }
         }
@@ -407,14 +428,64 @@ fun DownloadBadge(state: DownloadState, progress: Float) {
     }
 }
 
-/** A card as it shows lifted out over its long-press menu. */
+/**
+ * A shelf card as it shows lifted out over its long-press menu: the card's own
+ * content, laid out exactly as in the shelf, so the copy that settles back lands
+ * on the card without the cover or the text moving.
+ */
 @Composable
-internal fun CardPreview(title: String, subtitle: String, thumbnailUrl: String?, round: Boolean) {
-    Column(Modifier.fillMaxSize().padding(10.dp)) {
-        Artwork(thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), shape = if (round) CircleShape else MaterialTheme.shapes.medium)
-        Spacer(Modifier.height(6.dp))
-        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+internal fun CardPreview(title: String, subtitle: String, thumbnailUrl: String?, type: BrowseType?, explicit: Boolean = false) {
+    Column(Modifier.fillMaxSize().padding(CARD_INSET)) {
+        ItemCardBody(title, subtitle, thumbnailUrl, type, explicit, Modifier, null)
+    }
+}
+
+/** The inset of a shelf card's content, and the lifted card's corner that follows its cover's. */
+internal val CARD_INSET = 6.dp
+internal val CARD_LIFT_CORNER = CARD_INSET + 16.dp
+
+/** A shelf card's cover, title and subtitle, shared by the card and its lifted copy. */
+@Composable
+private fun ColumnScope.ItemCardBody(
+    title: String,
+    subtitle: String,
+    thumbnailUrl: String?,
+    type: BrowseType?,
+    explicit: Boolean,
+    imageModifier: Modifier,
+    onArtLoaded: ((Boolean) -> Unit)?,
+) {
+    val round = type == BrowseType.ARTIST
+    Artwork(
+        thumbnailUrl.artworkAt(CARD_ART_PX),
+        Modifier.fillMaxWidth().aspectRatio(1f),
+        shape = if (round) CircleShape else MaterialTheme.shapes.medium,
+        placeholder = when (type) {
+            BrowseType.ARTIST -> Icons.Filled.Person
+            BrowseType.ALBUM -> Icons.Filled.Album
+            BrowseType.PLAYLIST -> Icons.AutoMirrored.Filled.PlaylistPlay
+            else -> Icons.Filled.MusicNote
+        },
+        imageModifier = imageModifier,
+        onLoaded = onArtLoaded,
+    )
+    Spacer(Modifier.height(8.dp))
+    Text(
+        title,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        style = MaterialTheme.typography.titleSmall,
+        textAlign = if (round) TextAlign.Center else TextAlign.Start,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    if (subtitle.isNotBlank() || explicit) {
+        SubtitleLine(
+            subtitle,
+            explicit = explicit,
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = if (round) TextAlign.Center else TextAlign.Start,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -436,17 +507,16 @@ fun ItemCard(
     /** What a long press opens; nothing when null. */
     menu: CardMenu? = null,
 ) {
-    val round = type == BrowseType.ARTIST
     val anchor = remember { MenuAnchor() }
     val view = androidx.compose.ui.platform.LocalView.current
     val haptics = rememberHaptics()
     var contextOpen by remember { mutableStateOf(false) }
     val at = anchor.rect
     if (contextOpen && at != null && menu != null) {
-        val preview: @Composable () -> Unit = { CardPreview(title, subtitle, thumbnailUrl, round) }
+        val preview: @Composable () -> Unit = { CardPreview(title, subtitle, thumbnailUrl, type, explicit) }
         when (menu) {
-            is CardMenu.ForSong -> SongContextMenu(menu.song, at, onDismiss = { contextOpen = false }, preview = preview)
-            is CardMenu.ForList -> CollectionContextMenu(menu.list, at, onDismiss = { contextOpen = false }, preview = preview)
+            is CardMenu.ForSong -> SongContextMenu(menu.song, at, onDismiss = { contextOpen = false }, liftCorner = CARD_LIFT_CORNER, preview = preview)
+            is CardMenu.ForList -> CollectionContextMenu(menu.list, at, onDismiss = { contextOpen = false }, liftCorner = CARD_LIFT_CORNER, preview = preview)
         }
     }
     Column(
@@ -458,39 +528,9 @@ fun ItemCard(
                 if (menu == null) Modifier.clickable(onClick = onClick)
                 else Modifier.menuClickable(onClick = onClick, onLongClick = { haptics.press(); contextOpen = true }),
             )
-            .padding(6.dp),
+            .padding(CARD_INSET),
     ) {
-        Artwork(
-            thumbnailUrl.artworkAt(CARD_ART_PX),
-            Modifier.fillMaxWidth().aspectRatio(1f),
-            shape = if (round) CircleShape else MaterialTheme.shapes.medium,
-            placeholder = when (type) {
-                BrowseType.ARTIST -> Icons.Filled.Person
-                BrowseType.ALBUM -> Icons.Filled.Album
-                BrowseType.PLAYLIST -> Icons.AutoMirrored.Filled.PlaylistPlay
-                else -> Icons.Filled.MusicNote
-            },
-            imageModifier = imageModifier,
-            onLoaded = onArtLoaded,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            title,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.titleSmall,
-            textAlign = if (round) TextAlign.Center else TextAlign.Start,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        if (subtitle.isNotBlank() || explicit) {
-            SubtitleLine(
-                subtitle,
-                explicit = explicit,
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = if (round) TextAlign.Center else TextAlign.Start,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        ItemCardBody(title, subtitle, thumbnailUrl, type, explicit, imageModifier, onArtLoaded)
     }
 }
 
@@ -508,7 +548,7 @@ fun SectionHeader(
         Column(Modifier.weight(1f)) {
             if (!subtitle.isNullOrBlank()) {
                 Text(
-                    subtitle.uppercase(),
+                    com.opentune.ui.theme.tr(subtitle).uppercase(),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -525,10 +565,11 @@ fun <T> Shelf(
     title: String,
     items: List<T>,
     subtitle: String? = null,
+    action: (@Composable () -> Unit)? = null,
     card: @Composable (T) -> Unit,
 ) {
     Column {
-        SectionHeader(title, subtitle = subtitle)
+        SectionHeader(title, subtitle = subtitle, action = action)
         LazyRow(
             contentPadding = PaddingValues(horizontal = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -697,6 +738,22 @@ fun MessageState(
  * round again, and both edges fade, so the two never read as one line
  * running into the next; text that fits sits still, unfaded.
  */
+/**
+ * Single-line text that scrolls when it doesn't fit, as on a car stereo. A
+ * third of its width of space runs between the end and the start coming
+ * round again; text that fits sits still, unfaded. The scroll is run here
+ * rather than by basicMarquee, which never reports where it is: each edge
+ * fades only while text is really cut there, so at rest the start of the
+ * line is clear, and its fade returns as the line moves off it.
+ */
+/**
+ * Single-line text that scrolls when it doesn't fit, as on a car stereo. A
+ * third of its width of space runs between the end and the start coming
+ * round again; text that fits sits still, unfaded. The scroll is run here
+ * rather than by basicMarquee, which never reports where it is: each edge
+ * fades only while text is really cut there, so at rest the start of the
+ * line is clear, and its fade returns as the line moves off it.
+ */
 @Composable
 fun MarqueeText(
     text: String,
@@ -708,30 +765,64 @@ fun MarqueeText(
     androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
         val textWidth = remember(text, style) { measurer.measure(text, style, maxLines = 1, softWrap = false).size.width }
         val overflows = constraints.hasBoundedWidth && textWidth > constraints.maxWidth
-        val fade = with(androidx.compose.ui.platform.LocalDensity.current) { MARQUEE_FADE.toPx() }
-        Text(
-            text,
-            style = style,
-            color = color,
-            maxLines = 1,
-            modifier = if (!overflows) Modifier else Modifier
-                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    val edge = (fade / size.width).coerceIn(0f, 0.5f)
-                    drawRect(
-                        androidx.compose.ui.graphics.Brush.horizontalGradient(
-                            0f to Color.Transparent, edge to Color.Black, 1f - edge to Color.Black, 1f to Color.Transparent,
-                        ),
-                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
-                    )
+        if (!overflows) {
+            Text(text, style = style, color = color, maxLines = 1)
+        } else {
+            val containerWidth = constraints.maxWidth
+            val totalWidth = textWidth + containerWidth / 3
+            val fade = with(androidx.compose.ui.platform.LocalDensity.current) { MARQUEE_FADE.toPx() }
+            var phase by remember(text, containerWidth) { mutableFloatStateOf(0f) }
+            val velocityPx = with(androidx.compose.ui.platform.LocalDensity.current) { 50.dp.toPx() }
+            LaunchedEffect(text, style, containerWidth) {
+                while (true) {
+                    // Resting at the start is a plain wait: frames are asked for only while the
+                    // text moves, so a long title on screen doesn't keep the app drawing.
+                    phase = 0f
+                    kotlinx.coroutines.delay(1_500)
+                    val start = androidx.compose.runtime.withFrameNanos { it }
+                    var p = 0f
+                    while (p < totalWidth) {
+                        androidx.compose.runtime.withFrameNanos { frame ->
+                            p = (frame - start) / 1e9f * velocityPx
+                            phase = p.coerceAtMost(totalWidth.toFloat())
+                        }
+                    }
                 }
-                .basicMarquee(
-                    iterations = Int.MAX_VALUE,
-                    initialDelayMillis = 1_500,
-                    spacing = androidx.compose.foundation.MarqueeSpacing.fractionOfContainer(1f / 3f),
-                ),
-        )
+            }
+            val leftCut by remember(text, containerWidth) { derivedStateOf { phase > 0.5f && phase < textWidth } }
+            val rightCut by remember(text, containerWidth) { derivedStateOf { phase + containerWidth < textWidth || phase > totalWidth - containerWidth } }
+            val leftFade by androidx.compose.animation.core.animateFloatAsState(if (leftCut) 1f else 0f, androidx.compose.animation.core.tween(150), label = "marqueeLeftFade")
+            val rightFade by androidx.compose.animation.core.animateFloatAsState(if (rightCut) 1f else 0f, androidx.compose.animation.core.tween(150), label = "marqueeRightFade")
+            androidx.compose.foundation.layout.Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
+                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        val edge = (fade / size.width).coerceIn(0f, 0.5f)
+                        drawRect(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                0f to Color.Black.copy(alpha = 1f - leftFade), edge to Color.Black, 1f - edge to Color.Black, 1f to Color.Black.copy(alpha = 1f - rightFade),
+                            ),
+                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                        )
+                    }
+            ) {
+                Text(
+                    text, style = style, color = color, maxLines = 1, softWrap = false,
+                    modifier = Modifier
+                        .wrapContentWidth(androidx.compose.ui.Alignment.Start, unbounded = true)
+                        .offset { androidx.compose.ui.unit.IntOffset(-phase.toInt(), 0) }
+                )
+                Text(
+                    text, style = style, color = color, maxLines = 1, softWrap = false,
+                    modifier = Modifier
+                        .wrapContentWidth(androidx.compose.ui.Alignment.Start, unbounded = true)
+                        .offset { androidx.compose.ui.unit.IntOffset((totalWidth - phase).toInt(), 0) }
+                )
+            }
+        }
     }
 }
 
