@@ -1,5 +1,5 @@
 import { Radio, Shuffle } from 'lucide-react';
-import { useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useParams } from 'react-router';
 import { PlayIcon } from '@/components/icons/Transport';
 import { Artwork } from '@/components/music/Artwork';
@@ -9,7 +9,7 @@ import { playList, shuffleList } from '@/components/music/play';
 import { usePlayer } from '@/state/player';
 import { Shelves, TrackShelf } from '@/components/music/ShelfView';
 import { LoadError, NeedsExtension } from '@/components/music/States';
-import { requestAppleAccess, useAppleArtistArt, useUngrantedAppleOrigins, type AppleArtistArt } from '@/data/apple/artistArt';
+import { requestAppleAccess, useAppleArtistLookup, useUngrantedAppleOrigins, type AppleArtistArt } from '@/data/apple/artistArt';
 import { useArtist, useYouTubeReady } from '@/data/music/queries';
 import type { ArtworkColor } from '@/lib/artworkColor';
 import { usePageTint } from '@/lib/usePageTint';
@@ -65,11 +65,58 @@ function ArtistName({ name, apple, heading }: { name: string; apple: AppleArtist
  * header as the phone does: its photograph, its title logo over it, its
  * colour behind the whole page, and its colour on the Play button.
  */
+/** How long a page waits for Apple's header before settling on YouTube's for this visit. */
+const APPLE_WAIT_MS = 2000;
+
+/**
+ * Which header the page shows, decided once per visit: Apple's, when its lookup answers within
+ * APPLE_WAIT_MS of the artist being known and its photograph has loaded, or else YouTube's.
+ * Undefined while deciding. Drawing YouTube's photo and then swapping in Apple's, with its
+ * colour arriving after, made the page change under the eye; now photo, logo and colour come
+ * together. A later visit finds Apple's answer remembered and decides at once.
+ */
+function useHeaderChoice(lookup: { art: AppleArtistArt | null; settled: boolean }, known: boolean) {
+  const [choice, setChoice] = useState<{ apple: AppleArtistArt | null }>();
+  const decided = choice !== undefined;
+  useEffect(() => {
+    if (decided || !known) return;
+    const timer = setTimeout(() => setChoice((c) => c ?? { apple: null }), APPLE_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [decided, known]);
+  useEffect(() => {
+    if (decided || !lookup.settled) return;
+    const art = lookup.art;
+    if (!art) {
+      setChoice((c) => c ?? { apple: null });
+      return;
+    }
+    let live = true;
+    // The photograph must load for Apple's header to be used; the title logo is only fetched ahead.
+    const load = (url: string) =>
+      new Promise<void>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error(url));
+        image.src = url;
+      });
+    if (art.logoUrl) void load(art.logoUrl).catch(() => {});
+    load(art.heroUrl).then(
+      () => live && setChoice((c) => c ?? { apple: art }),
+      () => live && setChoice((c) => c ?? { apple: null }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [decided, lookup.settled, lookup.art]);
+  return choice;
+}
+
 export default function ArtistPage() {
   const id = decodeURIComponent(useParams().id ?? '');
   const { missing } = useYouTubeReady();
   const artist = useArtist(id);
-  const apple = useAppleArtistArt(artist.data?.name);
+  const header = useHeaderChoice(useAppleArtistLookup(artist.data?.name), !!artist.data);
+  const apple = header?.apple ?? null;
   const appleUngranted = useUngrantedAppleOrigins();
   const tint = useMemo<ArtworkColor | null>(
     () => (apple ? { background: apple.background, dark: luminance(apple.background) < 0.6 } : null),
@@ -100,16 +147,15 @@ export default function ArtistPage() {
       {/* The hero (report §4): full-bleed, ~1.93:1 of the content column, the name and actions centred near the bottom. */}
       <header className="relative max-h-[70vh] overflow-hidden">
         <div className="ot-parallax relative w-full">
-          <Artwork src={data.heroImage} displayWidth={1200} aspect={1165 / 604} eager />
-          {/* Apple's photograph fades in over YouTube's once it arrives. */}
+          {/* Decided once (useHeaderChoice): Apple's photograph, already loaded, or YouTube's. Until then the frame's own colour. */}
+          <Artwork src={header && !apple ? data.heroImage : null} displayWidth={1200} aspect={1165 / 604} eager />
           {apple && (
             <img
               key={apple.heroUrl}
-              className="absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-400 ease-in data-loaded:opacity-100"
+              className="ot-hero-in absolute inset-0 size-full object-cover"
               src={apple.heroUrl}
               alt=""
               decoding="async"
-              onLoad={(e) => e.currentTarget.setAttribute('data-loaded', '')}
             />
           )}
         </div>
@@ -118,7 +164,9 @@ export default function ArtistPage() {
           className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,color-mix(in_srgb,var(--page-tint,var(--pageBG))_70%,transparent)_80%,var(--page-tint,var(--pageBG))_100%)]"
           aria-hidden="true"
         />
-        <div className="ot-detail-text absolute inset-x-0 bottom-6 flex flex-col items-center gap-1.5 px-(--body-gutter) text-center">
+        <div
+          className={`ot-detail-text absolute inset-x-0 bottom-6 flex flex-col items-center gap-1.5 px-(--body-gutter) text-center transition-opacity duration-300 ${header ? '' : 'opacity-0'}`}
+        >
           <ArtistName name={data.name} apple={apple} heading={heading} />
           {data.audience && <p className="type-callout-emphasized text-secondary">{data.audience}</p>}
           {/* Shuffle · Play · Radio: the artist's top songs in order or mixed, or a station built from them. */}

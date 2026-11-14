@@ -85,14 +85,25 @@ export function useAppleAccess() {
  * YouTube header stands in meanwhile, and stays when Apple has nothing.
  */
 export function useAppleArtistArt(name: string | null | undefined): AppleArtistArt | null {
+  return useAppleArtistLookup(name).art;
+}
+
+/**
+ * Apple's header art for [name], and whether the lookup is over: answered, found nothing,
+ * failed, or was never going to run (the setting off, no name yet counts as not over).
+ */
+export function useAppleArtistLookup(name: string | null | undefined): { art: AppleArtistArt | null; settled: boolean } {
   const on = useAppleSettings((s) => s.artistArt);
+  const enabled = on && !!name && !!normalized(name);
   const query = useQuery({
     queryKey: ['apple', 'artist-art', normalized(name ?? '')],
     queryFn: () => fetchAppleArtistArt(name!),
-    enabled: on && !!name && !!normalized(name),
+    enabled,
     staleTime: Infinity,
     gcTime: 60 * 60_000,
     retry: false,
   });
-  return on ? (query.data ?? null) : null;
+  if (!on) return { art: null, settled: true };
+  if (!enabled) return { art: null, settled: false };
+  return { art: query.data ?? null, settled: query.data !== undefined || query.isError };
 }

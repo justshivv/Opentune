@@ -48,6 +48,9 @@
 .ot-swap-in { animation: ot-swap-in 0.28s var(--ot-ease-emph) both; }
 @keyframes ot-swap-in { from { opacity: 0; translate: 0 6px; } }
 .ot-cover-in { animation: ot-cover-in 0.45s var(--ot-ease-emph) both; }
+/* An artist's header photograph, once chosen: a fade, no movement, over the frame's own colour. */
+.ot-hero-in { animation: ot-hero-in 0.35s ease-out both; }
+@keyframes ot-hero-in { from { opacity: 0; } }
 @keyframes ot-cover-in { from { opacity: 0; scale: 0.94; } }
 
 /* Pressed things give a little. */
@@ -109,7 +112,7 @@
 :root[data-motion='false'] .ot-wave-flat { opacity: 1 !important; }
 @media (prefers-reduced-motion: reduce) {
   .ot-lockup-art, .ot-lockup-art img, .ot-circle-lockup > div:first-child, .ot-circle-lockup > div:first-child img { transition: none !important; translate: none !important; scale: none !important; }
-  .ot-page, .ot-shelf > li, .ot-home-heading, .ot-parallax, .ot-detail-cover, .ot-detail-text, .ot-detail-actions, .ot-swap-in, .ot-cover-in, .ot-morph > svg, .ot-fav svg, .ot-burst { animation: none !important; }
+  .ot-page, .ot-shelf > li, .ot-home-heading, .ot-parallax, .ot-detail-cover, .ot-detail-text, .ot-detail-actions, .ot-swap-in, .ot-cover-in, .ot-hero-in, .ot-morph > svg, .ot-fav svg, .ot-burst { animation: none !important; }
   .ot-wave-line { display: none; }
   .ot-wave-flat { opacity: 1 !important; }
 }
