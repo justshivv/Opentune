@@ -19,10 +19,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Forward30
+import androidx.compose.material.icons.rounded.Forward5
+import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.rounded.Replay30
+import androidx.compose.material.icons.rounded.Replay5
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,8 +62,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.opentune.ui.theme.Text
 import com.opentune.data.settings.ControlStyle
 import kotlin.math.PI
 import kotlin.math.cos
@@ -89,17 +102,25 @@ fun PlayerControls(
     style: ControlStyle = ControlStyle.BLOOM,
     animate: Boolean = true,
     progress: () -> Float = { 0f },
+    onRewind10: (() -> Unit)? = null,
+    onFastForward30: (() -> Unit)? = null,
 ) {
     var nextRolls by remember { mutableIntStateOf(0) }
     var previousRolls by remember { mutableIntStateOf(0) }
     // Deep, strong feels for the transport, each its own (see Haptics.Pattern).
     val haptics = com.opentune.ui.components.rememberHaptics()
-    val back = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.PREVIOUS); previousRolls++; onPrevious() }
-    val ahead = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.NEXT); nextRolls++; onNext() }
+    val isJump = onRewind10 != null && onFastForward30 != null
+    val backAction = onRewind10 ?: onPrevious
+    val aheadAction = onFastForward30 ?: onNext
+    val back = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.PREVIOUS); previousRolls++; backAction() }
+    val ahead = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.NEXT); nextRolls++; aheadAction() }
     val playPause = {
         haptics.pattern(if (isPlaying) com.opentune.ui.components.Haptics.Pattern.PAUSE else com.opentune.ui.components.Haptics.Pattern.PLAY)
         onTogglePlay()
     }
+    val backSeconds = if (isJump) 10 else null
+    val aheadSeconds = if (isJump) 30 else null
+    val aheadEnabled = if (isJump) true else hasNext
     Row(
         modifier.fillMaxWidth().height(86.dp),
         // Capsule is a tight cluster; the bare designs spread across the row.
@@ -108,33 +129,33 @@ fun PlayerControls(
     ) {
         when (style) {
             ControlStyle.ECHO -> {
-                BloomSkip(forward = false, previousRolls, enabled = true, animate, back)
+                BloomSkip(forward = false, previousRolls, enabled = true, animate, back, backSeconds)
                 EchoPlay(isPlaying, isBuffering, animate, playPause)
-                BloomSkip(forward = true, nextRolls, hasNext, animate, ahead)
+                BloomSkip(forward = true, nextRolls, aheadEnabled, animate, ahead, aheadSeconds)
             }
             ControlStyle.BLOOM -> {
-                BloomSkip(forward = false, previousRolls, enabled = true, animate, back)
+                BloomSkip(forward = false, previousRolls, enabled = true, animate, back, backSeconds)
                 BloomPlay(isPlaying, isBuffering, animate, playPause)
-                BloomSkip(forward = true, nextRolls, hasNext, animate, ahead)
+                BloomSkip(forward = true, nextRolls, aheadEnabled, animate, ahead, aheadSeconds)
             }
             ControlStyle.CAPSULE -> {
-                CapsuleSkip(forward = false, previousRolls, enabled = true, animate, back)
+                CapsuleSkip(forward = false, previousRolls, enabled = true, animate, back, backSeconds)
                 Spacer(Modifier.width(21.dp))
                 CapsulePlay(isPlaying, isBuffering, animate, playPause)
                 Spacer(Modifier.width(21.dp))
-                CapsuleSkip(forward = true, nextRolls, hasNext, animate, ahead)
+                CapsuleSkip(forward = true, nextRolls, aheadEnabled, animate, ahead, aheadSeconds)
             }
             ControlStyle.ORBIT -> {
-                OrbitSkip(forward = false, previousRolls, enabled = true, animate, back)
+                OrbitSkip(forward = false, previousRolls, enabled = true, animate, back, backSeconds)
                 OrbitPlay(isPlaying, isBuffering, animate, progress, playPause)
-                OrbitSkip(forward = true, nextRolls, hasNext, animate, ahead)
+                OrbitSkip(forward = true, nextRolls, aheadEnabled, animate, ahead, aheadSeconds)
             }
             ControlStyle.MORPH -> {
-                MorphSkip(forward = false, previousRolls, enabled = true, animate, back)
+                MorphSkip(forward = false, previousRolls, enabled = true, animate, back, backSeconds)
                 Spacer(Modifier.width(25.dp))
                 MorphPlay(isPlaying, isBuffering, animate, playPause)
                 Spacer(Modifier.width(25.dp))
-                MorphSkip(forward = true, nextRolls, hasNext, animate, ahead)
+                MorphSkip(forward = true, nextRolls, aheadEnabled, animate, ahead, aheadSeconds)
             }
         }
     }
@@ -213,15 +234,31 @@ private fun BloomPlay(isPlaying: Boolean, isBuffering: Boolean, animate: Boolean
 }
 
 @Composable
-private fun BloomSkip(forward: Boolean, rolls: Int, enabled: Boolean, animate: Boolean, onClick: () -> Unit) {
+private fun BloomSkip(
+    forward: Boolean,
+    rolls: Int,
+    enabled: Boolean,
+    animate: Boolean,
+    onClick: () -> Unit,
+    jumpSeconds: Int? = null,
+) {
     val interaction = remember { MutableInteractionSource() }
     val press = pressAmount(interaction.collectIsPressedAsState().value, animate)
     val ink = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.35f)
+    val label = if (jumpSeconds != null) {
+        if (forward) "Forward $jumpSeconds seconds" else "Rewind $jumpSeconds seconds"
+    } else {
+        if (forward) "Next" else "Previous"
+    }
     Box(
-        Modifier.size(61.dp).drawBloom(press, MaterialTheme.colorScheme.onSurface, 0f).button(interaction, enabled, if (forward) "Next" else "Previous", onClick),
+        Modifier.size(61.dp).drawBloom(press, MaterialTheme.colorScheme.onSurface, 0f).button(interaction, enabled, label, onClick),
         contentAlignment = Alignment.Center,
     ) {
-        SkipGlyph(forward, rolls, ink, animate, Modifier.size(40.dp).graphicsLayer { val s = 1f - 0.16f * press; scaleX = s; scaleY = s })
+        if (jumpSeconds != null) {
+            JumpGlyph(forward, jumpSeconds, rolls, ink, animate, Modifier.size(38.dp).graphicsLayer { val s = 1f - 0.16f * press; scaleX = s; scaleY = s })
+        } else {
+            SkipGlyph(forward, rolls, ink, animate, Modifier.size(40.dp).graphicsLayer { val s = 1f - 0.16f * press; scaleX = s; scaleY = s })
+        }
     }
 }
 
@@ -285,7 +322,14 @@ private fun CapsulePlay(isPlaying: Boolean, isBuffering: Boolean, animate: Boole
 }
 
 @Composable
-private fun CapsuleSkip(forward: Boolean, rolls: Int, enabled: Boolean, animate: Boolean, onClick: () -> Unit) {
+private fun CapsuleSkip(
+    forward: Boolean,
+    rolls: Int,
+    enabled: Boolean,
+    animate: Boolean,
+    onClick: () -> Unit,
+    jumpSeconds: Int? = null,
+) {
     val scheme = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val press = pressAmount(interaction.collectIsPressedAsState().value, animate)
@@ -298,6 +342,11 @@ private fun CapsuleSkip(forward: Boolean, rolls: Int, enabled: Boolean, animate:
     }
     val dir = if (forward) 1f else -1f
     val alpha = if (enabled) 1f else 0.35f
+    val label = if (jumpSeconds != null) {
+        if (forward) "Forward $jumpSeconds seconds" else "Rewind $jumpSeconds seconds"
+    } else {
+        if (forward) "Next" else "Previous"
+    }
     Box(
         Modifier
             .size(51.dp)
@@ -310,10 +359,14 @@ private fun CapsuleSkip(forward: Boolean, rolls: Int, enabled: Boolean, animate:
                 this.alpha = alpha
             }
             .drawBehindCompat { size -> drawCircle(scheme.primary.copy(alpha = 0.16f + 0.1f * press), radius = size.minDimension / 2f) }
-            .button(interaction, enabled, if (forward) "Next" else "Previous", onClick),
+            .button(interaction, enabled, label, onClick),
         contentAlignment = Alignment.Center,
     ) {
-        SkipGlyph(forward, rolls, scheme.primary, animate, Modifier.size(27.dp))
+        if (jumpSeconds != null) {
+            JumpGlyph(forward, jumpSeconds, rolls, scheme.primary, animate, Modifier.size(26.dp))
+        } else {
+            SkipGlyph(forward, rolls, scheme.primary, animate, Modifier.size(27.dp))
+        }
     }
 }
 
@@ -366,7 +419,14 @@ private fun OrbitPlay(isPlaying: Boolean, isBuffering: Boolean, animate: Boolean
 }
 
 @Composable
-private fun OrbitSkip(forward: Boolean, rolls: Int, enabled: Boolean, animate: Boolean, onClick: () -> Unit) {
+private fun OrbitSkip(
+    forward: Boolean,
+    rolls: Int,
+    enabled: Boolean,
+    animate: Boolean,
+    onClick: () -> Unit,
+    jumpSeconds: Int? = null,
+) {
     val scheme = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val press = pressAmount(interaction.collectIsPressedAsState().value, animate)
@@ -378,6 +438,11 @@ private fun OrbitSkip(forward: Boolean, rolls: Int, enabled: Boolean, animate: B
         sweep.animateTo(1f, tween(560, easing = FastOutSlowInEasing))
     }
     val ink = scheme.onSurface.copy(alpha = if (enabled) 1f else 0.35f)
+    val label = if (jumpSeconds != null) {
+        if (forward) "Forward $jumpSeconds seconds" else "Rewind $jumpSeconds seconds"
+    } else {
+        if (forward) "Next" else "Previous"
+    }
     Box(
         Modifier
             .size(59.dp)
@@ -397,10 +462,14 @@ private fun OrbitSkip(forward: Boolean, rolls: Int, enabled: Boolean, animate: B
                 }
                 drawCircle(scheme.onSurface.copy(alpha = 0.09f * press), radius = size.minDimension / 2f)
             }
-            .button(interaction, enabled, if (forward) "Next" else "Previous", onClick),
+            .button(interaction, enabled, label, onClick),
         contentAlignment = Alignment.Center,
     ) {
-        SkipGlyph(forward, rolls, ink, animate, Modifier.size(32.dp))
+        if (jumpSeconds != null) {
+            JumpGlyph(forward, jumpSeconds, rolls, ink, animate, Modifier.size(30.dp))
+        } else {
+            SkipGlyph(forward, rolls, ink, animate, Modifier.size(32.dp))
+        }
     }
 }
 
@@ -439,7 +508,14 @@ private fun MorphPlay(isPlaying: Boolean, isBuffering: Boolean, animate: Boolean
 }
 
 @Composable
-private fun MorphSkip(forward: Boolean, rolls: Int, enabled: Boolean, animate: Boolean, onClick: () -> Unit) {
+private fun MorphSkip(
+    forward: Boolean,
+    rolls: Int,
+    enabled: Boolean,
+    animate: Boolean,
+    onClick: () -> Unit,
+    jumpSeconds: Int? = null,
+) {
     val scheme = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val press = pressAmount(interaction.collectIsPressedAsState().value, animate)
@@ -452,6 +528,11 @@ private fun MorphSkip(forward: Boolean, rolls: Int, enabled: Boolean, animate: B
     }
     val ink = scheme.onSurface.copy(alpha = if (enabled) 1f else 0.35f)
     val path = remember { Path() }
+    val label = if (jumpSeconds != null) {
+        if (forward) "Forward $jumpSeconds seconds" else "Rewind $jumpSeconds seconds"
+    } else {
+        if (forward) "Next" else "Previous"
+    }
     Box(
         Modifier
             .size(53.dp)
@@ -462,10 +543,14 @@ private fun MorphSkip(forward: Boolean, rolls: Int, enabled: Boolean, animate: B
                 wavyCircle(path, size, size.minDimension / 2f, depth, (if (forward) 1f else -1f) * 80f * t)
                 drawPath(path, scheme.onSurface.copy(alpha = 0.12f + 0.08f * press))
             }
-            .button(interaction, enabled, if (forward) "Next" else "Previous", onClick),
+            .button(interaction, enabled, label, onClick),
         contentAlignment = Alignment.Center,
     ) {
-        SkipGlyph(forward, rolls, ink, animate, Modifier.size(28.dp))
+        if (jumpSeconds != null) {
+            JumpGlyph(forward, jumpSeconds, rolls, ink, animate, Modifier.size(28.dp))
+        } else {
+            SkipGlyph(forward, rolls, ink, animate, Modifier.size(28.dp))
+        }
     }
 }
 
@@ -691,4 +776,49 @@ private fun DrawScope.drawArrows(t: Float, color: Color) {
     arrow(start + shift, 1f, 1f)
     // The front one is pushed on ahead of it, shrinking as it goes.
     arrow(start + head + shift, 1f - t, 1f - t)
+}
+
+/**
+ * A circular open-arc arrow enclosing [seconds] (e.g. 10 or 30).
+ * Each tap rotates the arrow briefly in the skip direction and bounces back.
+ */
+@Composable
+fun JumpGlyph(
+    forward: Boolean,
+    seconds: Int,
+    rolls: Int,
+    color: Color,
+    animate: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val t = remember { Animatable(1f) }
+    LaunchedEffect(rolls) {
+        if (rolls == 0 || !animate) return@LaunchedEffect
+        t.snapTo(0f)
+        t.animateTo(1f, tween(420, easing = FastOutSlowInEasing))
+    }
+    val rotation = (if (forward) 1f else -1f) * sin(PI.toFloat() * t.value) * 26f
+    val icon = remember(forward, seconds) {
+        if (forward) {
+            when (seconds) {
+                10 -> Icons.Rounded.Forward10
+                5 -> Icons.Rounded.Forward5
+                else -> Icons.Rounded.Forward30
+            }
+        } else {
+            when (seconds) {
+                30 -> Icons.Rounded.Replay30
+                5 -> Icons.Rounded.Replay5
+                else -> Icons.Rounded.Replay10
+            }
+        }
+    }
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = color,
+        modifier = modifier
+            .graphicsLayer { rotationZ = rotation }
+            .fillMaxSize(),
+    )
 }
