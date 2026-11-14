@@ -118,6 +118,8 @@ class PlaybackService : MediaLibraryService() {
     private var castMirror: CastMirror? = null
     private var radioJob: Job? = null
     private var radioSeed: String? = null
+    /** The radio job is waiting before its next round, so a connection coming back can start it at once. */
+    private var radioWaiting = false
 
     /** Seeds whose radio added nothing new; asking again would only repeat that. */
     private val exhaustedSeeds = mutableSetOf<String>()
@@ -375,6 +377,7 @@ class PlaybackService : MediaLibraryService() {
         scope.launch {
             AppSettings.playback.map { it.skipSilence }.distinctUntilChanged().collect { player.skipSilenceEnabled = it }
         }
+        networkWatch()
         // Turning autoplay back on near the end of the queue should fetch now,
         // not at the next track change.
         scope.launch {
@@ -781,6 +784,8 @@ class PlaybackService : MediaLibraryService() {
         loudnessEnhancer = null
         audioManager?.unregisterAudioDeviceCallback(deviceCallback)
         runCatching { unregisterReceiver(volumeReceiver) }
+        networkCallback?.let { cb -> runCatching { getSystemService(android.net.ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
+        networkCallback = null
         BitPerfectUsb.setWanted(false)
         scope.cancel()
         startupSelections.clear()
@@ -984,8 +989,10 @@ class PlaybackService : MediaLibraryService() {
                     Player.EVENT_TIMELINE_CHANGED,
                     Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
                     Player.EVENT_REPEAT_MODE_CHANGED,
-                    // Asked again as playback starts and ends, in case an earlier ask came to nothing.
+                    // Asked again as playback starts and ends, in case an earlier ask came to nothing,
+                    // and as play resumes after a long pause, which stops the asking.
                     Player.EVENT_PLAYBACK_STATE_CHANGED,
+                    Player.EVENT_PLAY_WHEN_READY_CHANGED,
                 )
             ) {
                 extendQueueIfNeeded()
@@ -2445,6 +2452,28 @@ class PlaybackService : MediaLibraryService() {
 
     // ---- Autoplay ----------------------------------------------------------------
 
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+
+    /**
+     * The connection coming back while the queue waits at its end for radio: ask again now,
+     * not when the next round's wait is up.
+     */
+    private fun networkWatch() {
+        val manager = getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                scope.launch {
+                    if (radioJob?.isActive == true && !radioWaiting) return@launch
+                    radioJob?.cancel()
+                    radioSeed = null
+                    exhaustedSeeds.clear()
+                    extendQueueIfNeeded()
+                }
+            }
+        }
+        if (runCatching { manager.registerDefaultNetworkCallback(callback) }.isSuccess) networkCallback = callback
+    }
+
     /**
      * Append radio for the last queued track once playback nears the end, so
      * the music doesn't stop. Starting a single song goes through here too:
@@ -2522,16 +2551,27 @@ class PlaybackService : MediaLibraryService() {
             // again a little later while the song plays, rather than waiting for the
             // next thing the player happens to do: that left a single song with no
             // queue after it until something, such as opening the player, stirred it.
+            // Rounds go on (a minute apart after the first few) for as long as this song is still
+            // the last: a fixed number of rounds used to end with nothing on a bad connection,
+            // and the queue then ran dry with Next greyed out until the song had finished.
+            // The connection coming back cuts the wait short (see [networkWatch]).
             var ready: List<List<Song>> = emptyList()
-            for ((round, pause) in RADIO_AGAIN_MS.withIndex()) {
-                if (pause > 0) delay(pause)
+            var round = 0
+            while (true) {
+                val pause = Autoplay.radioPause(round)
+                if (pause > 0) {
+                    radioWaiting = true
+                    try { delay(pause) } finally { radioWaiting = false }
+                }
                 val count = player.mediaItemCount
                 if (!radioWanted(player) || count == 0 || player.getMediaItemAt(count - 1).mediaId != seed) return@launch
+                // Paused a long while: stop asking; playing again asks afresh.
+                if (round >= Autoplay.EAGER_ROUNDS && !player.playWhenReady) return@launch
                 ready = Autoplay.readyRadios(ask(), ::usable)
                 if (ready.any { it.isNotEmpty() }) break
-                Log.i(TAG, "No radio for $seed yet (round ${round + 1}), asking again shortly")
+                round++
+                Log.i(TAG, "No radio for $seed yet (round $round), asking again shortly")
             }
-            if (ready.all { it.isEmpty() }) return@launch
             // The radios blended, then put in the order this listener most likely plays
             // through (learned on the phone), with no artist twice in a row where it can be helped.
             val taste = com.opentune.data.reco.TasteModel.Taste(History.records.value, LibraryStore.liked.value.mapTo(HashSet()) { it.videoId })
@@ -2552,7 +2592,19 @@ class PlaybackService : MediaLibraryService() {
             // Not the same song again in another version (its video, a lyric video, a live take,
             // a cover) of one already in the queue or another in this batch.
             val queuedSongs = (0 until count).map { player.getMediaItemAt(it).toSong() }
-            val additions = com.opentune.data.reco.SongIdentity.distinct(fresh, queuedSongs)
+            val radioAdditions = com.opentune.data.reco.SongIdentity.distinct(fresh, queuedSongs)
+            // Every song the radios had is in the queue already (a long session on one radio):
+            // carry on with your own most played that aren't, artists from this queue first,
+            // rather than letting the music stop.
+            val additions = radioAdditions.ifEmpty {
+                com.opentune.data.reco.SongIdentity.distinct(
+                    Autoplay.fromHistory(History.records.value, queuedSongs) { song ->
+                        song.videoId in queued || !isYouTubeId(song.videoId) || LibraryStore.isDisliked(song.videoId) ||
+                            LibraryStore.hidden.value.hides(song.videoId, song.artist)
+                    },
+                    queuedSongs,
+                )
+            }
             if (additions.isEmpty()) {
                 exhaustedSeeds += seed
                 return@launch
@@ -2809,8 +2861,6 @@ class PlaybackService : MediaLibraryService() {
         const val END_FADE_MS = 15_000L
         /** Waits before each ask for radio: at once, then twice more if it fails. */
         val RADIO_RETRY_MS = longArrayOf(0L, 3_000L, 10_000L)
-        /** Whole rounds of asking, when a round brings nothing: now, then again while the song plays. */
-        val RADIO_AGAIN_MS = longArrayOf(0L, 20_000L, 45_000L, 90_000L)
         /** An episode only jumps to its saved place if it hasn't got going yet. */
         const val RESUME_SLACK_MS = 5_000L
         const val SEGMENT_POLL_MS = 250L
