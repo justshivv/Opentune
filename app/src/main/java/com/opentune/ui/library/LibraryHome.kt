@@ -1069,6 +1069,10 @@ fun TopNavBar(
     val frost by androidx.compose.animation.core.animateFloatAsState(if (solid) 1f else 0f, androidx.compose.animation.core.tween(240), label = "topNavFrost")
     val haze = com.opentune.ui.components.LocalHazeState.current
     val page = MaterialTheme.colorScheme.background
+    // The bar's frost answers to the Frosted top edge setting, like the
+    // strip at the root does: with it off, the bar is the plain page
+    // colour and nothing blurs under it.
+    val edgeFrost = AppSettings.ui.collectAsState().value.frostedTopEdge
     val density = androidx.compose.ui.platform.LocalDensity.current.density
     var tall by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val below = LocalNavFrostBelow.current
@@ -1086,7 +1090,14 @@ fun TopNavBar(
                     }
                     .onSizeChanged { tall = it.height }
                     .then(
-                        if (haze == null) {
+                        if (!edgeFrost) {
+                            // No blur at all: the page colour, solid over the bar
+                            // itself and easing out over the tail below it.
+                            Modifier.graphicsLayer { alpha = frost }.drawBehind {
+                                val solidTo = ((size.height - (below.value + NAV_FROST_TAIL.value) * density) / size.height).coerceIn(0f, 1f)
+                                drawRect(Brush.verticalGradient(0f to page, solidTo to page, 1f to page.copy(alpha = 0f)))
+                            }
+                        } else if (haze == null) {
                             Modifier.graphicsLayer { alpha = frost }.drawBehind {
                                 drawRect(Brush.verticalGradient(0f to page.copy(alpha = 0.95f), 0.72f to page.copy(alpha = 0.88f), 1f to page.copy(alpha = 0f)))
                             }
