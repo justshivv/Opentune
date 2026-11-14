@@ -1,0 +1,30 @@
+diff --git a/dist/src/am-lyrics.js b/dist/src/am-lyrics.js
+index a2709c1d062dfb0f24e8b52a0444f284fd1b47b0..2c46163b7bc28fb8f7ea6baf7cb10af63a573d9c 100644
+--- a/dist/src/am-lyrics.js
++++ b/dist/src/am-lyrics.js
+@@ -2522,6 +2522,10 @@ class AmLyrics extends i {
+     // 0x2f4080 detects Chinese/Japanese; Hangul is not part of that predicate.
+     // Keep connected RTL scripts intact in the browser renderer.
+     if (/[\u0590-\u08ff]/.test(text)) return 'none';
++    // Letters that carry combining marks (Devanagari and the other Indic scripts, Thai,
++    // Tibetan...) are shaped together: split into boxes of one code point each, a vowel
++    // sign lands alone on a dotted circle. Those syllables wipe whole instead.
++    if (/\p{M}/u.test(text)) return 'none';
+     const count = Array.from(text.trim()).length;
+     if (!count) return 'none';
+     if (/[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff]/.test(text)) {
+diff --git a/src/AmLyrics.ts b/src/AmLyrics.ts
+index 0ea55534afb75515e82d217845e88da8b71cf498..e613a0c511063ee0267c8ffdbfc2ae65fa95249c 100644
+--- a/src/AmLyrics.ts
++++ b/src/AmLyrics.ts
+@@ -5233,6 +5233,10 @@ export class AmLyrics extends LitElement {
+     // 0x2f4080 detects Chinese/Japanese; Hangul is not part of that predicate.
+     // Keep connected RTL scripts intact in the browser renderer.
+     if (/[\u0590-\u08ff]/.test(text)) return 'none';
++    // Letters that carry combining marks (Devanagari and the other Indic scripts, Thai,
++    // Tibetan...) are shaped together: split into boxes of one code point each, a vowel
++    // sign lands alone on a dotted circle. Those syllables wipe whole instead.
++    if (/\p{M}/u.test(text)) return 'none';
+     const count = Array.from(text.trim()).length;
+     if (!count) return 'none';
+     if (/[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff]/.test(text)) {

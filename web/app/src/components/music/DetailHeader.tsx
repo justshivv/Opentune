@@ -1,6 +1,5 @@
-import { Check, ChevronLeft, Link2, ListEnd, ListStart, MoreHorizontal, Plus, Shuffle } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Check, Link2, ListEnd, ListStart, MoreHorizontal, Plus, Shuffle } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { Menu, MenuItem, MenuSeparator } from '@/components/Menu';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { toast } from '@/components/Toast';
@@ -9,6 +8,7 @@ import { useSetListSaved, useSignedIn } from '@/data/music/queries';
 import type { AppleMotion } from '@/data/apple/motionArt';
 import type { HeaderInfo } from '@/data/music/types';
 import { Artwork } from './Artwork';
+import { DetailBar } from './DetailBar';
 import { ExplicitBadge } from './ExplicitBadge';
 import { MotionArtwork } from './MotionArtwork';
 import { artistHref } from './links';
@@ -94,7 +94,7 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, 
   const title = useRef<HTMLHeadingElement>(null);
   return (
     <>
-    <DetailBar info={info} title={title} onPlay={onPlay} canPlay={canPlay} />
+    <DetailBar title={info.title} thumbnail={info.thumbnail} watch={title} onPlay={onPlay} canPlay={canPlay} />
     {/* Artwork beside the headings, description and actions; stacked and centred below 768px. */}
     <div className="ot-detail relative isolate mb-10 px-(--body-gutter)">
       {info.thumbnail && <CoverWash src={info.thumbnail} />}
@@ -180,58 +180,6 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, 
       </div>
     </div>
     </>
-  );
-}
-
-/**
- * The bar along the top of an album or playlist page, as in the phone app: Back at its left from
- * the start, and once the page's title has scrolled up under it, a frosted strip of the page's
- * colour with the cover, the title and Play, so the list being looked at stays named.
- */
-function DetailBar({ info, title, onPlay, canPlay }: { info: HeaderInfo; title: React.RefObject<HTMLHeadingElement | null>; onPlay: () => void; canPlay: boolean }) {
-  const navigate = useNavigate();
-  const bar = useRef<HTMLDivElement>(null);
-  const [stuck, setStuck] = useState(false);
-  useEffect(() => {
-    const page = document.getElementById('scrollable-page');
-    if (!page) return;
-    // This bar has its own glass; the page's top-edge blur would only smear it.
-    page.dataset.ownBar = '';
-    let frame = 0;
-    const mark = () => {
-      frame = 0;
-      const heading = title.current?.getBoundingClientRect();
-      const strip = bar.current?.getBoundingClientRect();
-      if (heading && strip) setStuck(heading.bottom <= strip.bottom);
-    };
-    const onScroll = () => { if (!frame) frame = requestAnimationFrame(mark); };
-    mark();
-    page.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      page.removeEventListener('scroll', onScroll);
-      cancelAnimationFrame(frame);
-      delete page.dataset.ownBar;
-    };
-  }, [title]);
-  // Back where the visitor came from; a page opened straight from a link goes Home instead.
-  const back = () => ((window.history.state as { idx?: number } | null)?.idx ? navigate(-1) : navigate('/home'));
-  return (
-    <div ref={bar} className="ot-detail-bar" data-stuck={stuck || undefined}>
-      <button className="ot-detail-back" aria-label="Back" title="Back" onClick={back}>
-        <ChevronLeft size={22} strokeWidth={2.4} />
-      </button>
-      <div className="ot-detail-bar-title" aria-hidden={!stuck}>
-        {info.thumbnail && (
-          <span className="size-8 shrink-0">
-            <Artwork src={info.thumbnail} displayWidth={32} radius="6px" />
-          </span>
-        )}
-        <span className="min-w-0 truncate type-title-3-emphasized">{info.title}</span>
-      </div>
-      <button className="ot-detail-bar-play" aria-label={`Play ${info.title}`} tabIndex={stuck ? 0 : -1} aria-hidden={!stuck} onClick={onPlay} disabled={!canPlay}>
-        <PlayIcon size={15} />
-      </button>
-    </div>
   );
 }
 

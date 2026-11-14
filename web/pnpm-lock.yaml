@@ -162,6 +162,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@uimaxbai/am-lyrics@1.8.2': 3db664ae99364d6e0d352f6807ba88c446199a80f476b42b84b07227721e05a5
+
 importers:
 
   .: {}
@@ -185,7 +188,7 @@ importers:
         version: 3.14.19(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@uimaxbai/am-lyrics':
         specifier: ^1.8.2
-        version: 1.8.2(@lit/react@1.0.8(@types/react@19.3.0))(react@19.3.1)
+        version: 1.8.2(patch_hash=3db664ae99364d6e0d352f6807ba88c446199a80f476b42b84b07227721e05a5)(react@19.3.1)
       bgutils-js:
         specifier: ^4.0.3
         version: 4.0.3
@@ -342,11 +345,6 @@ packages:
 
   '@lit-labs/ssr-dom-shim@1.6.0':
     resolution: {integrity: sha512-VHb0ALPMTlgKjM6yIxxoQNnpKyUKLD04VzeQdsiXkMqkvYlAHxq9glGLmgbb889/1GsohSOAjvQYoiBppXFqrQ==}
-
-  '@lit/react@1.0.8':
-    resolution: {integrity: sha512-p2+YcF+JE67SRX3mMlJ1TKCSTsgyOVdAwd/nxp3NuV1+Cb6MWALbN6nT7Ld4tpmYofcE5kcaSY1YBB9erY+6fw==}
-    peerDependencies:
-      '@types/react': 17 || 18 || 19
 
   '@lit/reactive-element@2.1.2':
     resolution: {integrity: sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A==}
@@ -1784,11 +1782,6 @@ snapshots:
 
   '@lit-labs/ssr-dom-shim@1.6.0': {}
 
-  '@lit/react@1.0.8(@types/react@19.3.0)':
-    dependencies:
-      '@types/react': 19.3.0
-    optional: true
-
   '@lit/reactive-element@2.1.2':
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.6.0
@@ -2085,12 +2078,11 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  '@uimaxbai/am-lyrics@1.8.2(@lit/react@1.0.8(@types/react@19.3.0))(react@19.3.1)':
+  '@uimaxbai/am-lyrics@1.8.2(patch_hash=3db664ae99364d6e0d352f6807ba88c446199a80f476b42b84b07227721e05a5)(react@19.3.1)':
     dependencies:
       '@babel/runtime': 7.29.10
       lit: 3.3.3
     optionalDependencies:
-      '@lit/react': 1.0.8(@types/react@19.3.0)
       react: 19.3.1
 
   '@vitejs/plugin-react@6.1.2(vite@8.3.4(@types/node@22.20.5)(jiti@2.7.0))':

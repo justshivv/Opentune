@@ -376,12 +376,15 @@
 .ot-detail-bar[data-stuck]::before { opacity: 1; }
 .ot-detail-back { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 999px; color: var(--systemPrimary); background: var(--systemQuinary); border: .75px solid var(--systemQuaternary); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); transition: background-color .2s ease, scale .2s var(--ot-ease-emph); }
 .ot-detail-back:hover { background: var(--systemQuaternary); }
+/* Over an artist's photograph, before the strip comes in: the dark glass of the hero's own buttons. */
+.ot-detail-bar[data-over-photo]:not([data-stuck]) .ot-detail-back { color: #fff; background: #0000004d; border-color: transparent; }
+.ot-detail-bar[data-over-photo]:not([data-stuck]) .ot-detail-back:hover { background: #00000066; }
 .ot-detail-back:active { scale: .92; }
 .ot-detail-bar-title { display: flex; min-width: 0; flex: 1; align-items: center; gap: 10px; }
 .ot-detail-bar-play { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px; color: var(--button-pill-color, var(--systemPrimary)); background: var(--button-pill-background-color, var(--keyColor)); }
-.ot-detail-bar-play:disabled { opacity: .4; }
 .ot-detail-bar-title, .ot-detail-bar-play { opacity: 0; translate: 0 8px; pointer-events: none; transition: opacity .22s ease, translate .4s var(--ot-ease-emph); }
 .ot-detail-bar[data-stuck] .ot-detail-bar-title, .ot-detail-bar[data-stuck] .ot-detail-bar-play { opacity: 1; translate: 0 0; pointer-events: auto; }
+.ot-detail-bar[data-stuck] .ot-detail-bar-play:disabled { opacity: .4; pointer-events: none; }
 #scrollable-page[data-own-bar] ~ .ot-scroll-edge { display: none; }
 
 /* Cards: the cover lifts and zooms a little in its frame, a shade rises from the bottom and the play
