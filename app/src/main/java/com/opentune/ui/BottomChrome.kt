@@ -11,6 +11,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.layout
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -218,9 +222,22 @@ fun BottomChrome(
     mini: (@Composable (inline: Boolean, modifier: Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
     motion: DockMotion = DockMotion.MINIMIZE,
+    dockAway: Boolean = false,
     lens: DockLens = DockLens.STRETCH,
     reduceMotion: Boolean = false,
 ) {
+    // On destination pages the dock and Search slide away past the
+    // screen's edge and the mini player has the bottom to itself. [away]
+    // runs 0 (the chrome as usual) to 1 (away), and every piece reads
+    // it, so nothing is ever clipped: each piece travels whole, shadow
+    // and all, the dock far enough to clear the edge — its own height,
+    // the room under the chrome, and its shadow's reach.
+    val awayProgress = animateFloatAsState(
+        if (dockAway) 1f else 0f,
+        if (reduceMotion) androidx.compose.animation.core.snap() else tween(420, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+        label = "dockAway",
+    )
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val c = ChromeContent(
         tabs,
         selected,
@@ -230,7 +247,9 @@ fun BottomChrome(
         onSearch,
         onSearchLongPress,
         mini,
-        if (reduceMotion) DockLens.GLIDE else lens
+        if (reduceMotion) DockLens.GLIDE else lens,
+        { awayProgress.value },
+        CHROME_TAB_HEIGHT + navBottom + 32.dp,
     )
     val chrome: @Composable (Boolean, () -> Float, Modifier) -> Unit = { folded, progress, m ->
         when (motion) {
@@ -272,6 +291,10 @@ private class ChromeContent(
     val onSearchLongPress: () -> Unit,
     val mini: (@Composable (inline: Boolean, modifier: Modifier) -> Unit)?,
     val lens: DockLens,
+    /** How far the dock and Search have slid away, 0 to 1; see [BottomChrome]. */
+    val away: () -> Float,
+    /** How far the dock and Search travel to clear the screen's edge. */
+    val drop: Dp,
 )
 
 /** The spring each [DockMotion] runs on, from open to folded and back. */
@@ -302,9 +325,9 @@ private fun ramp(from: Float, to: Float, t: Float): Float {
 }
 
 /** The chrome's height at a given moment. Everything in it is placed from the bottom edge, which stays put. */
-private fun Modifier.chromeHeight(progress: () -> Float, open: Dp, folded: Dp): Modifier =
+private fun Modifier.chromeHeight(progress: () -> Float, open: Dp, folded: Dp, away: () -> Float = { 0f }, awayHeight: Dp = 0.dp): Modifier =
     this.layout { measurable, constraints ->
-        val h = lerp(open, folded, progress()).roundToPx().coerceAtLeast(0)
+        val h = lerp(lerp(open, folded, progress()), awayHeight, away()).roundToPx().coerceAtLeast(0)
         val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
         layout(placeable.width, h) { placeable.place(0, 0) }
     }
@@ -315,15 +338,21 @@ private fun Modifier.placed(
     x: (Float) -> Dp,
     bottom: (Float) -> Dp,
     w: (Float) -> Dp,
-    h: (Float) -> Dp
+    h: (Float) -> Dp,
+    away: () -> Float = { 0f },
+    awayDrop: Dp = 0.dp
 ): Modifier =
     this.layout { measurable, constraints ->
         val t = progress()
         val pw = w(t).roundToPx().coerceAtLeast(0)
         val ph = h(t).roundToPx().coerceAtLeast(0)
         val placeable = measurable.measure(Constraints.fixed(pw, ph))
+        // Slid away, a piece travels [awayDrop] further down, whole: the
+        // dock and Search go past the screen's edge, the mini player only
+        // as far as the bottom they leave it.
+        val b = bottom(t) - awayDrop * away()
         layout(constraints.maxWidth, constraints.maxHeight) {
-            placeable.place(x(t).roundToPx(), constraints.maxHeight - bottom(t).roundToPx() - ph)
+            placeable.place(x(t).roundToPx(), constraints.maxHeight - b.roundToPx() - ph)
         }
     }
 
@@ -352,7 +381,7 @@ private fun MinimizeChrome(
             if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT
         Box(Modifier
             .fillMaxWidth()
-            .chromeHeight(progress, openHeight, MINI_ROW)) {
+            .chromeHeight(progress, openHeight, MINI_ROW, c.away, openHeight - CHROME_TAB_HEIGHT - CARD_GAP)) {
             val row = { t: Float -> lerp(CHROME_TAB_HEIGHT, MINI_ROW, t) }
             c.mini?.invoke(
                 false,
@@ -362,6 +391,8 @@ private fun MinimizeChrome(
                     bottom = { t -> lerp(CHROME_TAB_HEIGHT + CARD_GAP, 0.dp, t) },
                     w = { t -> lerp(width, width - (MINI_ROW + SEARCH_GAP) * 2, t) },
                     h = { t -> lerp(CHROME_MINI_HEIGHT, MINI_ROW, t) },
+                    away = c.away,
+                    awayDrop = CHROME_TAB_HEIGHT + CARD_GAP,
                 ),
             )
             // The dock, contracting to the left into a circle.
@@ -372,7 +403,9 @@ private fun MinimizeChrome(
                     x = { 0.dp },
                     bottom = { 0.dp },
                     w = { t -> lerp(fullDock, MINI_ROW, t) },
-                    h = row
+                    h = row,
+                    away = c.away,
+                    awayDrop = c.drop
                 ),
             )
             SearchOrb(
@@ -382,7 +415,9 @@ private fun MinimizeChrome(
                     x = { t -> width - row(t) },
                     bottom = { 0.dp },
                     w = row,
-                    h = row
+                    h = row,
+                    away = c.away,
+                    awayDrop = c.drop
                 ),
                 onClick = {
                     if (!c.searchSelected) haptics.tick()
@@ -430,7 +465,7 @@ private fun CapsuleChrome(
         val mini = c.mini
         Box(Modifier
             .fillMaxWidth()
-            .chromeHeight(progress, openHeight, MINI_ROW)) {
+            .chromeHeight(progress, openHeight, MINI_ROW, c.away, openHeight - CHROME_TAB_HEIGHT - CARD_GAP)) {
             val onSearch = {
                 if (!c.searchSelected) haptics.tick()
                 c.onSearch()
@@ -446,7 +481,9 @@ private fun CapsuleChrome(
                                 x = { 0.dp },
                                 bottom = row,
                                 w = { width },
-                                h = { CHROME_MINI_HEIGHT + CARD_GAP })
+                                h = { CHROME_MINI_HEIGHT + CARD_GAP },
+                                away = c.away,
+                                awayDrop = CHROME_TAB_HEIGHT + CARD_GAP)
                             .clipToBounds(),
                     ) {
                         mini(
@@ -485,6 +522,8 @@ private fun CapsuleChrome(
                                 bottom = { t -> (row(t) - orb(t)) / 2 },
                                 w = orb,
                                 h = orb,
+                                away = c.away,
+                                awayDrop = c.drop,
                             )
                             .graphicsLayer { alpha = 1f - ramp(0f, 0.45f, progress()) },
                         onClick = onSearch,
@@ -500,6 +539,8 @@ private fun CapsuleChrome(
                     bottom = { 0.dp },
                     w = { t -> lerp(fullDock, CAPSULE_WIDTH, t) },
                     h = { t -> lerp(CHROME_TAB_HEIGHT, MINI_ROW, t) },
+                    away = c.away,
+                    awayDrop = c.drop,
                 ),
             )
             if (mini == null) {
@@ -512,7 +553,9 @@ private fun CapsuleChrome(
                         x = { t -> lerp(width - CHROME_TAB_HEIGHT, endX, t) },
                         bottom = { t -> lerp(0.dp, CAPSULE_INSET, t) },
                         w = orb,
-                        h = orb
+                        h = orb,
+                        away = c.away,
+                        awayDrop = c.drop
                     ),
                     onClick = onSearch,
                     onLongPress = { c.onSearchLongPress() },
@@ -526,7 +569,9 @@ private fun CapsuleChrome(
                             x = { endX },
                             bottom = { CAPSULE_INSET },
                             w = { end },
-                            h = { end })
+                            h = { end },
+                            away = c.away,
+                            awayDrop = c.drop)
                         .graphicsLayer {
                             val a = ramp(0.6f, 1f, progress())
                             alpha = a
@@ -568,7 +613,7 @@ private fun SinkChrome(
         val foldedHeight = if (c.mini != null) CHROME_MINI_HEIGHT else MINI_ROW
         Box(Modifier
             .fillMaxWidth()
-            .chromeHeight(progress, openHeight, foldedHeight)) {
+            .chromeHeight(progress, openHeight, foldedHeight, c.away, openHeight - CHROME_TAB_HEIGHT - CARD_GAP)) {
             if (dockShown) {
                 Box(
                     Modifier
@@ -590,7 +635,7 @@ private fun SinkChrome(
                             val scale = 1f - 0.08f * s
                             scaleX = scale
                             scaleY = scale
-                            translationY = 14.dp.toPx() * s
+                            translationY = 14.dp.toPx() * s + c.drop.toPx() * c.away()
                             val r = 18.dp.toPx() * s
                             renderEffect =
                                 if (blur && r >= 0.5f) BlurEffect(r, r, TileMode.Decal) else null
@@ -625,7 +670,7 @@ private fun SinkChrome(
                 mini(
                     false,
                     Modifier
-                        .placed(progress, x = { 0.dp }, bottom = { t -> lerp(CHROME_TAB_HEIGHT + CARD_GAP, 0.dp, t) }, w = { width }, h = { CHROME_MINI_HEIGHT })
+                        .placed(progress, x = { 0.dp }, bottom = { t -> lerp(CHROME_TAB_HEIGHT + CARD_GAP, 0.dp, t) }, w = { width }, h = { CHROME_MINI_HEIGHT }, away = c.away, awayDrop = CHROME_TAB_HEIGHT + CARD_GAP)
                         .zIndex(if (com.opentune.ui.components.PlayerMorph.miniDismiss > 0f) -1f else 0f),
                 )
             } else if (buttonShown) {

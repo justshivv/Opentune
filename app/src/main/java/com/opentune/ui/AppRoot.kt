@@ -434,6 +434,10 @@ fun AppRoot(vm: PlayerViewModel) {
     // The Wrapped story fills the screen, like the login page.
     val chromeRoute = route != "login" && route != "discord-login" && route != "wrapped"
     val chromeVisible = chromeRoute && !playerCovers
+    // With the Dock slides away setting on, pages that are destinations
+    // in themselves lose the dock and Search to the mini player.
+    val dockAway = chromeUi.dockSlidesAway && (route == "liked" || route == "playlist/{id}" || route == "collection/{id}" ||
+            route == "artist/{id}" || route == "artist-items/{id}?params={params}&title={title}" || route == "settings?page={page}")
     // The window's size class picks the chrome. A fold or unfold only changes
     // what's around the pages: the NavHost and the player keep their place in
     // the tree, so neither starts over (the activity handles the size change
@@ -455,11 +459,18 @@ fun AppRoot(vm: PlayerViewModel) {
     // brings the full player back, as it was left.
     LaunchedEffect(layout.sidePlayer) { if (layout.sidePlayer && playerOpen) paneCollapsed = false }
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val content = if (layout.nav == NavChrome.DOCK) {
-        PaddingValues(bottom = navInset + CHROME_TAB_HEIGHT + 24.dp + if (song != null) CHROME_MINI_HEIGHT + 8.dp else 0.dp)
-    } else {
-        PaddingValues(bottom = navInset + 16.dp + if (layout.nowPlaying == NowPlaying.BAR) CHROME_MINI_HEIGHT + 12.dp else 0.dp)
-    }
+    // The pages' bottom room follows the chrome: with the dock away on a
+    // destination page, only the mini player's share of it stays.
+    val contentBottom by androidx.compose.animation.core.animateDpAsState(
+        when {
+            layout.nav != NavChrome.DOCK -> navInset + 16.dp + if (layout.nowPlaying == NowPlaying.BAR) CHROME_MINI_HEIGHT + 12.dp else 0.dp
+            dockAway -> navInset + 24.dp + if (song != null) CHROME_MINI_HEIGHT + 8.dp else 0.dp
+            else -> navInset + CHROME_TAB_HEIGHT + 24.dp + if (song != null) CHROME_MINI_HEIGHT + 8.dp else 0.dp
+        },
+        if (chromeUi.reduceAnimation) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(420, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+        label = "contentBottom",
+    )
+    val content = PaddingValues(bottom = contentBottom)
     // Room the rail and the docked player take beside the pages, eased as
     // the pane folds and unfolds.
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
@@ -856,7 +867,8 @@ fun AppRoot(vm: PlayerViewModel) {
                     Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
                         starCard()
                         BottomChrome(
-                            inline = chromeScroll.inline,
+                            inline = chromeScroll.inline && !dockAway,
+                            dockAway = dockAway,
                             tabs = chromeTabs,
                             selected = if (route == SEARCH_ROUTE) null else dockTabs.indexOf(tab).takeIf { it >= 0 },
                             onSelect = selectTab,
