@@ -10,7 +10,6 @@ import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -317,9 +316,10 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
     val drift: androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit = {
         if (!still && listState.firstVisibleItemIndex == 0) translationY = listState.firstVisibleItemScrollOffset * PARALLAX
     }
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // Square on a phone; on a wide window it would be a wall, so it stops growing.
-        val photoHeight = min(maxWidth, MAX_PHOTO_HEIGHT)
+    Box(Modifier.fillMaxWidth()) {
+        // The height of a full-screen playlist cover, so the photo takes
+        // the same share of the screen as the covers on the other pages.
+        val photoHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * ARTIST_HERO_FRACTION).dp
         Box(
             Modifier
                 // Pulled down at the top, the photo stays at the top of the screen and grows to
@@ -747,7 +747,8 @@ private val PHOTO_FADE = Brush.verticalGradient(
     1f to Color.Transparent,
 )
 
-private val MAX_PHOTO_HEIGHT = 480.dp
+/** The share of the screen's height the photo takes, the same as a full-screen playlist cover. */
+private const val ARTIST_HERO_FRACTION = 0.68f
 /** How far up the name sits into the photo's fade. */
 private val NAME_OVERLAP = 76.dp
 private val SIDE_BUTTON = 56.dp
