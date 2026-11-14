@@ -327,6 +327,13 @@ object LibraryStore {
         mirror(id) { remote -> PlaylistEdit(PlaylistEdit.Kind.REMOVE, id, remote, videoIds = listOf(gone.videoId), setVideoId = gone.setVideoId) }
     }
 
+    /** Takes every copy of the songs [videoIds] out of playlist [id], as [removeFromPlaylist] would one by one. */
+    @Synchronized
+    fun removeSongsFromPlaylist(id: String, videoIds: Collection<String>) {
+        val p = playlist(id) ?: return
+        p.songs.withIndex().filter { it.value.videoId in videoIds }.map { it.index }.sortedDescending().forEach { removeFromPlaylist(id, it) }
+    }
+
     /** A song just taken out of a playlist, which [undoRemove] can put back where it was. */
     class Removed internal constructor(val playlistId: String, val index: Int, val song: SongRef, internal val token: Long)
 

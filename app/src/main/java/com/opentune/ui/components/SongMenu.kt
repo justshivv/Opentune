@@ -551,14 +551,24 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
     PlaylistPicker(
         songs = listOf(song),
         local = playlists.map { p ->
-            localTarget(p, if (p.songs.any { it.videoId == song.videoId }) 1 else 0) { LibraryStore.addToPlaylist(p.id, song) }
+            localTarget(p, if (p.songs.any { it.videoId == song.videoId }) 1 else 0,
+                add = { LibraryStore.addToPlaylist(p.id, song) },
+                remove = { LibraryStore.removeSongsFromPlaylist(p.id, listOf(song.videoId)) })
         },
         account = accountPlaylists.map { p ->
-            accountTarget(p, inAccount[p.playlistId]?.let { if (it) 1 else 0 }) {
-                PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
-                    if (!ok) com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add it to {0}", p.title), context)
-                }
-            }
+            accountTarget(p, inAccount[p.playlistId]?.let { if (it) 1 else 0 },
+                add = {
+                    inAccount[p.playlistId] = true
+                    PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
+                        if (!ok) { inAccount[p.playlistId] = false; com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add it to {0}", p.title), context) }
+                    }
+                },
+                remove = {
+                    inAccount[p.playlistId] = false
+                    PlaylistSync.removeFromAccountPlaylist(p.playlistId, listOf(song)) { ok ->
+                        if (!ok) { inAccount[p.playlistId] = true; com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't take it out of {0}", p.title), context) }
+                    }
+                })
         },
         online = online,
         onCreate = { name, privacy ->

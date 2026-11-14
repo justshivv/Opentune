@@ -223,13 +223,15 @@ internal fun AddAllToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit, on
     }
     PlaylistPicker(
         songs = songs,
-        local = playlists.map { p -> localTarget(p, p.songs.count { it.videoId in ids }) { addTo(p.id) } },
+        local = playlists.map { p ->
+            localTarget(p, p.songs.count { it.videoId in ids }, add = { addTo(p.id) }, remove = { LibraryStore.removeSongsFromPlaylist(p.id, ids) })
+        },
         account = accountPlaylists.map { p ->
-            accountTarget(p, null) {
+            accountTarget(p, null, add = {
                 com.opentune.data.library.PlaylistSync.addAllToAccountPlaylist(p.playlistId, songs) { ok ->
                     if (!ok) com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add them to {0}", p.title), context)
                 }
-            }
+            })
         },
         online = online,
         onCreate = { name, privacy ->

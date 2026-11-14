@@ -72,6 +72,8 @@ internal data class PickTarget(
     val cover: @Composable (Modifier) -> Unit,
     /** Puts the songs in it (only the ones not there yet); a failure says so itself. */
     val add: () -> Unit,
+    /** Takes the songs out of it again, for one that has them; null where that can't be done. */
+    val remove: (() -> Unit)? = null,
 )
 
 /**
@@ -121,6 +123,13 @@ internal fun PlaylistPicker(
         // One that has everything in it already isn't picked again: it says so instead.
         if (whole(t)) { com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", t.title), context); return }
         picked = if (t.key in picked) picked - t.key else picked + t.key
+    }
+    // Its tick taken off: the songs come out of it, with Undo to put them back. The picker stays,
+    // so the tick turns back into a + there and then.
+    fun untick(t: PickTarget) {
+        val remove = t.remove ?: return toggle(t)
+        remove()
+        com.opentune.data.Pills.withAction(com.opentune.i18n.Tr.f("Removed from {0}", t.title), com.opentune.i18n.Tr.t("Undo")) { t.add() }
     }
     var name by remember { mutableStateOf("") }
     var saveOnline by remember { mutableStateOf(true) }
@@ -175,14 +184,14 @@ internal fun PlaylistPicker(
                     val choosing = picked.isNotEmpty()
                     if (mine.isNotEmpty()) {
                         SectionLabel(Icons.Rounded.PhoneAndroid, "Your playlists")
-                        mine.forEach { t -> TargetRow(t, adding, t.key in picked, choosing, onTap = { if (choosing) toggle(t) else addOne(t) }, onPick = { toggle(t) }) }
+                        mine.forEach { t -> TargetRow(t, adding, t.key in picked, choosing, onTap = { if (choosing) toggle(t) else addOne(t) }, onPick = { if (whole(t)) untick(t) else toggle(t) }) }
                     }
                     if (theirs.isNotEmpty()) {
                         SectionLabel(Icons.AutoMirrored.Rounded.QueueMusic, "On YouTube Music")
-                        theirs.forEach { t -> TargetRow(t, adding, t.key in picked, choosing, onTap = { if (choosing) toggle(t) else addOne(t) }, onPick = { toggle(t) }) }
+                        theirs.forEach { t -> TargetRow(t, adding, t.key in picked, choosing, onTap = { if (choosing) toggle(t) else addOne(t) }, onPick = { if (whole(t)) untick(t) else toggle(t) }) }
                     }
                     if (mine.isNotEmpty() || theirs.isNotEmpty()) Text(
-                        if (choosing) "Tap more playlists to add to them all at once" else "Tap the circle to pick several playlists",
+                        if (choosing) "Tap more playlists to add to them all at once" else "Tap a circle to pick several playlists, or a tick to take it out",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                     )
@@ -303,7 +312,10 @@ private fun TargetRow(t: PickTarget, adding: Int, picked: Boolean, choosing: Boo
         }
         // The round button: picks the playlist. Its own target, 48dp, so it's easy to hit apart from the row.
         Box(
-            Modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Checkbox, onClickLabel = com.opentune.i18n.Tr.f("Pick {0}", t.title)) { haptics.tick(); onPick() },
+            Modifier.size(48.dp).clip(CircleShape).clickable(
+                role = Role.Checkbox,
+                onClickLabel = if (all && t.remove != null) com.opentune.i18n.Tr.f("Remove from {0}", t.title) else com.opentune.i18n.Tr.f("Pick {0}", t.title),
+            ) { haptics.tick(); onPick() },
             contentAlignment = Alignment.Center,
         ) {
             Box(
@@ -385,17 +397,19 @@ internal const val FIELD_TINT = 0.08f
 private const val SEARCH_FROM = 6
 
 /** A playlist made here, to pick. */
-internal fun localTarget(p: LocalPlaylist, already: Int, add: () -> Unit) = PickTarget(
+internal fun localTarget(p: LocalPlaylist, already: Int, add: () -> Unit, remove: (() -> Unit)? = null) = PickTarget(
     "local:${p.id}", p.name,
     if (p.songs.size == 1) com.opentune.i18n.Tr.t("1 song") else com.opentune.i18n.Tr.f("{0} songs", p.songs.size),
     already,
     { m -> PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, m, RectangleShape) },
     add,
+    remove,
 )
 
 /** One of the account's playlists on YouTube Music, to pick. */
-internal fun accountTarget(p: UserPlaylist, already: Int?, add: () -> Unit) = PickTarget(
+internal fun accountTarget(p: UserPlaylist, already: Int?, add: () -> Unit, remove: (() -> Unit)? = null) = PickTarget(
     "yt:${p.playlistId}", p.title, p.subtitle.ifBlank { "YouTube Music" }, already,
     { m -> Artwork(p.thumbnailUrl, m, RectangleShape, placeholder = Icons.AutoMirrored.Rounded.QueueMusic) },
     add,
+    remove,
 )

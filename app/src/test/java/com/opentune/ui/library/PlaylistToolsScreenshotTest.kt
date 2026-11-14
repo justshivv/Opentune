@@ -155,7 +155,7 @@ class PlaylistToolsScreenshotTest {
         org.junit.Assert.assertEquals(songs.map { it.videoId }, LibraryStore.playlist(id)!!.songs.map { it.videoId })
     }
 
-    /** A playlist that has the song already keeps its tick while others are picked, and can't be picked itself. */
+    /** A playlist that has the song already keeps its tick while others are picked, can't be picked, and its tick takes the song out. */
     @Test fun aPlaylistWithTheSongCantBePickedAgain() {
         val gym = LibraryStore.createPlaylist("Gym")
         compose.setContent { OpenTuneTheme(ThemeSettings()) {
@@ -166,11 +166,18 @@ class PlaylistToolsScreenshotTest {
             it.config.getOrNull(androidx.compose.ui.semantics.SemanticsActions.OnClick)?.label == label
         }).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         clickLabelled("Pick Gym")
-        clickLabelled("Pick Late nights")
         compose.mainClock.advanceTimeBy(500)
+        // The one with the song keeps its tick, and offers to take the song out rather than be picked.
         compose.onAllNodesWithContentDescription("In this playlist", useUnmergedTree = true).assertCountEquals(1)
+        compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher("pick late nights") {
+            it.config.getOrNull(androidx.compose.ui.semantics.SemanticsActions.OnClick)?.label == "Pick Late nights"
+        }).assertCountEquals(0)
         compose.onNode(androidx.compose.ui.test.hasClickAction() and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Add to 1 playlist")), useUnmergedTree = true).assertExists()
         org.junit.Assert.assertTrue(LibraryStore.playlist(gym)!!.songs.isEmpty())
+        // Its tick taken off: the song comes out of it.
+        clickLabelled("Remove from Late nights")
+        compose.mainClock.advanceTimeBy(500)
+        org.junit.Assert.assertEquals(listOf(songs[1].videoId), LibraryStore.playlist(id)!!.songs.map { it.videoId })
     }
 
     /**
