@@ -550,29 +550,13 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
     PlaylistPicker(
         songs = listOf(song),
         local = playlists.map { p ->
-            val has = p.songs.any { it.videoId == song.videoId }
-            localTarget(p, if (has) 1 else 0) {
-                if (has) {
-                    com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", p.name), context)
-                } else {
-                    LibraryStore.addToPlaylist(p.id, song)
-                    com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", p.name), context)
-                }
-                onDone()
-            }
+            localTarget(p, if (p.songs.any { it.videoId == song.videoId }) 1 else 0) { LibraryStore.addToPlaylist(p.id, song) }
         },
         account = accountPlaylists.map { p ->
-            val has = inAccount[p.playlistId]
-            accountTarget(p, has?.let { if (it) 1 else 0 }) {
-                if (has == true) {
-                    com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", p.title), context)
-                } else {
-                    PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
-                        if (ok) com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", p.title), context)
-                        else com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add it to {0}", p.title), context)
-                    }
+            accountTarget(p, inAccount[p.playlistId]?.let { if (it) 1 else 0 }) {
+                PlaylistSync.addToAccountPlaylist(p.playlistId, song) { ok ->
+                    if (!ok) com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add it to {0}", p.title), context)
                 }
-                onDone()
             }
         },
         online = online,
@@ -581,6 +565,7 @@ fun AddToPlaylistDialog(song: Song, onDone: () -> Unit, onDismiss: () -> Unit) {
             com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", name), context)
             onDone()
         },
+        onDone = onDone,
         onDismiss = onDismiss,
     )
 }

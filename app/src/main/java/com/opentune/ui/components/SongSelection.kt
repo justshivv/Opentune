@@ -208,20 +208,37 @@ internal fun AddAllToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit, on
     val context = LocalContext.current.applicationContext
     val all by LibraryStore.playlists.collectAsState()
     val playlists = remember(all) { all.filter { it.spotifyId == null } }
-    fun addTo(id: String, title: String) {
+    // Signed in, the account's own playlists on YouTube Music are offered too, as for one song:
+    // without them, someone whose playlists are all there was sent straight to naming a new one.
+    val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
+    val account by com.opentune.data.library.LibraryCache.playlists.collectAsState()
+    val owned by com.opentune.data.library.LibraryCache.owned.collectAsState()
+    val online = signedIn && songs.any { isYouTubeId(it.videoId) }
+    val accountPlaylists = if (online) remember(account, owned, playlists) { com.opentune.data.library.PlaylistLinks.pickable(account, owned, playlists) } else emptyList()
+    val ids = remember(songs) { songs.mapTo(HashSet()) { it.videoId } }
+    fun addTo(id: String) {
         val have = LibraryStore.playlist(id)?.songs?.map { it.videoId }?.toHashSet().orEmpty()
         val fresh = songs.filter { it.videoId !in have }
         if (fresh.isNotEmpty()) LibraryStore.addAllToPlaylist(id, fresh)
-        com.opentune.data.Pills.done(if (fresh.isEmpty()) com.opentune.i18n.Tr.f("Already in {0}", title) else com.opentune.i18n.Tr.f("Added {0} to {1}", fresh.size, title), context)
-        onDone()
     }
-    val ids = remember(songs) { songs.mapTo(HashSet()) { it.videoId } }
     PlaylistPicker(
         songs = songs,
-        local = playlists.map { p -> localTarget(p, p.songs.count { it.videoId in ids }) { addTo(p.id, p.name) } },
-        account = emptyList(),
-        online = false,
-        onCreate = { name, _ -> addTo(LibraryStore.createPlaylist(name), name) },
+        local = playlists.map { p -> localTarget(p, p.songs.count { it.videoId in ids }) { addTo(p.id) } },
+        account = accountPlaylists.map { p ->
+            accountTarget(p, null) {
+                com.opentune.data.library.PlaylistSync.addAllToAccountPlaylist(p.playlistId, songs) { ok ->
+                    if (!ok) com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't add them to {0}", p.title), context)
+                }
+            }
+        },
+        online = online,
+        onCreate = { name, privacy ->
+            val id = LibraryStore.createPlaylist(name, privacy = privacy)
+            addTo(id)
+            com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added {0} to {1}", songs.size, name), context)
+            onDone()
+        },
+        onDone = onDone,
         onDismiss = onDismiss,
     )
 }

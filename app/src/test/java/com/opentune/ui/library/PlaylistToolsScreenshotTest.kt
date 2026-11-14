@@ -29,6 +29,8 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.semantics.getOrNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -130,6 +132,26 @@ class PlaylistToolsScreenshotTest {
         compose.onNode(androidx.compose.ui.test.hasClickAction() and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Late nights")), useUnmergedTree = true)
             .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         compose.mainClock.advanceTimeBy(500)
+        org.junit.Assert.assertEquals(songs.map { it.videoId }, LibraryStore.playlist(id)!!.songs.map { it.videoId })
+    }
+
+    /** Picking two playlists with their round buttons, then adding to both at once. */
+    @Test fun addingToSeveralPlaylistsAtOnce() {
+        val gym = LibraryStore.createPlaylist("Gym")
+        compose.setContent { OpenTuneTheme(ThemeSettings()) {
+            com.opentune.ui.components.AddAllToPlaylistDialog(songs, onDismiss = {}, onDone = {})
+        } }
+        compose.mainClock.advanceTimeBy(1_000)
+        fun clickLabelled(label: String) = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher(label) {
+            it.config.getOrNull(androidx.compose.ui.semantics.SemanticsActions.OnClick)?.label == label
+        }).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        clickLabelled("Pick Gym")
+        clickLabelled("Pick Late nights")
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNode(androidx.compose.ui.test.hasClickAction() and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Add to 2 playlists")), useUnmergedTree = true)
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(500)
+        org.junit.Assert.assertEquals(songs.map { it.videoId }, LibraryStore.playlist(gym)!!.songs.map { it.videoId })
         org.junit.Assert.assertEquals(songs.map { it.videoId }, LibraryStore.playlist(id)!!.songs.map { it.videoId })
     }
 

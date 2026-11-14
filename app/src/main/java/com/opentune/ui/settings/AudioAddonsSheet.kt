@@ -359,82 +359,15 @@ private fun SmallPill(label: String, danger: Boolean = false, onClick: () -> Uni
     ) { Text(label, style = MaterialTheme.typography.labelLarge, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface) }
 }
 
-/**
- * Adding a source by its link: the link field with Paste beside it, what will happen in a line
- * under it, and while the source is read, a spinner on the button; if it can't be added, why,
- * in the card, so the link can be fixed there.
- */
+/** Adding a source by its link, in the shared link card. */
 @Composable
-internal fun AddSourceCard(input: String, onInput: (String) -> Unit, working: Boolean, onDismiss: () -> Unit, onAdd: () -> Unit, error: String?) {
-    val c = MaterialTheme.colorScheme
-    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    val looksLikeLink = input.trim().let { it.startsWith("https://", true) || it.startsWith("http://", true) || (it.contains('.') && !it.contains(' ')) }
-    com.opentune.ui.components.FloatingCard(
-        onDismiss = onDismiss,
+internal fun AddSourceCard(input: String, onInput: (String) -> Unit, working: Boolean, onDismiss: () -> Unit, onAdd: () -> Unit, error: String?) =
+    com.opentune.ui.components.LinkEntryCard(
         title = "Add an audio source",
-        icon = Icons.Rounded.Link,
-        dismissible = !working,
-        actions = {
-            Box(Modifier.weight(1f)) {
-                com.opentune.ui.components.SheetButton("Cancel", onClick = onDismiss, enabled = !working,
-                    tone = com.opentune.ui.components.SheetTone.Neutral, closes = true)
-            }
-            Box(Modifier.weight(1f)) {
-                com.opentune.ui.components.SheetButton(if (working) "Adding…" else "Add source", onClick = onAdd,
-                    enabled = looksLikeLink && !working, loading = working, tone = com.opentune.ui.components.SheetTone.Primary)
-            }
-        },
-    ) {
-        Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Paste the link to a source's service or its manifest. OpenTune reads what it offers. Nothing is installed.",
-                style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
-            Row(
-                Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(18.dp)).background(c.onSurface.copy(alpha = com.opentune.ui.components.FIELD_TINT))
-                    .then(if (error != null) Modifier.border(1.5.dp, c.error, RoundedCornerShape(18.dp)) else Modifier)
-                    .padding(start = 16.dp, end = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Rounded.Link, null, tint = c.onSurfaceVariant, modifier = Modifier.size(22.dp))
-                Box(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                    if (input.isEmpty()) Text("https://…", style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant)
-                    androidx.compose.foundation.text.BasicTextField(
-                        input, onInput, singleLine = true, enabled = !working,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.onSurface),
-                        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.primary),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                        ),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (looksLikeLink && !working) onAdd() }),
-                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                    )
-                }
-                if (input.isEmpty()) {
-                    // Paste straight from the clipboard: links are long and fiddly to type.
-                    Box(
-                        Modifier.clip(RoundedCornerShape(50)).background(c.onSurface)
-                            .clickable { clipboard.getText()?.text?.trim()?.let { onInput(it) } }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                    ) { Text("Paste", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = c.surface) }
-                } else if (!working) {
-                    IconButton(onClick = { onInput("") }) { Icon(Icons.Rounded.Close, "Clear", Modifier.size(20.dp)) }
-                }
-            }
-            when {
-                error != null -> Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.errorContainer).padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.ErrorOutline, null, tint = c.onErrorContainer, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text(error, style = MaterialTheme.typography.bodyMedium, color = c.onErrorContainer)
-                }
-                working -> Text("Reading the source…", style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
-                else -> Text("HTTPS, or http for a service on this device", style = MaterialTheme.typography.bodySmall,
-                    color = c.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
-            }
-        }
-    }
-}
+        description = "Paste the link to a source's service or its manifest. OpenTune reads what it offers. Nothing is installed.",
+        input = input, onInput = onInput, working = working, error = error,
+        hint = "HTTPS, or http for a service on this device",
+        workingLine = "Reading the source…",
+        confirm = "Add source", confirming = "Adding…",
+        onConfirm = onAdd, onDismiss = onDismiss,
+    )

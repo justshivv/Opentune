@@ -70,14 +70,17 @@ internal data class PickTarget(
     /** How many of the songs being added are in it already; null while that's being checked. */
     val already: Int?,
     val cover: @Composable (Modifier) -> Unit,
-    val onPick: () -> Unit,
+    /** Puts the songs in it (only the ones not there yet); a failure says so itself. */
+    val add: () -> Unit,
 )
 
 /**
  * Where a song, or several, goes: a card with what's being added at the top, a New playlist
- * tile, then your playlists here and on YouTube Music, each with a + that turns into a tick for
- * one that has it already. With many playlists, a field to find one by name. New playlist turns
- * the card into naming it, the songs' covers above the name, without leaving it.
+ * tile, then your playlists here and on YouTube Music. Tapping a playlist adds to it at once;
+ * its round button picks it instead, and with one or more picked, taps pick too and a button
+ * adds to all of them together. A tick shows a playlist that has it all already. With many
+ * playlists, a field to find one by name. New playlist turns the card into naming it, the
+ * songs' covers above the name, without leaving it. It always opens on the list.
  */
 @Composable
 internal fun PlaylistPicker(
@@ -87,9 +90,34 @@ internal fun PlaylistPicker(
     /** Offers keeping a copy on YouTube Music when making one. */
     online: Boolean,
     onCreate: (name: String, privacy: PlaylistPrivacy?) -> Unit,
+    /** Everything's added: the picker is done. */
+    onDone: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var naming by remember { mutableStateOf(local.isEmpty() && account.isEmpty()) }
+    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    var naming by remember { mutableStateOf(false) }
+    // Playlists picked to add to together, by key.
+    var picked by remember { mutableStateOf(emptyList<String>()) }
+    val adding = songs.size
+    fun whole(t: PickTarget) = t.already != null && t.already >= adding
+    fun addOne(t: PickTarget) {
+        if (whole(t)) com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", t.title), context)
+        else { t.add(); com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added to {0}", t.title), context) }
+        onDone()
+    }
+    fun addPicked() {
+        val chosen = (local + account).filter { it.key in picked }
+        val doing = chosen.filterNot(::whole)
+        doing.forEach { it.add() }
+        com.opentune.data.Pills.done(
+            if (doing.isEmpty()) com.opentune.i18n.Tr.t("Already in all of them")
+            else if (doing.size == 1) com.opentune.i18n.Tr.f("Added to {0}", doing[0].title)
+            else com.opentune.i18n.Tr.f("Added to {0} playlists", doing.size),
+            context,
+        )
+        onDone()
+    }
+    fun toggle(t: PickTarget) { picked = if (t.key in picked) picked - t.key else picked + t.key }
     var name by remember { mutableStateOf("") }
     var saveOnline by remember { mutableStateOf(true) }
     var privacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
@@ -105,16 +133,24 @@ internal fun PlaylistPicker(
             AddingStrip(songs, Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp))
             if (!naming && many) FindField(query, { query = it }, Modifier.padding(horizontal = 14.dp).padding(bottom = 8.dp))
         },
-        actions = if (naming) ({
-            Box(Modifier.weight(1f)) {
-                SheetButton(if (local.isEmpty() && account.isEmpty()) "Cancel" else "Back",
-                    onClick = { if (local.isEmpty() && account.isEmpty()) onDismiss() else naming = false },
-                    tone = SheetTone.Neutral, closes = local.isEmpty() && account.isEmpty())
-            }
-            Box(Modifier.weight(1f)) {
-                SheetButton("Create", onClick = { onCreate(name.trim().ifEmpty { "New playlist" }, privacy.takeIf { online && saveOnline }) }, tone = SheetTone.Primary)
-            }
-        }) else null,
+        actions = when {
+            naming -> ({
+                Box(Modifier.weight(1f)) { SheetButton("Back", onClick = { naming = false }, tone = SheetTone.Neutral) }
+                Box(Modifier.weight(1f)) {
+                    SheetButton("Create", onClick = { onCreate(name.trim().ifEmpty { "New playlist" }, privacy.takeIf { online && saveOnline }) }, tone = SheetTone.Primary)
+                }
+            })
+            picked.isNotEmpty() -> ({
+                Box(Modifier.weight(1f)) { SheetButton("Clear", onClick = { picked = emptyList() }, tone = SheetTone.Neutral) }
+                Box(Modifier.weight(1.4f)) {
+                    SheetButton(
+                        if (picked.size == 1) com.opentune.i18n.Tr.t("Add to 1 playlist") else com.opentune.i18n.Tr.f("Add to {0} playlists", picked.size),
+                        onClick = ::addPicked, tone = SheetTone.Primary,
+                    )
+                }
+            })
+            else -> null
+        },
     ) {
         AnimatedContent(naming, transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }, label = "picker") { isNaming ->
             if (isNaming) {
@@ -126,14 +162,20 @@ internal fun PlaylistPicker(
                 val theirs = account.found()
                 Column(Modifier.fillMaxWidth().heightIn(min = 120.dp).verticalScroll(rememberScrollState()).padding(bottom = 8.dp)) {
                     if (q.isEmpty()) NewTile(if (single != null) "With this song in it" else com.opentune.i18n.Tr.f("With these {0} songs in it", songs.size)) { naming = true }
+                    val choosing = picked.isNotEmpty()
                     if (mine.isNotEmpty()) {
                         SectionLabel(Icons.Rounded.PhoneAndroid, "Your playlists")
-                        mine.forEach { TargetRow(it, songs.size) }
+                        mine.forEach { t -> TargetRow(t, adding, t.key in picked, choosing, onTap = { if (choosing) toggle(t) else addOne(t) }, onPick = { toggle(t) }) }
                     }
                     if (theirs.isNotEmpty()) {
                         SectionLabel(Icons.AutoMirrored.Rounded.QueueMusic, "On YouTube Music")
-                        theirs.forEach { TargetRow(it, songs.size) }
+                        theirs.forEach { t -> TargetRow(t, adding, t.key in picked, choosing, onTap = { if (choosing) toggle(t) else addOne(t) }, onPick = { toggle(t) }) }
                     }
+                    if (mine.isNotEmpty() || theirs.isNotEmpty()) Text(
+                        if (choosing) "Tap more playlists to add to them all at once" else "Tap the circle to pick several playlists",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    )
                     if (q.isNotEmpty() && mine.isEmpty() && theirs.isEmpty()) {
                         Text(com.opentune.i18n.Tr.f("No playlist called \"{0}\"", q), style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 20.dp))
@@ -219,15 +261,20 @@ private fun NewTile(line: String, onClick: () -> Unit) {
     }
 }
 
-/** One playlist: its cover, name and size, and a + (a tick once everything is in it). */
+/**
+ * One playlist: its cover, name and size, and its round button, which picks it (a filled
+ * circle with a tick); a tick on its own marks one that has everything in it already.
+ */
 @Composable
-private fun TargetRow(t: PickTarget, adding: Int) {
+private fun TargetRow(t: PickTarget, adding: Int, picked: Boolean, choosing: Boolean, onTap: () -> Unit, onPick: () -> Unit) {
     val c = MaterialTheme.colorScheme
     val haptics = rememberHaptics()
     val all = t.already != null && t.already >= adding
     val some = t.already != null && t.already in 1 until adding
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(role = Role.Button) { haptics.press(); t.onPick() }
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .then(if (picked) Modifier.background(c.primary.copy(alpha = 0.12f)) else Modifier)
+            .clickable(role = Role.Button) { haptics.press(); onTap() }
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -244,13 +291,28 @@ private fun TargetRow(t: PickTarget, adding: Int) {
                 style = MaterialTheme.typography.bodyMedium, color = if (all) c.primary else c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
+        // The round button: picks the playlist. Its own target, 48dp, so it's easy to hit apart from the row.
         Box(
-            Modifier.size(34.dp).clip(CircleShape)
-                .then(if (all) Modifier.background(c.primary) else Modifier.border(1.5.dp, c.outline, CircleShape)),
+            Modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Checkbox, onClickLabel = com.opentune.i18n.Tr.f("Pick {0}", t.title)) { haptics.tick(); onPick() },
             contentAlignment = Alignment.Center,
         ) {
-            if (all) Icon(Icons.Rounded.Check, "In this playlist", tint = c.onPrimary, modifier = Modifier.size(20.dp))
-            else Icon(Icons.Rounded.Add, com.opentune.i18n.Tr.f("Add to {0}", t.title), tint = c.onSurface, modifier = Modifier.size(20.dp))
+            Box(
+                Modifier.size(30.dp).clip(CircleShape)
+                    .then(
+                        when {
+                            picked -> Modifier.background(c.primary)
+                            all && !choosing -> Modifier.background(c.primary.copy(alpha = 0.18f))
+                            else -> Modifier.border(1.5.dp, c.outline, CircleShape)
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    picked -> Icon(Icons.Rounded.Check, "Picked", tint = c.onPrimary, modifier = Modifier.size(18.dp))
+                    all && !choosing -> Icon(Icons.Rounded.Check, "In this playlist", tint = c.primary, modifier = Modifier.size(18.dp))
+                    !choosing -> Icon(Icons.Rounded.Add, null, tint = c.onSurface, modifier = Modifier.size(18.dp))
+                }
+            }
         }
     }
 }
@@ -290,17 +352,17 @@ internal const val FIELD_TINT = 0.08f
 private const val SEARCH_FROM = 6
 
 /** A playlist made here, to pick. */
-internal fun localTarget(p: LocalPlaylist, already: Int, onPick: () -> Unit) = PickTarget(
+internal fun localTarget(p: LocalPlaylist, already: Int, add: () -> Unit) = PickTarget(
     "local:${p.id}", p.name,
     if (p.songs.size == 1) com.opentune.i18n.Tr.t("1 song") else com.opentune.i18n.Tr.f("{0} songs", p.songs.size),
     already,
     { m -> PlaylistCover(p.name, p.songs.map { it.thumbnailUrl }, m, RectangleShape) },
-    onPick,
+    add,
 )
 
 /** One of the account's playlists on YouTube Music, to pick. */
-internal fun accountTarget(p: UserPlaylist, already: Int?, onPick: () -> Unit) = PickTarget(
+internal fun accountTarget(p: UserPlaylist, already: Int?, add: () -> Unit) = PickTarget(
     "yt:${p.playlistId}", p.title, p.subtitle.ifBlank { "YouTube Music" }, already,
     { m -> Artwork(p.thumbnailUrl, m, RectangleShape, placeholder = Icons.AutoMirrored.Rounded.QueueMusic) },
-    onPick,
+    add,
 )

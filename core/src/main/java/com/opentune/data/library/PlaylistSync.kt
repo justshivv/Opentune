@@ -111,15 +111,21 @@ object PlaylistSync {
      * Adds [song] straight to one of the account's own playlists, for one
      * with no copy here; [done] hears, on the main thread, whether it went.
      */
-    fun addToAccountPlaylist(playlistId: String, song: Song, done: (Boolean) -> Unit) {
+    fun addToAccountPlaylist(playlistId: String, song: Song, done: (Boolean) -> Unit) =
+        addAllToAccountPlaylist(playlistId, listOf(song), done)
+
+    /** [addToAccountPlaylist] for several songs at once, in one request. */
+    fun addAllToAccountPlaylist(playlistId: String, songs: List<Song>, done: (Boolean) -> Unit) {
+        val ids = songs.map { it.videoId }.filter { com.opentune.data.isYouTubeId(it) }.distinct()
+        if (ids.isEmpty()) { done(false); return }
         scope.launch {
             val ok = try {
-                Innertube.addToPlaylist(playlistId, listOf(song.videoId))
+                Innertube.addToPlaylist(playlistId, ids)
                 true
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "Couldn't add ${song.videoId} to $playlistId", e)
+                Log.w(TAG, "Couldn't add ${ids.size} songs to $playlistId", e)
                 false
             }
             withContext(Dispatchers.Main) { done(ok) }
