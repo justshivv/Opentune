@@ -557,6 +557,8 @@ data class InterfaceSettings(
     val lyricsAlign: LyricsAlign = LyricsAlign.LEFT,
     /** A soft glow around the line being sung, whatever the lyrics animation. */
     val lyricsGlow: Boolean = false,
+    /** While lyrics are on screen, the screen stays on instead of dimming and locking. */
+    val keepScreenOnLyrics: Boolean = false,
     /** High performance mode: ask for a fast refresh rate while the app is open. */
     val highRefreshRate: Boolean = true,
     /** The profile last chosen (Settings › Performance profile); the switches it set may have been changed since. */

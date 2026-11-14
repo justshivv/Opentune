@@ -73,6 +73,7 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.Flare
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.FormatAlignCenter
 import androidx.compose.material.icons.rounded.FormatSize
@@ -1494,6 +1495,9 @@ private fun settingsSections(
                 },
                 Entry("Glow on the sung line", "lyrics glow shine highlight") {
                     ToggleRow("Glow on the sung line", ui.lyricsGlow, { v -> AppSettings.updateUi { it.copy(lyricsGlow = v) } }, summary = "A soft halo around the line being sung, with any animation", icon = Icons.Rounded.Flare)
+                },
+                Entry("Keep the screen on for lyrics", "keep screen awake on wake lock sleep dim lyrics") {
+                    ToggleRow("Keep the screen on for lyrics", ui.keepScreenOnLyrics, { v -> AppSettings.updateUi { it.copy(keepScreenOnLyrics = v) } }, summary = "While lyrics are showing, the screen doesn't dim or lock. It goes back to normal when you leave them.", icon = Icons.Rounded.LightMode)
                 },
                 Entry("Blur unfocused lyrics", "spotlight") {
                     ToggleRow("Blur unfocused lyrics", ui.blurLyrics, { v -> AppSettings.updateUi { it.copy(blurLyrics = v) } }, summary = "Keeps the spotlight on the current line", icon = Icons.Rounded.BlurOn)

@@ -86,6 +86,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.keepScreenOn
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -150,7 +151,10 @@ fun LyricsView(
     val selection = remember(syncedLines) { androidx.compose.runtime.mutableStateListOf<Int>() }
     // The picked lines handed to the card sheet, frozen when Share was pressed.
     var sharingPicked by remember { mutableStateOf<Pair<com.opentune.data.model.Song, List<String>>?>(null) }
-    Box(modifier) {
+    // Settings › Keep the screen on for lyrics: held only while this view is on screen, and
+    // released with it, as the window's flag is shared with every other holder.
+    val keepAwake = AppSettings.ui.collectAsState().value.keepScreenOnLyrics
+    Box(if (keepAwake) modifier.keepScreenOn() else modifier) {
         when (state) {
             is LyricsState.Loading -> Column(Modifier.padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 SettingUpBadge()
