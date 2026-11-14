@@ -339,7 +339,11 @@ private fun Modifier.liquidTouch(touch: LiquidTouch, swell: Boolean, press: () -
         scaleX = 1f + minOf(LIQUID_SWELL, 8.dp.toPx() / size.width) * p
         scaleY = 1f + minOf(LIQUID_SWELL, 5.dp.toPx() / size.height) * p
         val at = touch.at
-        if (at.isSpecified) transformOrigin = TransformOrigin((at.x / size.width).coerceIn(0f, 1f), (at.y / size.height).coerceIn(0f, 1f))
+        // Anchored on the side away from the finger, so the glass grows
+        // toward the finger and its middle follows it. Anchored at the
+        // finger, the growth ran to the far side and the middle drifted
+        // against the drag.
+        if (at.isSpecified) transformOrigin = TransformOrigin(1f - (at.x / size.width).coerceIn(0f, 1f), 1f - (at.y / size.height).coerceIn(0f, 1f))
     }
 }
 
