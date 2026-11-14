@@ -96,7 +96,6 @@ import com.opentune.data.releases.NewReleases
 import com.opentune.data.settings.AppSettings
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.ErrorState
-import com.opentune.ui.components.GlassIconButton
 import com.opentune.ui.components.GlassPage
 import com.opentune.ui.components.Haptics
 import com.opentune.ui.components.ItemCard
@@ -135,8 +134,7 @@ fun ArtistScreen(
     val state by loader.state.collectAsState()
     when (val s = state) {
         is UiState.Error -> {
-            val listState = rememberLazyListState()
-            GlassPage(Modifier.fillMaxSize(), overlay = { CollapsingBar("", listState, onBack) }) {
+            GlassPage(Modifier.fillMaxSize(), overlay = { com.opentune.ui.library.TopNavBar("", false, onBack) }) {
                 Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorState(s.message, { loader.reload() }) }
             }
         }
@@ -149,14 +147,14 @@ fun ArtistScreen(
                 } ?: actions
             }
             ArtistPageView(
-            browseId = browseId,
-            page = page,
-            contentPadding = contentPadding,
-            actions = tracked,
-            onBack = onBack,
-            onItemClick = onItemClick,
-            onShowAll = onShowAll,
-        )
+                browseId = browseId,
+                page = page,
+                contentPadding = contentPadding,
+                actions = tracked,
+                onBack = onBack,
+                onItemClick = onItemClick,
+                onShowAll = onShowAll,
+            )
         }
     }
 }
@@ -194,17 +192,22 @@ internal fun ArtistPageView(
         )
         if (ready is coil3.request.SuccessResult) ArtistPhotos.upgrade(browseId, hero)
     }
+    // The playlist pages' top bar, solid once the hero has scrolled away.
+    val barSolid = androidx.compose.runtime.remember(listState) { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 } }.value
     ArtistTint(photo) {
         GlassPage(
             Modifier.fillMaxSize(),
             overlay = {
-                CollapsingBar(page?.name.orEmpty(), listState, onBack) {
-                    GlassIconButton(
-                        Icons.Rounded.Share,
-                        "Share",
-                        onClick = { ListShare.shareList(context, page?.name ?: "Artist", browseId) },
-                        size = 48.dp,
-                    )
+                com.opentune.ui.library.TopNavBar(page?.name.orEmpty(), barSolid, onBack) {
+                    // The back button's own build, with the share in it.
+                    Box(
+                        Modifier.size(48.dp)
+                            .then(if (barSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape))
+                            .clickable(onClickLabel = "Share") { ListShare.shareList(context, page?.name ?: "Artist", browseId) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Rounded.Share, "Share", tint = MaterialTheme.colorScheme.onSurface)
+                    }
                 }
             },
         ) {
