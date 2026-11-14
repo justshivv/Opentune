@@ -1,4 +1,5 @@
 import shaka from 'shaka-player/dist/shaka-player.compiled';
+import { useAddons } from '@/addons/client';
 import { getVideoElement, useVideo } from '@/state/video';
 import { trackLog } from '../trackLog';
 import type { YouTubeEngine } from './engine';
@@ -65,12 +66,19 @@ useVideo.subscribe((state, previous) => {
   if (state.surfaces > 0 !== previous.surfaces > 0) void refresh();
 });
 
+// A track whose audio may still move to JioSaavn or a FLAC add-on shows its cover until that's
+// settled: the picture would flash for a second and go when the audio leaves YouTube, and it
+// wouldn't match the other recording anyway. Asked again once the search is over.
+useAddons.subscribe((state, previous) => {
+  if (state.checkingVideoId !== previous.checkingVideoId) void refresh();
+});
+
 async function refresh(): Promise<void> {
   const run = ++generation;
   const wanted = source && useVideo.getState().surfaces > 0 ? source : null;
   const stream = wanted ? await wanted.engine.videoStream().catch(() => null) : null;
   if (run !== generation) return;
-  if (!stream) {
+  if (!stream || useAddons.getState().checkingVideoId === stream.videoId) {
     await unload();
     return;
   }
