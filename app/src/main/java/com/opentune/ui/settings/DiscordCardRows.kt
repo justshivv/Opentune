@@ -2,14 +2,11 @@ package com.opentune.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.DropdownMenu
@@ -29,7 +26,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import com.opentune.data.discord.DiscordRpc
 import com.opentune.ui.components.FIELD_TINT
-import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.components.SettingRow
 import com.opentune.ui.components.ToggleRow
 import com.opentune.ui.theme.Icon
@@ -37,47 +33,73 @@ import com.opentune.ui.theme.Text
 import kotlinx.coroutines.delay
 
 /**
- * How the Discord card reads, as the web player offers it: the activity it heads with, its
- * name, the status set while it shows, what member lists show, and its two buttons.
+ * How the Discord card reads, as the web player offers it, as rows on the Discord section of
+ * Settings: the activity it heads with ("Listening to", "Playing", "Watching", "Competing in"),
+ * its name, the status set while it shows, what member lists show, and its two buttons. Each
+ * change shows on the card at once. They can be set before an account is connected.
  */
+private fun discordSet(change: (DiscordRpc.Options) -> DiscordRpc.Options) = DiscordRpc.setOptions(change(DiscordRpc.options.value))
+
 @Composable
-fun DiscordCardSheet(onDismiss: () -> Unit) {
-    val options by DiscordRpc.options.collectAsState()
-    fun set(change: (DiscordRpc.Options) -> DiscordRpc.Options) = DiscordRpc.setOptions(change(DiscordRpc.options.value))
-    FloatingCard(
-        onDismiss = onDismiss,
-        title = "Discord card",
-        subtitle = "How what you play shows on your profile",
-        expandable = true,
-        startExpanded = true,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-    ) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
-            Choice("Activity", DiscordRpc.ActivityType.entries, options.activityType, { it.label }) { v -> set { it.copy(activityType = v) } }
-            TextSetting("Name", "OpenTune", options.activityName, 128) { v -> set { it.copy(activityName = v) } }
-            Choice("Status", DiscordRpc.OnlineStatus.entries, options.status, { it.label }) { v -> set { it.copy(status = v) } }
-            Choice("Member lists show", DiscordRpc.Lead.entries, options.lead, { it.label }) { v -> set { it.copy(lead = v) } }
-            ToggleRow("Listen button", options.button1Visible, { v -> set { it.copy(button1Visible = v) } }, summary = "Opens the song on YouTube Music")
-            if (options.button1Visible) TextSetting("Listen button text", "Listen on YouTube Music", options.button1Text, 32) { v -> set { it.copy(button1Text = v) } }
-            ToggleRow("OpenTune button", options.button2Visible, { v -> set { it.copy(button2Visible = v) } }, summary = "Opens OpenTune's page, or the web address you give as its text")
-            if (options.button2Visible) TextSetting("OpenTune button text", "Get OpenTune", options.button2Text, 32) { v -> set { it.copy(button2Text = v) } }
-            Text(
-                "Button text can use {song_name}, {artist_name} and {album_name}, up to 32 characters: Discord drops a card with a longer label. " +
-                    "A web address as the OpenTune button's text makes the button open it. This uses your Discord account's own sign-in, which Discord's terms don't allow.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            )
-        }
+private fun discordOptions(): DiscordRpc.Options = DiscordRpc.options.collectAsState().value
+
+@Composable
+fun DiscordActivityRow() {
+    val o = discordOptions()
+    Choice("Activity", DiscordRpc.ActivityType.entries, o.activityType, { it.label }, summary = "How the card is headed: ${o.activityType.label} ${o.activityName.ifBlank { "OpenTune" }}") { v ->
+        discordSet { it.copy(activityType = v) }
     }
+}
+
+@Composable
+fun DiscordNameRow() {
+    val o = discordOptions()
+    TextSetting("Name", "OpenTune", o.activityName, 128) { v -> discordSet { it.copy(activityName = v) } }
+}
+
+@Composable
+fun DiscordStatusRow() {
+    val o = discordOptions()
+    Choice("Status", DiscordRpc.OnlineStatus.entries, o.status, { it.label }, summary = "Your Discord status while the card shows") { v -> discordSet { it.copy(status = v) } }
+}
+
+@Composable
+fun DiscordLeadRow() {
+    val o = discordOptions()
+    Choice("Member lists show", DiscordRpc.Lead.entries, o.lead, { it.label }, summary = "The line under your name in server member lists") { v -> discordSet { it.copy(lead = v) } }
+}
+
+@Composable
+fun DiscordListenButtonRows() {
+    val o = discordOptions()
+    ToggleRow("Listen button", o.button1Visible, { v -> discordSet { it.copy(button1Visible = v) } }, summary = "Opens the song on YouTube Music")
+    if (o.button1Visible) TextSetting("Listen button text", "Listen on YouTube Music", o.button1Text, 32) { v -> discordSet { it.copy(button1Text = v) } }
+}
+
+@Composable
+fun DiscordOpenTuneButtonRows() {
+    val o = discordOptions()
+    ToggleRow("OpenTune button", o.button2Visible, { v -> discordSet { it.copy(button2Visible = v) } }, summary = "Opens OpenTune's page, or the web address you give as its text")
+    if (o.button2Visible) TextSetting("OpenTune button text", "Get OpenTune", o.button2Text, 32) { v -> discordSet { it.copy(button2Text = v) } }
+}
+
+@Composable
+fun DiscordCardNote() {
+    Text(
+        "Button text can use {song_name}, {artist_name} and {album_name}, up to 32 characters: Discord drops a card with a longer label. " +
+            "A web address as the OpenTune button's text makes the button open it. This uses your Discord account's own sign-in, which Discord's terms don't allow.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+    )
 }
 
 /** A row whose value opens a short menu of the choices. */
 @Composable
-private fun <T> Choice(title: String, choices: List<T>, selected: T, label: (T) -> String, onPick: (T) -> Unit) {
+private fun <T> Choice(title: String, choices: List<T>, selected: T, label: (T) -> String, summary: String? = null, onPick: (T) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        SettingRow(title, onClick = { open = true }, trailing = {
+        SettingRow(title, summary = summary, onClick = { open = true }, trailing = {
             androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(label(selected), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                 Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)

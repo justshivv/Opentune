@@ -472,7 +472,6 @@ private fun settingsSections(
     val done by Downloads.done.collectAsState(Downloads.doneNow())
     var downloadQualityDialog by remember { mutableStateOf(false) }
     var lyricsSourcesDialog by remember { mutableStateOf(false) }
-    var discordCardSheet by remember { mutableStateOf(false) }
     var bitPerfectSheet by remember { mutableStateOf(false) }
     var lastFmDialog by remember { mutableStateOf(false) }
     var serverDialog by remember { mutableStateOf(false) }
@@ -579,7 +578,6 @@ private fun settingsSections(
         )
     }
     if (lyricsSourcesDialog) LyricsSourcesDialog(onDismiss = { lyricsSourcesDialog = false })
-    if (discordCardSheet) DiscordCardSheet(onDismiss = { discordCardSheet = false })
     if (lastFmDialog) LastFmDialog(onDismiss = { lastFmDialog = false })
     if (serverDialog) ServerDialog(onDismiss = { serverDialog = false })
     if (listenBrainzDialog) ListenBrainzDialog(onDismiss = { listenBrainzDialog = false })
@@ -1745,17 +1743,14 @@ private fun settingsSections(
                         trailing = if (who != null) { { AppSwitch(discordOn, { v -> com.opentune.data.discord.DiscordRpc.setEnabled(v) }) } } else null,
                     )
                 },
-                // How the card reads, as the web player offers it; once an account is connected.
-                if (discord != null) Entry("How the card reads", "discord card activity name status playing watching buttons listen button text") {
-                    NavRow(
-                        "How the card reads",
-                        { discordCardSheet = true },
-                        summary = com.opentune.data.discord.DiscordRpc.options.collectAsState().value.let { o ->
-                            "${o.activityType.label} ${o.activityName.ifBlank { "OpenTune" }} · ${o.status.label}"
-                        },
-                        icon = Icons.Rounded.Tune,
-                    )
-                } else null,
+                // How the card reads, as the web player lays it out. Set any time; used once connected.
+                Entry("Activity", "discord activity listening to playing watching competing in card type") { DiscordActivityRow() },
+                Entry("Name", "discord activity name card title opentune") { DiscordNameRow() },
+                Entry("Status", "discord status online idle do not disturb dnd invisible") { DiscordStatusRow() },
+                Entry("Member lists show", "discord member list artist song name lead details") { DiscordLeadRow() },
+                Entry("Listen button", "discord listen button text youtube music link") { DiscordListenButtonRows() },
+                Entry("OpenTune button", "discord opentune button text link web address") { DiscordOpenTuneButtonRows() },
+                Entry("About the Discord card", "discord button variables song_name artist_name album_name terms") { DiscordCardNote() },
             ),
         ),
         Section(
