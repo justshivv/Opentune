@@ -2,16 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { browseQuery, useYouTubeReady } from '@/data/music/queries';
-import type { BrowsePage, Category, CategoryGroup } from '@/data/music/types';
+import type { Category, CategoryGroup } from '@/data/music/types';
 import { sizedArtwork } from '@/lib/artwork';
+import { leadCover } from './leadCover';
 import { browseHref } from './links';
-
-/** The first cover a mood or genre's own page leads with: its first playlist, or anything with art. */
-export function leadCover(page: BrowsePage | undefined): string | null {
-  if (!page) return null;
-  const items = [...page.grid, ...page.shelves.flatMap((s) => s.items)];
-  return (items.find((i) => i.kind === 'playlist' && i.thumbnail) ?? items.find((i) => i.thumbnail))?.thumbnail ?? null;
-}
 
 /**
  * One tile: YouTube's colour for the mood or genre, its name at the bottom left, and, once the

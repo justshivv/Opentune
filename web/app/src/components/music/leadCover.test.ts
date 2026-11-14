@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BrowsePage, MusicItem } from '@/data/music/types';
-import { leadCover } from './CategoryTiles';
+import { leadCover } from './leadCover';
 
 const item = (kind: MusicItem['kind'], thumbnail: string | null): MusicItem =>
   ({ kind, id: kind, title: kind, subtitle: '', artists: [], album: null, thumbnail, wide: false, durationSec: null, explicit: false }) as MusicItem;
