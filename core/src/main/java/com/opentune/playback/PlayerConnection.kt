@@ -557,6 +557,7 @@ class PlayerConnection(private val context: Context) {
 
     /** Stops playback and clears the queue entirely: nothing is left playing. */
     fun dismiss() {
+        QueueStore.clear()
         val controller = controller ?: return
         controller.stop()
         controller.clearMediaItems()

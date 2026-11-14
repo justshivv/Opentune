@@ -46,5 +46,10 @@ object QueueStore {
         }
     }
 
+    /** Forgets the saved queue: the next start opens with no player. */
+    fun clear() {
+        runCatching { file?.delete() }
+    }
+
     private const val MAX_SONGS = 200
 }
