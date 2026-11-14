@@ -548,8 +548,8 @@ data class InterfaceSettings(
     val dockLens: DockLens = DockLens.STRETCH,
     /**
      * On pages that are destinations in themselves — Liked, a playlist,
-     * an artist, Settings — the dock and Search slide away past the
-     * screen's edge and the mini player has the bottom to itself.
+     * an artist, Settings, History — the dock and Search slide away past
+     * the screen's edge and the mini player has the bottom to itself.
      */
     val dockSlidesAway: Boolean = false,
     /** How one page gives way to the next. */

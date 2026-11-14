@@ -437,7 +437,7 @@ fun AppRoot(vm: PlayerViewModel) {
     // With the Dock slides away setting on, pages that are destinations
     // in themselves lose the dock and Search to the mini player.
     val dockAway = chromeUi.dockSlidesAway && (route == "liked" || route == "playlist/{id}" || route == "collection/{id}" ||
-            route == "artist/{id}" || route == "artist-items/{id}?params={params}&title={title}" || route == "settings?page={page}")
+            route == "artist/{id}" || route == "artist-items/{id}?params={params}&title={title}" || route == "settings?page={page}" || route == "history")
     // The window's size class picks the chrome. A fold or unfold only changes
     // what's around the pages: the NavHost and the player keep their place in
     // the tree, so neither starts over (the activity handles the size change
