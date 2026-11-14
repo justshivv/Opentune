@@ -1802,7 +1802,7 @@ private fun settingsSections(
                         summary = "Show the current lyric on the player in every theme", icon = Icons.Rounded.Lyrics)
                 },
                 Entry("Comments button", "comments youtube button pill remove hide") {
-                    ToggleRow("Comments button", ui.commentsButton, { v -> AppSettings.updateUi { it.copy(commentsButton = v) } }, summary = "A button in the player that opens the song's comments from YouTube", icon = Icons.Rounded.ChatBubbleOutline)
+                    ToggleRow("Comments button", ui.commentsButton, { v -> AppSettings.updateUi { it.copy(commentsButton = v) } }, summary = "A button in the player's pill for the song's comments from YouTube. Off, they're still in the player's menu", icon = Icons.Rounded.ChatBubbleOutline)
                 },
                 Entry("Hide song status", "playing from") {
                     ToggleRow("Hide song status", ui.hideSongStatus, { v -> AppSettings.updateUi { it.copy(hideSongStatus = v) } }, summary = "Hides the \"Playing from\" line in the player", icon = Icons.Rounded.VisibilityOff)

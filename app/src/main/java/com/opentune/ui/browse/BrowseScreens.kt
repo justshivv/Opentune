@@ -14,6 +14,7 @@ import dev.chrisbanes.haze.hazeEffect
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -703,6 +704,51 @@ internal fun ListSearchField(query: String, onQuery: (String) -> Unit, onClear: 
     }
 }
 
+/** Whether a list is saved in the account's library on YouTube Music, and how to take it out. */
+internal class AccountSaved(val saved: Boolean, val ask: () -> Unit)
+
+/**
+ * A playlist someone else made, saved to the account's library on YouTube Music: shown
+ * saved, with a way to remove it, asked first since it goes from the library on every device.
+ * Not for the account's own playlists, which are deleted, not removed.
+ */
+@Composable
+internal fun rememberAccountSaved(c: com.opentune.data.Collection, own: Boolean): AccountSaved {
+    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
+    val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
+    var removed by remember(c.browseId) { mutableStateOf(false) }
+    var asking by remember { mutableStateOf(false) }
+    var working by remember { mutableStateOf(false) }
+    val listed = accountLists.any { it.browseId?.removePrefix("VL") == c.browseId.removePrefix("VL") }
+    // Playlists only: removing an album takes an id its page here doesn't carry.
+    val saved = signedIn && !own && !removed && listed && c.browseId.startsWith("VL")
+    if (asking) com.opentune.ui.components.FloatingDialog(
+        onDismissRequest = { if (!working) asking = false },
+        title = { Text("Remove from your library?") },
+        text = { Text(com.opentune.i18n.Tr.f("{0} comes out of your YouTube Music library on every device. You can save it again later.", c.title)) },
+        confirmButton = {
+            com.opentune.ui.components.SheetButton(if (working) "Removing…" else "Remove", loading = working, enabled = !working, onClick = {
+                working = true
+                scope.launch {
+                    val ok = com.opentune.data.library.PlaylistSync.removeFromAccountLibrary(c.browseId, c.browseId.removePrefix("VL"))
+                    working = false
+                    asking = false
+                    if (ok) {
+                        removed = true
+                        com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Removed {0} from your library", c.title), context)
+                    } else {
+                        com.opentune.data.Pills.error("Couldn't remove it. Check the connection and try again.", context)
+                    }
+                }
+            })
+        },
+        dismissButton = { com.opentune.ui.components.SheetButton("Cancel", onClick = { asking = false }, enabled = !working, closes = true) },
+    )
+    return AccountSaved(saved) { asking = true }
+}
+
 /** The page's own menu: the list's cover and name, then what can be done with the whole list. */
 @Composable
 private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, actions: SongActions, onRefresh: () -> Unit, onDismiss: () -> Unit) {
@@ -710,6 +756,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
     val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
     val saved = savedLists.any { it.browseId == c.browseId }
     val own = rememberOwnPlaylist(c)
+    val accountSaved = rememberAccountSaved(c, own != null)
     com.opentune.ui.components.FloatingCard(
         onDismiss = onDismiss,
         contentPadding = PaddingValues(0.dp),
@@ -747,6 +794,9 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
             com.opentune.ui.components.MenuRow(if (saved) Icons.Filled.BookmarkRemove else Icons.Filled.PushPin, if (saved) "Unpin" else "Pin") {
                 close()
                 com.opentune.data.library.LibraryStore.setSaved(com.opentune.data.library.SavedList(c.browseId, c.title, c.subtitle, c.thumbnailUrl), !saved)
+            }
+            if (accountSaved.saved) {
+                com.opentune.ui.components.MenuRow(Icons.Filled.BookmarkRemove, "Remove from your library") { close(); accountSaved.ask() }
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -953,13 +1003,20 @@ fun CollectionScreen(
                                         // Already in the account's library (made there, or saved there): nothing for a plus to add.
                                         val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
                                         val inAccount = own != null || accountLists.any { it.browseId?.removePrefix("VL") == c.browseId.removePrefix("VL") }
+                                        // Saved to the account's library on YouTube Music (made by someone else): the
+                                        // button shows it saved, and takes it out of the library, asked first.
+                                        val accountSaved = rememberAccountSaved(c, own != null)
                                         ListPlayRow(
                                             enabled = c.songs.isNotEmpty(),
-                                            saved = saved,
+                                            saved = saved || accountSaved.saved,
                                             onPlay = { actions.playAll(shown.ifEmpty { c.songs }, 0, false, c.title) },
                                             onShuffle = { actions.playAll(shown.ifEmpty { c.songs }, 0, true, c.title) },
                                             onSmartShuffle = { actions.smartShuffle(shown.ifEmpty { c.songs }, c.title) },
-                                            onSave = if (inAccount && !saved) null else ({ com.opentune.data.library.LibraryStore.setSaved(com.opentune.data.library.SavedList(c.browseId, c.title, c.subtitle, c.thumbnailUrl), !saved) }),
+                                            onSave = when {
+                                                accountSaved.saved && !saved -> accountSaved.ask
+                                                inAccount && !saved -> null
+                                                else -> ({ com.opentune.data.library.LibraryStore.setSaved(com.opentune.data.library.SavedList(c.browseId, c.title, c.subtitle, c.thumbnailUrl), !saved) })
+                                            },
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     },

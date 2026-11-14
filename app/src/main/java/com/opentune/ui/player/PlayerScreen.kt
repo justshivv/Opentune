@@ -1444,7 +1444,8 @@ fun PlayerLayout(
                 asPage = true,
                 top = { close ->
                     MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
-                    if (state.ui.commentsButton) MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }
+                    // Always here: the Comments button setting only takes it out of the button pill.
+                    MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }
                 },
                 tools = { close ->
                     MenuRow(Icons.Rounded.HighQuality, "Track details") { close(); showDetails = true }

@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -38,10 +40,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -301,10 +303,16 @@ fun FloatingCard(
                         }
                     }
                 }
+                // Pulled up to the whole page, the card runs under the status and navigation bars, edge
+                // to edge: the room kept for them outside it goes as it grows, and comes back inside
+                // it instead, so nothing of it sits under the clock. Kept outside, it left a hard band
+                // of the page above and below a card that was meant to be the page.
+                val barsTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                val barsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                val inside = if (fullscreen) 1f - edge else 0f
                 Column(
                     Modifier
-                        .statusBarsPadding()
-                        .navigationBarsPadding()
+                        .padding(top = barsTop * (1f - inside), bottom = barsBottom * (1f - inside))
                         .imePadding()
                         .padding(12.dp * edge)
                         .widthIn(max = if (fullscreen) maxWidth else 560.dp)
@@ -366,7 +374,7 @@ fun FloatingCard(
                         )
                         // Taps on the card stay on the card.
                         .pointerInput(Unit) { detectTapGestures { } }
-                        .padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 14.dp),
+                        .padding(start = 10.dp, end = 10.dp, top = 10.dp + barsTop * inside, bottom = 14.dp + barsBottom * inside),
                 ) {
                     // The handle and title pull the card down; content below keeps its own gestures.
                     Column(

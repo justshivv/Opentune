@@ -132,6 +132,28 @@ object PlaylistSync {
         }
     }
 
+    /**
+     * Takes a playlist or album someone else made out of the account's library on YouTube Music
+     * (on every device), and out of the library list kept here. [playlistId] is the id the page
+     * names for it (an album's is not its browse id). True if YouTube Music took it.
+     */
+    suspend fun removeFromAccountLibrary(browseId: String, playlistId: String): Boolean {
+        val ok = try {
+            Innertube.ratePlaylist(playlistId, saved = false)
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Couldn't remove $playlistId from the library", e)
+            false
+        }
+        if (ok) {
+            val key = browseId.removePrefix("VL")
+            LibraryCache.savePlaylists(LibraryCache.playlists.value.filterNot { it.browseId?.removePrefix("VL") == key }, LibraryCache.owner())
+        }
+        return ok
+    }
+
     private fun currentAccount(): String? = AccountStore.account.value?.email?.takeIf { it.isNotBlank() }
 
     /** Unlinks playlists made in another account than the one signed in, and drops their waiting changes. */
