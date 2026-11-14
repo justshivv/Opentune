@@ -1192,6 +1192,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     // resetting the count there would collapse the list back to one page.
     var shownCount by remember { androidx.compose.runtime.mutableIntStateOf(PAGE_SIZE) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val band = com.opentune.ui.components.rememberRubberBand()
     // The top bar turns solid once the hero's title zone has scrolled under it:
     // a derived flag, so it costs a recomposition only when it flips.
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -1277,11 +1278,12 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 // bottom inset (room for the dock); the hero carries its own top shade.
                 LazyColumn(
                     state = listState,
+                    overscrollEffect = band,
                     contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
                     modifier = Modifier.fillMaxSize().playlistSearchResults(search),
                 ) {
                     if (!storeReady) {
-                        item { LikedSkeleton() }
+                        item { LikedSkeleton(band) }
                         items(8) { com.opentune.ui.components.SongRowPlaceholder() }
                         return@LazyColumn
                     }
@@ -1291,6 +1293,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                             onPlay = { actions.playAll(shown, 0, false, "Liked Music") },
                             onShuffle = { actions.playAll(shown, 0, true, "Liked Music") },
                             onSmartShuffle = { actions.smartShuffle(shown, "Liked Music") },
+                            band = band,
                         )
                     }
                     if (!searching) item(key = "liked-sync") { LikedSyncPill(likedSync) }
@@ -1390,8 +1393,8 @@ private fun LikedMoreSheet(
  * with the title, the counts and the two buttons as bars over the fade.
  */
 @Composable
-private fun LikedSkeleton() {
-    com.opentune.ui.browse.ListHero(cover = { m -> com.opentune.ui.components.Placeholder(m, androidx.compose.ui.graphics.RectangleShape) }) {
+private fun LikedSkeleton(band: com.opentune.ui.components.RubberBandOverscroll? = null) {
+    com.opentune.ui.browse.ListHero(cover = { m -> com.opentune.ui.components.Placeholder(m, androidx.compose.ui.graphics.RectangleShape) }, band = band) {
         run {
             com.opentune.ui.components.Placeholder(Modifier.width(200.dp).height(26.dp))
             com.opentune.ui.components.Placeholder(Modifier.padding(top = 10.dp).width(140.dp).height(16.dp))
@@ -1420,6 +1423,7 @@ private const val HERO_FRACTION = 0.68f
 private fun LikedHero(
     latest: Song?, count: Int, totalSeconds: Long,
     onPlay: () -> Unit, onShuffle: () -> Unit, onSmartShuffle: () -> Unit,
+    band: com.opentune.ui.components.RubberBandOverscroll? = null,
 ) {
     // The newest song's art when Settings ask for it and there is one;
     // otherwise Liked Music's own heart cover, as on YouTube Music.
@@ -1431,6 +1435,7 @@ private fun LikedHero(
             else com.opentune.ui.components.LikedPlaylistCover(m, androidx.compose.ui.graphics.RectangleShape)
         },
         footPadding = 18.dp,
+        band = band,
     ) {
         run {
             Text(
@@ -1485,12 +1490,14 @@ private fun PlaylistHero(
     buttons: @Composable () -> Unit,
     tools: @Composable (Modifier) -> Unit,
     status: (@Composable () -> Unit)?,
+    band: com.opentune.ui.components.RubberBandOverscroll? = null,
 ) {
     com.opentune.ui.browse.ListHero(
         cover = { m ->
             if (coverUrl != null) Artwork(coverUrl.artworkAt(com.opentune.data.model.PLAYER_ART_PX), m, shape = androidx.compose.ui.graphics.RectangleShape)
             else com.opentune.ui.components.PlaylistCover(name, songs.map { it.thumbnailUrl }, m, androidx.compose.ui.graphics.RectangleShape, named = false)
         },
+        band = band,
     ) {
         run {
             Text(name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -1546,6 +1553,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val band = com.opentune.ui.components.rememberRubberBand()
     LaunchedEffect(searching, query) {
         if (searching) listState.scrollToItem(0)
     }
@@ -1718,7 +1726,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                 com.opentune.ui.browse.ListPageWash()
                 var shownCount by remember { androidx.compose.runtime.mutableIntStateOf(PAGE_SIZE) }
                 val paged = shown.take(shownCount)
-                LazyColumn(state = listState, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                LazyColumn(state = listState, overscrollEffect = band, contentPadding = if (searching) PaddingValues(bottom = 16.dp) else PaddingValues(bottom = contentPadding.calculateBottomPadding()),
                     modifier = Modifier.fillMaxSize().playlistSearchResults(search)) {
                     if (!searching) item(key = "header") {
                         PlaylistHero(
@@ -1741,6 +1749,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                             },
                             tools = tools,
                             status = if (playlist.spotifyId == null) status else null,
+                            band = band,
                         )
                     }
                     if (songs.isEmpty()) {
