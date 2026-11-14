@@ -1,5 +1,6 @@
-import { Check, Link2, ListEnd, ListStart, MoreHorizontal, Plus, Shuffle } from 'lucide-react';
-import { useState } from 'react';
+import { Check, ChevronLeft, Link2, ListEnd, ListStart, MoreHorizontal, Plus, Shuffle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Menu, MenuItem, MenuSeparator } from '@/components/Menu';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { toast } from '@/components/Toast';
@@ -90,11 +91,14 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, 
   const signedIn = useSignedIn();
   const setSaved = useSetListSaved();
   const library = signedIn ? info.library : null;
+  const title = useRef<HTMLHeadingElement>(null);
   return (
-    // Artwork beside the headings, description and actions; stacked and centred below 768px.
+    <>
+    <DetailBar info={info} title={title} onPlay={onPlay} canPlay={canPlay} />
+    {/* Artwork beside the headings, description and actions; stacked and centred below 768px. */}
     <div className="ot-detail relative isolate mb-10 px-(--body-gutter)">
       {info.thumbnail && <CoverWash src={info.thumbnail} />}
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-[34px] pt-11 [grid-template-areas:'artwork_headings'_'artwork_description'_'artwork_actions'] max-md:grid-cols-[1fr] max-md:grid-rows-[auto] max-md:justify-items-center max-md:pt-4 max-md:text-center max-md:[grid-template-areas:'artwork'_'headings'_'actions'_'description']">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-[34px] pt-14 [grid-template-areas:'artwork_headings'_'artwork_description'_'artwork_actions'] max-md:grid-cols-[1fr] max-md:grid-rows-[auto] max-md:justify-items-center max-md:pt-12 max-md:text-center max-md:[grid-template-areas:'artwork'_'headings'_'actions'_'description']">
         <div className="ot-detail-cover relative w-[270px] self-start rounded-artwork-lg shadow-[0_24px_60px_-12px_var(--radiosityShadowColor)] [grid-area:artwork] max-lg:w-[220px] max-md:w-[min(270px,70vw)]">
           {info.thumbnail && (
             // A blurred copy behind the artwork: Apple's radiosity glow.
@@ -113,7 +117,7 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, 
           )}
         </div>
         <div className="ot-detail-text flex flex-col pt-[37px] [grid-area:headings] max-md:items-center max-md:pt-5">
-          <h1 className="flex items-center type-large-title-emphasized leading-[30px] max-md:justify-center">
+          <h1 ref={title} className="flex items-center type-large-title-emphasized leading-[30px] max-md:justify-center">
             {info.title}
             {info.explicit && <ExplicitBadge size={16} />}
           </h1>
@@ -174,6 +178,59 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, 
           {extra}
         </div>
       </div>
+    </div>
+    </>
+  );
+}
+
+/**
+ * The bar along the top of an album or playlist page, as in the phone app: Back at its left from
+ * the start, and once the page's title has scrolled up under it, a frosted strip of the page's
+ * colour with the cover, the title and Play, so the list being looked at stays named.
+ */
+function DetailBar({ info, title, onPlay, canPlay }: { info: HeaderInfo; title: React.RefObject<HTMLHeadingElement | null>; onPlay: () => void; canPlay: boolean }) {
+  const navigate = useNavigate();
+  const bar = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const page = document.getElementById('scrollable-page');
+    if (!page) return;
+    // This bar has its own glass; the page's top-edge blur would only smear it.
+    page.dataset.ownBar = '';
+    let frame = 0;
+    const mark = () => {
+      frame = 0;
+      const heading = title.current?.getBoundingClientRect();
+      const strip = bar.current?.getBoundingClientRect();
+      if (heading && strip) setStuck(heading.bottom <= strip.bottom);
+    };
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(mark); };
+    mark();
+    page.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      page.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(frame);
+      delete page.dataset.ownBar;
+    };
+  }, [title]);
+  // Back where the visitor came from; a page opened straight from a link goes Home instead.
+  const back = () => ((window.history.state as { idx?: number } | null)?.idx ? navigate(-1) : navigate('/home'));
+  return (
+    <div ref={bar} className="ot-detail-bar" data-stuck={stuck || undefined}>
+      <button className="ot-detail-back" aria-label="Back" title="Back" onClick={back}>
+        <ChevronLeft size={22} strokeWidth={2.4} />
+      </button>
+      <div className="ot-detail-bar-title" aria-hidden={!stuck}>
+        {info.thumbnail && (
+          <span className="size-8 shrink-0">
+            <Artwork src={info.thumbnail} displayWidth={32} radius="6px" />
+          </span>
+        )}
+        <span className="min-w-0 truncate type-title-3-emphasized">{info.title}</span>
+      </div>
+      <button className="ot-detail-bar-play" aria-label={`Play ${info.title}`} tabIndex={stuck ? 0 : -1} aria-hidden={!stuck} onClick={onPlay} disabled={!canPlay}>
+        <PlayIcon size={15} />
+      </button>
     </div>
   );
 }

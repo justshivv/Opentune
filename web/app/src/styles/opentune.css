@@ -334,6 +334,12 @@
   .ot-side[data-folded='true'] .ot-side-header { height: 1px; margin: 12px 4px; padding: 0; color: transparent; background: var(--labelDivider); transition: height .38s var(--ot-ease-settle), margin .38s var(--ot-ease-settle), padding .38s var(--ot-ease-settle), color .1s ease, background-color .2s ease .15s; }
   .ot-side[data-folded='true'] :is(.ot-side-extra, .ot-side-full) { max-height: 0; opacity: 0; transition: max-height .38s var(--ot-ease-settle), opacity .12s ease; }
   .ot-side[data-folded='true'] .ot-side-compact { max-height: 48px; opacity: 1; }
+  /* Folded, the extension icon, the account photo and Settings share one centre line down the rail:
+     the Android link next to Settings takes no room, so Settings no longer sits off to the right. */
+  .ot-side-android { max-width: 240px; transition: opacity .22s ease .14s, visibility 0s linear 0s, max-width .38s var(--ot-ease-settle); }
+  .ot-side[data-folded='true'] .ot-side-android { max-width: 0; padding: 0; }
+  .ot-side[data-folded='true'] .ot-side-foot { justify-content: center; }
+  .ot-side[data-folded='true'] .ot-side-compact { align-items: center; }
   .ot-side[data-folded='true'] .ot-side-badge { position: absolute; top: 5px; right: 9px; width: 8px; height: 8px; padding: 0; border-radius: 50%; font-size: 0; }
 }
 :root[data-motion='false'] { transition: none !important; }
@@ -355,6 +361,28 @@
 .ot-wash[data-loaded] { opacity: .75; }
 :root[data-appearance='light'] .ot-wash[data-loaded] { opacity: .5; }
 .ot-wash img { position: absolute; left: -20%; top: -50%; width: 140%; max-width: none; height: 200%; object-fit: cover; filter: blur(72px) saturate(1.8); }
+/* The page's own colour laid over the wash, so a pale patch of the cover (a white corner, a mint
+   gradient) can't turn into a bright cloud behind the title. The labels are chosen against that
+   colour, so they stay readable on it. A dark tint also dims the wash a little, and a soft shadow
+   keeps light text off any patch that is still bright. */
+.ot-wash::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--page-tint, var(--pageBG)) 42%, transparent); }
+[data-tint='dark'] .ot-wash img, :root[data-appearance='dark'] #scrollable-page:not([data-tint]) .ot-wash img { filter: blur(72px) saturate(1.6) brightness(.78); }
+[data-tint='dark'] .ot-detail-text { text-shadow: 0 1px 18px rgb(0 0 0 / .3); }
+
+/* Album and playlist pages: Back at the top left, and a frosted strip with the cover, title and
+   Play once the title has scrolled under it (DetailHeader's DetailBar). */
+.ot-detail-bar { position: sticky; top: 0; z-index: calc(var(--z-default) + 5); display: flex; align-items: center; gap: 12px; height: 56px; margin-bottom: -56px; padding-inline: var(--body-gutter); }
+.ot-detail-bar::before { content: ''; position: absolute; inset: 0; z-index: -1; opacity: 0; background: color-mix(in srgb, var(--page-tint, var(--pageBG)) 80%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); box-shadow: inset 0 -.5px 0 var(--labelDivider); transition: opacity .25s ease; }
+.ot-detail-bar[data-stuck]::before { opacity: 1; }
+.ot-detail-back { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 999px; color: var(--systemPrimary); background: var(--systemQuinary); border: .75px solid var(--systemQuaternary); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); transition: background-color .2s ease, scale .2s var(--ot-ease-emph); }
+.ot-detail-back:hover { background: var(--systemQuaternary); }
+.ot-detail-back:active { scale: .92; }
+.ot-detail-bar-title { display: flex; min-width: 0; flex: 1; align-items: center; gap: 10px; }
+.ot-detail-bar-play { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px; color: var(--button-pill-color, var(--systemPrimary)); background: var(--button-pill-background-color, var(--keyColor)); }
+.ot-detail-bar-play:disabled { opacity: .4; }
+.ot-detail-bar-title, .ot-detail-bar-play { opacity: 0; translate: 0 8px; pointer-events: none; transition: opacity .22s ease, translate .4s var(--ot-ease-emph); }
+.ot-detail-bar[data-stuck] .ot-detail-bar-title, .ot-detail-bar[data-stuck] .ot-detail-bar-play { opacity: 1; translate: 0 0; pointer-events: auto; }
+#scrollable-page[data-own-bar] ~ .ot-scroll-edge { display: none; }
 
 /* Cards: the cover lifts and zooms a little in its frame, a shade rises from the bottom and the play
    disc comes up with it. Translate, scale and opacity only, so a full shelf stays on the compositor. */
@@ -395,6 +423,7 @@
 
 @media (prefers-reduced-transparency: reduce) {
   .ot-wash, .ot-scroll-edge { display: none; }
+  .ot-detail-bar::before { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--page-tint, var(--pageBG)); }
   .ot-arrow { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--opaqueShelfBG); }
 }
 
