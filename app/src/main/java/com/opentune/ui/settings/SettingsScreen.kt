@@ -1213,7 +1213,7 @@ private fun settingsSections(
                     NavRow("Dock lens", { dockLensDialog = true }, summary = ui.dockLens.summary, icon = Icons.Rounded.Lens, value = ui.dockLens.label)
                 },
                 Entry("Dock slides away", "dock slides away hide navigation bar bottom pages liked playlist artist settings mini player") {
-                    ToggleRow("Dock slides away", ui.dockSlidesAway, { v -> AppSettings.updateUi { it.copy(dockSlidesAway = v) } }, summary = "On Liked, playlists, artist pages and Settings, the dock and Search slide away and the mini player has the bottom to itself", icon = Icons.Rounded.Dock)
+                    ToggleRow("Dock slides away", ui.dockSlidesAway, { v -> AppSettings.updateUi { it.copy(dockSlidesAway = v) } }, summary = "On Liked, playlists, artist pages, Settings and History, the dock and Search slide away and the mini player has the bottom to itself", icon = Icons.Rounded.Dock)
                 },
                 Entry("Opening animation", "splash start launch intro logo reveal dive") {
                     ToggleRow(
@@ -1992,7 +1992,7 @@ private fun ListenAsSheet(onDismiss: () -> Unit) {
     val profiles by androidx.compose.runtime.produceState<List<com.opentune.data.model.AccountChannel>?>(null) {
         value = withContext(Dispatchers.IO) { AccountStore.profiles() }
     }
-    com.opentune.ui.components.FloatingCard(onDismiss = onDismiss, title = "Listen as") {
+    com.opentune.ui.components.FloatingCard(onDismiss = onDismiss, title = "Listen as", expandable = true, fullFraction = 1f) {
         Column(Modifier.padding(bottom = 12.dp)) {
             val list = profiles
             when {

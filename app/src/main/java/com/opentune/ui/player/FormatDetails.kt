@@ -107,7 +107,8 @@ internal fun FormatDetailsDialog(song: Song?, format: AudioFormatInfo?, onDismis
     FloatingCard(
         onDismiss = onDismiss,
         expandable = true,
-        startExpanded = true,
+        startExpanded = false,
+        fullFraction = 1f,
         header = {
             Row(Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(

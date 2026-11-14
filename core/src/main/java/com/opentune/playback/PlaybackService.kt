@@ -266,7 +266,7 @@ class PlaybackService : MediaLibraryService() {
                 setEnableDecoderFallback(true)
                 setMediaCodecSelector { mime, secure, tunneling ->
                     val selector = if (mime == "audio/flac") androidx.media3.exoplayer.mediacodec.MediaCodecSelector.PREFER_SOFTWARE
-                        else androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT
+                    else androidx.media3.exoplayer.mediacodec.MediaCodecSelector.DEFAULT
                     selector.getDecoderInfos(mime, secure, tunneling).filterNot {
                         mime == "audio/flac" && LosslessAudioPolicy.unsafeFlacDecoder(it.name)
                     }
@@ -299,12 +299,12 @@ class PlaybackService : MediaLibraryService() {
                 // it quietly plays at normal speed. The effects still run on float before that.
                 floatWanted = { source ->
                     allowFloat && !stretching() && (
-                        AppSettings.playback.value.floatOutput ||
-                            ((BitPerfectUsb.wanted || com.opentune.playback.nativeout.NativeOutputProvider.mode.let {
-                                it == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT || it == com.opentune.data.settings.BitPerfectOutput.BUILT_IN ||
-                                    it == com.opentune.data.settings.BitPerfectOutput.HEADPHONE_JACK
-                            }) && source != C.ENCODING_PCM_16BIT && source != C.ENCODING_PCM_8BIT)
-                        )
+                            AppSettings.playback.value.floatOutput ||
+                                    ((BitPerfectUsb.wanted || com.opentune.playback.nativeout.NativeOutputProvider.mode.let {
+                                        it == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT || it == com.opentune.data.settings.BitPerfectOutput.BUILT_IN ||
+                                                it == com.opentune.data.settings.BitPerfectOutput.HEADPHONE_JACK
+                                    }) && source != C.ENCODING_PCM_16BIT && source != C.ENCODING_PCM_8BIT)
+                            )
                 },
             )
         }
@@ -675,7 +675,15 @@ class PlaybackService : MediaLibraryService() {
         var last: QueueStore.Saved? = null
         while (true) {
             delay(QUEUE_SAVE_MS)
-            if (player.mediaItemCount == 0) continue
+            if (player.mediaItemCount == 0) {
+                // The player was emptied — dismissed, or the queue cleared:
+                // forget the saved queue, or the next start brings it back.
+                if (last != null) {
+                    last = null
+                    withContext(Dispatchers.IO) { QueueStore.clear() }
+                }
+                continue
+            }
             val items = (0 until player.mediaItemCount).map { player.getMediaItemAt(it) }
             val tiers = items.map { it.queueTier }
             val saved = QueueStore.Saved(
@@ -1461,9 +1469,9 @@ class PlaybackService : MediaLibraryService() {
             val startup = startupToken(uri)?.let { startupSelections[it] }
             if (startup != null && startup.selected == null) {
                 if (kotlinx.coroutines.withTimeoutOrNull(30_000) {
-                    while (startup.selected == null) delay(100)
-                    true
-                } != true) return@launch
+                        while (startup.selected == null) delay(100)
+                        true
+                    } != true) return@launch
             }
             if (alreadyExternal() && !force) return@launch
             val duration = player.duration.takeIf { it > 0 } ?: item.toSong().durationMillis()
@@ -1855,7 +1863,7 @@ class PlaybackService : MediaLibraryService() {
                     invalid = { audition.playerError != null || audition.playbackState == Player.STATE_ENDED || main.currentMediaItem?.mediaId != item.mediaId },
                     ready = {
                         val covered = audition.bufferedPosition >= main.currentPosition + AUDITION_AHEAD_MS ||
-                            (audition.duration > 0 && audition.bufferedPosition >= audition.duration - 500)
+                                (audition.duration > 0 && audition.bufferedPosition >= audition.duration - 500)
                         audition.playbackState == Player.STATE_READY && covered
                     },
                 )
@@ -1926,7 +1934,7 @@ class PlaybackService : MediaLibraryService() {
                 },
                 stillCurrent = {
                     !superseded() && player.currentMediaItemIndex == index && player.currentMediaItem?.mediaId == id &&
-                        player.currentMediaItem?.localConfiguration?.uri == item.localConfiguration?.uri && crossfade?.blending != true
+                            player.currentMediaItem?.localConfiguration?.uri == item.localConfiguration?.uri && crossfade?.blending != true
                 },
                 prebuffer = { prebuffer(player, next, superseded) },
                 replace = { replaceUpgrade(player, index, id, next) },
@@ -2042,7 +2050,7 @@ class PlaybackService : MediaLibraryService() {
                     invalid = { bridge.playerError != null || bridge.playbackState == Player.STATE_ENDED || player.currentMediaItem?.mediaId != id },
                     ready = {
                         val covered = bridge.bufferedPosition >= player.currentPosition + AUDITION_AHEAD_MS ||
-                            (bridge.duration > 0 && bridge.bufferedPosition >= bridge.duration - 500)
+                                (bridge.duration > 0 && bridge.bufferedPosition >= bridge.duration - 500)
                         bridge.playbackState == Player.STATE_READY && covered
                     },
                 )
@@ -2237,7 +2245,7 @@ class PlaybackService : MediaLibraryService() {
         val current = player.currentMediaItemIndex
         val previous = timeline.getPreviousWindowIndex(current, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
         val indices = player.upcomingPlayOrder().drop(1).take(WARM_AHEAD) +
-            listOfNotNull(previous.takeIf { it != C.INDEX_UNSET })
+                listOfNotNull(previous.takeIf { it != C.INDEX_UNSET })
         val now = SystemClock.elapsedRealtime()
         val ids = indices.map { player.getMediaItemAt(it).mediaId }
             .filter { isYouTubeId(it) && now - (warmedAt[it] ?: 0L) > WARM_TTL_MS }
@@ -2522,7 +2530,7 @@ class PlaybackService : MediaLibraryService() {
             }.drop(1)
             val queuedAtStart = queue.mapTo(HashSet()) { it.videoId }
             fun usable(song: Song): Boolean = song.videoId !in queuedAtStart &&
-                !LibraryStore.isDisliked(song.videoId) && !LibraryStore.hidden.value.hides(song.videoId, song.artist)
+                    !LibraryStore.isDisliked(song.videoId) && !LibraryStore.hidden.value.hides(song.videoId, song.artist)
             fun ask() = (listOf(seedItem.toSong()) + others).mapIndexed { index, song ->
                 async {
                     var answer = emptyList<Song>()
@@ -2600,7 +2608,7 @@ class PlaybackService : MediaLibraryService() {
                 com.opentune.data.reco.SongIdentity.distinct(
                     Autoplay.fromHistory(History.records.value, queuedSongs) { song ->
                         song.videoId in queued || !isYouTubeId(song.videoId) || LibraryStore.isDisliked(song.videoId) ||
-                            LibraryStore.hidden.value.hides(song.videoId, song.artist)
+                                LibraryStore.hidden.value.hides(song.videoId, song.artist)
                     },
                     queuedSongs,
                 )

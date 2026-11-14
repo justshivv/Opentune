@@ -33,8 +33,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.opentune.R
-import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.components.SheetButton
+import com.opentune.ui.components.SheetTone
 
 internal enum class AppIcon(val title: String, val resource: Int) {
     // The names are the launcher aliases in the manifest: kept as they are so a choice made
@@ -71,9 +72,16 @@ internal fun AppIconDialog(onDismiss: () -> Unit) {
     val resources = androidx.compose.ui.platform.LocalResources.current
     var selected by remember { mutableStateOf(AppIcon.selected(context)) }
     var error by remember { mutableStateOf<String?>(null) }
-    FloatingDialog(onDismissRequest = onDismiss, title = { Text("App icon") }, text = {
+    FloatingCard(
+        onDismiss = onDismiss,
+        title = "App icon",
+        expandable = true,
+        fullFraction = 1f,
+        fitContent = true,
+        actions = { SheetButton("Done", onClick = onDismiss, modifier = Modifier.weight(1f), tone = SheetTone.Primary, closes = true) },
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Your launcher controls the icon shape. Changes may take a moment to appear.", style = MaterialTheme.typography.bodyMedium)
+            Text("Your launcher controls the icon shape. Changes may take a moment to appear.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // Three to a row, each as the launcher would show it, the chosen one ringed and ticked.
             AppIcon.entries.chunked(3).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -92,7 +100,7 @@ internal fun AppIconDialog(onDismiss: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Box(Modifier.size(84.dp).border(2.5.dp, ring, RoundedCornerShape(26.dp)).padding(6.dp), contentAlignment = Alignment.Center) {
-                                Image(bitmap, icon.title, Modifier.fillMaxSize().graphicsLayer { scaleX = scale; scaleY = scale })
+                                Image(bitmap, icon.title, Modifier.fillMaxSize().then(if (chosen) Modifier.clip(RoundedCornerShape(20.dp)) else Modifier).graphicsLayer { scaleX = scale; scaleY = scale })
                                 if (chosen) Box(
                                     Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 6.dp).size(24.dp).clip(CircleShape)
                                         .background(MaterialTheme.colorScheme.primary),
@@ -112,5 +120,5 @@ internal fun AppIconDialog(onDismiss: () -> Unit) {
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
-    }, confirmButton = { SheetButton("Done", onClick = onDismiss, closes = true) })
+    }
 }

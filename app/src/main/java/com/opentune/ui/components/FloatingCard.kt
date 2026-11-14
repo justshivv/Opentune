@@ -223,7 +223,9 @@ fun FloatingCard(
                 // Start at full height when asked, so the whole menu shows at once; otherwise half.
                 val halfPx = if (startExpanded) fullPx else minOf(with(density) { (maxCard * openFraction).toPx() }, fullPx)
                 val range = (fullPx - halfPx).coerceAtLeast(0f)
-                val fullscreen = expandable && fullFraction >= 1f && !fitContent
+                // Full-screen treatment only for a card that can actually reach the full
+                // height: one capped by its content keeps its card shape at its top.
+                val fullscreen = expandable && fullFraction >= 1f && fullPx >= with(density) { maxCard.toPx() } - 1f
                 val expandedFraction = if (range > 0f) (extra / range).coerceIn(0f, 1f) else 1f
                 val edge = if (fullscreen) 1f - expandedFraction else 1f
                 val shape = RoundedCornerShape(32.dp * edge)
@@ -364,12 +366,12 @@ fun FloatingCard(
                                         ),
                                     )
                                     .background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.07f else 0.18f), 0.35f to Color.White.copy(alpha = 0f)))
-                                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.22f else 0.6f), Color.White.copy(alpha = 0.04f))), shape)
+                                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = (if (dark) 0.22f else 0.6f) * edge), Color.White.copy(alpha = 0.04f * edge))), shape)
                             } else {
                                 Modifier
                                     // Solid, so its shadow never shows through.
                                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape)
+                                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f * edge), shape)
                             },
                         )
                         // Taps on the card stay on the card.

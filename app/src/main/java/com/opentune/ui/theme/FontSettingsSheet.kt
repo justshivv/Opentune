@@ -92,7 +92,6 @@ fun FontSettingsSheet(onDismiss: () -> Unit) {
         expandable = true,
         fitContent = false,
         fullFraction = 1f,
-        openFraction = com.opentune.ui.components.OPEN_FRACTION,
     ) {
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 4.dp).padding(bottom = 12.dp)) {
             // What it will look like, in the font and weight chosen now.

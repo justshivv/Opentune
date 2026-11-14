@@ -59,8 +59,9 @@ import com.opentune.data.NerdStats
 import com.opentune.data.settings.AppSettings
 import com.opentune.playback.AudioFormatInfo
 import com.opentune.playback.BitPerfectUsb
-import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.components.SheetButton
+import com.opentune.ui.components.SheetTone
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
@@ -192,23 +193,25 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.
         ),
     )
 
-    FloatingDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Audio Pipeline") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(
-                    "Live signal path, decoder to output",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 14.dp),
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                Timeline(stages)
-            }
-        },
-        confirmButton = { SheetButton("Done", onClick = onDismiss, closes = true) },
-    )
+    FloatingCard(
+        onDismiss = onDismiss,
+        title = "Audio Pipeline",
+        expandable = true,
+        fullFraction = 1f,
+        fitContent = false,
+        actions = { SheetButton("Done", onClick = onDismiss, modifier = Modifier.weight(1f), tone = SheetTone.Primary, closes = true) },
+    ) {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            Text(
+                "Live signal path, decoder to output",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 14.dp),
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Timeline(stages)
+        }
+    }
 }
 
 /** One node on the pipeline: an icon, its name, and what the player says about it. */

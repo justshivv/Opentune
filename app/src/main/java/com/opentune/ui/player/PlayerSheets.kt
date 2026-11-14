@@ -53,6 +53,9 @@ fun RemixSheet(onDismiss: () -> Unit) {
         icon = Icons.Rounded.GraphicEq,
         subtitle = preset?.label ?: "Custom",
         contentPadding = PaddingValues(0.dp),
+        expandable = true,
+        fullFraction = 1f,
+        fitContent = false,
         actions = {
             SheetButton("Reset", onClick = { AppSettings.updateSound { RemixPreset.NORMAL.sound } }, modifier = Modifier.weight(1f), enabled = !sound.isDefault)
             SheetButton("Done", onClick = onDismiss, modifier = Modifier.weight(1f), tone = SheetTone.Primary, closes = true)
