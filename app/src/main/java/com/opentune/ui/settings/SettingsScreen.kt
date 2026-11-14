@@ -267,7 +267,7 @@ fun SettingsScreen(
             val forward = targetState != null
             val enter = if (motion.reduceAnimation) androidx.compose.animation.EnterTransition.None else
                 androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
-                    androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { if (forward) it / 8 else -it / 8 }
+                        androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260)) { if (forward) it / 8 else -it / 8 }
             val exit = if (motion.reduceAnimation) androidx.compose.animation.ExitTransition.None else
                 androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160))
             (enter togetherWith exit).using(null)
@@ -1257,6 +1257,9 @@ private fun settingsSections(
                 Entry("Full-screen playlist covers", "playlist album cover art edge full screen header") {
                     ToggleRow("Full-screen playlist covers", ui.fullScreenListCover, { v -> AppSettings.updateUi { it.copy(fullScreenListCover = v) } }, summary = "Playlists and albums open with their cover across the top of the page, edge to edge", icon = Icons.Rounded.Fullscreen)
                 },
+                Entry("Liked Music cover", "liked music cover heart newest latest song artwork") {
+                    ToggleRow("Liked Music cover", ui.likedCoverFromLatest, { v -> AppSettings.updateUi { it.copy(likedCoverFromLatest = v) } }, summary = "The newest song you liked becomes the cover, instead of the heart cover", icon = Icons.Rounded.Favorite)
+                },
                 Entry("Full-screen cover art", "artwork edge") {
                     ToggleRow("Full-screen cover art", ui.fullScreenCover, { v -> AppSettings.updateUi { it.copy(fullScreenCover = v) } }, summary = "Runs the cover to the edges of the player instead of a square sleeve", icon = Icons.Rounded.Fullscreen)
                 },
@@ -1925,7 +1928,7 @@ private fun BitPerfectSheet(mode: com.opentune.data.settings.BitPerfectOutput, o
     val direct by com.opentune.playback.nativeout.UsbDirect.status.collectAsState()
     val needsUsb = { o: com.opentune.data.settings.BitPerfectOutput ->
         o == com.opentune.data.settings.BitPerfectOutput.USB_DIRECT &&
-            com.opentune.playback.nativeout.UsbDirect.status.value is com.opentune.playback.nativeout.UsbDirect.Status.NeedsPermission
+                com.opentune.playback.nativeout.UsbDirect.status.value is com.opentune.playback.nativeout.UsbDirect.Status.NeedsPermission
     }
     val available = { o: com.opentune.data.settings.BitPerfectOutput ->
         o != com.opentune.data.settings.BitPerfectOutput.USB_ANDROID || BitPerfectUsb.supported
@@ -1936,7 +1939,7 @@ private fun BitPerfectSheet(mode: com.opentune.data.settings.BitPerfectOutput, o
         selected = mode,
         label = { o ->
             com.opentune.i18n.Tr.t(o.label) + " · " +
-                com.opentune.i18n.Tr.t(if (available(o)) o.summary else "Needs Android 14 or newer")
+                    com.opentune.i18n.Tr.t(if (available(o)) o.summary else "Needs Android 14 or newer")
         },
         onSelect = { option ->
             AppSettings.updatePlayback {
