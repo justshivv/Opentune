@@ -31,9 +31,9 @@ import kotlinx.coroutines.flow.asStateFlow
  *  - unliked here since then: unrated there.
  *
  * A rate that fails is not agreed on, so it is tried again next time. A
- * read that fails changes nothing at all, and an empty read is only
- * believed when it comes twice: a cut-down answer must never read as
- * "every song was unliked". Songs that live on this phone (`local:` ids)
+ * read that fails changes nothing at all, and a read that would take
+ * songs away is only believed when it comes twice: a cut-down answer
+ * must never read as songs unliked on the account. Songs that live on this phone (`local:` ids)
  * and songs marked Dislike are never the sync's business.
  *
  * The first run merges both lists and uploads local likes missing from the
@@ -106,9 +106,15 @@ object LikedSync {
             .filterNotTo(HashSet()) { it.startsWith("local:") }
 
         var remote = fetchLiked()
-        if (remote.isEmpty() && (localIds.isNotEmpty() || agreed.isNotEmpty())) {
-            // An empty answer is trusted only when it comes twice.
-            remote = fetchLiked()
+        // A read that takes songs away is trusted only when it comes
+        // twice, like an empty one: a cut-down answer must never read as
+        // songs unliked on the account. Of two reads, the fuller one is
+        // reconciled against; a real unlike shows up in both.
+        val firstIds = remote.mapTo(HashSet()) { it.videoId }
+        val takesAway = (agreed.takeIf { agreedOwner == accountId }.orEmpty() intersect localIds) - firstIds
+        if ((remote.isEmpty() && (localIds.isNotEmpty() || agreed.isNotEmpty())) || takesAway.isNotEmpty()) {
+            val again = fetchLiked()
+            if (again.size > remote.size) remote = again
         }
         checkAccount()
         val result = mergeLikedSongs(localAll, remote, agreed.takeIf { agreedOwner == accountId }, disliked) { id, status ->

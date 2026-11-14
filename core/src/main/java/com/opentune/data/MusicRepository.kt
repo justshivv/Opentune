@@ -577,6 +577,10 @@ object MusicRepository {
         val seen = HashSet<String>()
         while (token != null && seen.add(token) && seen.size <= 100) {
             val next = InnertubeParser.parsePlaylistContinuation(Innertube.browseContinuation(token))
+            // A page a token was issued for carries songs; one that reads
+            // empty is an answer that didn't come through whole, and the
+            // syncs reading here would take the short list as the truth.
+            if (next.songs.isEmpty()) error("a playlist page came back empty")
             songs += next.songs
             token = next.continuation
         }
