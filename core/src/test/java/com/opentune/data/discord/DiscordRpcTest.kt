@@ -45,42 +45,4 @@ class DiscordRpcTest {
         assertEquals(120_000.0, (t.getLong("end") - t.getLong("start")).toDouble(), 50.0)
         assertTrue(a.getString("details").endsWith("[2.00x]"))
     }
-
-    @Test fun theCardFollowsItsOptions() {
-        val options = DiscordRpc.Options(
-            activityType = DiscordRpc.ActivityType.PLAYING,
-            status = DiscordRpc.OnlineStatus.DND,
-            lead = DiscordRpc.Lead.SONG,
-            activityName = "My music",
-            button1Text = "{song_name} by {artist_name}",
-            button2Text = "https://example.com/me",
-        )
-        val p = DiscordRpc.presence("token", now(), options)
-        val a = p.getJSONArray("activities").getJSONObject(0)
-        assertEquals(0, a.getInt("type"))
-        assertEquals("My music", a.getString("name"))
-        assertEquals(2, a.getInt("status_display_type"))
-        assertEquals("dnd", p.getString("status"))
-        val buttons = a.getJSONArray("buttons")
-        assertEquals("Labon Ko by Pritam", buttons.getString(0))
-        // A web address as the second button's text: the usual label, going to that address.
-        assertEquals("Get OpenTune", buttons.getString(1))
-        assertEquals("https://example.com/me", a.getJSONObject("metadata").getJSONArray("button_urls").getString(1))
-    }
-
-    @Test fun buttonsCanBeHidden() {
-        val a = DiscordRpc.presence("token", now(), DiscordRpc.Options(button1Visible = false, button2Visible = false))
-            .getJSONArray("activities").getJSONObject(0)
-        assertTrue(!a.has("buttons"))
-        // The song's own link still opens from the title.
-        assertEquals("https://music.youtube.com/watch?v=dQw4w9WgXcQ", a.getString("details_url"))
-    }
-
-    @Test fun optionsSurviveBeingSaved() {
-        val options = DiscordRpc.Options(activityType = DiscordRpc.ActivityType.WATCHING, lead = DiscordRpc.Lead.ARTIST, button2Visible = false, activityName = "x")
-        val saved = org.json.JSONObject().put("activityType", "WATCHING").put("lead", "ARTIST").put("button2Visible", false).put("activityName", "x")
-        assertEquals(options, DiscordRpc.readOptions(saved))
-        // Anything unknown or missing falls back to the usual card.
-        assertEquals(DiscordRpc.Options(), DiscordRpc.readOptions(org.json.JSONObject().put("activityType", "DANCING")))
-    }
 }

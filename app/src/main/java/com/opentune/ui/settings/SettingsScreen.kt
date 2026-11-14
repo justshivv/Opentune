@@ -1743,14 +1743,6 @@ private fun settingsSections(
                         trailing = if (who != null) { { AppSwitch(discordOn, { v -> com.opentune.data.discord.DiscordRpc.setEnabled(v) }) } } else null,
                     )
                 },
-                // How the card reads, as the web player lays it out. Set any time; used once connected.
-                Entry("Activity", "discord activity listening to playing watching competing in card type") { DiscordActivityRow() },
-                Entry("Name", "discord activity name card title opentune") { DiscordNameRow() },
-                Entry("Status", "discord status online idle do not disturb dnd invisible") { DiscordStatusRow() },
-                Entry("Member lists show", "discord member list artist song name lead details") { DiscordLeadRow() },
-                Entry("Listen button", "discord listen button text youtube music link") { DiscordListenButtonRows() },
-                Entry("OpenTune button", "discord opentune button text link web address") { DiscordOpenTuneButtonRows() },
-                Entry("About the Discord card", "discord button variables song_name artist_name album_name terms") { DiscordCardNote() },
             ),
         ),
         Section(
