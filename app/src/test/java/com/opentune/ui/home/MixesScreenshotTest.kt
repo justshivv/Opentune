@@ -97,4 +97,23 @@ class MixesScreenshotTest {
         view.draw(android.graphics.Canvas(bitmap))
         File("build/screenshots/home/streaks.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
+
+    @Test fun daylist() {
+        val colors = listOf(0xFFE0457B, 0xFF3A7BD5, 0xFF2BB673, 0xFFF2A93B)
+        val engine = FakeImageLoaderEngine.Builder().apply {
+            colors.forEachIndexed { i, c -> intercept({ it is String && it.endsWith("/c$i") }, android.graphics.drawable.ColorDrawable(c.toInt()).asImage()) }
+        }.build()
+        SingletonImageLoader.setUnsafe(ImageLoader.Builder(compose.activity).components { add(engine) }.build())
+        val mix = DailyMixes.Mix("daylist", "Punjabi and Hip-Hop, Friday night", "", (0 until 12).map { Song("d$it", "Song", "Artist", "https://img/c${it % 4}") })
+        compose.setContent {
+            MaterialTheme(darkColorScheme(primary = Color(0xFFFF8A65), primaryContainer = Color(0xFF6B2A1A), onPrimaryContainer = Color(0xFFFFDBD0), tertiaryContainer = Color(0xFF3D2F5C))) {
+                Surface(color = MaterialTheme.colorScheme.background) { DaylistHero(mix) {} }
+            }
+        }
+        compose.waitForIdle()
+        val view = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bitmap))
+        File("build/screenshots/home/daylist.png").apply { parentFile!!.mkdirs() }.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
 }
