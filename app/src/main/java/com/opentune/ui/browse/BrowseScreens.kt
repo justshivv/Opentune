@@ -529,14 +529,23 @@ internal fun ListHero(
     cover: @Composable (Modifier) -> Unit,
     footPadding: androidx.compose.ui.unit.Dp = 0.dp,
     band: com.opentune.ui.components.RubberBandOverscroll? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState? = null,
     info: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     if (fullListCover()) {
         val heroHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
+        // The cover drifts down at a fraction of the scroll, so the list rises
+        // over it little by little instead of the two moving as one piece.
+        val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+        val drift: androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit = {
+            if (!still && listState != null && listState.firstVisibleItemIndex == 0) {
+                translationY = listState.firstVisibleItemScrollOffset * LIST_PARALLAX
+            }
+        }
         Box(Modifier.fillMaxWidth().height(heroHeight)) {
             // The cover melts into the page behind it, with no edge where it ends.
             Box(Modifier.fillMaxSize().pinnedToTop(band).meltIntoPage()) {
-                cover(Modifier.fillMaxSize())
+                cover(Modifier.fillMaxSize().graphicsLayer(drift))
                 // A shade at the very top, so the back button reads on any cover.
                 Box(
                     Modifier.fillMaxWidth().height(96.dp)
@@ -591,6 +600,7 @@ internal fun FullListCover(url: String?, modifier: Modifier = Modifier, cover: (
 /** The title starts below the complete square cover, never over the artwork. */
 internal const val FULL_COVER_TITLE_AT = 1f
 private const val COLLECTION_HERO_FRACTION = 0.68f
+private const val LIST_PARALLAX = 0.4f
 private const val COLLECTION_PAGE_SIZE = 50
 
 /** Shared artwork, typography and spacing for YouTube, Spotify and local playlists. */
@@ -821,6 +831,7 @@ private fun CollectionHero(
     fallbackCover: (@Composable () -> Unit)?,
     buttons: @Composable () -> Unit,
     band: com.opentune.ui.components.RubberBandOverscroll? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState? = null,
 ) {
     ListHero(
         cover = { m ->
@@ -831,6 +842,7 @@ private fun CollectionHero(
             }
         },
         band = band,
+        listState = listState,
     ) {
         Text(title, style = MaterialTheme.typography.displaySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (subtitle.isNotBlank()) {
@@ -983,7 +995,7 @@ fun CollectionScreen(
                                     val saved = savedLists.any { it.browseId == browseId }
                                     val accountLists by com.opentune.data.library.LibraryCache.playlists.collectAsState()
                                     val showSave = saved || accountLists.none { it.browseId?.removePrefix("VL") == browseId.removePrefix("VL") }
-                                    ListHero(cover = { m -> Placeholder(m, androidx.compose.ui.graphics.RectangleShape) }, band = band) {
+                                    ListHero(cover = { m -> Placeholder(m, androidx.compose.ui.graphics.RectangleShape) }, band = band, listState = listState) {
                                         run {
                                             Placeholder(Modifier.width(200.dp).height(26.dp))
                                             Placeholder(Modifier.padding(top = 10.dp).width(140.dp).height(16.dp))
@@ -1006,6 +1018,7 @@ fun CollectionScreen(
                                         thumbnailUrl = if (com.opentune.ui.library.isYouTubeLikes(browseId)) null else c.thumbnailUrl,
                                         fallbackCover = fallbackCover,
                                         band = band,
+                                        listState = listState,
                                         buttons = {
                                             val savedLists by com.opentune.data.library.LibraryStore.savedLists.collectAsState()
                                             val saved = savedLists.any { it.browseId == c.browseId }

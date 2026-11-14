@@ -1285,7 +1285,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                     modifier = Modifier.fillMaxSize().playlistSearchResults(search),
                 ) {
                     if (!storeReady) {
-                        item { LikedSkeleton(band) }
+                        item { LikedSkeleton(band, listState) }
                         items(8) { com.opentune.ui.components.SongRowPlaceholder() }
                         return@LazyColumn
                     }
@@ -1296,6 +1296,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                             onShuffle = { actions.playAll(shown, 0, true, "Liked Music") },
                             onSmartShuffle = { actions.smartShuffle(shown, "Liked Music") },
                             band = band,
+                            listState = listState,
                         )
                     }
                     if (!searching) item(key = "liked-sync") { LikedSyncPill(likedSync) }
@@ -1397,8 +1398,8 @@ private fun LikedMoreSheet(
  * with the title, the counts and the two buttons as bars over the fade.
  */
 @Composable
-private fun LikedSkeleton(band: com.opentune.ui.components.RubberBandOverscroll? = null) {
-    com.opentune.ui.browse.ListHero(cover = { m -> com.opentune.ui.components.Placeholder(m, androidx.compose.ui.graphics.RectangleShape) }, band = band) {
+private fun LikedSkeleton(band: com.opentune.ui.components.RubberBandOverscroll? = null, listState: androidx.compose.foundation.lazy.LazyListState? = null) {
+    com.opentune.ui.browse.ListHero(cover = { m -> com.opentune.ui.components.Placeholder(m, androidx.compose.ui.graphics.RectangleShape) }, band = band, listState = listState) {
         run {
             com.opentune.ui.components.Placeholder(Modifier.width(200.dp).height(26.dp))
             com.opentune.ui.components.Placeholder(Modifier.padding(top = 10.dp).width(140.dp).height(16.dp))
@@ -1428,6 +1429,7 @@ private fun LikedHero(
     latest: Song?, count: Int, totalSeconds: Long,
     onPlay: () -> Unit, onShuffle: () -> Unit, onSmartShuffle: () -> Unit,
     band: com.opentune.ui.components.RubberBandOverscroll? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState? = null,
 ) {
     // The newest song's art when Settings ask for it and there is one;
     // otherwise Liked Music's own heart cover, as on YouTube Music.
@@ -1440,6 +1442,7 @@ private fun LikedHero(
         },
         footPadding = 18.dp,
         band = band,
+        listState = listState,
     ) {
         run {
             Text(
@@ -1495,6 +1498,7 @@ private fun PlaylistHero(
     tools: @Composable (Modifier) -> Unit,
     status: (@Composable () -> Unit)?,
     band: com.opentune.ui.components.RubberBandOverscroll? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState? = null,
 ) {
     com.opentune.ui.browse.ListHero(
         cover = { m ->
@@ -1502,6 +1506,7 @@ private fun PlaylistHero(
             else com.opentune.ui.components.PlaylistCover(name, songs.map { it.thumbnailUrl }, m, androidx.compose.ui.graphics.RectangleShape, named = false)
         },
         band = band,
+        listState = listState,
     ) {
         run {
             Text(name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -1756,6 +1761,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                             tools = tools,
                             status = if (playlist.spotifyId == null) status else null,
                             band = band,
+                            listState = listState,
                         )
                     }
                     if (songs.isEmpty()) {
