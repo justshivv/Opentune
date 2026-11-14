@@ -48,4 +48,22 @@ class HomeLayoutTest {
         assertTrue(HomeEngagement.weightOf(20.0) < 1.0)
         assertNotEquals(HomeEngagement.weightOf(1.0), HomeEngagement.weightOf(10.0))
     }
+
+    private fun card(id: String) = com.opentune.data.model.ShelfItem("Title $id", "Playlist", null, null, "VL$id")
+    private fun shelf(title: String, vararg ids: String) = com.opentune.data.model.HomeShelf(title, ids.map(::card))
+
+    @Test fun cardsShownHigherUpAreLeftOffLaterShelves() {
+        val out = HomeLayout.withoutRepeats(listOf(
+            shelf("Featured on", "a", "b", "c", "d"),
+            shelf("Featured on", "b", "a", "e", "f", "g"),
+            shelf("Mostly the same", "a", "b", "c", "h"),
+            shelf("Short", "x", "y"),
+        ))
+        assertEquals(listOf("a", "b", "c", "d"), out[0]!!.items.map { it.browseId!!.removePrefix("VL") })
+        assertEquals(listOf("e", "f", "g"), out[1]!!.items.map { it.browseId!!.removePrefix("VL") })
+        // Only one new card left: not shown.
+        assertEquals(null, out[2])
+        // Short from the start, but nothing repeated: kept.
+        assertEquals(2, out[3]!!.items.size)
+    }
 }

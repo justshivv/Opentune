@@ -21,6 +21,30 @@ object HomeLayout {
     /** One of the rows made for you: [id], and how high it starts before anything's played from it. */
     data class Personal(val id: String, val base: Double)
 
+    /** A shelf left with fewer than this many cards, once repeats are taken out, isn't shown. */
+    const val MIN_CARDS = 3
+
+    /**
+     * YouTube Music's shelves as Home shows them, in that order, without repeats: a card already
+     * on a shelf higher up is left off the later ones ("Featured on" for two artists you like often
+     * lists the same playlists twice), and a shelf left with fewer than [MIN_CARDS] cards is null,
+     * not shown. One that came with fewer to start with keeps them, if none were repeats.
+     */
+    fun withoutRepeats(ordered: List<com.opentune.data.model.HomeShelf>): List<com.opentune.data.model.HomeShelf?> {
+        val seen = HashSet<String>()
+        return ordered.map { shelf ->
+            val fresh = shelf.items.filter { item ->
+                val key = item.browseId?.removePrefix("VL") ?: item.videoId ?: "${item.title}|${item.subtitle}".lowercase()
+                seen.add(key)
+            }
+            when {
+                fresh.size == shelf.items.size -> shelf
+                fresh.size >= MIN_CARDS -> shelf.copy(items = fresh)
+                else -> null
+            }
+        }
+    }
+
     /** How much a day's shuffle can move a row against the ones around it. */
     private const val JITTER = 0.35
 
