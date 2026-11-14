@@ -89,6 +89,8 @@ object Core {
         // After library and account: it sends playlist changes still waiting, when signed in.
         com.opentune.data.library.PlaylistSync.init(app)
         com.opentune.data.library.LikedSync.init()
+        // After the account and the followed artists: it keeps them in step with YouTube Music's subscriptions.
+        if (phone) com.opentune.data.releases.ArtistSync.init(app)
         InnerTubeXResolver.init(app)
     }
 

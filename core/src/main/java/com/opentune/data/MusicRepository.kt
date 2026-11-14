@@ -669,6 +669,32 @@ object MusicRepository {
         items.distinctBy { it.browseId }.filterNot { hide && it.explicit }
     }
 
+    /**
+     * The artists the signed-in account subscribes to on YouTube Music (Library › Artists ›
+     * Subscriptions), every page of them. Only channel pages (`UC…`). A page that says nobody is
+     * signed in throws, so an empty answer is never mistaken for "subscribed to no one".
+     */
+    suspend fun subscribedArtists(): List<ShelfItem> = io {
+        val firstJson = Innertube.browse("FEmusic_library_corpus_artists")
+        val first = InnertubeParser.parseLibraryItemPage(firstJson)
+        val all = LinkedHashMap<String, ShelfItem>()
+        fun take(items: List<ShelfItem>) = items.forEach { item ->
+            item.browseId?.takeIf { it.startsWith("UC") }?.let { all.putIfAbsent(it, item) }
+        }
+        take(first.items)
+        var token = first.continuation
+        var pages = 0
+        while (token != null && pages++ < LIBRARY_PAGES) {
+            val page = InnertubeParser.parseLibraryItemPage(Innertube.browseContinuation(token))
+            val before = all.size
+            take(page.items)
+            if (all.size == before || page.continuation == token) break
+            token = page.continuation
+        }
+        if (all.isEmpty() && InnertubeParser.answeredSignedOut(firstJson)) throw LibrarySignedOut()
+        all.values.toList()
+    }
+
     /** The signed-in account's playlists on YouTube Music, without the "New playlist" tile. */
     suspend fun libraryPlaylists(): List<ShelfItem> = io {
         // Whose these are is the session that asked. The account's profile (and so its email, which names
