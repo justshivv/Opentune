@@ -130,6 +130,8 @@ fun FloatingCard(
     startExpanded: Boolean = false,
     /** How much of the screen an [expandable] card takes pulled all the way up: 1 takes over the page. */
     fullFraction: Float = 0.9f,
+    /** How much of the screen an [expandable] card opens at, unless [startExpanded]. */
+    openFraction: Float = 0.5f,
     /** False for asynchronously loaded lists: loading and empty states must not cap expansion. */
     fitContent: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
@@ -217,7 +219,7 @@ fun FloatingCard(
                 var naturalPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
                 val fullPx = minOf(with(density) { (maxCard * fullFraction).toPx() }, if (fitContent) naturalPx else Float.MAX_VALUE)
                 // Start at full height when asked, so the whole menu shows at once; otherwise half.
-                val halfPx = if (startExpanded) fullPx else minOf(with(density) { (maxCard * 0.5f).toPx() }, fullPx)
+                val halfPx = if (startExpanded) fullPx else minOf(with(density) { (maxCard * openFraction).toPx() }, fullPx)
                 val range = (fullPx - halfPx).coerceAtLeast(0f)
                 val fullscreen = expandable && fullFraction >= 1f && !fitContent
                 val expandedFraction = if (range > 0f) (extra / range).coerceIn(0f, 1f) else 1f

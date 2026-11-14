@@ -127,8 +127,11 @@ internal fun PlaylistPicker(
     FloatingCard(
         onDismiss = onDismiss,
         title = if (naming) "New playlist" else if (single != null) "Add to playlist" else com.opentune.i18n.Tr.f("Add {0} songs", songs.size),
+        // The list opens most of the way up; dragged or scrolled up, it takes over the page.
         expandable = !naming,
-        startExpanded = !naming,
+        fitContent = naming,
+        fullFraction = 1f,
+        openFraction = OPEN_FRACTION,
         header = {
             AddingStrip(songs, Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp))
             if (!naming && many) FindField(query, { query = it }, Modifier.padding(horizontal = 14.dp).padding(bottom = 8.dp))
@@ -152,7 +155,8 @@ internal fun PlaylistPicker(
             else -> null
         },
     ) {
-        AnimatedContent(naming, transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }, label = "picker") { isNaming ->
+        AnimatedContent(naming, transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }, label = "picker",
+            modifier = if (naming) Modifier else Modifier.weight(1f)) { isNaming ->
             if (isNaming) {
                 NameStep(songs, name, { name = it }, online, saveOnline, { saveOnline = it }, privacy, { privacy = it })
             } else {
@@ -160,7 +164,7 @@ internal fun PlaylistPicker(
                 fun List<PickTarget>.found() = if (q.isEmpty()) this else filter { it.title.contains(q, ignoreCase = true) }
                 val mine = local.found()
                 val theirs = account.found()
-                Column(Modifier.fillMaxWidth().heightIn(min = 120.dp).verticalScroll(rememberScrollState()).padding(bottom = 8.dp)) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 8.dp)) {
                     if (q.isEmpty()) NewTile(if (single != null) "With this song in it" else com.opentune.i18n.Tr.f("With these {0} songs in it", songs.size)) { naming = true }
                     val choosing = picked.isNotEmpty()
                     if (mine.isNotEmpty()) {
@@ -344,6 +348,9 @@ private fun NameStep(
         if (online) AccountCopyOptions(saveOnline, onSaveOnline, privacy, onPrivacy, Modifier.fillMaxWidth().padding(top = 14.dp))
     }
 }
+
+/** How much of the screen a list card (playlists, artists) opens at, before it's pulled up to full. */
+internal const val OPEN_FRACTION = 0.78f
 
 /** How strongly a field or strip stands out from the card it sits on. */
 internal const val FIELD_TINT = 0.08f

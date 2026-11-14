@@ -78,8 +78,11 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
             1 -> com.opentune.i18n.Tr.t("1 artist · alerts for new releases")
             else -> com.opentune.i18n.Tr.f("{0} artists · alerts for new releases", followed.size)
         },
+        // Opens most of the way up; dragged or scrolled up, it takes over the page.
         expandable = true,
-        startExpanded = true,
+        fitContent = false,
+        fullFraction = 1f,
+        openFraction = com.opentune.ui.components.OPEN_FRACTION,
         header = {
             if (followed.isNotEmpty()) Row(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 8.dp).clip(RoundedCornerShape(18.dp))
@@ -125,7 +128,7 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
             }
         },
     ) {
-        Column(Modifier.fillMaxWidth().heightIn(min = 160.dp).verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+        Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
             if (shown.isEmpty()) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(64.dp).clip(CircleShape).background(c.primary.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {

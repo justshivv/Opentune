@@ -233,7 +233,11 @@ fun AddSongsSheet(playlistId: String, onDismiss: () -> Unit) {
         onDismiss = onDismiss,
         title = "Add songs",
         icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+        // Opens most of the way up; dragged or scrolled up, it takes over the page.
         expandable = true,
+        fitContent = false,
+        fullFraction = 1f,
+        openFraction = com.opentune.ui.components.OPEN_FRACTION,
         header = {
             OutlinedTextField(
                 value = query,
@@ -248,7 +252,7 @@ fun AddSongsSheet(playlistId: String, onDismiss: () -> Unit) {
         },
     ) {
         val list = results ?: recent
-        Column(Modifier.weight(1f, fill = false).heightIn(min = 120.dp).verticalScroll(rememberScrollState())) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Text(
                 when {
                     searching -> "Searching…"
