@@ -314,7 +314,7 @@
    names fade and the rows that only the open sidebar has fold away. Phones keep the full drawer.
    Labels stay in the page for screen readers; the tooltips name each icon for everyone else. */
 @media (min-width: 484px) {
-  .ot-side { overflow: hidden; }
+  .ot-side { overflow: hidden; transition: width .38s var(--ot-ease-settle); }
   .ot-side-top, .ot-side-scroll, .ot-side-bottom { transition: padding .38s var(--ot-ease-settle); }
   .ot-side-wordmark, .ot-side-android { min-width: 0; flex-shrink: 1; overflow: hidden; white-space: nowrap; }
   .ot-side-wordmark, .ot-side-android, .ot-side-label { transition: opacity .22s ease .14s, visibility 0s linear 0s; }
