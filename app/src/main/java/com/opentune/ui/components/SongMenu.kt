@@ -52,6 +52,7 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PersonOff
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -257,7 +258,7 @@ fun SongMenuSheet(
                 if (artist.isNotBlank()) {
                     val entry = hidden.artists.firstOrNull { it.key == HiddenList.normalize(artist) }
                     if (entry != null) {
-                        MenuRow(Icons.Rounded.Person, com.opentune.i18n.Tr.f("Suggest {0} again", artist)) { LibraryStore.unhideArtist(entry.key); close() }
+                        MenuRow(Icons.Rounded.PersonAdd, com.opentune.i18n.Tr.f("Suggest {0} again", artist)) { LibraryStore.unhideArtist(entry.key); close() }
                     } else {
                         MenuRow(Icons.Rounded.PersonOff, com.opentune.i18n.Tr.f("Don't play {0}", artist)) { close(); actions.dontPlayArtist(song) }
                     }

@@ -69,6 +69,11 @@ import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.SubtitlesOff
+import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.Route
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Upgrade
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Translate
@@ -1443,18 +1448,18 @@ fun PlayerLayout(
                 onDismiss = { showMenu = false },
                 asPage = true,
                 top = { close ->
-                    MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
+                    MenuRow(Icons.Rounded.Upgrade, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
                     // Always here: the Comments button setting only takes it out of the button pill.
                     MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }
                 },
                 tools = { close ->
-                    MenuRow(Icons.Rounded.HighQuality, "Track details") { close(); showDetails = true }
-                    MenuRow(Icons.Rounded.GraphicEq, "Signal path") { close(); showSignal = true }
+                    MenuRow(Icons.Rounded.Info, "Track details") { close(); showDetails = true }
+                    MenuRow(Icons.Rounded.Route, "Signal path") { close(); showSignal = true }
                     MenuRow(Icons.Rounded.Groups, "Listen together") { close(); actions.openTogether() }
                     MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
                     MenuRow(Icons.Rounded.Tune, "Lyrics offset") { close(); showOffset = true }
                     MenuRow(Icons.Rounded.Lyrics, "Lyrics source") { close(); showLyricsSource = true }
-                    MenuRow(Icons.Rounded.Lyrics, if (state.ui.lyricsPreview) "Hide lyrics preview" else "Show lyrics preview") {
+                    MenuRow(if (state.ui.lyricsPreview) Icons.Rounded.SubtitlesOff else Icons.Rounded.Subtitles, if (state.ui.lyricsPreview) "Hide lyrics preview" else "Show lyrics preview") {
                         close()
                         AppSettings.updateUi { it.copy(lyricsPreview = !it.lyricsPreview) }
                     }
