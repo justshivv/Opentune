@@ -43,6 +43,13 @@ data class SongRef(
      * slot in some other playlist.
      */
     val setVideoId: String? = null,
+    /**
+     * When the song was liked, in epoch milliseconds, for songs in Liked:
+     * the library is shown newest-first by it, so the order lives in the
+     * songs themselves and no sync or merge can scramble it. Zero for
+     * songs saved before it was kept, and everywhere outside Liked.
+     */
+    val likedAt: Long = 0,
 ) {
     fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit)
 
@@ -220,7 +227,9 @@ object LibraryStore {
 
     private fun publish(d: LibraryDocument) {
         doc.value = d
-        _liked.value = d.liked
+        // Newest like first, always: the order is read off the songs' own
+        // like times, never off where a write happened to leave them.
+        _liked.value = d.liked.sortedByDescending { it.likedAt }
         _playlists.value = d.playlists
         _savedLists.value = d.savedLists
         _hidden.value = HiddenList(d.hiddenSongs, d.hiddenArtists)
@@ -254,7 +263,7 @@ object LibraryStore {
     fun setLiked(song: Song, liked: Boolean) {
         update { d ->
             val rest = d.liked.filterNot { it.videoId == song.videoId }
-            d.copy(liked = if (liked) listOf(SongRef.of(song)) + rest else rest, disliked = if (liked) d.disliked - song.videoId else d.disliked)
+            d.copy(liked = if (liked) listOf(SongRef.of(song).copy(likedAt = System.currentTimeMillis())) + rest else rest, disliked = if (liked) d.disliked - song.videoId else d.disliked)
         }
         if (AccountStore.signedIn.value && !song.videoId.startsWith("local:")) {
             scope.launch {

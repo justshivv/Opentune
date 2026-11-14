@@ -23,11 +23,29 @@ internal suspend fun mergeLikedSongs(
     val pushedLikes = addedHere.filterTo(HashSet()) { rate(it, LikeStatus.LIKE) }
     val pushedUnlikes = removedHere.filterTo(HashSet()) { rate(it, LikeStatus.INDIFFERENT) }
     val songs = (remote.filter { it.videoId in addedThere }.map { SongRef.of(it) } +
-        local.filterNot { it.videoId in removedThere }).distinctBy { it.videoId }
+            local.filterNot { it.videoId in removedThere }).distinctBy { it.videoId }
+    // Give every song that has no like time one, so the library's order
+    // can be read off the times and no merge can scramble it again. The
+    // account's list is itself in like order, so its songs take times a
+    // step apart under this moment, in that order; local songs the
+    // account doesn't have keep their own order just above it — they
+    // were liked here. A song already stamped keeps its time: stamping
+    // it again on a later sync would move a song that didn't move.
+    val now = System.currentTimeMillis()
+    val remoteIndex = HashMap<String, Int>()
+    remote.forEachIndexed { i, s -> remoteIndex.putIfAbsent(s.videoId, i) }
+    val localOnly = songs.filter { it.likedAt == 0L && it.videoId !in remoteIndex }
+    val stamped = songs.map { ref ->
+        when {
+            ref.likedAt != 0L -> ref
+            ref.videoId in remoteIndex -> ref.copy(likedAt = now - remoteIndex.getValue(ref.videoId))
+            else -> ref.copy(likedAt = now + (localOnly.size - localOnly.indexOf(ref)))
+        }
+    }
     // A failed write stays outside the agreement, and will be retried on the next sync.
-    val shared = songs.mapTo(HashSet()) { it.videoId }.intersect(remoteIds + pushedLikes - pushedUnlikes)
+    val shared = stamped.mapTo(HashSet()) { it.videoId }.intersect(remoteIds + pushedLikes - pushedUnlikes)
     // Remember unsuccessful unlikes too, so the next run can still remove them remotely.
-    return LikedMergeResult(songs, shared + (removedHere - pushedUnlikes))
+    return LikedMergeResult(stamped, shared + (removedHere - pushedUnlikes))
 }
 
 /** Preserve heart taps made while the remote list or writes were in flight. */
