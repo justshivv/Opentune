@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -15,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
@@ -118,15 +120,20 @@ private fun SignatureImage(sig: ArtistSignature, name: String, onDrawn: () -> Un
     }
     // Tall signatures stay short enough to leave the photo showing; wide ones fill the width.
     val height = if (sig.aspect >= 1.4f) 120.dp else 150.dp
-    AsyncImage(
-        request,
-        contentDescription = com.opentune.i18n.Tr.f("{0}'s signature", name),
-        contentScale = ContentScale.Fit,
-        onSuccess = { onDrawn() },
-        onError = { if (vector) vector = false else onFailed() },
-        alpha = if (shown) 1f else 0f,
-        modifier = Modifier.padding(horizontal = 40.dp).widthIn(max = 420.dp).fillMaxWidth().height(if (shown) height else 1.dp),
-    )
+    // Drawn over the photo, not in the layout: the slot is a hair tall and the image
+    // overflows upward out of it, so a signature arriving never makes the hero taller.
+    Box(Modifier.fillMaxWidth().height(1.dp), contentAlignment = Alignment.BottomCenter) {
+        AsyncImage(
+            request,
+            contentDescription = com.opentune.i18n.Tr.f("{0}'s signature", name),
+            contentScale = ContentScale.Fit,
+            onSuccess = { onDrawn() },
+            onError = { if (vector) vector = false else onFailed() },
+            alpha = if (shown) 1f else 0f,
+            modifier = Modifier.padding(horizontal = 40.dp).widthIn(max = 420.dp).fillMaxWidth()
+                .wrapContentHeight(unbounded = true, align = Alignment.Bottom).height(height),
+        )
+    }
 }
 
 /** A signature as white ink on clear, the paper of a scan dropped away ([ArtistSignatures.whiteInk]). */
