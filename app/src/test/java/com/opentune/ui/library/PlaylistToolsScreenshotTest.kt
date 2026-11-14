@@ -155,6 +155,24 @@ class PlaylistToolsScreenshotTest {
         org.junit.Assert.assertEquals(songs.map { it.videoId }, LibraryStore.playlist(id)!!.songs.map { it.videoId })
     }
 
+    /** A playlist that has the song already keeps its tick while others are picked, and can't be picked itself. */
+    @Test fun aPlaylistWithTheSongCantBePickedAgain() {
+        val gym = LibraryStore.createPlaylist("Gym")
+        compose.setContent { OpenTuneTheme(ThemeSettings()) {
+            com.opentune.ui.components.AddToPlaylistDialog(songs[0], onDone = {}, onDismiss = {})
+        } }
+        compose.mainClock.advanceTimeBy(1_000)
+        fun clickLabelled(label: String) = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher(label) {
+            it.config.getOrNull(androidx.compose.ui.semantics.SemanticsActions.OnClick)?.label == label
+        }).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        clickLabelled("Pick Gym")
+        clickLabelled("Pick Late nights")
+        compose.mainClock.advanceTimeBy(500)
+        compose.onAllNodesWithContentDescription("In this playlist", useUnmergedTree = true).assertCountEquals(1)
+        compose.onNode(androidx.compose.ui.test.hasClickAction() and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("Add to 1 playlist")), useUnmergedTree = true).assertExists()
+        org.junit.Assert.assertTrue(LibraryStore.playlist(gym)!!.songs.isEmpty())
+    }
+
     /**
      * Searching a list: the field sits on the bar's own frost (no band of another colour behind
      * it), and has no X of its own until something is typed; the bar's X closes the search.

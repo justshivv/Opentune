@@ -117,7 +117,11 @@ internal fun PlaylistPicker(
         )
         onDone()
     }
-    fun toggle(t: PickTarget) { picked = if (t.key in picked) picked - t.key else picked + t.key }
+    fun toggle(t: PickTarget) {
+        // One that has everything in it already isn't picked again: it says so instead.
+        if (whole(t)) { com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Already in {0}", t.title), context); return }
+        picked = if (t.key in picked) picked - t.key else picked + t.key
+    }
     var name by remember { mutableStateOf("") }
     var saveOnline by remember { mutableStateOf(true) }
     var privacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
@@ -307,7 +311,8 @@ private fun TargetRow(t: PickTarget, adding: Int, picked: Boolean, choosing: Boo
                     .then(
                         when {
                             picked -> Modifier.background(c.primary)
-                            all && !choosing -> Modifier.background(c.primary.copy(alpha = 0.18f))
+                            // In it already: its tick stays while others are picked, and it can't be picked.
+                            all -> Modifier.background(c.primary.copy(alpha = 0.18f))
                             else -> Modifier.border(1.5.dp, c.outline, CircleShape)
                         },
                     ),
@@ -315,7 +320,7 @@ private fun TargetRow(t: PickTarget, adding: Int, picked: Boolean, choosing: Boo
             ) {
                 when {
                     picked -> Icon(Icons.Rounded.Check, "Picked", tint = c.onPrimary, modifier = Modifier.size(18.dp))
-                    all && !choosing -> Icon(Icons.Rounded.Check, "In this playlist", tint = c.primary, modifier = Modifier.size(18.dp))
+                    all -> Icon(Icons.Rounded.Check, "In this playlist", tint = c.primary, modifier = Modifier.size(18.dp))
                     !choosing -> Icon(Icons.Rounded.Add, null, tint = c.onSurface, modifier = Modifier.size(18.dp))
                 }
             }
