@@ -57,15 +57,17 @@ object SpotifyConnection {
         com.opentune.data.spotify.SpotifySync.cancel()
         clearCookies()
         SpotifyWebPlayer.signedOut()
+        com.opentune.data.library.LibraryStore.dropSpotifyPlaylists(emptySet())
         _problem.value = reason ?: "Spotify signed you out"
         _connected.value = false
     }
 
-    /** Signs out; the playlists already brought over stay in Library. */
+    /** Signs out, and the playlists it brought over leave Library with it; signing in again syncs them back. */
     fun disconnect() {
         com.opentune.data.spotify.SpotifySync.cancel()
         clearCookies()
         SpotifyWebPlayer.signedOut()
+        com.opentune.data.library.LibraryStore.dropSpotifyPlaylists(emptySet())
         _problem.value = null
         _connected.value = false
     }
