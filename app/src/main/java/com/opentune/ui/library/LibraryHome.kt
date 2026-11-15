@@ -1481,10 +1481,13 @@ private fun LikedHero(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(18.dp))
-                PlayButtons(
+                com.opentune.ui.browse.ListPlayRow(
+                    enabled = true,
+                    saved = false,
                     onPlay = onPlay,
                     onShuffle = onShuffle,
                     onSmartShuffle = onSmartShuffle,
+                    onSave = null,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
