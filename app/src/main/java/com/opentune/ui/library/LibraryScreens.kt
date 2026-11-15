@@ -106,6 +106,12 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
         if (granted) songs = runCatching { LocalMusic.tracks(context, library) }.getOrDefault(emptyList())
     }
 
+    // Songs can be picked together, as on a playlist: long-press one and Select, then add the
+    // picked ones to playlists or the queue at once.
+    val selection = com.opentune.ui.components.rememberSongSelection()
+    val selectionRows = remember(songs) { songs.orEmpty().map { it.videoId to it } }
+    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader("On this device", onBack = onBack) }
         when {
@@ -149,6 +155,14 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
                 }
             }
         }
+    }
+    com.opentune.ui.components.SongSelectionBar(
+        selection,
+        rows = selectionRows,
+        onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+        modifier = Modifier.align(androidx.compose.ui.Alignment.TopCenter),
+    )
+    }
     }
 }
 
