@@ -123,6 +123,8 @@ fun SongSelectionBar(
     modifier: Modifier = Modifier,
     onRemove: ((Set<String>) -> Unit)? = null,
     removeLabel: String = "Remove",
+    /** Off where every song is downloaded already. */
+    offerDownload: Boolean = true,
 ) {
     val context = LocalContext.current
     var adding by remember { mutableStateOf<List<Song>?>(null) }
@@ -174,7 +176,7 @@ fun SongSelectionBar(
                     onRemove(selection.picked.keys.toSet())
                     selection.clear()
                 }
-                BarAction(Icons.Rounded.Download, "Download", enabled && inOrder.any { isYouTubeId(it.videoId) }) {
+                if (offerDownload) BarAction(Icons.Rounded.Download, "Download", enabled && inOrder.any { isYouTubeId(it.videoId) }) {
                     val online = inOrder.filter { isYouTubeId(it.videoId) }
                     online.forEach { Downloads.enqueue(context, it) }
                     com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} {1}", online.size, if (online.size == 1) "song" else "songs"), context)

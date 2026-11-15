@@ -992,6 +992,13 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
         }
     }
     var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(DownloadsTab.SONGS) }
+    // Songs can be picked together, as on a playlist: long-press one and Select, then remove
+    // the picked downloads (or add them to a playlist or the queue) at once.
+    val selection = com.opentune.ui.components.rememberSongSelection()
+    val selectionRows = remember(list) { list.map { it.song.videoId to it.song.toSong() } }
+    LaunchedEffect(tab) { if (tab != DownloadsTab.SONGS) selection.clear() }
+    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
         item { PageHeader(com.opentune.ui.theme.tr("Downloads"), onBack = onBack) }
         if (list.isEmpty()) {
@@ -1039,6 +1046,23 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
                 onAddToQueue = { actions.addToQueue(song) },
             )
         }
+    }
+    com.opentune.ui.components.SongSelectionBar(
+        selection,
+        rows = selectionRows,
+        onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+        modifier = Modifier.align(Alignment.TopCenter),
+        onRemove = { ids ->
+            ids.forEach { Downloads.remove(context, it) }
+            com.opentune.data.Pills.done(
+                if (ids.size == 1) com.opentune.i18n.Tr.t("Removed 1 download") else com.opentune.i18n.Tr.f("Removed {0} downloads", ids.size),
+                context,
+            )
+        },
+        removeLabel = "Remove download",
+        offerDownload = false,
+    )
+    }
     }
 }
 
