@@ -90,6 +90,7 @@ private fun DiscordWebPage(
     onLoading: (Boolean) -> Unit,
     onProblem: (String) -> Unit,
     onSignedIn: () -> Unit,
+    onAddress: (String?) -> Unit,
 ) {
     // A page whose renderer was taken can't be used again: Retry builds a new one.
     var attempt by remember { mutableStateOf(0) }
@@ -106,7 +107,7 @@ private fun DiscordWebPage(
         return
     }
     androidx.compose.runtime.key(attempt) {
-        DiscordWebPageView(modifier, onLoading, onProblem, onSignedIn, onRendererGone = { rendererGone = true; onLoading(false) })
+        DiscordWebPageView(modifier, onLoading, onProblem, onSignedIn, onRendererGone = { rendererGone = true; onLoading(false) }, onAddress = onAddress)
     }
 }
 
@@ -118,6 +119,7 @@ private fun DiscordWebPageView(
     onProblem: (String) -> Unit,
     onSignedIn: () -> Unit,
     onRendererGone: () -> Unit,
+    onAddress: (String?) -> Unit,
 ) {
     val gone = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val taken = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
@@ -182,15 +184,17 @@ private fun DiscordWebPageView(
                             onProblem("Discord's page returned HTTP ${response.statusCode}. Try Retry page shortly.")
                         }
                     }
-                    override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) { if (!gone.get()) onLoading(true) }
+                    override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) { if (!gone.get()) { onLoading(true); onAddress(addressLabel(url)) } }
                     override fun onPageFinished(view: WebView, url: String?) {
                         if (gone.get()) return
                         onLoading(false)
+                        onAddress(addressLabel(url))
                         check(view, url)
                         for (wait in listOf(1_000L, 2_500L, 5_000L, 9_000L)) main.postDelayed({ if (!gone.get()) check(view, view.url) }, wait)
                     }
                     override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
                         if (gone.get()) return
+                        onAddress(addressLabel(url))
                         check(view, url)
                         for (wait in listOf(1_500L, 4_000L)) main.postDelayed({ if (!gone.get()) check(view, view.url) }, wait)
                     }
@@ -240,6 +244,7 @@ private fun DiscordWebPageView(
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 fun DiscordLoginScreen(onDone: () -> Unit) {
     var loading by remember { mutableStateOf(false) }
+    var pageAddress by remember { mutableStateOf<String?>(null) }
     var problem by remember { mutableStateOf<String?>(null) }
     // Discord's own page first, so it's plainly Discord being signed in to; the form and a token are other ways in.
     var onPage by remember { mutableStateOf(true) }
@@ -255,6 +260,7 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
         brand = DiscordBlurple,
         icon = Icons.Rounded.Headphones,
         logo = com.opentune.R.drawable.ic_discord,
+        url = if (onPage) pageAddress else null,
         gives = "The song you play on your Discord profile, as \"Playing on OpenTune\"",
         loading = loading,
         onBack = leave,
@@ -276,7 +282,7 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
     ) { webModifier ->
         if (onPage) {
             androidx.compose.runtime.key(pageAttempt) {
-                DiscordWebPage(webModifier, onLoading = { loading = it }, onProblem = { problem = it }, onSignedIn = leave)
+                DiscordWebPage(webModifier, onLoading = { loading = it }, onProblem = { problem = it }, onSignedIn = leave, onAddress = { pageAddress = it })
             }
         } else {
             DiscordForm(webModifier, onBusy = { loading = it }, onSignedIn = leave)
