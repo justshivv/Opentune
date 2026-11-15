@@ -1079,7 +1079,7 @@ internal fun SungLine(line: LyricLine, position: () -> Long, style: androidx.com
     val rtl = remember(line) { com.opentune.data.lyrics.readsRightToLeft(line) }
     Text(
         text,
-        style = style,
+        style = style.copy(textDirection = if (rtl) TextDirection.Rtl else TextDirection.Ltr),
         color = bright,
         maxLines = 1,
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
