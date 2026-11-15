@@ -310,11 +310,11 @@ class PlaybackService : MediaLibraryService() {
         }
         val renderers = renderersFor(dsp, exclusive = true)
 
-        // Start as soon as a little audio is in: the defaults wait for 2.5 s,
-        // which is video-sized caution. A stream starts after half a second buffered
+        // Start once a healthy cushion of audio is buffered (2.0s for streaming
+        // prevents buffer underrun loops after fast skips or network hiccups)
         // and a local file after a quarter second.
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMsForStreaming(30_000, FAR_BUFFER_MS, 500, 2_000)
+            .setBufferDurationsMsForStreaming(30_000, FAR_BUFFER_MS, 2_000, 3_500)
             .setBufferDurationsMsForLocalPlayback(5_000, FAR_BUFFER_MS, 250, 500)
             // The byte ceiling decides, not the time one: a whole song at CD
             // quality, a couple of minutes at 24-bit/96 kHz, so a fetched track is
@@ -1009,8 +1009,11 @@ class PlaybackService : MediaLibraryService() {
             // A quality switch says what's playing once the new stream really is (see swapToUpgrade).
             if (!swap) updateExternalStats()
             applyLoudness()
-            if (!swap) scheduleUpgrade()
-            if (!swap) prefetchAhead()
+            if (!swap) {
+                warmJob?.cancel()
+                scheduleUpgrade()
+                prefetchAhead()
+            }
             // After this callback, not inside it: the queue changes under it otherwise.
             if (!swap) scope.launch(Dispatchers.Main) { dropPlayedHandQueued() }
             // Nothing but a blend or a swap turns the main player down; outside
@@ -2243,27 +2246,33 @@ class PlaybackService : MediaLibraryService() {
             .filter { isYouTubeId(it) && now - (warmedAt[it] ?: 0L) > WARM_TTL_MS }
             .distinct()
         if (ids.isEmpty()) return
-        ids.forEach { warmedAt[it] = now }
         if (warmedAt.size > 64) warmedAt.entries.removeAll { now - it.value > WARM_TTL_MS }
 
         val songs = indices.map { player.getMediaItemAt(it).toSong() }.filter { it.videoId in ids }.distinctBy { it.videoId }
-        val previousJob = warmJob
+        warmJob?.cancel()
         warmJob = scope.launch(Dispatchers.IO) {
-            previousJob?.join()
+            // Settle delay: if skipping rapidly, do not warm neighbours for passed-over tracks
+            delay(WARM_SETTLE_MS)
             // Prepare the preferred source independently of YouTube URL warm-up.
             if (AppSettings.effectiveAudioQuality == com.opentune.data.settings.AudioQuality.MAX) launch {
-                for (song in songs) kotlinx.coroutines.withTimeoutOrNull(3_000) {
-                    ExternalStreams.findJioSaavn(song, song.durationMillis())
+                for (song in songs) {
+                    ensureActive()
+                    kotlinx.coroutines.withTimeoutOrNull(3_000) {
+                        ExternalStreams.findJioSaavn(song, song.durationMillis())
+                    }
                 }
             }
             // One at a time: these compete with the playing track for bandwidth.
             for (id in ids) {
-                runCatching { StreamResolver.resolve(id) }
-                    .onFailure { e ->
-                        if (e is CancellationException) throw e
-                        Log.w(TAG, "Warm-up for $id failed: ${e.message}")
-                        warmedAt.remove(id)
-                    }
+                ensureActive()
+                runCatching {
+                    StreamResolver.resolve(id)
+                    warmedAt[id] = SystemClock.elapsedRealtime()
+                }.onFailure { e ->
+                    if (e is CancellationException) throw e
+                    Log.w(TAG, "Warm-up for $id failed: ${e.message}")
+                    warmedAt.remove(id)
+                }
             }
         }
     }
@@ -2949,6 +2958,9 @@ class PlaybackService : MediaLibraryService() {
 
         /** Tracks ahead of the current one whose stream URLs are resolved early. */
         const val WARM_AHEAD = 2
+
+        /** Delay before warming neighbours, avoiding wasted fetches during rapid skips. */
+        const val WARM_SETTLE_MS = 600L
 
         /** A little under StreamResolver's 20-minute URL lifetime. */
         const val WARM_TTL_MS = 15 * 60 * 1000L
