@@ -43,7 +43,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -304,6 +305,7 @@ fun rememberSeekCount(vm: PlayerViewModel): () -> Long {
 private enum class Pane { COVER, LYRICS, QUEUE }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun PlayerLayout(
     state: PlayerUiState,
     position: () -> Long,
@@ -432,11 +434,13 @@ fun PlayerLayout(
     LaunchedEffect(Unit) {
         snapshotFlow { dragOffset == 0f }.distinctUntilChanged().collect { covering(it) }
     }
-    // On the lyrics, the system's gesture bar along the bottom is put away; a swipe up from the
-    // edge brings it back for a moment. It comes back for good on leaving the lyrics, starting
-    // to drag the player down, or closing it.
+    // On the lyrics, with its setting on, the system's gesture bar along the bottom is put
+    // away; a swipe up from the edge brings it back for a moment. It comes back for good on
+    // leaving the lyrics, starting to drag the player down, or closing it. The page below
+    // pads itself with the bar's space whether it is showing or not, so the controls keep
+    // their distance from the edge while it is away.
     val lyricsView = androidx.compose.ui.platform.LocalView.current
-    val hideGestureBar = !docked && pane == Pane.LYRICS && dragOffset == 0f
+    val hideGestureBar = !docked && pane == Pane.LYRICS && dragOffset == 0f && state.ui.hideNavigationBarOnLyrics
     androidx.compose.runtime.DisposableEffect(hideGestureBar) {
         var ctx: android.content.Context? = lyricsView.context
         while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) ctx = ctx.baseContext
@@ -903,7 +907,7 @@ fun PlayerLayout(
                         },
                     )
                 } else Column(
-                    Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(horizontal = 24.dp)
+                    Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility).padding(horizontal = 24.dp)
                         // Every touch anywhere on the player, seen before the parts under it
                         // handle it and never taken from them: it counts as being looked at.
                         .pointerInput(Unit) {

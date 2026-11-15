@@ -23,7 +23,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -87,6 +88,7 @@ import com.opentune.ui.formatTime
  * either takes the cover's place on the left, and the same tap goes back.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun LandscapePlayer(
     state: PlayerUiState,
     position: () -> Long,
@@ -116,7 +118,7 @@ internal fun LandscapePlayer(
     Row(
         Modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
+            .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout))
             .padding(horizontal = 28.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -247,9 +249,9 @@ private fun LyricsPeek(lines: PeekLines, next: Boolean, animate: Boolean, onClic
             else {
                 val forward = targetState.index > initialState.index
                 (androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 380f)) { if (forward) it / 3 else -it / 3 } +
-                    androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260, delayMillis = 60))) togetherWith
-                    (androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(240)) { if (forward) -it / 3 else it / 3 } +
-                        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(180)))
+                        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260, delayMillis = 60))) togetherWith
+                        (androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(240)) { if (forward) -it / 3 else it / 3 } +
+                                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(180)))
             }) using androidx.compose.animation.SizeTransform(clip = false) { _, _ -> androidx.compose.animation.core.snap() }
         },
         label = "peek",
