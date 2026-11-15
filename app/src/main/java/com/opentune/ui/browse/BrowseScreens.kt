@@ -1066,7 +1066,7 @@ fun CollectionScreen(
                                         title = c.title,
                                         subtitle = if (isAlbum) c.subtitle else "",
                                         explicit = isAlbum && c.songs.any { it.isExplicit == true },
-                                        meta = if (isAlbum) listMeta("Album", c.songs) else playlistMeta(c.songs),
+                                        meta = playlistMeta(c.songs),
                                         // Liked Music has its own heart cover: YouTube sends its top song's art for it.
                                         thumbnailUrl = if (com.opentune.ui.library.isYouTubeLikes(browseId)) null else c.thumbnailUrl,
                                         fallbackCover = fallbackCover,
