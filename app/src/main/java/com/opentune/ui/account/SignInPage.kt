@@ -48,9 +48,11 @@ internal fun SignInPage(
     // Static tips live behind Help; a new browser error is brought to the user's attention.
     LaunchedEffect(hint) { if (hint != null && hint != initialHint) showHelp = true }
     Surface(Modifier.fillMaxSize(), color = scheme.background, contentColor = scheme.onBackground) {
+        // The bottom is left out of the padding: the navigation bar is transparent, and the
+        // page runs under it, so no band of the page's own background shows along the edge.
         Column(
             Modifier.fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.ime))
+                .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.navigationBars).union(WindowInsets.ime))
                 .testTag("sign-in-page"),
         ) {
             Row(
