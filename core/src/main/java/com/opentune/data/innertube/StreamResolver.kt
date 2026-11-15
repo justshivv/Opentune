@@ -1170,6 +1170,8 @@ object StreamResolver {
 
     private fun audioFormats(response: JsonObject): List<Audio> {
         rememberLoudness(response)
+        // The description carries the song's credits; kept so View credits needs no request of its own.
+        com.opentune.data.metadata.SongCreditsRepository.remember(response)
         return audioFormatList(response)
     }
 

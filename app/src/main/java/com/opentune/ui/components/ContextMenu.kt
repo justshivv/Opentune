@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.CheckCircleOutline
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.BookmarkRemove
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -367,6 +368,7 @@ fun SongContextMenu(
         "playlist" -> { AddToPlaylistDialog(song, onDone = { next = null; onDismiss() }, onDismiss = { next = null; onDismiss() }); return }
         "more" -> { SongMenuSheet(song, onDismiss = { next = null; onDismiss() }); return }
         "info" -> { com.opentune.ui.player.TrackDetailsDialog(song, song.durationMillis(), onDismiss = { next = null; onDismiss() }); return }
+        "credits" -> { com.opentune.ui.player.CreditsSheet(song, onDismiss = { next = null; onDismiss() }); return }
     }
     // Kept audio, separate from a download: the song cache that makes replays instant.
     val cached = remember(song.videoId) { !local && com.opentune.playback.AudioCache.holds(context, song.videoId) }
@@ -398,6 +400,7 @@ fun SongContextMenu(
             }
         }
         add(MenuEntry("Song info", Icons.Rounded.Info) { next = "info" })
+        if (!local) add(MenuEntry("View credits", Icons.Rounded.People) { next = "credits" })
         if (!local) add(MenuEntry("Share", Icons.Rounded.Share) {
             val (at, length) = actions?.progressOf?.invoke(song) ?: (0L to 0L)
             com.opentune.ui.share.ShareCard.share(context, song, at, length)

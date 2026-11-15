@@ -53,6 +53,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Cast
@@ -353,6 +354,7 @@ fun PlayerLayout(
     var showOffset by remember { mutableStateOf(false) }
     var showLyricsSource by remember { mutableStateOf(false) }
     var showDetails by remember { mutableStateOf(false) }
+    var showCredits by remember { mutableStateOf(false) }
     var showSignal by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val clipboard = remember { context.getSystemService(ClipboardManager::class.java) }
@@ -381,7 +383,7 @@ fun PlayerLayout(
     val artworkMotion = com.opentune.ui.components.rememberArtworkMotion(state.isPlaying && state.ui.movingCover && !state.ui.reduceAnimation)
     val focusable = state.ui.lyricsFocus && pane == Pane.LYRICS && state.isPlaying &&
             ((state.lyrics as? LyricsState.Found)?.lyrics is com.opentune.data.lyrics.Lyrics.Synced)
-    val sheetOpen = showMenu || showRemix || showSleep || showCast || showOffset || showLyricsSource || showDetails || showSignal
+    val sheetOpen = showMenu || showRemix || showSleep || showCast || showOffset || showLyricsSource || showDetails || showCredits || showSignal
     LaunchedEffect(touchedAt, focusable, sheetOpen) {
         // A sheet opening or closing leaves the controls as they are, the tap that opened
         // it included: bringing them back resized the lyrics under the sheet as it slid
@@ -1469,6 +1471,7 @@ fun PlayerLayout(
                 },
                 tools = { close ->
                     MenuRow(Icons.Rounded.Info, "Track details") { close(); showDetails = true }
+                    if (!current.videoId.startsWith("local:")) MenuRow(Icons.Rounded.People, "View credits") { close(); showCredits = true }
                     MenuRow(Icons.Rounded.Route, "Signal path") { close(); showSignal = true }
                     MenuRow(Icons.Rounded.Groups, "Listen together") { close(); actions.openTogether() }
                     MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
@@ -1502,6 +1505,7 @@ fun PlayerLayout(
         if (showOffset) LyricsOffsetDialog(current.videoId, autoOffsetMs, onDismiss = { showOffset = false })
         if (showLyricsSource) LyricsSourceDialog(current, state.durationMs, onDismiss = { showLyricsSource = false })
         if (showDetails) TrackDetailsDialog(current, state.durationMs, onDismiss = { showDetails = false })
+        if (showCredits) CreditsSheet(current, onDismiss = { showCredits = false })
         if (showSignal) SignalPathDialog(state.audioFormat, onDismiss = { showSignal = false }, song = current)
     }
 }
