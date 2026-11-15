@@ -259,8 +259,12 @@ class PlaybackService : MediaLibraryService() {
                 eventListener: androidx.media3.exoplayer.audio.AudioRendererEventListener,
                 out: java.util.ArrayList<androidx.media3.exoplayer.Renderer>,
             ) {
-                if (!exclusive) return super.buildAudioRenderers(context, extensionRendererMode, mediaCodecSelector, enableDecoderFallback, audioSink, eventHandler, eventListener, out)
-                out.add(MeasuringAudioRenderer(context, codecAdapterFactory, mediaCodecSelector, enableDecoderFallback, eventHandler, eventListener, audioSink))
+                if (!exclusive) super.buildAudioRenderers(context, extensionRendererMode, mediaCodecSelector, enableDecoderFallback, audioSink, eventHandler, eventListener, out)
+                else out.add(MeasuringAudioRenderer(context, codecAdapterFactory, mediaCodecSelector, enableDecoderFallback, eventHandler, eventListener, audioSink))
+                // Dolby Digital and Dolby Digital Plus (Atmos's 5.1 or 7.1 bed) on phones with no
+                // Dolby decoder of their own. After the platform's renderer, so the phone's own
+                // decoder, or passing the stream to a receiver over HDMI, still comes first.
+                out.add(androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer(eventHandler, eventListener, audioSink))
             }
             init {
                 setEnableDecoderFallback(true)
