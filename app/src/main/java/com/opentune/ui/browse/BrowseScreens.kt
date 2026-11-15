@@ -478,6 +478,8 @@ internal fun ListPageWash() {
 /** The orders a list's songs can be shown in. */
 internal enum class ListOrder(val label: String) {
     DEFAULT("Default order"),
+    /** Newest first: playlists add songs at the end, so it's the list read from the bottom up. */
+    RECENT("Recently added"),
     A_TO_Z("Alphabetical (A to Z)"),
     Z_TO_A("Alphabetical (Z to A)"),
 }
@@ -902,6 +904,7 @@ fun CollectionScreen(
         val found = if (q.isEmpty()) songs else songs.filter { it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true) }
         when (order) {
             ListOrder.DEFAULT -> found
+            ListOrder.RECENT -> found.asReversed()
             ListOrder.A_TO_Z -> found.sortedBy { it.title.lowercase() }
             ListOrder.Z_TO_A -> found.sortedByDescending { it.title.lowercase() }
         }
@@ -942,7 +945,8 @@ fun CollectionScreen(
                             Box {
                                 androidx.compose.material3.IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
                                 androidx.compose.material3.DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
-                                    ListOrder.entries.forEach { o ->
+                                    // An album's songs aren't added to it: no "Recently added" there.
+                                    ListOrder.entries.filter { it != ListOrder.RECENT || !browseId.startsWith("MPRE") }.forEach { o ->
                                         androidx.compose.material3.DropdownMenuItem(
                                             text = { Text(o.label) },
                                             trailingIcon = { if (o == order) Icon(Icons.Filled.Check, null) },

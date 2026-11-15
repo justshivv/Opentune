@@ -1222,6 +1222,8 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
         val found = if (q.isEmpty()) songs else songs.filter { it.title.contains(q, true) || it.artist.contains(q, true) }
         when (order) {
             com.opentune.ui.browse.ListOrder.DEFAULT -> found
+            // Liked is kept newest like first already.
+            com.opentune.ui.browse.ListOrder.RECENT -> found
             com.opentune.ui.browse.ListOrder.A_TO_Z -> found.sortedBy { it.title.lowercase() }
             com.opentune.ui.browse.ListOrder.Z_TO_A -> found.sortedByDescending { it.title.lowercase() }
         }
@@ -1570,6 +1572,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         val found = songs.indices.filter { songs[it].title.contains(query.trim(), true) || songs[it].artist.contains(query.trim(), true) }
         when (order) {
             com.opentune.ui.browse.ListOrder.DEFAULT -> found
+            // Songs join a playlist at the end: newest first is the list from the bottom up.
+            com.opentune.ui.browse.ListOrder.RECENT -> found.asReversed()
             com.opentune.ui.browse.ListOrder.A_TO_Z -> found.sortedBy { songs[it].title.lowercase() }
             com.opentune.ui.browse.ListOrder.Z_TO_A -> found.sortedByDescending { songs[it].title.lowercase() }
         }
