@@ -949,14 +949,36 @@ fun CollectionScreen(
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     val loaded = (state as? UiState.Success)?.data
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // Taken out of this playlist on YouTube Music: hidden here at once, and
+    // put back if YouTube Music says no.
+    var removed by remember(browseId) { mutableStateOf<Set<String>>(emptySet()) }
+    val removeSongs: (List<Song>) -> Unit = { songs ->
+        if (songs.isNotEmpty()) {
+            val ids = songs.mapTo(HashSet()) { it.videoId }
+            removed = removed + ids
+            com.opentune.data.library.PlaylistSync.removeFromAccountPlaylist(browseId, songs) { ok ->
+                if (ok) {
+                    com.opentune.data.Pills.done(
+                        if (songs.size == 1) com.opentune.i18n.Tr.f("Removed \"{0}\"", songs[0].title)
+                        else com.opentune.i18n.Tr.f("Removed {0} songs", songs.size),
+                        context,
+                    )
+                } else {
+                    removed = removed - ids
+                    com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't remove from this playlist"), context)
+                }
+            }
+        }
+    }
     // Played from here: the album or playlist counts toward Speed dial.
     val actions = remember(pageActions, loaded) {
         loaded?.let { c ->
             pageActions.alsoOnPlay { com.opentune.data.history.ListenedCollections.played(browseId, c.title, c.subtitle, c.thumbnailUrl) }
         } ?: pageActions
     }
-    val shown = remember(loaded, query, order) {
-        val songs = loaded?.songs.orEmpty()
+    val shown = remember(loaded, query, order, removed) {
+        val songs = loaded?.songs.orEmpty().filter { it.videoId !in removed }
         val q = query.trim()
         val found = if (q.isEmpty()) songs else songs.filter { it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true) }
         when (order) {
@@ -1013,6 +1035,7 @@ fun CollectionScreen(
                     selection,
                     rows = listed.mapIndexed { i, s -> "$i:${s.videoId}" to s },
                     onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+                    onRemove = if ((state as? UiState.Success)?.data?.owned == true) ({ keys -> removeSongs(listed.filterIndexed { i, s -> "$i:${s.videoId}" in keys && s.videoId !in removed }) }) else null,
                     modifier = Modifier.align(Alignment.TopCenter),
                 )
             }) {
@@ -1126,6 +1149,8 @@ fun CollectionScreen(
                                         },
                                         onPlayNext = { actions.playNext(song) },
                                         onAddToQueue = { actions.addToQueue(song) },
+                                        onRemoveFromPlaylist = if (c.owned == true) ({ removeSongs(listOf(song)) }) else null,
+                                        onSwipeRemove = if (c.owned == true) ({ removeSongs(listOf(song)) }) else null,
                                         selectKey = "${c.songs.indexOf(song).takeIf { it >= 0 } ?: i}:${song.videoId}",
                                     )
                                 }
