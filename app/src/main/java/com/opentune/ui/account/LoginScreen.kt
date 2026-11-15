@@ -39,7 +39,7 @@ private const val SIGN_IN_URL =
             "https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F"
 
 /** The page's address as it is shown under the service's name: the host and the path, without the scheme or the query. */
-private fun addressLabel(url: String?): String? {
+internal fun addressLabel(url: String?): String? {
     val uri = url?.let { runCatching { android.net.Uri.parse(it) }.getOrNull() } ?: return null
     val host = uri.host ?: return null
     val path = uri.path?.takeIf { it.isNotBlank() && it != "/" } ?: ""

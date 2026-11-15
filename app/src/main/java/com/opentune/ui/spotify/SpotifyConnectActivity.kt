@@ -1,6 +1,7 @@
 package com.opentune.ui.spotify
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Message
@@ -46,6 +47,7 @@ class SpotifyConnectActivity : ComponentActivity() {
     private var done = false
     private var loading by mutableStateOf(true)
     private var unavailable by mutableStateOf(false)
+    private var pageAddress by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,6 +84,7 @@ class SpotifyConnectActivity : ComponentActivity() {
                     onBack = { finish() },
                     unavailable = if (unavailable) "This phone's web view isn't working, so Spotify's sign-in page can't open. Update Android System WebView in the Play Store and try again." else null,
                     hint = "If Google sign-in won't open here, use your Spotify email or username, or a one-time code by email.",
+                    url = pageAddress,
                 ) { modifier ->
                     frame?.let { f -> AndroidView(factory = { f }, modifier = modifier) }
                 }
@@ -124,9 +127,19 @@ class SpotifyConnectActivity : ComponentActivity() {
             return scheme != "https" && scheme != "http"
         }
 
+        override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+            pageAddress = com.opentune.ui.account.addressLabel(url)
+        }
+
         override fun onPageFinished(view: WebView, url: String?) {
             loading = false
+            pageAddress = com.opentune.ui.account.addressLabel(url)
             signedIn()
+        }
+
+        // Spotify's pages change address without loading a new page.
+        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+            pageAddress = com.opentune.ui.account.addressLabel(url)
         }
     }
 
