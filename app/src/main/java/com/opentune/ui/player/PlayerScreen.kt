@@ -1327,12 +1327,8 @@ fun PlayerLayout(
                             )
                         }
                     }
-                    // Where the controls went: a faint handle, and a swipe or touch brings them back.
-                    AnimatedVisibility(controlsHidden, enter = fadeIn(tween(400)), exit = fadeOut(tween(150))) {
-                        Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp), contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(width = 44.dp, height = 5.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)))
-                        }
-                    }
+                    // With the controls away nothing is drawn in their place (a touch or a swipe
+                    // down brings them back), so the lyrics run to the bottom of the screen.
                 }
             }
             // The cover on its way between the header and the full cover, over the rest. Kept built
