@@ -1371,6 +1371,9 @@ private fun settingsSections(
                 Entry("Reduce animation", "motion") {
                     ToggleRow("Reduce animation", ui.reduceAnimation, { v -> AppSettings.updateUi { it.copy(reduceAnimation = v) } }, summary = "Freezes decorative motion and simplifies player and lyric transitions", icon = Icons.Rounded.Animation)
                 },
+                Entry("Lite three-dot menu", "song menu page animation performance low end") {
+                    ToggleRow("Lite three-dot menu", ui.liteThreeDotMenu, { v -> AppSettings.updateUi { it.copy(liteThreeDotMenu = v) } }, summary = "The song menu opens as a plain page with no animation, lighter on low-end phones", icon = Icons.Rounded.Speed)
+                },
                 Entry("Liquid Glass", "glass refraction apple lens") {
                     ToggleRow(
                         "Liquid Glass",
