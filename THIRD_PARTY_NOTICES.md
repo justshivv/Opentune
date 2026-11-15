@@ -61,6 +61,11 @@ On computers, YouTube's Opus stream and other formats are decoded by
 [JavaCV](https://github.com/bytedeco/javacv) and
 [JavaCPP Presets](https://github.com/bytedeco/javacpp-presets) (Apache
 License 2.0 and GPLv2 with the Classpath exception).
+On Android, Dolby Digital and Dolby Digital Plus are decoded, where the
+phone has no decoder of its own, by [FFmpeg](https://ffmpeg.org) 7.1.1
+(LGPL 2.1 or later, built with only its AC-3 and E-AC-3 decoders) through
+the audio classes and JNI glue of Media3's FFmpeg decoder module (Apache
+License 2.0). How it is built is in `third_party/ffmpeg-dolby`.
 
 ## BitChord browser player and audio compatibility fixes
 

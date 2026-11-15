@@ -166,15 +166,15 @@ class PlayerConnection(private val context: Context) {
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            val dolby = controller?.currentTracks?.groups?.firstOrNull { it.type == C.TRACK_TYPE_AUDIO }?.getTrackFormat(0)?.sampleMimeType
-                ?.let { it in DOLBY_MIMES } == true
+            val mime = controller?.currentTracks?.groups?.firstOrNull { it.type == C.TRACK_TYPE_AUDIO }?.getTrackFormat(0)?.sampleMimeType
+            val dolby = mime != null && mime in DOLBY_MIMES
             _error.value = when (error.errorCode) {
                 // A Dolby stream (Atmos, Digital Plus) on a phone with no Dolby decoder, and no receiver to pass it to.
                 PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
                 PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
                 PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
                 PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
-                    -> if (dolby) "This phone can't decode Dolby audio. It plays through a Dolby-capable receiver or TV over HDMI or eARC."
+                    -> if (dolby) dolbyUnplayable(mime)
                 else error.cause?.message ?: error.message
                 PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
                 PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED ->
@@ -738,6 +738,14 @@ fun bestKbps(info: AudioFormatInfo?, measured: Int?, sourceKbps: Int?): Int? {
  * Atmos for E-AC-3 with objects (JOC) and for AC-4, Dolby Digital Plus for plain
  * E-AC-3, Dolby Digital for AC-3.
  */
+/**
+ * Why a Dolby stream didn't play. AC-3 and E-AC-3 have OpenTune's own decoder to fall back on
+ * (third_party/ffmpeg-dolby); AC-4 has none, as FFmpeg can't decode it.
+ */
+fun dolbyUnplayable(mime: String?): String =
+    if (mime == "audio/ac4") "This phone has no Dolby AC-4 decoder. AC-4 plays on phones with Dolby's own decoder, or through a Dolby-capable receiver or TV over HDMI or eARC."
+    else "This Dolby audio couldn't be decoded. It also plays through a Dolby-capable receiver or TV over HDMI or eARC."
+
 fun dolbyName(info: AudioFormatInfo?): String? {
     val mime = info?.mime?.lowercase().orEmpty()
     val codec = info?.codec?.lowercase().orEmpty()

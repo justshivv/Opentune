@@ -24,4 +24,9 @@ class DolbyNameTest {
         assertNull(dolbyName(info("audio/opus", "OPUS")))
         assertNull(dolbyName(null))
     }
+
+    @Test fun ac4IsTheOneWithNoFallbackDecoder() {
+        org.junit.Assert.assertTrue("AC-4" in dolbyUnplayable("audio/ac4"))
+        org.junit.Assert.assertFalse("AC-4" in dolbyUnplayable("audio/eac3-joc"))
+    }
 }
