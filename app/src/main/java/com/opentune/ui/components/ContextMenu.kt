@@ -435,12 +435,38 @@ fun CollectionContextMenu(
     val saved by LibraryStore.savedLists.collectAsState()
     val isSaved = saved.any { it.browseId == list.browseId }
     val kind = if (list.type == BrowseType.ALBUM) "album" else "playlist"
+    // Add to playlist: the list's songs are read, then the playlist picker takes over from the menu.
+    var adding by remember { mutableStateOf(false) }
+    if (adding) {
+        var songs by remember { mutableStateOf<List<com.opentune.data.model.Song>?>(null) }
+        LaunchedEffect(list.browseId) {
+            songs = try {
+                com.opentune.data.MusicRepository.collection(list.browseId).songs
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+        val found = songs
+        when {
+            found == null -> Unit
+            found.isEmpty() -> LaunchedEffect(Unit) {
+                com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't read the {0}'s songs", kind), context)
+                adding = false
+                onDismiss()
+            }
+            else -> AddAllToPlaylistDialog(found, onDismiss = { adding = false; onDismiss() }, onDone = { adding = false; onDismiss() })
+        }
+        return
+    }
     val entries = buildList {
         if (actions != null) {
             add(MenuEntry("Play", Icons.Rounded.PlayArrow) { actions.play(list.browseId, list.title, false) })
             add(MenuEntry("Shuffle", Icons.Rounded.Shuffle) { actions.play(list.browseId, list.title, true) })
             add(MenuEntry("Play next", Icons.AutoMirrored.Rounded.PlaylistPlay) { actions.playNext(list.browseId) })
             add(MenuEntry("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic) { actions.addToQueue(list.browseId) })
+            add(MenuEntry("Add to playlist", Icons.AutoMirrored.Rounded.PlaylistAdd) { adding = true })
             add(MenuEntry("Download all", Icons.Rounded.Download) { actions.downloadAll(list.browseId) })
             add(MenuEntry(com.opentune.i18n.Tr.f("Open {0}", kind), Icons.AutoMirrored.Rounded.KeyboardArrowRight) { actions.open(list.browseId, list.type) })
         }
@@ -451,5 +477,5 @@ fun CollectionContextMenu(
             },
         )
     }
-    ContextMenu(anchor, onDismiss, entries, liftCorner, preview)
+    ContextMenu(anchor, onDismiss = { if (!adding) onDismiss() }, entries = entries, liftCorner = liftCorner, preview = preview)
 }

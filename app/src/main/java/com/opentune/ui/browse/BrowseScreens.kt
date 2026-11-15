@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.aspectRatio
@@ -770,6 +771,12 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
     val saved = savedLists.any { it.browseId == c.browseId }
     val own = rememberOwnPlaylist(c)
     val accountSaved = rememberAccountSaved(c, own != null)
+    // Every song of the album or playlist into a playlist at once, from the same picker as one song.
+    var adding by remember { mutableStateOf(false) }
+    if (adding) {
+        com.opentune.ui.components.AddAllToPlaylistDialog(c.songs, onDismiss = { adding = false; onDismiss() }, onDone = { adding = false; onDismiss() })
+        return
+    }
     com.opentune.ui.components.FloatingCard(
         onDismiss = onDismiss,
         contentPadding = PaddingValues(0.dp),
@@ -796,6 +803,7 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
             com.opentune.ui.components.MenuRow(Icons.Filled.Refresh, "Refresh") { close(); onRefresh() }
             com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Filled.PlaylistPlay, "Play next") { close(); c.songs.asReversed().forEach(actions.playNext) }
             com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Filled.QueueMusic, "Add to queue") { close(); c.songs.forEach(actions.addToQueue) }
+            if (c.songs.isNotEmpty()) com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Filled.PlaylistAdd, if (isAlbum) "Add album to playlist" else "Add all to playlist") { adding = true }
             com.opentune.ui.components.MenuRow(Icons.Filled.Download, "Download all") {
                 close()
                 c.songs.forEach { com.opentune.data.download.Downloads.enqueue(context, it) }
