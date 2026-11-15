@@ -430,6 +430,21 @@ fun PlayerLayout(
     LaunchedEffect(Unit) {
         snapshotFlow { dragOffset == 0f }.distinctUntilChanged().collect { covering(it) }
     }
+    // On the lyrics, the system's gesture bar along the bottom is put away; a swipe up from the
+    // edge brings it back for a moment. It comes back for good on leaving the lyrics, starting
+    // to drag the player down, or closing it.
+    val lyricsView = androidx.compose.ui.platform.LocalView.current
+    val hideGestureBar = !docked && pane == Pane.LYRICS && dragOffset == 0f
+    androidx.compose.runtime.DisposableEffect(hideGestureBar) {
+        var ctx: android.content.Context? = lyricsView.context
+        while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) ctx = ctx.baseContext
+        val window = (ctx as? android.app.Activity)?.window
+        if (window == null || !hideGestureBar) return@DisposableEffect onDispose {}
+        val bars = androidx.core.view.WindowCompat.getInsetsController(window, lyricsView)
+        bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        bars.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+        onDispose { bars.show(androidx.core.view.WindowInsetsCompat.Type.navigationBars()) }
+    }
     // The cover leaves the card as it's dragged down and shrinks toward the
     // mini player with the finger; let go short and it settles back with the card.
     LaunchedEffect(docked, state.ui.reduceAnimation) {
