@@ -36,7 +36,7 @@ private const val MUSIC = "https://music.youtube.com"
 private const val DESTROY_AFTER_MS = 1_500L
 private const val SIGN_IN_URL =
     "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=" +
-        "https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F"
+            "https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F"
 
 /**
  * Google's own sign-in page in a WebView. Once it lands back on YouTube
@@ -70,12 +70,13 @@ fun LoginScreen(onDone: () -> Unit) {
         service = "YouTube Music",
         brand = YouTubeMusicRed,
         icon = Icons.Rounded.PlayCircle,
+        logo = com.opentune.R.drawable.ic_youtube_music,
         gives = "Your playlists, liked songs, history and recommendations",
         loading = loading,
         onBack = leave,
         unavailable = if (unavailable) {
             "Sign-in needs Android System WebView, which isn't working on this device. Update or turn it on in the " +
-                "Play Store, or sign in on your phone and use Link a device to sign this one in."
+                    "Play Store, or sign in on your phone and use Link a device to sign this one in."
         } else null,
     ) { webModifier ->
         AndroidView(
