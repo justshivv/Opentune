@@ -494,8 +494,11 @@ private fun AboutArtist(song: Song, base: Color, onOpenArtist: (ShelfItem) -> Un
         value = artistId?.let { id -> runCatching { InnertubeParser.parseArtistPage(Innertube.browse(id)) }.getOrNull() }
     }
     val name = page?.name ?: song.artist.substringBefore(",").substringBefore(" & ")
-    val apple by produceState<String?>(null, name) {
-        value = runCatching { com.opentune.data.covers.AppleArtistArtRepository.artFor(name)?.heroUrl }.getOrNull()
+    val apple by produceState<String?>(null, name, page) {
+        // Apple's photo only for the artist whose page this is, not a namesake (see artFor).
+        val p = page ?: return@produceState
+        val titles = p.songs.map { it.title } + p.sections.flatMap { sec -> sec.items.map { it.title } }
+        value = runCatching { com.opentune.data.covers.AppleArtistArtRepository.artFor(name, artistId ?: "", titles)?.heroUrl }.getOrNull()
     }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(base)) {
         Box(Modifier.fillMaxWidth().height(170.dp)) {

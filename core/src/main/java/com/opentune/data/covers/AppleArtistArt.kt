@@ -47,16 +47,30 @@ object AppleArtistArtRepository {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>?) = size > REMEMBERED
     }
 
-    /** What's already known for [artistName] without asking: null when never asked, or when Apple has nothing. */
-    fun cached(artistName: String): AppleArtistArt? = synchronized(cache) { cache[normalized(artistName)] }?.art
+    /**
+     * What's already known for [artistName] on the channel [channel] without asking: null when
+     * never asked, or when Apple has nothing that is surely this artist.
+     */
+    fun cached(artistName: String, channel: String): AppleArtistArt? = synchronized(cache) { cache[keyOf(artistName, channel)] }?.art
 
-    /** The header art for [artistName], or null when Apple has none or couldn't be asked. Never throws. */
-    suspend fun artFor(artistName: String): AppleArtistArt? {
-        val key = normalized(artistName)
-        if (key.isEmpty()) return null
+    private fun keyOf(artistName: String, channel: String) = normalized(artistName) + "|" + channel
+
+    /**
+     * The header art for [artistName], the artist of the YouTube channel [channel], or null when
+     * Apple has none or couldn't be asked. Never throws.
+     *
+     * Many artists share a name ("KK"). Apple's artist is only taken when some song or album
+     * of theirs has the same title as one of [titles], what the channel's page lists; with no
+     * titles to go by, a name alone isn't enough. So one KK's photo never heads another's page.
+     */
+    suspend fun artFor(artistName: String, channel: String, titles: Collection<String>): AppleArtistArt? {
+        if (normalized(artistName).isEmpty()) return null
+        val key = keyOf(artistName, channel)
         synchronized(cache) { cache[key] }?.let { return it.art }
+        val wanted = titles.mapNotNullTo(HashSet()) { title(it).ifEmpty { null } }
+        if (wanted.isEmpty()) return null
         val entry = withContext(Dispatchers.IO) {
-            runCatching { lookup(artistName, key) }
+            runCatching { lookup(artistName, wanted) }
                 .onFailure { DebugLog.d(TAG, "Apple art lookup failed for $artistName: $it") }
                 .getOrNull()
         } ?: return null
@@ -64,21 +78,39 @@ object AppleArtistArtRepository {
         return entry.art
     }
 
-    private fun lookup(artistName: String, key: String): Entry? {
-        val search = get("https://itunes.apple.com/search?term=${URLEncoder.encode(artistName, "UTF-8")}&entity=musicArtist&limit=5") ?: return null
+    /** A title as compared: no "(feat. …)", "[Remix]" or " - From …" part, case, accents or punctuation. */
+    internal fun title(s: String): String =
+        normalized(s.replace(Regex("""\([^)]*\)|\[[^]]*]"""), " ").substringBefore(" - "))
+
+    private fun lookup(artistName: String, wanted: Set<String>): Entry? {
+        val key = normalized(artistName)
+        val search = get("https://itunes.apple.com/search?term=${URLEncoder.encode(artistName, "UTF-8")}&entity=musicArtist&limit=10") ?: return null
         val results = JSONObject(search).optJSONArray("results") ?: JSONArray()
-        var page: String? = null
+        // Every Apple artist by this name, until one of them has a title the channel's page has.
         for (i in 0 until results.length()) {
             val r = results.getJSONObject(i)
-            if (normalized(r.optString("artistName")) == key) {
-                page = r.optString("artistLinkUrl").substringBefore('?').takeIf { it.isNotBlank() }
-                    ?: r.optLong("artistId").takeIf { it > 0 }?.let { "https://music.apple.com/us/artist/$it" }
-                break
+            if (normalized(r.optString("artistName")) != key) continue
+            val id = r.optLong("artistId").takeIf { it > 0 } ?: continue
+            if (!sharesATitle(id, wanted)) continue
+            val page = r.optString("artistLinkUrl").substringBefore('?').takeIf { it.isNotBlank() } ?: "https://music.apple.com/us/artist/$id"
+            val html = get(page) ?: return null
+            return Entry(parse(html))
+        }
+        return Entry(null)
+    }
+
+    /** Whether Apple's artist [id] has a song or album titled as one in [wanted]. */
+    private fun sharesATitle(id: Long, wanted: Set<String>): Boolean {
+        for (entity in listOf("song", "album")) {
+            val body = get("https://itunes.apple.com/lookup?id=$id&entity=$entity&limit=100") ?: continue
+            val items = JSONObject(body).optJSONArray("results") ?: continue
+            for (i in 0 until items.length()) {
+                val item = items.getJSONObject(i)
+                val names = listOf(item.optString("trackName"), item.optString("collectionName"))
+                if (names.any { it.isNotBlank() && title(it) in wanted }) return true
             }
         }
-        if (page == null) return Entry(null)
-        val html = get(page) ?: return null
-        return Entry(parse(html))
+        return false
     }
 
     internal fun parse(html: String): AppleArtistArt? {

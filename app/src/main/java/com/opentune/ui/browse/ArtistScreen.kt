@@ -176,14 +176,16 @@ internal fun ArtistPageView(
     // rather than replacing a visible face and leaving its palette tied to the previous one.
     val photo = remember(browseId, page?.name) {
         ArtistPhotos.pinned(browseId)
-            ?: page?.name?.let { com.opentune.data.covers.AppleArtistArtRepository.cached(it)?.heroUrl }
+            ?: page?.name?.let { com.opentune.data.covers.AppleArtistArtRepository.cached(it, browseId)?.heroUrl }
             ?: page?.thumbnailUrl.artworkAt(ARTIST_PHOTO_PX)
     }
     val context = LocalContext.current
     androidx.compose.runtime.LaunchedEffect(photo, page?.name) {
         val name = page?.name ?: return@LaunchedEffect
         photo?.let { ArtistPhotos.pin(browseId, it) }
-        val hero = com.opentune.data.covers.AppleArtistArtRepository.artFor(name)?.heroUrl
+        // Only an Apple artist with a song or album of this page's (see artFor): not a namesake's photo.
+        val titles = page.songs.map { it.title } + page.sections.flatMap { sec -> sec.items.map { it.title } }
+        val hero = com.opentune.data.covers.AppleArtistArtRepository.artFor(name, browseId, titles)?.heroUrl
         if (hero == null || hero == photo || ArtistPhotos.pinned(browseId) == hero) return@LaunchedEffect
         val ready = coil3.SingletonImageLoader.get(context).execute(
             coil3.request.ImageRequest.Builder(context).data(hero).size(ARTWORK_PREFETCH_PX)
@@ -309,7 +311,7 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
     // Apple Music's header for the artist, when it has one: a sharper photo, and
     // for some a looping video. YouTube's photo shows until (and unless) it comes.
     val name = page?.name
-    val apple = remember(name) { name?.let { com.opentune.data.covers.AppleArtistArtRepository.cached(it) } }
+    val apple = remember(name, photo) { name?.let { com.opentune.data.covers.AppleArtistArtRepository.cached(it, browseId) } }
     val shown = photo
     // The clip only where moving pictures are welcome and data is free.
     val video = apple?.videoUrl?.takeIf { apple?.heroUrl == shown && !still && !AppSettings.onMeteredNetwork() }

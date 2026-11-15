@@ -1,6 +1,7 @@
 package com.opentune.data.covers
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,5 +41,13 @@ class AppleArtistArtTest {
 
     @Test fun namesMatchWhateverTheirCaseAndAccents() {
         assertEquals(AppleArtistArtRepository.normalized("Beyoncé"), AppleArtistArtRepository.normalized("BEYONCE"))
+    }
+
+    @Test fun titlesAreComparedWithoutTheirExtras() {
+        val t = AppleArtistArtRepository::title
+        assertEquals(t("Tu Hi Meri Shab Hai"), t("Tu Hi Meri Shab Hai (From \"Gangster\")"))
+        assertEquals(t("Mannequin Challenge"), t("Mannequin Challenge (feat. Juice WRLD) [Remix]"))
+        assertEquals(t("Pehla Nasha"), t("Pehla Nasha - From Jo Jeeta Wohi Sikandar"))
+        assertNotEquals(t("Wabi Sabi"), t("Tu Hi Meri Shab Hai"))
     }
 }

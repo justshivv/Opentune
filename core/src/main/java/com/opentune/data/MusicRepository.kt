@@ -787,15 +787,29 @@ object MusicRepository {
     }
 
     /**
-     * The page of one of [song]'s artists by [name], when a song has several:
-     * the row's own artist id for the first name, else YouTube Music's artist
-     * search, taking the result whose name matches before the top one.
+     * The page of one of [song]'s artists by [name], when a song has several: the row's own
+     * artist id for the first name; else the artist the song itself links that name to on
+     * YouTube Music; only then YouTube Music's artist search, taking the result whose name
+     * matches before the top one. Many artists share a name ("KK"): a search alone opened
+     * whichever namesake came first, so the song's own links are asked before it.
      */
     suspend fun artistIdFor(song: Song, name: String): String? {
         val first = song.artist.split(", ", " & ").first().trim()
         if (name.equals(first, ignoreCase = true)) song.artistId?.let { return it }
-        val key = name.trim().lowercase()
+        val name0 = name.trim().lowercase()
+        // Remembered per song: the same name on another song may be someone else.
+        val key = "${song.videoId}|$name0"
         synchronized(artistIds) { artistIds[key] }?.let { return it }
+        if (isYouTubeId(song.videoId)) {
+            val linked = io {
+                runCatching { InnertubeParser.watchArtistLinks(Innertube.next(song.videoId), song.videoId)[name0] }
+                    .onFailure { if (it is CancellationException) throw it }.getOrNull()
+            }
+            if (linked != null) {
+                synchronized(artistIds) { artistIds[key] = linked }
+                return linked
+            }
+        }
         // A search can fail on a slow network: tried twice, then, for the first artist, the player's own queue.
         val found = io {
             repeat(2) {

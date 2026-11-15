@@ -78,8 +78,11 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
         value = runCatching { InnertubeParser.parseArtistPage(Innertube.browse(id)) }.getOrNull()
     }
     val name = page?.name ?: item.title
-    val hero by produceState<String?>(null, name) {
-        value = runCatching { com.opentune.data.covers.AppleArtistArtRepository.artFor(name)?.heroUrl }.getOrNull()
+    val hero by produceState<String?>(null, name, page) {
+        // Apple's photo only for the artist whose page this is, not a namesake (see artFor).
+        val p = page ?: return@produceState
+        val titles = p.songs.map { it.title } + p.sections.flatMap { sec -> sec.items.map { it.title } }
+        value = runCatching { com.opentune.data.covers.AppleArtistArtRepository.artFor(name, id, titles)?.heroUrl }.getOrNull()
     }
     val signature by produceState<ArtistSignature?>(null, name, ui.artistSignatures, ui.signatureApi) {
         value = if (ui.artistSignatures) ArtistSignatures.signatureFor(name, ui.signatureApi) else null

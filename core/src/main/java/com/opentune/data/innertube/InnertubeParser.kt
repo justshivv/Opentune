@@ -1252,6 +1252,27 @@ object InnertubeParser {
         return out.values.toList()
     }
 
+    /**
+     * Every artist the watch row for [videoId] links to, by the name each run shows (lower case):
+     * "Pritam & KK" links both. A song's row carries only its first artist's id ([Song.artistId]);
+     * this is how the others are opened at their own page rather than at a namesake's.
+     */
+    fun watchArtistLinks(root: JsonElement, videoId: String): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        watchRows(root).forEach { (primary, other) ->
+            listOfNotNull(primary, other).filter { it.s("videoId") == videoId }.forEach { row ->
+                (row.o("longBylineText").a("runs").orEmpty() + row.o("shortBylineText").a("runs").orEmpty()).forEach { run ->
+                    val browse = run.o("navigationEndpoint").o("browseEndpoint")
+                    val id = browse.s("browseId") ?: return@forEach
+                    val pageType = browse.o("browseEndpointContextSupportedConfigs").o("browseEndpointContextMusicConfig").s("pageType").orEmpty()
+                    val name = run.s("text")?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return@forEach
+                    if ("ARTIST" in pageType) out.putIfAbsent(name, id)
+                }
+            }
+        }
+        return out
+    }
+
     private fun watchSong(renderer: JsonObject): Song? {
         run {
             val videoId = renderer.s("videoId") ?: return null
