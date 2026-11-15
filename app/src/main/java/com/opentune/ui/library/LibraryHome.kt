@@ -1772,8 +1772,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                     if (!searching) item(key = "header") {
                         PlaylistHero(
                             name = playlist.name,
-                            source = if (playlist.spotifyId != null) "Spotify" else if (playlist.synced) "YouTube Music" else "On this phone",
-                            meta = com.opentune.ui.browse.playlistMeta(songs),
+                            source = if (playlist.spotifyId != null) "" else if (playlist.synced) "YouTube Music" else "On this phone",
+                            meta = (if (playlist.spotifyId != null) "Spotify · " else "") + com.opentune.ui.browse.playlistMeta(songs),
                             coverUrl = pageCoverUrl,
                             songs = songs,
                             buttons = {
