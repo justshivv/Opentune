@@ -1592,8 +1592,11 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         val found = songs.indices.filter { songs[it].title.contains(query.trim(), true) || songs[it].artist.contains(query.trim(), true) }
         when (order) {
             com.opentune.ui.browse.ListOrder.DEFAULT -> found
-            // Songs join a playlist at the end: newest first is the list from the bottom up.
-            com.opentune.ui.browse.ListOrder.RECENT -> found.asReversed()
+            // A Spotify list's songs carry when they were added there: newest first by that stamp.
+            // A local playlist's songs join at the end: newest first is the list from the bottom up.
+            com.opentune.ui.browse.ListOrder.RECENT ->
+                if (playlist.spotifyId != null) found.sortedByDescending { playlist.songs[it].addedAt }
+                else found.asReversed()
             com.opentune.ui.browse.ListOrder.A_TO_Z -> found.sortedBy { songs[it].title.lowercase() }
             com.opentune.ui.browse.ListOrder.Z_TO_A -> found.sortedByDescending { songs[it].title.lowercase() }
         }

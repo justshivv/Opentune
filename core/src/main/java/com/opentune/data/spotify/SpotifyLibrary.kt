@@ -27,7 +27,7 @@ object SpotifyLibrary {
     data class Playlist(val id: String, val name: String, val owner: String?, val imageUrl: String?)
 
     /** A song in a playlist, with Spotify's id for it. */
-    data class Item(val uri: String, val track: Spotify.Track)
+    data class Item(val uri: String, val track: Spotify.Track, val addedAt: Long = 0)
 
     internal data class Page<T>(val items: List<T>, val total: Int, val raw: Int, val revision: String? = null)
 
@@ -167,7 +167,7 @@ object SpotifyLibrary {
         val raw = content["items"] as? JsonArray ?: JsonArray(emptyList())
         val items = raw.mapNotNull { entry ->
             val data = entry.at("itemV2", "data") as? JsonObject ?: return@mapNotNull null
-            item(data, data.text("uri") ?: data.text("_uri"))
+            item(data, data.text("uri") ?: data.text("_uri"), addedAt(entry))
         }
         return Page(items, content.int("totalCount") ?: raw.size, raw.size, playlist.text("revisionId"))
     }
@@ -179,12 +179,12 @@ object SpotifyLibrary {
         val items = raw.mapNotNull { entry ->
             val wrapper = entry.at("track") as? JsonObject ?: return@mapNotNull null
             val data = wrapper["data"] as? JsonObject ?: return@mapNotNull null
-            item(data, wrapper.text("_uri") ?: data.text("uri"))
+            item(data, wrapper.text("_uri") ?: data.text("uri"), addedAt(entry))
         }
         return Page(items, tracks.int("totalCount") ?: raw.size, raw.size)
     }
 
-    private fun item(data: JsonObject, uri: String?): Item? {
+    private fun item(data: JsonObject, uri: String?, addedAt: Long = 0): Item? {
         if (uri == null || !uri.startsWith("spotify:track:")) return null
         val title = data.text("name")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         val artists = (data.at("artists", "items") as? JsonArray).orEmpty()
@@ -192,7 +192,21 @@ object SpotifyLibrary {
         val ms = (data.at("trackDuration", "totalMilliseconds") ?: data.at("duration", "totalMilliseconds"))
             .let { (it as? JsonPrimitive)?.longOrNull } ?: 0L
         val album = (data.at("albumOfTrack", "name") as? JsonPrimitive)?.contentOrNull
-        return Item(uri, Spotify.Track(title, artists, album, ms))
+        return Item(uri, Spotify.Track(title, artists, album, ms), addedAt)
+    }
+
+    /**
+     * When a song was added to the list, from the stamp Spotify puts on the
+     * entry itself, in epoch milliseconds; 0 when the entry carries none.
+     */
+    private fun addedAt(entry: JsonElement): Long {
+        val raw = (entry as? JsonObject)?.get("addedAt") ?: return 0
+        val text = when (raw) {
+            is JsonObject -> (raw["isoString"] as? JsonPrimitive)?.contentOrNull
+            is JsonPrimitive -> raw.contentOrNull
+            else -> null
+        } ?: return 0
+        return runCatching { java.time.Instant.parse(text).toEpochMilli() }.getOrNull() ?: text.toLongOrNull() ?: 0
     }
 
     /** The widest source: Spotify lists sizes in no fixed order, sometimes without them. */

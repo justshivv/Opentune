@@ -171,7 +171,7 @@ object SpotifySync {
                     val revision = gate.withPermit { SpotifyLibrary.revision(cookie, list.id) }
                     if (revision == null || revision != mine.spotifyRevision) return@async list
                     if (mine.name != list.name || mine.coverUrl != list.imageUrl) {
-                        LibraryStore.putSpotifyPlaylist(list.id, list.name, mine.songs.map { it.toSong() }, revision, list.imageUrl)
+                        LibraryStore.putSpotifyPlaylistRefs(list.id, list.name, mine.songs, revision, list.imageUrl)
                     }
                     null
                 }
@@ -182,7 +182,7 @@ object SpotifySync {
             _status.update { it.copy(current = list.name, index = i + 1, count = stale.size) }
             val (items, revision) = SpotifyLibrary.tracks(cookie, list.id)
             val songs = matchAll(items)
-            LibraryStore.putSpotifyPlaylist(list.id, list.name, songs.map { it.toSong() }, revision, list.imageUrl)
+            LibraryStore.putSpotifyPlaylistRefs(list.id, list.name, songs, revision, list.imageUrl)
             save(_status.value.lastSynced)
         }
         // Only after the whole library was listed: a failed read must not empty Library.
@@ -215,9 +215,12 @@ object SpotifySync {
         val gate = Semaphore(PARALLEL)
         items.map { item ->
             async {
-                found[item.uri] ?: gate.withPermit {
+                val ref = found[item.uri] ?: gate.withPermit {
                     runCatching { PlaylistImport.match(item.track) }.getOrNull()?.let(SongRef::of)?.also { found[item.uri] = it }
                 }
+                // Each song carries when it was added to this list on Spotify, so the
+                // list's order by recency lives in the songs, not in their positions.
+                ref?.copy(addedAt = item.addedAt)
             }
         }.awaitAll().filterNotNull()
     }
