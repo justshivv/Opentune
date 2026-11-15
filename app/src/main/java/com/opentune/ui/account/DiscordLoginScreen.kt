@@ -139,6 +139,9 @@ private fun DiscordWebPageView(
                 onLoading(false)
             }.getOrNull() ?: return@AndroidView android.view.View(context)
             view.apply {
+                // Invisible until its first page starts: a new WebView paints one frame
+                // at the wrong place, over the header, before it settles into its box.
+                visibility = android.view.View.INVISIBLE
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 // Discord's mobile/WebView entry point can render an empty app shell.
@@ -186,10 +189,11 @@ private fun DiscordWebPageView(
                             onProblem("Discord's page returned HTTP ${response.statusCode}. Try Retry page shortly.")
                         }
                     }
-                    override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) { if (!gone.get()) { onLoading(true); onAddress(addressLabel(url)) } }
+                    override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) { if (!gone.get()) { onLoading(true); onAddress(addressLabel(url)); view.visibility = android.view.View.VISIBLE } }
                     override fun onPageFinished(view: WebView, url: String?) {
                         if (gone.get()) return
                         onLoading(false)
+                        view.visibility = android.view.View.VISIBLE
                         onAddress(addressLabel(url))
                         view.probePageColor(onPageColor)
                         check(view, url)

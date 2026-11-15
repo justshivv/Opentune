@@ -60,7 +60,8 @@ class SpotifyConnectActivity : ComponentActivity() {
         } else {
             web = page
             frame = FrameLayout(this).apply { addView(page, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
-            if (savedInstanceState == null) page.loadUrl(LOGIN) else page.restoreState(savedInstanceState)
+            // The page starts once the screen is up, so the header is there first.
+            page.post { if (savedInstanceState == null) page.loadUrl(LOGIN) else page.restoreState(savedInstanceState) }
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -109,6 +110,9 @@ class SpotifyConnectActivity : ComponentActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun newWebView(): WebView = WebView(this).apply {
+        // Invisible until its first page starts: a new WebView paints one frame
+        // at the wrong place, over the header, before it settles into its box.
+        visibility = android.view.View.INVISIBLE
         setBackgroundColor(Color.WHITE)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -132,10 +136,12 @@ class SpotifyConnectActivity : ComponentActivity() {
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             pageAddress = com.opentune.ui.account.addressLabel(url)
+            view.visibility = android.view.View.VISIBLE
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
             loading = false
+            view.visibility = android.view.View.VISIBLE
             pageAddress = com.opentune.ui.account.addressLabel(url)
             view.probePageColor { pageColor = it }
             signedIn()

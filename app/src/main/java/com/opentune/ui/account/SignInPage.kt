@@ -1,6 +1,12 @@
 package com.opentune.ui.account
 
 import android.webkit.WebView
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -8,13 +14,20 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -68,6 +81,13 @@ internal fun SignInPage(
         }
     }
     var showHelp by remember { mutableStateOf(false) }
+    // The header paints its first frame before the browser is built: building a WebView
+    // stalls the main thread, and the header used to wait for it.
+    var webShown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        webShown = true
+    }
     val initialHint = remember { hint }
     // Static tips live behind Help; a new browser error is brought to the user's attention.
     LaunchedEffect(hint) { if (hint != null && hint != initialHint) showHelp = true }
@@ -96,6 +116,7 @@ internal fun SignInPage(
                 Row(
                     Modifier.weight(1f).height(48.dp)
                         .background(scheme.surfaceContainerHigh, androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+                        .then(if (loading) Modifier.borderLoader(brand) else Modifier)
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -123,15 +144,16 @@ internal fun SignInPage(
                     }
                 }
             }
-            Box(Modifier.weight(1f).fillMaxWidth().testTag("sign-in-browser")) {
-                if (unavailable == null) web(Modifier.fillMaxSize())
+            // Clipped to its box: a WebView's first frames can paint past its bounds, and
+            // nothing it draws may ever reach the header above it.
+            Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().testTag("sign-in-browser")) {
+                if (unavailable == null) {
+                    if (webShown) web(Modifier.fillMaxSize())
+                }
                 else Box(Modifier.fillMaxSize().background(scheme.surfaceContainer).padding(24.dp), Alignment.Center) {
                     Text(unavailable, Modifier.verticalScroll(rememberScrollState()),
                         style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
                 }
-                if (loading && unavailable == null) LinearProgressIndicator(
-                    Modifier.fillMaxWidth().height(3.dp), color = brand, trackColor = Color.Transparent,
-                )
             }
         }
     }
@@ -143,6 +165,49 @@ internal fun SignInPage(
                 style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             if (hint != null) Text(hint, style = MaterialTheme.typography.bodyMedium)
             extra?.invoke { showHelp = false }
+        }
+    }
+}
+
+/**
+ * A short run of [color] travelling around the element's rounded edge, one lap every
+ * 1.4 seconds. The lap is read only in the draw phase, so it costs no recomposition.
+ */
+@Composable
+private fun Modifier.borderLoader(color: Color): Modifier {
+    val transition = rememberInfiniteTransition(label = "sign-in loader")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1_400, easing = LinearEasing), RepeatMode.Restart),
+        label = "sign-in loader lap",
+    )
+    return drawWithContent {
+        drawContent()
+        val stroke = 2.dp.toPx()
+        val inset = stroke / 2f
+        val path = Path()
+        path.addRoundRect(
+            RoundRect(
+                inset, inset, size.width - inset, size.height - inset,
+                CornerRadius(size.height / 2f - inset),
+            ),
+        )
+        val measure = PathMeasure()
+        measure.setPath(path, false)
+        val length = measure.length
+        if (length > 0f) {
+            val run = length * 0.22f
+            val head = progress * length
+            val tail = head - run
+            val out = Path()
+            if (tail >= 0f) {
+                measure.getSegment(tail, head, out, true)
+            } else {
+                measure.getSegment(0f, head, out, true)
+                measure.getSegment(length + tail, length, out, true)
+            }
+            drawPath(out, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
         }
     }
 }

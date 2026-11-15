@@ -103,6 +103,9 @@ fun LoginScreen(onDone: () -> Unit) {
                     loading = false
                 }.getOrNull() ?: return@AndroidView android.view.View(context)
                 view.apply {
+                    // Invisible until its first page starts: a new WebView paints one frame
+                    // at the wrong place, over the header, before it settles into its box.
+                    visibility = android.view.View.INVISIBLE
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -134,12 +137,13 @@ fun LoginScreen(onDone: () -> Unit) {
                     }
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                            if (!gone.get()) { loading = true; pageAddress = addressLabel(url) }
+                            if (!gone.get()) { loading = true; pageAddress = addressLabel(url); view.visibility = android.view.View.VISIBLE }
                         }
 
                         override fun onPageFinished(view: WebView, url: String?) {
                             if (gone.get()) return
                             loading = false
+                            view.visibility = android.view.View.VISIBLE
                             pageAddress = addressLabel(url)
                             view.probePageColor { pageColor = it }
                             check(view, url)
