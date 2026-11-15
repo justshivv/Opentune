@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Translate
@@ -103,31 +103,37 @@ internal fun LyricsTextSheet(lines: List<String>, synced: Boolean, onDismiss: ()
             }
         },
     ) {
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+        // One lazy list for the whole body: the ninety-odd languages compose only
+        // as they show, instead of every row being built and measured up front.
+        LazyColumn(Modifier.weight(1f)) {
             if (synced && Romanizer.available) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Romanized lyrics")
-                        Text(
-                            "Latin letters under each line in another script",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                item {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Romanized lyrics")
+                            Text(
+                                "Latin letters under each line in another script",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = settings.romanize,
+                            onCheckedChange = { v -> AppSettings.updateLyrics { it.copy(romanize = v) } },
                         )
                     }
-                    Switch(
-                        checked = settings.romanize,
-                        onCheckedChange = { v -> AppSettings.updateLyrics { it.copy(romanize = v) } },
-                    )
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 }
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
-            Text(
-                "Translate to",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-            LyricsTranslator.LANGUAGES.forEach { lang ->
+            item {
+                Text(
+                    "Translate to",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            items(LyricsTranslator.LANGUAGES, key = { it.code }) { lang ->
                 Row(
                     Modifier.fillMaxWidth().clickable { picked = lang.code }.padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -141,12 +147,14 @@ internal fun LyricsTextSheet(lines: List<String>, synced: Boolean, onDismiss: ()
                 }
             }
             if (failed) {
-                Text(
-                    "Couldn't translate just now. Check your connection and try again.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 10.dp),
-                )
+                item {
+                    Text(
+                        "Couldn't translate just now. Check your connection and try again.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                }
             }
         }
     }
