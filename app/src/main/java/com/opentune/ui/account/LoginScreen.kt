@@ -56,6 +56,7 @@ internal fun addressLabel(url: String?): String? {
 fun LoginScreen(onDone: () -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var pageAddress by remember { mutableStateOf<String?>(null) }
+    var pageColor by remember { mutableStateOf<androidx.compose.ui.graphics.Color?>(null) }
     var finished by remember { mutableStateOf(false) }
     // Set once the screen has gone: a page that finishes loading after that is ignored.
     val gone = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
@@ -81,6 +82,7 @@ fun LoginScreen(onDone: () -> Unit) {
         icon = Icons.Rounded.PlayCircle,
         logo = com.opentune.R.drawable.ic_youtube_music,
         url = pageAddress,
+        pageColor = pageColor,
         gives = "Your playlists, liked songs, history and recommendations",
         loading = loading,
         onBack = leave,
@@ -139,13 +141,14 @@ fun LoginScreen(onDone: () -> Unit) {
                             if (gone.get()) return
                             loading = false
                             pageAddress = addressLabel(url)
+                            view.probePageColor { pageColor = it }
                             check(view, url)
                             for (wait in listOf(1_000L, 2_500L, 5_000L)) main.postDelayed({ if (!gone.get()) check(view, view.url) }, wait)
                         }
 
                         // YouTube's pages change address without loading a new page.
                         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
-                            if (!gone.get()) { pageAddress = addressLabel(url); check(view, url) }
+                            if (!gone.get()) { pageAddress = addressLabel(url); view.probePageColor { pageColor = it }; check(view, url) }
                         }
                     }
                     web.set(this)

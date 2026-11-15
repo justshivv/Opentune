@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.viewinterop.AndroidView
 import com.opentune.data.settings.AppSettings
 import com.opentune.ui.account.SignInPage
+import com.opentune.ui.account.probePageColor
 import com.opentune.ui.account.SpotifyGreen
 import com.opentune.ui.theme.OpenTuneTheme
 
@@ -48,6 +49,7 @@ class SpotifyConnectActivity : ComponentActivity() {
     private var loading by mutableStateOf(true)
     private var unavailable by mutableStateOf(false)
     private var pageAddress by mutableStateOf<String?>(null)
+    private var pageColor by mutableStateOf<androidx.compose.ui.graphics.Color?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,6 +87,7 @@ class SpotifyConnectActivity : ComponentActivity() {
                     unavailable = if (unavailable) "This phone's web view isn't working, so Spotify's sign-in page can't open. Update Android System WebView in the Play Store and try again." else null,
                     hint = "If Google sign-in won't open here, use your Spotify email or username, or a one-time code by email.",
                     url = pageAddress,
+                    pageColor = pageColor,
                 ) { modifier ->
                     frame?.let { f -> AndroidView(factory = { f }, modifier = modifier) }
                 }
@@ -134,6 +137,7 @@ class SpotifyConnectActivity : ComponentActivity() {
         override fun onPageFinished(view: WebView, url: String?) {
             loading = false
             pageAddress = com.opentune.ui.account.addressLabel(url)
+            view.probePageColor { pageColor = it }
             signedIn()
         }
 
