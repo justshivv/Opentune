@@ -830,6 +830,10 @@ data class LyricsSettings(
     val offsets: Map<String, Long> = emptyMap(),
     /** A line in Latin letters under each one in another script. */
     val romanize: Boolean = true,
+    /** Lyrics are shown translated into this language, a line under each original; blank is off. */
+    val translateTo: String = "",
+    /** The language last picked for translation, offered first in the translate sheet. */
+    val translateTarget: String = "",
     /** Per-song source picked from the player's "Lyrics source"; the others aren't asked first. */
     val chosen: Map<String, LyricsSource> = emptyMap(),
 ) {
