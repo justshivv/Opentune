@@ -160,6 +160,8 @@ fun SongMenuSheet(
         ?.let { id -> playlists.firstOrNull { it.id == id } }
         ?.takeIf { p -> p.spotifyId == null && p.songs.none { it.videoId == song.videoId } }
     val download = downloads[song.videoId]
+    // Lite three-dot menu (Settings): the menu is a plain page, there at once, instead of a rising card.
+    val menuAsPage = asPage || com.opentune.data.settings.AppSettings.ui.collectAsState().value.liteThreeDotMenu
     // Files on this phone and songs on your server: no YouTube actions.
     val local = !isYouTubeId(song.videoId)
     var pickPlaylist by remember { mutableStateOf(false) }
@@ -171,7 +173,7 @@ fun SongMenuSheet(
         val card = LocalFloatingCard.current
         val close: () -> Unit = { card?.close() ?: onDismiss() }
         // The page shows the song larger itself.
-        if (!asPage) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (!menuAsPage) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(56.dp))
             Spacer(Modifier.size(14.dp))
             Column(Modifier.weight(1f)) {
@@ -274,7 +276,7 @@ fun SongMenuSheet(
             Spacer(Modifier.size(12.dp))
         }
     }
-    if (asPage) {
+    if (menuAsPage) {
         SongMenuPage(song, onDismiss, header, body)
     } else {
         FloatingCard(

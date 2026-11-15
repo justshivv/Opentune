@@ -25,7 +25,9 @@ import androidx.compose.ui.Alignment
  * Every stored listen in time order, including repeat listens; no 30-song
  * preview limit. The Remote tab is the signed-in account's history on
  * YouTube Music itself, read live when it's opened: nothing is stored
- * here, so a listen the app already has is never counted twice.
+ * here, so a listen the app already has is never counted twice. The
+ * Local / Remote switch is shown only when signed in; signed out, there
+ * is no switch and the page is the local list alone.
  */
 @Composable
 fun ListeningHistoryScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
@@ -51,13 +53,13 @@ fun ListeningHistoryScreen(contentPadding: PaddingValues, actions: SongActions, 
     val songs = remember(ordered) { ordered.map { it.toSong() } }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item { PageHeader("Listening history", onBack = onBack) }
-        item {
+        if (signedIn) item {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                 SegmentedButton(!remote, { remote = false }, SegmentedButtonDefaults.itemShape(0, 2)) { Text("Local") }
                 SegmentedButton(remote, { remote = true }, SegmentedButtonDefaults.itemShape(1, 2)) { Text("Remote") }
             }
         }
-        if (!remote) {
+        if (!remote || !signedIn) {
             if (songs.isEmpty()) item { Text("Your listening history will appear here.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge) }
             itemsIndexed(ordered, key = { i, record -> "$i:${record.playedAt}:${record.videoId}" }) { i, record ->
                 val date = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM)
@@ -70,8 +72,6 @@ fun ListeningHistoryScreen(contentPadding: PaddingValues, actions: SongActions, 
                     isCurrent = song.videoId == actions.currentVideoId, isPlaying = actions.isPlaying,
                     onPlayNext = { actions.playNext(song) }, onAddToQueue = { actions.addToQueue(song) })
             }
-        } else if (!signedIn) {
-            item { Text("Sign in with your YouTube account to see the history it keeps.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge) }
         } else if (remoteFailed) {
             item { Text("Couldn't load your YouTube history.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge) }
         } else {

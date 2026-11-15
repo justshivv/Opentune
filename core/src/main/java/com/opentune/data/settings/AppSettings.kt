@@ -439,6 +439,8 @@ data class InterfaceSettings(
     /** Lite mode has been offered on this device (turned on if it suited), after which it's the listener's. */
     val liteChecked: Boolean = false,
     val reduceAnimation: Boolean = false,
+    /** The song menu opens as a plain page, there at once with no animation, instead of a card rising from the bottom. */
+    val liteThreeDotMenu: Boolean = false,
     /** The mark's dive into the app when it starts. */
     val openingAnimation: Boolean = true,
     /** Solid fills instead of frosted glass. */

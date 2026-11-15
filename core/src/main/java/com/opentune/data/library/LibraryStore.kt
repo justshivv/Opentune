@@ -50,6 +50,13 @@ data class SongRef(
      * songs saved before it was kept, and everywhere outside Liked.
      */
     val likedAt: Long = 0,
+    /**
+     * When the song was added to a Spotify list, in epoch milliseconds, for
+     * songs in a playlist kept from Spotify: the list is shown newest-first
+     * by it, so the order lives in the songs themselves and no sync can
+     * scramble it. Zero when Spotify didn't say, and everywhere else.
+     */
+    val addedAt: Long = 0,
 ) {
     fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit)
 
@@ -438,8 +445,12 @@ object LibraryStore {
      * The copy of Spotify playlist [spotifyId]: made at the end of the list the
      * first time, its name, cover and songs replaced after that.
      */
-    fun putSpotifyPlaylist(spotifyId: String, name: String, songs: List<Song>, revision: String?, coverUrl: String?) {
-        val refs = songs.distinctBy { it.videoId }.map(SongRef::of)
+    fun putSpotifyPlaylist(spotifyId: String, name: String, songs: List<Song>, revision: String?, coverUrl: String?) =
+        putSpotifyPlaylistRefs(spotifyId, name, songs.map(SongRef::of), revision, coverUrl)
+
+    /** As [putSpotifyPlaylist], with the songs already as refs, so what the refs carry (like when each song was added on Spotify) is kept. */
+    fun putSpotifyPlaylistRefs(spotifyId: String, name: String, songs: List<SongRef>, revision: String?, coverUrl: String?) {
+        val refs = songs.distinctBy { it.videoId }
         update { d ->
             val existing = d.playlists.firstOrNull { it.spotifyId == spotifyId }
             if (existing == null) {
