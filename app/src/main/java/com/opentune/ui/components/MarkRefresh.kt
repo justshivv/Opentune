@@ -67,7 +67,13 @@ fun MarkRefreshBox(
     val state = rememberPullToRefreshState()
     val still = AppSettings.ui.collectAsState().value.reduceAnimation
     val haptics = rememberHaptics()
-    val loading by androidx.compose.runtime.rememberUpdatedState(isRefreshing)
+    // Only a refresh the person pulled for shows the mark and holds the page down for it. One the
+    // page starts on its own (coming back to it, say) loads quietly underneath: shown, the mark
+    // slid in over whatever was at the top of the page without the page moving to make room.
+    var pulled by remember { mutableStateOf(false) }
+    LaunchedEffect(isRefreshing) { if (!isRefreshing) pulled = false }
+    val showing = isRefreshing && pulled
+    val loading by androidx.compose.runtime.rememberUpdatedState(showing)
     // A tick as the pull passes the line (not as the indicator settles while loading).
     LaunchedEffect(state) {
         snapshotFlow { state.distanceFraction >= 1f }.distinctUntilChanged().collect { past ->
@@ -78,7 +84,7 @@ fun MarkRefreshBox(
     // back up, so the mark doesn't sit over the content scrolling under it.
     var tucked by remember { mutableStateOf(false) }
     val tuck by androidx.compose.animation.core.animateFloatAsState(if (tucked) 1f else 0f, tween(220), label = "tuck")
-    LaunchedEffect(isRefreshing) { if (!isRefreshing) tucked = false }
+    LaunchedEffect(showing) { if (!showing) tucked = false }
     val watchScroll = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -88,11 +94,11 @@ fun MarkRefreshBox(
         }
     }
     PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = { haptics.press(); onRefresh() },
+        isRefreshing = showing,
+        onRefresh = { pulled = true; haptics.press(); onRefresh() },
         state = state,
         modifier = modifier,
-        indicator = { MarkIndicator(state, isRefreshing, still, Modifier.align(Alignment.TopCenter).graphicsLayer { alpha = 1f - tuck }) },
+        indicator = { MarkIndicator(state, showing, still, Modifier.align(Alignment.TopCenter).graphicsLayer { alpha = 1f - tuck }) },
     ) {
         // The page follows the pull, slowing as it goes, and holds a little down while loading.
         Box(
