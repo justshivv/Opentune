@@ -1705,8 +1705,15 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     }
     // Songs picked together (long press, then Select): the bar over the top acts on them.
     val selection = com.opentune.ui.components.rememberSongSelection()
+    // The Liked cover setting covers Spotify's Liked Songs too: with it on, the page is
+    // covered by the newest song added there (the latest added stamp), not Spotify's heart cover.
+    val pageCoverUrl = if (playlist.spotifyId == com.opentune.data.spotify.SpotifyLibrary.LIKED_ID && AppSettings.ui.collectAsState().value.likedCoverFromLatest) {
+        playlist.songs.maxByOrNull { it.addedAt }?.thumbnailUrl?.takeIf { it.isNotBlank() } ?: playlist.coverUrl
+    } else {
+        playlist.coverUrl
+    }
     // The page's background as Settings ask for it, from the playlist's cover or its first song's.
-    com.opentune.ui.browse.ListPageTint(coverUrl = playlist.coverUrl ?: playlist.songs.firstOrNull()?.thumbnailUrl) {
+    com.opentune.ui.browse.ListPageTint(coverUrl = pageCoverUrl ?: playlist.songs.firstOrNull()?.thumbnailUrl) {
         // The page's menu is composed inside the tint, so its sheet wears the page's colours.
         if (moreOpen) LocalListMoreSheet(playlist, songs, actions,
             onRefresh = {
@@ -1767,7 +1774,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                             name = playlist.name,
                             source = if (playlist.spotifyId != null) "Spotify" else if (playlist.synced) "YouTube Music" else "On this phone",
                             meta = com.opentune.ui.browse.playlistMeta(songs),
-                            coverUrl = playlist.coverUrl,
+                            coverUrl = pageCoverUrl,
                             songs = songs,
                             buttons = {
                                 com.opentune.ui.browse.ListPlayRow(
