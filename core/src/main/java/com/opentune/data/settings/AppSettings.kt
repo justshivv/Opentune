@@ -374,6 +374,8 @@ data class PlaybackSettings(
     val swipeToQueue: Boolean = true,
     /** Buffer the next track and resolve its neighbours early, for instant skips. */
     val preloadUpcoming: Boolean = true,
+    /** Deepen preloading (20s buffer, 3 neighbours resolved) when on Wi-Fi or unmetered networks. */
+    val preloadBoostOnWifi: Boolean = true,
     /** A downloaded song streams in its best quality while there's internet; its file plays offline. */
     val streamDownloadsOnline: Boolean = true,
     /** Swap to a clearly better stream mid-song when one turns up. */

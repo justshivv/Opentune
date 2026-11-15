@@ -991,6 +991,15 @@ private fun settingsSections(
                 Entry("Preload upcoming songs", "latency fast skip instant buffer") {
                     ToggleRow("Preload upcoming songs", pb.preloadUpcoming, { v -> AppSettings.updatePlayback { it.copy(preloadUpcoming = v) } }, summary = "Next and previous songs start almost instantly. Uses a little extra data.", icon = Icons.Rounded.Speed)
                 },
+                if (pb.preloadUpcoming) Entry("Boost preloading on Wi-Fi", "preload wifi unmetered buffer performance speed") {
+                    ToggleRow(
+                        "Boost preloading on Wi-Fi",
+                        pb.preloadBoostOnWifi,
+                        { v -> AppSettings.updatePlayback { it.copy(preloadBoostOnWifi = v) } },
+                        summary = "Pre-buffers 20 seconds ahead and resolves 3 songs early when connected to Wi-Fi",
+                        icon = Icons.Rounded.Wifi,
+                    )
+                } else null,
                 Entry("Upgrade quality while playing", "better stream premium 256 opus swap") {
                     ToggleRow("Upgrade quality while playing", pb.qualityUpgrade, { v -> AppSettings.updatePlayback { it.copy(qualityUpgrade = v) } }, summary = "If a clearly better stream turns up a few seconds in, switch to it without stopping", icon = Icons.Rounded.HighQuality, beta = true)
                 },
