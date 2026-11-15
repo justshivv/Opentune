@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -958,10 +960,21 @@ object AppSettings {
         _recentAddonSearches.value = s.recentAddonSearches
     }
 
+    // Settings arrive in bursts — a slider drag fires dozens of updates a
+    // second — so a change is published at once (the UI and the sound effects
+    // stay live) but the document is written out on a short delay, once the
+    // burst settles, instead of the whole document being serialized and
+    // stored on every single tick.
+    private val persistHandler = Handler(Looper.getMainLooper())
+    private val persistWrite = Runnable {
+        val p = prefs ?: return@Runnable
+        p.edit { putString(K_STATE, json.encodeToString(SettingsState.serializer(), _state.value)) }
+    }
+
     private fun update(transform: (SettingsState) -> SettingsState) {
-        val s = transform(_state.value)
-        publish(s)
-        prefs?.edit { putString(K_STATE, json.encodeToString(SettingsState.serializer(), s)) }
+        publish(transform(_state.value))
+        persistHandler.removeCallbacks(persistWrite)
+        persistHandler.postDelayed(persistWrite, 600)
     }
 
     fun updateTheme(t: (ThemeSettings) -> ThemeSettings) = update { it.copy(theme = t(it.theme)) }
