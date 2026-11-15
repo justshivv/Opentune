@@ -38,6 +38,14 @@ private const val SIGN_IN_URL =
     "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=" +
             "https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F"
 
+/** The page's address as it is shown under the service's name: the host and the path, without the scheme or the query. */
+private fun addressLabel(url: String?): String? {
+    val uri = url?.let { runCatching { android.net.Uri.parse(it) }.getOrNull() } ?: return null
+    val host = uri.host ?: return null
+    val path = uri.path?.takeIf { it.isNotBlank() && it != "/" } ?: ""
+    return host + path
+}
+
 /**
  * Google's own sign-in page in a WebView. Once it lands back on YouTube
  * Music with a session cookie, the cookie is handed to [AccountStore] and
@@ -47,6 +55,7 @@ private const val SIGN_IN_URL =
 @Composable
 fun LoginScreen(onDone: () -> Unit) {
     var loading by remember { mutableStateOf(true) }
+    var pageAddress by remember { mutableStateOf<String?>(null) }
     var finished by remember { mutableStateOf(false) }
     // Set once the screen has gone: a page that finishes loading after that is ignored.
     val gone = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
@@ -71,6 +80,7 @@ fun LoginScreen(onDone: () -> Unit) {
         brand = YouTubeMusicRed,
         icon = Icons.Rounded.PlayCircle,
         logo = com.opentune.R.drawable.ic_youtube_music,
+        url = pageAddress,
         gives = "Your playlists, liked songs, history and recommendations",
         loading = loading,
         onBack = leave,
@@ -122,19 +132,20 @@ fun LoginScreen(onDone: () -> Unit) {
                     }
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                            if (!gone.get()) loading = true
+                            if (!gone.get()) { loading = true; pageAddress = addressLabel(url) }
                         }
 
                         override fun onPageFinished(view: WebView, url: String?) {
                             if (gone.get()) return
                             loading = false
+                            pageAddress = addressLabel(url)
                             check(view, url)
                             for (wait in listOf(1_000L, 2_500L, 5_000L)) main.postDelayed({ if (!gone.get()) check(view, view.url) }, wait)
                         }
 
                         // YouTube's pages change address without loading a new page.
                         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
-                            if (!gone.get()) check(view, url)
+                            if (!gone.get()) { pageAddress = addressLabel(url); check(view, url) }
                         }
                     }
                     web.set(this)

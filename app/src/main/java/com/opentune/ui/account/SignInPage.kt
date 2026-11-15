@@ -37,6 +37,7 @@ internal fun SignInPage(
     unavailable: String? = null,
     hint: String? = null,
     logo: Int? = null,
+    url: String? = null,
     extra: (@Composable (closeHelp: () -> Unit) -> Unit)? = null,
     privacy: String? = null,
     web: @Composable (Modifier) -> Unit,
@@ -60,9 +61,14 @@ internal fun SignInPage(
                 if (logo != null) {
                     androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(logo), null, Modifier.size(24.dp))
                 } else Icon(icon, null, Modifier.size(24.dp), tint = brand)
-                Text(service, Modifier.weight(1f).padding(horizontal = 12.dp),
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text(service,
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (url != null) Text(url,
+                        style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 IconButton(onClick = { showHelp = true }) { Icon(Icons.Rounded.Info, "Sign-in help") }
             }
             Box(Modifier.weight(1f).fillMaxWidth().testTag("sign-in-browser")) {
