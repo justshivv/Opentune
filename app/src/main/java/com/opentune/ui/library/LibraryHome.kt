@@ -998,71 +998,71 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
     val selectionRows = remember(list) { list.map { it.song.videoId to it.song.toSong() } }
     LaunchedEffect(tab) { if (tab != DownloadsTab.SONGS) selection.clear() }
     androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
-    Box(Modifier.fillMaxSize()) {
-    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item { PageHeader(com.opentune.ui.theme.tr("Downloads"), onBack = onBack) }
-        if (list.isEmpty()) {
-            item {
-                MessageState(Icons.Rounded.Download, "No downloads yet", Modifier.padding(top = 32.dp), message = "Pick Download from any song's menu to keep it for offline listening.")
-            }
-            return@LazyColumn
-        }
-        item {
-            com.opentune.ui.components.PillSegmented(DownloadsTab.entries, tab, { it.label(list.size, lists.size) }, { tab = it },
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
-        }
-        if (tab == DownloadsTab.PLAYLISTS) {
-            if (lists.isEmpty()) item {
-                MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "No playlists downloaded", Modifier.padding(top = 32.dp),
-                    message = "Use Download on a playlist or album page to keep the whole list offline.")
-            }
-            items(lists, key = { "list:${it.first.id}" }) { (l, have) ->
-                PlaylistRow(l.thumbnailUrl, l.title, com.opentune.i18n.Tr.f("{0} of {1} downloaded · plays offline", have, l.songIds.size), { onOpenList(l.id) }, Modifier.animateItem())
-            }
-            return@LazyColumn
-        }
-        item {
-            PlayButtons(
-                onPlay = { actions.playAll(ready, 0, false, "Downloads") },
-                onShuffle = { actions.playAll(ready, 0, true, "Downloads") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-        }
-        items(list, key = { it.song.videoId }) { e ->
-            val song = e.song.toSong()
-            SongListItem(
-                song = if (e.state == DownloadState.FAILED) song.copy(durationText = "Failed · tap to retry") else song,
-                onClick = {
-                    when (e.state) {
-                        DownloadState.DONE -> actions.playAll(ready, ready.indexOfFirst { it.videoId == song.videoId }.coerceAtLeast(0), false, "Downloads")
-                        DownloadState.FAILED -> Downloads.retry(context, song.videoId)
-                        else -> Unit
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+                item { PageHeader(com.opentune.ui.theme.tr("Downloads"), onBack = onBack) }
+                if (list.isEmpty()) {
+                    item {
+                        MessageState(Icons.Rounded.Download, "No downloads yet", Modifier.padding(top = 32.dp), message = "Pick Download from any song's menu to keep it for offline listening.")
                     }
+                    return@LazyColumn
+                }
+                item {
+                    com.opentune.ui.components.PillSegmented(DownloadsTab.entries, tab, { it.label(list.size, lists.size) }, { tab = it },
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+                }
+                if (tab == DownloadsTab.PLAYLISTS) {
+                    if (lists.isEmpty()) item {
+                        MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "No playlists downloaded", Modifier.padding(top = 32.dp),
+                            message = "Use Download on a playlist or album page to keep the whole list offline.")
+                    }
+                    items(lists, key = { "list:${it.first.id}" }) { (l, have) ->
+                        PlaylistRow(l.thumbnailUrl, l.title, com.opentune.i18n.Tr.f("{0} of {1} downloaded · plays offline", have, l.songIds.size), { onOpenList(l.id) }, Modifier.animateItem())
+                    }
+                    return@LazyColumn
+                }
+                item {
+                    PlayButtons(
+                        onPlay = { actions.playAll(ready, 0, false, "Downloads") },
+                        onShuffle = { actions.playAll(ready, 0, true, "Downloads") },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
+                items(list, key = { it.song.videoId }) { e ->
+                    val song = e.song.toSong()
+                    SongListItem(
+                        song = if (e.state == DownloadState.FAILED) song.copy(durationText = "Failed · tap to retry") else song,
+                        onClick = {
+                            when (e.state) {
+                                DownloadState.DONE -> actions.playAll(ready, ready.indexOfFirst { it.videoId == song.videoId }.coerceAtLeast(0), false, "Downloads")
+                                DownloadState.FAILED -> Downloads.retry(context, song.videoId)
+                                else -> Unit
+                            }
+                        },
+                        modifier = Modifier.animateItem(),
+                        isCurrent = song.videoId == actions.currentVideoId,
+                        isPlaying = actions.isPlaying,
+                        onPlayNext = { actions.playNext(song) },
+                        onAddToQueue = { actions.addToQueue(song) },
+                    )
+                }
+            }
+            com.opentune.ui.components.SongSelectionBar(
+                selection,
+                rows = selectionRows,
+                onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
+                modifier = Modifier.align(Alignment.TopCenter),
+                onRemove = { ids ->
+                    ids.forEach { Downloads.remove(context, it) }
+                    com.opentune.data.Pills.done(
+                        if (ids.size == 1) com.opentune.i18n.Tr.t("Removed 1 download") else com.opentune.i18n.Tr.f("Removed {0} downloads", ids.size),
+                        context,
+                    )
                 },
-                modifier = Modifier.animateItem(),
-                isCurrent = song.videoId == actions.currentVideoId,
-                isPlaying = actions.isPlaying,
-                onPlayNext = { actions.playNext(song) },
-                onAddToQueue = { actions.addToQueue(song) },
+                removeLabel = "Remove download",
+                offerDownload = false,
             )
         }
-    }
-    com.opentune.ui.components.SongSelectionBar(
-        selection,
-        rows = selectionRows,
-        onAddToQueue = { picked -> picked.forEach(actions.addToQueue) },
-        modifier = Modifier.align(Alignment.TopCenter),
-        onRemove = { ids ->
-            ids.forEach { Downloads.remove(context, it) }
-            com.opentune.data.Pills.done(
-                if (ids.size == 1) com.opentune.i18n.Tr.t("Removed 1 download") else com.opentune.i18n.Tr.f("Removed {0} downloads", ids.size),
-                context,
-            )
-        },
-        removeLabel = "Remove download",
-        offerDownload = false,
-    )
-    }
     }
 }
 
@@ -1235,7 +1235,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     val search = remember { com.opentune.ui.browse.PlaylistSearch() }
     val searching = search.open
     val query = search.query
-    var order by remember { mutableStateOf(com.opentune.ui.browse.ListOrder.DEFAULT) }
+    var order by remember { mutableStateOf(com.opentune.ui.browse.ListOrder.RECENT) }
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     LaunchedEffect(searching, query) {
@@ -1277,11 +1277,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                             }
                             Box {
                                 IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
-                                androidx.compose.material3.DropdownMenu(sortOpen, { sortOpen = false }) {
-                                    com.opentune.ui.browse.ListOrder.entries.forEach { value ->
-                                        androidx.compose.material3.DropdownMenuItem(text = { Text(value.label) }, onClick = { order = value; sortOpen = false })
-                                    }
-                                }
+                                com.opentune.ui.browse.ListSortMenu(sortOpen, order, onPick = { order = it; sortOpen = false }, onDismiss = { sortOpen = false })
                             }
                             IconButton(onClick = { moreOpen = true }) { Icon(Icons.Rounded.MoreHoriz, "More") }
                         }
@@ -1584,7 +1580,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     val search = remember(id) { com.opentune.ui.browse.PlaylistSearch() }
     val query = search.query
     val searching = search.open
-    var order by remember(id) { mutableStateOf(com.opentune.ui.browse.ListOrder.DEFAULT) }
+    var order by remember(id) { mutableStateOf(com.opentune.ui.browse.ListOrder.RECENT) }
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -1736,11 +1732,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                             }
                             Box {
                                 IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
-                                androidx.compose.material3.DropdownMenu(sortOpen, { sortOpen = false }) {
-                                    com.opentune.ui.browse.ListOrder.entries.forEach { value ->
-                                        androidx.compose.material3.DropdownMenuItem(text = { Text(value.label) }, onClick = { order = value; sortOpen = false })
-                                    }
-                                }
+                                com.opentune.ui.browse.ListSortMenu(sortOpen, order, onPick = { order = it; sortOpen = false }, onDismiss = { sortOpen = false })
                             }
                             IconButton(onClick = { moreOpen = true }) { Icon(Icons.Rounded.MoreHoriz, "More") }
                         }

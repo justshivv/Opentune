@@ -42,6 +42,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Reorder
+import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
@@ -485,6 +488,51 @@ internal enum class ListOrder(val label: String) {
     Z_TO_A("Alphabetical (Z to A)"),
 }
 
+/**
+ * The sort menu for a list's songs, iOS-style: a rounded panel in the page's own
+ * colours — it is composed inside the page's tint, so it wears them — with an
+ * icon for each order and a check on the current one. The panel is a solid
+ * colour from the page's scheme; nothing is blurred behind it.
+ */
+@Composable
+internal fun ListSortMenu(
+    expanded: Boolean,
+    order: ListOrder,
+    includeRecent: Boolean = true,
+    onPick: (ListOrder) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.material3.DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 0.dp,
+        shadowElevation = 8.dp,
+    ) {
+        val options = ListOrder.entries.filter { includeRecent || it != ListOrder.RECENT }
+        options.forEachIndexed { index, o ->
+            if (index > 0) androidx.compose.material3.HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text(o.label, fontWeight = if (o == order) androidx.compose.ui.text.font.FontWeight.SemiBold else null) },
+                leadingIcon = {
+                    Icon(
+                        when (o) {
+                            ListOrder.DEFAULT -> Icons.Filled.Reorder
+                            ListOrder.RECENT -> Icons.Filled.History
+                            ListOrder.A_TO_Z, ListOrder.Z_TO_A -> Icons.Filled.SortByAlpha
+                        },
+                        null,
+                        Modifier.size(20.dp),
+                    )
+                },
+                trailingIcon = if (o == order) ({ Icon(Icons.Filled.Check, null) }) else null,
+                onClick = { onPick(o) },
+            )
+        }
+    }
+}
+
 /** "Playlist · 146 Tracks · 9h 48m": the kind, how many songs, and how long they run where that's known. */
 internal fun listMeta(kind: String, songs: List<com.opentune.data.model.Song>): String {
     val count = "${songs.size} ${if (songs.size == 1) "Track" else "Tracks"}"
@@ -896,7 +944,8 @@ fun CollectionScreen(
     LaunchedEffect(searching, query) {
         if (searching) listState.scrollToItem(0)
     }
-    var order by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ListOrder.DEFAULT) }
+    // Albums have no "Recently added": their order stays the default. Playlists open newest first.
+    var order by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(if (browseId.startsWith("MPRE")) ListOrder.DEFAULT else ListOrder.RECENT) }
     var sortOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     val loaded = (state as? UiState.Success)?.data
@@ -952,16 +1001,8 @@ fun CollectionScreen(
                             }
                             Box {
                                 androidx.compose.material3.IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
-                                androidx.compose.material3.DropdownMenu(sortOpen, onDismissRequest = { sortOpen = false }, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
-                                    // An album's songs aren't added to it: no "Recently added" there.
-                                    ListOrder.entries.filter { it != ListOrder.RECENT || !browseId.startsWith("MPRE") }.forEach { o ->
-                                        androidx.compose.material3.DropdownMenuItem(
-                                            text = { Text(o.label) },
-                                            trailingIcon = { if (o == order) Icon(Icons.Filled.Check, null) },
-                                            onClick = { order = o; sortOpen = false },
-                                        )
-                                    }
-                                }
+                                // An album's songs aren't added to it: no "Recently added" there.
+                                ListSortMenu(sortOpen, order, includeRecent = !browseId.startsWith("MPRE"), onPick = { order = it; sortOpen = false }, onDismiss = { sortOpen = false })
                             }
                             androidx.compose.material3.IconButton(onClick = { moreOpen = true }, enabled = loaded != null) { Icon(Icons.Filled.MoreHoriz, "More") }
                         }
