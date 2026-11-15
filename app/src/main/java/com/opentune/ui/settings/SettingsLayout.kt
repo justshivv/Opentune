@@ -82,7 +82,7 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "lyrics", "Lyrics", "Sync, animation, size and sources", Icons.Rounded.Lyrics,
         listOf(
-            "Display" to listOf("Synced lyrics", "Lyrics text size", "Lyrics alignment", "Lyrics take the screen", "Keep the screen on for lyrics", "Hide the navigation bar on the lyrics page"),
+            "Display" to listOf("Synced lyrics", "Lyrics text size", "Lyrics alignment", "Lyrics take the screen", "Keep the screen on for lyrics", "Hide the navigation bar on the lyrics page", "Hide the status bar on the lyrics page"),
             "Effects" to listOf("Lyrics animation", "Glow on the sung line", "Blur unfocused lyrics"),
             "Sources" to listOf("Lyrics sources"),
         ),

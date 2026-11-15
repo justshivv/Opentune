@@ -565,6 +565,8 @@ data class InterfaceSettings(
     val keepScreenOnLyrics: Boolean = false,
     /** On the lyrics page the device's navigation bar is hidden, its space left empty. */
     val hideNavigationBarOnLyrics: Boolean = false,
+    /** On the lyrics page the phone's status bar is hidden, its space left empty. */
+    val hideStatusBarOnLyrics: Boolean = false,
     /** High performance mode: ask for a fast refresh rate while the app is open. */
     val highRefreshRate: Boolean = true,
     /** The profile last chosen (Settings › Performance profile); the switches it set may have been changed since. */

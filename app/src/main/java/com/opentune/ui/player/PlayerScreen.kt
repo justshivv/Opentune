@@ -35,7 +35,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.windowInsetsTopHeight
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -304,6 +304,22 @@ fun rememberSeekCount(vm: PlayerViewModel): () -> Long {
 
 private enum class Pane { COVER, LYRICS, QUEUE }
 
+/** Puts one of the system's bars away while [hidden] holds, and brings it back the moment it stops holding. */
+@Composable
+private fun SystemBarHider(hidden: Boolean, type: Int) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(hidden) {
+        var ctx: android.content.Context? = view.context
+        while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) ctx = ctx.baseContext
+        val window = (ctx as? android.app.Activity)?.window
+        if (window == null || !hidden) return@DisposableEffect onDispose {}
+        val bars = androidx.core.view.WindowCompat.getInsetsController(window, view)
+        bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        bars.hide(type)
+        onDispose { bars.show(type) }
+    }
+}
+
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 fun PlayerLayout(
@@ -434,23 +450,15 @@ fun PlayerLayout(
     LaunchedEffect(Unit) {
         snapshotFlow { dragOffset == 0f }.distinctUntilChanged().collect { covering(it) }
     }
-    // On the lyrics, with its setting on, the system's gesture bar along the bottom is put
-    // away; a swipe up from the edge brings it back for a moment. It comes back for good on
-    // leaving the lyrics, starting to drag the player down, or closing it. The page below
-    // pads itself with the bar's space whether it is showing or not, so the controls keep
-    // their distance from the edge while it is away.
-    val lyricsView = androidx.compose.ui.platform.LocalView.current
-    val hideGestureBar = !docked && pane == Pane.LYRICS && dragOffset == 0f && state.ui.hideNavigationBarOnLyrics
-    androidx.compose.runtime.DisposableEffect(hideGestureBar) {
-        var ctx: android.content.Context? = lyricsView.context
-        while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) ctx = ctx.baseContext
-        val window = (ctx as? android.app.Activity)?.window
-        if (window == null || !hideGestureBar) return@DisposableEffect onDispose {}
-        val bars = androidx.core.view.WindowCompat.getInsetsController(window, lyricsView)
-        bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        bars.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
-        onDispose { bars.show(androidx.core.view.WindowInsetsCompat.Type.navigationBars()) }
-    }
+    // With their settings on, the system's bars are put away on the lyrics: the navigation
+    // bar along the bottom and the status bar along the top. Each bar is hidden by its own
+    // hider, so one starting or stopping never touches the other. A swipe from the edge
+    // brings a bar back for a moment; it comes back for good when its condition stops
+    // holding. The page pads itself with the bars' space whether they are showing or not,
+    // so nothing crowds the edges while they are away.
+    val atRest = !docked && dragOffset == 0f
+    SystemBarHider(atRest && pane == Pane.LYRICS && state.ui.hideNavigationBarOnLyrics, androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+    SystemBarHider(atRest && pane == Pane.LYRICS && state.ui.hideStatusBarOnLyrics, androidx.core.view.WindowInsetsCompat.Type.statusBars())
     // The cover leaves the card as it's dragged down and shrinks toward the
     // mini player with the finger; let go short and it settles back with the card.
     LaunchedEffect(docked, state.ui.reduceAnimation) {
@@ -1398,7 +1406,7 @@ fun PlayerLayout(
             if (!docked && !landscape) {
                 val pillColour = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 Column(
-                    Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 24.dp, end = 24.dp, top = 6.dp),
+                    Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility).padding(start = 24.dp, end = 24.dp, top = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(

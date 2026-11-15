@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BorderBottom
+import androidx.compose.material.icons.rounded.BorderTop
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
@@ -1505,6 +1506,9 @@ private fun settingsSections(
                 },
                 Entry("Hide the navigation bar on the lyrics page", "navigation bar hide gesture bottom bar immersive lyrics") {
                     ToggleRow("Hide the navigation bar on the lyrics page", ui.hideNavigationBarOnLyrics, { v -> AppSettings.updateUi { it.copy(hideNavigationBarOnLyrics = v) } }, summary = "The device's navigation bar is hidden on the lyrics page and its space left empty, so nothing crowds the bottom edge. Swipe up from the edge to bring it back for a moment.", icon = Icons.Rounded.BorderBottom)
+                },
+                Entry("Hide the status bar on the lyrics page", "status bar hide top immersive lyrics") {
+                    ToggleRow("Hide the status bar on the lyrics page", ui.hideStatusBarOnLyrics, { v -> AppSettings.updateUi { it.copy(hideStatusBarOnLyrics = v) } }, summary = "The phone's status bar is hidden on the lyrics page and its space left empty, so nothing crowds the top edge. Swipe down from the top edge to bring it back for a moment.", icon = Icons.Rounded.BorderTop)
                 },
                 Entry("Blur unfocused lyrics", "spotlight") {
                     ToggleRow("Blur unfocused lyrics", ui.blurLyrics, { v -> AppSettings.updateUi { it.copy(blurLyrics = v) } }, summary = "Keeps the spotlight on the current line", icon = Icons.Rounded.BlurOn)
