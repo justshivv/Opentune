@@ -1,6 +1,7 @@
 package com.opentune.ui.player
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,8 +28,9 @@ import androidx.compose.ui.unit.dp
 import com.opentune.data.lyrics.LyricsTranslator
 import com.opentune.data.lyrics.Romanizer
 import com.opentune.data.settings.AppSettings
-import com.opentune.ui.components.FloatingDialog
+import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.components.SheetButton
+import com.opentune.ui.components.SheetTone
 import com.opentune.ui.theme.Icon
 import com.opentune.ui.theme.Text
 import java.util.Locale
@@ -60,84 +62,92 @@ internal fun LyricsTextSheet(lines: List<String>, synced: Boolean, onDismiss: ()
     }
     var working by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
-    FloatingDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Translate") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                if (synced && Romanizer.available) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Romanized lyrics")
-                            Text(
-                                "Latin letters under each line in another script",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = settings.romanize,
-                            onCheckedChange = { v -> AppSettings.updateLyrics { it.copy(romanize = v) } },
-                        )
-                    }
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                }
-                Text(
-                    "Translate to",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-                LyricsTranslator.LANGUAGES.forEach { lang ->
-                    Row(
-                        Modifier.fillMaxWidth().clickable { picked = lang.code }.padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            lang.name,
-                            Modifier.weight(1f),
-                            fontWeight = if (lang.code == picked) androidx.compose.ui.text.font.FontWeight.SemiBold else null,
-                        )
-                        if (lang.code == picked) Icon(Icons.Rounded.Check, null, Modifier.size(20.dp))
-                    }
-                }
-                if (failed) {
-                    Text(
-                        "Couldn't translate just now. Check your connection and try again.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                }
-            }
+    FloatingCard(
+        onDismiss = onDismiss,
+        title = "Translate",
+        icon = Icons.Rounded.Translate,
+        subtitle = if (settings.translateTo.isNotBlank()) {
+            "Showing the translation into ${LyricsTranslator.languageName(settings.translateTo) ?: settings.translateTo}"
+        } else {
+            "A translation under every line"
         },
-        confirmButton = {
-            SheetButton(if (working) "Translating…" else "Translate", enabled = !working, onClick = {
-                working = true
-                failed = false
-                val target = picked
-                scope.launch {
-                    val won = LyricsTranslator.translate(lines, target).isSuccess
-                    working = false
-                    if (won) {
-                        AppSettings.updateLyrics { it.copy(translateTo = target, translateTarget = target) }
-                        onDismiss()
-                    } else {
-                        failed = true
-                    }
-                }
-            })
-        },
-        dismissButton = {
-            Row {
-                if (settings.translateTo.isNotBlank()) {
-                    SheetButton("Show original", onClick = {
+        // The language list is long: open at half height, pulled up to the whole page.
+        expandable = true,
+        fitContent = false,
+        fullFraction = 1f,
+        actions = {
+            if (settings.translateTo.isNotBlank()) {
+                Box(Modifier.weight(1f)) {
+                    SheetButton("Show original", tone = SheetTone.Neutral, onClick = {
                         AppSettings.updateLyrics { it.copy(translateTo = "") }
                         onDismiss()
                     })
                 }
-                SheetButton("Cancel", onClick = onDismiss, closes = true)
+            }
+            Box(Modifier.weight(1.4f)) {
+                SheetButton(if (working) "Translating…" else "Translate", enabled = !working, tone = SheetTone.Primary, onClick = {
+                    working = true
+                    failed = false
+                    val target = picked
+                    scope.launch {
+                        val won = LyricsTranslator.translate(lines, target).isSuccess
+                        working = false
+                        if (won) {
+                            AppSettings.updateLyrics { it.copy(translateTo = target, translateTarget = target) }
+                            onDismiss()
+                        } else {
+                            failed = true
+                        }
+                    }
+                })
             }
         },
-    )
+    ) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            if (synced && Romanizer.available) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Romanized lyrics")
+                        Text(
+                            "Latin letters under each line in another script",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = settings.romanize,
+                        onCheckedChange = { v -> AppSettings.updateLyrics { it.copy(romanize = v) } },
+                    )
+                }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
+            Text(
+                "Translate to",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+            LyricsTranslator.LANGUAGES.forEach { lang ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { picked = lang.code }.padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        lang.name,
+                        Modifier.weight(1f),
+                        fontWeight = if (lang.code == picked) androidx.compose.ui.text.font.FontWeight.SemiBold else null,
+                    )
+                    if (lang.code == picked) Icon(Icons.Rounded.Check, null, Modifier.size(20.dp))
+                }
+            }
+            if (failed) {
+                Text(
+                    "Couldn't translate just now. Check your connection and try again.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+            }
+        }
+    }
 }
