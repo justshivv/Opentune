@@ -80,4 +80,26 @@ class NowPlayingWidgetTest {
             assertEquals("A saved song", view.findViewById<TextView>(R.id.widget_title).text.toString())
         }
     }
+
+    // Media3's MediaButtonReceiver drops every key but play from Android 8 on, so the buttons
+    // must reach the player service itself; only Play may start it in the foreground.
+    @Test fun buttonsGoStraightToThePlayerService() {
+        for ((key, foreground) in listOf(
+            android.view.KeyEvent.KEYCODE_MEDIA_PLAY to true,
+            android.view.KeyEvent.KEYCODE_MEDIA_PAUSE to false,
+            android.view.KeyEvent.KEYCODE_MEDIA_NEXT to false,
+            android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS to false,
+        )) {
+            val pending = shadowOf(NowPlayingWidget.mediaKey(context, key, foreground))
+            assertEquals(foreground, pending.isForegroundService)
+            assertEquals(!foreground, pending.isService)
+            val intent = pending.savedIntent
+            assertEquals(android.content.Intent.ACTION_MEDIA_BUTTON, intent.action)
+            assertEquals(com.opentune.playback.PlaybackService::class.java.name, intent.component?.className)
+            @Suppress("DEPRECATION")
+            val event = intent.getParcelableExtra<android.view.KeyEvent>(android.content.Intent.EXTRA_KEY_EVENT)!!
+            assertEquals(key, event.keyCode)
+            assertEquals(android.view.KeyEvent.ACTION_DOWN, event.action)
+        }
+    }
 }

@@ -16,7 +16,6 @@ import androidx.annotation.OptIn
 import androidx.core.content.edit
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.session.MediaButtonReceiver
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -28,12 +27,14 @@ import com.opentune.data.library.LibraryStore
 import com.opentune.data.model.Song
 import com.opentune.data.model.artworkAt
 import com.opentune.data.subsonic.Subsonic
+import com.opentune.playback.PlaybackService
 import com.opentune.playback.toSong
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -41,11 +42,13 @@ import kotlinx.coroutines.withContext
  * The home-screen widget: cover, title and artist, previous / play-pause /
  * next, and the heart.
  *
- * The playback buttons are media-button events sent through Media3's
- * [MediaButtonReceiver], which starts the player service if it isn't
- * running (resuming the saved queue), the same path a Bluetooth headset's
- * buttons take. The heart goes straight to the library. The last song shown
- * is kept, cover included, so the widget isn't blank after a restart.
+ * The playback buttons are media-button events sent straight to the player
+ * service, as Media3's own notification buttons are. Play starts the service
+ * in the foreground if it isn't running (resuming the saved queue). They
+ * don't go through Media3's MediaButtonReceiver: from Android 8 on it drops
+ * every key but play, so Previous and Next did nothing. The heart goes
+ * straight to the library. The last song shown is kept, cover included, so
+ * the widget isn't blank after a restart.
  */
 @OptIn(UnstableApi::class)
 open class NowPlayingWidget : AppWidgetProvider() {
@@ -71,6 +74,17 @@ open class NowPlayingWidget : AppWidgetProvider() {
         val song = Song(id, state.title, state.artist, state.thumbnailUrl)
         LibraryStore.setLiked(song, !LibraryStore.isLiked(id))
         render(context, state.copy(liked = LibraryStore.isLiked(id)))
+        // The tap may have started the app just for this; keep it alive until the like is saved
+        // (the library writes a moment after a change) and sent to YouTube Music.
+        val pending = goAsync()
+        scope.launch {
+            try {
+                delay(LIKE_SAVE_MS)
+                withContext(Dispatchers.IO) { LibraryStore.flush() }
+            } finally {
+                pending.finish()
+            }
+        }
     }
 
     private data class State(
@@ -182,7 +196,11 @@ open class NowPlayingWidget : AppWidgetProvider() {
                         context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                     ))
                     views.setOnClickPendingIntent(R.id.widget_previous, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
-                    views.setOnClickPendingIntent(R.id.widget_play, mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+                    views.setOnClickPendingIntent(R.id.widget_play, if (state.playing) {
+                        mediaKey(context, KeyEvent.KEYCODE_MEDIA_PAUSE)
+                    } else {
+                        mediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY, foreground = true)
+                    })
                     views.setOnClickPendingIntent(R.id.widget_next, mediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT))
                     views.setOnClickPendingIntent(R.id.widget_like, PendingIntent.getBroadcast(
                         context, 1, Intent(context, NowPlayingWidget::class.java).setAction(ACTION_LIKE),
@@ -193,12 +211,25 @@ open class NowPlayingWidget : AppWidgetProvider() {
             }
         }
 
-        private fun mediaKey(context: Context, keyCode: Int): PendingIntent {
-            val intent = Intent(Intent.ACTION_MEDIA_BUTTON)
-                .setComponent(ComponentName(context, MediaButtonReceiver::class.java))
-                .putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-            return PendingIntent.getBroadcast(context, keyCode, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        /**
+         * A media key for the player service. Play is a foreground start, since it may have to
+         * start the service and Media3 puts it in the foreground as soon as play is asked for.
+         * The others go to a service that is already running; a foreground start for them would
+         * crash the app when nothing starts playing within Android's time limit.
+         */
+        internal fun mediaKey(context: Context, keyCode: Int, foreground: Boolean = false): PendingIntent {
+            val intent = mediaKeyIntent(context, keyCode)
+            val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            return if (foreground) {
+                PendingIntent.getForegroundService(context, keyCode, intent, flags)
+            } else {
+                PendingIntent.getService(context, keyCode, intent, flags)
+            }
         }
+
+        internal fun mediaKeyIntent(context: Context, keyCode: Int): Intent = Intent(Intent.ACTION_MEDIA_BUTTON)
+            .setComponent(ComponentName(context, PlaybackService::class.java))
+            .putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
 
         private fun coverFile(context: Context) = File(context.cacheDir, "widget-cover.jpg")
 
@@ -218,6 +249,7 @@ open class NowPlayingWidget : AppWidgetProvider() {
         }
 
         private const val COVER_PX = 384
+        private const val LIKE_SAVE_MS = 2_000L
     }
 }
 
