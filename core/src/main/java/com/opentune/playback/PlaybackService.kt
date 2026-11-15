@@ -423,12 +423,8 @@ class PlaybackService : MediaLibraryService() {
             AppSettings.playback.map { Triple(it.loudnessNormalization, it.normalizeOnSpeaker, it.volumeLevel) }.distinctUntilChanged().collect { applyLoudness() }
         }
         scope.launch {
-            AppSettings.playback.map { it.preloadUpcoming }.distinctUntilChanged().collect { on ->
-                // ExoPlayer prepares and buffers the next item in play order
-                // while this one plays, so it starts from memory.
-                player.preloadConfiguration =
-                    if (on) ExoPlayer.PreloadConfiguration(PRELOAD_US) else ExoPlayer.PreloadConfiguration.DEFAULT
-                if (on) warmNeighbours()
+            AppSettings.playback.map { it.preloadUpcoming to it.preloadBoostOnWifi }.distinctUntilChanged().collect {
+                updatePreload()
             }
         }
 
@@ -2242,6 +2238,27 @@ class PlaybackService : MediaLibraryService() {
      * skip or a jump back only has to fetch audio. ExoPlayer's own preload
      * then buffers the very next one.
      */
+    private fun isWifiBoosted(): Boolean {
+        val pb = AppSettings.playback.value
+        return pb.preloadBoostOnWifi && !AppSettings.onMeteredNetwork()
+    }
+
+    private fun preloadDurationUs(): Long {
+        if (!AppSettings.playback.value.preloadUpcoming) return 0L
+        return if (isWifiBoosted()) PRELOAD_WIFI_US else PRELOAD_STANDARD_US
+    }
+
+    private fun warmAheadCount(): Int =
+        if (isWifiBoosted()) WARM_WIFI_AHEAD else WARM_STANDARD_AHEAD
+
+    private fun updatePreload() {
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val durationUs = preloadDurationUs()
+        player.preloadConfiguration =
+            if (durationUs > 0) ExoPlayer.PreloadConfiguration(durationUs) else ExoPlayer.PreloadConfiguration.DEFAULT
+        if (AppSettings.playback.value.preloadUpcoming) warmNeighbours()
+    }
+
     private fun warmNeighbours() {
         // Maximum also starts immediately; warm its normal stream while quality
         // searches run independently, so next/previous do not repeat resolution.
@@ -2251,7 +2268,8 @@ class PlaybackService : MediaLibraryService() {
         if (timeline.isEmpty) return
         val current = player.currentMediaItemIndex
         val previous = timeline.getPreviousWindowIndex(current, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
-        val indices = player.upcomingPlayOrder().drop(1).take(WARM_AHEAD) +
+        val aheadCount = warmAheadCount()
+        val indices = player.upcomingPlayOrder().drop(1).take(aheadCount) +
                 listOfNotNull(previous.takeIf { it != C.INDEX_UNSET })
         val now = SystemClock.elapsedRealtime()
         val ids = indices.map { player.getMediaItemAt(it).mediaId }
@@ -2490,6 +2508,11 @@ class PlaybackService : MediaLibraryService() {
                     exhaustedSeeds.clear()
                     extendQueueIfNeeded()
                 }
+                scope.launch(Dispatchers.Main) { updatePreload() }
+            }
+
+            override fun onCapabilitiesChanged(network: android.net.Network, networkCapabilities: android.net.NetworkCapabilities) {
+                scope.launch(Dispatchers.Main) { updatePreload() }
             }
         }
         if (runCatching { manager.registerDefaultNetworkCallback(callback) }.isSuccess) networkCallback = callback
@@ -2964,12 +2987,16 @@ class PlaybackService : MediaLibraryService() {
         const val MIN_LOUDNESS_GAIN_MB = -1500
         const val MAX_LOUDNESS_GAIN_MB = 900
 
-        /** How much of the next track ExoPlayer buffers ahead of time. */
-        const val PRELOAD_US = 10_000_000L
+        /** Standard preload duration ahead (10s baseline on mobile data). */
+        const val PRELOAD_STANDARD_US = 10_000_000L
+        /** Boosted preload duration ahead on Wi-Fi (20s). */
+        const val PRELOAD_WIFI_US = 20_000_000L
         const val DISCORD_SETTLE_MS = 800L
 
-        /** Tracks ahead of the current one whose stream URLs are resolved early. */
-        const val WARM_AHEAD = 2
+        /** Tracks ahead whose stream URLs are resolved early (2 baseline on mobile). */
+        const val WARM_STANDARD_AHEAD = 2
+        /** Tracks ahead resolved early on Wi-Fi (boosted to 3). */
+        const val WARM_WIFI_AHEAD = 3
 
         /** Delay before warming neighbours, avoiding wasted fetches during rapid skips. */
         const val WARM_SETTLE_MS = 600L

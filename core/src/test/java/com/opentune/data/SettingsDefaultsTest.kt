@@ -19,6 +19,13 @@ class SettingsDefaultsTest {
         assertFalse(json.decodeFromString<SettingsState>(json.encodeToString(off)).ui.lyricsPreview)
     }
 
+    @Test fun preloadBoostOnWifiDefaultsOnAndSurvivesSerialization() {
+        assertTrue(json.decodeFromString<SettingsState>("{}").playback.preloadBoostOnWifi)
+        val off = json.decodeFromString<SettingsState>("""{"playback":{"preloadBoostOnWifi":false}}""")
+        assertFalse(off.playback.preloadBoostOnWifi)
+        assertFalse(json.decodeFromString<SettingsState>(json.encodeToString(off)).playback.preloadBoostOnWifi)
+    }
+
     @Test fun missingSavedSettingsUseTheNewDefaults() {
         for (body in listOf("{}", """{"playback":{},"lyrics":{}}""")) {
             val settings = json.decodeFromString<SettingsState>(body)
@@ -26,6 +33,8 @@ class SettingsDefaultsTest {
             assertFalse(settings.playback.pauseListeningHistory)
             assertEquals(com.opentune.data.history.ListeningHistoryTarget.YOUTUBE_MUSIC, settings.playback.listeningHistoryTarget)
             assertFalse(settings.playback.losslessUnmeteredOnly)
+            assertTrue(settings.playback.preloadUpcoming)
+            assertTrue(settings.playback.preloadBoostOnWifi)
             assertTrue(settings.lyrics.preferWordSynced)
             assertTrue(settings.lyrics.romanize)
             assertEquals(LyricsSource.entries.toList(), settings.lyrics.ordered.map { it.source })
