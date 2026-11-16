@@ -174,6 +174,7 @@ private const val YT_PLAYLISTS = "library:ytPlaylists"
 
 /** Wide enough that two and a bit show across a phone, as in the other music apps. */
 private val TILE_WIDTH = 168.dp
+private val ARTIST_TILE_WIDTH = 104.dp
 
 /**
  * Every playlist in Library, the pinned ones first in the order they were pinned,
@@ -259,13 +260,13 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
     var naming by remember { mutableStateOf(false) }
     if (naming) NewPlaylistDialog(signedIn, onDismiss = { naming = false }) { name, privacy -> naming = false; nav.playlist(LibraryStore.createPlaylist(name, privacy = privacy)) }
-    // The page's three faces: the page itself, every playlist on it but Spotify's, and Spotify's own.
+    // The page's faces: the page itself, its playlists, its artists, its smart playlists, and Spotify's own.
     var tab by remember { mutableStateOf(0) }
     val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
     val spotifySync by com.opentune.data.spotify.SpotifySync.status.collectAsState()
     // Opening Spotify's face asks Spotify what changed, behind the list already here.
     LaunchedEffect(tab, spotifyOn) {
-        if (tab == 2 && spotifyOn) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        if (tab == 4 && spotifyOn) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             com.opentune.ui.spotify.SpotifyConnection.checkPlaylists()
         }
     }
@@ -274,18 +275,23 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     val libraryListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val playlistsListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val spotifyListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    // The three faces live in a pager: a swipe turns between them, and the pills animate to them.
+    val artistsListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val smartListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // The faces live in a pager: a swipe turns between them, and the pills animate to them.
     val switchState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = tab) { 3 }
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = tab) { 5 }
     LaunchedEffect(pagerState) { androidx.compose.runtime.snapshotFlow { pagerState.currentPage }.collect { tab = it } }
     // "Show all" opens no page of its own any more: it turns to the Playlists face, from the top.
     val showAllPlaylists: () -> Unit = { scope.launch { pagerState.animateScrollToPage(1, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing)); playlistsListState.scrollToItem(0) } }
+    val showAllArtists: () -> Unit = { scope.launch { pagerState.animateScrollToPage(2, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing)); artistsListState.scrollToItem(0) } }
     val rows = rememberPlaylistRows(nav)
     var spotifyOrder by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PlaylistOrder.LIBRARY) }
     var spotifySorting by remember { mutableStateOf(false) }
     val spotifyRows = remember(rows) { rows.filter { it.source == "Spotify" } }
     var playlistsOrder by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PlaylistOrder.LIBRARY) }
     var playlistsSorting by remember { mutableStateOf(false) }
+    var smartOrder by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(SmartOrder.CREATED) }
+    var smartSorting by remember { mutableStateOf(false) }
     val allRows = remember(rows) { rows.filter { it.source != "Spotify" } }
     val shownPlaylists = remember(allRows, playlistsOrder, libraryUi.pinnedPlaylists) {
         val pinned = allRows.filter { it.pin in libraryUi.pinnedPlaylists }
@@ -293,11 +299,16 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
     val ytmSync by YtmSync.status.collectAsState()
     val records by History.records.collectAsState()
+    val followed by com.opentune.data.releases.NewReleases.followed.collectAsState()
+    // Your Artists: the followed ones, newest follow first.
+    val followedArtists = remember(followed) { followed.sortedByDescending { it.followedAt } }
+    val smartPlaylists by LibraryStore.smartPlaylists.collectAsState()
+    val shownSmart = remember(smartPlaylists, smartOrder) { smartOrder.sort(smartPlaylists) }
     // Library's Recently played shelf: this app's own listens only (the
     // account's listens live on the history page's Remote tab), each track
     // once, latest first.
     val recentSongs = remember(records) { History.recents(records.filter { !it.fromAccount }, 12) }
-    LaunchedEffect(tab) { if (tab == 1) YtmSync.check() }
+    LaunchedEffect(tab) { if (tab == 1) YtmSync.check(); if (tab == 2) com.opentune.data.releases.ArtistSync.sync() }
     // In the list, which sources show all their playlists rather than the first few.
     val openGroups = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
     // The pinned ones, then the most played; Show all has the rest. Spotify's have their own
@@ -327,10 +338,11 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 Modifier.height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // On the playlist faces the pill sorts instead, as on their old pages.
+                // On the playlists, smart and Spotify faces the pill sorts instead, as on their old pages.
                 when (tab) {
                     1 -> SortPill(playlistsOrder, playlistsSorting, { playlistsSorting = it }, { playlistsOrder = it })
-                    2 -> SortPill(spotifyOrder, spotifySorting, { spotifySorting = it }, { spotifyOrder = it })
+                    3 -> SmartSortPill(smartOrder, smartSorting, { smartSorting = it }, { smartOrder = it })
+                    4 -> SortPill(spotifyOrder, spotifySorting, { spotifySorting = it }, { spotifyOrder = it })
                     else -> IconButton(onClick = nav.history) { Icon(ImageVector.vectorResource(AppIcons.History), "Listening history") }
                 }
                 com.opentune.ui.components.AccountButton(nav.settings, plain = true)
@@ -437,6 +449,24 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
             }
         }
         item(key = "smart-playlists") { SmartPlaylistsRow(nav.smart, nav.newSmart, TILE_WIDTH) }
+        if (followedArtists.isNotEmpty()) {
+            item(key = "artists-head") {
+                SectionHeader("Artists", action = {
+                    TextButton(onClick = showAllArtists) { Text("Show all", style = MaterialTheme.typography.labelLarge) }
+                })
+            }
+            item(key = "artists-row") {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                ) {
+                    items(followedArtists, key = { it.browseId }) { artist ->
+                        ArtistTile(artist, Modifier.width(ARTIST_TILE_WIDTH).animateItem()) { nav.browse(artist.browseId) }
+                    }
+                }
+            }
+        }
     } }
 
     val playlistsFace: @Composable () -> Unit = { LazyColumn(state = playlistsListState, contentPadding = facePadding, modifier = Modifier.fillMaxSize()) {
@@ -535,11 +565,42 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         }
     } }
 
+    val smartFace: @Composable () -> Unit = { LazyColumn(state = smartListState, contentPadding = facePadding, modifier = Modifier.fillMaxSize()) {
+        item(key = "smart-head") {
+            Row(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SmartTile("New smart playlist", "Fills itself from rules", nav.newSmart, Modifier.weight(1f), icon = ImageVector.vectorResource(AppIcons.Add))
+                val first = shownSmart.firstOrNull()
+                if (first != null) SmartTile(first.name, smartSummary(first.rules), { nav.smart(first.id) }, Modifier.weight(1f)) else Box(Modifier.weight(1f))
+            }
+        }
+        items(shownSmart.drop(1).chunked(2), key = { it.first().id }) { pair ->
+            Row(Modifier.animateItem().padding(horizontal = 10.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                pair.forEach { p -> SmartTile(p.name, smartSummary(p.rules), { nav.smart(p.id) }, Modifier.weight(1f)) }
+                if (pair.size == 1) Box(Modifier.weight(1f))
+            }
+        }
+    } }
+
+    val artistsFace: @Composable () -> Unit = { LazyColumn(state = artistsListState, contentPadding = facePadding, modifier = Modifier.fillMaxSize()) {
+        if (followedArtists.isEmpty()) {
+            item(key = "artists-empty") {
+                Text("Artists you follow will appear here — follow one from its page.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)
+            }
+        } else {
+            items(followedArtists.chunked(3), key = { it.first().browseId }) { pair ->
+                Row(Modifier.animateItem().padding(horizontal = 10.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    pair.forEach { artist -> ArtistTile(artist, Modifier.weight(1f)) { nav.browse(artist.browseId) } }
+                    for (rest in pair.size until 3) Box(Modifier.weight(1f))
+                }
+            }
+        }
+    } }
+
     // The active face's first playlist cover washes the page, as on the old pages.
     val framed: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize()) {
             if (tab == 1) TabWash(shownPlaylists, playlistsListState)
-            else if (tab == 2 && spotifyOn) TabWash(spotifyRows, spotifyListState)
+            else if (tab == 4 && spotifyOn) TabWash(spotifyRows, spotifyListState)
             androidx.compose.foundation.pager.HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
@@ -548,6 +609,8 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 when (face) {
                     0 -> libraryFace()
                     1 -> playlistsFace()
+                    2 -> artistsFace()
+                    3 -> smartFace()
                     else -> spotifyFace()
                 }
             }
@@ -596,6 +659,23 @@ private fun SortPill(order: PlaylistOrder, sorting: Boolean, onSorting: (Boolean
         IconButton(onClick = { onSorting(true) }) { Icon(ImageVector.vectorResource(AppIcons.Sort), "Sort playlists") }
         androidx.compose.material3.DropdownMenu(sorting, { onSorting(false) }, shape = RoundedCornerShape(20.dp)) {
             PlaylistOrder.entries.forEach { o ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(o.label, fontWeight = if (o == order) FontWeight.SemiBold else null) },
+                    trailingIcon = if (o == order) ({ Icon(ImageVector.vectorResource(AppIcons.Check), null) }) else null,
+                    onClick = { onOrder(o); onSorting(false) },
+                )
+            }
+        }
+    }
+}
+
+/** The sort button for the smart face: the same pill, over the smart playlists' own orders. */
+@Composable
+private fun SmartSortPill(order: SmartOrder, sorting: Boolean, onSorting: (Boolean) -> Unit, onOrder: (SmartOrder) -> Unit) {
+    Box {
+        IconButton(onClick = { onSorting(true) }) { Icon(ImageVector.vectorResource(AppIcons.Sort), "Sort smart playlists") }
+        androidx.compose.material3.DropdownMenu(sorting, { onSorting(false) }, shape = RoundedCornerShape(20.dp)) {
+            SmartOrder.entries.forEach { o ->
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text(o.label, fontWeight = if (o == order) FontWeight.SemiBold else null) },
                     trailingIcon = if (o == order) ({ Icon(ImageVector.vectorResource(AppIcons.Check), null) }) else null,
@@ -661,10 +741,12 @@ private fun LibrarySwitch(tab: Int, rowState: androidx.compose.foundation.lazy.L
     ) {
         item { SwitchPill(com.opentune.ui.theme.tr("Library"), selected = tab == 0, glyph = { tint -> Icon(ImageVector.vectorResource(AppIcons.LibraryMusic), null, Modifier.size(20.dp), tint = tint) }) { onSelect(0) } }
         item { SwitchPill("Playlists", selected = tab == 1, glyph = { tint -> Icon(ImageVector.vectorResource(AppIcons.PlaylistPlay), null, Modifier.size(20.dp), tint = tint) }) { onSelect(1) } }
+        item { SwitchPill("Artists", selected = tab == 2, glyph = { tint -> Icon(ImageVector.vectorResource(AppIcons.Person), null, Modifier.size(20.dp), tint = tint) }) { onSelect(2) } }
+        item { SwitchPill("Smart playlists", selected = tab == 3, glyph = { tint -> Icon(ImageVector.vectorResource(AppIcons.AutoAwesome), null, Modifier.size(20.dp), tint = tint) }) { onSelect(3) } }
         item {
-            SwitchPill("Spotify", selected = tab == 2, glyph = {
+            SwitchPill("Spotify", selected = tab == 4, glyph = {
                 androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(20.dp))
-            }) { onSelect(2) }
+            }) { onSelect(4) }
         }
     }
 }
@@ -694,6 +776,18 @@ private enum class PlaylistOrder(val label: String) {
         NEWEST -> rows.sortedByDescending { it.local?.createdAt ?: 0L }
         NAME -> rows.sortedBy { it.title.lowercase() }
         SONGS -> rows.sortedByDescending { it.local?.songs?.size ?: -1 }
+    }
+}
+
+/** The orders the smart face can put its playlists in. */
+private enum class SmartOrder(val label: String) {
+    CREATED("As created"), NEWEST("Newest first"), NAME("A to Z"), NAME_REVERSED("Z to A");
+
+    fun sort(lists: List<com.opentune.data.library.SmartPlaylist>): List<com.opentune.data.library.SmartPlaylist> = when (this) {
+        CREATED -> lists
+        NEWEST -> lists.sortedByDescending { it.createdAt }
+        NAME -> lists.sortedBy { it.name.lowercase() }
+        NAME_REVERSED -> lists.sortedByDescending { it.name.lowercase() }
     }
 }
 
@@ -882,6 +976,23 @@ private fun PlaylistTile(row: LibraryPlaylistRow, modifier: Modifier = Modifier)
             else Artwork(row.url.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.medium)
             TileText(row.title, if (row.local != null) "${row.source} · ${row.subtitle}" else row.subtitle)
         }
+    }
+}
+
+/** A followed artist: its picture in a circle, its name under it. A tap opens its page. */
+@Composable
+private fun ArtistTile(artist: com.opentune.data.releases.NewReleases.Followed, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(modifier.clip(MaterialTheme.shapes.medium).then(Modifier.menuClickable(onClick = onClick, onLongClick = {})).padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Artwork(artist.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), androidx.compose.foundation.shape.CircleShape)
+        Text(
+            artist.name,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
     }
 }
 
