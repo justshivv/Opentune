@@ -185,6 +185,9 @@ fun AppRoot(vm: PlayerViewModel) {
         lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
             com.opentune.data.Usage.active()
             com.opentune.ui.components.Support.usedToday(appContext)
+            // The opening comes first: these checks wait a few seconds, so they
+            // never compete with the first frames and the entry motion.
+            kotlinx.coroutines.delay(3_000)
             while (true) {
                 if (com.opentune.data.settings.AppSettings.ui.value.checkForUpdates && update == null) {
                     update = com.opentune.data.UpdateCheck.checkIfDue(appContext)
@@ -229,6 +232,10 @@ fun AppRoot(vm: PlayerViewModel) {
         )
     }
 
+    // The opening animation, once per launch: the app comes forward out of
+    // the mark as the screen dives into it.
+    var opening by remember { mutableStateOf(!com.opentune.ui.components.Opening.played && chromeUi.openingAnimation && !chromeUi.reduceAnimation) }
+    var dive by remember { androidx.compose.runtime.mutableFloatStateOf(if (opening) 0f else 1f) }
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
@@ -527,10 +534,6 @@ fun AppRoot(vm: PlayerViewModel) {
         nav.navigate("mood/${Uri.encode(mood.browseId)}?params=${Uri.encode(mood.params.orEmpty())}&title=${Uri.encode(mood.title)}")
     }
 
-    // The opening animation, once per launch: the app comes forward out of
-    // the mark as the screen dives into it.
-    var opening by remember { mutableStateOf(!com.opentune.ui.components.Opening.played && chromeUi.openingAnimation && !chromeUi.reduceAnimation) }
-    var dive by remember { androidx.compose.runtime.mutableFloatStateOf(if (opening) 0f else 1f) }
     LaunchedEffect(Unit) { com.opentune.ui.components.Opening.played = true }
 
     // Back on the first page while music plays: the app shrinks up into a pill at the
@@ -616,10 +619,12 @@ fun AppRoot(vm: PlayerViewModel) {
                         navController = nav,
                         startDestination = Tab.HOME.route,
                         modifier = Modifier.align(Alignment.TopCenter).then(pageArea).fillMaxSize(),
-                        enterTransition = { PageMotion.enter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                        exitTransition = { PageMotion.exit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                        popEnterTransition = { PageMotion.popEnter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                        popExitTransition = { PageMotion.popExit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                        // The first appearance is no navigation: the opening page is simply
+                        // there, as if it had always been — it never flies in.
+                        enterTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.EnterTransition.None else PageMotion.enter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                        exitTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.ExitTransition.None else PageMotion.exit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                        popEnterTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.EnterTransition.None else PageMotion.popEnter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                        popExitTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.ExitTransition.None else PageMotion.popExit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
                     ) {
                         page(Tab.HOME.route) {
                             HomeScreen(
@@ -982,9 +987,9 @@ fun AppRoot(vm: PlayerViewModel) {
                 com.opentune.ui.components.PillHost(chromeUi.reduceAnimation, Modifier.align(Alignment.TopCenter))
             }
         }
-        if (opening) {
-            com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })
-        }
+    }
+    if (opening) {
+        com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })
     }
 }
 
