@@ -452,6 +452,7 @@ private fun settingsSections(
     var sponsorBlockDialog by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<UpdateCheck.Release?>(null) }
     var showWhatsNew by remember { mutableStateOf(false) }
+    var checkingUpdates by remember { mutableStateOf(false) }
     var supportDialog by remember { mutableStateOf(false) }
     val pendingUpdate by UpdateCheck.pending.collectAsState()
     var updateBytes by remember { mutableStateOf(0L) }
@@ -1831,15 +1832,20 @@ private fun settingsSections(
                     NavRow("Check for updates", {
                         // A release already found opens at once; Update still looks for a newer one first.
                         pendingUpdate?.let { update = it; return@NavRow }
+                        checkingUpdates = true
                         scope.launch {
-                            when (val r = UpdateCheck.checkNow(context)) {
-                                is UpdateCheck.Result.Newer -> update = r.release
-                                UpdateCheck.Result.UpToDate -> message = com.opentune.i18n.Tr.f("You have the latest version ({0}).", BuildConfig.VERSION_NAME)
-                                UpdateCheck.Result.NoReleases -> message = "No releases are published yet. Builds are on the GitHub branch for now."
-                                is UpdateCheck.Result.Failed -> message = com.opentune.i18n.Tr.f("Couldn't check: {0}", r.reason)
+                            try {
+                                when (val r = UpdateCheck.checkNow(context)) {
+                                    is UpdateCheck.Result.Newer -> update = r.release
+                                    UpdateCheck.Result.UpToDate -> message = com.opentune.i18n.Tr.f("You have the latest version ({0}).", BuildConfig.VERSION_NAME)
+                                    UpdateCheck.Result.NoReleases -> message = "No releases are published yet. Builds are on the GitHub branch for now."
+                                    is UpdateCheck.Result.Failed -> message = com.opentune.i18n.Tr.f("Couldn't check: {0}", r.reason)
+                                }
+                            } finally {
+                                checkingUpdates = false
                             }
                         }
-                    }, summary = pendingUpdate?.let { com.opentune.i18n.Tr.f("OpenTune {0} is ready to install. You have {1}.", it.version, BuildConfig.VERSION_NAME) } ?: com.opentune.i18n.Tr.f("Current version: {0}", BuildConfig.VERSION_NAME), icon = ImageVector.vectorResource(AppIcons.SystemUpdate), dot = pendingUpdate != null)
+                    }, summary = pendingUpdate?.let { com.opentune.i18n.Tr.f("OpenTune {0} is ready to install. You have {1}.", it.version, BuildConfig.VERSION_NAME) } ?: com.opentune.i18n.Tr.f("Current version: {0}", BuildConfig.VERSION_NAME), icon = ImageVector.vectorResource(AppIcons.SystemUpdate), dot = pendingUpdate != null, busy = checkingUpdates)
                 },
                 Entry("Check for updates automatically", "update new version release auto") {
                     ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Looks for a new release on GitHub every few hours, in the background too, and offers to install it", icon = ImageVector.vectorResource(AppIcons.SystemUpdate))

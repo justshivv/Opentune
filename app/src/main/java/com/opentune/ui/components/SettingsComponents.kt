@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
@@ -166,9 +167,11 @@ fun NavRow(
     enabled: Boolean = true,
     /** A small pill on the right, like a version number; null shows none. */
     badge: String? = null,
+    /** Working: a small spinner stands where the arrow goes, and the row doesn't open until it is done. */
+    busy: Boolean = false,
 ) {
     val alpha = if (enabled) 1f else 0.45f
-    SettingRow(title, summary = summary, icon = icon, enabled = enabled, onClick = onClick, leading = leading, trailing = {
+    SettingRow(title, summary = summary, icon = icon, enabled = enabled, onClick = if (busy) null else onClick, leading = leading, trailing = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (dot) UpdateDot(Modifier.padding(end = 6.dp))
             if (badge != null) {
@@ -186,7 +189,11 @@ fun NavRow(
             if (value != null) {
                 Text(com.opentune.ui.theme.tr(value), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
             }
-            Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
+            if (busy) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
+            } else {
+                Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
+            }
         }
     })
 }
