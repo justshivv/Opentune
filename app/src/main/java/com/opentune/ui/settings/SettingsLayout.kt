@@ -34,6 +34,9 @@ internal val FOLDED_GROUPS = mapOf("Seek bar" to 2)
 /** Subsections drawn as a card with no heading over it: the page's title already says what it is. */
 internal val UNLABELLED_GROUPS = setOf("YouTube Music", "Updates")
 
+/** Subsections whose settings sit side by side in one row instead of stacked: the two developers. */
+internal val SIDE_BY_SIDE_GROUPS = setOf("Developers")
+
 /** Settings shown as a row on the main Settings page instead of on their category's page; search still finds them. */
 internal val MAIN_PAGE_ONLY = setOf("Audio sources")
 

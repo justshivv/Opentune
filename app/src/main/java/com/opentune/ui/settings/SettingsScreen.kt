@@ -134,6 +134,7 @@ import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.collectAsState
@@ -151,7 +152,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -286,19 +290,44 @@ fun SettingsScreen(
                 item { PageHeader(com.opentune.ui.theme.tr(page.title), onBack = { openKey = null }) }
                 placed.filter { it.category == page && it.entry.title !in MAIN_PAGE_ONLY }.groupBy { it.group }.forEach { (group, rows) ->
                     item(key = "label:$group") {
-                        if (group in UNLABELLED_GROUPS) androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp)) else GroupLabel(group)
+                        when {
+                            group in UNLABELLED_GROUPS -> androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp))
+                            // The side-by-side group wears its label in the middle, over the pair.
+                            group in SIDE_BY_SIDE_GROUPS -> Text(
+                                com.opentune.ui.theme.tr(group).uppercase(),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = 28.dp, bottom = 10.dp),
+                            )
+                            else -> GroupLabel(group)
+                        }
                     }
                     item(key = "card:$group") {
                         val shown = FOLDED_GROUPS[group]?.takeIf { group !in unfolded && it < rows.size }
-                        GroupCard(if (motion.reduceAnimation) Modifier else Modifier.animateContentSize(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow))) {
-                            rows.take(shown ?: rows.size).forEachIndexed { i, row ->
-                                if (i > 0) RowDivider()
-                                row.entry.content()
+                        if (group in SIDE_BY_SIDE_GROUPS) {
+                            // No card behind this group: the pair sits on the page itself, together in the middle,
+                            // in the layout's order on every screen — the first name sits on the left.
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(48.dp, Alignment.CenterHorizontally),
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                ) {
+                                    rows.forEach { row -> row.entry.content() }
+                                }
                             }
-                            if (FOLDED_GROUPS[group]?.let { it < rows.size } == true) {
-                                RowDivider()
-                                SeeMoreRow(open = shown == null, hidden = rows.size - (FOLDED_GROUPS[group] ?: 0)) {
-                                    unfolded = if (group in unfolded) unfolded - group else unfolded + group
+                        } else {
+                            GroupCard(if (motion.reduceAnimation) Modifier else Modifier.animateContentSize(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow))) {
+                                rows.take(shown ?: rows.size).forEachIndexed { i, row ->
+                                    if (i > 0) RowDivider()
+                                    row.entry.content()
+                                }
+                                if (FOLDED_GROUPS[group]?.let { it < rows.size } == true) {
+                                    RowDivider()
+                                    SeeMoreRow(open = shown == null, hidden = rows.size - (FOLDED_GROUPS[group] ?: 0)) {
+                                        unfolded = if (group in unfolded) unfolded - group else unfolded + group
+                                    }
                                 }
                             }
                         }
@@ -408,6 +437,33 @@ private fun audioSourcesSummary(): String {
         addons.isEmpty() -> com.opentune.i18n.Tr.t("Add lossless sources and choose their order")
         on == 1 -> com.opentune.i18n.Tr.t("1 lossless source on · choose the order")
         else -> com.opentune.i18n.Tr.f("{0} lossless sources on · choose the order", on)
+    }
+}
+
+/** One developer on the About page: the photo, the name under it, and a GitHub badge on the photo's corner — the badge alone is the button, and it opens the profile. */
+@Composable
+private fun DeveloperCard(name: String, avatarUrl: String, profileUrl: String) {
+    val context = LocalContext.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(vertical = 8.dp),
+    ) {
+        Box {
+            Artwork(avatarUrl, Modifier.size(64.dp), CircleShape)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
+                    .border(2.dp, MaterialTheme.colorScheme.background, CircleShape)
+                    .clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, profileUrl.toUri())) } },
+            ) {
+                Icon(githubLogo, "GitHub", Modifier.size(17.dp), tint = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+        Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
@@ -1898,28 +1954,10 @@ private fun settingsSections(
                     }, summary = "github.com/justshivv/Opentune · GPL v3", icon = Icons.Rounded.Code)
                 },
                 Entry("justshivv", "github developer creator justshivv") {
-                    SettingRow(
-                        "justshivv",
-                        icon = null,
-                        leading = { Artwork("https://avatars.githubusercontent.com/u/78946189?v=4", Modifier.size(28.dp), CircleShape) },
-                        trailing = {
-                            IconButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/justshivv".toUri())) } }) {
-                                Icon(githubLogo, "GitHub", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        },
-                    )
+                    DeveloperCard("justshivv", "https://avatars.githubusercontent.com/u/78946189?v=4", "https://github.com/justshivv")
                 },
                 Entry("aerluc", "github developer aerluc") {
-                    SettingRow(
-                        "aerluc",
-                        icon = null,
-                        leading = { Artwork("https://avatars.githubusercontent.com/u/122277259?v=4", Modifier.size(28.dp), CircleShape) },
-                        trailing = {
-                            IconButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/aerluc".toUri())) } }) {
-                                Icon(githubLogo, "GitHub", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        },
-                    )
+                    DeveloperCard("aerluc", "https://avatars.githubusercontent.com/u/122277259?v=4", "https://github.com/aerluc")
                 },
                 Entry("Export diagnostics", "log share troubleshooting bug report") {
                     NavRow("Export diagnostics", {
