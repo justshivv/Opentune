@@ -314,11 +314,11 @@ class PlaybackService : MediaLibraryService() {
         }
         val renderers = renderersFor(dsp, exclusive = true)
 
-        // Start once a healthy cushion of audio is buffered (2.0s for streaming
-        // prevents buffer underrun loops after fast skips or network hiccups)
+        // Start as soon as a little audio is in: the defaults wait for 2.5 s,
+        // which is video-sized caution. A stream starts after half a second buffered
         // and a local file after a quarter second.
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMsForStreaming(30_000, FAR_BUFFER_MS, 2_000, 3_500)
+            .setBufferDurationsMsForStreaming(30_000, FAR_BUFFER_MS, 500, 2_000)
             .setBufferDurationsMsForLocalPlayback(5_000, FAR_BUFFER_MS, 250, 500)
             // The byte ceiling decides, not the time one: a whole song at CD
             // quality, a couple of minutes at 24-bit/96 kHz, so a fetched track is
