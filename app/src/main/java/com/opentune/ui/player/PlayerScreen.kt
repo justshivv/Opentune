@@ -1524,7 +1524,7 @@ fun PlayerLayout(
                         }
                     }
                     MenuRow(Icons.Rounded.Equalizer, "Equalizer") { close(); actions.openEqualizer() }
-                    MenuRow(Icons.Rounded.Speed, if (sound.speed != 1f) "Playback speed (%.2f×)".format(sound.speed) else "Playback speed") { close(); showSpeed = true }
+                    if (isEpisode)MenuRow(Icons.Rounded.Speed, if (sound.speed != 1f) "Playback speed (%.2f×)".format(sound.speed) else "Playback speed") { close(); showSpeed = true }
                     MenuRow(Icons.Rounded.GraphicEq, "Remix") { close(); showRemix = true }
                 },
                 end = { close ->
