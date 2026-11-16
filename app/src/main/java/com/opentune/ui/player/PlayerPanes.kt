@@ -419,7 +419,7 @@ private fun pressScale(press: androidx.compose.foundation.interaction.Interactio
  * own rounding shaping its outer end, rather than a circle round the icon.
  */
 @Composable
-fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit, width: androidx.compose.ui.unit.Dp = 76.dp, enabled: Boolean = true) {
+fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit, width: androidx.compose.ui.unit.Dp = LocalPillSegmentWidth.current, enabled: Boolean = true) {
     val bg by animateColorAsState(if (selected) Color.White.copy(alpha = 0.20f) else Color.Transparent, BUTTON_SETTLE, label = "pillButton")
     val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val scale = pressScale(press, selected)
@@ -429,9 +429,24 @@ fun PillButton(icon: ImageVector, label: String, selected: Boolean, onClick: () 
         contentAlignment = Alignment.Center,
     ) {
         // The segment's fill stays put in the pill; the icon is what gives under the finger.
-        Icon(icon, label, Modifier.size(26.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value })
+        Icon(icon, label, Modifier.size(24.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value })
     }
 }
+
+/**
+ * Every segment of the player's pills is this wide, sleep and output as much as the queue's
+ * shuffle and repeat, so the two sets are one size. At 76 dp three buttons came to 230 dp, and
+ * on a narrow phone the pill ran in under the Lyrics and Queue buttons either side of it.
+ */
+internal val PILL_SEGMENT_WIDTH = 60.dp
+
+/** A segment's width where the row is short of room for [PILL_SEGMENT_WIDTH] (a very narrow screen). */
+internal val LocalPillSegmentWidth = androidx.compose.runtime.compositionLocalOf { PILL_SEGMENT_WIDTH }
+
+/** The widest a segment can be for [count] of them, split by hairlines, to fit [room]. */
+internal fun pillSegmentWidth(room: androidx.compose.ui.unit.Dp, count: Int): androidx.compose.ui.unit.Dp =
+    if (count <= 0) PILL_SEGMENT_WIDTH
+    else ((room - (count - 1).dp) / count).coerceIn(40.dp, PILL_SEGMENT_WIDTH)
 
 /**
  * One pill that morphs between two sets of buttons, [first] and [second]
@@ -716,7 +731,7 @@ private fun PillSegment(icon: ImageVector, label: String, active: Boolean, motio
         kick.snapTo(0f)
     }
     Box(
-        Modifier.fillMaxHeight().width(60.dp).segmentFill(bg).clickable(enabled = enabled) { taps++; onClick() },
+        Modifier.fillMaxHeight().width(LocalPillSegmentWidth.current).segmentFill(bg).clickable(enabled = enabled) { taps++; onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
