@@ -152,9 +152,9 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "about", "About", "Source code, community and diagnostics", Icons.Rounded.Info,
         listOf(
-            "Community" to listOf("OpenTune community", "Support OpenTune", "Star on GitHub", "Source code"),
             "Developers" to listOf("justshivv", "aerluc"),
-            "Help" to listOf("Show the welcome again", "Count this phone in usage numbers", "Export diagnostics"),
+            "Community" to listOf("OpenTune community", "Source code", "Star on GitHub", "Support OpenTune"),
+            "Help" to listOf("Show the welcome again", "Export diagnostics", "Count this phone in usage numbers"),
         ),
     ),
 )
