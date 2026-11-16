@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -561,6 +563,10 @@ data class InterfaceSettings(
     val lyricsGlow: Boolean = false,
     /** While lyrics are on screen, the screen stays on instead of dimming and locking. */
     val keepScreenOnLyrics: Boolean = false,
+    /** On the lyrics page the device's navigation bar is hidden, its space left empty. */
+    val hideNavigationBarOnLyrics: Boolean = false,
+    /** On the lyrics page the phone's status bar is hidden, its space left empty. */
+    val hideStatusBarOnLyrics: Boolean = false,
     /** High performance mode: ask for a fast refresh rate while the app is open. */
     val highRefreshRate: Boolean = true,
     /** The profile last chosen (Settings › Performance profile); the switches it set may have been changed since. */
@@ -830,6 +836,10 @@ data class LyricsSettings(
     val offsets: Map<String, Long> = emptyMap(),
     /** A line in Latin letters under each one in another script. */
     val romanize: Boolean = true,
+    /** Lyrics are shown translated into this language, a line under each original; blank is off. */
+    val translateTo: String = "",
+    /** The language last picked for translation, offered first in the translate sheet. */
+    val translateTarget: String = "",
     /** Per-song source picked from the player's "Lyrics source"; the others aren't asked first. */
     val chosen: Map<String, LyricsSource> = emptyMap(),
 ) {
@@ -954,10 +964,21 @@ object AppSettings {
         _recentAddonSearches.value = s.recentAddonSearches
     }
 
+    // Settings arrive in bursts — a slider drag fires dozens of updates a
+    // second — so a change is published at once (the UI and the sound effects
+    // stay live) but the document is written out on a short delay, once the
+    // burst settles, instead of the whole document being serialized and
+    // stored on every single tick.
+    private val persistHandler = Handler(Looper.getMainLooper())
+    private val persistWrite = Runnable {
+        val p = prefs ?: return@Runnable
+        p.edit { putString(K_STATE, json.encodeToString(SettingsState.serializer(), _state.value)) }
+    }
+
     private fun update(transform: (SettingsState) -> SettingsState) {
-        val s = transform(_state.value)
-        publish(s)
-        prefs?.edit { putString(K_STATE, json.encodeToString(SettingsState.serializer(), s)) }
+        publish(transform(_state.value))
+        persistHandler.removeCallbacks(persistWrite)
+        persistHandler.postDelayed(persistWrite, 600)
     }
 
     fun updateTheme(t: (ThemeSettings) -> ThemeSettings) = update { it.copy(theme = t(it.theme)) }

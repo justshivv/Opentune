@@ -9,6 +9,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.foundation.layout.height
 import androidx.compose.animation.core.animate
@@ -17,7 +18,6 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -76,9 +76,11 @@ import androidx.compose.ui.graphics.luminance
 import kotlin.math.roundToInt
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -89,6 +91,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -226,9 +229,28 @@ fun FloatingCard(
                 // Full-screen treatment only for a card that can actually reach the full
                 // height: one capped by its content keeps its card shape at its top.
                 val fullscreen = expandable && fullFraction >= 1f && fullPx >= with(density) { maxCard.toPx() } - 1f
-                val expandedFraction = if (range > 0f) (extra / range).coerceIn(0f, 1f) else 1f
-                val edge = if (fullscreen) 1f - expandedFraction else 1f
-                val shape = RoundedCornerShape(32.dp * edge)
+                // How far the card's square-off has got: 1 at rest, 0 pulled up to the whole
+                // page. Read only from layout and draw code (the insets below, the layer and
+                // the rim), never while composing: a pull writes [extra] on every move, and a
+                // read here would rebuild the whole card — handle, title, content and all —
+                // on every one of them, which is what made dragging a sheet crawl.
+                val edgeNow = {
+                    if (!fullscreen) 1f
+                    else 1f - if (range > 0f) (extra / range).coerceIn(0f, 1f) else 1f
+                }
+                // The same square-off, coarsened for the layout insets: the insets set the
+                // card's width, and a width that creeps a pixel at a time makes the whole
+                // content measure itself again on every step of the pull — the dearest
+                // thing a content can be asked to do, and a sheet full of chip rows pays
+                // it worst. A dozen steps across the pull is more than the eye can catch;
+                // the corners and the rim are drawn, not laid out, and keep the smooth one.
+                val edgeLayout = {
+                    val e = edgeNow()
+                    (e * 12f).roundToInt() / 12f
+                }
+                // The solid card's rim and shadow colours, taken here for the draw code below.
+                val rim = MaterialTheme.colorScheme.onSurface
+                val scrim = MaterialTheme.colorScheme.scrim
                 fun settle(velocity: Float) {
                     settling?.cancel()
                     settling = scope.launch {
@@ -311,22 +333,47 @@ fun FloatingCard(
                 // of the page above and below a card that was meant to be the page.
                 val barsTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                 val barsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                val inside = if (fullscreen) 1f - edge else 0f
                 Column(
                     Modifier
-                        .padding(top = barsTop * (1f - inside), bottom = barsBottom * (1f - inside))
+                        .insetBy {
+                            val e = edgeLayout()
+                            val bars = if (fullscreen) e else 1f
+                            val side = (12.dp * e).roundToPx()
+                            InsetsPx(side, (barsTop * bars).roundToPx() + side, side, (barsBottom * bars).roundToPx() + side)
+                        }
                         .imePadding()
-                        .padding(12.dp * edge)
                         .widthIn(max = if (fullscreen) maxWidth else 560.dp)
                         .fillMaxWidth()
                         .then(
                             if (expandable) {
                                 Modifier.layout { measurable, constraints ->
-                                    // Lists that can't be measured whole (lazy ones) just take the height asked for.
-                                    val natural = if (fitContent) runCatching { measurable.maxIntrinsicHeight(constraints.maxWidth) }.getOrNull() else null
-                                    if (natural != null && natural.toFloat() != naturalPx) naturalPx = natural.toFloat()
-                                    measured = true
+                                    // The content's own height, learned two ways, each covering
+                                    // the other's blind spot. The intrinsic size is the honest
+                                    // sum of the content, but on some contents the query itself
+                                    // throws (it tries to build a Constraints with an
+                                    // unrepresentable height) — and a sheet whose body is laid
+                                    // out to fill would defeat it the other way. So when the
+                                    // query fails, the content is laid out for real inside the
+                                    // space actually on offer and its height read off that: a
+                                    // short content reports its own height, one that fills the
+                                    // whole space reports the space, which is a full sheet
+                                    // anyway. Both run at rest and whenever a pull reaches the
+                                    // cap they set, never on every pull, so dragging a sheet
+                                    // costs exactly what it cost before. A content that can't
+                                    // be measured whole (a lazy list) fails both, is caught,
+                                    // and just takes the height asked for, as before.
                                     val want = (halfPx + extra).roundToInt()
+                                    val atRest = extra <= 0f || extra >= range
+                                    val pressing = fitContent && want.toFloat() >= naturalPx
+                                    val natural = if (fitContent && (atRest || pressing)) {
+                                        runCatching { measurable.maxIntrinsicHeight(constraints.maxWidth) }.getOrNull()
+                                            ?: runCatching {
+                                                val probe = measurable.measure(constraints.copy(minHeight = 0))
+                                                probe.height.takeIf { it > 0 && it < constraints.maxHeight }
+                                            }.getOrNull()
+                                    } else null
+                                    if (natural != null && natural.toFloat() != naturalPx) naturalPx = natural.toFloat()
+                                    if (atRest || pressing || !fitContent) measured = true
                                     val h = minOf(want, natural ?: want).coerceIn(constraints.minHeight, constraints.maxHeight)
                                     val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
                                     layout(placeable.width, placeable.height) { placeable.place(0, 0) }
@@ -342,16 +389,22 @@ fun FloatingCard(
                             scaleX = s
                             scaleY = s
                             alpha = shown.coerceIn(0f, 1f)
+                            // The card's corners, squared off as it takes the whole page, are
+                            // the layer's own shape: set here in the draw phase, a pull changes
+                            // them without recomposing the card to do it.
+                            shape = RoundedCornerShape(32.dp * edgeNow())
+                            clip = true
+                            // No drop shadow under glass, whichever blur is behind it: Android
+                            // draws the shadow under the whole card, a little lower and inset,
+                            // and through the glass its edges read as a box inside the card.
+                            // Only the solid card, with no blur at all, gets one — cast by the
+                            // layer, with the same shape.
+                            if (frost == Frost.FAILED && !frosted) {
+                                shadowElevation = 32.dp.toPx()
+                                ambientShadowColor = scrim
+                                spotShadowColor = scrim
+                            }
                         }
-                        // No drop shadow under glass, whichever blur is behind it: Android
-                        // draws the shadow under the whole card, a little lower and inset,
-                        // and through the glass its edges read as a box inside the card.
-                        // Only the solid card, with no blur at all, gets one.
-                        .then(
-                            if (frost != Frost.FAILED || frosted) Modifier
-                            else Modifier.shadow(32.dp, shape, ambientColor = MaterialTheme.colorScheme.scrim, spotColor = MaterialTheme.colorScheme.scrim),
-                        )
-                        .clip(shape)
                         .then(
                             if (frosted) {
                                 // Glass: the blurred screen behind the window shows through
@@ -366,17 +419,36 @@ fun FloatingCard(
                                         ),
                                     )
                                     .background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.07f else 0.18f), 0.35f to Color.White.copy(alpha = 0f)))
-                                    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = (if (dark) 0.22f else 0.6f) * edge), Color.White.copy(alpha = 0.04f * edge))), shape)
                             } else {
                                 Modifier
                                     // Solid, so its shadow never shows through.
                                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f * edge), shape)
                             },
                         )
+                        // The card's rim, drawn over the film: like the corners, its fade as
+                        // the card squares off reads the pull in the draw phase.
+                        .drawWithContent {
+                            drawContent()
+                            val e = edgeNow()
+                            if (e > 0f) {
+                                val stroke = 1.dp.toPx()
+                                val outline = RoundedCornerShape(32.dp * e).createOutline(Size(size.width - stroke, size.height - stroke), layoutDirection, this)
+                                drawContext.canvas.save()
+                                drawContext.canvas.translate(stroke / 2f, stroke / 2f)
+                                if (frosted) {
+                                    drawOutline(outline, Brush.verticalGradient(listOf(Color.White.copy(alpha = (if (dark) 0.22f else 0.6f) * e), Color.White.copy(alpha = 0.04f * e))), style = Stroke(stroke))
+                                } else {
+                                    drawOutline(outline, rim.copy(alpha = 0.08f * e), style = Stroke(stroke))
+                                }
+                                drawContext.canvas.restore()
+                            }
+                        }
                         // Taps on the card stay on the card.
                         .pointerInput(Unit) { detectTapGestures { } }
-                        .padding(start = 10.dp, end = 10.dp, top = 10.dp + barsTop * inside, bottom = 14.dp + barsBottom * inside),
+                        .insetBy {
+                            val insideF = if (fullscreen) 1f - edgeLayout() else 0f
+                            InsetsPx(10.dp.roundToPx(), 10.dp.roundToPx() + (barsTop * insideF).roundToPx(), 10.dp.roundToPx(), 14.dp.roundToPx() + (barsBottom * insideF).roundToPx())
+                        },
                 ) {
                     // The handle and title pull the card down; content below keeps its own gestures.
                     Column(
@@ -399,7 +471,7 @@ fun FloatingCard(
                                 .then(if (expandable) Modifier.clickable(
                                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                     indication = null,
-                                    onClickLabel = if (extra < range / 2) "Expand sheet" else "Collapse sheet",
+                                    onClickLabel = "Expand or collapse sheet",
                                     role = Role.Button,
                                 ) { settle(if (extra < range / 2) -FLING - 1 else FLING + 1) } else Modifier)
                                 .semantics { contentDescription = "Sheet drag handle" },
@@ -438,9 +510,13 @@ fun FloatingCard(
                         if (header != null) header()
                     }
                     // The body rises in just behind the card, on the card's own clock, so the
-                    // two never pull against each other.
+                    // two never pull against each other. A content-capped card's body is not
+                    // force-filled: its height never passes the content's own anyway, and
+                    // leaving the fill off is what lets the cap probe in the height block
+                    // above lay the body out unbounded and hear its true height — a filled
+                    // body answers "as tall as you'll give me" and the cap never engages.
                     Column(
-                        Modifier.weight(1f, fill = expandable).fillMaxWidth().nestedScroll(grow).padding(contentPadding).graphicsLayer {
+                        Modifier.weight(1f, fill = expandable && !fitContent).fillMaxWidth().nestedScroll(grow).padding(contentPadding).graphicsLayer {
                             val rise = ((shown - 0.2f) / 0.8f).coerceIn(0f, 1f)
                             alpha = rise
                             translationY = (1f - rise) * 16.dp.toPx()
@@ -617,6 +693,26 @@ internal fun FrostBehind(
         }
     }
     return blurring
+}
+
+/** Padding measured in the layout phase: what it returns may read the card's pull, so a drag re-lays the card out without recomposing it. */
+private class InsetsPx(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
+private fun Modifier.insetBy(insets: Density.() -> InsetsPx): Modifier = layout { measurable, constraints ->
+    val ins = insets()
+    val maxW = (constraints.maxWidth - ins.left - ins.right).coerceAtLeast(0)
+    val maxH = (constraints.maxHeight - ins.top - ins.bottom).coerceAtLeast(0)
+    val placeable = measurable.measure(
+        constraints.copy(
+            minWidth = constraints.minWidth.coerceAtMost(maxW),
+            maxWidth = maxW,
+            minHeight = constraints.minHeight.coerceAtMost(maxH),
+            maxHeight = maxH,
+        ),
+    )
+    layout(placeable.width + ins.left + ins.right, placeable.height + ins.top + ins.bottom) {
+        placeable.place(ins.left, ins.top)
+    }
 }
 
 private const val EXIT_MS = 200L

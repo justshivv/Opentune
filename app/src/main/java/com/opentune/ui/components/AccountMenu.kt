@@ -25,7 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ManageAccounts
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -103,54 +103,54 @@ fun AccountMenu(nav: AccountMenuNav, onDismiss: () -> Unit) {
                 enter = if (calm) fadeIn(tween(120)) else fadeIn(tween(160)) + scaleIn(tween(240), initialScale = 0.86f, transformOrigin = TransformOrigin(1f, 0f)),
                 exit = if (calm) fadeOut(tween(100)) else fadeOut(tween(140)) + scaleOut(tween(160), targetScale = 0.92f, transformOrigin = TransformOrigin(1f, 0f)),
             ) {
-            Column(
-                Modifier
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp)
-                    .widthIn(max = 420.dp)
-                    .fillMaxWidth()
-                    .shadow(24.dp, RoundedCornerShape(30.dp))
-                    .clip(RoundedCornerShape(30.dp))
-                    .background(card)
-                    // Taps on the card stay on the card.
-                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
-                    .padding(vertical = 16.dp),
-            ) {
-                val active = accounts.firstOrNull { it.active }
-                Text(
-                    if (signedIn) "Switch account" else "Account",
-                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                )
-                if (active != null && active.email.isNotBlank()) {
+                Column(
+                    Modifier
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                        .widthIn(max = 420.dp)
+                        .fillMaxWidth()
+                        .shadow(24.dp, RoundedCornerShape(30.dp))
+                        .clip(RoundedCornerShape(30.dp))
+                        .background(card)
+                        // Taps on the card stay on the card.
+                        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+                        .padding(vertical = 16.dp),
+                ) {
+                    val active = accounts.firstOrNull { it.active }
                     Text(
-                        active.email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 4.dp),
+                        if (signedIn) "Switch account" else "Account",
+                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 24.dp),
                     )
-                }
-                if (signedIn) accounts.forEach { acc ->
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .clickable { if (!acc.active) AccountStore.switchTo(acc.id); close() }
-                            .padding(horizontal = 24.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Artwork(acc.thumbnailUrl, Modifier.size(48.dp), CircleShape)
-                        Column(Modifier.padding(start = 16.dp).weight(1f)) {
-                            Text(acc.name.ifBlank { "Signed in" }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (acc.email.isNotBlank()) Text(
-                                acc.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        if (acc.active) Icon(Icons.Rounded.Check, "In use", Modifier.size(26.dp))
+                    if (active != null && active.email.isNotBlank()) {
+                        Text(
+                            active.email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 4.dp),
+                        )
                     }
+                    if (signedIn) accounts.forEach { acc ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable { if (!acc.active) AccountStore.switchTo(acc.id); close() }
+                                .padding(horizontal = 24.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Artwork(acc.thumbnailUrl, Modifier.size(48.dp), CircleShape)
+                            Column(Modifier.padding(start = 16.dp).weight(1f)) {
+                                Text(acc.name.ifBlank { "Signed in" }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (acc.email.isNotBlank()) Text(
+                                    acc.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            if (acc.active) Icon(Icons.Rounded.Check, "In use", Modifier.size(26.dp))
+                        }
+                    }
+                    MenuLine(Icons.Rounded.Add, if (signedIn) "Add account" else "Sign in") { close(); nav.addAccount() }
+                    if (signedIn) MenuLine(Icons.Rounded.ManageAccounts, "Manage accounts") { close(); nav.manageAccounts() }
+                    MenuLine(Icons.Rounded.Settings, "Settings") { close(); nav.settings() }
                 }
-                MenuLine(Icons.Rounded.Add, if (signedIn) "Add account" else "Sign in") { close(); nav.addAccount() }
-                if (signedIn) MenuLine(Icons.Rounded.Close, "Manage accounts") { close(); nav.manageAccounts() }
-                MenuLine(Icons.Rounded.Settings, "Settings") { close(); nav.settings() }
-            }
             }
         }
     }

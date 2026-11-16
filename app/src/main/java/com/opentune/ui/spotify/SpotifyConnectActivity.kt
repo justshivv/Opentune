@@ -1,6 +1,7 @@
 package com.opentune.ui.spotify
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Message
@@ -25,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.viewinterop.AndroidView
 import com.opentune.data.settings.AppSettings
 import com.opentune.ui.account.SignInPage
+import com.opentune.ui.account.probePageColor
 import com.opentune.ui.account.SpotifyGreen
 import com.opentune.ui.theme.OpenTuneTheme
 
@@ -46,6 +48,8 @@ class SpotifyConnectActivity : ComponentActivity() {
     private var done = false
     private var loading by mutableStateOf(true)
     private var unavailable by mutableStateOf(false)
+    private var pageAddress by mutableStateOf<String?>(null)
+    private var pageColor by mutableStateOf<androidx.compose.ui.graphics.Color?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,7 +60,8 @@ class SpotifyConnectActivity : ComponentActivity() {
         } else {
             web = page
             frame = FrameLayout(this).apply { addView(page, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
-            if (savedInstanceState == null) page.loadUrl(LOGIN) else page.restoreState(savedInstanceState)
+            // The page starts once the screen is up, so the header is there first.
+            page.post { if (savedInstanceState == null) page.loadUrl(LOGIN) else page.restoreState(savedInstanceState) }
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -82,6 +87,8 @@ class SpotifyConnectActivity : ComponentActivity() {
                     onBack = { finish() },
                     unavailable = if (unavailable) "This phone's web view isn't working, so Spotify's sign-in page can't open. Update Android System WebView in the Play Store and try again." else null,
                     hint = "If Google sign-in won't open here, use your Spotify email or username, or a one-time code by email.",
+                    url = pageAddress,
+                    pageColor = pageColor,
                 ) { modifier ->
                     frame?.let { f -> AndroidView(factory = { f }, modifier = modifier) }
                 }
@@ -103,6 +110,9 @@ class SpotifyConnectActivity : ComponentActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun newWebView(): WebView = WebView(this).apply {
+        // Invisible until its first page starts: a new WebView paints one frame
+        // at the wrong place, over the header, before it settles into its box.
+        visibility = android.view.View.INVISIBLE
         setBackgroundColor(Color.WHITE)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -124,9 +134,22 @@ class SpotifyConnectActivity : ComponentActivity() {
             return scheme != "https" && scheme != "http"
         }
 
+        override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+            pageAddress = com.opentune.ui.account.addressLabel(url)
+            view.visibility = android.view.View.VISIBLE
+        }
+
         override fun onPageFinished(view: WebView, url: String?) {
             loading = false
+            view.visibility = android.view.View.VISIBLE
+            pageAddress = com.opentune.ui.account.addressLabel(url)
+            view.probePageColor { pageColor = it }
             signedIn()
+        }
+
+        // Spotify's pages change address without loading a new page.
+        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+            pageAddress = com.opentune.ui.account.addressLabel(url)
         }
     }
 

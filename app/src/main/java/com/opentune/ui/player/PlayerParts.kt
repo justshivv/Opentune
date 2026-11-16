@@ -79,6 +79,7 @@ import androidx.compose.animation.animateColorAsState
 import com.opentune.ui.theme.rememberArtworkSeed
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.Path
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.opentune.ui.components.glass
@@ -1059,7 +1060,7 @@ fun SeekBar(
 
     val seekHaptics = com.opentune.ui.components.rememberHaptics()
     fun fraction(): Float = dragFraction ?: heldFraction
-        ?: if (durationMs > 0) (position().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+    ?: if (durationMs > 0) (position().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     // Until the song's length is known there's nothing to seek: a band of light runs along the
     // track instead, so it reads as loading rather than stuck at the start.
     val loading = durationMs <= 0
@@ -1134,7 +1135,7 @@ fun SeekBar(
                 val b = if (durationMs > 0) (buffered().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
                 // Under the wave, the straight track starts where the played part ends: drawn the
                 // whole way along, it showed as a flat line behind the wave.
-                val trackFrom = if (amplitude > 0f && sweep == null) (size.width * f + h * 1.5f * amplitude).coerceAtMost(size.width) else 0f
+                val trackFrom = if (amplitude > 0f && sweep == null) (size.width * f + h * 0.5f * amplitude).coerceAtMost(size.width) else 0f
                 if (trackFrom < size.width) drawRoundRect(inactive, Offset(trackFrom, y), Size(size.width - trackFrom, h), r)
                 if (sweep != null) {
                     val at = sweep.value * size.width
@@ -1148,19 +1149,30 @@ fun SeekBar(
                 val bufferedTo = size.width * maxOf(b, f)
                 if (bufferedTo > trackFrom) drawRoundRect(bufferedColor, Offset(trackFrom, y), Size(bufferedTo - trackFrom, h), r)
                 if (amplitude > 0f) {
-                    // Played part as a sine wave, a stroke as thick as the track.
+                    // Played part as a sine wave, a stroke as thick as the track. The path
+                    // starts and ends on the curve itself: it used to start from the centre
+                    // line, and that first vertical step read as a glitch at the left end.
+                    // A point per pixel keeps the curve smooth instead of faceted, and the
+                    // joins are rounded so the stroke can't kink at the bends. The wave's
+                    // length is a fixed gentle one rather than a multiple of the track's
+                    // thickness, which packed a dozen busy waves across the bar.
                     val amp = h * 0.9f * amplitude
-                    val length = h * 7f
+                    val length = 45.dp.toPx()
+                    val phase = phaseState?.value ?: 0f
+                    val mid = size.height / 2
+                    val endX = size.width * f
+                    fun waveY(x: Float) = mid + amp * sin(x / length * 2 * PI.toFloat() + phase)
                     val wavePath = Path().apply {
-                        moveTo(0f, size.height / 2)
-                        var x = 0f
-                        while (x <= size.width * f) {
-                            lineTo(x, size.height / 2 + amp * sin(x / length * 2 * PI.toFloat() + (phaseState?.value ?: 0f)))
-                            x += 2f
+                        moveTo(0f, waveY(0f))
+                        var x = 1f
+                        while (x < endX) {
+                            lineTo(x, waveY(x))
+                            x += 1f
                         }
+                        if (endX > 0f) lineTo(endX, waveY(endX))
                     }
-                    if (gradient) drawPath(wavePath, Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), style = Stroke(width = h, cap = StrokeCap.Round))
-                    else drawPath(wavePath, active, style = Stroke(width = h, cap = StrokeCap.Round))
+                    if (gradient) drawPath(wavePath, Brush.horizontalGradient(listOf(active, gradientEnd), endX = maxOf(size.width * f, 1f)), style = Stroke(width = h, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    else drawPath(wavePath, active, style = Stroke(width = h, cap = StrokeCap.Round, join = StrokeJoin.Round))
                 } else if (lineThumb && thumbRadius > 0.dp) {
                     // Clip the full capsule at the handle instead of rounding the
                     // played segment there. Its outer edge stays round; the join

@@ -31,15 +31,24 @@ data class LyricLine(
     val rtl: Boolean? = null,
 )
 
-/** Whether [line] reads right to left: as its source says, else by its first letter with a direction. */
-fun readsRightToLeft(line: LyricLine): Boolean = line.rtl ?: run {
+/**
+ * Whether [line] reads right to left. Arabic anywhere in the line decides it: in the
+ * French-and-Arabic mixes this app plays, Arabic is the line's home script and the
+ * French rides inside it, so the line reads right to left however it opens. Any other
+ * script is settled by its first letter with a direction, and the source's mark —
+ * inherited from the whole song, so often just the document's language — is left for
+ * lines whose letters don't say (a line of numbers, say).
+ */
+fun readsRightToLeft(line: LyricLine): Boolean {
+    var first: Boolean? = null
     for (c in line.text) {
         when (Character.getDirectionality(c)) {
-            Character.DIRECTIONALITY_RIGHT_TO_LEFT, Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC -> return@run true
-            Character.DIRECTIONALITY_LEFT_TO_RIGHT -> return@run false
+            Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC -> return true
+            Character.DIRECTIONALITY_RIGHT_TO_LEFT -> if (first == null) first = true
+            Character.DIRECTIONALITY_LEFT_TO_RIGHT -> if (first == null) first = false
         }
     }
-    false
+    return first ?: line.rtl ?: false
 }
 
 const val VOICE_LEAD = 0

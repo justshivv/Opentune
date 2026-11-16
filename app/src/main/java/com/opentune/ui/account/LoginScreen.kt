@@ -36,7 +36,15 @@ private const val MUSIC = "https://music.youtube.com"
 private const val DESTROY_AFTER_MS = 1_500L
 private const val SIGN_IN_URL =
     "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=" +
-        "https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F"
+            "https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F"
+
+/** The page's address as it is shown under the service's name: the host and the path, without the scheme or the query. */
+internal fun addressLabel(url: String?): String? {
+    val uri = url?.let { runCatching { android.net.Uri.parse(it) }.getOrNull() } ?: return null
+    val host = uri.host ?: return null
+    val path = uri.path?.takeIf { it.isNotBlank() && it != "/" } ?: ""
+    return host + path
+}
 
 /**
  * Google's own sign-in page in a WebView. Once it lands back on YouTube
@@ -47,6 +55,8 @@ private const val SIGN_IN_URL =
 @Composable
 fun LoginScreen(onDone: () -> Unit) {
     var loading by remember { mutableStateOf(true) }
+    var pageAddress by remember { mutableStateOf<String?>(null) }
+    var pageColor by remember { mutableStateOf<androidx.compose.ui.graphics.Color?>(null) }
     var finished by remember { mutableStateOf(false) }
     // Set once the screen has gone: a page that finishes loading after that is ignored.
     val gone = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
@@ -70,12 +80,15 @@ fun LoginScreen(onDone: () -> Unit) {
         service = "YouTube Music",
         brand = YouTubeMusicRed,
         icon = Icons.Rounded.PlayCircle,
+        logo = com.opentune.R.drawable.ic_youtube_music,
+        url = pageAddress,
+        pageColor = pageColor,
         gives = "Your playlists, liked songs, history and recommendations",
         loading = loading,
         onBack = leave,
         unavailable = if (unavailable) {
             "Sign-in needs Android System WebView, which isn't working on this device. Update or turn it on in the " +
-                "Play Store, or sign in on your phone and use Link a device to sign this one in."
+                    "Play Store, or sign in on your phone and use Link a device to sign this one in."
         } else null,
     ) { webModifier ->
         AndroidView(
@@ -90,6 +103,9 @@ fun LoginScreen(onDone: () -> Unit) {
                     loading = false
                 }.getOrNull() ?: return@AndroidView android.view.View(context)
                 view.apply {
+                    // Invisible until its first page starts: a new WebView paints one frame
+                    // at the wrong place, over the header, before it settles into its box.
+                    visibility = android.view.View.INVISIBLE
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -121,19 +137,22 @@ fun LoginScreen(onDone: () -> Unit) {
                     }
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                            if (!gone.get()) loading = true
+                            if (!gone.get()) { loading = true; pageAddress = addressLabel(url); view.visibility = android.view.View.VISIBLE }
                         }
 
                         override fun onPageFinished(view: WebView, url: String?) {
                             if (gone.get()) return
                             loading = false
+                            view.visibility = android.view.View.VISIBLE
+                            pageAddress = addressLabel(url)
+                            view.probePageColor { pageColor = it }
                             check(view, url)
                             for (wait in listOf(1_000L, 2_500L, 5_000L)) main.postDelayed({ if (!gone.get()) check(view, view.url) }, wait)
                         }
 
                         // YouTube's pages change address without loading a new page.
                         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
-                            if (!gone.get()) check(view, url)
+                            if (!gone.get()) { pageAddress = addressLabel(url); view.probePageColor { pageColor = it }; check(view, url) }
                         }
                     }
                     web.set(this)

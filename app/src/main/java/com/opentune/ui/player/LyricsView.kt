@@ -151,6 +151,8 @@ fun LyricsView(
     val selection = remember(syncedLines) { androidx.compose.runtime.mutableStateListOf<Int>() }
     // The picked lines handed to the card sheet, frozen when Share was pressed.
     var sharingPicked by remember { mutableStateOf<Pair<com.opentune.data.model.Song, List<String>>?>(null) }
+    // The translate-and-romanize sheet, opened from the page's translate button.
+    var textSheet by remember { mutableStateOf(false) }
     // Settings › Keep the screen on for lyrics: held only while this view is on screen, and
     // released with it, as the window's flag is shared with every other holder.
     val keepAwake = AppSettings.ui.collectAsState().value.keepScreenOnLyrics
@@ -194,13 +196,12 @@ fun LyricsView(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    // Turn romanized lines (Latin letters under another script) on or off from the page.
-                    if (found is Lyrics.Synced && Romanizer.available) {
-                        val romanizeOn = AppSettings.lyrics.collectAsState().value.romanize
-                        LyricActionButton(Icons.Rounded.Translate, if (romanizeOn) "Turn off romanization" else "Show romanized lyrics", active = romanizeOn) {
-                            haptics.tick()
-                            AppSettings.updateLyrics { it.copy(romanize = !it.romanize) }
-                        }
+                    // One sheet for the words themselves: romanized lines under another
+                    // script, and a translation under every line.
+                    val lyricsSettings = AppSettings.lyrics.collectAsState().value
+                    LyricActionButton(Icons.Rounded.Translate, "Translate or romanize lyrics", active = lyricsSettings.romanize || lyricsSettings.translateTo.isNotBlank()) {
+                        haptics.tick()
+                        textSheet = true
                     }
                     if (shareSong != null) {
                         // Lines with words in them (synced lyrics carry empty ones for the gaps), with
@@ -232,6 +233,13 @@ fun LyricsView(
         sharing?.let { (song, shared) -> com.opentune.ui.share.LyricCardSheet(song, shared, startAt = shareStartAt, onDismiss = { sharing = null }) }
         sharingPicked?.let { (song, picked) ->
             com.opentune.ui.share.LyricCardSheet(song, picked, startAt = 0, onDismiss = { sharingPicked = null }, pickable = false)
+        }
+        if (textSheet && found != null) {
+            val sheetLines = when (found) {
+                is Lyrics.Synced -> found.lines.map { it.text }
+                is Lyrics.Plain -> found.text.lines()
+            }
+            LyricsTextSheet(sheetLines, synced = found is Lyrics.Synced, onDismiss = { textSheet = false })
         }
     }
 }
@@ -339,15 +347,24 @@ private fun PlainLyrics(text: String, source: String, note: String? = "These lyr
                 com.opentune.data.lyrics.JapaneseReadings.lines(texts)?.let { read -> value = read.mapIndexed { i, r -> r ?: value.getOrNull(i) } }
             }
         }
+        val translateTo = AppSettings.lyrics.collectAsState().value.translateTo
+        val translated by androidx.compose.runtime.produceState<List<String?>>(emptyList(), text, translateTo) {
+            if (translateTo.isBlank()) { value = emptyList(); return@produceState }
+            value = com.opentune.data.lyrics.LyricsTranslator.translate(text.lines(), translateTo).getOrDefault(emptyList())
+        }
         val dimmed = MaterialTheme.colorScheme.onSurfaceVariant
-        val shown = remember(text, romanized, dimmed) {
-            if (romanized.none { it != null }) AnnotatedString(text) else buildAnnotatedString {
+        val shown = remember(text, romanized, translated, dimmed) {
+            if (romanized.none { it != null } && translated.none { it != null }) AnnotatedString(text) else buildAnnotatedString {
                 text.lines().forEachIndexed { i, line ->
                     if (i > 0) append("\n")
                     append(line)
                     romanized.getOrNull(i)?.let { r ->
                         append("\n")
                         withStyle(SpanStyle(color = dimmed, fontSize = style.fontSize * 0.5f)) { append(r) }
+                    }
+                    translated.getOrNull(i)?.let { t ->
+                        append("\n")
+                        withStyle(SpanStyle(color = dimmed, fontSize = style.fontSize * 0.55f)) { append(t) }
                     }
                 }
             }
@@ -394,6 +411,12 @@ private fun SyncedLyrics(
         if (com.opentune.data.lyrics.JapaneseReadings.wanted(texts)) {
             com.opentune.data.lyrics.JapaneseReadings.lines(texts)?.let { read -> value = read.mapIndexed { i, r -> r ?: value.getOrNull(i) } }
         }
+    }
+    // A translation under every line, fetched once and kept by the translator.
+    val translateTo = AppSettings.lyrics.collectAsState().value.translateTo
+    val translated by androidx.compose.runtime.produceState<List<String?>>(emptyList(), lines, translateTo) {
+        if (translateTo.isBlank()) { value = emptyList(); return@produceState }
+        value = com.opentune.data.lyrics.LyricsTranslator.translate(lines.map { it.text }, translateTo).getOrDefault(emptyList())
     }
     // Two singers trade lines: the second voice's sit on the other side.
     val duet = remember(lines) { lines.any { it.voice == VOICE_SECOND } }
@@ -508,49 +531,50 @@ private fun SyncedLyrics(
                         translationY = glideRun?.let { trailOf(it, r + 1, elapsed.floatValue) } ?: 0f
                     },
                 ) {
-                when (row) {
-                    is LyricRow.Line -> {
-                        val i = row.index
-                        val line = row.line
-                        val picked = selection?.contains(i)
-                        LyricLineView(
-                            line = line,
-                            distance = i - activeLine,
-                            isActive = r == activeRow && !selecting,
-                            animation = animation,
-                            blurEnabled = blur && following,
-                            position = clock,
-                            romanized = romanized.getOrNull(i),
-                            duet = duet,
-                            selected = if (selecting) picked == true else null,
-                            onClick = {
-                                if (selecting && selection != null) {
-                                    // Tap to add or drop a line, up to the card's limit.
-                                    when {
-                                        i in selection -> selection.remove(i)
-                                        selection.size < com.opentune.ui.share.LyricCard.MAX_LINES -> selection.add(i)
-                                        else -> { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.OFF); return@LyricLineView }
+                    when (row) {
+                        is LyricRow.Line -> {
+                            val i = row.index
+                            val line = row.line
+                            val picked = selection?.contains(i)
+                            LyricLineView(
+                                line = line,
+                                distance = i - activeLine,
+                                isActive = r == activeRow && !selecting,
+                                animation = animation,
+                                blurEnabled = blur && following,
+                                position = clock,
+                                romanized = romanized.getOrNull(i),
+                                translated = translated.getOrNull(i),
+                                duet = duet,
+                                selected = if (selecting) picked == true else null,
+                                onClick = {
+                                    if (selecting && selection != null) {
+                                        // Tap to add or drop a line, up to the card's limit.
+                                        when {
+                                            i in selection -> selection.remove(i)
+                                            selection.size < com.opentune.ui.share.LyricCard.MAX_LINES -> selection.add(i)
+                                            else -> { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.OFF); return@LyricLineView }
+                                        }
+                                        haptics.tick()
+                                    } else {
+                                        onSeek(line.startMs)
+                                        following = true
                                     }
-                                    haptics.tick()
-                                } else {
-                                    onSeek(line.startMs)
-                                    following = true
-                                }
-                            },
-                            // A long press starts picking lines to share; without a song to
-                            // share, it lines the lyrics up with this line as before.
-                            onLongClick = when {
-                                selection != null -> { { if (!selecting) { haptics.press(); selection.add(i) } } }
-                                onSyncLine != null -> { { onSyncLine(line.startMs); following = true } }
-                                else -> null
-                            },
+                                },
+                                // A long press starts picking lines to share; without a song to
+                                // share, it lines the lyrics up with this line as before.
+                                onLongClick = when {
+                                    selection != null -> { { if (!selecting) { haptics.press(); selection.add(i) } } }
+                                    onSyncLine != null -> { { onSyncLine(line.startMs); following = true } }
+                                    else -> null
+                                },
+                            )
+                        }
+                        is LyricRow.Gap -> GapDots(
+                            visible = r == activeRow,
+                            progress = { ((clock() - row.gap.startMs).toFloat() / (row.gap.endMs - row.gap.startMs)).coerceIn(0f, 1f) },
                         )
                     }
-                    is LyricRow.Gap -> GapDots(
-                        visible = r == activeRow,
-                        progress = { ((clock() - row.gap.startMs).toFloat() / (row.gap.endMs - row.gap.startMs)).coerceIn(0f, 1f) },
-                    )
-                }
                 }
             }
             item(key = "credit") { Credit(source) }
@@ -642,7 +666,7 @@ private fun trailOf(run: GlideRun, index: Int, elapsedMs: Float): Float {
     val own = if (behind == 0) 0f else {
         val late = behind * TRAIL_STEP * run.durationMs
         run.delta * (GLIDE_EASING.transform((elapsedMs / run.durationMs).coerceIn(0f, 1f)) -
-            GLIDE_EASING.transform(((elapsedMs - late) / run.durationMs).coerceIn(0f, 1f)))
+                GLIDE_EASING.transform(((elapsedMs - late) / run.durationMs).coerceIn(0f, 1f)))
     }
     val handed = run.previous?.let { trailOf(it, index, run.handOffMs) } ?: 0f
     return own + handed * (1f - GLIDE_EASING.transform((elapsedMs / run.durationMs).coerceIn(0f, 1f)))
@@ -806,6 +830,7 @@ internal fun LyricLineView(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     romanized: String? = null,
+    translated: String? = null,
     duet: Boolean = false,
     /** While lines are being picked to share: whether this one is. Null otherwise. */
     selected: Boolean? = null,
@@ -979,6 +1004,14 @@ internal fun LyricLineView(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             )
         }
+        translated?.let {
+            Text(
+                it,
+                style = base.copy(fontSize = base.fontSize * 0.55f, lineHeight = base.lineHeight * 0.6f),
+                color = (if (isActive) bright else dim).copy(alpha = if (isActive) 0.85f else 0.4f),
+                modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
+            )
+        }
     }
 }
 
@@ -1046,7 +1079,7 @@ internal fun SungLine(line: LyricLine, position: () -> Long, style: androidx.com
     val rtl = remember(line) { com.opentune.data.lyrics.readsRightToLeft(line) }
     Text(
         text,
-        style = style,
+        style = style.copy(textDirection = if (rtl) TextDirection.Rtl else TextDirection.Ltr),
         color = bright,
         maxLines = 1,
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
