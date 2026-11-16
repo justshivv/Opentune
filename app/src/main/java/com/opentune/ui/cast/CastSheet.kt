@@ -27,12 +27,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.CastConnected
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Speaker
-import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import com.opentune.ui.theme.Icon
@@ -56,6 +50,9 @@ import com.opentune.cast.Cast
 import com.opentune.cast.CastTarget
 import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.components.rememberHaptics
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Picks a device to play on: Chromecasts and DLNA renderers (smart TVs,
@@ -70,7 +67,7 @@ fun CastSheet(onDismiss: () -> Unit) {
     val scanning by Cast.scanning.collectAsState()
     val session by Cast.session.collectAsState()
     LaunchedEffect(Unit) { Cast.scan(context) }
-    FloatingCard(onDismiss = onDismiss, title = "Play on", icon = Icons.Rounded.Cast, expandable = true, fullFraction = 1f) {
+    FloatingCard(onDismiss = onDismiss, title = "Play on", icon = ImageVector.vectorResource(AppIcons.Cast), expandable = true, fullFraction = 1f) {
         Column(Modifier.verticalScroll(rememberScrollState()).animateContentSize().padding(bottom = 12.dp)) {
             session?.let { s ->
                 Column(
@@ -86,7 +83,7 @@ fun CastSheet(onDismiss: () -> Unit) {
                             if (s.receiver == null) {
                                 CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
                             } else {
-                                Icon(Icons.Rounded.CastConnected, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
+                                Icon(ImageVector.vectorResource(AppIcons.CastConnected), null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
                             }
                         }
                         Spacer(Modifier.width(12.dp))
@@ -117,7 +114,7 @@ fun CastSheet(onDismiss: () -> Unit) {
                     Radar(Modifier.size(28.dp))
                 } else {
                     TextButton(onClick = { haptics.tick(); Cast.scan(context) }) {
-                        Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
+                        Icon(ImageVector.vectorResource(AppIcons.Refresh), null, Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Search again")
                     }
@@ -145,9 +142,9 @@ fun CastSheet(onDismiss: () -> Unit) {
 private fun DeviceRow(device: CastTarget, current: Boolean, onClick: () -> Unit) {
     val tv = device.kind == CastTarget.Kind.DLNA && Regex("tv|bravia|samsung|lg|webos|tizen|android", RegexOption.IGNORE_CASE).containsMatchIn(device.name + " " + device.model.orEmpty())
     val icon = when {
-        device.kind == CastTarget.Kind.CHROMECAST && device.model?.contains("speaker", true) != true && device.model?.contains("home", true) != true && device.model?.contains("nest audio", true) != true -> Icons.Rounded.Cast
-        tv -> Icons.Rounded.Tv
-        else -> Icons.Rounded.Speaker
+        device.kind == CastTarget.Kind.CHROMECAST && device.model?.contains("speaker", true) != true && device.model?.contains("home", true) != true && device.model?.contains("nest audio", true) != true -> ImageVector.vectorResource(AppIcons.Cast)
+        tv -> ImageVector.vectorResource(AppIcons.Tv)
+        else -> ImageVector.vectorResource(AppIcons.Speaker)
     }
     Row(
         Modifier

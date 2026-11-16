@@ -20,15 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.LocationOff
-import androidx.compose.material.icons.rounded.NearMe
-import androidx.compose.material.icons.rounded.Radio
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import com.opentune.ui.theme.Icon
@@ -71,6 +62,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** What the list under the chips shows. */
 private sealed interface RadioView {
@@ -195,8 +189,8 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 onValueChange = { query = it },
                 singleLine = true,
                 placeholder = { Text("Search 50,000 stations") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
+                leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Search), null) },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Clear") } },
                 shape = RoundedCornerShape(20.dp),
                 colors = TextFieldDefaults.colors(
                     focusedIndicatorColor = Color.Transparent,
@@ -219,7 +213,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                             view == RadioView.NearYou,
                             { view = RadioView.NearYou },
                             { Text("Near you") },
-                            leadingIcon = { Icon(Icons.Rounded.NearMe, null, Modifier.size(18.dp)) },
+                            leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.NearMe), null, Modifier.size(18.dp)) },
                         )
                     }
                     if (countryName != null) item { FilterChip(view == RadioView.Country, { view = RadioView.Country }, { Text(countryName) }) }
@@ -235,7 +229,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
             if (favourites.isEmpty() && recent.isEmpty()) {
                 item {
                     MessageState(
-                        Icons.Rounded.Radio,
+                        ImageVector.vectorResource(AppIcons.Radio),
                         "No favourite stations yet",
                         message = "Tap the heart on a station to keep it here.",
                     )
@@ -266,7 +260,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 }
                 Near.LocationOff -> item {
                     MessageState(
-                        Icons.Rounded.LocationOff,
+                        ImageVector.vectorResource(AppIcons.LocationOff),
                         "Location is off",
                         message = "Turn on location to find stations around you.",
                         action = {
@@ -289,7 +283,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 }
                 Near.NoFix -> item {
                     MessageState(
-                        Icons.Rounded.LocationOff,
+                        ImageVector.vectorResource(AppIcons.LocationOff),
                         "Couldn't find where you are",
                         message = "Your phone didn't give a location in time.",
                         action = {
@@ -305,7 +299,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                     if (n.stations.isEmpty() && n.area.isEmpty()) {
                         item {
                             MessageState(
-                                Icons.Rounded.Radio,
+                                ImageVector.vectorResource(AppIcons.Radio),
                                 "No stations listed near you",
                                 message = "Radio Browser has no stations for this area yet.",
                                 action = toCountry?.let { { OutlinedButton(onClick = it) { Text(com.opentune.i18n.Tr.f("Stations in {0}", countryName)) } } },
@@ -333,7 +327,7 @@ fun RadioScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                 Load.Loading -> items(8) { com.opentune.ui.components.SongRowPlaceholder() }
                 is Load.Failed -> item { ErrorState(l.message, onRetry = { attempt++ }) }
                 is Load.Done -> {
-                    if (l.stations.isEmpty()) item { MessageState(Icons.Rounded.Radio, "No stations found") }
+                    if (l.stations.isEmpty()) item { MessageState(ImageVector.vectorResource(AppIcons.Radio), "No stations found") }
                     items(l.stations, key = { it.uuid }) { StationRow(it, actions.currentVideoId == it.id, ::play) }
                 }
             }
@@ -357,7 +351,7 @@ internal fun StationRow(station: Radio.Station, playing: Boolean, onPlay: (Radio
         Modifier.fillMaxWidth().clickable { onPlay(station) }.padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Artwork(station.favicon, Modifier.size(52.dp), RoundedCornerShape(12.dp), placeholder = Icons.Rounded.Radio)
+        Artwork(station.favicon, Modifier.size(52.dp), RoundedCornerShape(12.dp), placeholder = ImageVector.vectorResource(AppIcons.Radio))
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -378,7 +372,7 @@ internal fun StationRow(station: Radio.Station, playing: Boolean, onPlay: (Radio
         }
         IconButton(onClick = { Radio.setFavourite(station, !favourite) }) {
             Icon(
-                if (favourite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                if (favourite) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder),
                 if (favourite) "Remove from favourites" else "Add to favourites",
                 tint = if (favourite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -396,7 +390,7 @@ internal fun NearbyPrompt(
     onCountry: (() -> Unit)?,
 ) {
     MessageState(
-        Icons.Rounded.NearMe,
+        ImageVector.vectorResource(AppIcons.NearMe),
         "Radio stations near you",
         message = if (refused) {
             "Location access is turned off for OpenTune. You can allow approximate location in the app's settings."
@@ -435,7 +429,7 @@ internal fun MissingStation(onAdd: () -> Unit, onSuggest: () -> Unit) {
         Spacer(Modifier.size(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onAdd) {
-                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                Icon(ImageVector.vectorResource(AppIcons.Add), null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Add a stream")
             }

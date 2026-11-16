@@ -1,11 +1,6 @@
 package com.opentune.ui
 
 
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.Podcasts
-import androidx.compose.material.icons.outlined.LibraryMusic
-import androidx.compose.material.icons.rounded.Podcasts
 import com.opentune.ui.server.ServerAlbumScreen
 import com.opentune.ui.server.ServerArtistScreen
 import com.opentune.ui.server.ServerArtistsScreen
@@ -41,11 +36,6 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.toSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Explore
-import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -113,6 +103,8 @@ import com.opentune.ui.settings.EqualizerScreen
 import com.opentune.ui.settings.SettingsScreen
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** A tab tapped again while its root page is showing, for the page to scroll back to its top and refresh. */
 object TabEvents {
@@ -121,11 +113,11 @@ object TabEvents {
     fun reselect(route: String) { _reselected.tryEmit(route) }
 }
 
-private enum class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
-    HOME("home", "Home", Icons.Outlined.Home, Icons.Rounded.Home),
-    EXPLORE("explore", "Explore", Icons.Outlined.Explore, Icons.Rounded.Explore),
-    PODCASTS("podcasts", "Podcasts", Icons.Outlined.Podcasts, Icons.Rounded.Podcasts),
-    LIBRARY("library", "Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
+private enum class Tab(val route: String, val label: String, val iconRes: Int, val selectedIconRes: Int) {
+    HOME("home", "Home", AppIcons.HomeOutline, AppIcons.Home),
+    EXPLORE("explore", "Explore", AppIcons.ExploreOutline, AppIcons.Explore),
+    PODCASTS("podcasts", "Podcasts", AppIcons.Podcasts, AppIcons.Podcasts),
+    LIBRARY("library", "Library", AppIcons.LibraryMusicOutline, AppIcons.LibraryMusic),
 }
 
 private const val SEARCH_ROUTE = "search"
@@ -153,7 +145,7 @@ fun AppRoot(vm: PlayerViewModel) {
     // Explore without a tab of its own lives on the Search page instead.
     val separateExplore = chromeUi.separateExplore
     val dockTabs = remember(separateExplore) { if (separateExplore) Tab.entries.toList() else Tab.entries - Tab.EXPLORE }
-    val chromeTabs = remember(dockTabs) { dockTabs.map { ChromeTab(it.label, it.icon, it.selectedIcon) } }
+    val chromeTabs = dockTabs.map { ChromeTab(it.label, ImageVector.vectorResource(it.iconRes), ImageVector.vectorResource(it.selectedIconRes)) }
     // A page opened from inside the player (the artist, from a tap on their
     // name) folds the player away; back from that page opens the player
     // again, as it was left. Held: the page the player was over, and the page

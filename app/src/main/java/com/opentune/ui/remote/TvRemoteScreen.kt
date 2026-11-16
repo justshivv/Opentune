@@ -29,28 +29,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.FastForward
-import androidx.compose.material.icons.rounded.FastRewind
-import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Keyboard
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.QrCodeScanner
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Tv
-import androidx.compose.material.icons.rounded.VolumeDown
-import androidx.compose.material.icons.rounded.VolumeOff
-import androidx.compose.material.icons.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import com.opentune.ui.theme.Icon
@@ -109,6 +87,8 @@ import com.opentune.ui.components.rememberHaptics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * The phone as the TV's remote. Pick a TV that has been paired (or pair one by scanning the
@@ -207,7 +187,7 @@ private fun TvPicker(vm: TvRemoteViewModel, contentPadding: PaddingValues, onBac
         }
         item {
             Row(Modifier.padding(20.dp)) {
-                BigButton(if (paired.isEmpty()) "Scan the code on the TV" else "Pair another TV", Icons.Rounded.QrCodeScanner, onClick = { scanning = true })
+                BigButton(if (paired.isEmpty()) "Scan the code on the TV" else "Pair another TV", ImageVector.vectorResource(AppIcons.QrCodeScanner), onClick = { scanning = true })
             }
         }
     }
@@ -224,7 +204,7 @@ private fun Notice(text: String, isError: Boolean = false, working: Boolean = fa
         if (working) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp).also { Spacer(Modifier.width(12.dp)) }
         Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
             color = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface)
-        if (onDismiss != null) Icon(Icons.Rounded.Close, "Dismiss", Modifier.size(20.dp).clickable(onClick = onDismiss))
+        if (onDismiss != null) Icon(ImageVector.vectorResource(AppIcons.Close), "Dismiss", Modifier.size(20.dp).clickable(onClick = onDismiss))
     }
 }
 
@@ -234,7 +214,7 @@ private fun TvRow(tv: PairedTv, online: Boolean, onClick: () -> Unit, onForget: 
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Tv, null, Modifier.size(28.dp), tint = if (online) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(ImageVector.vectorResource(AppIcons.Tv), null, Modifier.size(28.dp), tint = if (online) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         Column(Modifier.padding(start = 16.dp).weight(1f)) {
             Text(tv.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
@@ -294,8 +274,8 @@ internal fun RemotePad(tvName: String, now: RemoteMessage.Now?, send: (RemoteMes
         PageHeader(
             tvName, onBack = onLeave,
             actions = {
-                Icon(Icons.Rounded.HelpOutline, "Gestures", Modifier.size(44.dp).clip(CircleShape).clickable { help = true }.padding(10.dp))
-                Icon(Icons.Rounded.Tune, "Remote settings", Modifier.size(44.dp).clip(CircleShape).clickable { options = true }.padding(10.dp))
+                Icon(ImageVector.vectorResource(AppIcons.HelpOutline), "Gestures", Modifier.size(44.dp).clip(CircleShape).clickable { help = true }.padding(10.dp))
+                Icon(ImageVector.vectorResource(AppIcons.Tune), "Remote settings", Modifier.size(44.dp).clip(CircleShape).clickable { options = true }.padding(10.dp))
             },
         )
         NowStrip(now)
@@ -431,10 +411,10 @@ private fun ButtonPad(send: (RemoteMessage) -> Unit, haptics: () -> Unit) {
             onKey = { k, repeat -> if (!repeat) haptics(); key(k, repeat) },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            PadButton(Icons.Rounded.SkipPrevious, "Previous") { haptics(); key(RemoteKey.PREVIOUS) }
-            PadButton(Icons.Rounded.FastRewind, "Back 10 seconds", repeating = { r -> key(RemoteKey.REWIND, r) }) { }
-            PadButton(Icons.Rounded.FastForward, "Forward 10 seconds", repeating = { r -> key(RemoteKey.FORWARD, r) }) { }
-            PadButton(Icons.Rounded.SkipNext, "Next") { haptics(); key(RemoteKey.NEXT) }
+            PadButton(ImageVector.vectorResource(AppIcons.SkipPrevious), "Previous") { haptics(); key(RemoteKey.PREVIOUS) }
+            PadButton(ImageVector.vectorResource(AppIcons.FastRewind), "Back 10 seconds", repeating = { r -> key(RemoteKey.REWIND, r) }) { }
+            PadButton(ImageVector.vectorResource(AppIcons.FastForward), "Forward 10 seconds", repeating = { r -> key(RemoteKey.FORWARD, r) }) { }
+            PadButton(ImageVector.vectorResource(AppIcons.SkipNext), "Next") { haptics(); key(RemoteKey.NEXT) }
         }
     }
 }
@@ -443,10 +423,10 @@ private fun ButtonPad(send: (RemoteMessage) -> Unit, haptics: () -> Unit) {
 private fun DPad(onKey: (RemoteKey, Boolean) -> Unit) {
     val ring = MaterialTheme.colorScheme.surfaceContainerHigh
     Box(Modifier.size(248.dp).clip(CircleShape).background(ring), contentAlignment = Alignment.Center) {
-        PadButton(Icons.Rounded.KeyboardArrowUp, "Up", Modifier.align(Alignment.TopCenter).padding(top = 8.dp), plain = true, repeating = { r -> onKey(RemoteKey.UP, r) }) {}
-        PadButton(Icons.Rounded.KeyboardArrowDown, "Down", Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), plain = true, repeating = { r -> onKey(RemoteKey.DOWN, r) }) {}
-        PadButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Left", Modifier.align(Alignment.CenterStart).padding(start = 8.dp), plain = true, repeating = { r -> onKey(RemoteKey.LEFT, r) }) {}
-        PadButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Right", Modifier.align(Alignment.CenterEnd).padding(end = 8.dp), plain = true, repeating = { r -> onKey(RemoteKey.RIGHT, r) }) {}
+        PadButton(ImageVector.vectorResource(AppIcons.KeyboardArrowUp), "Up", Modifier.align(Alignment.TopCenter).padding(top = 8.dp), plain = true, repeating = { r -> onKey(RemoteKey.UP, r) }) {}
+        PadButton(ImageVector.vectorResource(AppIcons.KeyboardArrowDown), "Down", Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), plain = true, repeating = { r -> onKey(RemoteKey.DOWN, r) }) {}
+        PadButton(ImageVector.vectorResource(AppIcons.KeyboardArrowLeft), "Left", Modifier.align(Alignment.CenterStart).padding(start = 8.dp), plain = true, repeating = { r -> onKey(RemoteKey.LEFT, r) }) {}
+        PadButton(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), "Right", Modifier.align(Alignment.CenterEnd).padding(end = 8.dp), plain = true, repeating = { r -> onKey(RemoteKey.RIGHT, r) }) {}
         Box(
             Modifier.size(92.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary).clickable { onKey(RemoteKey.OK, false) }
                 .semantics { contentDescription = "OK" },
@@ -501,13 +481,13 @@ private fun BottomBar(send: (RemoteMessage) -> Unit, playing: Boolean, onKeyboar
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically,
     ) {
-        PadButton(Icons.AutoMirrored.Rounded.ArrowBack, "TV back", size = 50.dp) { key(RemoteKey.BACK) }
-        PadButton(Icons.Rounded.Home, "TV home", size = 50.dp) { key(RemoteKey.HOME) }
-        PadButton(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", size = 50.dp) { key(RemoteKey.PLAY_PAUSE) }
-        PadButton(Icons.Rounded.VolumeDown, "Volume down", size = 50.dp, repeating = { r -> send(RemoteMessage.Key(RemoteKey.VOLUME_DOWN, r)) }) {}
-        PadButton(Icons.Rounded.VolumeUp, "Volume up", size = 50.dp, repeating = { r -> send(RemoteMessage.Key(RemoteKey.VOLUME_UP, r)) }) {}
-        PadButton(Icons.Rounded.VolumeOff, "Mute", size = 50.dp) { key(RemoteKey.MUTE) }
-        PadButton(Icons.Rounded.Keyboard, "Type", size = 50.dp) { tick(); onKeyboard() }
+        PadButton(ImageVector.vectorResource(AppIcons.ArrowBack), "TV back", size = 50.dp) { key(RemoteKey.BACK) }
+        PadButton(ImageVector.vectorResource(AppIcons.Home), "TV home", size = 50.dp) { key(RemoteKey.HOME) }
+        PadButton(if (playing) ImageVector.vectorResource(AppIcons.Pause) else ImageVector.vectorResource(AppIcons.PlayArrow), if (playing) "Pause" else "Play", size = 50.dp) { key(RemoteKey.PLAY_PAUSE) }
+        PadButton(ImageVector.vectorResource(AppIcons.VolumeDown), "Volume down", size = 50.dp, repeating = { r -> send(RemoteMessage.Key(RemoteKey.VOLUME_DOWN, r)) }) {}
+        PadButton(ImageVector.vectorResource(AppIcons.VolumeUp), "Volume up", size = 50.dp, repeating = { r -> send(RemoteMessage.Key(RemoteKey.VOLUME_UP, r)) }) {}
+        PadButton(ImageVector.vectorResource(AppIcons.VolumeOff), "Mute", size = 50.dp) { key(RemoteKey.MUTE) }
+        PadButton(ImageVector.vectorResource(AppIcons.Keyboard), "Type", size = 50.dp) { tick(); onKeyboard() }
     }
 }
 

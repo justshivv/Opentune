@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +32,9 @@ import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.components.SheetButton
 import com.opentune.ui.components.SheetTone
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Speed, pitch, reverb and bass, with one-tap presets. Changes apply live;
@@ -50,7 +51,7 @@ fun RemixSheet(onDismiss: () -> Unit) {
     FloatingCard(
         onDismiss = onDismiss,
         title = "Remix",
-        icon = Icons.Rounded.GraphicEq,
+        icon = ImageVector.vectorResource(AppIcons.GraphicEq),
         subtitle = preset?.label ?: "Custom",
         contentPadding = PaddingValues(0.dp),
         expandable = true,

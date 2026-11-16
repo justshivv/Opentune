@@ -12,19 +12,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.rounded.PushPin
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import com.opentune.ui.components.glass
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import com.opentune.ui.components.icon
+import com.opentune.ui.components.iconRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,33 +40,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ThumbUp
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.CloudUpload
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Dns
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.Radio
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Search
 import com.opentune.ui.browse.playlistSearchResults
 import com.opentune.ui.browse.coverWash
 import com.opentune.ui.browse.dismissPlaylistSearch
-import androidx.compose.material.icons.rounded.Settings
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -138,6 +107,8 @@ import com.opentune.ui.components.meaning
 import com.opentune.ui.components.pressable
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Where Library's tiles lead. */
 class LibraryNav(
@@ -357,7 +328,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 when (tab) {
                     1 -> SortPill(playlistsOrder, playlistsSorting, { playlistsSorting = it }, { playlistsOrder = it })
                     2 -> SortPill(spotifyOrder, spotifySorting, { spotifySorting = it }, { spotifyOrder = it })
-                    else -> IconButton(onClick = nav.history) { Icon(Icons.Rounded.History, "Listening history") }
+                    else -> IconButton(onClick = nav.history) { Icon(ImageVector.vectorResource(AppIcons.History), "Listening history") }
                 }
                 com.opentune.ui.components.AccountButton(nav.settings, plain = true)
             }
@@ -376,18 +347,18 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Shortcut(Icons.Rounded.Favorite, "Liked", com.opentune.i18n.Tr.f("{0} songs", liked.size), nav.liked, Modifier.weight(1f))
-                    Shortcut(Icons.Rounded.Download, "Downloads", if (doneCount == 0) "Offline songs" else com.opentune.i18n.Tr.f("{0} songs", doneCount), nav.downloads, Modifier.weight(1f))
+                    Shortcut(ImageVector.vectorResource(AppIcons.Favorite), "Liked", com.opentune.i18n.Tr.f("{0} songs", liked.size), nav.liked, Modifier.weight(1f))
+                    Shortcut(ImageVector.vectorResource(AppIcons.Download), "Downloads", if (doneCount == 0) "Offline songs" else com.opentune.i18n.Tr.f("{0} songs", doneCount), nav.downloads, Modifier.weight(1f))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Shortcut(Icons.Rounded.LibraryMusic, "On this phone", "Local files", nav.local, Modifier.weight(1f))
-                    Shortcut(Icons.Rounded.History, "Replay", "Your top songs", nav.replay, Modifier.weight(1f))
+                    Shortcut(ImageVector.vectorResource(AppIcons.LibraryMusic), "On this phone", "Local files", nav.local, Modifier.weight(1f))
+                    Shortcut(ImageVector.vectorResource(AppIcons.History), "Replay", "Your top songs", nav.replay, Modifier.weight(1f))
                 }
                 val server by Subsonic.server.collectAsState()
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Shortcut(Icons.Rounded.Radio, "Radio", "Live stations", nav.radio, Modifier.weight(1f))
+                    Shortcut(ImageVector.vectorResource(AppIcons.Radio), "Radio", "Live stations", nav.radio, Modifier.weight(1f))
                     Shortcut(
-                        Icons.Rounded.Dns,
+                        ImageVector.vectorResource(AppIcons.Dns),
                         "Music server",
                         server?.let { it.url.substringAfter("://") } ?: "Subsonic, lossless",
                         nav.server,
@@ -397,7 +368,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                 val room by com.opentune.data.together.Together.room.collectAsState()
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Shortcut(
-                        Icons.Rounded.Groups,
+                        ImageVector.vectorResource(AppIcons.Groups),
                         "Listen together",
                         room?.let { if (it.hosting) com.opentune.i18n.Tr.f("Your room · {0} in", it.members.size) else com.opentune.i18n.Tr.f("In {0}'s room", it.hostName ?: com.opentune.i18n.Tr.t("a friend")) } ?: com.opentune.i18n.Tr.t("Rooms with friends, in sync"),
                         nav.together,
@@ -432,7 +403,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     if (signedIn) {
                         IconButton(onClick = { pulled = false; refresh() }, enabled = !refreshing) {
                             if (refreshing) androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                            else Icon(Icons.Rounded.Refresh, "Refresh YouTube Music playlists", Modifier.size(20.dp))
+                            else Icon(ImageVector.vectorResource(AppIcons.Refresh), "Refresh YouTube Music playlists", Modifier.size(20.dp))
                         }
                     }
                     TextButton(onClick = showAllPlaylists) { Text(if (libraryUi.playlistList) "View all" else "Show all", style = MaterialTheme.typography.labelLarge) }
@@ -490,8 +461,8 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
             }
         }
         if (libraryUi.playlistList) {
-            item(key = "tab-new") { ActionLine(Icons.Rounded.Add, "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
-            item(key = "tab-liked") { ActionLine(Icons.Rounded.Favorite, "Liked songs", com.opentune.i18n.Tr.f("{0} songs", liked.size), onClick = nav.liked) }
+            item(key = "tab-new") { ActionLine(ImageVector.vectorResource(AppIcons.Add), "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
+            item(key = "tab-liked") { ActionLine(ImageVector.vectorResource(AppIcons.Favorite), "Liked songs", com.opentune.i18n.Tr.f("{0} songs", liked.size), onClick = nav.liked) }
             items(shownPlaylists, key = { it.key }) { row -> PlaylistLine(row, Modifier.animateItem()) }
         } else {
             item(key = "tab-tiles-head") {
@@ -619,12 +590,12 @@ private fun TabWash(rows: List<LibraryPlaylistRow>, listState: androidx.compose.
 @Composable
 private fun SortPill(order: PlaylistOrder, sorting: Boolean, onSorting: (Boolean) -> Unit, onOrder: (PlaylistOrder) -> Unit) {
     Box {
-        IconButton(onClick = { onSorting(true) }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort playlists") }
+        IconButton(onClick = { onSorting(true) }) { Icon(ImageVector.vectorResource(AppIcons.Sort), "Sort playlists") }
         androidx.compose.material3.DropdownMenu(sorting, { onSorting(false) }, shape = RoundedCornerShape(20.dp)) {
             PlaylistOrder.entries.forEach { o ->
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text(o.label, fontWeight = if (o == order) FontWeight.SemiBold else null) },
-                    trailingIcon = if (o == order) ({ Icon(Icons.Rounded.Check, null) }) else null,
+                    trailingIcon = if (o == order) ({ Icon(ImageVector.vectorResource(AppIcons.Check), null) }) else null,
                     onClick = { onOrder(o); onSorting(false) },
                 )
             }
@@ -685,8 +656,8 @@ private fun LibrarySwitch(tab: Int, rowState: androidx.compose.foundation.lazy.L
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        item { SwitchPill(com.opentune.ui.theme.tr("Library"), selected = tab == 0, glyph = { tint -> Icon(Icons.Rounded.LibraryMusic, null, Modifier.size(20.dp), tint = tint) }) { onSelect(0) } }
-        item { SwitchPill("Playlists", selected = tab == 1, glyph = { tint -> Icon(Icons.AutoMirrored.Rounded.PlaylistPlay, null, Modifier.size(20.dp), tint = tint) }) { onSelect(1) } }
+        item { SwitchPill(com.opentune.ui.theme.tr("Library"), selected = tab == 0, glyph = { tint -> Icon(ImageVector.vectorResource(AppIcons.LibraryMusic), null, Modifier.size(20.dp), tint = tint) }) { onSelect(0) } }
+        item { SwitchPill("Playlists", selected = tab == 1, glyph = { tint -> Icon(ImageVector.vectorResource(AppIcons.PlaylistPlay), null, Modifier.size(20.dp), tint = tint) }) { onSelect(1) } }
         item {
             SwitchPill("Spotify", selected = tab == 2, glyph = {
                 androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(20.dp))
@@ -767,7 +738,7 @@ private fun ActionTile(
 @Composable
 private fun NewPlaylistTile(signedIn: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     ActionTile("New playlist", if (signedIn) "Saved to YouTube Music" else "On this phone", onClick, modifier) {
-        Icon(Icons.Rounded.Add, null, Modifier.size(44.dp))
+        Icon(ImageVector.vectorResource(AppIcons.Add), null, Modifier.size(44.dp))
     }
 }
 
@@ -776,7 +747,7 @@ private fun NewPlaylistTile(signedIn: Boolean, onClick: () -> Unit, modifier: Mo
 private fun LikedTile(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
     ActionTile("Liked Music", if (count == 0) "Auto playlist" else com.opentune.i18n.Tr.f("Auto playlist · {0} songs", count), onClick, modifier,
         background = Brush.verticalGradient(listOf(Color(0xFF8C6AF0), Color(0xFFF95AAE)))) {
-        Icon(Icons.Rounded.ThumbUp, null, Modifier.size(72.dp), tint = Color.White)
+        Icon(ImageVector.vectorResource(AppIcons.ThumbUp), null, Modifier.size(72.dp), tint = Color.White)
     }
 }
 
@@ -834,7 +805,7 @@ private fun PlaylistRow(
             Artwork(art.artworkAt(CARD_ART_PX), Modifier.size(56.dp), RoundedCornerShape(14.dp))
         } else {
             Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
-                Icon(Icons.AutoMirrored.Rounded.QueueMusic, null)
+                Icon(ImageVector.vectorResource(AppIcons.QueueMusic), null)
             }
         }
         Column(Modifier.padding(start = 14.dp).weight(1f)) {
@@ -922,7 +893,7 @@ private fun RecentTile(song: Song, modifier: Modifier = Modifier, playing: Boole
                     .background(MaterialTheme.colorScheme.onSurface),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.surface)
+                Icon(if (playing) ImageVector.vectorResource(AppIcons.Pause) else ImageVector.vectorResource(AppIcons.PlayArrow), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.surface)
             }
         }
         TileText(song.title, song.artist)
@@ -939,7 +910,7 @@ private fun PinnableRow(pin: String, modifier: Modifier = Modifier, content: @Co
         androidx.compose.material3.DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(20.dp)) {
             androidx.compose.material3.DropdownMenuItem(
                 text = { Text(if (pinned) "Unpin" else "Pin to the top") },
-                leadingIcon = { Icon(Icons.Rounded.PushPin, null) },
+                leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.PushPin), null) },
                 onClick = { menu = false; LibraryPins.toggle(pin) },
             )
         }
@@ -1052,7 +1023,7 @@ fun DownloadedListScreen(id: String, contentPadding: PaddingValues, actions: Son
             LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
                 item { PageHeader(saved?.title ?: "Downloaded", onBack = onBack) }
                 if (saved == null || inList.isEmpty()) {
-                    item { MessageState(Icons.Rounded.Download, "Nothing downloaded here", Modifier.padding(top = 32.dp), message = "Its songs were removed from Downloads.") }
+                    item { MessageState(ImageVector.vectorResource(AppIcons.Download), "Nothing downloaded here", Modifier.padding(top = 32.dp), message = "Its songs were removed from Downloads.") }
                     return@LazyColumn
                 }
                 item {
@@ -1129,7 +1100,7 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
                 item { PageHeader(com.opentune.ui.theme.tr("Downloads"), onBack = onBack) }
                 if (list.isEmpty()) {
                     item {
-                        MessageState(Icons.Rounded.Download, "No downloads yet", Modifier.padding(top = 32.dp), message = "Pick Download from any song's menu to keep it for offline listening.")
+                        MessageState(ImageVector.vectorResource(AppIcons.Download), "No downloads yet", Modifier.padding(top = 32.dp), message = "Pick Download from any song's menu to keep it for offline listening.")
                     }
                     return@LazyColumn
                 }
@@ -1139,7 +1110,7 @@ fun DownloadsScreen(contentPadding: PaddingValues, actions: SongActions, onBack:
                 }
                 if (tab == DownloadsTab.PLAYLISTS) {
                     if (lists.isEmpty()) item {
-                        MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "No playlists downloaded", Modifier.padding(top = 32.dp),
+                        MessageState(ImageVector.vectorResource(AppIcons.QueueMusic), "No playlists downloaded", Modifier.padding(top = 32.dp),
                             message = "Use Download on a playlist or album page to keep the whole list offline.")
                     }
                     items(lists, key = { "list:${it.first.id}" }) { (l, have) ->
@@ -1282,7 +1253,7 @@ fun TopNavBar(
                         .clickable(onClickLabel = "Back", onClick = onBack),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurface)
+                    Icon(ImageVector.vectorResource(AppIcons.ArrowBack), "Back", tint = MaterialTheme.colorScheme.onSurface)
                 }
                 if (solid) {
                     Spacer(Modifier.width(6.dp))
@@ -1398,13 +1369,13 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                     TopNavBar("Liked Music", topSolid, onBack) {
                         Row(Modifier.height(48.dp).then(if (topSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = { if (searching) search.close() else search.open = true }) {
-                                Icon(if (searching) Icons.Rounded.Close else Icons.Rounded.Search, "Search this list")
+                                Icon(if (searching) ImageVector.vectorResource(AppIcons.Close) else ImageVector.vectorResource(AppIcons.Search), "Search this list")
                             }
                             Box {
-                                IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
+                                IconButton(onClick = { sortOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.Sort), "Sort") }
                                 com.opentune.ui.browse.ListSortMenu(sortOpen, order, onPick = { order = it; sortOpen = false }, onDismiss = { sortOpen = false })
                             }
-                            IconButton(onClick = { moreOpen = true }) { Icon(Icons.Rounded.MoreHoriz, "More") }
+                            IconButton(onClick = { moreOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.MoreHoriz), "More") }
                         }
                     }
                 }
@@ -1449,7 +1420,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
 
                     if (songs.isEmpty()) {
                         item {
-                            MessageState(Icons.Rounded.Favorite, "No liked songs", Modifier.padding(top = 32.dp), message = "Tap the heart in the player, or Like in a song's menu.")
+                            MessageState(ImageVector.vectorResource(AppIcons.Favorite), "No liked songs", Modifier.padding(top = 32.dp), message = "Tap the heart in the player, or Like in a song's menu.")
                         }
                         return@LazyColumn
                     }
@@ -1517,20 +1488,20 @@ private fun LikedMoreSheet(
         val card = com.opentune.ui.components.LocalFloatingCard.current
         val close: () -> Unit = { card?.close() ?: onDismiss() }
         Column {
-            com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") {
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.PlaylistPlay), "Play next") {
                 close()
                 songs.asReversed().forEach(actions.playNext)
             }
-            com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue") {
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.QueueMusic), "Add to queue") {
                 close()
                 songs.forEach(actions.addToQueue)
             }
-            com.opentune.ui.components.MenuRow(Icons.Rounded.Download, "Download all") {
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Download), "Download all") {
                 close()
                 songs.forEach { com.opentune.data.download.Downloads.enqueue(context, it) }
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size), context)
             }
-            com.opentune.ui.components.MenuRow(Icons.Rounded.Share, "Share") {
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Share), "Share") {
                 close()
                 com.opentune.ui.share.ListShare.shareLocal(context, "Liked Music", songs)
             }
@@ -1813,7 +1784,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
         !signedIn -> null
         !playlist.synced -> ({
             TextButton(onClick = { savingOnline = true }) {
-                Icon(Icons.Rounded.CloudUpload, null, Modifier.size(18.dp))
+                Icon(ImageVector.vectorResource(AppIcons.CloudUpload), null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Save to YouTube Music")
             }
@@ -1866,13 +1837,13 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                     TopNavBar(playlist.name, barSolid, onBack) {
                         Row(Modifier.height(48.dp).then(if (barSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = { if (searching) search.close() else search.open = true }) {
-                                Icon(if (searching) Icons.Rounded.Close else Icons.Rounded.Search, "Search this list")
+                                Icon(if (searching) ImageVector.vectorResource(AppIcons.Close) else ImageVector.vectorResource(AppIcons.Search), "Search this list")
                             }
                             Box {
-                                IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
+                                IconButton(onClick = { sortOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.Sort), "Sort") }
                                 com.opentune.ui.browse.ListSortMenu(sortOpen, order, onPick = { order = it; sortOpen = false }, onDismiss = { sortOpen = false })
                             }
-                            IconButton(onClick = { moreOpen = true }) { Icon(Icons.Rounded.MoreHoriz, "More") }
+                            IconButton(onClick = { moreOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.MoreHoriz), "More") }
                         }
                     }
                 }
@@ -1924,7 +1895,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                     }
                     if (songs.isEmpty()) {
                         item {
-                            MessageState(Icons.AutoMirrored.Rounded.QueueMusic, "Nothing here yet", Modifier.padding(top = 32.dp), message = if (playlist.spotifyId != null) "Songs added in Spotify appear after the next sync." else "Add songs here, or use Add to playlist in any song's menu.")
+                            MessageState(ImageVector.vectorResource(AppIcons.QueueMusic), "Nothing here yet", Modifier.padding(top = 32.dp), message = if (playlist.spotifyId != null) "Songs added in Spotify appear after the next sync." else "Add songs here, or use Add to playlist in any song's menu.")
                         }
                         return@LazyColumn
                     }
@@ -2006,25 +1977,25 @@ private fun LocalListMoreSheet(
         val card = com.opentune.ui.components.LocalFloatingCard.current
         val close: () -> Unit = { card?.close() ?: onDismiss() }
         Column {
-            com.opentune.ui.components.MenuRow(Icons.Rounded.Refresh, "Refresh") { close(); onRefresh() }
-            com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") { close(); songs.asReversed().forEach(actions.playNext) }
-            com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue") { close(); songs.forEach(actions.addToQueue) }
-            com.opentune.ui.components.MenuRow(Icons.Rounded.Download, "Download all") {
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Refresh), "Refresh") { close(); onRefresh() }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.PlaylistPlay), "Play next") { close(); songs.asReversed().forEach(actions.playNext) }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.QueueMusic), "Add to queue") { close(); songs.forEach(actions.addToQueue) }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Download), "Download all") {
                 close()
                 songs.forEach { Downloads.enqueue(context, it) }
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", songs.size), context)
             }
             if (!spotify) {
-                com.opentune.ui.components.MenuRow(Icons.Rounded.Add, "Add songs") { close(); onAddSongs() }
-                com.opentune.ui.components.MenuRow(Icons.Rounded.Edit, "Rename") { close(); onRename() }
+                com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Add), "Add songs") { close(); onAddSongs() }
+                com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Edit), "Rename") { close(); onRename() }
             }
-            com.opentune.ui.components.MenuRow(Icons.Rounded.Share, "Share") { close(); onShare() }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Share), "Share") { close(); onShare() }
             val privacyTap = onPrivacy
             if (privacyTap != null) {
-                com.opentune.ui.components.MenuRow((playlist.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).icon, (playlist.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).meaning) { close(); privacyTap() }
+                com.opentune.ui.components.MenuRow(ImageVector.vectorResource((playlist.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).iconRes), (playlist.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).meaning) { close(); privacyTap() }
             }
-            com.opentune.ui.components.MenuRow(Icons.Rounded.PushPin, if (pinned) "Unpin from Library" else "Pin to the top of Library") { close(); LibraryPins.toggle(playlist.id) }
-            if (!spotify) com.opentune.ui.components.MenuRow(Icons.Rounded.DeleteOutline, "Delete") { close(); onDelete() }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.PushPin), if (pinned) "Unpin from Library" else "Pin to the top of Library") { close(); LibraryPins.toggle(playlist.id) }
+            if (!spotify) com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.DeleteOutline), "Delete") { close(); onDelete() }
             Spacer(Modifier.height(8.dp))
         }
     }

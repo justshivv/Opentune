@@ -21,10 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.Link
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -56,6 +52,9 @@ import com.opentune.ui.components.SheetButton
 import com.opentune.ui.components.SheetTone
 import com.opentune.ui.components.rememberHaptics
 import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * How to bring friends in: the room link to share, and a QR code of it with
@@ -70,7 +69,7 @@ internal fun InviteSheet(code: RoomCode, hosting: Boolean, onDismiss: () -> Unit
                 "Share link",
                 onClick = { shareRoom(context, code) },
                 tone = SheetTone.Primary,
-                icon = Icons.Rounded.Link,
+                icon = ImageVector.vectorResource(AppIcons.Link),
                 modifier = Modifier.heightIn(min = 56.dp),
             )
             Spacer(Modifier.height(12.dp))
@@ -132,7 +131,7 @@ private fun CopyPill(code: RoomCode) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy, null, Modifier.size(16.dp))
+        Icon(if (copied) ImageVector.vectorResource(AppIcons.Check) else ImageVector.vectorResource(AppIcons.ContentCopy), null, Modifier.size(16.dp))
         Text(if (copied) "Copied" else "Copy code", style = MaterialTheme.typography.labelLarge)
     }
 }

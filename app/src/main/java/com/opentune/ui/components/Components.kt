@@ -50,16 +50,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.DownloadDone
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.rounded.RemoveCircleOutline
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import com.opentune.ui.theme.Icon
@@ -102,6 +92,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Artwork with a tinted placeholder icon while it loads or when there is none.
@@ -115,7 +107,7 @@ fun Artwork(
     url: String?,
     modifier: Modifier = Modifier,
     shape: Shape = MaterialTheme.shapes.small,
-    placeholder: ImageVector = Icons.Filled.MusicNote,
+    placeholder: ImageVector = ImageVector.vectorResource(AppIcons.MusicNote),
     /** Applied to the image inside the clipped frame, e.g. to move it within it. */
     imageModifier: Modifier = Modifier,
     /** Hears whether the cover is showing (loaded, so cached) each time that changes. */
@@ -315,7 +307,7 @@ fun SongListItem(
     val download by remember(song.videoId) { Downloads.entry(song.videoId) }
         .collectAsState(Downloads.entryNow(song.videoId))
     if (menuOpen) SongMenuSheet(song, onDismiss = { menuOpen = false }, end = onRemoveFromPlaylist?.let { remove ->
-        { close -> MenuRow(Icons.Rounded.RemoveCircleOutline, "Remove from this playlist") { close(); remove() } }
+        { close -> MenuRow(ImageVector.vectorResource(AppIcons.RemoveCircleOutline), "Remove from this playlist") { close(); remove() } }
     })
     val at = anchor.rect
     if (contextOpen && at != null) SongContextMenu(song, at, onDismiss = { contextOpen = false }, onRemoveFromPlaylist = onRemoveFromPlaylist,
@@ -384,7 +376,7 @@ fun SongListItem(
                 download?.let { DownloadBadge(it.state, it.progress) }
                 if (hasMenu) {
                     IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+                        Icon(ImageVector.vectorResource(AppIcons.MoreVert), contentDescription = "More options")
                     }
                 }
             }
@@ -405,7 +397,7 @@ internal fun SongPreview(song: Song) {
             Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
             SubtitleLine(listOfNotNull(song.artist.takeIf { it.isNotBlank() }, song.durationText).joinToString(" • "), explicit = song.isExplicit == true)
         }
-        Icon(Icons.Filled.MoreVert, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(ImageVector.vectorResource(AppIcons.MoreVert), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -420,8 +412,8 @@ sealed interface CardMenu {
 fun DownloadBadge(state: DownloadState, progress: Float) {
     Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
         when (state) {
-            DownloadState.DONE -> Icon(Icons.Filled.DownloadDone, "Downloaded", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-            DownloadState.FAILED -> Icon(Icons.Filled.ErrorOutline, "Download failed", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+            DownloadState.DONE -> Icon(ImageVector.vectorResource(AppIcons.DownloadDone), "Downloaded", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            DownloadState.FAILED -> Icon(ImageVector.vectorResource(AppIcons.ErrorOutline), "Download failed", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
             else -> CircularProgressIndicator(
                 progress = { progress },
                 modifier = Modifier.size(16.dp),
@@ -464,10 +456,10 @@ private fun ColumnScope.ItemCardBody(
         Modifier.fillMaxWidth().aspectRatio(1f),
         shape = if (round) CircleShape else MaterialTheme.shapes.medium,
         placeholder = when (type) {
-            BrowseType.ARTIST -> Icons.Filled.Person
-            BrowseType.ALBUM -> Icons.Filled.Album
-            BrowseType.PLAYLIST -> Icons.AutoMirrored.Filled.PlaylistPlay
-            else -> Icons.Filled.MusicNote
+            BrowseType.ARTIST -> ImageVector.vectorResource(AppIcons.Person)
+            BrowseType.ALBUM -> ImageVector.vectorResource(AppIcons.Album)
+            BrowseType.PLAYLIST -> ImageVector.vectorResource(AppIcons.PlaylistPlay)
+            else -> ImageVector.vectorResource(AppIcons.MusicNote)
         },
         imageModifier = imageModifier,
         onLoaded = onArtLoaded,
@@ -695,7 +687,7 @@ fun SongRowPlaceholder() {
 @Composable
 fun ErrorState(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     MessageState(
-        icon = Icons.Filled.CloudOff,
+        icon = ImageVector.vectorResource(AppIcons.CloudOff),
         title = "Couldn't load this",
         modifier = modifier,
         message = message,

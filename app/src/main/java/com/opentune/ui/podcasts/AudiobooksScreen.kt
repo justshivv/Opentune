@@ -20,11 +20,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.MenuBook
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import com.opentune.ui.theme.Icon
@@ -56,6 +51,9 @@ import com.opentune.ui.components.ErrorState
 import com.opentune.ui.components.PageHeader
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** The row on the Podcasts page that opens Audiobooks. */
 @Composable
@@ -66,7 +64,7 @@ internal fun AudiobooksEntry(onOpen: () -> Unit) {
             .clickable(onClick = onOpen).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
+        Icon(ImageVector.vectorResource(AppIcons.MenuBook), null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
             Text("Audiobooks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text("Free classics read aloud, from LibriVox", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -104,8 +102,8 @@ fun AudiobooksScreen(contentPadding: PaddingValues, onBack: () -> Unit, onOpenBo
                 value = query,
                 onValueChange = { query = it },
                 placeholder = { Text("Title or author") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
+                leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Search), null) },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Clear") } },
                 singleLine = true,
                 shape = RoundedCornerShape(28.dp),
                 colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
@@ -207,7 +205,7 @@ fun AudiobookScreen(id: String, contentPadding: PaddingValues, actions: SongActi
                     onClick = { if (songs.isNotEmpty()) actions.playAll(songs, resumeIndex ?: 0, false, p.book.title) },
                     enabled = songs.isNotEmpty(),
                 ) {
-                    Icon(Icons.Rounded.PlayArrow, null)
+                    Icon(ImageVector.vectorResource(AppIcons.PlayArrow), null)
                     Spacer(Modifier.width(6.dp))
                     Text(if (resumeIndex != null) com.opentune.i18n.Tr.f("Continue: {0}", p.chapters[resumeIndex].title) else "Play from the start", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }

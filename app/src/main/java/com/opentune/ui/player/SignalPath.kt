@@ -13,14 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Headphones
-import androidx.compose.material.icons.rounded.Memory
-import androidx.compose.material.icons.rounded.Speaker
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.HorizontalDivider
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
@@ -66,6 +58,8 @@ import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Every stage the sound passes through, from the stream to the speaker, as
@@ -122,7 +116,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.
 
     val stages = listOf(
         Stage(
-            Icons.Rounded.Description, "Track info",
+            ImageVector.vectorResource(AppIcons.Description), "Track info",
             emptyList(),
             content = {
                 TrackInfo(
@@ -140,14 +134,14 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.
             },
         ),
         Stage(
-            Icons.Rounded.Memory, "Decoder",
+            ImageVector.vectorResource(AppIcons.Memory), "Decoder",
             listOfNotNull(
                 "Decoder Name" to (pipe.decoderName ?: if (pipe.offload) "Hardware offload" else "Starting…"),
                 pipe.decoderOutput?.let { "Format" to it },
             ),
         ),
         Stage(
-            Icons.Rounded.Tune, "Resampler",
+            ImageVector.vectorResource(AppIcons.Tune), "Resampler",
             listOf(
                 "I/O Rate" to (if (trackRate != null) "${khz(trackRate)} → ${khz(mixerRate ?: trackRate)}" else "Unknown"),
                 "Type" to if (resampled) "Android mixer resampler" else "None",
@@ -156,7 +150,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.
             ),
         ),
         Stage(
-            Icons.Rounded.GraphicEq, "DSP",
+            ImageVector.vectorResource(AppIcons.GraphicEq), "DSP",
             listOfNotNull(
                 "PCM Format" to if (pb.floatOutput) "Float32" else "16-bit PCM",
                 "Effects" to (if (dspStages.isEmpty()) "Bypassed" else dspStages.joinToString(", ")),
@@ -175,7 +169,7 @@ fun SignalPathDialog(format: AudioFormatInfo?, onDismiss: () -> Unit, song: com.
             ),
         ),
         Stage(
-            if (route == OutputRoute.PHONE) Icons.Rounded.Speaker else route.icon,
+            if (route == OutputRoute.PHONE) ImageVector.vectorResource(AppIcons.Speaker) else route.icon,
             "Output",
             listOfNotNull(
                 "Device" to device,

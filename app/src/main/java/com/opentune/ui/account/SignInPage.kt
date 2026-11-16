@@ -11,9 +11,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
@@ -39,6 +36,8 @@ import androidx.core.view.WindowCompat
 import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.theme.Icon
 import com.opentune.ui.theme.Text
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** A full-page browser. Help never takes space away from the service's sign-in form. */
 @Composable
@@ -110,7 +109,7 @@ internal fun SignInPage(
                     modifier = Modifier.size(48.dp),
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Close sign-in", Modifier.size(22.dp))
+                        Icon(ImageVector.vectorResource(AppIcons.ArrowBack), "Close sign-in", Modifier.size(22.dp))
                     }
                 }
                 Row(
@@ -140,7 +139,7 @@ internal fun SignInPage(
                     modifier = Modifier.size(48.dp),
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Info, "Sign-in help", Modifier.size(22.dp))
+                        Icon(ImageVector.vectorResource(AppIcons.Info), "Sign-in help", Modifier.size(22.dp))
                     }
                 }
             }

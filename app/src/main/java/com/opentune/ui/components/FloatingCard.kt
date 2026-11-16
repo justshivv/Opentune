@@ -47,8 +47,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.CircularProgressIndicator
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
@@ -99,6 +97,8 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.SheetStyle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Lets what's inside a [FloatingCard] close it with its exit motion. */
 class FloatingCardScope internal constructor(private val closeWith: (after: (() -> Unit)?) -> Unit) {
@@ -511,7 +511,7 @@ fun FloatingCard(
                                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                             .clickable(onClickLabel = "Close", role = Role.Button) { card.close() },
                                         contentAlignment = Alignment.Center,
-                                    ) { Icon(Icons.Rounded.Close, "Close", Modifier.size(20.dp)) }
+                                    ) { Icon(ImageVector.vectorResource(AppIcons.Close), "Close", Modifier.size(20.dp)) }
                                 }
                             }
                         } else {

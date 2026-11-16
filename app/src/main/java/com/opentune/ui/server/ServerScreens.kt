@@ -13,13 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Logout
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Dns
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -60,6 +53,9 @@ import com.opentune.ui.rememberLoader
 import com.opentune.ui.settings.ServerDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Where the server pages lead. */
 class ServerNav(
@@ -87,7 +83,7 @@ fun ServerScreen(contentPadding: PaddingValues, actions: SongActions, nav: Serve
         Column(Modifier.fillMaxSize().padding(contentPadding)) {
             PageHeader("Your music server", onBack = onBack)
             MessageState(
-                Icons.Rounded.Dns,
+                ImageVector.vectorResource(AppIcons.Dns),
                 "No server connected",
                 Modifier.padding(top = 24.dp),
                 message = "Stream your own FLAC and hi-res files from Navidrome, Gonic, Airsonic, Nextcloud Music or any Subsonic server.",
@@ -119,13 +115,13 @@ fun ServerScreen(contentPadding: PaddingValues, actions: SongActions, nav: Serve
         item {
             PageHeader("Your music server", onBack = onBack, actions = {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassIconButton(Icons.Rounded.Shuffle, "Shuffle the whole server", {
+                    GlassIconButton(ImageVector.vectorResource(AppIcons.Shuffle), "Shuffle the whole server", {
                         scope.launch {
                             runCatching { Subsonic.randomSongs(100) }.getOrNull()?.takeIf { it.isNotEmpty() }
                                 ?.let { actions.playAll(it, 0, false, "Your server") }
                         }
                     })
-                    GlassIconButton(Icons.AutoMirrored.Rounded.Logout, "Disconnect", { Subsonic.disconnect() })
+                    GlassIconButton(ImageVector.vectorResource(AppIcons.Logout), "Disconnect", { Subsonic.disconnect() })
                 }
             })
         }
@@ -141,7 +137,7 @@ fun ServerScreen(contentPadding: PaddingValues, actions: SongActions, nav: Serve
             OutlinedTextField(
                 query, { query = it },
                 placeholder = { Text("Search your server") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Search), null) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             )
@@ -155,7 +151,7 @@ fun ServerScreen(contentPadding: PaddingValues, actions: SongActions, nav: Serve
                 songRows(found.songs, actions, "Search")
             }
             if (found.albums.isEmpty() && found.artists.isEmpty() && found.songs.isEmpty()) {
-                item { MessageState(Icons.Rounded.Search, "Nothing found", message = com.opentune.i18n.Tr.f("Nothing on your server matches \"{0}\".", query)) }
+                item { MessageState(ImageVector.vectorResource(AppIcons.Search), "Nothing found", message = com.opentune.i18n.Tr.f("Nothing on your server matches \"{0}\".", query)) }
             }
             return@LazyColumn
         }
@@ -167,11 +163,11 @@ fun ServerScreen(contentPadding: PaddingValues, actions: SongActions, nav: Serve
                 if (home.newest.isNotEmpty()) item(key = "newest") { AlbumShelf("Recently added", home.newest, nav) }
                 if (home.frequent.isNotEmpty()) item(key = "frequent") { AlbumShelf("Most played", home.frequent, nav) }
                 if (home.recent.isNotEmpty()) item(key = "recent") { AlbumShelf("Played lately", home.recent, nav) }
-                item(key = "artists") { ServerRow(Icons.Rounded.Person, "Artists", "Everyone on your server", null, onClick = nav.artists) }
+                item(key = "artists") { ServerRow(ImageVector.vectorResource(AppIcons.Person), "Artists", "Everyone on your server", null, onClick = nav.artists) }
                 if (home.playlists.isNotEmpty()) {
                     item(key = "pl-header") { SectionHeader("Playlists") }
                     items(home.playlists, key = { "pl:${it.id}" }) { p ->
-                        ServerRow(Icons.AutoMirrored.Rounded.QueueMusic, p.name, com.opentune.i18n.Tr.f("{0} songs", p.songCount), p.cover) { nav.playlist(p.id) }
+                        ServerRow(ImageVector.vectorResource(AppIcons.QueueMusic), p.name, com.opentune.i18n.Tr.f("{0} songs", p.songCount), p.cover) { nav.playlist(p.id) }
                     }
                 }
             }
@@ -285,7 +281,7 @@ fun ServerArtistsScreen(contentPadding: PaddingValues, nav: ServerNav, onBack: (
             is UiState.Loading -> items(3) { ShelfPlaceholder() }
             is UiState.Error -> item { ErrorState(s.message, onRetry = { loader.reload() }) }
             is UiState.Success -> items(s.data, key = { it.id }) { a ->
-                ServerRow(Icons.Rounded.Person, a.name, com.opentune.i18n.Tr.f("{0} albums", a.albumCount), a.cover, round = true) { nav.artist(a.id) }
+                ServerRow(ImageVector.vectorResource(AppIcons.Person), a.name, com.opentune.i18n.Tr.f("{0} albums", a.albumCount), a.cover, round = true) { nav.artist(a.id) }
             }
         }
     }
@@ -336,7 +332,7 @@ private fun ServerRow(
             cover.artworkAt(ROW_ART_PX),
             Modifier.size(52.dp),
             if (round) CircleShape else MaterialTheme.shapes.small,
-            placeholder = icon ?: Icons.AutoMirrored.Rounded.QueueMusic,
+            placeholder = icon ?: ImageVector.vectorResource(AppIcons.QueueMusic),
         )
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)

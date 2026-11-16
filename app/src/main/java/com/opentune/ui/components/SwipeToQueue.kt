@@ -17,10 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Delete
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -61,6 +57,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** What a sideways swipe on a song row asks for. */
 enum class SwipeAction { PLAY_NEXT, ADD_TO_QUEUE, REMOVE }
@@ -425,9 +424,9 @@ private fun androidx.compose.foundation.layout.BoxScope.SwipeReveal(
         SwipeAction.REMOVE -> colors.errorContainer to colors.onErrorContainer
     }
     val icon = when (action) {
-        SwipeAction.PLAY_NEXT -> Icons.AutoMirrored.Rounded.PlaylistPlay
-        SwipeAction.ADD_TO_QUEUE -> Icons.AutoMirrored.Rounded.QueueMusic
-        SwipeAction.REMOVE -> Icons.Rounded.Delete
+        SwipeAction.PLAY_NEXT -> ImageVector.vectorResource(AppIcons.PlaylistPlay)
+        SwipeAction.ADD_TO_QUEUE -> ImageVector.vectorResource(AppIcons.QueueMusic)
+        SwipeAction.REMOVE -> ImageVector.vectorResource(AppIcons.Delete)
     }
     val label = labelOf(action)
     // The icon grows toward the threshold and pops on reaching it; held still with less motion.

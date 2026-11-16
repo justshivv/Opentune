@@ -29,9 +29,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -78,6 +75,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Replay as one story-sized picture: the minutes large, the top five songs
@@ -498,12 +498,12 @@ fun ReplayShareSheet(summary: ReplaySummary, period: String, onDismiss: () -> Un
     FloatingCard(
         onDismiss = onDismiss,
         title = "Share my Replay",
-        icon = Icons.Rounded.Share,
+        icon = ImageVector.vectorResource(AppIcons.Share),
         subtitle = "Your minutes, songs, artists and albums, in one picture.",
         actions = {
             SheetButton(
                 "Save",
-                icon = Icons.Rounded.Download,
+                icon = ImageVector.vectorResource(AppIcons.Download),
                 tone = SheetTone.Neutral,
                 enabled = card != null && !saving,
                 loading = saving,
@@ -520,7 +520,7 @@ fun ReplayShareSheet(summary: ReplaySummary, period: String, onDismiss: () -> Un
             )
             SheetButton(
                 "Share",
-                icon = Icons.Rounded.Share,
+                icon = ImageVector.vectorResource(AppIcons.Share),
                 tone = SheetTone.Primary,
                 enabled = card != null,
                 modifier = Modifier.weight(1f),

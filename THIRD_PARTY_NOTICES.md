@@ -82,3 +82,9 @@ STREAMINFO measurement approach from `AudioOutputPolicy.kt` and
 FLAC decoders and reads actual FLAC metadata rather than treating float PCM
 as proof of a hi-res master. No proprietary SF Pro font files are bundled in
 the browser preview; it uses DM Sans and system fallbacks.
+
+## Material Symbols icons
+
+The settings icons are Google's [Material Symbols](https://fonts.google.com/icons)
+in the Rounded style, licensed under the Apache License 2.0. In the app they
+are the `symbol_*` vector drawables, listed in `ui/theme/AppIcons.kt`.

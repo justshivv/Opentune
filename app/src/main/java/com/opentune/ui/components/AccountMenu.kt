@@ -22,11 +22,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ManageAccounts
-import androidx.compose.material.icons.rounded.Settings
+import com.opentune.ui.theme.AppIcons
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -42,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -144,12 +141,12 @@ fun AccountMenu(nav: AccountMenuNav, onDismiss: () -> Unit) {
                                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            if (acc.active) Icon(Icons.Rounded.Check, "In use", Modifier.size(26.dp))
+                            if (acc.active) Icon(ImageVector.vectorResource(AppIcons.Check), "In use", Modifier.size(26.dp))
                         }
                     }
-                    MenuLine(Icons.Rounded.Add, if (signedIn) "Add account" else "Sign in") { close(); nav.addAccount() }
-                    if (signedIn) MenuLine(Icons.Rounded.ManageAccounts, "Manage accounts") { close(); nav.manageAccounts() }
-                    MenuLine(Icons.Rounded.Settings, "Settings") { close(); nav.settings() }
+                    MenuLine(ImageVector.vectorResource(AppIcons.Add), if (signedIn) "Add account" else "Sign in") { close(); nav.addAccount() }
+                    if (signedIn) MenuLine(ImageVector.vectorResource(AppIcons.ManageAccounts), "Manage accounts") { close(); nav.manageAccounts() }
+                    MenuLine(ImageVector.vectorResource(AppIcons.Settings), "Settings") { close(); nav.settings() }
                 }
             }
         }

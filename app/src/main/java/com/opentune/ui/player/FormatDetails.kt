@@ -18,17 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AudioFile
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Speed
-import androidx.compose.material.icons.rounded.Storage
-import androidx.compose.material.icons.rounded.Timeline
-import androidx.compose.material.icons.rounded.VolumeUp
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -60,6 +49,8 @@ import com.opentune.ui.components.SheetTone
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * The audio details as cards: the format the song is in, where it's going and
@@ -114,7 +105,7 @@ internal fun FormatDetailsDialog(song: Song?, format: AudioFormatInfo?, onDismis
                 Box(
                     Modifier.size(52.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.GraphicEq, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary) }
+                ) { Icon(ImageVector.vectorResource(AppIcons.GraphicEq), null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary) }
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text("Audio Format Details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -124,14 +115,14 @@ internal fun FormatDetailsDialog(song: Song?, format: AudioFormatInfo?, onDismis
             }
         },
         actions = {
-            Box(Modifier.weight(1f)) { SheetButton("Pipeline view", onClick = onPipeline, tone = SheetTone.Neutral, icon = Icons.Rounded.Timeline) }
+            Box(Modifier.weight(1f)) { SheetButton("Pipeline view", onClick = onPipeline, tone = SheetTone.Neutral, icon = ImageVector.vectorResource(AppIcons.Timeline)) }
             Box(Modifier.weight(1f)) { SheetButton("Close", onClick = onDismiss, tone = SheetTone.Primary, closes = true) }
         },
     ) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (song != null) DetailsCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.MusicNote, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.primary)
+                    Icon(ImageVector.vectorResource(AppIcons.MusicNote), null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.primary)
                     Column(Modifier.padding(start = 14.dp)) {
                         Text(song.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -139,10 +130,10 @@ internal fun FormatDetailsDialog(song: Song?, format: AudioFormatInfo?, onDismis
                 }
             }
             DetailsCard("Audio specifications") {
-                DetailRow(Icons.Rounded.AudioFile, "Codec / Format", format?.codec ?: "—")
-                DetailRow(Icons.Rounded.GraphicEq, "Resolution", listOfNotNull(bits?.takeIf { lossless }?.let { "$it-bit" }, rate?.let(::kiloHertz)).joinToString(" • ").ifEmpty { "—" })
-                DetailRow(Icons.Rounded.Speed, "Bitrate", kbps?.takeIf { it > 0 }?.let { com.opentune.i18n.Tr.f("{0} kbps", it) } ?: "—")
-                DetailRow(Icons.Rounded.CheckCircle, "Channels", when (channels) {
+                DetailRow(ImageVector.vectorResource(AppIcons.AudioFile), "Codec / Format", format?.codec ?: "—")
+                DetailRow(ImageVector.vectorResource(AppIcons.GraphicEq), "Resolution", listOfNotNull(bits?.takeIf { lossless }?.let { "$it-bit" }, rate?.let(::kiloHertz)).joinToString(" • ").ifEmpty { "—" })
+                DetailRow(ImageVector.vectorResource(AppIcons.Speed), "Bitrate", kbps?.takeIf { it > 0 }?.let { com.opentune.i18n.Tr.f("{0} kbps", it) } ?: "—")
+                DetailRow(ImageVector.vectorResource(AppIcons.CheckCircle), "Channels", when (channels) {
                     null -> "—"
                     1 -> "Mono (1 Channel)"
                     2 -> "Stereo (2 Channels)"
@@ -150,28 +141,28 @@ internal fun FormatDetailsDialog(song: Song?, format: AudioFormatInfo?, onDismis
                 })
             }
             DetailsCard("Output & routing") {
-                DetailRow(if (route == OutputRoute.PHONE) Icons.Rounded.VolumeUp else route.icon, "Active Device", device)
-                DetailRow(Icons.Rounded.Speed, "Hi-Fi Mode", when (val bp = bitPerfect) {
+                DetailRow(if (route == OutputRoute.PHONE) ImageVector.vectorResource(AppIcons.VolumeUp) else route.icon, "Active Device", device)
+                DetailRow(ImageVector.vectorResource(AppIcons.Speed), "Hi-Fi Mode", when (val bp = bitPerfect) {
                     is BitPerfectUsb.Status.Active -> com.opentune.i18n.Tr.f("Exclusive USB · {0}", bp.format.ifEmpty { "${bp.bits}-bit" })
                     is BitPerfectUsb.Status.NoMatch -> com.opentune.i18n.Tr.f("On · DAC has no bit-perfect {0}", kiloHertz(bp.sampleRate))
                     BitPerfectUsb.Status.NoDac -> "On · waiting for a USB DAC"
                     BitPerfectUsb.Status.Unsupported -> "Needs Android 14"
                     BitPerfectUsb.Status.Off -> if (BitPerfectUsb.supported && route == OutputRoute.USB) "Supported on device · off" else "Off"
                 })
-                DetailRow(Icons.Rounded.Info, "Signal Path", when {
+                DetailRow(ImageVector.vectorResource(AppIcons.Info), "Signal Path", when {
                     bitPerfect is BitPerfectUsb.Status.Active -> com.opentune.i18n.Tr.f("Direct bit-perfect ({0})", kiloHertz((bitPerfect as BitPerfectUsb.Status.Active).sampleRate))
                     trackRate != null && mixerRate != null && trackRate != mixerRate -> com.opentune.i18n.Tr.f("Resampled by Android to {0}", kiloHertz(mixerRate))
                     trackRate != null -> com.opentune.i18n.Tr.f("Native rate ({0})", kiloHertz(trackRate))
                     else -> "—"
                 })
-                DetailRow(Icons.Rounded.GraphicEq, "Output Format", pipe.outputEncoding ?: if (pb.floatOutput) "Float32" else "16-bit PCM")
+                DetailRow(ImageVector.vectorResource(AppIcons.GraphicEq), "Output Format", pipe.outputEncoding ?: if (pb.floatOutput) "Float32" else "16-bit PCM")
             }
             DetailsCard("Source & storage") {
-                DetailRow(Icons.Rounded.Info, "Provider", when {
+                DetailRow(ImageVector.vectorResource(AppIcons.Info), "Provider", when {
                     local != null -> "Local Storage"
                     else -> source?.provider?.removePrefix("YouTube · ") ?: "—"
                 })
-                size?.let { DetailRow(Icons.Rounded.Storage, "File Size", String.format(Locale.ROOT, "%.1f MB", it / 1_048_576.0)) }
+                size?.let { DetailRow(ImageVector.vectorResource(AppIcons.Storage), "File Size", String.format(Locale.ROOT, "%.1f MB", it / 1_048_576.0)) }
                 local?.let { uri -> LocationRow(uri.toString()) }
             }
         }
@@ -219,7 +210,7 @@ private fun LocationRow(location: String) {
                 com.opentune.data.Pills.done("Location copied", context)
             },
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.ContentCopy, "Copy location", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary) }
+        ) { Icon(ImageVector.vectorResource(AppIcons.ContentCopy), "Copy location", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary) }
     }
 }
 

@@ -35,21 +35,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Smartphone
-import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.AllInclusive
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Bedtime
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.DragHandle
-import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material.icons.rounded.RepeatOne
-import androidx.compose.material.icons.rounded.Shuffle
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -112,6 +99,8 @@ import com.opentune.ui.components.SheetButton
 import com.opentune.ui.components.glass
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 private val QUEUE_ROW = 64.dp
 
@@ -141,7 +130,7 @@ fun QueuePane(
 ) {
     // A song started on its own carries on with its radio even with AutoPlay off (see PlaybackService.radioWanted).
     val autoplay = AppSettings.playback.collectAsState().value.autoplay ||
-        queue.count { it.queueTier != com.opentune.data.model.QueueTier.AUTOPLAY } == 1
+            queue.count { it.queueTier != com.opentune.data.model.QueueTier.AUTOPLAY } == 1
     val haptics = com.opentune.ui.components.rememberHaptics()
     val rowPx = with(LocalDensity.current) { QUEUE_ROW.toPx() }
     // A local copy of the upcoming order, so a drag can move rows before the player hears of it.
@@ -171,7 +160,7 @@ fun QueuePane(
         }
         item(key = "autoplay") {
             Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.AllInclusive, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
+                Icon(ImageVector.vectorResource(AppIcons.AllInclusive), null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
                 Column(Modifier.padding(start = 14.dp)) {
                     Text(if (appleWords && autoplay && !shuffle && !shuffled && !smartShuffle) "AutoPlay" else "Up next",
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -259,21 +248,21 @@ private fun QueueRow(song: Song, isCurrent: Boolean, isPlaying: Boolean, handle:
         Modifier.fillMaxWidth().height(QUEUE_ROW).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (handle) Icon(Icons.Rounded.DragHandle, "Drag to reorder", Modifier.padding(end = 10.dp).size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (handle) Icon(ImageVector.vectorResource(AppIcons.DragHandle), "Drag to reorder", Modifier.padding(end = 10.dp).size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Box(Modifier.size(50.dp)) {
             Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.fillMaxHeight().width(50.dp), RoundedCornerShape(8.dp))
         }
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (song.smartShuffle) {
-                    Icon(Icons.Rounded.AutoAwesome, "Added by smart shuffle", Modifier.padding(end = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Icon(ImageVector.vectorResource(AppIcons.AutoAwesome), "Added by smart shuffle", Modifier.padding(end = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.primary)
                 }
                 // Songs queued by hand stay next whatever is started; autoplay's come after everything.
                 when (song.queueTier) {
                     com.opentune.data.model.QueueTier.USER ->
-                        Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Queued by you", Modifier.padding(end = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(ImageVector.vectorResource(AppIcons.PlaylistAdd), "Queued by you", Modifier.padding(end = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.primary)
                     com.opentune.data.model.QueueTier.AUTOPLAY ->
-                        Icon(Icons.Rounded.AllInclusive, "Added by autoplay", Modifier.padding(end = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(ImageVector.vectorResource(AppIcons.AllInclusive), "Added by autoplay", Modifier.padding(end = 6.dp).size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     com.opentune.data.model.QueueTier.CONTEXT -> Unit
                 }
                 Text(song.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -282,7 +271,7 @@ private fun QueueRow(song: Song, isCurrent: Boolean, isPlaying: Boolean, handle:
         }
         if (isCurrent) NowPlayingBars(isPlaying, MaterialTheme.colorScheme.onSurface, Modifier.padding(horizontal = 12.dp))
         if (onRemove != null) {
-            IconButton(onClick = onRemove) { Icon(Icons.Rounded.Close, "Remove from queue", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            IconButton(onClick = onRemove) { Icon(ImageVector.vectorResource(AppIcons.Close), "Remove from queue", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }
@@ -327,15 +316,15 @@ fun LyricPreview(
             current,
             transitionSpec = {
                 (androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 420f)) { it } + fadeIn(tween(240))) togetherWith
-                    (androidx.compose.animation.slideOutVertically(tween(260)) { -it } + fadeOut(tween(200))) using
-                    androidx.compose.animation.SizeTransform(clip = true)
+                        (androidx.compose.animation.slideOutVertically(tween(260)) { -it } + fadeOut(tween(200))) using
+                        androidx.compose.animation.SizeTransform(clip = true)
             },
             label = "previewLine",
             modifier = Modifier.weight(1f, fill = false),
         ) { l ->
             SungLine(l, pos, MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), Modifier.graphicsLayer { this.alpha = alpha })
         }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Open lyrics", Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), "Open lyrics", Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -538,7 +527,7 @@ private fun Modifier.sweepMask(old: Boolean, set: Int, widths: FloatArray, progr
         val none = if (old) p >= 1f else p <= 0f
         alpha = if (none) 0f else 1f
         compositingStrategy = if (whole || none) androidx.compose.ui.graphics.CompositingStrategy.Auto
-            else androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+        else androidx.compose.ui.graphics.CompositingStrategy.Offscreen
     }
     .drawWithContent {
         val p = progress()
@@ -643,7 +632,7 @@ fun ModesPill(
         // Like repeat beside it, shuffle has a third state for a queue from a
         // playlist or album: off, shuffle, smart shuffle, then off again.
         PillSegment(
-            Icons.Rounded.Shuffle,
+            ImageVector.vectorResource(AppIcons.Shuffle),
             when (shuffle) {
                 ShuffleMode.OFF -> "Shuffle off"
                 ShuffleMode.ON -> "Shuffle on"
@@ -651,7 +640,7 @@ fun ModesPill(
             },
             shuffle != ShuffleMode.OFF,
             SegmentMotion.WIGGLE,
-            badge = if (shuffle == ShuffleMode.SMART) Icons.Rounded.AutoAwesome else null,
+            badge = if (shuffle == ShuffleMode.SMART) ImageVector.vectorResource(AppIcons.AutoAwesome) else null,
             enabled = enabled,
         ) {
             val next = shuffle.next(smartShuffleAvailable)
@@ -668,7 +657,7 @@ fun ModesPill(
         }
         VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
         PillSegment(
-            if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+            if (repeatMode == Player.REPEAT_MODE_ONE) ImageVector.vectorResource(AppIcons.RepeatOne) else ImageVector.vectorResource(AppIcons.Repeat),
             when (repeatMode) {
                 Player.REPEAT_MODE_ONE -> "Repeat one"
                 Player.REPEAT_MODE_ALL -> "Repeat all"
@@ -689,7 +678,7 @@ fun ModesPill(
             onRepeat()
         }
         VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
-        PillSegment(Icons.Rounded.AllInclusive, "AutoPlay", autoplay, SegmentMotion.PULSE, enabled = enabled) {
+        PillSegment(ImageVector.vectorResource(AppIcons.AllInclusive), "AutoPlay", autoplay, SegmentMotion.PULSE, enabled = enabled) {
             haptics.pattern(if (autoplay) Haptics.Pattern.OFF else Haptics.Pattern.AUTOPLAY)
             AppSettings.setAutoplay(!autoplay)
         }
@@ -778,11 +767,11 @@ enum class OutputRoute { PHONE, HEADPHONES, BLUETOOTH, USB, CAST }
 
 /** The icon for where the sound is going: earbuds for Bluetooth, headphones for a wire or USB. */
 internal val OutputRoute.icon: ImageVector
-    get() = when (this) {
-        OutputRoute.CAST -> Icons.Rounded.Cast
+    @Composable get() = when (this) {
+        OutputRoute.CAST -> ImageVector.vectorResource(AppIcons.CastOutline)
         OutputRoute.BLUETOOTH -> PlayerIcons.Earbuds
         OutputRoute.HEADPHONES, OutputRoute.USB -> PlayerIcons.Headphones
-        OutputRoute.PHONE -> Icons.Rounded.Smartphone
+        OutputRoute.PHONE -> ImageVector.vectorResource(AppIcons.SmartphoneOutline)
     }
 
 /** True for anything you'd put over your ears: the button shows a headphone icon for these. */

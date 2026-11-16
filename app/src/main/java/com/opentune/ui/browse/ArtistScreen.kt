@@ -31,18 +31,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material.icons.rounded.StarBorder
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -113,6 +101,8 @@ import com.opentune.ui.theme.animated
 import com.opentune.ui.theme.rememberArtworkSeed
 import com.opentune.ui.type
 import com.opentune.ui.cardMenu
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * An artist's page: their photo across the top, fading into a page tinted
@@ -207,7 +197,7 @@ internal fun ArtistPageView(
                             .clickable(onClickLabel = "Share") { ListShare.shareList(context, page?.name ?: "Artist", browseId) },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Rounded.Share, "Share", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(ImageVector.vectorResource(AppIcons.Share), "Share", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             },
@@ -345,7 +335,7 @@ private fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, list
                     shown,
                     Modifier.fillMaxSize().graphicsLayer(drift),
                     shape = RectangleShape,
-                    placeholder = Icons.Filled.Person,
+                    placeholder = ImageVector.vectorResource(AppIcons.Person),
                 )
                 if (video != null) ArtistVideo(video, Modifier.fillMaxSize().graphicsLayer(drift))
                 // The lower part goes soft as it nears the page: a blurred copy of the
@@ -420,7 +410,7 @@ private fun HeroButtons(browseId: String, page: ArtistPage?, actions: SongAction
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.PlayArrow, "Play", Modifier.size(40.dp), tint = colors.background)
+            Icon(ImageVector.vectorResource(AppIcons.PlayArrow), "Play", Modifier.size(40.dp), tint = colors.background)
         }
         FollowButton(browseId, page, Modifier.size(SIDE_BUTTON))
     }
@@ -461,7 +451,7 @@ private fun FollowButton(browseId: String, page: ArtistPage?, modifier: Modifier
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            if (following) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+            if (following) ImageVector.vectorResource(AppIcons.Star) else ImageVector.vectorResource(AppIcons.StarBorder),
             label,
             Modifier.size(24.dp),
             tint = if (following) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
@@ -489,7 +479,7 @@ private fun LatestReleaseCard(release: LatestRelease, onOpen: () -> Unit, modifi
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Artwork(item.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.size(96.dp), MaterialTheme.shapes.medium, placeholder = Icons.Filled.Album)
+        Artwork(item.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.size(96.dp), MaterialTheme.shapes.medium, placeholder = ImageVector.vectorResource(AppIcons.Album))
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
             if (release.line.isNotEmpty()) {
                 Text(release.line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
@@ -509,7 +499,7 @@ private fun LatestReleaseCard(release: LatestRelease, onOpen: () -> Unit, modifi
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                if (saved) Icons.Rounded.Check else Icons.Rounded.Add,
+                if (saved) ImageVector.vectorResource(AppIcons.Check) else ImageVector.vectorResource(AppIcons.Add),
                 if (saved) "Remove from library" else "Save to library",
                 Modifier.size(24.dp),
                 tint = if (saved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
@@ -611,8 +601,8 @@ private fun AboutArtist(description: String?, subscribers: String?, monthly: Str
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                subscribers?.let { CountPill(Icons.Rounded.Person, it) }
-                monthly?.let { CountPill(Icons.Rounded.GraphicEq, it) }
+                subscribers?.let { CountPill(ImageVector.vectorResource(AppIcons.Person), it) }
+                monthly?.let { CountPill(ImageVector.vectorResource(AppIcons.GraphicEq), it) }
             }
         }
     }
@@ -666,7 +656,7 @@ fun ArtistItemsScreen(
                             }
                         }
                         cards.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }, key = "empty") {
-                            MessageState(Icons.Rounded.LibraryMusic, "Nothing to show here")
+                            MessageState(ImageVector.vectorResource(AppIcons.LibraryMusic), "Nothing to show here")
                         }
                         else -> items(cards) { item ->
                             ItemCard(

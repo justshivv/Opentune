@@ -22,8 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.HorizontalDivider
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +43,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Small gray uppercase label above a group. */
 @Composable
@@ -186,7 +186,7 @@ fun NavRow(
             if (value != null) {
                 Text(com.opentune.ui.theme.tr(value), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
             }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
+            Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
         }
     })
 }

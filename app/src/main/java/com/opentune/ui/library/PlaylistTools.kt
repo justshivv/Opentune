@@ -19,24 +19,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.DownloadDone
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
@@ -77,6 +65,9 @@ import com.opentune.data.download.downloadSelection
 import com.opentune.ui.components.Haptics
 import com.opentune.ui.components.rememberHaptics
 import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Download every song in a list, with how far it's got: "Download",
@@ -114,19 +105,19 @@ fun DownloadAllButton(songs: List<Song>, modifier: Modifier = Modifier, list: Do
         wanted.forEach { Downloads.enqueue(context, it) }
         list?.let { com.opentune.data.download.DownloadedLists.save(it.id, it.title, it.subtitle, it.thumbnailUrl, songs.map { s -> s.videoId }) }
     }
-    if (options) FloatingCard(onDismiss = { options = false }, title = "Playlist downloads", icon = Icons.Rounded.Download) {
+    if (options) FloatingCard(onDismiss = { options = false }, title = "Playlist downloads", icon = ImageVector.vectorResource(AppIcons.Download)) {
         Text(com.opentune.i18n.Tr.f("{0} of {1} songs saved · {2} pending", done, wanted.size, going), Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
             style = MaterialTheme.typography.bodyMedium)
-        if (done + going < wanted.size) MenuRow(Icons.Rounded.Download, "Download remaining songs") {
+        if (done + going < wanted.size) MenuRow(ImageVector.vectorResource(AppIcons.Download), "Download remaining songs") {
             downloadRemaining()
             options = false
         }
-        if (going > 0) MenuRow(Icons.Rounded.Close, "Cancel downloads") {
+        if (going > 0) MenuRow(ImageVector.vectorResource(AppIcons.Close), "Cancel downloads") {
             started = false
             Downloads.cancelAll(context, wanted)
             options = false
         }
-        if (selection.stored.isNotEmpty()) MenuRow(Icons.Rounded.DeleteOutline, "Remove all downloads") {
+        if (selection.stored.isNotEmpty()) MenuRow(ImageVector.vectorResource(AppIcons.DeleteOutline), "Remove all downloads") {
             options = false
             confirmRemove = true
         }
@@ -157,9 +148,9 @@ fun DownloadAllButton(songs: List<Song>, modifier: Modifier = Modifier, list: Do
     ) {
         Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
             when {
-                all -> Icon(Icons.Rounded.DownloadDone, null, tint = scheme.primary, modifier = Modifier.size(22.dp))
+                all -> Icon(ImageVector.vectorResource(AppIcons.DownloadDone), null, tint = scheme.primary, modifier = Modifier.size(22.dp))
                 going > 0 -> CircularProgressIndicator(progress = { progress }, strokeWidth = 2.5.dp, modifier = Modifier.size(20.dp), trackColor = scheme.onSurface.copy(alpha = 0.15f))
-                else -> Icon(Icons.Rounded.Download, null, modifier = Modifier.size(22.dp))
+                else -> Icon(ImageVector.vectorResource(AppIcons.Download), null, modifier = Modifier.size(22.dp))
             }
         }
         Spacer(Modifier.width(8.dp))
@@ -188,7 +179,7 @@ fun AddSongsButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null, modifier = Modifier.size(22.dp))
+        Icon(ImageVector.vectorResource(AppIcons.PlaylistAdd), null, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(8.dp))
         Text("Add songs", style = MaterialTheme.typography.labelLarge)
     }
@@ -232,7 +223,7 @@ fun AddSongsSheet(playlistId: String, onDismiss: () -> Unit) {
     FloatingCard(
         onDismiss = onDismiss,
         title = "Add songs",
-        icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+        icon = ImageVector.vectorResource(AppIcons.PlaylistAdd),
         // Opens at half height; dragged or scrolled up, it takes over the page.
         expandable = true,
         fitContent = false,
@@ -243,7 +234,7 @@ fun AddSongsSheet(playlistId: String, onDismiss: () -> Unit) {
                 onValueChange = { query = it },
                 singleLine = true,
                 placeholder = { Text("Search for songs") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Search), null) },
                 shape = RoundedCornerShape(18.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
@@ -311,7 +302,7 @@ internal fun AddRow(song: Song, added: Boolean, progress: com.opentune.data.spot
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             } else AnimatedContent(added, transitionSpec = { (fadeIn(tween(180)) + scaleIn(tween(220), 0.6f)) togetherWith fadeOut(tween(120)) }, label = "addIcon") { a ->
                 Icon(
-                    if (a) Icons.Rounded.Check else Icons.Rounded.Add,
+                    if (a) ImageVector.vectorResource(AppIcons.Check) else ImageVector.vectorResource(AppIcons.Add),
                     if (a) "Added" else if (progress?.failed == true) "Retry adding to playlist" else "Add to playlist",
                     tint = if (a) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(20.dp),
@@ -353,7 +344,7 @@ private fun ListHeart(saved: Boolean, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            if (saved) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            if (saved) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder),
             if (saved) "Remove from library" else "Save to library",
             Modifier.size(22.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
             tint = if (saved) androidx.compose.ui.graphics.Color(0xFFFF4D6D) else MaterialTheme.colorScheme.onSurface,
@@ -384,6 +375,6 @@ fun ListTools(
         if (onPrivacy != null) com.opentune.ui.components.PrivacyButton(privacy, onPrivacy)
         if (onAddSongs != null) AddSongsButton(onAddSongs)
         if (showDownload && songs.isNotEmpty()) DownloadAllButton(songs, list = list)
-        if (onShare != null) RoundToolButton(Icons.Rounded.Share, "Share", onShare)
+        if (onShare != null) RoundToolButton(ImageVector.vectorResource(AppIcons.Share), "Share", onShare)
     }
 }

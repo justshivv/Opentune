@@ -33,9 +33,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -83,6 +80,9 @@ import com.opentune.data.settings.ChoiceMenuStyle
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Pick one of a few options: on a page of its own, or in a [FloatingCard] sheet, as chosen in
@@ -355,7 +355,7 @@ private fun OptionRow(text: String, selected: Boolean, index: Int, still: Boolea
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Rounded.Check, null,
+                    ImageVector.vectorResource(AppIcons.Check), null,
                     tint = scheme.onPrimary,
                     modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = (1f - check) * -40f },
                 )

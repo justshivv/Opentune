@@ -18,7 +18,6 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,27 +37,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
-import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.DownloadDone
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.NotificationsActive
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.PersonAdd
-import androidx.compose.material.icons.rounded.PersonOff
-import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material.icons.rounded.Radio
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.ThumbDownOffAlt
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import com.opentune.ui.theme.Icon
@@ -95,6 +73,8 @@ import com.opentune.data.model.PlaylistPrivacy
 import com.opentune.data.model.ROW_ART_PX
 import com.opentune.data.model.Song
 import com.opentune.data.model.artworkAt
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** What a song's menu can do beyond the library, wired up by the app shell. */
 class SongMenuActions(
@@ -183,16 +163,16 @@ fun SongMenuSheet(
         }
         // The four things done most often, one tap each.
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            QuickAction(if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (isLiked) "Liked" else "Like", active = isLiked) {
+            QuickAction(if (isLiked) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder), if (isLiked) "Liked" else "Like", active = isLiked) {
                 LibraryStore.setLiked(song, !isLiked)
             }
             if (!local) {
                 val (icon, label) = when (download?.state) {
-                    DownloadState.DONE -> Icons.Rounded.DeleteOutline to "Remove"
-                    DownloadState.QUEUED -> Icons.Rounded.Close to if (Downloads.waitingForWifi(context)) "Needs Wi-Fi" else "Waiting"
-                    DownloadState.DOWNLOADING -> Icons.Rounded.Close to "${(download.progress * 100).toInt()}%"
-                    DownloadState.FAILED -> Icons.Rounded.Download to "Retry"
-                    null -> Icons.Rounded.Download to "Download"
+                    DownloadState.DONE -> ImageVector.vectorResource(AppIcons.DeleteOutline) to "Remove"
+                    DownloadState.QUEUED -> ImageVector.vectorResource(AppIcons.Close) to if (Downloads.waitingForWifi(context)) "Needs Wi-Fi" else "Waiting"
+                    DownloadState.DOWNLOADING -> ImageVector.vectorResource(AppIcons.Close) to "${(download.progress * 100).toInt()}%"
+                    DownloadState.FAILED -> ImageVector.vectorResource(AppIcons.Download) to "Retry"
+                    null -> ImageVector.vectorResource(AppIcons.Download) to "Download"
                 }
                 val ring = when (download?.state) {
                     DownloadState.DOWNLOADING -> download.progress
@@ -207,9 +187,9 @@ fun SongMenuSheet(
                     }
                 }
             }
-            QuickAction(Icons.AutoMirrored.Rounded.PlaylistAdd, "Playlist", active = false) { pickPlaylist = true }
+            QuickAction(ImageVector.vectorResource(AppIcons.PlaylistAdd), "Playlist", active = false) { pickPlaylist = true }
             if (!local) {
-                QuickAction(Icons.Rounded.Share, "Share", active = false) {
+                QuickAction(ImageVector.vectorResource(AppIcons.Share), "Share", active = false) {
                     // The link goes with a picture of the song, like a now-playing card.
                     val (at, length) = actions?.progressOf?.invoke(song) ?: (0L to 0L)
                     com.opentune.ui.share.ShareCard.share(context, song, at, length)
@@ -226,24 +206,24 @@ fun SongMenuSheet(
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             if (!local && download != null) {
                 val downloading = download.state == DownloadState.QUEUED || download.state == DownloadState.DOWNLOADING
-                MenuRow(if (downloading) Icons.Rounded.Close else Icons.Rounded.DeleteOutline,
+                MenuRow(if (downloading) ImageVector.vectorResource(AppIcons.Close) else ImageVector.vectorResource(AppIcons.DeleteOutline),
                     if (downloading) "Cancel download" else "Remove download") {
                     Downloads.remove(context, song.videoId)
                     close()
                 }
             }
             if (actions != null) {
-                MenuRow(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") { actions.playNext(song); close() }
-                MenuRow(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue") { actions.addToQueue(song); close() }
-                keepIn?.let { p -> MenuRow(Icons.AutoMirrored.Rounded.PlaylistAdd, "Keep in playlist") { close(); actions.keepInPlaylist(song, p.id) } }
-                if (!local) MenuRow(Icons.Rounded.Radio, "Start radio") { actions.startRadio(song); close() }
+                MenuRow(ImageVector.vectorResource(AppIcons.PlaylistPlay), "Play next") { actions.playNext(song); close() }
+                MenuRow(ImageVector.vectorResource(AppIcons.QueueMusic), "Add to queue") { actions.addToQueue(song); close() }
+                keepIn?.let { p -> MenuRow(ImageVector.vectorResource(AppIcons.PlaylistAdd), "Keep in playlist") { close(); actions.keepInPlaylist(song, p.id) } }
+                if (!local) MenuRow(ImageVector.vectorResource(AppIcons.Radio), "Start radio") { actions.startRadio(song); close() }
                 when {
-                    actions.viewArtist != null && !local -> MenuRow(Icons.Rounded.Person, "View artist") { close(); actions.viewArtist.invoke(song) }
-                    song.artistId != null -> MenuRow(Icons.Rounded.Person, "View artist") { close(); actions.openArtist(song.artistId!!) }
+                    actions.viewArtist != null && !local -> MenuRow(ImageVector.vectorResource(AppIcons.Person), "View artist") { close(); actions.viewArtist.invoke(song) }
+                    song.artistId != null -> MenuRow(ImageVector.vectorResource(AppIcons.Person), "View artist") { close(); actions.openArtist(song.artistId!!) }
                 }
                 when {
-                    song.albumId != null -> MenuRow(Icons.Rounded.Album, "Open album") { close(); actions.openAlbum(song.albumId!!) }
-                    actions.viewAlbum != null && !local -> MenuRow(Icons.Rounded.Album, "Open album") { close(); actions.viewAlbum.invoke(song) }
+                    song.albumId != null -> MenuRow(ImageVector.vectorResource(AppIcons.Album), "Open album") { close(); actions.openAlbum(song.albumId!!) }
+                    actions.viewAlbum != null && !local -> MenuRow(ImageVector.vectorResource(AppIcons.Album), "Open album") { close(); actions.viewAlbum.invoke(song) }
                 }
             }
             if (top != null || tools != null) {
@@ -252,23 +232,23 @@ fun SongMenuSheet(
                 tools?.invoke(this, close)
             }
             if (download?.state == DownloadState.DONE || (local && Ringtones.canUse(song))) {
-                MenuRow(Icons.Rounded.NotificationsActive, "Set as ringtone") { ringtone = true }
+                MenuRow(ImageVector.vectorResource(AppIcons.NotificationsActive), "Set as ringtone") { ringtone = true }
             }
-            if (actions != null) MenuRow(Icons.Rounded.ThumbDownOffAlt, "Not for me (dislike)") { close(); actions.dislike(song) }
+            if (actions != null) MenuRow(ImageVector.vectorResource(AppIcons.ThumbDownOffAlt), "Not for me (dislike)") { close(); actions.dislike(song) }
             // Only suggestions are affected: the song still plays when picked, and stays in playlists.
             if (actions != null && !com.opentune.data.radio.Radio.isRadio(song.videoId)) {
                 if (hidden.hidesSong(song.videoId)) {
-                    MenuRow(Icons.Rounded.Visibility, "Suggest this song again") { LibraryStore.unhideSong(song.videoId); close() }
+                    MenuRow(ImageVector.vectorResource(AppIcons.Visibility), "Suggest this song again") { LibraryStore.unhideSong(song.videoId); close() }
                 } else {
-                    MenuRow(Icons.Rounded.VisibilityOff, "Not interested") { close(); actions.notInterested(song) }
+                    MenuRow(ImageVector.vectorResource(AppIcons.VisibilityOff), "Not interested") { close(); actions.notInterested(song) }
                 }
                 val artist = HiddenList.mainArtist(song.artist)
                 if (artist.isNotBlank()) {
                     val entry = hidden.artists.firstOrNull { it.key == HiddenList.normalize(artist) }
                     if (entry != null) {
-                        MenuRow(Icons.Rounded.PersonAdd, com.opentune.i18n.Tr.f("Suggest {0} again", artist)) { LibraryStore.unhideArtist(entry.key); close() }
+                        MenuRow(ImageVector.vectorResource(AppIcons.PersonAdd), com.opentune.i18n.Tr.f("Suggest {0} again", artist)) { LibraryStore.unhideArtist(entry.key); close() }
                     } else {
-                        MenuRow(Icons.Rounded.PersonOff, com.opentune.i18n.Tr.f("Don't play {0}", artist)) { close(); actions.dontPlayArtist(song) }
+                        MenuRow(ImageVector.vectorResource(AppIcons.PersonOff), com.opentune.i18n.Tr.f("Don't play {0}", artist)) { close(); actions.dontPlayArtist(song) }
                     }
                 }
             }

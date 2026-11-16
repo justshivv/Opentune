@@ -20,13 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ContentPaste
-import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -70,6 +63,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Something ready to bring over, whatever it came from. */
 private sealed interface Found {
@@ -215,10 +211,10 @@ fun ImportScreen(
                 onValueChange = { text = it },
                 singleLine = true,
                 placeholder = { Text("Playlist, album or song link") },
-                leadingIcon = { Icon(Icons.Rounded.Link, null) },
+                leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Link), null) },
                 trailingIcon = {
-                    if (text.isEmpty()) IconButton(onClick = ::pasteFromClipboard) { Icon(Icons.Rounded.ContentPaste, "Paste") }
-                    else IconButton(onClick = { text = "" }) { Icon(Icons.Rounded.Close, "Clear") }
+                    if (text.isEmpty()) IconButton(onClick = ::pasteFromClipboard) { Icon(ImageVector.vectorResource(AppIcons.ContentPaste), "Paste") }
+                    else IconButton(onClick = { text = "" }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Clear") }
                 },
                 shape = RoundedCornerShape(20.dp),
                 colors = TextFieldDefaults.colors(
@@ -233,12 +229,12 @@ fun ImportScreen(
         item {
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FilledTonalButton(onClick = ::pasteFromClipboard) {
-                    Icon(Icons.Rounded.ContentPaste, null, Modifier.size(18.dp))
+                    Icon(ImageVector.vectorResource(AppIcons.ContentPaste), null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Paste link")
                 }
                 OutlinedButton(onClick = { csvPicker.launchSafely(context, arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel", "*/*")) }) {
-                    Icon(Icons.Rounded.Description, null, Modifier.size(18.dp))
+                    Icon(ImageVector.vectorResource(AppIcons.Description), null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("CSV file")
                 }
@@ -247,7 +243,7 @@ fun ImportScreen(
         item {
             // Exportify inside the app: sign in with Spotify there, tap Export, and the file comes straight here.
             Button(onClick = onOpenExportify, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp))
+                Icon(ImageVector.vectorResource(AppIcons.OpenInNew), null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Export from Spotify (whole playlists, Liked Songs)")
             }
@@ -269,7 +265,7 @@ fun ImportScreen(
                 val f = p.found
                 item {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(f.imageUrl, Modifier.size(112.dp), RoundedCornerShape(16.dp), placeholder = Icons.AutoMirrored.Rounded.QueueMusic)
+                        Artwork(f.imageUrl, Modifier.size(112.dp), RoundedCornerShape(16.dp), placeholder = ImageVector.vectorResource(AppIcons.QueueMusic))
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(f.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)

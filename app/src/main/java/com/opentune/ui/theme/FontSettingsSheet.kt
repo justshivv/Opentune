@@ -19,10 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -51,6 +47,9 @@ import com.opentune.ui.components.launchSafely
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Fonts & readability: a preview at the top that changes as you choose, the typefaces as tiles
@@ -88,7 +87,7 @@ fun FontSettingsSheet(onDismiss: () -> Unit) {
     FloatingCard(
         onDismiss = onDismiss,
         title = "Fonts & readability",
-        icon = Icons.Rounded.TextFields,
+        icon = ImageVector.vectorResource(AppIcons.TextFields),
         expandable = true,
         fitContent = false,
         fullFraction = 1f,
@@ -191,7 +190,7 @@ private fun FontTile(name: String, family: FontFamily, selected: Boolean, enable
                 color = if (enabled) c.onSurfaceVariant else c.onSurfaceVariant.copy(alpha = 0.4f))
         }
         if (selected) Box(Modifier.align(Alignment.TopEnd).size(22.dp).clip(CircleShape).background(c.primary), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Check, "In use", tint = c.onPrimary, modifier = Modifier.size(14.dp))
+            Icon(ImageVector.vectorResource(AppIcons.Check), "In use", tint = c.onPrimary, modifier = Modifier.size(14.dp))
         }
     }
 }
@@ -206,7 +205,7 @@ private fun ImportTile(importing: Boolean, modifier: Modifier, onClick: () -> Un
     ) {
         Box(Modifier.align(Alignment.TopStart).size(34.dp).clip(CircleShape).background(c.onSurface), contentAlignment = Alignment.Center) {
             if (importing) CircularProgressIndicator(Modifier.size(18.dp), color = c.surface, strokeWidth = 2.dp)
-            else Icon(Icons.Rounded.Add, null, tint = c.surface, modifier = Modifier.size(20.dp))
+            else Icon(ImageVector.vectorResource(AppIcons.Add), null, tint = c.surface, modifier = Modifier.size(20.dp))
         }
         Column(Modifier.align(Alignment.BottomStart)) {
             Text(if (importing) "Importing…" else "Import a font", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)

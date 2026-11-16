@@ -34,13 +34,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
-import androidx.compose.material.icons.automirrored.rounded.VolumeOff
-import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Shuffle
 import com.opentune.ui.theme.Icon
 import com.opentune.ui.theme.Text
 import androidx.compose.runtime.Composable
@@ -61,7 +54,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.key
-import androidx.compose.material.icons.rounded.Share
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -107,6 +99,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Which stretch of the history the story covers. */
 enum class WrappedPeriod(val label: String) { YEAR("This year"), MONTH("Last 30 days"), ALL("All time") }
@@ -353,7 +347,7 @@ fun WrappedScreen(actions: SongActions, onBack: () -> Unit, nowMs: Long = System
                     .clickable(onClick = onBack)
                     .semantics { role = Role.Button; contentDescription = "Close" },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.Close, null, tint = ink, modifier = Modifier.size(24.dp)) }
+            ) { Icon(ImageVector.vectorResource(AppIcons.Close), null, tint = ink, modifier = Modifier.size(24.dp)) }
         }
     }
 }
@@ -377,7 +371,7 @@ private fun MusicButton(offer: Boolean, on: Boolean, ink: Color, onToggle: () ->
                 .padding(start = 10.dp, end = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.PlayArrow, null, tint = ink, modifier = Modifier.size(18.dp))
+            Icon(ImageVector.vectorResource(AppIcons.PlayArrow), null, tint = ink, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
             Text("Play calm music", style = TextStyle(color = ink, fontSize = 13.sp, fontWeight = FontWeight.Medium))
         }
@@ -390,7 +384,7 @@ private fun MusicButton(offer: Boolean, on: Boolean, ink: Color, onToggle: () ->
                 .semantics { role = Role.Button; contentDescription = if (on) "Mute" else "Unmute" },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(if (on) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff, null, tint = ink, modifier = Modifier.size(22.dp))
+            Icon(if (on) ImageVector.vectorResource(AppIcons.VolumeUp) else ImageVector.vectorResource(AppIcons.VolumeOff), null, tint = ink, modifier = Modifier.size(22.dp))
         }
     }
 }
@@ -846,7 +840,7 @@ private fun BoxScope.TopSongSlide(e: Wrapped.Entry, look: Look, still: Boolean, 
         Spacer(Modifier.height(4.dp))
         Text(com.opentune.i18n.Tr.f("Played {0} times", e.plays), style = body(look.ink.copy(alpha = 0.6f)), modifier = Modifier.rise(c))
         Spacer(Modifier.height(22.dp))
-        Pill("Play your top songs", Icons.Rounded.PlayArrow, filled = true, look, onPlay, Modifier.rise(c))
+        Pill("Play your top songs", ImageVector.vectorResource(AppIcons.PlayArrow), filled = true, look, onPlay, Modifier.rise(c))
     }
 }
 
@@ -1023,9 +1017,9 @@ private fun BoxScope.SummarySlide(title: String, s: Wrapped.Summary, look: Look,
         Spacer(Modifier.height(22.dp))
         // Buttons take their own taps (and the gaps between them), so the story doesn't turn.
         Row(Modifier.rise(b).pointerInput(Unit) { detectTapGestures { } }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Pill("Play", Icons.Rounded.PlayArrow, filled = true, look, onPlay)
-            Pill("Shuffle", Icons.Rounded.Shuffle, filled = false, look, onShuffle)
-            Pill("Share", Icons.Rounded.Share, filled = false, look, onShare)
+            Pill("Play", ImageVector.vectorResource(AppIcons.PlayArrow), filled = true, look, onPlay)
+            Pill("Shuffle", ImageVector.vectorResource(AppIcons.Shuffle), filled = false, look, onShuffle)
+            Pill("Share", ImageVector.vectorResource(AppIcons.Share), filled = false, look, onShare)
         }
         Spacer(Modifier.height(10.dp))
         Text(
@@ -1062,7 +1056,7 @@ fun WrappedBanner(heading: String, line: String, onClick: () -> Unit, modifier: 
             }
             Spacer(Modifier.width(12.dp))
             Box(Modifier.size(44.dp).clip(CircleShape).background(look.ink), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = look.field, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(AppIcons.ArrowForward), null, tint = look.field, modifier = Modifier.size(22.dp))
             }
         }
     }

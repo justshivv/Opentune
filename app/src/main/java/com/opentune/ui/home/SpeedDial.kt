@@ -27,9 +27,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Person
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -65,6 +62,9 @@ import com.opentune.ui.components.SongContextMenu
 import com.opentune.ui.components.menuAnchor
 import com.opentune.ui.components.rememberHaptics
 import com.opentune.ui.type
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** What Home's Speed dial shows, for its full page: Home sets it as it lays out. */
 object SpeedDialItems {
@@ -94,7 +94,7 @@ internal fun SpeedDialSection(
             Modifier.fillMaxWidth().clickable(onClickLabel = "Show all", onClick = onOpenAll).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Artwork(avatarUrl, Modifier.size(48.dp), CircleShape, placeholder = Icons.Rounded.Person)
+            Artwork(avatarUrl, Modifier.size(48.dp), CircleShape, placeholder = ImageVector.vectorResource(AppIcons.Person))
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 if (strapline.isNotBlank()) {
@@ -102,7 +102,7 @@ internal fun SpeedDialSection(
                 }
                 Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1)
             }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Show all", Modifier.size(28.dp))
+            Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), "Show all", Modifier.size(28.dp))
         }
         val pager = rememberPagerState(pageCount = { pageCount })
         BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -193,7 +193,7 @@ private fun androidx.compose.foundation.layout.BoxScope.SpeedDialTileFace(item: 
             item.thumbnailUrl.artworkAt(CARD_ART_PX),
             Modifier.fillMaxSize(0.86f).align(Alignment.TopCenter).padding(top = 8.dp).aspectRatio(1f),
             CircleShape,
-            placeholder = Icons.Rounded.Person,
+            placeholder = ImageVector.vectorResource(AppIcons.Person),
         )
     } else {
         Artwork(item.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.fillMaxSize(), RectangleShape)
@@ -213,7 +213,7 @@ private fun androidx.compose.foundation.layout.BoxScope.SpeedDialTileFace(item: 
             modifier = Modifier.weight(1f, fill = false),
         )
         // An album, playlist or artist opens a page rather than playing.
-        if (item.browseId != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(18.dp), tint = Color.White)
+        if (item.browseId != null) Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), null, Modifier.size(18.dp), tint = Color.White)
     }
 }
 

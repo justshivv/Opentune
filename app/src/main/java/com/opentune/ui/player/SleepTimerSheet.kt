@@ -27,9 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Bedtime
-import androidx.compose.material.icons.rounded.MusicNote
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -63,6 +60,9 @@ import com.opentune.ui.components.SheetTone
 import com.opentune.ui.components.rememberHaptics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 private val MINUTES = listOf(15, 30, 45, 60, 90)
 
@@ -79,7 +79,7 @@ fun SleepTimerDialog(onDismiss: () -> Unit) {
     FloatingCard(
         onDismiss = onDismiss,
         title = "Sleep timer",
-        icon = Icons.Rounded.Bedtime,
+        icon = ImageVector.vectorResource(AppIcons.Bedtime),
         subtitle = label ?: "Pick when the music stops",
         expandable = true,
         fullFraction = 1f,
@@ -146,7 +146,7 @@ fun SleepTimerDialog(onDismiss: () -> Unit) {
                                 Text("$minutes", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
                                 Text("min", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } else {
-                                Icon(Icons.Rounded.MusicNote, null, Modifier.size(26.dp))
+                                Icon(ImageVector.vectorResource(AppIcons.MusicNote), null, Modifier.size(26.dp))
                                 Spacer(Modifier.height(4.dp))
                                 Text("End of song", style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
                             }
@@ -199,7 +199,7 @@ private fun Running(state: SleepTimer.State, still: Boolean, onAdd: () -> Unit, 
                     fontWeight = FontWeight.SemiBold,
                 )
             } else {
-                Icon(Icons.Rounded.MusicNote, null, Modifier.size(26.dp), tint = ink)
+                Icon(ImageVector.vectorResource(AppIcons.MusicNote), null, Modifier.size(26.dp), tint = ink)
             }
         }
         Spacer(Modifier.width(14.dp))

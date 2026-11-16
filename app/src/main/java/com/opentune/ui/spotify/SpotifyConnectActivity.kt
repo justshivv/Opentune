@@ -17,8 +17,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +27,9 @@ import com.opentune.ui.account.SignInPage
 import com.opentune.ui.account.probePageColor
 import com.opentune.ui.account.SpotifyGreen
 import com.opentune.ui.theme.OpenTuneTheme
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Connect Spotify: Spotify's own sign-in page in a screen of its own, laid
@@ -80,7 +81,7 @@ class SpotifyConnectActivity : ComponentActivity() {
                 SignInPage(
                     service = "Spotify",
                     brand = SpotifyGreen,
-                    icon = Icons.Rounded.GraphicEq,
+                    icon = ImageVector.vectorResource(AppIcons.GraphicEq),
                     logo = com.opentune.R.drawable.ic_spotify,
                     gives = "Your playlists in Library, each song's Canvas, and suggestions made for you",
                     loading = loading,

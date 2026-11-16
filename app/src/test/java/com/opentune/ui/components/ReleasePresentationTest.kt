@@ -1,8 +1,7 @@
 package com.opentune.ui.components
 
 import android.graphics.Bitmap
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Download
+import com.opentune.ui.theme.AppIcons
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -31,7 +30,7 @@ class ReleasePresentationTest {
 
     @Test fun olderNotesExpandAndPrimaryActionStaysVisible() {
         var closed = false
-        val note = WhatsNew.Note(Icons.Rounded.Download, "Downloads in your hands", "Cancel pending downloads or remove saved songs from a playlist.")
+        val note = WhatsNew.Note(AppIcons.Download, "Downloads in your hands", "Cancel pending downloads or remove saved songs from a playlist.")
         compose.setContent { MaterialTheme(darkColorScheme()) {
             WhatsNewSheet(listOf("0.4.15" to listOf(note), "0.4.14" to listOf(note.copy(title = "Earlier improvement"))), "0.4.15") { closed = true }
         } }

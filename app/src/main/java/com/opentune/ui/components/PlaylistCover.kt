@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -30,13 +28,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.artworkAt
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** YouTube does not always return an image for its special LM playlist. */
 @Composable
 fun LikedPlaylistCover(modifier: Modifier = Modifier, shape: Shape = RoundedCornerShape(14.dp)) {
     Box(modifier.clip(shape).background(Brush.verticalGradient(listOf(Color(0xFF8C6AF0), Color(0xFFF95AAE)))),
         contentAlignment = Alignment.Center) {
-        androidx.compose.material3.Icon(Icons.Rounded.ThumbUp, "Liked Music artwork",
+        androidx.compose.material3.Icon(ImageVector.vectorResource(AppIcons.ThumbUp), "Liked Music artwork",
             Modifier.fillMaxSize(0.35f), tint = Color.White)
     }
 }

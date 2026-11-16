@@ -49,20 +49,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.rounded.AccountCircle
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Explore
-import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.Podcasts
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.LibraryMusic
-import androidx.compose.material.icons.outlined.Podcasts
 import androidx.compose.material3.Button
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
@@ -131,6 +117,9 @@ import com.opentune.ui.player.MiniPlayer
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** The welcome's steps, in order. */
 internal enum class WelcomeStep { ARTISTS, LOOK, SIGN_IN }
@@ -177,7 +166,7 @@ fun WelcomeScreen(
     var locationAnswered by rememberSaveable {
         mutableStateOf(
             com.opentune.data.radio.ApproxLocation.granted(context) ||
-                !context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LOCATION),
+                    !context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LOCATION),
         )
     }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { locationAnswered = true }
@@ -493,15 +482,15 @@ private fun ArtistsStep(
         StepTitle(
             "Pick artists you like",
             (if (place != null) com.opentune.i18n.Tr.f("Starting with what's popular in {0}. ", place) else "") +
-                "Each one you pick brings in more like them. Keep going as long as you like, then tap Done.",
+                    "Each one you pick brings in more like them. Keep going as long as you like, then tap Done.",
         )
         TextField(
             value = query,
             onValueChange = { query = it },
             singleLine = true,
             placeholder = { Text("Search artists") },
-            leadingIcon = { Icon(Icons.Rounded.Search, null) },
-            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
+            leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Search), null) },
+            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Clear") } },
             shape = RoundedCornerShape(20.dp),
             colors = TextFieldDefaults.colors(
                 focusedIndicatorColor = Color.Transparent,
@@ -563,7 +552,7 @@ private fun PickedFaces(faces: List<ExploreFeed.Artist>) {
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primaryContainer),
             ) {
-                Artwork(a.thumbnailUrl.artworkAt(96), Modifier.matchParentSize(), CircleShape, placeholder = Icons.Filled.Person)
+                Artwork(a.thumbnailUrl.artworkAt(96), Modifier.matchParentSize(), CircleShape, placeholder = ImageVector.vectorResource(AppIcons.Person))
             }
         }
     }
@@ -612,7 +601,7 @@ private fun ArtistChoice(
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 if (artist.thumbnailUrl != null) {
-                    Artwork(artist.thumbnailUrl.artworkAt(240), Modifier.matchParentSize(), CircleShape, placeholder = Icons.Filled.Person)
+                    Artwork(artist.thumbnailUrl.artworkAt(240), Modifier.matchParentSize(), CircleShape, placeholder = ImageVector.vectorResource(AppIcons.Person))
                 }
             }
             // While the artists like this one load, a turning arc on the ring.
@@ -635,7 +624,7 @@ private fun ArtistChoice(
                         .clip(CircleShape).background(MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Rounded.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                    Icon(ImageVector.vectorResource(AppIcons.Check), null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimary)
                 }
             }
         }
@@ -734,11 +723,12 @@ private fun ChoicePill(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-private val previewTabs = listOf(
-    ChromeTab("Home", Icons.Outlined.Home, Icons.Rounded.Home),
-    ChromeTab("Explore", Icons.Outlined.Explore, Icons.Rounded.Explore),
-    ChromeTab("Podcasts", Icons.Outlined.Podcasts, Icons.Rounded.Podcasts),
-    ChromeTab("Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
+@Composable
+private fun previewTabs() = listOf(
+    ChromeTab("Home", ImageVector.vectorResource(AppIcons.Home), ImageVector.vectorResource(AppIcons.Home)),
+    ChromeTab("Explore", ImageVector.vectorResource(AppIcons.Explore), ImageVector.vectorResource(AppIcons.Explore)),
+    ChromeTab("Podcasts", ImageVector.vectorResource(AppIcons.Podcasts), ImageVector.vectorResource(AppIcons.Podcasts)),
+    ChromeTab("Library", ImageVector.vectorResource(AppIcons.LibraryMusic), ImageVector.vectorResource(AppIcons.LibraryMusic)),
 )
 
 /**
@@ -765,7 +755,7 @@ internal fun LookPreview(picks: List<ExploreFeed.Artist>, modifier: Modifier = M
         overlay = {
             BottomChrome(
                 inline = false,
-                tabs = previewTabs,
+                tabs = previewTabs(),
                 selected = tab,
                 onSelect = { tab = it },
                 onExpand = {},
@@ -808,7 +798,7 @@ internal fun LookPreview(picks: List<ExploreFeed.Artist>, modifier: Modifier = M
                 if (faces.isEmpty()) {
                     repeat(4) { Box(Modifier.size(56.dp).clip(CircleShape).background(scheme.primary.copy(alpha = 0.25f + 0.15f * it))) }
                 } else {
-                    faces.forEach { Artwork(it.thumbnailUrl.artworkAt(160), Modifier.size(56.dp), CircleShape, placeholder = Icons.Filled.Person) }
+                    faces.forEach { Artwork(it.thumbnailUrl.artworkAt(160), Modifier.size(56.dp), CircleShape, placeholder = ImageVector.vectorResource(AppIcons.Person)) }
                 }
             }
             Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -840,7 +830,7 @@ private fun SignInStep() {
             Box(Modifier.size(132.dp).clip(CircleShape).glass(CircleShape), contentAlignment = Alignment.Center) {
                 val photo = account?.thumbnailUrl
                 if (signedIn && photo != null) Artwork(photo, Modifier.size(132.dp), CircleShape)
-                else Icon(Icons.Rounded.AccountCircle, null, Modifier.size(72.dp), tint = MaterialTheme.colorScheme.primary)
+                else Icon(ImageVector.vectorResource(AppIcons.AccountCircle), null, Modifier.size(72.dp), tint = MaterialTheme.colorScheme.primary)
             }
         }
         Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 28.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -850,7 +840,7 @@ private fun SignInStep() {
                 "Your sign-in stays on this phone; the password goes only to Google",
             ).forEach { line ->
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Rounded.Check, null, Modifier.size(20.dp).padding(top = 2.dp), tint = MaterialTheme.colorScheme.primary)
+                    Icon(ImageVector.vectorResource(AppIcons.Check), null, Modifier.size(20.dp).padding(top = 2.dp), tint = MaterialTheme.colorScheme.primary)
                     Text(line, style = MaterialTheme.typography.bodyLarge)
                 }
             }

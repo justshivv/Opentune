@@ -30,19 +30,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.Headphones
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.SpeakerGroup
-import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.Smartphone
-import androidx.compose.material.icons.rounded.Lyrics
-import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
@@ -79,6 +66,9 @@ import com.opentune.data.model.artworkAt
 import com.opentune.ui.LyricsState
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.formatTime
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * The player on its side: the cover fills the left, and the right holds
@@ -166,8 +156,8 @@ internal fun LandscapePlayer(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    RoundIcon(Icons.Rounded.MoreHoriz, "More", onMore)
-                    RoundIcon(Icons.Rounded.KeyboardArrowDown, "Close player", actions.collapse)
+                    RoundIcon(ImageVector.vectorResource(AppIcons.MoreHoriz), "More", onMore)
+                    RoundIcon(ImageVector.vectorResource(AppIcons.KeyboardArrowDown), "Close player", actions.collapse)
                 }
                 TimeBar(position, state.durationMs, actions.seekTo)
                 if (state.ui.sourcePill) SourceQualityBadge(song.videoId, state.audioFormat, onClick = onSignal, modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -175,7 +165,7 @@ internal fun LandscapePlayer(
                 val lines = if (showLines) rememberLyricLines(state.lyrics, lyricsPosition) else null
                 if (lines != null) LyricsPeek(lines, next = roomy, animate = animate, onClick = onLyrics)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    RoundIcon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Unlike" else "Like", { haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE); onLike() }, tint = if (liked) scheme.primary else scheme.onSurface)
+                    RoundIcon(if (liked) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder), if (liked) "Unlike" else "Like", { haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE); onLike() }, tint = if (liked) scheme.primary else scheme.onSurface)
                     Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                         Tap("Previous", { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.PREVIOUS); previousRolls++; actions.previous() }) { SkipGlyph(false, previousRolls, scheme.onSurface, animate, Modifier.size(38.dp)) }
                         Tap(if (state.isPlaying) "Pause" else "Play", { haptics.pattern(if (state.isPlaying) com.opentune.ui.components.Haptics.Pattern.PAUSE else com.opentune.ui.components.Haptics.Pattern.PLAY); actions.togglePlay() }) { PlayPauseGlyph(state.isPlaying, scheme.onSurface, animate, Modifier.size(54.dp)) }
@@ -184,7 +174,7 @@ internal fun LandscapePlayer(
                         }
                     }
                     val context = LocalContext.current
-                    RoundIcon(Icons.Rounded.SpeakerGroup, "Choose where it plays", { openOutputSwitcher(context) })
+                    RoundIcon(ImageVector.vectorResource(AppIcons.SpeakerGroup), "Choose where it plays", { openOutputSwitcher(context) })
                     RoundIcon(
                         outputRoute.icon,
                         "Audio output",
@@ -201,10 +191,10 @@ internal fun LandscapePlayer(
                 if (roomy) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { VolumeBar() }
-                        RoundIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", onQueue)
+                        RoundIcon(ImageVector.vectorResource(AppIcons.QueueMusic), "Queue", onQueue)
                     }
                 } else {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { RoundIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", onQueue) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { RoundIcon(ImageVector.vectorResource(AppIcons.QueueMusic), "Queue", onQueue) }
                 }
             }
         }

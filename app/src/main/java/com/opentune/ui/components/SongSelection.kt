@@ -24,16 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +53,8 @@ import com.opentune.data.download.Downloads
 import com.opentune.data.library.LibraryStore
 import com.opentune.data.model.Song
 import com.opentune.data.isYouTubeId
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Songs picked on a page, to act on together: like them, add them to a playlist or
@@ -105,7 +97,7 @@ internal fun SelectionTick(picked: Boolean) {
             .then(if (picked) Modifier.background(scheme.primary) else Modifier.border(2.dp, scheme.onSurfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))),
         Alignment.Center,
     ) {
-        if (picked) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp), tint = scheme.onPrimary)
+        if (picked) Icon(ImageVector.vectorResource(AppIcons.Check), null, Modifier.size(18.dp), tint = scheme.onPrimary)
     }
 }
 
@@ -150,7 +142,7 @@ fun SongSelectionBar(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { selection.clear() }) { Icon(Icons.Rounded.Close, "Stop selecting") }
+                IconButton(onClick = { selection.clear() }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Stop selecting") }
                 Text(if (count == 1) "1 selected" else com.opentune.i18n.Tr.f("{0} selected", count), style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 4.dp))
                 val everything = count == rows.size && rows.isNotEmpty()
@@ -161,22 +153,22 @@ fun SongSelectionBar(
             // One height for every tile, the tallest label's.
             Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 val enabled = count > 0
-                BarAction(if (allLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (allLiked) "Unlike" else "Like", enabled) {
+                BarAction(if (allLiked) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder), if (allLiked) "Unlike" else "Like", enabled) {
                     inOrder.forEach { LibraryStore.setLiked(it, !allLiked) }
                     com.opentune.data.Pills.done(if (allLiked) com.opentune.i18n.Tr.f("Removed {0} from Liked", inOrder.size) else com.opentune.i18n.Tr.f("Liked {0} {1}", inOrder.size, if (inOrder.size == 1) "song" else "songs"), context)
                     selection.clear()
                 }
-                BarAction(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist", enabled) { adding = inOrder }
-                BarAction(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue", enabled) {
+                BarAction(ImageVector.vectorResource(AppIcons.PlaylistAdd), "Add to playlist", enabled) { adding = inOrder }
+                BarAction(ImageVector.vectorResource(AppIcons.QueueMusic), "Add to queue", enabled) {
                     onAddToQueue(inOrder)
                     com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Added {0} to the queue", inOrder.size), context)
                     selection.clear()
                 }
-                if (onRemove != null) BarAction(Icons.Rounded.RemoveCircleOutline, removeLabel, enabled) {
+                if (onRemove != null) BarAction(ImageVector.vectorResource(AppIcons.RemoveCircleOutline), removeLabel, enabled) {
                     onRemove(selection.picked.keys.toSet())
                     selection.clear()
                 }
-                if (offerDownload) BarAction(Icons.Rounded.Download, "Download", enabled && inOrder.any { isYouTubeId(it.videoId) }) {
+                if (offerDownload) BarAction(ImageVector.vectorResource(AppIcons.Download), "Download", enabled && inOrder.any { isYouTubeId(it.videoId) }) {
                     val online = inOrder.filter { isYouTubeId(it.videoId) }
                     online.forEach { Downloads.enqueue(context, it) }
                     com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} {1}", online.size, if (online.size == 1) "song" else "songs"), context)

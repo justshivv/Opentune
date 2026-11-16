@@ -61,8 +61,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Search
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -99,6 +97,8 @@ import androidx.compose.foundation.layout.sizeIn
 import com.opentune.data.settings.DockLens
 import com.opentune.data.settings.DockMotion
 import com.opentune.ui.components.glass
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Room the chrome takes when shown, for content padding. */
 val CHROME_TAB_HEIGHT = 64.dp
@@ -928,13 +928,8 @@ internal fun DockItem(
     onClick: () -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        when {
-            pressed -> 0.9f
-            selected -> 1.06f
-            else -> 1f
-        },
+        if (selected) 1.06f else 1f,
         spring(dampingRatio = 0.85f, stiffness = 320f),
         label = "dockScale",
     )
@@ -1040,7 +1035,7 @@ internal fun SearchOrb(selected: Boolean, modifier: Modifier = Modifier, onLongP
             .semantics { role = Role.Tab; this.selected = selected },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Rounded.Search, "Search", tint = fg, modifier = Modifier.size(26.dp))
+        Icon(ImageVector.vectorResource(AppIcons.Search), "Search", tint = fg, modifier = Modifier.size(26.dp))
     }
 }
 

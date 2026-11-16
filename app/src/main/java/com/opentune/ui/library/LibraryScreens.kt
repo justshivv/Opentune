@@ -25,14 +25,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.BarChart
-import androidx.compose.material.icons.rounded.Folder
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import com.opentune.ui.theme.Icon
@@ -72,16 +64,19 @@ import com.opentune.ui.components.SongListItem
 import com.opentune.ui.components.SongRowPlaceholder
 import com.opentune.ui.share.ReplayShareSheet
 import java.util.concurrent.TimeUnit
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 @Composable
 internal fun PlayButtons(onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false, onSmartShuffle: (() -> Unit)? = null) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (compact) {
             ShuffleButton(onShuffle, onSmartShuffle, compact = true)
-            GlassIconButton(Icons.Rounded.PlayArrow, "Play", onPlay, size = 44.dp)
+            GlassIconButton(ImageVector.vectorResource(AppIcons.PlayArrow), "Play", onPlay, size = 44.dp)
         } else {
             Button(onClick = onPlay, modifier = Modifier.weight(1f).height(52.dp)) {
-                Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text(com.opentune.ui.theme.tr("Play"))
+                Icon(ImageVector.vectorResource(AppIcons.PlayArrow), null); Spacer(Modifier.width(8.dp)); Text(com.opentune.ui.theme.tr("Play"))
             }
             ShuffleButton(onShuffle, onSmartShuffle, Modifier.weight(1f))
         }
@@ -117,7 +112,7 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
         when {
             !granted -> item {
                 MessageState(
-                    Icons.Rounded.Folder,
+                    ImageVector.vectorResource(AppIcons.Folder),
                     "Play music saved on your phone",
                     Modifier.padding(top = 32.dp),
                     message = "OpenTune needs permission to read audio files. Nothing leaves your device.",
@@ -126,7 +121,7 @@ fun LocalMusicScreen(contentPadding: PaddingValues, actions: SongActions, onBack
             }
             songs == null -> items(8) { SongRowPlaceholder() }
             songs.isNullOrEmpty() -> item {
-                MessageState(Icons.Rounded.Folder, "No music found", Modifier.padding(top = 32.dp), message = "Check the folder and filter in Settings › Local music.")
+                MessageState(ImageVector.vectorResource(AppIcons.Folder), "No music found", Modifier.padding(top = 32.dp), message = "Check the folder and filter in Settings › Local music.")
             }
             else -> {
                 val list = songs.orEmpty()
@@ -188,7 +183,7 @@ fun ReplayScreen(contentPadding: PaddingValues, actions: SongActions, onBack: ()
         androidx.compose.ui.graphics.Brush.verticalGradient(0f to tint.copy(alpha = 0.75f), 0.55f to background))) {
         item {
             PageHeader("Replay", onBack = onBack, actions = if (summary.totalPlays == 0) null else {
-                { GlassIconButton(Icons.Rounded.Share, "Share my Replay", { sharing = true }) }
+                { GlassIconButton(ImageVector.vectorResource(AppIcons.Share), "Share my Replay", { sharing = true }) }
             })
             Text(range.heading(), Modifier.padding(horizontal = 24.dp),
                 style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -220,13 +215,13 @@ fun ReplayScreen(contentPadding: PaddingValues, actions: SongActions, onBack: ()
                     .clickable { story = true }.padding(horizontal = 18.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Rounded.PlayArrow, null)
+                Icon(ImageVector.vectorResource(AppIcons.PlayArrow), null)
                 Text("Play your Replay", Modifier.weight(1f).padding(start = 12.dp), style = MaterialTheme.typography.titleMedium)
-                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (summary.totalPlays == 0) item {
-            MessageState(Icons.Rounded.BarChart, "Nothing to replay yet", Modifier.padding(16.dp), message = "Listen for a while and your top songs and artists show up here.")
+            MessageState(ImageVector.vectorResource(AppIcons.BarChart), "Nothing to replay yet", Modifier.padding(16.dp), message = "Listen for a while and your top songs and artists show up here.")
         }
         if (summary.topSongs.isNotEmpty()) item { SectionHeader("Top songs") }
         itemsIndexed(summary.topSongs, key = { i, entry -> "s:$i:${entry.key}" }) { i, entry ->

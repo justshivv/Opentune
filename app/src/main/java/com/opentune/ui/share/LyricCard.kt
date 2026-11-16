@@ -32,14 +32,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Article
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.FormatQuote
-import androidx.compose.material.icons.rounded.IosShare
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
-import androidx.compose.material.icons.rounded.Smartphone
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -66,6 +58,9 @@ import com.opentune.ui.components.rememberHaptics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * A picture of a few lines of a song to share: the lines large on a dark
@@ -219,7 +214,7 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
     FloatingCard(
         onDismiss = onDismiss,
         title = "Share lyrics",
-        icon = Icons.Rounded.FormatQuote,
+        icon = ImageVector.vectorResource(AppIcons.FormatQuote),
         subtitle = when {
             !pickable -> "The lines you picked, laid out on a card with the cover."
             picked.isEmpty() -> "Tap the lines to put on the card"
@@ -229,7 +224,7 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
         actions = {
             SheetButton(
                 "Save",
-                icon = Icons.Rounded.Download,
+                icon = ImageVector.vectorResource(AppIcons.Download),
                 enabled = preview != null,
                 modifier = Modifier.weight(1f),
                 onClick = {
@@ -243,7 +238,7 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
             )
             SheetButton(
                 "Share",
-                icon = Icons.Rounded.IosShare,
+                icon = ImageVector.vectorResource(AppIcons.IosShare),
                 tone = SheetTone.Primary,
                 enabled = preview != null,
                 modifier = Modifier.weight(1f),
@@ -265,13 +260,13 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
                 Image(p.asImageBitmap(), "Lyric card", frame, contentScale = androidx.compose.ui.layout.ContentScale.Crop)
             } else {
                 Box(frame.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.FormatQuote, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(ImageVector.vectorResource(AppIcons.FormatQuote), null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
         SheetButton(
             if (story) "Make it a card" else "Make it a story",
-            icon = if (story) Icons.AutoMirrored.Rounded.Article else Icons.Rounded.Smartphone,
+            icon = if (story) ImageVector.vectorResource(AppIcons.Article) else ImageVector.vectorResource(AppIcons.Smartphone),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
             onClick = { haptics.tick(); story = !story },
         )
@@ -295,7 +290,7 @@ fun LyricCardSheet(song: Song, lines: List<String>, startAt: Int, onDismiss: () 
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
-                            if (on) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                            if (on) ImageVector.vectorResource(AppIcons.CheckCircle) else ImageVector.vectorResource(AppIcons.RadioButtonUnchecked),
                             if (on) "Picked" else "Not picked",
                             Modifier.size(22.dp),
                             tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (full) 0.35f else 0.8f),

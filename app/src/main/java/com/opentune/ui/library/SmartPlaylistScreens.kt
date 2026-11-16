@@ -19,12 +19,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material3.FilterChip
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
@@ -76,6 +70,9 @@ import com.opentune.ui.components.menuClickable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** What a smart playlist's songs are worked out from, kept up to date as they change. */
 @Composable
@@ -152,14 +149,14 @@ internal fun SmartPlaylistsRow(onOpen: (String) -> Unit, onNew: () -> Unit, tile
     ) {
         items(smart, key = { it.id }) { p -> SmartTile(p.name, smartSummary(p.rules), { onOpen(p.id) }, Modifier.width(tileWidth)) }
         item(key = "new-smart") {
-            SmartTile("New smart playlist", "Fills itself from rules", onNew, Modifier.width(tileWidth), icon = Icons.Rounded.Add)
+            SmartTile("New smart playlist", "Fills itself from rules", onNew, Modifier.width(tileWidth), icon = ImageVector.vectorResource(AppIcons.Add))
         }
     }
 }
 
 /** A smart playlist's tile: a gradient of its own from its name, and the sparkle mark. */
 @Composable
-private fun SmartTile(title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier, icon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Rounded.AutoAwesome) {
+private fun SmartTile(title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier, icon: androidx.compose.ui.graphics.vector.ImageVector = ImageVector.vectorResource(AppIcons.AutoAwesome)) {
     val hue = (title.lowercase().hashCode().toUInt() % 360u).toFloat()
     val brush = Brush.linearGradient(listOf(Color.hsv(hue, 0.55f, 0.75f), Color.hsv((hue + 50f) % 360f, 0.65f, 0.45f)))
     Column(modifier.clip(MaterialTheme.shapes.medium).menuClickable(onClick = onClick, onLongClick = null).padding(6.dp)) {
@@ -185,67 +182,67 @@ fun SmartPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
     val songs = remember(refs) { refs.orEmpty().map { it.toSong() } }
     // The page's background as Settings ask for it, from the first song's cover.
     com.opentune.ui.browse.ListPageTint(coverUrl = songs.firstOrNull()?.thumbnailUrl) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            com.opentune.ui.browse.ListPageWash()
-            LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-                item {
-                    PageHeader(playlist.name, onBack = onBack, actions = {
-                        IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, "Edit rules") }
-                    })
-                }
-                item {
-                    Text(
-                        smartSummary(playlist.rules), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                    )
-                }
-                if (refs == null) return@LazyColumn
-                if (songs.isEmpty()) {
-                    item {
-                        MessageState(Icons.Rounded.AutoAwesome, "Nothing matches yet", Modifier.padding(top = 24.dp),
-                            message = "Songs appear here once they fit the rules. Keep listening, or edit the rules.")
-                    }
-                    return@LazyColumn
-                }
-                item {
-                    PlayButtons(
-                        onPlay = { actions.playAll(songs, 0, false, playlist.name) },
-                        onShuffle = { actions.playAll(songs, 0, true, playlist.name) },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
-                }
-                item {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            if (songs.size == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", songs.size),
-                            style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 12.dp).weight(1f),
-                        )
-                        TextButton(onClick = {
-                            // A copy that stays as it is now: an ordinary playlist made in the app.
-                            val copy = LibraryStore.createPlaylist(playlist.name)
-                            LibraryStore.addAllToPlaylist(copy, songs)
-                            com.opentune.data.Pills.done("Saved as a playlist", context)
-                            onOpenPlaylist(copy)
-                        }) {
-                            Icon(Icons.Rounded.PlaylistAdd, null, Modifier.size(18.dp))
-                            Text("Save as playlist", Modifier.padding(start = 6.dp))
-                        }
-                    }
-                }
-                itemsIndexed(songs, key = { _, s -> s.videoId }) { i, song ->
-                    SongListItem(
-                        song = song,
-                        onClick = { actions.playAll(songs, i, false, playlist.name) },
-                        modifier = Modifier.animateItem(),
-                        isCurrent = song.videoId == actions.currentVideoId,
-                        isPlaying = actions.isPlaying,
-                        onPlayNext = { actions.playNext(song) },
-                        onAddToQueue = { actions.addToQueue(song) },
-                    )
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    com.opentune.ui.browse.ListPageWash()
+    LazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
+        item {
+            PageHeader(playlist.name, onBack = onBack, actions = {
+                IconButton(onClick = onEdit) { Icon(ImageVector.vectorResource(AppIcons.Edit), "Edit rules") }
+            })
+        }
+        item {
+            Text(
+                smartSummary(playlist.rules), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+        }
+        if (refs == null) return@LazyColumn
+        if (songs.isEmpty()) {
+            item {
+                MessageState(ImageVector.vectorResource(AppIcons.AutoAwesome), "Nothing matches yet", Modifier.padding(top = 24.dp),
+                    message = "Songs appear here once they fit the rules. Keep listening, or edit the rules.")
+            }
+            return@LazyColumn
+        }
+        item {
+            PlayButtons(
+                onPlay = { actions.playAll(songs, 0, false, playlist.name) },
+                onShuffle = { actions.playAll(songs, 0, true, playlist.name) },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            )
+        }
+        item {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (songs.size == 1) "1 song" else com.opentune.i18n.Tr.f("{0} songs", songs.size),
+                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp).weight(1f),
+                )
+                TextButton(onClick = {
+                    // A copy that stays as it is now: an ordinary playlist made in the app.
+                    val copy = LibraryStore.createPlaylist(playlist.name)
+                    LibraryStore.addAllToPlaylist(copy, songs)
+                    com.opentune.data.Pills.done("Saved as a playlist", context)
+                    onOpenPlaylist(copy)
+                }) {
+                    Icon(ImageVector.vectorResource(AppIcons.PlaylistAdd), null, Modifier.size(18.dp))
+                    Text("Save as playlist", Modifier.padding(start = 6.dp))
                 }
             }
         }
+        itemsIndexed(songs, key = { _, s -> s.videoId }) { i, song ->
+            SongListItem(
+                song = song,
+                onClick = { actions.playAll(songs, i, false, playlist.name) },
+                modifier = Modifier.animateItem(),
+                isCurrent = song.videoId == actions.currentVideoId,
+                isPlaying = actions.isPlaying,
+                onPlayNext = { actions.playNext(song) },
+                onAddToQueue = { actions.addToQueue(song) },
+            )
+        }
+    }
+    }
     }
 }
 
@@ -268,7 +265,7 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
 
     fun save() {
         val saved = if (existing == null) LibraryStore.createSmartPlaylist(name, rules)
-        else existing.id.also { LibraryStore.updateSmartPlaylist(it, name, rules) }
+            else existing.id.also { LibraryStore.updateSmartPlaylist(it, name, rules) }
         onSaved(saved)
     }
 
@@ -349,7 +346,7 @@ fun SmartPlaylistEditor(id: String?, contentPadding: PaddingValues, onBack: () -
         }
         if (existing != null) item {
             TextButton(onClick = { deleting = true }, modifier = Modifier.padding(horizontal = 16.dp)) {
-                Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error)
+                Icon(ImageVector.vectorResource(AppIcons.Delete), null, tint = MaterialTheme.colorScheme.error)
                 Text("Delete smart playlist", Modifier.padding(start = 8.dp), color = MaterialTheme.colorScheme.error)
             }
         }

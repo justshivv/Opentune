@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -35,6 +32,9 @@ import com.opentune.ui.theme.Icon
 import com.opentune.ui.theme.Text
 import java.util.Locale
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** The language offered first: the phone's own, when Google Translate has it. */
 private fun defaultTarget(): String {
@@ -65,7 +65,7 @@ internal fun LyricsTextSheet(lines: List<String>, synced: Boolean, onDismiss: ()
     FloatingCard(
         onDismiss = onDismiss,
         title = "Translate",
-        icon = Icons.Rounded.Translate,
+        icon = ImageVector.vectorResource(AppIcons.Translate),
         subtitle = if (settings.translateTo.isNotBlank()) {
             "Showing the translation into ${LyricsTranslator.languageName(settings.translateTo) ?: settings.translateTo}"
         } else {
@@ -143,7 +143,7 @@ internal fun LyricsTextSheet(lines: List<String>, synced: Boolean, onDismiss: ()
                         Modifier.weight(1f),
                         fontWeight = if (lang.code == picked) androidx.compose.ui.text.font.FontWeight.SemiBold else null,
                     )
-                    if (lang.code == picked) Icon(Icons.Rounded.Check, null, Modifier.size(20.dp))
+                    if (lang.code == picked) Icon(ImageVector.vectorResource(AppIcons.Check), null, Modifier.size(20.dp))
                 }
             }
             if (failed) {
