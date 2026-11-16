@@ -49,7 +49,9 @@ fun ListeningHistoryScreen(contentPadding: PaddingValues, actions: SongActions, 
         }
     }
     val records by History.records.collectAsState()
-    val ordered = remember(records) { records.sortedByDescending { it.playedAt } }
+    // Each song once, at its latest play — like the account's own history —
+    // instead of a row for every single play.
+    val ordered = remember(records) { records.sortedByDescending { it.playedAt }.distinctBy { it.videoId } }
     val songs = remember(ordered) { ordered.map { it.toSong() } }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item { PageHeader("Listening history", onBack = onBack) }
