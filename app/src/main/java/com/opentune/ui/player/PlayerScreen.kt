@@ -344,7 +344,7 @@ fun PlayerLayout(
     val sound = state.sound
     val isEpisode = remember(current.videoId) {
         com.opentune.data.podcasts.Podcasts.isEpisode(current.videoId) ||
-        com.opentune.data.audiobooks.Audiobooks.isChapter(current.videoId)
+                com.opentune.data.audiobooks.Audiobooks.isChapter(current.videoId)
     }
 
     var paneName by rememberSaveable { mutableStateOf(if (initialLyrics) Pane.LYRICS.name else Pane.COVER.name) }
@@ -585,6 +585,11 @@ fun PlayerLayout(
             pane != Pane.COVER && next == Pane.COVER -> expandCover()
             else -> paneName = next.name
         }
+    }
+    // The phone's back button steps out of a list pane to the cover first, the same
+    // way the pane's own button does; only a press on the cover leaves the player.
+    androidx.activity.compose.BackHandler(enabled = atRest && pane != Pane.COVER) {
+        toggle(pane)
     }
     // Flies the cover to wherever its new place turns out to be, once that's laid out.
     LaunchedEffect(flight.runs) {
@@ -1295,67 +1300,67 @@ fun PlayerLayout(
                             // The pill's segments are the queue capsule's width; on a screen too narrow
                             // for three of those between the Lyrics and Queue buttons, they narrow to fit.
                             androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
-                            val segments = maxOf(3, listOf(!apple, true, state.ui.commentsButton, apple).count { it })
-                            val segmentWidth = pillSegmentWidth(maxWidth - 52.dp * 2 - 16.dp, segments)
-                            androidx.compose.runtime.CompositionLocalProvider(LocalPillSegmentWidth provides segmentWidth) {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                GlassToggle(PlayerIcons.Lyrics, "Lyrics", pane == Pane.LYRICS, { toggle(Pane.LYRICS) })
-                                // One pill that morphs between sleep and output, and the queue's modes.
-                                val inQueueNow = pane == Pane.QUEUE
-                                MorphPill(
-                                    second = inQueueNow,
-                                    animate = !state.ui.reduceAnimation,
-                                    // Between the cover and the queue, on the cover's own clock (the finger's
-                                    // while a swipe carries it), so the pill changes as the cover moves
-                                    // rather than in a second animation after it lands.
-                                    progress = {
-                                        val queueSide = when {
-                                            pane == Pane.QUEUE -> true
-                                            pane == Pane.LYRICS -> false
-                                            flight.following -> (returnPane ?: Pane.QUEUE.name) == Pane.QUEUE.name
-                                            else -> lastList == Pane.QUEUE.name
-                                        }
-                                        if (queueSide && (flight.active || listsShown.isRunning)) paneProgress() else null
-                                    },
-                                    firstFill = Color.White.copy(alpha = 0.14f),
-                                    secondFill = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    modifier = Modifier.weight(1f),
-                                    first = { enabled ->
-                                        // Its two halves split by a hairline; the fill is the morphing one behind.
-                                        // Rounded by the morphing pill's own outline, so its lit end buttons reach that edge.
-                                        Row(Modifier.height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            // Each half is the button: a press fills the half, not a circle round the icon.
-                                            // Apple Music's has where it's playing, then who's listening with you.
-                                            if (!apple) {
-                                                PillButton(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true }, enabled = enabled)
-                                                androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
-                                            }
-                                            PillButton(
-                                                outputRoute.icon,
-                                                "Audio output",
-                                                // Headphones only change the icon; lit up is for casting, a session to notice.
-                                                outputRoute == OutputRoute.CAST,
-                                                { showOutput = true },
-                                                enabled = enabled,
-                                            )
-                                            if (state.ui.commentsButton) {
-                                                androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
-                                                PillButton(Icons.Rounded.ChatBubbleOutline, "Comments", showComments, { showComments = true }, enabled = enabled)
-                                            }
-                                            if (apple) {
-                                                val room by Together.room.collectAsState()
-                                                androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
-                                                PillButton(Icons.Rounded.Person, "Listen together", room != null, actions.openTogether, enabled = enabled)
-                                            }
-                                        }
-                                    },
-                                    secondContent = { enabled ->
-                                        ModesPill(state.shuffleMode, state.smartShuffleAvailable, state.repeatMode, actions.toggleShuffle, actions.cycleRepeat, filled = false, enabled = enabled)
-                                    },
-                                )
-                                GlassToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
-                            }
-                            }
+                                val segments = maxOf(3, listOf(!apple, true, state.ui.commentsButton, apple).count { it })
+                                val segmentWidth = pillSegmentWidth(maxWidth - 52.dp * 2 - 16.dp, segments)
+                                androidx.compose.runtime.CompositionLocalProvider(LocalPillSegmentWidth provides segmentWidth) {
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        GlassToggle(PlayerIcons.Lyrics, "Lyrics", pane == Pane.LYRICS, { toggle(Pane.LYRICS) })
+                                        // One pill that morphs between sleep and output, and the queue's modes.
+                                        val inQueueNow = pane == Pane.QUEUE
+                                        MorphPill(
+                                            second = inQueueNow,
+                                            animate = !state.ui.reduceAnimation,
+                                            // Between the cover and the queue, on the cover's own clock (the finger's
+                                            // while a swipe carries it), so the pill changes as the cover moves
+                                            // rather than in a second animation after it lands.
+                                            progress = {
+                                                val queueSide = when {
+                                                    pane == Pane.QUEUE -> true
+                                                    pane == Pane.LYRICS -> false
+                                                    flight.following -> (returnPane ?: Pane.QUEUE.name) == Pane.QUEUE.name
+                                                    else -> lastList == Pane.QUEUE.name
+                                                }
+                                                if (queueSide && (flight.active || listsShown.isRunning)) paneProgress() else null
+                                            },
+                                            firstFill = Color.White.copy(alpha = 0.14f),
+                                            secondFill = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            modifier = Modifier.weight(1f),
+                                            first = { enabled ->
+                                                // Its two halves split by a hairline; the fill is the morphing one behind.
+                                                // Rounded by the morphing pill's own outline, so its lit end buttons reach that edge.
+                                                Row(Modifier.height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    // Each half is the button: a press fills the half, not a circle round the icon.
+                                                    // Apple Music's has where it's playing, then who's listening with you.
+                                                    if (!apple) {
+                                                        PillButton(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true }, enabled = enabled)
+                                                        androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
+                                                    }
+                                                    PillButton(
+                                                        outputRoute.icon,
+                                                        "Audio output",
+                                                        // Headphones only change the icon; lit up is for casting, a session to notice.
+                                                        outputRoute == OutputRoute.CAST,
+                                                        { showOutput = true },
+                                                        enabled = enabled,
+                                                    )
+                                                    if (state.ui.commentsButton) {
+                                                        androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
+                                                        PillButton(Icons.Rounded.ChatBubbleOutline, "Comments", showComments, { showComments = true }, enabled = enabled)
+                                                    }
+                                                    if (apple) {
+                                                        val room by Together.room.collectAsState()
+                                                        androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
+                                                        PillButton(Icons.Rounded.Person, "Listen together", room != null, actions.openTogether, enabled = enabled)
+                                                    }
+                                                }
+                                            },
+                                            secondContent = { enabled ->
+                                                ModesPill(state.shuffleMode, state.smartShuffleAvailable, state.repeatMode, actions.toggleShuffle, actions.cycleRepeat, filled = false, enabled = enabled)
+                                            },
+                                        )
+                                        GlassToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
+                                    }
+                                }
                             }
                             if (!minimal && roomy && (sleepLabel != null || !state.ui.hideOutputDevice)) Text(
                                 sleepLabel ?: device,
