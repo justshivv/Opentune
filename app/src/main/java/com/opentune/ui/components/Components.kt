@@ -58,8 +58,8 @@ import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import com.opentune.ui.theme.Icon
@@ -314,19 +314,9 @@ fun SongListItem(
     val hasMenu = onPlayNext != null || onAddToQueue != null || LocalSongMenu.current != null
     val download by remember(song.videoId) { Downloads.entry(song.videoId) }
         .collectAsState(Downloads.entryNow(song.videoId))
-    if (menuOpen) SongMenuSheet(
-        song,
-        onDismiss = { menuOpen = false },
-        // The same way out of this playlist the long-press menu offers, here in the full menu too.
-        end = onRemoveFromPlaylist?.let { remove ->
-            { close ->
-                MenuRow(Icons.Rounded.RemoveCircleOutline, "Remove from this playlist") {
-                    close()
-                    remove()
-                }
-            }
-        },
-    )
+    if (menuOpen) SongMenuSheet(song, onDismiss = { menuOpen = false }, end = onRemoveFromPlaylist?.let { remove ->
+        { close -> MenuRow(Icons.Rounded.RemoveCircleOutline, "Remove from this playlist") { close(); remove() } }
+    })
     val at = anchor.rect
     if (contextOpen && at != null) SongContextMenu(song, at, onDismiss = { contextOpen = false }, onRemoveFromPlaylist = onRemoveFromPlaylist,
         onSelect = selection?.let { s -> { contextOpen = false; s.start(selectKey, song) } }) { SongPreview(song) }
@@ -553,6 +543,8 @@ fun SectionHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     action: (@Composable () -> Unit)? = null,
+    /** A smaller title where a page's sections sit under a bigger one; the app's usual size when null. */
+    titleStyle: TextStyle? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
@@ -566,7 +558,7 @@ fun SectionHeader(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(com.opentune.ui.theme.tr(title), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(com.opentune.ui.theme.tr(title), style = titleStyle ?: MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         action?.invoke()
     }

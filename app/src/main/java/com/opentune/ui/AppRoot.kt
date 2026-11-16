@@ -370,8 +370,6 @@ fun AppRoot(vm: PlayerViewModel) {
         importPlaylist = { nav.navigate("import") },
         wrapped = { nav.navigate("wrapped") },
         history = { nav.navigate("history") },
-        allPlaylists = { nav.navigate("playlists") },
-        spotify = { nav.navigate("spotify-playlists") },
         smart = { id -> nav.navigate("smart/${Uri.encode(id)}") },
         newSmart = { nav.navigate("smart-edit") },
     ) }
@@ -731,8 +729,6 @@ fun AppRoot(vm: PlayerViewModel) {
                         page("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                             com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                         }
-                        page("playlists") { com.opentune.ui.library.AllPlaylistsScreen(content, libraryNav, onBack = { nav.popBackStack() }) }
-                        page("spotify-playlists") { com.opentune.ui.library.AllPlaylistsScreen(content, libraryNav, onBack = { nav.popBackStack() }, spotify = true) }
                         page("liked") {
                             LikedScreen(content, actions, onBack = { nav.popBackStack() })
                         }

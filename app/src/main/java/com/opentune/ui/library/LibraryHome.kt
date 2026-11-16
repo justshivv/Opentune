@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
@@ -21,14 +22,18 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import com.opentune.ui.components.glass
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import com.opentune.ui.components.icon
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -86,6 +91,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
@@ -106,6 +112,7 @@ import com.opentune.data.library.LibraryStore
 import com.opentune.data.library.PlaylistLinks
 import com.opentune.data.library.PlaylistSync
 import com.opentune.data.library.LikedSync
+import com.opentune.data.library.YtmSync
 import com.opentune.data.model.CARD_ART_PX
 import com.opentune.data.model.PlaylistPrivacy
 import com.opentune.data.model.ShelfItem
@@ -129,7 +136,6 @@ import com.opentune.ui.components.SheetTone
 import com.opentune.ui.components.SongListItem
 import com.opentune.ui.components.meaning
 import com.opentune.ui.components.pressable
-import java.util.Calendar
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.launch
 
@@ -148,10 +154,6 @@ class LibraryNav(
     val importPlaylist: () -> Unit = {},
     val wrapped: () -> Unit = {},
     val history: () -> Unit = {},
-    /** Every playlist, from Show all. */
-    val allPlaylists: () -> Unit = {},
-    /** The playlists brought over from Spotify, on their own page. */
-    val spotify: () -> Unit = {},
     /** An album or playlist downloaded as a whole, by its id. */
     val downloaded: (String) -> Unit = {},
     /** A smart playlist, by its id. */
@@ -199,7 +201,7 @@ internal object LibraryPins {
 private const val YT_PLAYLISTS = "library:ytPlaylists"
 
 /** Wide enough that two and a bit show across a phone, as in the other music apps. */
-private val TILE_WIDTH = 164.dp
+private val TILE_WIDTH = 168.dp
 
 /**
  * Every playlist in Library, the pinned ones first in the order they were pinned,
@@ -246,16 +248,11 @@ private fun rememberPlaylistRows(nav: LibraryNav): List<LibraryPlaylistRow> {
 
 @Composable
 fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: LibraryNav) {
-    val records by History.records.collectAsState()
     val liked by LibraryStore.liked.collectAsState()
     val finished by Downloads.done.collectAsState(Downloads.doneNow())
     val signedIn by AccountStore.signedIn.collectAsState()
     val account by AccountStore.account.collectAsState()
     val libraryUi by AppSettings.ui.collectAsState()
-    val yearStart = remember {
-        Calendar.getInstance().apply { set(Calendar.DAY_OF_YEAR, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0) }.timeInMillis
-    }
-    val summary = remember(records) { History.replay(records, yearStart) }
     LaunchedEffect(signedIn, account?.email) {
         if (signedIn) runCatching { MusicRepository.libraryPlaylists() }
     }
@@ -290,9 +287,43 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
     var naming by remember { mutableStateOf(false) }
     if (naming) NewPlaylistDialog(signedIn, onDismiss = { naming = false }) { name, privacy -> naming = false; nav.playlist(LibraryStore.createPlaylist(name, privacy = privacy)) }
+    // The page's three faces: the page itself, every playlist on it but Spotify's, and Spotify's own.
+    var tab by remember { mutableStateOf(0) }
+    val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
+    val spotifySync by com.opentune.data.spotify.SpotifySync.status.collectAsState()
+    // Opening Spotify's face asks Spotify what changed, behind the list already here.
+    LaunchedEffect(tab, spotifyOn) {
+        if (tab == 2 && spotifyOn) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.opentune.ui.spotify.SpotifyConnection.checkPlaylists()
+        }
+    }
     val doneCount = finished.size
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // One scroll state per face, so each face keeps its place while the faces swipe.
+    val libraryListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val playlistsListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val spotifyListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // The three faces live in a pager: a swipe turns between them, and the pills animate to them.
+    val switchState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = tab) { 3 }
+    LaunchedEffect(pagerState) { androidx.compose.runtime.snapshotFlow { pagerState.currentPage }.collect { tab = it } }
+    // "Show all" opens no page of its own any more: it turns to the Playlists face, from the top.
+    val showAllPlaylists: () -> Unit = { scope.launch { pagerState.animateScrollToPage(1, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing)); playlistsListState.scrollToItem(0) } }
     val rows = rememberPlaylistRows(nav)
+    var spotifyOrder by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PlaylistOrder.LIBRARY) }
+    var spotifySorting by remember { mutableStateOf(false) }
+    val spotifyRows = remember(rows) { rows.filter { it.source == "Spotify" } }
+    var playlistsOrder by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PlaylistOrder.LIBRARY) }
+    var playlistsSorting by remember { mutableStateOf(false) }
+    val allRows = remember(rows) { rows.filter { it.source != "Spotify" } }
+    val shownPlaylists = remember(allRows, playlistsOrder, libraryUi.pinnedPlaylists) {
+        val pinned = allRows.filter { it.pin in libraryUi.pinnedPlaylists }
+        pinned + playlistsOrder.sort(allRows.filter { it !in pinned })
+    }
+    val ytmSync by YtmSync.status.collectAsState()
+    val records by History.records.collectAsState()
+    // Library's Recently played shelf: each track once, latest first.
+    val recentSongs = remember(records) { History.recents(records, 12) }
+    LaunchedEffect(tab) { if (tab == 1) YtmSync.check() }
     // In the list, which sources show all their playlists rather than the first few.
     val openGroups = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
     // The pinned ones, then the most played; Show all has the rest. Spotify's have their own
@@ -303,25 +334,45 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
         (pinned + shownRows.filter { it !in pinned }.sortedByDescending { it.plays }).take(5)
     }
 
-    val page: @Composable () -> Unit = { LazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-        item {
-            PageHeader(com.opentune.ui.theme.tr("Library"), actions = {
-                // History and the account side by side in one glass pill.
-                Row(
-                    Modifier.height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = nav.history) { Icon(Icons.Rounded.History, "Listening history") }
-                    com.opentune.ui.components.AccountButton(nav.settings, plain = true)
+    // One row above the swiping faces: the faces' pills in a glass capsule on the left, the actions in theirs on the right.
+    val header: @Composable () -> Unit = {
+        Row(
+            Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // The faces' pills, in a glass capsule matching the actions'; as they scroll inside it, they dissolve at its ends.
+            Row(
+                Modifier.weight(1f).height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).fadingEdges(switchState),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LibrarySwitch(tab, switchState, { scope.launch { pagerState.animateScrollToPage(it, animationSpec = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing)) } })
+            }
+            Spacer(Modifier.width(10.dp))
+            // History and the account side by side in one glass pill.
+            Row(
+                Modifier.height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // On the playlist faces the pill sorts instead, as on their old pages.
+                when (tab) {
+                    1 -> SortPill(playlistsOrder, playlistsSorting, { playlistsSorting = it }, { playlistsOrder = it })
+                    2 -> SortPill(spotifyOrder, spotifySorting, { spotifySorting = it }, { spotifyOrder = it })
+                    else -> IconButton(onClick = nav.history) { Icon(Icons.Rounded.History, "Listening history") }
                 }
-            })
+                com.opentune.ui.components.AccountButton(nav.settings, plain = true)
+            }
         }
-        item {
-            // This year's listening, a card each for the minutes and the top song, artist and album; opens Replay.
-            val since = remember(records) { memberSince(records.lastOrNull()?.playedAt) }
-            ReplayCards(summary, ReplayRange.YEAR, account?.name ?: com.opentune.data.together.Together.savedName.takeIf { it.isNotBlank() } ?: "You",
-                since, onClick = nav.replay, modifier = Modifier.padding(vertical = 8.dp))
-        }
+    }
+
+    // The faces run full-bleed under the transparent header; their content starts below it.
+    val facePadding = PaddingValues(
+        start = contentPadding.calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+        end = contentPadding.calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+        top = with(androidx.compose.ui.platform.LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() } + 76.dp,
+        bottom = contentPadding.calculateBottomPadding(),
+    )
+
+    val libraryFace: @Composable () -> Unit = { LazyColumn(state = libraryListState, contentPadding = facePadding, modifier = Modifier.fillMaxSize()) {
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -353,28 +404,25 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                         Modifier.weight(1f),
                     )
                 }
-                // Spotify: a row of its own, its playlists on their own page.
-                val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
-                val spotifyLists by LibraryStore.playlists.collectAsState()
-                val fromSpotify = remember(spotifyLists) { spotifyLists.count { it.spotifyId != null } }
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).pressable(nav.spotify, 0.98f)
-                        .padding(start = 4.dp, end = 2.dp, top = 10.dp, bottom = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+            }
+        }
+        if (recentSongs.isNotEmpty()) {
+            item(key = "recent-head") {
+                SectionHeader("Recently played", action = {
+                    TextButton(onClick = nav.history) { Text("Show all", style = MaterialTheme.typography.labelLarge) }
+                })
+            }
+            item(key = "recent-row") {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 ) {
-                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(40.dp))
-                    Column(Modifier.weight(1f).padding(start = 16.dp)) {
-                        Text("Spotify", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            when {
-                                fromSpotify > 0 -> if (fromSpotify == 1) "1 playlist" else com.opentune.i18n.Tr.f("{0} playlists", fromSpotify)
-                                spotifyOn -> "Your playlists"
-                                else -> "Connect or import"
-                            },
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    itemsIndexed(recentSongs, key = { _, song -> song.videoId }) { index, song ->
+                        RecentTile(song, Modifier.width(TILE_WIDTH).animateItem(), playing = song.videoId == actions.currentVideoId && actions.isPlaying) {
+                            actions.playAll(recentSongs, index, false, "Recently played")
+                        }
                     }
-                    Icon(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -387,19 +435,13 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                             else Icon(Icons.Rounded.Refresh, "Refresh YouTube Music playlists", Modifier.size(20.dp))
                         }
                     }
-                    TextButton(onClick = nav.allPlaylists) { Text(if (libraryUi.playlistList) "View all" else "Show all", fontWeight = FontWeight.SemiBold) }
+                    TextButton(onClick = showAllPlaylists) { Text(if (libraryUi.playlistList) "View all" else "Show all", style = MaterialTheme.typography.labelLarge) }
                 }
             })
         }
         if (libraryUi.playlistList) {
-            // The list, as Library had it before the tiles: new and import first, then the
-            // pinned ones and each source's own, five of each until "Show more".
-            item(key = "playlist-new") { ActionLine(Icons.Rounded.Add, "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
-            item(key = "playlist-import") {
-                ActionLine(null, "Import a playlist", "From a Spotify or YouTube Music link", onClick = nav.importPlaylist, picture = {
-                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(30.dp))
-                })
-            }
+            // The list, as Library had it before the tiles: the pinned ones and each
+            // source's own, five of each until "Show more".
             playlistGroups(shownRows, libraryUi.pinnedPlaylists).forEach { (group, inGroup) ->
                 item(key = "group:$group") { GroupLabel(group) }
                 val open = group == PINNED || openGroups[group] == true
@@ -413,28 +455,258 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
             }
         } else item(key = "playlist-tiles") {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             ) {
-                item(key = "new") { NewPlaylistTile(signedIn, { naming = true }, Modifier.width(TILE_WIDTH)) }
-                item(key = "import") {
-                    ActionTile("Import Spotify", "From a playlist link", nav.importPlaylist, Modifier.width(TILE_WIDTH)) {
-                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(64.dp))
-                    }
-                }
-                item(key = "liked") { LikedTile(liked.size, nav.liked, Modifier.width(TILE_WIDTH)) }
                 items(top, key = { it.key }) { row -> PlaylistTile(row, Modifier.width(TILE_WIDTH).animateItem()) }
             }
         }
         item(key = "smart-playlists") { SmartPlaylistsRow(nav.smart, nav.newSmart, TILE_WIDTH) }
     } }
 
+    val playlistsFace: @Composable () -> Unit = { LazyColumn(state = playlistsListState, contentPadding = facePadding, modifier = Modifier.fillMaxSize()) {
+        // YouTube Music's sync pill, general here: the whole check, as Spotify's face carries its own.
+        item(key = "tab-yt-sync") { YtmSyncPill(ytmSync) }
+        if (signedIn && !ytmSync.running) {
+            val ytRows = shownPlaylists.count { it.source == "YouTube Music" }
+            val signedOut = ytmSync.error?.contains("signed in") == true
+            val problem = when {
+                signedOut -> ytmSync.error
+                ytRows == 0 && ytmSync.lastSynced > 0 && ytmSync.error == null -> "No YouTube Music playlists were found on this account."
+                else -> null
+            }
+            if (problem != null) item(key = "tab-yt-problem") {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(start = 16.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(problem, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    androidx.compose.material3.TextButton(onClick = {
+                        if (signedOut) nav.settings() else YtmSync.check(force = true)
+                    }) { Text(if (signedOut) "Settings" else "Try again") }
+                }
+            }
+        }
+        if (libraryUi.playlistList) {
+            item(key = "tab-new") { ActionLine(Icons.Rounded.Add, "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
+            item(key = "tab-liked") { ActionLine(Icons.Rounded.Favorite, "Liked songs", com.opentune.i18n.Tr.f("{0} songs", liked.size), onClick = nav.liked) }
+            items(shownPlaylists, key = { it.key }) { row -> PlaylistLine(row, Modifier.animateItem()) }
+        } else {
+            item(key = "tab-tiles-head") {
+                Row(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    NewPlaylistTile(signedIn, { naming = true }, Modifier.weight(1f))
+                    LikedTile(liked.size, nav.liked, Modifier.weight(1f))
+                }
+            }
+            items(shownPlaylists.chunked(2), key = { it.first().key }) { pair ->
+                Row(Modifier.animateItem().padding(horizontal = 10.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    pair.forEach { row -> PlaylistTile(row, Modifier.weight(1f)) }
+                    if (pair.size == 1) Box(Modifier.weight(1f))
+                }
+            }
+        }
+    } }
+
+    val spotifyFace: @Composable () -> Unit = { LazyColumn(state = spotifyListState, contentPadding = facePadding, modifier = Modifier.fillMaxSize()) {
+        if (!spotifyOn) item(key = "spotify-connect") {
+            Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(72.dp))
+                Text(
+                    "Connect Spotify to bring your playlists here, or import one from a link.",
+                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                androidx.compose.material3.Button(onClick = nav.importPlaylist) { Text("Connect or import") }
+            }
+        } else {
+            item(key = "spotify-sync") { com.opentune.ui.spotify.SpotifySyncPill(spotifySync) }
+            // Under the sync pill: bringing a playlist over from a link.
+            if (libraryUi.playlistList) item(key = "spotify-import") {
+                ActionLine(null, "Import a playlist", "From a Spotify or YouTube Music link", onClick = nav.importPlaylist, picture = {
+                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(30.dp))
+                })
+            }
+            val pinnedSpotify = spotifyRows.filter { it.pin in libraryUi.pinnedPlaylists }
+            val shownSpotify = pinnedSpotify + spotifyOrder.sort(spotifyRows.filter { it !in pinnedSpotify })
+            if (shownSpotify.isEmpty()) item(key = "spotify-waiting") {
+                Text(
+                    "Your Spotify playlists appear here after the next sync.",
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
+                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
+            if (libraryUi.playlistList) {
+                items(shownSpotify, key = { it.key }) { row -> PlaylistLine(row, Modifier.animateItem()) }
+            } else {
+                // The import card is the grid's first cell, flowing with the playlists.
+                val cells = listOf<LibraryPlaylistRow?>(null) + shownSpotify
+                items(cells.chunked(2), key = { it.first()?.key ?: "spotify-import" }) { pair ->
+                    Row(Modifier.animateItem().padding(horizontal = 10.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        pair.forEach { row ->
+                            if (row == null) {
+                                ActionTile("Import Spotify", "From a playlist link", nav.importPlaylist, Modifier.weight(1f)) {
+                                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(64.dp))
+                                }
+                            } else {
+                                PlaylistTile(row, Modifier.weight(1f))
+                            }
+                        }
+                        if (pair.size == 1) Box(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    } }
+
+    // The active face's first playlist cover washes the page, as on the old pages.
+    val framed: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize()) {
+            if (tab == 1) TabWash(shownPlaylists, playlistsListState)
+            else if (tab == 2 && spotifyOn) TabWash(spotifyRows, spotifyListState)
+            androidx.compose.foundation.pager.HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1,
+            ) { face ->
+                when (face) {
+                    0 -> libraryFace()
+                    1 -> playlistsFace()
+                    else -> spotifyFace()
+                }
+            }
+            // The header floats over the faces, transparent: their content scrolls under its glass.
+            header()
+        }
+    }
     // Pull to refresh only when there's an account to refresh from.
     if (signedIn) {
-        com.opentune.ui.components.MarkRefreshBox(isRefreshing = refreshing && pulled, onRefresh = { pulled = true; refresh() }, modifier = Modifier.fillMaxSize()) { page() }
+        com.opentune.ui.components.MarkRefreshBox(isRefreshing = refreshing && pulled, onRefresh = { pulled = true; refresh() }, modifier = Modifier.fillMaxSize()) { framed() }
     } else {
-        page()
+        framed()
+    }
+}
+
+/** Behind a playlist face: the cover of the first playlist in view, blurred across the top and running down into its colour, following the scroll — as on the old pages. */
+@Composable
+private fun TabWash(rows: List<LibraryPlaylistRow>, listState: androidx.compose.foundation.lazy.LazyListState) {
+    val byKey = remember(rows) { rows.associateBy { it.key } }
+    val coverUrl by remember(byKey) {
+        androidx.compose.runtime.derivedStateOf {
+            listState.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item ->
+                byKey[item.key]?.let { it.url ?: it.local?.songs?.firstOrNull()?.thumbnailUrl }
+            }?.artworkAt(CARD_ART_PX)
+        }
+    }
+    val seed = com.opentune.ui.theme.rememberArtworkSeed(coverUrl)
+    val background = MaterialTheme.colorScheme.background
+    val accent by androidx.compose.animation.animateColorAsState(
+        seed?.let { androidx.compose.ui.graphics.lerp(background, it, 0.24f) } ?: background,
+        androidx.compose.animation.core.tween(800), label = "tabAccent",
+    )
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(0f to accent, 0.6f to accent, 1f to androidx.compose.ui.graphics.lerp(background, accent, 0.45f)),
+        ),
+    ) {
+        coverUrl?.let { CoverWash(it, accent, Modifier.fillMaxWidth().height(440.dp)) }
+    }
+}
+
+/** The sort button and its menu, as the playlist pages carry in their top pill. */
+@Composable
+private fun SortPill(order: PlaylistOrder, sorting: Boolean, onSorting: (Boolean) -> Unit, onOrder: (PlaylistOrder) -> Unit) {
+    Box {
+        IconButton(onClick = { onSorting(true) }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort playlists") }
+        androidx.compose.material3.DropdownMenu(sorting, { onSorting(false) }, shape = RoundedCornerShape(20.dp)) {
+            PlaylistOrder.entries.forEach { o ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(o.label, fontWeight = if (o == order) FontWeight.SemiBold else null) },
+                    trailingIcon = if (o == order) ({ Icon(Icons.Rounded.Check, null) }) else null,
+                    onClick = { onOrder(o); onSorting(false) },
+                )
+            }
+        }
+    }
+}
+
+/** A lazy row's edges, dissolved while there's more to reach that way: what slides to an end fades out instead of clipping against it, and an end already reached shows no fade. */
+private fun Modifier.fadingEdges(state: androidx.compose.foundation.lazy.LazyListState): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val fade = 28.dp.toPx()
+        // Each edge's fade grows and melts with how much is hidden past it, so it
+        // eases in and out as you scroll instead of snapping on and off.
+        val info = state.layoutInfo
+        // A fade only ever covers what is actually cut off at that edge: a pill
+        // sitting whole inside the capsule is never dissolved. The left cut is the
+        // list's own scroll offset — the one measure that stays true while the row
+        // is mid-animation (item offsets lag a frame behind an animated scroll).
+        val left = (state.firstVisibleItemScrollOffset / fade).coerceIn(0f, 1f)
+        val last = info.visibleItemsInfo.lastOrNull()
+        val right = if (last == null) 0f else ((last.offset + last.size - info.viewportSize.width) / fade).coerceIn(0f, 1f)
+        // The row itself is clipped to the container's inner round (in
+        // LibrarySwitch), so a pill leaves through a round window like the
+        // container's outside; this only softens that round exit.
+        if (left > 0f) {
+            drawRect(
+                brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    listOf(Color.Black.copy(alpha = left), Color.Transparent),
+                    startX = 0f,
+                    endX = fade,
+                ),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstOut,
+            )
+        }
+        if (right > 0f) {
+            drawRect(
+                brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    listOf(Color.Transparent, Color.Black.copy(alpha = right)),
+                    startX = size.width - fade,
+                    endX = size.width,
+                ),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstOut,
+            )
+        }
+    }
+
+/** The pills where Library's title was: the page itself, its playlists, and Spotify's own face. */
+@Composable
+private fun LibrarySwitch(tab: Int, rowState: androidx.compose.foundation.lazy.LazyListState, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    // The selected pill is always kept in sight: the row scrolls it into view on its own.
+    LaunchedEffect(tab) { rowState.animateScrollToItem(tab) }
+    androidx.compose.foundation.lazy.LazyRow(
+        state = rowState,
+        modifier = modifier.fillMaxHeight().clip(androidx.compose.foundation.shape.RoundedCornerShape(50)),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        item { SwitchPill(com.opentune.ui.theme.tr("Library"), selected = tab == 0, glyph = { tint -> Icon(Icons.Rounded.LibraryMusic, null, Modifier.size(20.dp), tint = tint) }) { onSelect(0) } }
+        item { SwitchPill("Playlists", selected = tab == 1, glyph = { tint -> Icon(Icons.AutoMirrored.Rounded.PlaylistPlay, null, Modifier.size(20.dp), tint = tint) }) { onSelect(1) } }
+        item {
+            SwitchPill("Spotify", selected = tab == 2, glyph = {
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(20.dp))
+            }) { onSelect(2) }
+        }
+    }
+}
+
+@Composable
+private fun SwitchPill(label: String, selected: Boolean, glyph: @Composable (Color) -> Unit, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val content = if (selected) scheme.surface else scheme.onSurfaceVariant
+    Row(
+        modifier.clip(RoundedCornerShape(50)).background(if (selected) scheme.onSurface else Color.Transparent)
+            .clickable(onClick = onClick).height(44.dp).padding(horizontal = 22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        glyph(content)
+        Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = content)
     }
 }
 
@@ -451,170 +723,6 @@ private enum class PlaylistOrder(val label: String) {
     }
 }
 
-/** Every playlist, two to a row, from "Show all" on Library. */
-@Composable
-fun AllPlaylistsScreen(
-    contentPadding: PaddingValues,
-    nav: LibraryNav,
-    onBack: () -> Unit,
-    /** Only Spotify's playlists, on the Spotify page; otherwise every playlist but Spotify's, which have that page. */
-    spotify: Boolean = false,
-) {
-    val liked by LibraryStore.liked.collectAsState()
-    val signedIn by AccountStore.signedIn.collectAsState()
-    val pinned = AppSettings.ui.collectAsState().value.pinnedPlaylists
-    var order by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PlaylistOrder.LIBRARY) }
-    var sorting by remember { mutableStateOf(false) }
-    var naming by remember { mutableStateOf(false) }
-    if (naming) NewPlaylistDialog(signedIn, onDismiss = { naming = false }) { name, privacy -> naming = false; nav.playlist(LibraryStore.createPlaylist(name, privacy = privacy)) }
-    // The Spotify page: Spotify's playlists. Show all: the rest, and a Spotify one only when pinned.
-    val rows = rememberPlaylistRows(nav).filter { if (spotify) it.source == "Spotify" else it.source != "Spotify" || it.pin in pinned }
-    val spotifyOn by com.opentune.ui.spotify.SpotifyConnection.connected.collectAsState()
-    // Show all brings the account's YouTube Music playlists up to date as it opens, behind what's
-    // already here, and says so plainly when it can't, rather than leaving the page looking empty.
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var library by remember { mutableStateOf<YouTubeLoad>(YouTubeLoad.Idle) }
-    val loadLibrary: () -> Unit = {
-        if (signedIn && !spotify && library != YouTubeLoad.Loading) scope.launch {
-            library = YouTubeLoad.Loading
-            library = try {
-                MusicRepository.libraryPlaylists()
-                YouTubeLoad.Done
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: com.opentune.data.LibrarySignedOut) {
-                YouTubeLoad.Failed("YouTube Music says this phone isn't signed in any more. Sign in again from Settings.")
-            } catch (_: Exception) {
-                YouTubeLoad.Failed("Couldn't reach YouTube Music just now. Check the connection and try again.")
-            }
-        }
-    }
-    LaunchedEffect(signedIn, spotify) { loadLibrary() }
-    // The Spotify page asks Spotify what changed as it opens, behind the list already here, so it
-    // shows at once; only playlists added or changed there are read, and removed ones go.
-    val spotifySync by com.opentune.data.spotify.SpotifySync.status.collectAsState()
-    if (spotify) LaunchedEffect(spotifyOn) {
-        if (spotifyOn) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            com.opentune.ui.spotify.SpotifyConnection.checkPlaylists()
-        }
-    }
-    val shown = remember(rows, order, pinned) {
-        val top = rows.filter { it.pin in pinned }
-        top + order.sort(rows.filter { it !in top })
-    }
-    val asList = AppSettings.ui.collectAsState().value.playlistList
-    val full = androidx.compose.foundation.lazy.grid.GridItemSpan(if (asList) 1 else 2)
-    val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
-    // Behind it all, the cover of the first playlist in view, blurred across the top and running
-    // down into its colour; as the page scrolls, both follow the playlists on screen.
-    val byKey = remember(shown) { shown.associateBy { it.key } }
-    val coverUrl by remember(byKey) {
-        androidx.compose.runtime.derivedStateOf {
-            grid.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item ->
-                byKey[item.key]?.let { it.url ?: it.local?.songs?.firstOrNull()?.thumbnailUrl }
-            }?.artworkAt(CARD_ART_PX)
-        }
-    }
-    val seed = com.opentune.ui.theme.rememberArtworkSeed(coverUrl)
-    val background = MaterialTheme.colorScheme.background
-    val accent by androidx.compose.animation.animateColorAsState(
-        seed?.let { androidx.compose.ui.graphics.lerp(background, it, 0.24f) } ?: background,
-        androidx.compose.animation.core.tween(800), label = "playlistsAccent",
-    )
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to accent, 0.6f to accent,
-        1f to androidx.compose.ui.graphics.lerp(background, accent, 0.45f)))) {
-        coverUrl?.let { CoverWash(it, accent, Modifier.fillMaxWidth().height(440.dp)) }
-        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-            state = grid,
-            // Two tiles to a row, or one playlist to a line when Library shows them as a list.
-            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(if (asList) 1 else 2),
-            contentPadding = contentPadding,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(if (asList) 0.dp else 10.dp),
-            modifier = Modifier.fillMaxSize().padding(horizontal = if (asList) 0.dp else 10.dp),
-        ) {
-            item(key = "header", span = { full }) {
-                PageHeader(if (spotify) "Spotify" else com.opentune.ui.theme.tr("Playlists"), onBack = onBack, actions = {
-                    // Sorting and the account in one glass pill, as on Library.
-                    Row(
-                        Modifier.height(54.dp).glass(androidx.compose.foundation.shape.CircleShape).padding(horizontal = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box {
-                            IconButton(onClick = { sorting = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort playlists") }
-                            androidx.compose.material3.DropdownMenu(sorting, { sorting = false }, shape = RoundedCornerShape(20.dp)) {
-                                PlaylistOrder.entries.forEach { o ->
-                                    androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text(o.label, fontWeight = if (o == order) FontWeight.SemiBold else null) },
-                                        trailingIcon = if (o == order) ({ Icon(Icons.Rounded.Check, null) }) else null,
-                                        onClick = { order = o; sorting = false },
-                                    )
-                                }
-                            }
-                        }
-                        com.opentune.ui.components.AccountButton(nav.settings, plain = true)
-                    }
-                })
-            }
-            // What the check is doing, in a small pill under the title; then what it found, briefly.
-            if (spotify) item(key = "syncing", span = { full }) { com.opentune.ui.spotify.SpotifySyncPill(spotifySync) }
-            // The same for YouTube Music's: a bar while it loads, and a line with a way to try again when it didn't.
-            if (!spotify && library == YouTubeLoad.Loading) item(key = "yt-loading", span = { full }) {
-                androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(2.dp))
-            }
-            if (!spotify && signedIn && library != YouTubeLoad.Loading) {
-                val ytRows = shown.count { it.source == "YouTube Music" }
-                val problem = (library as? YouTubeLoad.Failed)?.reason
-                    ?: if (ytRows == 0 && library == YouTubeLoad.Done) "No YouTube Music playlists were found on this account." else null
-                if (problem != null) item(key = "yt-problem", span = { full }) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(start = 16.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(problem, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        androidx.compose.material3.TextButton(onClick = {
-                            loadLibrary()
-                            if (library is YouTubeLoad.Failed && (library as YouTubeLoad.Failed).reason.contains("signed in")) nav.settings()
-                        }) { Text(if ((library as? YouTubeLoad.Failed)?.reason?.contains("signed in") == true) "Settings" else "Try again") }
-                    }
-                }
-            }
-            if (spotify) {
-                if (shown.isEmpty()) item(key = "spotify-empty", span = { full }) {
-                    Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.opentune.R.drawable.ic_spotify), null, Modifier.size(72.dp))
-                        Text(
-                            if (spotifyOn) "Your Spotify playlists appear here after the next sync." else "Connect Spotify to bring your playlists here, or import one from a link.",
-                            style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        )
-                        androidx.compose.material3.Button(onClick = nav.importPlaylist) { Text(if (spotifyOn) "Import a playlist" else "Connect or import") }
-                    }
-                }
-                if (asList) items(shown.size, key = { shown[it].key }) { i -> PlaylistLine(shown[i], Modifier.animateItem()) }
-                else items(shown.size, key = { shown[it].key }) { i -> PlaylistTile(shown[i], Modifier.animateItem()) }
-            } else if (asList) {
-                item(key = "new") { ActionLine(Icons.Rounded.Add, "New playlist", if (signedIn) "Here and on YouTube Music" else "On this phone") { naming = true } }
-                item(key = "liked") { ActionLine(Icons.Rounded.Favorite, "Liked songs", com.opentune.i18n.Tr.f("{0} songs", liked.size), onClick = nav.liked) }
-                items(shown.size, key = { shown[it].key }) { i -> PlaylistLine(shown[i], Modifier.animateItem()) }
-            } else {
-                item(key = "new") { NewPlaylistTile(signedIn, { naming = true }) }
-                item(key = "liked") { LikedTile(liked.size, nav.liked) }
-                items(shown.size, key = { shown[it].key }) { i -> PlaylistTile(shown[i], Modifier.animateItem()) }
-            }
-        }
-    }
-}
-
-/** Where bringing the account's YouTube Music playlists up to date has got to, for the Show all page. */
-private sealed interface YouTubeLoad {
-    data object Idle : YouTubeLoad
-    data object Loading : YouTubeLoad
-    data object Done : YouTubeLoad
-    data class Failed(val reason: String) : YouTubeLoad
-}
 
 /**
  * A cover blurred and spread wide, fading down into [into]. Before Android 12, which
@@ -674,8 +782,8 @@ private fun LikedTile(count: Int, onClick: () -> Unit, modifier: Modifier = Modi
 
 @Composable
 private fun TileText(title: String, subtitle: String) {
-    Text(title, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-        maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(title, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall,
+        maxLines = 2, overflow = TextOverflow.Ellipsis)
     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
@@ -794,12 +902,30 @@ private const val LIST_FOLD = 5
 @Composable
 private fun PlaylistTile(row: LibraryPlaylistRow, modifier: Modifier = Modifier) {
     PinnableRow(row.pin, modifier) { onLongClick ->
-        Column(Modifier.clip(MaterialTheme.shapes.large).then(Modifier.menuClickable(onClick = row.onClick, onLongClick = onLongClick)).padding(6.dp)) {
+        Column(Modifier.clip(MaterialTheme.shapes.medium).then(Modifier.menuClickable(onClick = row.onClick, onLongClick = onLongClick)).padding(6.dp)) {
             if (row.local != null && row.url == null) com.opentune.ui.components.PlaylistCover(row.title,
-                row.local.songs.map { it.thumbnailUrl }, Modifier.fillMaxWidth().aspectRatio(1f))
-            else Artwork(row.url.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.large)
+                row.local.songs.map { it.thumbnailUrl }, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.medium, named = false)
+            else Artwork(row.url.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.medium)
             TileText(row.title, if (row.local != null) "${row.source} · ${row.subtitle}" else row.subtitle)
         }
+    }
+}
+
+/** A recently played song on Library's shelf: its cover with a play button over its corner, its name and artist under it. A tap plays the shelf from that song; while that song is the one playing, the button says so. */
+@Composable
+private fun RecentTile(song: Song, modifier: Modifier = Modifier, playing: Boolean = false, onPlay: () -> Unit) {
+    Column(modifier.clip(MaterialTheme.shapes.medium).then(Modifier.menuClickable(onClick = onPlay, onLongClick = {})).padding(6.dp)) {
+        Box {
+            Artwork(song.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.medium)
+            Box(
+                Modifier.align(Alignment.BottomEnd).padding(8.dp).size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.surface)
+            }
+        }
+        TileText(song.title, song.artist)
     }
 }
 
@@ -1193,7 +1319,6 @@ internal val LocalNavFrostBelow = androidx.compose.runtime.compositionLocalOf { 
 fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () -> Unit) {
     val liked by LibraryStore.liked.collectAsState()
     val storeReady by LibraryStore.ready.collectAsState()
-    val likedSync by LikedSync.status.collectAsState()
     val signedIn by AccountStore.signedIn.collectAsState()
     LaunchedEffect(signedIn) { if (signedIn) LikedSync.sync() }
     val songs = remember(liked) { liked.map { it.toSong() } }
@@ -1321,7 +1446,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                             listState = listState,
                         )
                     }
-                    if (!searching) item(key = "liked-sync") { LikedSyncPill(likedSync) }
+
                     if (songs.isEmpty()) {
                         item {
                             MessageState(Icons.Rounded.Favorite, "No liked songs", Modifier.padding(top = 32.dp), message = "Tap the heart in the player, or Like in a song's menu.")
