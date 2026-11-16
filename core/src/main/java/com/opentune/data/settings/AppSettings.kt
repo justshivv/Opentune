@@ -458,6 +458,8 @@ data class InterfaceSettings(
     val coverCornerDp: Int = 28,
     val coverColorBackground: Boolean = false,
     val hideVolumeBar: Boolean = false,
+    /** Volume keys move the volume without Android's panel; only offered while the player's own slider is shown. */
+    val hideDeviceVolumeBar: Boolean = false,
     val hideSongStatus: Boolean = false,
     val hideOutputDevice: Boolean = false,
     /** The Comments button in the player (in the pill beside the audio output) and in the song's menu. */

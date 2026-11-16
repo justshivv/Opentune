@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
             val memory = getSystemService(android.app.ActivityManager::class.java)
             val info = android.app.ActivityManager.MemoryInfo().also { memory?.getMemoryInfo(it) }
             val slow = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q ||
-                memory?.isLowRamDevice == true || info.totalMem in 1 until LITE_MEMORY_BYTES
+                    memory?.isLowRamDevice == true || info.totalMem in 1 until LITE_MEMORY_BYTES
             AppSettings.updateUi { (if (slow) com.opentune.data.settings.liteModeApplied(it, true) else it).copy(liteChecked = true) }
         }
         setContent {
@@ -74,37 +74,74 @@ class MainActivity : ComponentActivity() {
             OpenTuneTheme(theme, artworkSeed = rememberArtworkSeed(song?.thumbnailUrl)) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     androidx.compose.foundation.layout.Box {
-                    // More than two releases behind, the app is only its update screen until it's updated.
-                    val required by com.opentune.data.UpdateLock.required.collectAsState()
-                    val behind by com.opentune.data.UpdateLock.behind.collectAsState()
-                    LaunchedEffect(required) { if (required != null && vm.isPlaying.value) vm.togglePlayPause() }
-                    if (required != null) com.opentune.ui.settings.UpdateRequiredScreen(required!!, behind) else {
-                    // A fresh install's welcome comes first; Home, built after it, starts from the picks.
-                    androidx.compose.animation.AnimatedContent(
-                        ui.welcome == WelcomeState.DUE,
-                        transitionSpec = {
-                            if (ui.reduceAnimation) {
-                                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) togetherWith
-                                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
-                            } else {
-                                (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(320, delayMillis = 80)) +
-                                    androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(420), initialScale = 0.96f)) togetherWith
-                                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200))
+                        // More than two releases behind, the app is only its update screen until it's updated.
+                        val required by com.opentune.data.UpdateLock.required.collectAsState()
+                        val behind by com.opentune.data.UpdateLock.behind.collectAsState()
+                        LaunchedEffect(required) { if (required != null && vm.isPlaying.value) vm.togglePlayPause() }
+                        if (required != null) com.opentune.ui.settings.UpdateRequiredScreen(required!!, behind) else {
+                            // A fresh install's welcome comes first; Home, built after it, starts from the picks.
+                            androidx.compose.animation.AnimatedContent(
+                                ui.welcome == WelcomeState.DUE,
+                                transitionSpec = {
+                                    if (ui.reduceAnimation) {
+                                        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) togetherWith
+                                                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
+                                    } else {
+                                        (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(320, delayMillis = 80)) +
+                                                androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(420), initialScale = 0.96f)) togetherWith
+                                                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200))
+                                    }
+                                },
+                                label = "welcome",
+                            ) { welcome ->
+                                val page: @androidx.compose.runtime.Composable () -> Unit = {
+                                    if (welcome) WelcomeScreen(onDone = {}) else AppRoot(vm)
+                                }
+                                page()
                             }
-                        },
-                        label = "welcome",
-                    ) { welcome ->
-                        val page: @androidx.compose.runtime.Composable () -> Unit = {
-                            if (welcome) WelcomeScreen(onDone = {}) else AppRoot(vm)
                         }
-                        page()
-                    }
-                    }
-                    com.opentune.ui.account.ConfirmPairing()
+                        com.opentune.ui.account.ConfirmPairing()
                     }
                 }
             }
         }
+    }
+
+    /**
+     * With the device volume bar hidden (a player choice), the volume keys move
+     * the music volume without Android's panel, but only while the big player
+     * is open. The choice counts only while the player's own volume slider is
+     * shown too, so one volume control is always on screen; the player's
+     * slider follows the keys on its own.
+     */
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        if (silentVolumeKey(keyCode)) {
+            val direction = if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) {
+                android.media.AudioManager.ADJUST_RAISE
+            } else {
+                android.media.AudioManager.ADJUST_LOWER
+            }
+            // No FLAG_SHOW_UI: the volume moves, the panel stays away.
+            getSystemService(android.media.AudioManager::class.java)
+                ?.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, direction, 0)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        if (silentVolumeKey(keyCode)) return true
+        return super.onKeyUp(keyCode, event)
+    }
+
+    /** The same PlayerViewModel the content uses; its playerOpen flag gates the keys. */
+    private val playerVm by lazy { androidx.lifecycle.ViewModelProvider(this)[PlayerViewModel::class.java] }
+
+    /** True for a volume key press the app should take silently: the setting on, the player's slider shown, the big player open. */
+    private fun silentVolumeKey(keyCode: Int): Boolean {
+        if (keyCode != android.view.KeyEvent.KEYCODE_VOLUME_UP && keyCode != android.view.KeyEvent.KEYCODE_VOLUME_DOWN) return false
+        val ui = AppSettings.ui.value
+        return ui.hideDeviceVolumeBar && !ui.hideVolumeBar && playerVm.playerOpen.value
     }
 
     override fun onStart() {

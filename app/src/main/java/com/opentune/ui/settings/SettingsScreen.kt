@@ -1827,6 +1827,9 @@ private fun settingsSections(
                 Entry("Hide volume bar", "player slider") {
                     ToggleRow("Hide volume bar", ui.hideVolumeBar, { v -> AppSettings.updateUi { it.copy(hideVolumeBar = v) } }, summary = "Removes the volume slider from the player", icon = Icons.AutoMirrored.Rounded.VolumeOff)
                 },
+                Entry("Hide device volume bar", "system volume panel keys") {
+                    ToggleRow("Hide device volume bar", ui.hideDeviceVolumeBar, { v -> AppSettings.updateUi { it.copy(hideDeviceVolumeBar = v) } }, summary = "Volume keys change the volume with no Android panel over the player; needs the volume slider shown", icon = Icons.AutoMirrored.Rounded.VolumeUp, enabled = !ui.hideVolumeBar)
+                },
                 Entry("Lyrics preview", "player lyrics line apple music classic theme") {
                     ToggleRow("Lyrics preview", ui.lyricsPreview, { v -> AppSettings.updateUi { it.copy(lyricsPreview = v) } },
                         summary = "Show the current lyric on the player in every theme", icon = Icons.Rounded.Lyrics)
