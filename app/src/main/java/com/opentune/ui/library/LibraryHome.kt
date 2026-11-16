@@ -96,6 +96,7 @@ import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.FloatingDialog
 import com.opentune.ui.components.GlassIconButton
 import com.opentune.ui.components.MessageState
+import com.opentune.ui.components.NowPlayingBars
 import com.opentune.ui.components.PageHeader
 import com.opentune.ui.components.PrivacySheet
 import com.opentune.ui.components.PrivateShareDialog
@@ -292,8 +293,10 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     }
     val ytmSync by YtmSync.status.collectAsState()
     val records by History.records.collectAsState()
-    // Library's Recently played shelf: each track once, latest first.
-    val recentSongs = remember(records) { History.recents(records, 12) }
+    // Library's Recently played shelf: this app's own listens only (the
+    // account's listens live on the history page's Remote tab), each track
+    // once, latest first.
+    val recentSongs = remember(records) { History.recents(records.filter { !it.fromAccount }, 12) }
     LaunchedEffect(tab) { if (tab == 1) YtmSync.check() }
     // In the list, which sources show all their playlists rather than the first few.
     val openGroups = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
@@ -390,7 +393,7 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 ) {
                     itemsIndexed(recentSongs, key = { _, song -> song.videoId }) { index, song ->
-                        RecentTile(song, Modifier.width(TILE_WIDTH).animateItem(), playing = song.videoId == actions.currentVideoId && actions.isPlaying) {
+                        RecentTile(song, Modifier.width(TILE_WIDTH).animateItem(), current = song.videoId == actions.currentVideoId, playing = actions.isPlaying) {
                             actions.playAll(recentSongs, index, false, "Recently played")
                         }
                     }
@@ -882,23 +885,26 @@ private fun PlaylistTile(row: LibraryPlaylistRow, modifier: Modifier = Modifier)
     }
 }
 
-/** A recently played song on Library's shelf: its cover with a play button over its corner, its name and artist under it. A tap plays the shelf from that song; while that song is the one playing, the button says so. */
+/** A recently played song on Library's shelf: its cover, its name and artist under it. A tap plays the shelf from that song. The song the player has now wears a small badge of level bars over its corner: dancing while it plays, resting low while it is paused. */
 @Composable
-private fun RecentTile(song: Song, modifier: Modifier = Modifier, playing: Boolean = false, onPlay: () -> Unit) {
+private fun RecentTile(song: Song, modifier: Modifier = Modifier, current: Boolean = false, playing: Boolean = false, onPlay: () -> Unit) {
     Column(modifier.clip(MaterialTheme.shapes.medium).then(Modifier.menuClickable(onClick = onPlay, onLongClick = {})).padding(6.dp)) {
         Box {
             Artwork(song.thumbnailUrl.artworkAt(CARD_ART_PX), Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.medium)
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(8.dp).size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurface),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(if (playing) ImageVector.vectorResource(AppIcons.Pause) else ImageVector.vectorResource(AppIcons.PlayArrow), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.surface)
+            if (current) {
+                Box(
+                    Modifier.align(Alignment.BottomEnd).padding(8.dp).size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.62f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    NowPlayingBars(playing = playing, color = androidx.compose.ui.graphics.Color.White)
+                }
             }
         }
         TileText(song.title, song.artist)
     }
 }
+
 
 /** [content] with a long press that offers to pin playlist [pin] to the top of Library, or unpin it. */
 @Composable
