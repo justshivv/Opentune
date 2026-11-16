@@ -164,11 +164,25 @@ fun NavRow(
     leading: (@Composable () -> Unit)? = null,
     /** Off where the setting has no effect: dimmed, value and arrow too, and it doesn't open. */
     enabled: Boolean = true,
+    /** A small pill on the right, like a version number; null shows none. */
+    badge: String? = null,
 ) {
     val alpha = if (enabled) 1f else 0.45f
     SettingRow(title, summary = summary, icon = icon, enabled = enabled, onClick = onClick, leading = leading, trailing = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (dot) UpdateDot(Modifier.padding(end = 6.dp))
+            if (badge != null) {
+                Text(
+                    badge,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+                    modifier = Modifier
+                        .padding(end = 6.dp)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(50))
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
             if (value != null) {
                 Text(com.opentune.ui.theme.tr(value), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
             }

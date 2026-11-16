@@ -378,6 +378,7 @@ fun SettingsScreen(
                                         summary = summary,
                                         icon = if (avatar == null) c.icon else null,
                                         dot = c.key == "updates" && updatePending,
+                                        badge = if (c.key == "updates") BuildConfig.VERSION_NAME else null,
                                         leading = avatar?.let { url -> { Artwork(url, Modifier.size(28.dp), CircleShape) } },
                                     )
                                 }
