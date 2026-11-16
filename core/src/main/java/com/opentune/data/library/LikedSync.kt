@@ -68,28 +68,37 @@ object LikedSync {
 
     /** Syncs now, when signed in — unless one is running or just ran. */
     fun sync() {
-        scope.launch {
-            running.lock()
+        scope.launch { awaitSync() }
+    }
+
+    /**
+     * Runs the sync and reports how it went, for a caller reporting a bigger
+     * check ([YtmSync]). When one is already running this waits for it; when
+     * one just ran, or nobody is signed in, it reports the standing status
+     * instead of starting another.
+     */
+    suspend fun awaitSync(): Status {
+        running.lock()
+        try {
+            val account = owner() ?: return _status.value
+            val now = System.currentTimeMillis()
+            if (lastOwner == account && now - lastRun < MIN_INTERVAL_MS) return _status.value
+            _status.value = Status(running = true)
             try {
-                val account = owner() ?: return@launch
-                val now = System.currentTimeMillis()
-                if (lastOwner == account && now - lastRun < MIN_INTERVAL_MS) return@launch
-                _status.value = Status(running = true)
-                try {
-                    val changed = reconcile(account)
-                    lastOwner = account
-                    lastRun = System.currentTimeMillis()
-                    _status.value = Status(changed = changed)
-                } catch (e: CancellationException) {
-                    _status.value = Status()
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "Liked sync didn't finish; it can be retried", e)
-                    _status.value = Status(failed = true)
-                }
-            } finally {
-                running.unlock()
+                val changed = reconcile(account)
+                lastOwner = account
+                lastRun = System.currentTimeMillis()
+                _status.value = Status(changed = changed)
+            } catch (e: CancellationException) {
+                _status.value = Status()
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Liked sync didn't finish; it can be retried", e)
+                _status.value = Status(failed = true)
             }
+            return _status.value
+        } finally {
+            running.unlock()
         }
     }
 
