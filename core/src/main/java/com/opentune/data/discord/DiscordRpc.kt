@@ -68,6 +68,8 @@ object DiscordRpc {
     private const val API = "https://discord.com/api/v10"
     private const val PROJECT_URL = "https://github.com/justshivv/Opentune"
     private const val APP_NAME = "OpenTune"
+    /** The logo's key among the Discord application's Rich Presence assets. */
+    private const val LOGO_ASSET = "logo"
     private const val LABEL_MAX = 32
     private const val TEXT_MAX = 128
     private const val MIN_RETRY_MS = 1_000L
@@ -221,17 +223,26 @@ object DiscordRpc {
         val watch = "https://music.youtube.com/watch?v=${now.videoId}"
         val art = now.artworkUrl?.takeIf { it.startsWith("http") }
         val image = art?.let { externalAsset(token, it) ?: it }
+        // Discord heads the card with the activity's name, so the name carries the
+        // song after the app's: "Listening to OpenTune · <title>", as LastWave's does.
+        val heading = if (now.title.isBlank()) APP_NAME else fit("$APP_NAME · ${now.title}", TEXT_MAX)
         val activity = JSONObject()
             // A type-2 (Listening) activity, the way BitChord shows it: Discord heads
             // the card "Listening to OpenTune", draws the song's progress as a bar
             // from the timestamps, and puts details over state under the artwork.
-            .put("name", APP_NAME)
+            .put("name", heading)
             .put("type", 2)
             .put("details", fit(if (rate != 1f) "${now.title} [${"%.2f".format(rate)}x]" else now.title, TEXT_MAX))
             .put("state", fit(now.artist.ifBlank { "Unknown artist" }, TEXT_MAX))
-            .put("status_display_type", 0)
+            // 2 names the details line: the status reads "Listening to <song>", as on desktop.
+            .put("status_display_type", 2)
             .put("assets", JSONObject().apply {
-                if (image != null) put("large_image", image)
+                if (image != null) {
+                    put("large_image", image)
+                    // The app's mark on the cover's bottom corner, where Discord badges a card.
+                    put("small_image", LOGO_ASSET)
+                    put("small_text", APP_NAME)
+                }
                 now.album?.takeIf { it.isNotBlank() }?.let { put("large_text", fit(it, TEXT_MAX)) }
             })
         if (now.durationMs > 0) {
