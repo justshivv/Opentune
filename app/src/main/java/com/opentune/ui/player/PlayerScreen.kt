@@ -1273,6 +1273,12 @@ fun PlayerLayout(
                             )
                             if (!state.ui.hideVolumeBar && !minimal && roomy) VolumeBar(Modifier.padding(vertical = 4.dp))
                             Spacer(Modifier.height(10.dp))
+                            // The pill's segments are the queue capsule's width; on a screen too narrow
+                            // for three of those between the Lyrics and Queue buttons, they narrow to fit.
+                            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+                            val segments = maxOf(3, listOf(!apple, true, state.ui.commentsButton, apple).count { it })
+                            val segmentWidth = pillSegmentWidth(maxWidth - 52.dp * 2 - 16.dp, segments)
+                            androidx.compose.runtime.CompositionLocalProvider(LocalPillSegmentWidth provides segmentWidth) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 GlassToggle(PlayerIcons.Lyrics, "Lyrics", pane == Pane.LYRICS, { toggle(Pane.LYRICS) })
                                 // One pill that morphs between sleep and output, and the queue's modes.
@@ -1303,7 +1309,7 @@ fun PlayerLayout(
                                             // Apple Music's has where it's playing, then who's listening with you.
                                             if (!apple) {
                                                 PillButton(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true }, enabled = enabled)
-                                                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                                androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
                                             }
                                             PillButton(
                                                 outputRoute.icon,
@@ -1314,12 +1320,12 @@ fun PlayerLayout(
                                                 enabled = enabled,
                                             )
                                             if (state.ui.commentsButton) {
-                                                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                                androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
                                                 PillButton(Icons.Rounded.ChatBubbleOutline, "Comments", showComments, { showComments = true }, enabled = enabled)
                                             }
                                             if (apple) {
                                                 val room by Together.room.collectAsState()
-                                                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = 0.16f)))
+                                                androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
                                                 PillButton(Icons.Rounded.Person, "Listen together", room != null, actions.openTogether, enabled = enabled)
                                             }
                                         }
@@ -1329,6 +1335,8 @@ fun PlayerLayout(
                                     },
                                 )
                                 GlassToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
+                            }
+                            }
                             }
                             if (!minimal && roomy && (sleepLabel != null || !state.ui.hideOutputDevice)) Text(
                                 sleepLabel ?: device,

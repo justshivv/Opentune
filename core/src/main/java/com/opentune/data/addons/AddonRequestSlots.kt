@@ -7,11 +7,13 @@ import java.util.concurrent.ConcurrentHashMap
 /** Keep catalogue fan-out from occupying every slot needed to verify a found stream. */
 internal class AddonRequestSlots {
     private class Host {
-        val network = Semaphore(2)
-        val catalogue = Semaphore(1)
+        val network = Semaphore(3)
+        val catalogue = Semaphore(2)
     }
-    private val network = Semaphore(6)
-    private val catalogue = Semaphore(4)
+    // Preserve the previous six-query/two-per-host catalogue throughput,
+    // with bounded extra capacity for stream resolution and header checks.
+    private val network = Semaphore(8)
+    private val catalogue = Semaphore(6)
     private val hosts = ConcurrentHashMap<String, Host>()
     private val overflow = Host()
 
