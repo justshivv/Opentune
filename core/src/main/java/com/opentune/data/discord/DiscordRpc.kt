@@ -251,7 +251,6 @@ object DiscordRpc {
                 .put("end", wall + ((now.durationMs - now.positionMs).coerceAtLeast(0) / rate).toLong()))
         }
         if (com.opentune.data.isYouTubeId(now.videoId)) {
-            activity.put("details_url", watch)
             activity.put("buttons", JSONArray().put(fit("Listen on YouTube Music", LABEL_MAX)).put(fit("Get OpenTune", LABEL_MAX)))
             activity.put("metadata", JSONObject().put("button_urls", JSONArray().put(watch).put(PROJECT_URL)))
         }
