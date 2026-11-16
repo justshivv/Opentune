@@ -424,7 +424,7 @@ class PlaybackService : MediaLibraryService() {
         }
         scope.launch {
             AppSettings.playback.map { it.preloadUpcoming to it.preloadBoostOnWifi }.distinctUntilChanged().collect {
-                updatePreload()
+                updatePreload(player)
             }
         }
 
@@ -2251,8 +2251,8 @@ class PlaybackService : MediaLibraryService() {
     private fun warmAheadCount(): Int =
         if (isWifiBoosted()) WARM_WIFI_AHEAD else WARM_STANDARD_AHEAD
 
-    private fun updatePreload() {
-        val player = mediaSession?.player as? ExoPlayer ?: return
+    private fun updatePreload(target: ExoPlayer? = null) {
+        val player = target ?: (mediaSession?.player as? ExoPlayer) ?: return
         val durationUs = preloadDurationUs()
         player.preloadConfiguration =
             if (durationUs > 0) ExoPlayer.PreloadConfiguration(durationUs) else ExoPlayer.PreloadConfiguration.DEFAULT
