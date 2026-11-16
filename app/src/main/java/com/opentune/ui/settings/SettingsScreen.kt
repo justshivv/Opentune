@@ -334,7 +334,8 @@ fun SettingsScreen(
                         com.opentune.i18n.Tr.f("OpenTune {0} • GNU GPL v3 • Lyrics from LRCLIB", BuildConfig.VERSION_NAME),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(28.dp),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(28.dp),
                     )
                 }
             }
