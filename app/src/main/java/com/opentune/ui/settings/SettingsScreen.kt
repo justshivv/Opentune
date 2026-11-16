@@ -377,7 +377,7 @@ fun SettingsScreen(
                                         { openKey = c.key },
                                         summary = summary,
                                         icon = if (avatar == null) c.icon else null,
-                                        dot = c.key == "about" && updatePending,
+                                        dot = c.key == "updates" && updatePending,
                                         leading = avatar?.let { url -> { Artwork(url, Modifier.size(28.dp), CircleShape) } },
                                     )
                                 }

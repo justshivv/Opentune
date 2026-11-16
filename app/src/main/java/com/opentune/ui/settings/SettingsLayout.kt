@@ -12,6 +12,7 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /** A page of settings, reached from the list on the main Settings page. */
@@ -31,7 +32,7 @@ internal class SettingsCategory(
 internal val FOLDED_GROUPS = mapOf("Seek bar" to 2)
 
 /** Subsections drawn as a card with no heading over it: the page's title already says what it is. */
-internal val UNLABELLED_GROUPS = setOf("YouTube Music")
+internal val UNLABELLED_GROUPS = setOf("YouTube Music", "Updates")
 
 /** Settings shown as a row on the main Settings page instead of on their category's page; search still finds them. */
 internal val MAIN_PAGE_ONLY = setOf("Audio sources")
@@ -143,9 +144,14 @@ internal val SETTINGS_CATEGORIES = listOf(
         ),
     ),
     SettingsCategory(
-        "about", "About", "Updates, source code and diagnostics", Icons.Rounded.Info,
+        "updates", "Updates", "What's new and checking for new versions", Icons.Rounded.SystemUpdate,
         listOf(
             "Updates" to listOf("What's new", "Check for updates", "Check for updates automatically"),
+        ),
+    ),
+    SettingsCategory(
+        "about", "About", "Source code, community and diagnostics", Icons.Rounded.Info,
+        listOf(
             "Community" to listOf("OpenTune community", "Support OpenTune", "Star on GitHub", "Source code"),
             "Developers" to listOf("justshivv", "aerluc"),
             "Help" to listOf("Show the welcome again", "Count this phone in usage numbers", "Export diagnostics"),
@@ -159,7 +165,7 @@ internal val SETTINGS_HOME = listOf(
     "Listening" to listOf("audio", "playback", "lyrics"),
     "Look and feel" to listOf("look", "player", "motion"),
     "Your music" to listOf("library", "data"),
-    "App" to listOf("about"),
+    "App" to listOf("updates", "about"),
 )
 
 /** For a setting no category names: the page its old section belongs on. */
