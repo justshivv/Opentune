@@ -19,10 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Devices
-import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +39,8 @@ import com.opentune.R
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.theme.Icon
 import com.opentune.ui.theme.Text
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /*
  * The pieces of the Account & integrations page: the YouTube Music card at the top, and one
@@ -61,8 +59,8 @@ internal fun ServiceMark(kind: ServiceKind, size: androidx.compose.ui.unit.Dp = 
         ServiceKind.Discord -> Image(painterResource(R.drawable.ic_discord), "Discord", Modifier.size(size))
         ServiceKind.LastFm -> Monogram("fm", Color(0xFFD51007), Color.White, size)
         ServiceKind.ListenBrainz -> Monogram("LB", Color(0xFFEB743B), Color(0xFF353070), size)
-        ServiceKind.Server -> IconMark(Icons.Rounded.Dns, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer, size)
-        ServiceKind.Devices -> IconMark(Icons.Rounded.Devices, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer, size)
+        ServiceKind.Server -> IconMark(ImageVector.vectorResource(AppIcons.Dns), MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer, size)
+        ServiceKind.Devices -> IconMark(ImageVector.vectorResource(AppIcons.Devices), MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer, size)
     }
 }
 
@@ -177,7 +175,7 @@ internal fun ServiceRow(
             when {
                 trailing != null -> trailing()
                 !connected -> ConnectPill(enabled, onClick)
-                chevron -> Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                chevron -> Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (connected && actions.isNotEmpty()) {

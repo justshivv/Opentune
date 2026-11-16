@@ -30,12 +30,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.PhoneAndroid
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Equalizer
-import androidx.compose.material.icons.rounded.Headphones
-import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material3.FilterChip
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
@@ -86,6 +80,9 @@ import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 private const val MAX_DB = 12f
 /** The graph's frequency span, on a log axis. */
@@ -121,7 +118,7 @@ fun EqualizerScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
                     eq.enabled,
                     { v -> AppSettings.updateEqualizer { it.copy(enabled = v) } },
                     summary = "Boosts are balanced with automatic headroom, so they don't distort",
-                    icon = Icons.Rounded.Equalizer,
+                    icon = ImageVector.vectorResource(AppIcons.Equalizer),
                 )
             }
         }
@@ -144,7 +141,7 @@ fun EqualizerScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
                     }
                     if (eq.bands.any { it != 0f } || eq.bassDb != 0f || eq.trebleDb != 0f || eq.preampDb != 0f) {
                         TextButton(onClick = { AppSettings.updateEqualizer { it.copy(bands = List(EQ_BANDS_HZ.size) { 0f }, bassDb = 0f, trebleDb = 0f, preampDb = 0f) } }) {
-                            Icon(Icons.Rounded.RestartAlt, null, Modifier.size(18.dp))
+                            Icon(ImageVector.vectorResource(AppIcons.RestartAlt), null, Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("Reset")
                         }
@@ -196,7 +193,7 @@ fun EqualizerScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
                     icon = com.opentune.ui.player.PlayerIcons.Headphones,
                 )
                 if (hp != null) {
-                    SettingRow("Turn off headphone correction", icon = Icons.Rounded.Close, onClick = { AppSettings.updateEqualizer { it.copy(headphone = null) } })
+                    SettingRow("Turn off headphone correction", icon = ImageVector.vectorResource(AppIcons.Close), onClick = { AppSettings.updateEqualizer { it.copy(headphone = null) } })
                 }
             }
         }
@@ -214,7 +211,7 @@ fun EqualizerScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
                         },
                         summary = if (effectsOn) "The equalizer that came with your phone, on top of this one"
                         else "The equalizer that came with your phone. Opening it turns on System audio effects",
-                        icon = Icons.Rounded.PhoneAndroid,
+                        icon = ImageVector.vectorResource(AppIcons.PhoneAndroid),
                     )
                 }
             }

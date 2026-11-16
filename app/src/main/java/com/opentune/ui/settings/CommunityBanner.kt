@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -26,6 +24,8 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Discord's channel invite. The whole row is the button: it fills its slot in
@@ -54,7 +54,7 @@ internal fun CommunityBanner(modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White, modifier = Modifier.padding(start = 12.dp))
+        Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), null, tint = Color.White, modifier = Modifier.padding(start = 12.dp))
     }
 }
 

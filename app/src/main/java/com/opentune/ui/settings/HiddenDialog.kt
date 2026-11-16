@@ -11,9 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
 import androidx.compose.material3.TextButton
@@ -30,6 +27,9 @@ import com.opentune.data.model.artworkAt
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.FloatingDialog
 import com.opentune.ui.components.SheetButton
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Songs marked "Not interested" and artists marked "Don't play", each with Unhide. */
 @Composable
@@ -57,13 +57,13 @@ fun HiddenDialog(onDismiss: () -> Unit) {
                     if (hidden.artists.isNotEmpty()) {
                         item { Heading("Artists") }
                         items(hidden.artists, key = { "a:${it.key}" }) { a ->
-                            HiddenRow(null, a.name, null, CircleShape, Icons.Rounded.Person) { LibraryStore.unhideArtist(a.key) }
+                            HiddenRow(null, a.name, null, CircleShape, ImageVector.vectorResource(AppIcons.Person)) { LibraryStore.unhideArtist(a.key) }
                         }
                     }
                     if (hidden.songs.isNotEmpty()) {
                         item { Heading("Songs") }
                         items(hidden.songs, key = { "s:${it.videoId}" }) { s ->
-                            HiddenRow(s.thumbnailUrl.artworkAt(ROW_ART_PX), s.title, s.artist, RoundedCornerShape(8.dp), Icons.Rounded.MusicNote) { LibraryStore.unhideSong(s.videoId) }
+                            HiddenRow(s.thumbnailUrl.artworkAt(ROW_ART_PX), s.title, s.artist, RoundedCornerShape(8.dp), ImageVector.vectorResource(AppIcons.MusicNote)) { LibraryStore.unhideSong(s.videoId) }
                         }
                     }
                 }

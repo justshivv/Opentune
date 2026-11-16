@@ -18,12 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.NotificationsActive
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +45,9 @@ import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.theme.Icon
 import com.opentune.ui.theme.Text
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * The artists followed for new-release alerts: each with their photo, since when, and a
@@ -107,7 +104,7 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
             ) {
                 Box(Modifier.size(36.dp).clip(CircleShape).background(c.primary), contentAlignment = Alignment.Center) {
                     if (checking) CircularProgressIndicator(Modifier.size(18.dp), color = c.onPrimary, strokeWidth = 2.dp)
-                    else Icon(Icons.Rounded.Refresh, null, tint = c.onPrimary, modifier = Modifier.size(20.dp))
+                    else Icon(ImageVector.vectorResource(AppIcons.Refresh), null, tint = c.onPrimary, modifier = Modifier.size(20.dp))
                 }
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
                     Text("Check for new releases", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -130,13 +127,13 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
                     .background(c.onSurface.copy(alpha = FIELD_TINT)).padding(start = 14.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Rounded.Search, null, tint = c.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                Icon(ImageVector.vectorResource(AppIcons.Search), null, tint = c.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 Box(Modifier.weight(1f).padding(start = 10.dp)) {
                     if (query.isEmpty()) Text("Find an artist", style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant)
                     BasicTextField(query, { query = it }, singleLine = true, textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.onSurface),
                         cursorBrush = SolidColor(c.primary), modifier = Modifier.fillMaxWidth())
                 }
-                if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear", Modifier.size(20.dp)) }
+                if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Clear", Modifier.size(20.dp)) }
             }
         },
     ) {
@@ -144,7 +141,7 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
             if (shown.isEmpty()) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(64.dp).clip(CircleShape).background(c.primary.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.NotificationsActive, null, tint = c.primary, modifier = Modifier.size(30.dp))
+                        Icon(ImageVector.vectorResource(AppIcons.NotificationsActive), null, tint = c.primary, modifier = Modifier.size(30.dp))
                     }
                     Spacer(Modifier.height(14.dp))
                     Text("Follow artists to hear about new music", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
@@ -156,7 +153,7 @@ fun FollowedArtistsDialog(onDismiss: () -> Unit) {
             shown.filter { q.isEmpty() || it.name.contains(q, ignoreCase = true) }.forEach { a ->
                 val on = followed.any { it.browseId == a.browseId }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Artwork(a.thumbnailUrl, Modifier.size(52.dp), CircleShape, placeholder = Icons.Rounded.Person)
+                    Artwork(a.thumbnailUrl, Modifier.size(52.dp), CircleShape, placeholder = ImageVector.vectorResource(AppIcons.Person))
                     Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                         Text(a.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(

@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material3.HorizontalDivider
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +40,9 @@ import com.opentune.ui.components.SheetButton
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 private val ROW = 68.dp
 
@@ -97,7 +97,7 @@ fun LyricsSourcesDialog(onDismiss: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
-                            Icons.Rounded.DragHandle,
+                            ImageVector.vectorResource(AppIcons.DragHandle),
                             "Drag to reorder",
                             Modifier
                                 .padding(end = 12.dp)
@@ -137,7 +137,7 @@ fun LyricsSourcesDialog(onDismiss: () -> Unit) {
                             )
                         }
                         Icon(
-                            Icons.Rounded.Check,
+                            ImageVector.vectorResource(AppIcons.Check),
                             if (entry.enabled) "On" else "Off",
                             Modifier.padding(start = 12.dp).size(24.dp),
                             tint = if (entry.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
