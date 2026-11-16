@@ -49,9 +49,14 @@ fun ListeningHistoryScreen(contentPadding: PaddingValues, actions: SongActions, 
         }
     }
     val records by History.records.collectAsState()
+    // The Local tab shows this app's own listens only. Listens brought in
+    // from the account's history are stamped fromAccount: they belong to
+    // the Remote tab, which reads them live from the account. They stay in
+    // the store itself, where Recents and Replay use them.
+    val local = remember(records) { records.filter { !it.fromAccount } }
     // Each song once, at its latest play — like the account's own history —
     // instead of a row for every single play.
-    val ordered = remember(records) { records.sortedByDescending { it.playedAt }.distinctBy { it.videoId } }
+    val ordered = remember(local) { local.sortedByDescending { it.playedAt }.distinctBy { it.videoId } }
     val songs = remember(ordered) { ordered.map { it.toSong() } }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item { PageHeader("Listening history", onBack = onBack) }
