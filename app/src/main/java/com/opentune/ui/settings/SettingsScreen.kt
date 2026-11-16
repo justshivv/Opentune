@@ -503,6 +503,7 @@ private fun settingsSections(
     var dockMotionDialog by remember { mutableStateOf(false) }
     var dockLensDialog by remember { mutableStateOf(false) }
     var glassStyleDialog by remember { mutableStateOf(false) }
+    var sheetStyleDialog by remember { mutableStateOf(false) }
     var choiceMenusDialog by remember { mutableStateOf(false) }
     var artistShadeDialog by remember { mutableStateOf(false) }
     var listBackgroundDialog by remember { mutableStateOf(false) }
@@ -727,6 +728,16 @@ private fun settingsSections(
             label = { "${it.label} · ${it.summary}" },
             onSelect = { m -> AppSettings.updateUi { it.copy(choiceMenus = m) } },
             onDismiss = { choiceMenusDialog = false },
+        )
+    }
+    if (sheetStyleDialog) {
+        ChoiceSheet(
+            title = "Sheet style",
+            options = com.opentune.data.settings.SheetStyle.entries,
+            selected = ui.sheetStyle,
+            label = { "${it.label} · ${it.summary}" },
+            onSelect = { s -> AppSettings.updateUi { it.copy(sheetStyle = s) } },
+            onDismiss = { sheetStyleDialog = false },
         )
     }
     if (glassStyleDialog) {
@@ -1429,6 +1440,9 @@ private fun settingsSections(
                 },
                 Entry("Reduce dynamic blur", "glass frosted performance") {
                     ToggleRow("Reduce dynamic blur", ui.reduceBlur, { v -> AppSettings.updateUi { it.copy(reduceBlur = v) } }, summary = "Swaps frosted glass for solid fills across the app", icon = Icons.Rounded.BlurOff)
+                },
+                Entry("Sheet style", "sheets blur theme dynamic frosted bottom sheet") {
+                    NavRow("Sheet style", { sheetStyleDialog = true }, summary = ui.sheetStyle.summary, icon = Icons.Rounded.BlurOn, value = ui.sheetStyle.label)
                 },
                 Entry("Lite mode", "performance tv old phone lag smooth light simple fast low end") {
                     ToggleRow(
