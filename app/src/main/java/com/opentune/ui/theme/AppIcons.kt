@@ -21,6 +21,7 @@ internal object AppIcons {
     val Article = R.drawable.symbol_article_rounded
     val AudioFile = R.drawable.symbol_audio_file_rounded
     val AutoAwesome = R.drawable.symbol_stars_rounded
+    val Autorenew = R.drawable.symbol_autorenew_rounded
     val BarChart = R.drawable.symbol_bar_chart_rounded
     val BatteryChargingFull = R.drawable.symbol_battery_charging_full_rounded
     val BatteryFull = R.drawable.symbol_battery_full_rounded
@@ -76,6 +77,7 @@ internal object AppIcons {
     val FastRewind = R.drawable.symbol_fast_rewind_rounded
     val Favorite = R.drawable.symbol_favorite_rounded
     val FavoriteBorder = R.drawable.symbol_favorite_outline_rounded
+    val FiberNew = R.drawable.symbol_fiber_new_rounded
     val FilterAlt = R.drawable.symbol_filter_alt
     val Flare = R.drawable.symbol_flare_rounded
     val Folder = R.drawable.symbol_folder_rounded
@@ -202,6 +204,7 @@ internal object AppIcons {
     val Tune = R.drawable.symbol_tune_rounded
     val Tv = R.drawable.symbol_tv_rounded
     val UnfoldMore = R.drawable.symbol_unfold_more_rounded
+    val Update = R.drawable.symbol_update_rounded
     val Upload = R.drawable.symbol_upload_rounded
     val Usb = R.drawable.symbol_usb_rounded
     val VerticalSplit = R.drawable.symbol_vertical_split_rounded

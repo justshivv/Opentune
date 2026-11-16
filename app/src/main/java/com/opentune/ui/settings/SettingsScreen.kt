@@ -1823,7 +1823,7 @@ private fun settingsSections(
             "Advanced",
             listOf(
                 Entry("What's new", "release notes changelog version highlights") {
-                    NavRow("What's new", { showWhatsNew = true }, summary = com.opentune.i18n.Tr.f("Highlights and improvements in {0}", BuildConfig.VERSION_NAME), icon = ImageVector.vectorResource(AppIcons.SystemUpdate))
+                    NavRow("What's new", { showWhatsNew = true }, summary = com.opentune.i18n.Tr.f("Highlights and improvements in {0}", BuildConfig.VERSION_NAME), icon = ImageVector.vectorResource(AppIcons.FiberNew))
                 },
                 Entry("Show the welcome again", "welcome onboarding first run start intro pick artists setup") {
                     NavRow("Show the welcome again", { com.opentune.data.Welcome.showAgain() }, summary = "Pick artists, choose a look and sign in, as on the first start", icon = ImageVector.vectorResource(AppIcons.WavingHand))
@@ -1845,10 +1845,10 @@ private fun settingsSections(
                                 checkingUpdates = false
                             }
                         }
-                    }, summary = pendingUpdate?.let { com.opentune.i18n.Tr.f("OpenTune {0} is ready to install. You have {1}.", it.version, BuildConfig.VERSION_NAME) } ?: com.opentune.i18n.Tr.f("Current version: {0}", BuildConfig.VERSION_NAME), icon = ImageVector.vectorResource(AppIcons.SystemUpdate), dot = pendingUpdate != null, busy = checkingUpdates)
+                    }, summary = pendingUpdate?.let { com.opentune.i18n.Tr.f("OpenTune {0} is ready to install. You have {1}.", it.version, BuildConfig.VERSION_NAME) } ?: com.opentune.i18n.Tr.f("Current version: {0}", BuildConfig.VERSION_NAME), icon = ImageVector.vectorResource(AppIcons.Update), dot = pendingUpdate != null, busy = checkingUpdates)
                 },
                 Entry("Check for updates automatically", "update new version release auto") {
-                    ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Looks for a new release on GitHub every few hours, in the background too, and offers to install it", icon = ImageVector.vectorResource(AppIcons.SystemUpdate))
+                    ToggleRow("Check for updates automatically", ui.checkForUpdates, { v -> AppSettings.updateUi { it.copy(checkForUpdates = v) }; com.opentune.data.UpdateCheck.schedule(context) }, summary = "Looks for a new release on GitHub every few hours, in the background too, and offers to install it", icon = ImageVector.vectorResource(AppIcons.Autorenew))
                 },
                 Entry("Count this phone in usage numbers", "anonymous usage statistics analytics counter privacy telemetry") {
                     ToggleRow(

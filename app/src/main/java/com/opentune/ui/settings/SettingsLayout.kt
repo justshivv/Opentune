@@ -134,7 +134,7 @@ internal val SETTINGS_CATEGORIES = listOf(
         ),
     ),
     SettingsCategory(
-        "updates", "Updates", "What's new and checking for new versions", AppIcons.SystemUpdate,
+        "updates", "Updates", "What's new and checking for new versions", AppIcons.Update,
         listOf(
             "Updates" to listOf("What's new", "Check for updates", "Check for updates automatically"),
         ),
