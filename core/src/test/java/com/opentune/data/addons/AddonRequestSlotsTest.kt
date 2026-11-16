@@ -7,9 +7,9 @@ import org.junit.Test
 class AddonRequestSlotsTest {
     @Test fun stalledCataloguesLeaveCapacityToVerifyAStream() = runBlocking {
         val slots = AddonRequestSlots()
-        val started = List(4) { CompletableDeferred<Unit>() }
+        val started = List(6) { CompletableDeferred<Unit>() }
         val busy = started.mapIndexed { index, signal -> launch {
-            slots.withPermit("catalogue-$index", true) { signal.complete(Unit); awaitCancellation() }
+            slots.withPermit("catalogue-${index / 2}", true) { signal.complete(Unit); awaitCancellation() }
         } }
         try {
             withTimeout(2_000) { started.forEach { it.await() } }
@@ -34,20 +34,20 @@ class AddonRequestSlotsTest {
 
     @Test fun rateLimitBackoffDoesNotHoldTheHostConnection() = runBlocking {
         val slots = AddonRequestSlots()
-        val limited = CompletableDeferred<Unit>()
-        var calls = 0
-        val retry = async {
+        val limited = List(2) { CompletableDeferred<Unit>() }
+        val retries = limited.map { signal -> async {
+            var calls = 0
             AddonHttp.waitingOutRateLimits {
                 slots.withPermit("limited", true) {
-                    if (++calls == 1) { limited.complete(Unit); throw AddonHttp.Failure(429, 2) }
+                    if (++calls == 1) { signal.complete(Unit); throw AddonHttp.Failure(429, 2) }
                     "retried"
                 }
             }
-        }
+        } }
         try {
-            withTimeout(2_000) { limited.await() }
+            withTimeout(2_000) { limited.forEach { it.await() } }
             assertEquals("other request", withTimeout(1_000) { slots.withPermit("limited", true) { "other request" } })
-            assertFalse(retry.isCompleted)
-        } finally { retry.cancelAndJoin() }
+            assertTrue(retries.none { it.isCompleted })
+        } finally { retries.forEach { it.cancelAndJoin() } }
     }
 }
