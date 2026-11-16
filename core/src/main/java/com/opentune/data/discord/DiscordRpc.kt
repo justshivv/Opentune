@@ -60,6 +60,8 @@ object DiscordRpc {
         val positionMs: Long,
         val rate: Float,
         val playing: Boolean,
+        /** The stream's quality line ("Lossless · 16-bit · 44.1 kHz"), when known. */
+        val quality: String? = null,
     )
 
     enum class Status { Off, Connecting, Ready, Error }
@@ -233,7 +235,12 @@ object DiscordRpc {
             .put("name", heading)
             .put("type", 2)
             .put("details", fit(if (rate != 1f) "${now.title} [${"%.2f".format(rate)}x]" else now.title, TEXT_MAX))
-            .put("state", fit(now.artist.ifBlank { "Unknown artist" }, TEXT_MAX))
+            // The artist, with the stream's quality after them when it's known.
+            .put("state", fit(
+                listOfNotNull(now.artist.ifBlank { "Unknown artist" }, now.quality?.takeIf { it.isNotBlank() })
+                    .joinToString(" · "),
+                TEXT_MAX,
+            ))
             // 2 names the details line: the status reads "Listening to <song>", as on desktop.
             .put("status_display_type", 2)
             .put("assets", JSONObject().apply {

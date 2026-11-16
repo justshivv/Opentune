@@ -19,10 +19,10 @@ class DiscordRpcTest {
         val before = System.currentTimeMillis()
         val p = DiscordRpc.presence("token", now())
         val a = p.getJSONArray("activities").getJSONObject(0)
-        // A Listening activity: Discord heads the card "Listening to OpenTune" and draws the progress bar.
+        // A Listening activity: the card is headed "Listening to OpenTune · Labon Ko" and draws the progress bar.
         assertEquals(2, a.getInt("type"))
-        assertEquals("OpenTune", a.getString("name"))
-        assertEquals(0, a.getInt("status_display_type"))
+        assertEquals("OpenTune · Labon Ko", a.getString("name"))
+        assertEquals(2, a.getInt("status_display_type"))
         assertEquals("Labon Ko", a.getString("details"))
         assertEquals("Pritam", a.getString("state"))
         val t = a.getJSONObject("timestamps")
@@ -30,6 +30,12 @@ class DiscordRpcTest {
         assertTrue(t.getLong("start") in before - 61_000..before - 58_000)
         assertEquals(240_000.0, (t.getLong("end") - t.getLong("start")).toDouble(), 50.0)
         assertEquals("https://music.youtube.com/watch?v=dQw4w9WgXcQ", a.getJSONObject("metadata").getJSONArray("button_urls").getString(0))
+    }
+
+    @Test fun artistCarriesTheQuality() {
+        val a = DiscordRpc.presence("token", now().copy(quality = "Lossless · 16-bit · 44.1 kHz"))
+            .getJSONArray("activities").getJSONObject(0)
+        assertEquals("Pritam · Lossless · 16-bit · 44.1 kHz", a.getString("state"))
     }
 
     @Test fun keepsWithinDiscordsLimits() {

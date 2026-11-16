@@ -161,11 +161,55 @@ class PlaybackService : MediaLibraryService() {
                         positionMs = p.currentPosition,
                         rate = p.playbackParameters.speed,
                         playing = p.isPlaying,
+                        quality = discordQuality(p),
                     )
                 },
             )
         }
     }
+
+    /**
+     * The playing stream's quality for the Discord card, in the quality badge's own
+     * terms: "Lossless · 16-bit · 44.1 kHz" for a lossless stream, the bitrate and
+     * rate otherwise; null while the format isn't known. Bit depth is a
+     * lossless-only figure, as on the format sheet.
+     */
+    private fun discordQuality(p: Player): String? {
+        // The format getters live on ExoPlayer, not on the Player interface.
+        val format = (p as? ExoPlayer)?.audioFormat ?: return null
+        val flac = LosslessAudioPolicy.streamInfo(format)
+        val info = AudioFormatInfo(
+            codec = (format.codecs ?: format.sampleMimeType?.substringAfter('/'))?.uppercase(),
+            mime = format.sampleMimeType,
+            bitrateKbps = format.bitrate.takeIf { b -> b > 0 }?.div(1000),
+            sampleRateHz = flac?.rate ?: format.sampleRate.takeIf { r -> r > 0 },
+            channels = flac?.channels ?: format.channelCount.takeIf { c -> c > 0 },
+            bitDepth = flac?.bits ?: when (format.pcmEncoding) {
+                C.ENCODING_PCM_8BIT -> 8
+                C.ENCODING_PCM_16BIT -> 16
+                C.ENCODING_PCM_24BIT -> 24
+                C.ENCODING_PCM_32BIT -> 32
+                else -> null
+            },
+        )
+        // The badge's lossless test: a bitrate no lossy codec reaches, or a lossless codec.
+        val lossless = (info.bitrateKbps ?: 0) >= 700 ||
+                info.codec?.let { c -> DISCORD_LOSSLESS_CODECS.any { c.contains(it, ignoreCase = true) } } == true
+        val parts = buildList {
+            if (lossless) {
+                add("Lossless")
+                info.bitDepth?.let { add("$it-bit") }
+            } else {
+                bestKbps(info, MeasuredBitrate.kbps.value, null)?.takeIf { it > 0 }?.let { add("$it kbps") }
+            }
+            info.sampleRateHz?.let { add(discordKhz(it)) }
+        }
+        return parts.joinToString(" · ").ifEmpty { null }
+    }
+
+    /** A sample rate in Hz as "44.1 kHz" or "96 kHz", trimming a trailing ".0". */
+    private fun discordKhz(hz: Int): String =
+        String.format(java.util.Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0") + " kHz"
 
     private fun selectedUri(uri: Uri): Uri = startupToken(uri)?.let { startupSelections[it]?.selected } ?: uri
 
@@ -2992,6 +3036,9 @@ class PlaybackService : MediaLibraryService() {
         /** Boosted preload duration ahead on Wi-Fi (20s). */
         const val PRELOAD_WIFI_US = 20_000_000L
         const val DISCORD_SETTLE_MS = 800L
+
+        /** Codecs that are lossless whatever the stream around them says. */
+        val DISCORD_LOSSLESS_CODECS = listOf("FLAC", "ALAC", "WAV", "AIFF", "DSD", "WavPack", "APE")
 
         /** Tracks ahead whose stream URLs are resolved early (2 baseline on mobile). */
         const val WARM_STANDARD_AHEAD = 2
