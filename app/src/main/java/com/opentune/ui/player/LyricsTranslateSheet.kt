@@ -85,7 +85,7 @@ internal fun LyricsTextSheet(lines: List<String>, synced: Boolean, onDismiss: ()
                 }
             }
             Box(Modifier.weight(1.4f)) {
-                SheetButton(if (working) "Translating…" else "Translate", enabled = !working, tone = SheetTone.Primary, onClick = {
+                SheetButton("Translate", enabled = !working, loading = working, spinnerOnly = true, tone = SheetTone.Primary, onClick = {
                     working = true
                     failed = false
                     val target = picked

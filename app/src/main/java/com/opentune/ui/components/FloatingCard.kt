@@ -608,6 +608,8 @@ fun SheetButton(
     closes: Boolean = false,
     icon: ImageVector? = null,
     loading: Boolean = false,
+    /** With [loading], the spinner stands in for the text instead of sitting beside it. */
+    spinnerOnly: Boolean = false,
 ) {
     val haptics = rememberHaptics()
     val card = LocalFloatingCard.current
@@ -641,12 +643,14 @@ fun SheetButton(
     ) {
         if (loading) {
             CircularProgressIndicator(Modifier.size(18.dp), color = ink, strokeWidth = 2.dp)
-            Spacer(Modifier.width(10.dp))
+            if (!spinnerOnly) Spacer(Modifier.width(10.dp))
         } else if (icon != null) {
             Icon(icon, null, Modifier.size(18.dp), tint = ink)
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, color = ink, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
+        if (!loading || !spinnerOnly) {
+            Text(text, color = ink, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
