@@ -241,8 +241,10 @@ object DiscordRpc {
                     .joinToString(" · "),
                 TEXT_MAX,
             ))
-            // 2 names the details line: the status reads "Listening to <song>", as on desktop.
-            .put("status_display_type", 2)
+            // 0 names the activity itself: the status line reads the name,
+            // "OpenTune · <song>", so the compact line leads with the app
+            // first, the same order the card's head shows.
+            .put("status_display_type", 0)
             .put("assets", JSONObject().apply {
                 if (image != null) {
                     put("large_image", image)
