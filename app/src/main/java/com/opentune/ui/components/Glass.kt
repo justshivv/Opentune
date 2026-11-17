@@ -81,6 +81,16 @@ import com.opentune.ui.theme.AppIcons
 val LocalHazeState = staticCompositionLocalOf<HazeState?> { null }
 
 /**
+ * A tinted page's wash: its colour at the top, the background its gradient
+ * eases toward, and the cover's second colour glowing in from the side.
+ * Provided by the page's tint wrapper, so a bar frosted over the page can
+ * paint the same backdrop instead of guessing from one flat colour.
+ */
+class PageWash(val tint: Color, val base: Color, val glow: Color)
+
+val LocalPageWash = staticCompositionLocalOf<PageWash?> { null }
+
+/**
  * The layer Liquid Glass refracts. Only floating chrome drawn outside that
  * layer gets one (the nav pill, mini player, player buttons): glass inside
  * the layer it samples would sample itself.
@@ -408,6 +418,9 @@ fun TopEdgeFrost(modifier: Modifier = Modifier) {
     if (!ui.frostedTopEdge) return
     val haze = LocalHazeState.current
     val page = MaterialTheme.colorScheme.background
+    // On a washed page the strip takes the wash's top colour, not the flat
+    // background, so it agrees with what the page paints under it.
+    val edge = LocalPageWash.current?.tint ?: page
     val height = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 28.dp
     Box(
         modifier
@@ -415,7 +428,7 @@ fun TopEdgeFrost(modifier: Modifier = Modifier) {
             .height(height)
             .then(
                 if (haze == null || ui.reduceBlur) Modifier else Modifier.hazeEffect(haze) {
-                    backgroundColor = page
+                    backgroundColor = edge
                     tints = emptyList()
                     blurRadius = 20.dp
                     noiseFactor = 0f
@@ -423,7 +436,7 @@ fun TopEdgeFrost(modifier: Modifier = Modifier) {
                     progressive = HazeProgressive.verticalGradient(easing = EaseOutCubic, startIntensity = 1f, endIntensity = 0f)
                 },
             )
-            .background(Brush.verticalGradient(0f to page.copy(alpha = 0.6f), 0.55f to page.copy(alpha = 0.25f), 1f to page.copy(alpha = 0f))),
+            .background(Brush.verticalGradient(0f to edge.copy(alpha = 0.6f), 0.55f to edge.copy(alpha = 0.25f), 1f to edge.copy(alpha = 0f))),
     )
 }
 

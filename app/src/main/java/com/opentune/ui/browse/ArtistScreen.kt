@@ -186,67 +186,83 @@ internal fun ArtistPageView(
     // The playlist pages' top bar, solid once the hero has scrolled away.
     val barSolid = androidx.compose.runtime.remember(listState) { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 } }.value
     ArtistTint(photo) {
-        GlassPage(
-            Modifier.fillMaxSize(),
-            overlay = {
-                com.opentune.ui.library.TopNavBar(page?.name.orEmpty(), barSolid, onBack) {
-                    // The back button's own build, with the share in it.
-                    Box(
-                        Modifier.size(48.dp)
-                            .then(if (barSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape))
-                            .clickable(onClickLabel = "Share") { ListShare.shareList(context, page?.name ?: "Artist", browseId) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(ImageVector.vectorResource(AppIcons.Share), "Share", tint = MaterialTheme.colorScheme.onSurface)
+        ArtistWashProvider(appearance.artistPageTint && appearance.artistShade == com.opentune.data.settings.ArtistShade.LIGHT, photo) {
+            GlassPage(
+                Modifier.fillMaxSize(),
+                overlay = {
+                    com.opentune.ui.library.TopNavBar(page?.name.orEmpty(), barSolid, onBack) {
+                        // The back button's own build, with the share in it.
+                        Box(
+                            Modifier.size(48.dp)
+                                .then(if (barSolid) Modifier else Modifier.glass(androidx.compose.foundation.shape.CircleShape))
+                                .clickable(onClickLabel = "Share") { ListShare.shareList(context, page?.name ?: "Artist", browseId) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(ImageVector.vectorResource(AppIcons.Share), "Share", tint = MaterialTheme.colorScheme.onSurface)
+                        }
                     }
-                }
-            },
-        ) {
-            val band = com.opentune.ui.components.rememberRubberBand()
-            LazyColumn(state = listState, contentPadding = contentPadding,
-                // Light lays a soft wash of the photo's colour over the page's deep shade; Dark leaves the deep shade alone.
-                modifier = Modifier.fillMaxSize().then(
-                    if (appearance.artistPageTint && appearance.artistShade == com.opentune.data.settings.ArtistShade.LIGHT) Modifier.coverWash(rememberCoverTint(photo), photo) else Modifier,
-                ),
-                overscrollEffect = band) {
-                item(key = "hero", contentType = "hero") { ArtistHero(browseId, page, photo, listState, actions, band) }
-                if (page == null) {
-                    item(key = "latest-placeholder") {
-                        Placeholder(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(LATEST_CARD_HEIGHT), MaterialTheme.shapes.large)
+                },
+            ) {
+                val band = com.opentune.ui.components.rememberRubberBand()
+                LazyColumn(state = listState, contentPadding = contentPadding,
+                    // Light lays a soft wash of the photo's colour over the page's deep shade; Dark leaves the deep shade alone.
+                    modifier = Modifier.fillMaxSize().then(
+                        if (appearance.artistPageTint && appearance.artistShade == com.opentune.data.settings.ArtistShade.LIGHT) Modifier.coverWash(rememberCoverTint(photo), photo) else Modifier,
+                    ),
+                    overscrollEffect = band) {
+                    item(key = "hero", contentType = "hero") { ArtistHero(browseId, page, photo, listState, actions, band) }
+                    if (page == null) {
+                        item(key = "latest-placeholder") {
+                            Placeholder(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().height(LATEST_CARD_HEIGHT), MaterialTheme.shapes.large)
+                        }
+                        item(key = "top-placeholder") { SectionHeader("Top songs") }
+                        items(4, key = { "song-placeholder:$it" }) { SongRowPlaceholder() }
+                        return@LazyColumn
                     }
-                    item(key = "top-placeholder") { SectionHeader("Top songs") }
-                    items(4, key = { "song-placeholder:$it" }) { SongRowPlaceholder() }
-                    return@LazyColumn
-                }
-                latestRelease(page.sections)?.let { release ->
-                    item(key = "latest", contentType = "latest") {
-                        LatestReleaseCard(release, onOpen = { onItemClick(release.item) }, Modifier.padding(top = 8.dp))
+                    latestRelease(page.sections)?.let { release ->
+                        item(key = "latest", contentType = "latest") {
+                            LatestReleaseCard(release, onOpen = { onItemClick(release.item) }, Modifier.padding(top = 8.dp))
+                        }
                     }
-                }
-                if (page.songs.isNotEmpty()) {
-                    item(key = "top", contentType = "top") {
-                        TopSongs(
-                            page,
-                            actions,
-                            onShowAll = page.moreSongsBrowseId?.let { id -> { onItemClick(ShelfItem("Top songs", page.name.orEmpty(), null, null, id)) } },
-                        )
+                    if (page.songs.isNotEmpty()) {
+                        item(key = "top", contentType = "top") {
+                            TopSongs(
+                                page,
+                                actions,
+                                onShowAll = page.moreSongsBrowseId?.let { id -> { onItemClick(ShelfItem("Top songs", page.name.orEmpty(), null, null, id)) } },
+                            )
+                        }
                     }
-                }
-                page.sections.forEachIndexed { i, shelf ->
-                    item(key = "shelf:$i:${shelf.title}", contentType = "shelf") {
-                        ArtistShelf(shelf, onItemClick, onShowAll = if (shelf.moreBrowseId != null) ({ onShowAll(shelf) }) else null)
+                    page.sections.forEachIndexed { i, shelf ->
+                        item(key = "shelf:$i:${shelf.title}", contentType = "shelf") {
+                            ArtistShelf(shelf, onItemClick, onShowAll = if (shelf.moreBrowseId != null) ({ onShowAll(shelf) }) else null)
+                        }
                     }
-                }
-                val about = page.description?.takeIf { it.isNotBlank() }
-                if (about != null || page.subscriberCountText != null || page.monthlyListenerCount != null) {
-                    item(key = "about", contentType = "about") {
-                        AboutArtist(about, page.subscriberCountText, page.monthlyListenerCount)
+                    val about = page.description?.takeIf { it.isNotBlank() }
+                    if (about != null || page.subscriberCountText != null || page.monthlyListenerCount != null) {
+                        item(key = "about", contentType = "about") {
+                            AboutArtist(about, page.subscriberCountText, page.monthlyListenerCount)
+                        }
                     }
+                    item(key = "end") { Spacer(Modifier.height(16.dp)) }
                 }
-                item(key = "end") { Spacer(Modifier.height(16.dp)) }
             }
         }
     }
+}
+
+/**
+ * Shares the page's wash with the bar over it, while the wash is on: the
+ * same colours the page's own [coverWash] paints — its tint, mixed against
+ * this page's deep shade — so the bar's frost is the page's backdrop, not
+ * a flat guess at it. Provides nothing when the wash is off.
+ */
+@Composable
+private fun ArtistWashProvider(washed: Boolean, photo: String?, content: @Composable () -> Unit) {
+    val tint = rememberCoverTint(photo)
+    val glow = rememberPageGlow(tint, photo)
+    val wash = if (washed) com.opentune.ui.components.PageWash(tint, MaterialTheme.colorScheme.background, glow) else null
+    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalPageWash provides wash, content = content)
 }
 
 /**

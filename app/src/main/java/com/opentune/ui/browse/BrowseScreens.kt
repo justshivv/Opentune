@@ -354,6 +354,29 @@ internal fun coverTone(seed: Color?, dark: Boolean): Color {
     return Color(com.materialkolor.hct.Hct.from(hct.hue, if (seed == null) 0.0 else hct.chroma, tone).toInt())
 }
 
+/** The stops of the gradient a page wash paints: [tint] at the top, easing toward [base]. */
+internal fun pageWashStops(tint: Color, base: Color): Array<Pair<Float, Color>> = arrayOf(
+    0f to tint,
+    0.45f to androidx.compose.ui.graphics.lerp(tint, base, 0.18f),
+    // Not further toward the background than this: a dark cover's page would end in black.
+    1f to androidx.compose.ui.graphics.lerp(tint, base, 0.3f),
+)
+
+/** A cover's second colour, glowing in from the side of a washed page; [tint] when it has none. */
+@Composable
+internal fun rememberPageGlow(tint: Color, artwork: String?): Color {
+    val background = MaterialTheme.colorScheme.background
+    val dark = background.luminance() < 0.5f
+    val palette = com.opentune.ui.theme.rememberArtworkPalette(artwork)
+    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
+    val glow by androidx.compose.animation.animateColorAsState(
+        palette.getOrNull(1)?.let { androidx.compose.ui.graphics.lerp(background, coverTone(it, dark), if (dark) 0.36f else 0.18f) } ?: tint,
+        animationSpec = if (still) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(550),
+        label = "ambientSecondary",
+    )
+    return glow
+}
+
 /**
  * The cover's colour behind the whole page, not just its header: even down the
  * top half of the screen, where the header fades into it, then easing toward
@@ -362,18 +385,9 @@ internal fun coverTone(seed: Color?, dark: Boolean): Color {
 @Composable
 internal fun Modifier.coverWash(tint: Color, artwork: String? = null): Modifier {
     val background = MaterialTheme.colorScheme.background
-    val dark = background.luminance() < 0.5f
-    val palette = com.opentune.ui.theme.rememberArtworkPalette(artwork)
-    val still = com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceAnimation
-    val secondary by androidx.compose.animation.animateColorAsState(
-        palette.getOrNull(1)?.let { androidx.compose.ui.graphics.lerp(background, coverTone(it, dark), if (dark) 0.36f else 0.18f) } ?: tint,
-        animationSpec = if (still) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(550),
-        label = "ambientSecondary",
-    )
+    val secondary = rememberPageGlow(tint, artwork)
     return this.drawBehind {
-        drawRect(Brush.verticalGradient(0f to tint, 0.45f to androidx.compose.ui.graphics.lerp(tint, background, 0.18f),
-            // Not further toward the background than this: a dark cover's page would end in black.
-            1f to androidx.compose.ui.graphics.lerp(tint, background, 0.3f)))
+        drawRect(Brush.verticalGradient(*pageWashStops(tint, background)))
         drawRect(Brush.radialGradient(listOf(secondary.copy(alpha = 0.65f), Color.Transparent),
             center = androidx.compose.ui.geometry.Offset(size.width * 0.9f, size.height * 0.3f),
             radius = maxOf(size.width, size.height * 0.7f).coerceAtLeast(1f)))
@@ -422,8 +436,15 @@ internal fun ListPageTint(coverUrl: String?, seed: Color? = null, content: @Comp
         surfaceContainerHighest = lift(0.14f),
     )
     MaterialTheme(colorScheme = scheme) {
+        // The wash this page paints, shared with the bars frosted over it.
+        // Read here, inside the scheme, so the glow is mixed against the
+        // tint exactly as the wash behind the songs mixes it. The wash's
+        // gradient eases toward the scheme's own background — the tint
+        // itself — so the two colours it needs are the tint and this glow.
+        val glow = rememberPageGlow(tint, coverUrl)
         androidx.compose.runtime.CompositionLocalProvider(
             LocalListBase provides base.background, LocalListCover provides coverUrl, LocalListLook provides ui.listBackground,
+            com.opentune.ui.components.LocalPageWash provides com.opentune.ui.components.PageWash(tint, tint, glow),
             content = content,
         )
     }

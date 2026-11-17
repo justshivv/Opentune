@@ -1314,6 +1314,11 @@ fun TopNavBar(
     val density = androidx.compose.ui.platform.LocalDensity.current.density
     var tall by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val below = LocalNavFrostBelow.current
+    // On a washed page the frost paints the page's own wash (see
+    // LocalPageWash), mapped to the screen's height so its colours line
+    // up with the backdrop's at every point; a flat colour never could.
+    val wash = com.opentune.ui.components.LocalPageWash.current
+    val screenHeight = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * density
     Box(modifier.fillMaxWidth()) {
         if (frost > 0f) {
             Box(
@@ -1331,19 +1336,43 @@ fun TopNavBar(
                         if (!edgeFrost) {
                             // No blur at all: the page colour, solid over the bar
                             // itself and easing out over the tail below it.
-                            Modifier.graphicsLayer { alpha = frost }.drawBehind {
-                                val solidTo = ((size.height - (below.value + NAV_FROST_TAIL.value) * density) / size.height).coerceIn(0f, 1f)
-                                drawRect(Brush.verticalGradient(0f to page, solidTo to page, 1f to page.copy(alpha = 0f)))
+                            if (wash == null) {
+                                Modifier.graphicsLayer { alpha = frost }.drawBehind {
+                                    val solidTo = ((size.height - (below.value + NAV_FROST_TAIL.value) * density) / size.height).coerceIn(0f, 1f)
+                                    drawRect(Brush.verticalGradient(0f to page, solidTo to page, 1f to page.copy(alpha = 0f)))
+                                }
+                            } else {
+                                // The wash, masked out over the tail in an offscreen
+                                // layer (the cover fades' own technique): an erase
+                                // blend in the open would eat through the page
+                                // under the bar once the frost sits at full alpha.
+                                Modifier.graphicsLayer { alpha = frost; compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }.drawWithContent {
+                                    drawContent()
+                                    val solidTo = ((size.height - (below.value + NAV_FROST_TAIL.value) * density) / size.height).coerceIn(0f, 1f)
+                                    drawPageWash(wash, screenHeight, 1f)
+                                    drawRect(Brush.verticalGradient(0f to Color.Black, solidTo to Color.Black, 1f to Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                                }
                             }
                         } else if (haze == null) {
-                            Modifier.graphicsLayer { alpha = frost }.drawBehind {
-                                drawRect(Brush.verticalGradient(0f to page.copy(alpha = 0.95f), 0.72f to page.copy(alpha = 0.88f), 1f to page.copy(alpha = 0f)))
+                            if (wash == null) {
+                                Modifier.graphicsLayer { alpha = frost }.drawBehind {
+                                    drawRect(Brush.verticalGradient(0f to page.copy(alpha = 0.95f), 0.72f to page.copy(alpha = 0.88f), 1f to page.copy(alpha = 0f)))
+                                }
+                            } else {
+                                Modifier.graphicsLayer { alpha = frost; compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }.drawWithContent {
+                                    drawContent()
+                                    drawPageWash(wash, screenHeight, 0.95f)
+                                    drawRect(Brush.verticalGradient(0f to Color.Black, 0.72f to Color.Black.copy(alpha = 0.926f), 1f to Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                                }
                             }
                         } else {
                             Modifier.hazeEffect(haze) {
                                 alpha = frost
-                                backgroundColor = page
-                                tints = listOf(dev.chrisbanes.haze.HazeTint(page.copy(alpha = 0.5f)))
+                                // The blur already samples the real backdrop; over a
+                                // wash the tint only veils it, kept thin so the
+                                // backdrop's own colours stay in charge.
+                                backgroundColor = wash?.tint ?: page
+                                tints = listOf(dev.chrisbanes.haze.HazeTint((wash?.tint ?: page).copy(alpha = if (wash == null) 0.5f else 0.22f)))
                                 blurRadius = 28.dp
                                 noiseFactor = 0.03f
                                 progressive = dev.chrisbanes.haze.HazeProgressive.verticalGradient(
@@ -1390,6 +1419,28 @@ fun TopNavBar(
             }
         }
     }
+}
+
+/**
+ * A page's wash painted in a top bar's frost: the same gradient and glow
+ * the page draws behind itself, mapped to the screen's height so the
+ * colours line up with the backdrop at every point, at [alpha]. The
+ * caller masks it out over the frost's tail.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPageWash(
+    wash: com.opentune.ui.components.PageWash,
+    screenHeight: Float,
+    alpha: Float,
+) {
+    drawRect(Brush.verticalGradient(*com.opentune.ui.browse.pageWashStops(wash.tint, wash.base), startY = 0f, endY = screenHeight), alpha = alpha)
+    drawRect(
+        Brush.radialGradient(
+            listOf(wash.glow.copy(alpha = 0.65f), Color.Transparent),
+            center = androidx.compose.ui.geometry.Offset(size.width * 0.9f, screenHeight * 0.3f),
+            radius = maxOf(size.width, screenHeight * 0.7f).coerceAtLeast(1f),
+        ),
+        alpha = alpha,
+    )
 }
 
 /** How far a top bar's frost reaches below it, thinning out. */
