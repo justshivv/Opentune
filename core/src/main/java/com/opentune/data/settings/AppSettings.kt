@@ -380,6 +380,10 @@ data class PlaybackSettings(
     val preloadBoostOnWifi: Boolean = false,
     /** A downloaded song streams in its best quality while there's internet; its file plays offline. */
     val streamDownloadsOnline: Boolean = true,
+    /** With [streamDownloadsOnline], mobile data streams too; off, a downloaded song streams on Wi-Fi only. */
+    val streamDownloadsOnMobile: Boolean = true,
+    /** A downloaded song streams only when a stream could beat its file; otherwise the file plays. */
+    val streamDownloadsOnlyIfBetter: Boolean = true,
     /** Swap to a clearly better stream mid-song when one turns up. */
     val qualityUpgrade: Boolean = true,
     /** Community FLAC lookup runs after playback starts. Downloads remain YouTube audio. */

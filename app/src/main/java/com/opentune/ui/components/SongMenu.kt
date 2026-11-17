@@ -206,10 +206,25 @@ fun SongMenuSheet(
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             if (!local && download != null) {
                 val downloading = download.state == DownloadState.QUEUED || download.state == DownloadState.DOWNLOADING
+                // What the saved copy is (format, quality, where it came from), or how far its lossless replacement is.
+                val upgrade = download.upgrade
+                val summary = when {
+                    download.state != DownloadState.DONE -> null
+                    upgrade != null -> com.opentune.i18n.Tr.f("Downloading again in lossless · {0}%", (upgrade.progress * 100).toInt())
+                    else -> listOfNotNull(com.opentune.data.download.DownloadedCopy.describe(download),
+                        download.bytes.takeIf { it > 0 }?.let { android.text.format.Formatter.formatShortFileSize(context, it) }).joinToString(" · ")
+                }
                 MenuRow(if (downloading) ImageVector.vectorResource(AppIcons.Close) else ImageVector.vectorResource(AppIcons.DeleteOutline),
-                    if (downloading) "Cancel download" else "Remove download") {
+                    if (downloading) "Cancel download" else "Remove download", summary = summary) {
                     Downloads.remove(context, song.videoId)
                     close()
+                }
+                if (com.opentune.data.download.DownloadedCopy.canRedownloadLossless(download, com.opentune.data.download.DownloadedCopy.addonCanDownload())) {
+                    MenuRow(ImageVector.vectorResource(AppIcons.HighQuality), "Download again in lossless") {
+                        if (Downloads.downloadAgainLossless(context, song.videoId))
+                            com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("Looking for a lossless copy of {0}", song.title), context)
+                        close()
+                    }
                 }
             }
             if (actions != null) {
@@ -491,14 +506,18 @@ private fun QuickAction(icon: ImageVector, label: String, active: Boolean, progr
 }
 
 @Composable
-fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+fun MenuRow(icon: ImageVector, label: String, summary: String? = null, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 15.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = if (summary == null) 15.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         Icon(icon, null, Modifier.size(24.dp))
-        Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.bodyLarge)
+        Column {
+            Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.bodyLarge)
+            if (summary != null) Text(summary, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

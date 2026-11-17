@@ -87,7 +87,15 @@ data class DownloadEntry(
     val preferredRenditionKey: String? = null,
     /** Owned by the smart-download budget until explicitly saved by the listener. */
     val smartDownload: Boolean = false,
+    /** The add-on file's codec ("flac", "alac"…); older and YouTube downloads go by the file's extension. */
+    val codec: String? = null,
+    /** A lossless copy being fetched to replace this one; this file stays and plays until it's in. */
+    val upgrade: DownloadUpgrade? = null,
 )
+
+/** "Download again in lossless" under way for a finished download. */
+@Serializable
+data class DownloadUpgrade(val workId: String, val progress: Float = 0f)
 
 /**
  * Songs saved for offline listening. Files live in app storage
@@ -153,6 +161,41 @@ object Downloads {
         return e.path?.let(::File)?.takeIf { it.isFile && it.length() > 0 }
     }
 
+    /**
+     * The file to play for [videoId] right now: always offline, online as "Downloaded
+     * songs play from" says, and with "Stream only when it's better" whenever no stream beats it.
+     */
+    fun playableFile(videoId: String): File? {
+        val file = fileFor(videoId) ?: return null
+        val entry = _entries.value[videoId] ?: return null
+        val settings = AppSettings.playback.value
+        val online = AppSettings.isOnline()
+        val streamBetter = online && settings.streamDownloadsOnlyIfBetter &&
+            DownloadedCopy.streamBeatsFile(DownloadedCopy.fileKbps(entry, DownloadedCopy.durationMs(entry.song.durationText)), bestStreamKbps(videoId))
+        return file.takeIf {
+            DownloadedCopy.playsFile(settings.downloadedPlayback, online, metered = online && AppSettings.onMeteredNetwork(),
+                onlyIfBetter = settings.streamDownloadsOnlyIfBetter, streamBetter = streamBetter)
+        }
+    }
+
+    /**
+     * The best quality streaming could give [videoId] here and now: a FLAC already found
+     * for it, a lossless add-on's or JioSaavn's when those are on for this network, or
+     * YouTube's own up to the quality set for it.
+     */
+    private fun bestStreamKbps(videoId: String): Int {
+        val youtube = minOf(AppSettings.effectiveAudioQuality.maxKbps, DownloadedCopy.YOUTUBE_KBPS)
+        val known = com.opentune.data.lossless.ExternalStreams.cached(videoId)?.let {
+            if (it.lossless) DownloadedCopy.losslessKbps(it.bits, it.sampleRate) else it.kbps ?: 320
+        }
+        val possible = when {
+            com.opentune.data.lossless.ExternalStreams.allowed(true) -> DownloadedCopy.CD_KBPS
+            com.opentune.data.lossless.ExternalStreams.allowed(false) -> 320
+            else -> youtube
+        }
+        return maxOf(known ?: 0, possible, youtube)
+    }
+
     fun artFor(videoId: String): File? =
         _entries.value[videoId]?.takeIf { it.state == DownloadState.DONE }?.artPath?.let(::File)?.takeIf { it.exists() }
 
@@ -192,7 +235,20 @@ object Downloads {
             preferred?.key ?: existing?.preferredRenditionKey, smart = true)
     }
 
-    private fun schedule(context: Context, song: SongRef, preferLossless: Boolean = false, preferredKey: String? = null, smart: Boolean = false) {
+    /**
+     * Fetches [videoId] again from a lossless add-on, keeping the finished copy, which
+     * plays and stays listed until the new file is in. With no lossless file to be had
+     * the old copy is simply kept. False when there's nothing to replace.
+     */
+    @Synchronized
+    fun downloadAgainLossless(context: Context, videoId: String): Boolean {
+        val e = _entries.value[videoId]?.takeIf { it.state == DownloadState.DONE && it.upgrade == null } ?: return false
+        schedule(context, e.song, preferLossless = true, upgradeOf = e)
+        return true
+    }
+
+    private fun schedule(context: Context, song: SongRef, preferLossless: Boolean = false, preferredKey: String? = null, smart: Boolean = false,
+                         upgradeOf: DownloadEntry? = null) {
         val wifiOnly = smart || AppSettings.library.value.downloadWifiOnly
         // Behind a VPN that calls itself metered Android's "unmetered" never comes, even on
         // Wi-Fi: the job waits for any connection and the worker checks for Wi-Fi itself.
@@ -211,8 +267,11 @@ object Downloads {
             .apply { if (smart) addTag(SmartDownloads.TAG) else setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST) }
             .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 15, java.util.concurrent.TimeUnit.SECONDS)
             .addTag(TAG)
+            .apply { if (upgradeOf != null) setInputData(workDataOf(DownloadWorker.KEY_ID to song.videoId, DownloadWorker.KEY_UPGRADE to true)) }
             .build()
-        put(song.videoId) { DownloadEntry(song, workId = request.id.toString(), preferLossless = preferLossless, preferredRenditionKey = preferredKey, smartDownload = smart) }
+        // A re-download keeps the finished copy listed; asked for by name, it's the listener's, outside the smart budget.
+        if (upgradeOf != null) put(song.videoId) { (it ?: upgradeOf).copy(upgrade = DownloadUpgrade(request.id.toString()), smartDownload = false) }
+        else put(song.videoId) { DownloadEntry(song, workId = request.id.toString(), preferLossless = preferLossless, preferredRenditionKey = preferredKey, smartDownload = smart) }
         WorkManager.getInstance(context).enqueueUniqueWork(workName(song.videoId), ExistingWorkPolicy.REPLACE, request)
     }
 
@@ -224,6 +283,7 @@ object Downloads {
     @Synchronized
     fun requeueWaiting(context: Context) {
         _entries.value.values.filter { it.state == DownloadState.QUEUED }.forEach { schedule(context, it.song, it.preferLossless, it.preferredRenditionKey, it.smartDownload) }
+        _entries.value.values.filter { it.state == DownloadState.DONE && it.upgrade != null }.forEach { schedule(context, it.song, preferLossless = true, upgradeOf = it) }
     }
 
     /**
@@ -279,6 +339,7 @@ object Downloads {
         val manager = WorkManager.getInstance(context)
         val workId = entry.workId?.let { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
         if (workId != null) manager.cancelWorkById(workId) else manager.cancelUniqueWork(workName(videoId))
+        entry.upgrade?.let { runCatching { java.util.UUID.fromString(it.workId) }.getOrNull() }?.let(manager::cancelWorkById)
         val directory = dir
         scope.launch {
             entry.exportUri?.let { DownloadExport.unpublish(context, it) }
@@ -286,6 +347,7 @@ object Downloads {
             entry.artPath?.let { File(it).delete() }
             directory?.let { d ->
                 entry.workId?.let { File(d, "$videoId.$it").deleteRecursively() }
+                entry.upgrade?.let { File(d, "$videoId.${it.workId}").deleteRecursively() }
                 File(d, "$videoId.part").delete()
                 if (entry.workId == null) File(d, "$videoId.lyrics.json").delete()
             }
@@ -340,6 +402,49 @@ object Downloads {
         }
     }
 
+    /** A lossless re-download's progress; false once it's no longer wanted (removed, or another took its place). */
+    internal fun updateUpgrade(videoId: String, workId: String, progress: Float): Boolean {
+        while (true) {
+            val before = _entries.value
+            val entry = before[videoId]?.takeIf { it.upgrade?.workId == workId } ?: return false
+            val after = entry.copy(upgrade = entry.upgrade!!.copy(progress = progress))
+            if (_entries.compareAndSet(before, before + (videoId to after))) return true
+        }
+    }
+
+    /**
+     * The lossless file is in: [fresh] takes the old copy's place, and the old
+     * copy's files go. False when the re-download was withdrawn meanwhile.
+     */
+    internal fun finishUpgrade(context: Context, videoId: String, workId: String, fresh: DownloadEntry): Boolean {
+        var replaced: DownloadEntry? = null
+        while (true) {
+            val before = _entries.value
+            val old = before[videoId]?.takeIf { it.upgrade?.workId == workId } ?: return false
+            val after = fresh.copy(workId = workId, upgrade = null, addedAt = old.addedAt, smartDownload = false)
+            if (_entries.compareAndSet(before, before + (videoId to after))) { replaced = old; break }
+        }
+        val old = replaced ?: return true
+        val directory = dir
+        scope.launch {
+            old.exportUri?.let { DownloadExport.unpublish(context, it) }
+            old.path?.let { File(it).delete() }
+            old.artPath?.let { File(it).delete() }
+            directory?.let { d ->
+                old.workId?.let { File(d, "$videoId.$it").deleteRecursively() } ?: File(d, "$videoId.lyrics.json").delete()
+            }
+        }
+        return true
+    }
+
+    /** The re-download found no lossless file or failed: the old copy simply stays. */
+    internal fun abandonUpgrade(videoId: String, workId: String) {
+        _entries.update { m ->
+            val e = m[videoId]?.takeIf { it.upgrade?.workId == workId } ?: return@update m
+            m + (videoId to e.copy(upgrade = null))
+        }
+    }
+
     /** A legacy download failed the player's extractor; keep the row so it can be repaired. */
     fun markBroken(videoId: String) {
         val entry = _entries.value[videoId] ?: return
@@ -368,13 +473,40 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
     override suspend fun doWork(): Result {
         val id = inputData.getString(KEY_ID) ?: return Result.failure()
         val entry = Downloads.entries.value[id] ?: return Result.failure()
-        if (entry.workId != null && entry.workId != this.id.toString()) return Result.success()
+        val myWork = this.id.toString()
+        // "Download again in lossless": the finished copy stays listed and playing while this runs.
+        val upgrading = inputData.getBoolean(KEY_UPGRADE, false)
+        if (upgrading && entry.upgrade?.workId != myWork) return Result.success()
+        if (!upgrading && entry.workId != null && entry.workId != myWork) return Result.success()
         if (entry.smartDownload && !SmartDownloads.allowed(applicationContext)) return Result.retry()
         // Scheduled for any connection because of a VPN (see Downloads.schedule): still Wi-Fi only.
         if (!entry.smartDownload && Downloads.waitingForWifi(applicationContext)) return Result.retry()
         runCatching { setForeground(foregroundInfo(entry.song.title, 0f)) }
+        // A re-download works on its own copy of the entry, which replaces the listed one once its file is in.
+        var shadow: DownloadEntry? = if (!upgrading) null else entry.copy(
+            state = DownloadState.QUEUED, progress = 0f, path = null, artPath = null, bytes = 0, error = null,
+            loudnessDb = null, exportUri = null, source = null, bits = null, sampleRate = null, codec = null,
+            preferLossless = true, upgrade = null, workId = myWork)
+        var owner = entry.workId
         fun publish(transform: (DownloadEntry) -> DownloadEntry) {
-            if (!Downloads.updateWorker(id, entry.workId, transform)) throw CancellationException("Download removed or replaced")
+            val copy = shadow
+            if (copy == null) {
+                if (!Downloads.updateWorker(id, owner, transform)) throw CancellationException("Download removed or replaced")
+                return
+            }
+            val next = transform(copy)
+            when (next.state) {
+                DownloadState.DONE -> {
+                    if (!Downloads.finishUpgrade(applicationContext, id, myWork, next)) throw CancellationException("Re-download withdrawn")
+                    shadow = null
+                    owner = myWork
+                }
+                DownloadState.FAILED -> { Downloads.abandonUpgrade(id, myWork); shadow = null }
+                else -> {
+                    if (!Downloads.updateUpgrade(id, myWork, next.progress)) throw CancellationException("Re-download withdrawn")
+                    shadow = next
+                }
+            }
         }
         val jobDir = File(Downloads.directory(), "$id.${this.id}")
         publish { it.copy(state = DownloadState.DOWNLOADING, error = null) }
@@ -394,7 +526,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 val preferred = entry.preferredRenditionKey?.let {
                     com.opentune.data.lossless.ExternalStreams.get(id, it)
                 } ?: com.opentune.data.lossless.ExternalStreams.downloadPreference(id)
-                if (LosslessDownloads.shouldTry(maxKbps, entry.preferLossless, preferred)) {
+                var handOverFailed = false
+                if (LosslessDownloads.shouldTry(maxKbps, entry.preferLossless || upgrading, preferred)) {
                     suspend fun save(candidate: com.opentune.data.addons.AddonStream, holdFailure: Boolean = true): File? {
                         val file = File(dir, "$id.${candidate.extension}")
                         try {
@@ -406,6 +539,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
                         } catch (e: SmartDownloadDeferred) {
                             throw e
                         } catch (e: Exception) {
+                            handOverFailed = true
                             com.opentune.data.addons.AddonResolver.failed(candidate.addonId, id, hold = holdFailure)
                             Log.w(TAG, "${candidate.provider} wouldn't hand over $id (${e.javaClass.simpleName}: ${e.message}); trying the next source")
                             publish { it.copy(progress = 0f) }
@@ -420,6 +554,10 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
                         .filter { it.extension != null }
                     for (candidate in candidates) save(candidate)?.let { return@withPermit it }
                 }
+                // Asked for lossless only: the copy already here is as good as any other stream.
+                // A source that had the file but wouldn't hand it over just then (busy, 429) is
+                // asked again later, like any failed download; with none that has it, that's that.
+                if (upgrading) throw if (handOverFailed) IOException("The lossless source didn't hand the file over") else NoLosslessCopy()
                 // No lossless file: JioSaavn's 320 kbps next, before YouTube's own stream,
                 // when JioSaavn is on and the download quality reaches that far.
                 if (maxKbps >= SAAVN_KBPS && AppSettings.playback.value.jioSaavnQuality) {
@@ -463,8 +601,10 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
                     state = DownloadState.DONE, progress = 1f, path = target.path, artPath = art?.path,
                     bytes = target.length(), loudnessDb = if (addon == null && !fromSaavn) StreamResolver.loudnessDbFor(id) else null,
                     source = addon?.provider ?: if (fromSaavn) "JioSaavn · 320 kbps" else null, bits = addon?.bits, sampleRate = addon?.sampleRate,
+                    codec = addon?.codec,
                 )
             }
+            if (upgrading) com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("{0} is now downloaded in lossless", entry.song.title), applicationContext)
             // A copy in the Music folder for other apps, when asked for and the format allows.
             if (exporting && DownloadExport.compatible(target)) {
                 DownloadExport.publish(applicationContext, entry.song, target)?.let { uri ->
@@ -481,6 +621,10 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         } catch (e: SmartDownloadDeferred) {
             publish { it.copy(state = DownloadState.QUEUED, progress = 0f, error = null) }
             Result.retry()
+        } catch (e: NoLosslessCopy) {
+            publish { it.copy(state = DownloadState.FAILED, progress = 0f) }
+            com.opentune.data.Pills.info(com.opentune.i18n.Tr.f("No lossless copy of {0} to download; keeping the one you have", entry.song.title), applicationContext)
+            Result.failure()
         } catch (e: Exception) {
             Log.w(TAG, "Download of $id failed", e)
             // A stream YouTube wouldn't hand over just then fails the same way as a
@@ -488,10 +632,12 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             val retrying = runAttemptCount < MAX_ATTEMPTS
             publish { it.copy(state = if (retrying) DownloadState.QUEUED else DownloadState.FAILED,
                 progress = 0f, error = e.message) }
+            if (upgrading && !retrying) com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't download {0} again; keeping the one you have", entry.song.title), applicationContext)
             if (retrying) Result.retry() else Result.failure()
         } finally {
             val current = Downloads.entryNow(id)
-            if (current == null || current.workId != entry.workId || current.state != DownloadState.DONE) {
+            // The folder is this job's: kept only when its file became the download.
+            if (current == null || current.workId != (if (upgrading) myWork else entry.workId) || current.state != DownloadState.DONE) {
                 jobDir.deleteRecursively()
             }
         }
@@ -564,6 +710,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
     companion object {
         const val KEY_ID = "videoId"
+        const val KEY_UPGRADE = "upgrade"
         private const val TAG = "DownloadWorker"
         private const val CHANNEL = "downloads"
         private const val NOTIFICATION_ID = 4120

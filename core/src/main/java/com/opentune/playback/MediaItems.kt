@@ -44,11 +44,9 @@ fun trackUri(videoId: String): Uri = when {
     Radio.isRadio(videoId) -> Radio.streamUrl(videoId)?.let(Uri::parse) ?: Uri.EMPTY
     // An audiobook's chapter plays straight from the Internet Archive.
     com.opentune.data.audiobooks.Audiobooks.isChapter(videoId) -> Uri.parse(com.opentune.data.audiobooks.Audiobooks.urlOf(videoId))
-    // A download is played from its file offline; with internet it streams, so it starts
-    // in the best quality found (the file is YouTube's audio as saved), unless that's off.
-    else -> Downloads.fileFor(videoId)
-        ?.takeUnless { com.opentune.data.settings.AppSettings.playback.value.streamDownloadsOnline && com.opentune.data.settings.AppSettings.isOnline() }
-        ?.let(Uri::fromFile)
+    // A download plays its file offline. With internet it streams in the best quality
+    // found, on Wi-Fi only or on any network as chosen, unless the file is lossless.
+    else -> Downloads.playableFile(videoId)?.let(Uri::fromFile)
         ?: streamUri(videoId, upgraded = UpgradedTracks.contains(videoId))
 }
 
