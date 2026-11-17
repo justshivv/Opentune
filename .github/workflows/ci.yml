@@ -49,6 +49,8 @@ jobs:
           --tests '*ExternalStreamsTest'
           --tests '*LosslessSourceTest'
           --tests '*UpgradeHandoffTest'
+          --tests '*PodcastParserTest'
+          --tests '*PodcastsTest'
       - name: Player and sign-in regression tests
         run: >-
           ./gradlew --no-daemon :app:testDebugUnitTest
@@ -249,7 +251,7 @@ jobs:
           if-no-files-found: error
 
   website:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

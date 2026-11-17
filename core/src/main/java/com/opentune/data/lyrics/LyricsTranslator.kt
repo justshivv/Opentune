@@ -5,6 +5,7 @@ import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
 import java.io.File
 import java.security.MessageDigest
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -35,86 +36,28 @@ object LyricsTranslator {
 
     data class Language(val code: String, val name: String)
 
-    val LANGUAGES: List<Language> = listOf(
-        Language("ar", "Arabic"),
-        Language("en", "English"),
-        Language("fr", "French"),
-        Language("es", "Spanish"),
-        Language("de", "German"),
-        Language("it", "Italian"),
-        Language("pt", "Portuguese"),
-        Language("ru", "Russian"),
-        Language("tr", "Turkish"),
-        Language("fa", "Persian"),
-        Language("ur", "Urdu"),
-        Language("hi", "Hindi"),
-        Language("bn", "Bengali"),
-        Language("pa", "Punjabi"),
-        Language("ta", "Tamil"),
-        Language("te", "Telugu"),
-        Language("ml", "Malayalam"),
-        Language("kn", "Kannada"),
-        Language("mr", "Marathi"),
-        Language("gu", "Gujarati"),
-        Language("ne", "Nepali"),
-        Language("si", "Sinhala"),
-        Language("my", "Burmese"),
-        Language("km", "Khmer"),
-        Language("lo", "Lao"),
-        Language("th", "Thai"),
-        Language("vi", "Vietnamese"),
-        Language("id", "Indonesian"),
-        Language("ms", "Malay"),
-        Language("tl", "Filipino"),
-        Language("zh-CN", "Chinese (Simplified)"),
-        Language("zh-TW", "Chinese (Traditional)"),
-        Language("ja", "Japanese"),
-        Language("ko", "Korean"),
-        Language("nl", "Dutch"),
-        Language("sv", "Swedish"),
-        Language("no", "Norwegian"),
-        Language("da", "Danish"),
-        Language("fi", "Finnish"),
-        Language("pl", "Polish"),
-        Language("cs", "Czech"),
-        Language("sk", "Slovak"),
-        Language("hu", "Hungarian"),
-        Language("ro", "Romanian"),
-        Language("bg", "Bulgarian"),
-        Language("hr", "Croatian"),
-        Language("sr", "Serbian"),
-        Language("sl", "Slovenian"),
-        Language("uk", "Ukrainian"),
-        Language("be", "Belarusian"),
-        Language("el", "Greek"),
-        Language("he", "Hebrew"),
-        Language("am", "Amharic"),
-        Language("sw", "Swahili"),
-        Language("ha", "Hausa"),
-        Language("yo", "Yoruba"),
-        Language("ig", "Igbo"),
-        Language("so", "Somali"),
-        Language("af", "Afrikaans"),
-        Language("ca", "Catalan"),
-        Language("eu", "Basque"),
-        Language("gl", "Galician"),
-        Language("is", "Icelandic"),
-        Language("ga", "Irish"),
-        Language("lt", "Lithuanian"),
-        Language("lv", "Latvian"),
-        Language("et", "Estonian"),
-        Language("mk", "Macedonian"),
-        Language("sq", "Albanian"),
-        Language("az", "Azerbaijani"),
-        Language("ka", "Georgian"),
-        Language("hy", "Armenian"),
-        Language("kk", "Kazakh"),
-        Language("uz", "Uzbek"),
-        Language("mn", "Mongolian"),
-        Language("yi", "Yiddish"),
-        Language("la", "Latin"),
-        Language("eo", "Esperanto"),
+    /** Google Translate's codes; the names are the platform's own, so they never need writing out. */
+    private const val LANGUAGE_CODES =
+        "ar,en,fr,es,de,it,pt,ru,tr,fa,ur,hi,bn,pa,ta,te,ml,kn,mr,gu,ne,si,my,km,lo,th," +
+                "vi,id,ms,tl,zh-CN,zh-TW,ja,ko,nl,sv,no,da,fi,pl,cs,sk,hu,ro,bg,hr,sr,sl,uk,be,el,he," +
+                "am,sw,ha,yo,ig,so,af,ca,eu,gl,is,ga,lt,lv,et,mk,sq,az,ka,hy,kk,uz,mn,yi,la,eo"
+
+    /** The names Google uses, where the platform's own name for a code differs. */
+    private val NAME_OVERRIDES = mapOf(
+        "bn" to "Bengali",
+        "tl" to "Filipino",
+        "zh-CN" to "Chinese (Simplified)",
+        "zh-TW" to "Chinese (Traditional)",
     )
+
+    /** Every language the lyrics can be translated into, A to Z by name. */
+    val LANGUAGES: List<Language> = LANGUAGE_CODES.split(",")
+        .map { code ->
+            val name = NAME_OVERRIDES[code]
+                ?: Locale.forLanguageTag(code).getDisplayLanguage(Locale.ENGLISH).ifBlank { code }
+            Language(code, name)
+        }
+        .sortedBy { it.name }
 
     fun languageName(code: String): String? = LANGUAGES.firstOrNull { it.code == code }?.name
 

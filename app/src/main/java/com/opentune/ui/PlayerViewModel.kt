@@ -44,6 +44,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** Apple's animated cover and Spotify's Canvas found for the playing track, by its id. */
     private val motionFound = MutableStateFlow<Pair<String, com.opentune.data.covers.AppleMotionArt.Motion>?>(null)
     private val canvasFound = MutableStateFlow<Pair<String, String>?>(null)
+    /** Whether the full player is on screen; AppRoot keeps it current, the activity reads it. */
+    private val _playerOpen = MutableStateFlow(false)
+    val playerOpen = _playerOpen.asStateFlow()
+    fun setPlayerOpen(open: Boolean) { _playerOpen.value = open }
     /** The animated cover to loop in the player's cover; null when none, or turned off since. */
     val coverVideo = combine(player.currentSong, motionFound, AppSettings.ui) { song, found, ui ->
         found?.takeIf { song != null && it.first == song.videoId && ui.animatedCovers && !ui.reduceAnimation }?.second

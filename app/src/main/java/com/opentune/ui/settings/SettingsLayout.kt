@@ -73,7 +73,7 @@ internal val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
         "playback", "Playback", "Automix and crossfade, autoplay, headphones and music videos", Icons.Rounded.PlayCircle,
         listOf(
-            "Between songs" to listOf("Automix", "Automix performance", "Crossfade", "Skip silence", "Preload upcoming songs"),
+            "Between songs" to listOf("Automix", "Automix performance", "Crossfade", "Skip silence", "Preload upcoming songs", "Boost preloading on Wi-Fi"),
             "Autoplay and suggestions" to listOf("Autoplay", "Recommendations", "Songs, not music videos", "Smart shuffle", "Don't repeat songs in current session"),
             "Headphones and the app" to listOf("Resume when headphones connect", "Pause at zero volume", "Background playback", "Stop music on close from recents"),
             "Music videos" to listOf("SponsorBlock", "SponsorBlock categories"),
@@ -103,7 +103,7 @@ internal val SETTINGS_CATEGORIES = listOf(
             "Cover art" to listOf("Full-screen cover art", "Match background to cover", "Cover corners", "Moving cover art", "Glow under the cover", "Song change", "Album covers", "Double-tap to skip 10 seconds"),
             "Animated covers and Canvas" to listOf("Animated covers", "Animated covers on Wi-Fi only", "Moving covers on Home"),
             "Seek bar" to listOf("Wavy seek bar", "Lyric preview while seeking", "Seek bar thickness", "Seek bar handle", "Seek bar colour", "Seek bar time", "Song part marks"),
-            "On the player" to listOf("Lyrics preview", "Audio quality label", "Audio details page", "Comments button", "Skip to chorus", "Hide volume bar", "Hide song status", "Hide output device", "Show stats for nerds"),
+            "On the player" to listOf("Lyrics preview", "Audio quality label", "Audio details page", "Comments button", "Skip to chorus", "Hide volume bar", "Hide device volume bar", "Hide song status", "Hide output device", "Show stats for nerds"),
         ),
     ),
     SettingsCategory(

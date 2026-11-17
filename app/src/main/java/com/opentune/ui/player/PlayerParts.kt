@@ -1011,11 +1011,11 @@ fun SeekBar(
     marks: List<Long> = emptyList(),
     quality: (@Composable () -> Unit)? = null,
 ) {
-    var dragFraction by remember { mutableStateOf<Float?>(null) }
+    var dragFraction by remember(durationMs) { mutableStateOf<Float?>(null) }
     // Where the finger let go (or tapped), held until the player has got there: the seek takes
     // a few frames, and drawn from the player's position at once the line went back to where
     // it was and then jumped to the new place.
-    var heldFraction by remember { mutableStateOf<Float?>(null) }
+    var heldFraction by remember(durationMs) { mutableStateOf<Float?>(null) }
     LaunchedEffect(heldFraction, durationMs) {
         val held = heldFraction ?: return@LaunchedEffect
         if (durationMs <= 0) { heldFraction = null; return@LaunchedEffect }

@@ -138,6 +138,7 @@ fun AppRoot(vm: PlayerViewModel) {
     val isPlaying by vm.isPlaying.collectAsState()
     val playbackError by vm.playbackError.collectAsState()
     var playerOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(playerOpen) { vm.setPlayerOpen(playerOpen) }
     // The docked player folded into its strip, on screens wide enough for one.
     var paneCollapsed by rememberSaveable { mutableStateOf(false) }
     var playerCovers by remember { mutableStateOf(false) }

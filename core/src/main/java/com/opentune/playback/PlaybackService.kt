@@ -161,11 +161,55 @@ class PlaybackService : MediaLibraryService() {
                         positionMs = p.currentPosition,
                         rate = p.playbackParameters.speed,
                         playing = p.isPlaying,
+                        quality = discordQuality(p),
                     )
                 },
             )
         }
     }
+
+    /**
+     * The playing stream's quality for the Discord card, in the quality badge's own
+     * terms: "Lossless · 16-bit · 44.1 kHz" for a lossless stream, the bitrate and
+     * rate otherwise; null while the format isn't known. Bit depth is a
+     * lossless-only figure, as on the format sheet.
+     */
+    private fun discordQuality(p: Player): String? {
+        // The format getters live on ExoPlayer, not on the Player interface.
+        val format = (p as? ExoPlayer)?.audioFormat ?: return null
+        val flac = LosslessAudioPolicy.streamInfo(format)
+        val info = AudioFormatInfo(
+            codec = (format.codecs ?: format.sampleMimeType?.substringAfter('/'))?.uppercase(),
+            mime = format.sampleMimeType,
+            bitrateKbps = format.bitrate.takeIf { b -> b > 0 }?.div(1000),
+            sampleRateHz = flac?.rate ?: format.sampleRate.takeIf { r -> r > 0 },
+            channels = flac?.channels ?: format.channelCount.takeIf { c -> c > 0 },
+            bitDepth = flac?.bits ?: when (format.pcmEncoding) {
+                C.ENCODING_PCM_8BIT -> 8
+                C.ENCODING_PCM_16BIT -> 16
+                C.ENCODING_PCM_24BIT -> 24
+                C.ENCODING_PCM_32BIT -> 32
+                else -> null
+            },
+        )
+        // The badge's lossless test: a bitrate no lossy codec reaches, or a lossless codec.
+        val lossless = (info.bitrateKbps ?: 0) >= 700 ||
+                info.codec?.let { c -> DISCORD_LOSSLESS_CODECS.any { c.contains(it, ignoreCase = true) } } == true
+        val parts = buildList {
+            if (lossless) {
+                add("Lossless")
+                info.bitDepth?.let { add("$it-bit") }
+            } else {
+                bestKbps(info, MeasuredBitrate.kbps.value, null)?.takeIf { it > 0 }?.let { add("$it kbps") }
+            }
+            info.sampleRateHz?.let { add(discordKhz(it)) }
+        }
+        return parts.joinToString(" · ").ifEmpty { null }
+    }
+
+    /** A sample rate in Hz as "44.1 kHz" or "96 kHz", trimming a trailing ".0". */
+    private fun discordKhz(hz: Int): String =
+        String.format(java.util.Locale.ROOT, "%.1f", hz / 1000.0).removeSuffix(".0") + " kHz"
 
     private fun selectedUri(uri: Uri): Uri = startupToken(uri)?.let { startupSelections[it]?.selected } ?: uri
 
@@ -423,12 +467,8 @@ class PlaybackService : MediaLibraryService() {
             AppSettings.playback.map { Triple(it.loudnessNormalization, it.normalizeOnSpeaker, it.volumeLevel) }.distinctUntilChanged().collect { applyLoudness() }
         }
         scope.launch {
-            AppSettings.playback.map { it.preloadUpcoming }.distinctUntilChanged().collect { on ->
-                // ExoPlayer prepares and buffers the next item in play order
-                // while this one plays, so it starts from memory.
-                player.preloadConfiguration =
-                    if (on) ExoPlayer.PreloadConfiguration(PRELOAD_US) else ExoPlayer.PreloadConfiguration.DEFAULT
-                if (on) warmNeighbours()
+            AppSettings.playback.map { it.preloadUpcoming to it.preloadBoostOnWifi }.distinctUntilChanged().collect {
+                updatePreload(player)
             }
         }
 
@@ -1021,8 +1061,11 @@ class PlaybackService : MediaLibraryService() {
             // A quality switch says what's playing once the new stream really is (see swapToUpgrade).
             if (!swap) updateExternalStats()
             applyLoudness()
-            if (!swap) scheduleUpgrade()
-            if (!swap) prefetchAhead()
+            if (!swap) {
+                warmJob?.cancel()
+                scheduleUpgrade()
+                prefetchAhead()
+            }
             // After this callback, not inside it: the queue changes under it otherwise.
             if (!swap) scope.launch(Dispatchers.Main) { dropPlayedHandQueued() }
             // Nothing but a blend or a swap turns the main player down; outside
@@ -2239,6 +2282,27 @@ class PlaybackService : MediaLibraryService() {
      * skip or a jump back only has to fetch audio. ExoPlayer's own preload
      * then buffers the very next one.
      */
+    private fun isWifiBoosted(): Boolean {
+        val pb = AppSettings.playback.value
+        return pb.preloadBoostOnWifi && !AppSettings.onMeteredNetwork()
+    }
+
+    private fun preloadDurationUs(): Long {
+        if (!AppSettings.playback.value.preloadUpcoming) return 0L
+        return if (isWifiBoosted()) PRELOAD_WIFI_US else PRELOAD_STANDARD_US
+    }
+
+    private fun warmAheadCount(): Int =
+        if (isWifiBoosted()) WARM_WIFI_AHEAD else WARM_STANDARD_AHEAD
+
+    private fun updatePreload(target: ExoPlayer? = null) {
+        val player = target ?: (mediaSession?.player as? ExoPlayer) ?: return
+        val durationUs = preloadDurationUs()
+        player.preloadConfiguration =
+            if (durationUs > 0) ExoPlayer.PreloadConfiguration(durationUs) else ExoPlayer.PreloadConfiguration.DEFAULT
+        if (AppSettings.playback.value.preloadUpcoming) warmNeighbours()
+    }
+
     private fun warmNeighbours() {
         // Maximum also starts immediately; warm its normal stream while quality
         // searches run independently, so next/previous do not repeat resolution.
@@ -2248,34 +2312,41 @@ class PlaybackService : MediaLibraryService() {
         if (timeline.isEmpty) return
         val current = player.currentMediaItemIndex
         val previous = timeline.getPreviousWindowIndex(current, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled)
-        val indices = player.upcomingPlayOrder().drop(1).take(WARM_AHEAD) +
+        val aheadCount = warmAheadCount()
+        val indices = player.upcomingPlayOrder().drop(1).take(aheadCount) +
                 listOfNotNull(previous.takeIf { it != C.INDEX_UNSET })
         val now = SystemClock.elapsedRealtime()
         val ids = indices.map { player.getMediaItemAt(it).mediaId }
             .filter { isYouTubeId(it) && now - (warmedAt[it] ?: 0L) > WARM_TTL_MS }
             .distinct()
         if (ids.isEmpty()) return
-        ids.forEach { warmedAt[it] = now }
         if (warmedAt.size > 64) warmedAt.entries.removeAll { now - it.value > WARM_TTL_MS }
 
         val songs = indices.map { player.getMediaItemAt(it).toSong() }.filter { it.videoId in ids }.distinctBy { it.videoId }
-        val previousJob = warmJob
+        warmJob?.cancel()
         warmJob = scope.launch(Dispatchers.IO) {
-            previousJob?.join()
+            // Settle delay: if skipping rapidly, do not warm neighbours for passed-over tracks
+            delay(WARM_SETTLE_MS)
             // Prepare the preferred source independently of YouTube URL warm-up.
             if (AppSettings.effectiveAudioQuality == com.opentune.data.settings.AudioQuality.MAX) launch {
-                for (song in songs) kotlinx.coroutines.withTimeoutOrNull(3_000) {
-                    ExternalStreams.findJioSaavn(song, song.durationMillis())
+                for (song in songs) {
+                    ensureActive()
+                    kotlinx.coroutines.withTimeoutOrNull(3_000) {
+                        ExternalStreams.findJioSaavn(song, song.durationMillis())
+                    }
                 }
             }
             // One at a time: these compete with the playing track for bandwidth.
             for (id in ids) {
-                runCatching { StreamResolver.resolve(id) }
-                    .onFailure { e ->
-                        if (e is CancellationException) throw e
-                        Log.w(TAG, "Warm-up for $id failed: ${e.message}")
-                        warmedAt.remove(id)
-                    }
+                ensureActive()
+                runCatching {
+                    StreamResolver.resolve(id)
+                    warmedAt[id] = SystemClock.elapsedRealtime()
+                }.onFailure { e ->
+                    if (e is CancellationException) throw e
+                    Log.w(TAG, "Warm-up for $id failed: ${e.message}")
+                    warmedAt.remove(id)
+                }
             }
         }
     }
@@ -2481,6 +2552,11 @@ class PlaybackService : MediaLibraryService() {
                     exhaustedSeeds.clear()
                     extendQueueIfNeeded()
                 }
+                scope.launch(Dispatchers.Main) { updatePreload() }
+            }
+
+            override fun onCapabilitiesChanged(network: android.net.Network, networkCapabilities: android.net.NetworkCapabilities) {
+                scope.launch(Dispatchers.Main) { updatePreload() }
             }
         }
         if (runCatching { manager.registerDefaultNetworkCallback(callback) }.isSuccess) networkCallback = callback
@@ -2955,12 +3031,22 @@ class PlaybackService : MediaLibraryService() {
         const val MIN_LOUDNESS_GAIN_MB = -1500
         const val MAX_LOUDNESS_GAIN_MB = 900
 
-        /** How much of the next track ExoPlayer buffers ahead of time. */
-        const val PRELOAD_US = 10_000_000L
+        /** Standard preload duration ahead (10s baseline on mobile data). */
+        const val PRELOAD_STANDARD_US = 10_000_000L
+        /** Boosted preload duration ahead on Wi-Fi (20s). */
+        const val PRELOAD_WIFI_US = 20_000_000L
         const val DISCORD_SETTLE_MS = 800L
 
-        /** Tracks ahead of the current one whose stream URLs are resolved early. */
-        const val WARM_AHEAD = 2
+        /** Codecs that are lossless whatever the stream around them says. */
+        val DISCORD_LOSSLESS_CODECS = listOf("FLAC", "ALAC", "WAV", "AIFF", "DSD", "WavPack", "APE")
+
+        /** Tracks ahead whose stream URLs are resolved early (2 baseline on mobile). */
+        const val WARM_STANDARD_AHEAD = 2
+        /** Tracks ahead resolved early on Wi-Fi (boosted to 3). */
+        const val WARM_WIFI_AHEAD = 3
+
+        /** Delay before warming neighbours, avoiding wasted fetches during rapid skips. */
+        const val WARM_SETTLE_MS = 600L
 
         /** A little under StreamResolver's 20-minute URL lifetime. */
         const val WARM_TTL_MS = 15 * 60 * 1000L

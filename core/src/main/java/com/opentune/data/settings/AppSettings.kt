@@ -376,6 +376,8 @@ data class PlaybackSettings(
     val swipeToQueue: Boolean = true,
     /** Buffer the next track and resolve its neighbours early, for instant skips. */
     val preloadUpcoming: Boolean = true,
+    /** Deepen preloading (20s buffer, 3 neighbours resolved) when on Wi-Fi or unmetered networks. */
+    val preloadBoostOnWifi: Boolean = false,
     /** A downloaded song streams in its best quality while there's internet; its file plays offline. */
     val streamDownloadsOnline: Boolean = true,
     /** Swap to a clearly better stream mid-song when one turns up. */
@@ -456,6 +458,8 @@ data class InterfaceSettings(
     val coverCornerDp: Int = 28,
     val coverColorBackground: Boolean = false,
     val hideVolumeBar: Boolean = false,
+    /** Volume keys move the volume without Android's panel; only offered while the player's own slider is shown. */
+    val hideDeviceVolumeBar: Boolean = false,
     val hideSongStatus: Boolean = false,
     val hideOutputDevice: Boolean = false,
     /** The Comments button in the player (in the pill beside the audio output) and in the song's menu. */
