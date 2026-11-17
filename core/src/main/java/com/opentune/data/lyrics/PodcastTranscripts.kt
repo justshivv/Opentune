@@ -24,8 +24,8 @@ object PodcastTranscripts {
 
     /** A sentence ends here once a line has this many characters. */
     private const val MIN_CHARS = 20
-    /** No line longer than this, sentence or not. */
-    private const val MAX_CHARS = 90
+    /** No line longer than this, sentence or not: lyrics are shown large. */
+    private const val MAX_CHARS = 70
     /** A silence this long starts a new line. */
     private const val PAUSE_MS = 1_500L
 
@@ -65,8 +65,19 @@ object PodcastTranscripts {
         return spokenTrack ?: manual.firstOrNull()
     }
 
-    /** A piece of the captions: a word of the automatic ones, a caption of hand-made ones. */
-    private class Piece(val startMs: Long, var endMs: Long, val text: String)
+    /**
+     * A piece of the captions: a word of the automatic ones, a caption of hand-made ones.
+     * [newSpeaker] where YouTube marks another voice taking over (">>").
+     */
+    private class Piece(val startMs: Long, var endMs: Long, val text: String, val newSpeaker: Boolean = false)
+
+    /** [raw] without YouTube's ">>" speaker marks, noting whether it had one. */
+    private fun piece(start: Long, end: Long, raw: String): Piece? {
+        val speaker = raw.trimStart().startsWith(">>")
+        // "[odkašlání]", "[Music]": a sound, not something said.
+        val text = raw.replace(">>", " ").replace(CUE, " ").replace(SPACES, " ").trim()
+        return if (text.isEmpty()) null else Piece(start, end, text, speaker)
+    }
 
     /** YouTube's timed text (`<p t d>`, with `<s t>` words in automatic captions) as lines of whole sentences. */
     internal fun lines(body: String): List<LyricLine> {
@@ -80,14 +91,13 @@ object PodcastTranscripts {
             if (words.isNotEmpty()) {
                 wordTimed = true
                 words.forEach { s ->
-                    val text = clean(s.groupValues[2])
-                    if (text.isNotEmpty()) pieces += Piece(start + (attr(s.groupValues[1], "t")?.toLongOrNull() ?: 0), end, text)
+                    piece(start + (attr(s.groupValues[1], "t")?.toLongOrNull() ?: 0), end, clean(s.groupValues[2]))?.let { pieces += it }
                 }
             } else {
                 val text = clean(inner.replace(TAG, ""))
                 // "[Music]", "(laughs)": not something said.
                 if (text.isNotEmpty() && !(text.startsWith("[") && text.endsWith("]")) && !(text.startsWith("(") && text.endsWith(")")))
-                    pieces += Piece(start, end, text)
+                    piece(start, end, text)?.let { pieces += it }
             }
         }
         pieces.sortBy { it.startMs }
@@ -114,7 +124,7 @@ object PodcastTranscripts {
             val last = current.lastOrNull()
             if (last != null) {
                 val length = current.sumOf { it.text.length + 1 }
-                if (piece.startMs - last.endMs > PAUSE_MS ||
+                if (piece.newSpeaker || piece.startMs - last.endMs > PAUSE_MS ||
                     (endsSentence(last.text) && length >= MIN_CHARS) ||
                     length + piece.text.length > MAX_CHARS
                 ) flush()
@@ -125,12 +135,17 @@ object PodcastTranscripts {
         return lines
     }
 
+    /** Ends a sentence; a number's dot doesn't, as in Czech dates ("v neděli 15. listopadu"). */
     private fun endsSentence(text: String) = text.trimEnd('"', '\'', '”', '’', ')').let { t ->
-        t.endsWith('.') || t.endsWith('?') || t.endsWith('!') || t.endsWith('…')
+        (t.endsWith('.') && !ORDINAL.matches(t.substringAfterLast(' '))) || t.endsWith('?') || t.endsWith('!') || t.endsWith('…')
     }
 
     private fun clean(s: String) = s.replace("&#39;", "'").replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
-        .replace(Regex("\\s+"), " ").trim()
+        .replace(SPACES, " ").trim()
+
+    private val SPACES = Regex("\\s+")
+    private val CUE = Regex("\\[[^\\]]*]")
+    private val ORDINAL = Regex("\\d{1,2}\\.")
 
     private fun kind(t: JsonObject) = (t["kind"] as? JsonPrimitive)?.contentOrNull
     private fun lang(t: JsonObject) = (t["languageCode"] as? JsonPrimitive)?.contentOrNull.orEmpty()
