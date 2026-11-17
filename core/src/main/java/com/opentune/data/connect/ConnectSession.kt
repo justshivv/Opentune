@@ -241,7 +241,7 @@ internal class ConnectSession(
             val id = newId()
             send(Transfer(myId, ++seq, clock(), to = deviceId, id = id, queue = queue, index = 0, pos = snap.pos, playing = snap.playing))
             expect(id, deviceId, timings.transferMs) { ack ->
-                if (ack.ok) player.pause() else notice(CANT_PLAY, nameOf(deviceId))
+                if (ack.ok) player.pause() else refused(ack, deviceId)
             }
             return
         }
@@ -260,9 +260,12 @@ internal class ConnectSession(
         val id = newId()
         send(Transfer(myId, ++seq, clock(), to = deviceId, id = id, queue = queue, index = 0, pos = pos, playing = state.playing))
         expect(id, deviceId, timings.transferMs) { ack ->
-            if (ack.ok) command(source.id, "pause", quiet = true) else notice(CANT_PLAY, nameOf(deviceId))
+            if (ack.ok) command(source.id, "pause", quiet = true) else refused(ack, deviceId)
         }
     }
+
+    /** Why [deviceId] didn't take the music, for the person. */
+    private fun refused(ack: Ack, deviceId: String) = notice(if (ack.reason == "needs-tap") NEEDS_TAP else CANT_PLAY, nameOf(deviceId))
 
     // ---- In --------------------------------------------------------------------------------
 
@@ -424,6 +427,7 @@ internal class ConnectSession(
         const val KIND = 21421
         const val NOT_ANSWERING = "{0} isn't answering"
         const val CANT_PLAY = "Can't play this on {0}"
+        const val NEEDS_TAP = "Click in {0} first, then try again"
         private const val TAG = "Connect"
     }
 }

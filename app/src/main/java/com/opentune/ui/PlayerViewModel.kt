@@ -40,11 +40,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val betterCover = MutableStateFlow<Pair<String, String>?>(null)
     /** The fuller artist credit the catalogue bills for the playing track, by its id. */
     private val fullerArtist = MutableStateFlow<Pair<String, String>?>(null)
-    val currentSong = combine(player.currentSong, betterCover, fullerArtist) { song, better, fuller ->
-        song?.copy(
-            thumbnailUrl = artwork.choose(song, better?.takeIf { it.first == song.videoId }?.second),
-            artist = fuller?.takeIf { it.first == song.videoId }?.second ?: song.artist,
-        ) ?: run { artwork.clear(); null }
+    /**
+     * Another of the person's devices playing (Connect): the player shows its
+     * song, play state and position, and its buttons act there.
+     */
+    private val remote = Connect.controlling
+    val currentSong = combine(player.currentSong, betterCover, fullerArtist, remote) { song, better, fuller, far ->
+        far?.state?.let { s -> s.track?.toSong() ?: Song("", com.opentune.i18n.Tr.t("Something of its own"), "", null) }
+            ?: song?.copy(
+                thumbnailUrl = artwork.choose(song, better?.takeIf { it.first == song.videoId }?.second),
+                artist = fuller?.takeIf { it.first == song.videoId }?.second ?: song.artist,
+            ) ?: run { artwork.clear(); null }
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
 
     /** Apple's animated cover and Spotify's Canvas found for the playing track, by its id. */
@@ -65,16 +71,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val queue = player.queue
     val currentIndex = player.currentIndex
     val upNext = player.upNext
-    val hasNext = player.hasNext
-    val isPlaying = player.isPlaying
+    val hasNext = combine(player.hasNext, remote) { here, far -> far != null || here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+    val isPlaying = combine(player.isPlaying, remote) { here, far -> far?.state?.playing ?: here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
     val isSounding = player.isSounding
-    val isBuffering = player.isBuffering
+    val isBuffering = combine(player.isBuffering, remote) { here, far -> far == null && here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
     val loadingMessage = player.loadingMessage
     val shuffleEnabled = player.shuffleEnabled
     val shuffleMode = player.shuffleMode
     val smartShuffleAvailable = player.smartShuffleAvailable
     val repeatMode = player.repeatMode
-    val durationMs = player.durationMs
+    val durationMs = combine(player.durationMs, remote) { here, far -> far?.state?.track?.lengthMs?.takeIf { it > 0 } ?: here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, 0L)
     val playbackError = player.error
     val source = player.source
     val audioFormat = player.audioFormat
@@ -270,7 +280,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** A song on its own; the service follows it with radio. */
     fun startRadio(song: Song) { if (!toRoom(song)) player.play(song, com.opentune.i18n.Tr.f("{0} radio", song.title)) }
     fun seekTo(positionMs: Long) { if (!Connect.seekTo(positionMs) && !Together.intercept(Together.Control.Seek(positionMs))) player.seekTo(positionMs) }
-    fun positionMs(): Long = player.currentPositionMs()
+    fun positionMs(): Long = remote.value?.positionAt(System.currentTimeMillis()) ?: player.currentPositionMs()
     fun bufferedPositionMs(): Long = player.bufferedPositionMs()
 
     override fun onCleared() {

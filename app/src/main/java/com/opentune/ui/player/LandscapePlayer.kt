@@ -185,6 +185,7 @@ internal fun LandscapePlayer(
                         onDismiss = { showOutput = false },
                         onCast = { showOutput = false; showCast = true },
                         onPipeline = { showOutput = false; onSignal() },
+                        onDevices = { showOutput = false; actions.openDevices() },
                     )
                     if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
                 }

@@ -65,11 +65,8 @@ export const useConnect = create<{
   link: { app: string; web: string } | null;
   view: ConnectView | null;
   notice: ConnectNotice | null;
-  devicesOpen: boolean;
-}>(() => ({ saved: load(), link: null, view: null, notice: null, devicesOpen: false }));
+}>(() => ({ saved: load(), link: null, view: null, notice: null }));
 
-export const openDevices = () => useConnect.setState({ devicesOpen: true });
-export const closeDevices = () => useConnect.setState({ devicesOpen: false });
 
 /** The other device this browser shows and controls, if any. */
 export const useControlling = (): Device | null => useConnect((s) => controllingOf(s.view));
@@ -128,6 +125,8 @@ const webPlayer: ConnectPlayer = {
     usePlayer.getState().next();
   },
   addToQueue: (ts) => usePlayer.getState().addToQueue(ts.map(fromCTrack)),
+  // A tab nobody has clicked in since it loaded may not start sound (the browser's autoplay rule).
+  needsTap: () => navigator.userActivation ? !navigator.userActivation.hasBeenActive : false,
   load: (queue, index, pos, playing) => {
     if (!queue.length || index < 0 || index >= queue.length) return false;
     void partyPlayer.load(queue.map(fromCTrack), queue.map(() => 'user'), index, pos / 1000, playing, SOURCE);
@@ -288,4 +287,6 @@ export async function disconnectAll(): Promise<void> {
 }
 
 export const transferTo = (deviceId: string) => session?.transferTo(deviceId);
+/** Seeks the device playing elsewhere to [ms]. */
+export const seekRemote = (ms: number) => session?.intercept('seek', Math.round(ms)) ?? false;
 export const sendVolume = (value: number) => session?.intercept('volume', 0, value) ?? false;

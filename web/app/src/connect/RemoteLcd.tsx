@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useUi } from '@/state/ui';
 import { positionAt, type Device } from './session';
 
 const seconds = (length: string | null | undefined): number => {
@@ -20,8 +21,9 @@ export function RemoteLcd({ device }: { device: Device }) {
   const track = s?.track;
   const total = seconds(track?.length) * 1000;
   const done = total ? Math.min(1, positionAt(device, now) / total) : 0;
+  const open = useUi((s) => s.setFullScreen);
   return (
-    <div className="relative flex h-full items-center gap-3 overflow-hidden">
+    <button className="relative flex h-full w-full items-center gap-3 overflow-hidden text-left" aria-label="Open Now Playing" onClick={() => open(true)}>
       {track?.thumb && <img src={track.thumb} alt="" className="size-10 flex-none rounded-[6px] object-cover" />}
       <div className="min-w-0 flex-1">
         <p className="truncate type-body-emphasized text-primary">{track?.title ?? 'Something of its own'}</p>
@@ -30,6 +32,6 @@ export function RemoteLcd({ device }: { device: Device }) {
       <div className="absolute right-0 bottom-1 left-0 h-[3px] rounded-full bg-quaternary">
         <div className="h-full rounded-full bg-key-bg" style={{ width: `${done * 100}%` }} />
       </div>
-    </div>
+    </button>
   );
 }

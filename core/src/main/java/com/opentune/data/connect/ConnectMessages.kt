@@ -18,6 +18,9 @@ data class CTrack(
 ) {
     fun toSong() = Song(videoId = id, title = title, artist = artist, thumbnailUrl = thumb, durationText = length, albumName = album)
 
+    /** [length] ("3:45", "1:02:03") in ms; 0 when there's none. */
+    val lengthMs: Long get() = length?.split(':')?.map { it.toLongOrNull() ?: return 0 }?.fold(0L) { a, b -> a * 60 + b }?.times(1000) ?: 0
+
     companion object {
         /** The track for [song], or null for one only this device can play (its own files, a private server). */
         fun of(song: Song): CTrack? =

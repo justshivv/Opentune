@@ -7,6 +7,7 @@ import { decode, fit, MAX_QUEUE, type Ack, type Command, type ConnectMsg, type C
 export const KIND = 21421;
 export const NOT_ANSWERING = "{0} isn't answering";
 export const CANT_PLAY = "Can't play this on {0}";
+export const NEEDS_TAP = 'Click in {0} first, then try again';
 
 /** What Connect needs from this device's player; ConnectPlayer on the phone. */
 export interface ConnectPlayer {
@@ -21,6 +22,8 @@ export interface ConnectPlayer {
   addToQueue(ts: CTrack[]): void;
   /** Loads [queue] from [index] at [pos] ms; false when none of it can play here. */
   load(queue: CTrack[], index: number, pos: number, playing: boolean): boolean;
+  /** True while this device can't start sound by itself (a browser tab nobody has clicked in yet). */
+  needsTap?(): boolean;
 }
 
 export interface Snapshot {
@@ -216,7 +219,7 @@ export class ConnectSession {
       this.send({ type: 'transfer', from: this.myId, seq: ++this.seq, at: this.clock(), to: deviceId, id, queue: [snap.track, ...snap.queue], index: 0, pos: Math.round(snap.pos), playing: snap.playing });
       this.expect(id, deviceId, this.timings.transferMs, (ack) => {
         if (ack.ok) this.player.pause();
-        else this.notice(CANT_PLAY, this.nameOf(deviceId));
+        else this.refused(ack, deviceId);
       });
       return;
     }
@@ -238,8 +241,13 @@ export class ConnectSession {
     this.send({ type: 'transfer', from: this.myId, seq: ++this.seq, at: this.clock(), to: deviceId, id, queue, index: 0, pos, playing });
     this.expect(id, deviceId, this.timings.transferMs, (ack) => {
       if (ack.ok) this.command(source.id, 'pause', { quiet: true });
-      else this.notice(CANT_PLAY, this.nameOf(deviceId));
+      else this.refused(ack, deviceId);
     });
+  }
+
+  /** Why [deviceId] didn't take the music, for the person. */
+  private refused(ack: { reason?: string | null }, deviceId: string): void {
+    this.notice(ack.reason === 'needs-tap' ? NEEDS_TAP : CANT_PLAY, this.nameOf(deviceId));
   }
 
   // ---- In ------------------------------------------------------------------------------------
@@ -295,8 +303,10 @@ export class ConnectSession {
         this.touch(msg.from, now);
         if (msg.to !== this.myId) return;
         const late = Math.min(Math.max(now - msg.at, 0), 10_000);
-        const ok = this.player.load(msg.queue ?? [], msg.index ?? 0, (msg.pos ?? 0) + late, msg.playing ?? true);
-        this.send({ type: 'ack', from: this.myId, seq: ++this.seq, at: now, to: msg.from, id: msg.id, ok, ...(ok ? {} : { reason: 'unplayable' }) });
+        // Taken only if it can sound here: otherwise the music stays where it is.
+        const reason = (msg.playing ?? true) && this.player.needsTap?.() ? 'needs-tap' : null;
+        const ok = !reason && this.player.load(msg.queue ?? [], msg.index ?? 0, (msg.pos ?? 0) + late, msg.playing ?? true);
+        this.send({ type: 'ack', from: this.myId, seq: ++this.seq, at: now, to: msg.from, id: msg.id, ok, ...(ok ? {} : { reason: reason ?? 'unplayable' }) });
         if (ok) {
           this.mine = null;
           setTimeout(() => this.localChanged(), 50);

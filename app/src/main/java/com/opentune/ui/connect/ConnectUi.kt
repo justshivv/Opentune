@@ -61,97 +61,17 @@ import com.opentune.ui.together.QrCode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** What the app shell needs to show of Connect: whether the devices sheet is open. */
-object ConnectUi {
-    private val _devicesOpen = MutableStateFlow(false)
-    val devicesOpen = _devicesOpen.asStateFlow()
-    fun openDevices() { _devicesOpen.value = true }
-    fun closeDevices() { _devicesOpen.value = false }
-}
-
+/** A device's icon by its form: "web" or "phone". */
 @Composable
-private fun formIcon(form: String): ImageVector =
+internal fun formIcon(form: String): ImageVector =
     ImageVector.vectorResource(if (form == "web") AppIcons.Laptop else AppIcons.Smartphone)
 
 /** The line a device's song shows under its name: "Song · Artist", or what it's doing instead. */
-private fun doing(d: Device): String? {
+internal fun doing(d: Device): String? {
     val s = d.state ?: return null
     if (s.track == null) return if (s.private) Tr.t("Playing something of its own") else null
     val what = listOf(s.track!!.title, s.track!!.artist).filter { it.isNotBlank() }.joinToString(" · ")
     return if (s.playing) what else Tr.f("Paused · {0}", what)
-}
-
-/**
- * The person's devices, to move playback to one of them. Opened from the
- * player and from the mini player of a song playing elsewhere.
- */
-@Composable
-fun DevicesSheet(onDismiss: () -> Unit, onSettings: () -> Unit) {
-    val view by Connect.view.collectAsState()
-    val group by Connect.group.collectAsState()
-    val name by Connect.deviceName.collectAsState()
-    FloatingCard(onDismiss = onDismiss, title = "Your devices", icon = ImageVector.vectorResource(AppIcons.Devices)) {
-        Column(Modifier.padding(horizontal = 4.dp)) {
-            val v = view
-            if (group == null || v == null) {
-                Text(
-                    "Play on your computer from this phone, and the other way round. Add OpenTune on the web to start.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
-                SheetButton("Add a device", onClick = { onDismiss(); onSettings() }, tone = SheetTone.Primary, icon = ImageVector.vectorResource(AppIcons.Add))
-                return@Column
-            }
-            DeviceRow(
-                icon = formIcon("phone"),
-                name = name,
-                line = Tr.t("This phone"),
-                active = v.activeId == v.myId,
-                onClick = { Connect.transferTo(v.myId); onDismiss() },
-            )
-            for (d in v.devices.sortedBy { it.name }) {
-                DeviceRow(
-                    icon = formIcon(d.form),
-                    name = d.name.ifBlank { Tr.t("Another device") },
-                    line = doing(d),
-                    active = v.activeId == d.id,
-                    onClick = { Connect.transferTo(d.id); onDismiss() },
-                )
-            }
-            if (v.devices.isEmpty()) {
-                Text(
-                    if (v.relays == 0) "Connecting…" else "Open OpenTune on your computer to see it here.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            SheetButton("Add a device", onClick = { onDismiss(); onSettings() }, icon = ImageVector.vectorResource(AppIcons.Add))
-        }
-    }
-}
-
-@Composable
-private fun DeviceRow(icon: ImageVector, name: String, line: String?, active: Boolean, onClick: () -> Unit) {
-    val accent = MaterialTheme.colorScheme.primary
-    Row(
-        Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(if (active) accent.copy(alpha = 0.12f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, null, Modifier.size(26.dp), tint = if (active) accent else MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = if (active) accent else MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (line != null) Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (active) Icon(ImageVector.vectorResource(AppIcons.GraphicEq), null, Modifier.size(20.dp), tint = accent)
-    }
 }
 
 /** Settings › Your devices: pairing, this device's name, the group, and syncing it through the account. */

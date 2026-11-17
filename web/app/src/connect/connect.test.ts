@@ -70,7 +70,7 @@ const fast: Timings = { presenceMs: 200, goneMs: 700, stateMs: 100, commandMs: 4
 const track = (c: string): CTrack => ({ id: c.repeat(11), title: `Song ${c}`, artist: 'Artist' });
 
 function fakePlayer(playable = true) {
-  const s = { track: null as CTrack | null, queue: [] as CTrack[], playing: false, pos: 0, volume: 1, calls: [] as string[] };
+  const s = { track: null as CTrack | null, queue: [] as CTrack[], playing: false, pos: 0, volume: 1, calls: [] as string[], needsTap: false };
   const player: ConnectPlayer = {
     snapshot: (): Snapshot | null => (s.track ? { track: s.track, private: false, playing: s.playing, pos: s.pos, queue: s.queue, volume: s.volume, shuffle: false, repeat: 'off' } : null),
     play: () => { s.calls.push('play'); s.playing = true; },
@@ -79,6 +79,7 @@ function fakePlayer(playable = true) {
     previous: () => { s.calls.push('previous'); },
     seekTo: (ms) => { s.calls.push(`seek ${ms}`); s.pos = ms; },
     setVolume: (v) => { s.calls.push(`volume ${v}`); s.volume = v; },
+    needsTap: () => s.needsTap,
     playTrack: (t) => { s.track = t; s.playing = true; },
     addToQueue: (ts) => { s.queue = [...s.queue, ...ts]; },
     load: (queue, index, pos, playing) => {
@@ -190,6 +191,18 @@ describe('sessions', () => {
     c!.session.transferTo('c');
     await eventually('c plays, b stops', () => c!.s.playing && !b!.s.playing);
     [a, b, c].forEach((d) => d!.session.stop());
+  });
+
+  it('keeps the music where it is when the target tab cannot start sound yet', async () => {
+    const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
+    b!.s.needsTap = true;
+    play(a!, track('x'));
+    await eventually('b sees a', () => b!.view?.activeId === 'a' && a!.view?.devices.length === 1);
+    a!.session.transferTo('b');
+    await eventually('a told why', () => a!.notices.includes('Click in Chrome first, then try again'));
+    expect(a!.s.playing).toBe(true);
+    expect(b!.s.calls).not.toContain('load 1');
+    a!.session.stop(); b!.session.stop();
   });
 
   it('leaves playback where it was when the target cannot play it', async () => {

@@ -151,7 +151,8 @@ fun rememberPlaybackPosition(vm: PlayerViewModel): () -> Long {
         while (true) {
             if (vm.isPlaying.value) withFrameMillis { } else delay(250)
             // Through a quality switch, where the song is heard rather than the main player's stalled reading.
-            position.longValue = com.opentune.playback.PlaybackRequests.soundingPosition?.invoke() ?: vm.positionMs()
+            position.longValue = if (com.opentune.data.connect.Connect.controlling.value != null) vm.positionMs()
+                else com.opentune.playback.PlaybackRequests.soundingPosition?.invoke() ?: vm.positionMs()
         }
     }
     return { position.longValue }
@@ -201,6 +202,8 @@ class PlayerActions(
     val moveIndex: (Int, Int) -> Unit = { _, _ -> },
     val openTogether: () -> Unit = {},
     val openEqualizer: () -> Unit = {},
+    /** Settings › Your devices (Connect). */
+    val openDevices: () -> Unit = {},
 )
 
 @Composable
@@ -211,6 +214,7 @@ fun PlayerScreen(
     onCovering: (Boolean) -> Unit = {},
     onTogether: () -> Unit = {},
     onEqualizer: () -> Unit = {},
+    onDevices: () -> Unit = {},
     /** Docked beside the page on a large screen; see [PlayerLayout]. */
     docked: Boolean = false,
 ) {
@@ -252,6 +256,7 @@ fun PlayerScreen(
             moveIndex = vm::moveQueueItem,
             openTogether = onTogether,
             openEqualizer = onEqualizer,
+            openDevices = onDevices,
         )
     }
     PlayerLayout(
@@ -1337,24 +1342,27 @@ fun PlayerLayout(
                                 }
                             }
                             val connectOn = com.opentune.data.connect.Connect.view.collectAsState().value != null
+                            val playingOn = com.opentune.data.connect.Connect.controlling.collectAsState().value
+                                ?.let { com.opentune.i18n.Tr.f("Playing on {0}", it.name.ifBlank { com.opentune.i18n.Tr.t("another device") }) }
                             if (!minimal && roomy && (sleepLabel != null || !state.ui.hideOutputDevice || connectOn)) Row(
                                 Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                // With Connect on, the line also opens the person's other devices.
+                                // With Connect on, the line opens where the sound goes, the person's other devices among it.
                                 Row(
                                     Modifier.clip(CircleShape)
-                                        .then(if (connectOn) Modifier.clickable { com.opentune.ui.connect.ConnectUi.openDevices() } else Modifier)
+                                        .then(if (connectOn) Modifier.clickable { showOutput = true } else Modifier)
                                         .padding(horizontal = 10.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    if (connectOn) Icon(ImageVector.vectorResource(AppIcons.Devices), null, Modifier.size(16.dp).padding(end = 2.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    val tint = if (playingOn != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    if (connectOn) Icon(ImageVector.vectorResource(AppIcons.Devices), null, Modifier.size(16.dp).padding(end = 2.dp), tint = tint)
                                     if (connectOn) Spacer(Modifier.width(6.dp))
                                     Text(
-                                        sleepLabel ?: device.takeIf { !state.ui.hideOutputDevice } ?: com.opentune.i18n.Tr.t("Your devices"),
+                                        playingOn ?: sleepLabel ?: device.takeIf { !state.ui.hideOutputDevice } ?: com.opentune.i18n.Tr.t("Your devices"),
                                         style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = tint,
                                         textAlign = TextAlign.Center,
                                     )
                                 }
@@ -1487,6 +1495,7 @@ fun PlayerLayout(
             onDismiss = { showOutput = false },
             onCast = { showOutput = false; showCast = true },
             onPipeline = { showOutput = false; showSignal = true },
+            onDevices = { showOutput = false; actions.openDevices() },
         )
         if (showCast) com.opentune.ui.cast.CastSheet(onDismiss = { showCast = false })
         if (showSleep) SleepTimerDialog(onDismiss = { showSleep = false })
@@ -1854,7 +1863,7 @@ fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier 
     val position = rememberPlaybackPosition(vm)
     val haptics = com.opentune.ui.components.rememberHaptics()
     val remote by com.opentune.data.connect.Connect.controlling.collectAsState()
-    remote?.let { device -> RemoteMiniPlayer(device, modifier, inline, replica); return }
+    remote?.let { device -> RemoteMiniPlayer(device, onExpand, modifier, inline, replica); return }
     val s = song ?: return
     MiniPlayer(
         song = s,
@@ -1879,18 +1888,16 @@ fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier 
 /**
  * The mini player while another of the person's devices plays: its song,
  * "Playing on" it in place of the artist, and its buttons acting there.
- * A tap opens the devices, to bring the music here or move it on.
+ * A tap opens the player, which shows and controls it too.
  */
 @Composable
-private fun RemoteMiniPlayer(device: com.opentune.data.connect.Device, modifier: Modifier, inline: Boolean, replica: Boolean) {
+private fun RemoteMiniPlayer(device: com.opentune.data.connect.Device, onExpand: () -> Unit, modifier: Modifier, inline: Boolean, replica: Boolean) {
     val state = device.state ?: return
     val track = state.track
     val name = device.name.ifBlank { com.opentune.i18n.Tr.t("another device") }
     val song = (track?.toSong() ?: com.opentune.data.model.Song("", com.opentune.i18n.Tr.t("Something of its own"), "", null))
         .copy(artist = com.opentune.i18n.Tr.f("Playing on {0}", name))
-    val length = remember(track?.length) {
-        track?.length?.split(':')?.mapNotNull { it.toLongOrNull() }?.takeIf { it.isNotEmpty() }?.fold(0L) { a, b -> a * 60 + b }?.times(1000) ?: 0L
-    }
+    val length = track?.lengthMs ?: 0L
     val haptics = com.opentune.ui.components.rememberHaptics()
     MiniPlayer(
         song = song,
@@ -1901,7 +1908,7 @@ private fun RemoteMiniPlayer(device: com.opentune.data.connect.Device, modifier:
         onTogglePlay = { haptics.tick(); com.opentune.data.connect.Connect.togglePlayPause() },
         onNext = { haptics.tick(); com.opentune.data.connect.Connect.skipNext() },
         onPrevious = { haptics.tick(); com.opentune.data.connect.Connect.skipPrevious() },
-        onClick = { com.opentune.ui.connect.ConnectUi.openDevices() },
+        onClick = onExpand,
         onDismiss = { if (state.playing) com.opentune.data.connect.Connect.togglePlayPause() },
         modifier = modifier,
         inline = inline,

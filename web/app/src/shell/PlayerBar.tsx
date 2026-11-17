@@ -19,7 +19,7 @@ import { usePlayer } from '@/state/player';
 import { useUi } from '@/state/ui';
 import { useLiquidGlass } from '@/lib/liquidGlass';
 import { Lcd } from './Lcd';
-import { openDevices, useControlling } from '@/connect/connect';
+import { useControlling } from '@/connect/connect';
 import { RemoteLcd } from '@/connect/RemoteLcd';
 
 const control = 'grid place-items-center rounded-[6px] disabled:opacity-40';
@@ -171,7 +171,12 @@ export function PlayerBar() {
           >
             <UpNextIcon size={18} />
           </button>
-          <button className={fading} aria-label="Your devices" aria-pressed={!!remote} onClick={openDevices}>
+          <button
+            className={`${fading} ${remote ? 'text-key' : ''}`}
+            aria-label="Devices"
+            aria-pressed={sidePanel === 'devices'}
+            onClick={() => toggleSidePanel('devices')}
+          >
             <MonitorSmartphone size={18} />
           </button>
           <VolumeControl open={volumeOpen} onOpen={() => setVolumeOpen(true)} />

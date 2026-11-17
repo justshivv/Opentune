@@ -126,10 +126,8 @@ private const val SEARCH_ROUTE = "search"
 @Composable
 fun AppRoot(vm: PlayerViewModel) {
     val nav = rememberNavController()
-    val localSong by vm.currentSong.collectAsState()
-    // Another of the person's devices playing: the mini player shows it here too (see Connect).
-    val remoteDevice by com.opentune.data.connect.Connect.controlling.collectAsState()
-    val song = localSong ?: remoteDevice?.state?.track?.toSong()
+    // With another of the person's devices playing, its song (see Connect).
+    val song by vm.currentSong.collectAsState()
     val isPlaying by vm.isPlaying.collectAsState()
     val playbackError by vm.playbackError.collectAsState()
     var playerOpen by rememberSaveable { mutableStateOf(false) }
@@ -445,11 +443,6 @@ fun AppRoot(vm: PlayerViewModel) {
     // the tree, so neither starts over (the activity handles the size change
     // itself rather than being recreated; see the manifest).
     val window = with(androidx.compose.ui.platform.LocalDensity.current) { androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.toSize().toDpSize() }
-    val devicesOpen by com.opentune.ui.connect.ConnectUi.devicesOpen.collectAsState()
-    if (devicesOpen) com.opentune.ui.connect.DevicesSheet(
-        onDismiss = com.opentune.ui.connect.ConnectUi::closeDevices,
-        onSettings = { playerOpen = false; nav.navigate("connect") },
-    )
     val layout = appLayout(window.width.value.toInt(), window.height.value.toInt(), song != null, paneCollapsed, chromeUi.wideLayout, chromeUi.sidePlayer)
     // Docked beside the page, the player is never also opened over it.
     val sheetOpen = playerOpen && !layout.sidePlayer
@@ -941,6 +934,7 @@ fun AppRoot(vm: PlayerViewModel) {
                         onCollapse = { paneCollapsed = true },
                         onTogether = { nav.navigate("together") },
                         onEqualizer = { nav.navigate("equalizer") },
+                        onDevices = { nav.navigate("connect") },
                         docked = true,
                     )
                 }
@@ -971,13 +965,14 @@ fun AppRoot(vm: PlayerViewModel) {
                     onCovering = { still = it },
                     onTogether = { fromPlayer { nav.navigate("together") } },
                     onEqualizer = { fromPlayer { nav.navigate("equalizer") } },
+                    onDevices = { fromPlayer { nav.navigate("connect") } },
                 )
             }
             if (sheetMorph) {
                 // Out of the mini player as one card, and back into it.
                 var sheetSettled by remember { mutableStateOf(false) }
                 com.opentune.ui.components.PlayerSheet(
-                    open = sheetOpen && localSong != null,
+                    open = sheetOpen && song != null,
                     onSettled = { sheetSettled = it },
                     face = { round -> MiniPlayerBar(vm, onExpand = {}, modifier = Modifier.fillMaxSize(), inline = round, replica = true) },
                 ) {
@@ -985,7 +980,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 }
             } else {
                 AnimatedVisibility(
-                    visible = sheetOpen && localSong != null,
+                    visible = sheetOpen && song != null,
                     enter = PageMotion.playerIn(chromeUi.playerMotion, chromeUi.reduceAnimation),
                     exit = PageMotion.playerOut(chromeUi.playerMotion, chromeUi.reduceAnimation),
                 ) {
@@ -999,7 +994,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 seed = com.opentune.ui.theme.rememberArtworkSeed(song?.thumbnailUrl),
                 settings = notificationTheme,
                 neutral = chromeUi.playerStyle == com.opentune.data.settings.PlayerStyle.APPLE_MUSIC,
-                active = sheetOpen && localSong != null,
+                active = sheetOpen && song != null,
             ) {
                 com.opentune.ui.components.PillHost(chromeUi.reduceAnimation, Modifier.align(Alignment.TopCenter))
             }
