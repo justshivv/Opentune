@@ -647,6 +647,8 @@ class PlaybackService : MediaLibraryService() {
         mediaSession = MediaLibrarySession.Builder(this, player, sessionCallback)
             .setSessionActivity(sessionActivity)
             .build()
+        // Another of the person's devices playing (Connect): the notification shows and controls that one.
+        scope.launch { com.opentune.data.connect.Connect.controlling.collect { showRemote(it, sessionActivity) } }
         // Earlier versions posted the song as a Live Update on its own channel. That's
         // gone; clear the channel so it doesn't linger in the phone's settings.
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -808,6 +810,43 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
         mediaSession
 
+    /**
+     * A second session, only while another of the person's devices plays
+     * (Connect): the notification, the lock screen and headphone buttons show
+     * and control that device through it. The app keeps talking to [mediaSession].
+     */
+    private var remoteSession: MediaSession? = null
+    private var remotePlayer: ConnectRemotePlayer? = null
+
+    private fun showRemote(device: com.opentune.data.connect.Device?, sessionActivity: PendingIntent) {
+        if (device == null) {
+            val session = remoteSession ?: return
+            remoteSession = null
+            removeSession(session)
+            session.release()
+            remotePlayer?.release()
+            remotePlayer = null
+            // The phone's own song back in the notification.
+            mediaSession?.let { onUpdateNotification(it, false) }
+            return
+        }
+        val player = remotePlayer ?: ConnectRemotePlayer().also { remotePlayer = it }
+        player.device = device
+        if (remoteSession == null) {
+            remoteSession = MediaSession.Builder(this, player)
+                .setId("connect")
+                .setSessionActivity(sessionActivity)
+                .build()
+                .also { addSession(it) }
+        }
+    }
+
+    /** While another device plays, the phone's own paused song doesn't take the notification back. */
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        if (remoteSession != null && session === mediaSession && !startInForegroundRequired) return
+        super.onUpdateNotification(session, startInForegroundRequired)
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player ?: return
         if (AppSettings.playback.value.stopOnTaskRemoved) {
@@ -846,6 +885,10 @@ class PlaybackService : MediaLibraryService() {
         startupSelections.clear()
         soundEffects?.release()
         soundEffects = null
+        remoteSession?.release()
+        remoteSession = null
+        remotePlayer?.release()
+        remotePlayer = null
         mediaSession?.run {
             player.removeListener(playerListener)
             player.release()
