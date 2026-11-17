@@ -29,7 +29,7 @@ class PodcastTranscriptsTest {
         assertEquals("ends where the next word starts", first.words[2].startMs, first.words[1].endMs)
         assertEquals("Tady je podcast Kecia politika 292.", lines[1].text)
         // The empty captions between the shown ones leave no blank lines, and lines don't overlap.
-        assertTrue(lines.all { it.text.isNotBlank() && it.text.length <= 90 })
+        assertTrue(lines.all { it.text.isNotBlank() && it.text.length <= 70 })
         lines.zipWithNext().forEach { (a, b) -> assertTrue("${a.text} / ${b.text}", a.endMs <= b.startMs) }
     }
 
@@ -42,10 +42,21 @@ Preston Stewart</p>
             <p t="12000" d="3000">Here we go.</p>
             </body></timedtext>"""
         val lines = PodcastTranscripts.lines(xml)
-        assertEquals(listOf("- The following is a conversation with Preston Stewart about the war & its drones.", "Here we go."), lines.map { it.text })
+        // Too long for one line together, so the sentence goes over two.
+        assertEquals(listOf("- The following is a conversation with Preston Stewart", "about the war & its drones.", "Here we go."), lines.map { it.text })
         assertFalse(lines.first().wordSynced)
         assertEquals(140L, lines.first().startMs)
-        assertEquals("the words are spread over each caption's own time", 4180L, lines.first().words.first { it.text.startsWith("about") }.startMs)
+        assertEquals("the words are spread over each caption's own time", 4180L, lines[1].words.first().startMs)
+    }
+
+    @Test fun anotherSpeakerStartsALineAndDatesDontEndSentences() {
+        val xml = """<timedtext format="3"><body>
+            <p t="0" d="3000" w="1"><s>Bylo</s><s t="300"> to</s><s t="500"> v</s><s t="700"> neděli</s><s t="1000"> 15.</s><s t="1300"> listopadu.</s><s t="1700"> [odkašlání]</s><s t="1800"> No</s></p>
+            <p t="2000" d="2000" w="1"><s>&gt;&gt; je</s><s t="200"> to</s><s t="400"> tak.</s></p>
+            </body></timedtext>"""
+        val lines = PodcastTranscripts.lines(xml)
+        assertEquals(listOf("Bylo to v neděli 15. listopadu.", "No", "je to tak."), lines.map { it.text })
+        assertEquals(2000L, lines[2].startMs)
     }
 
     @Test fun thePodcastsOwnLanguageIsChosenNotTheFirstListed() {
