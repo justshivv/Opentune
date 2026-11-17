@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import com.opentune.data.model.UiState
 import com.opentune.data.model.artworkAt
@@ -85,10 +86,12 @@ private enum class SearchKind(val label: String) { SHOWS("Shows"), EPISODES("Epi
 fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenShow: (String) -> Unit, onOpenSettings: (() -> Unit)? = null, onOpenAudiobooks: (() -> Unit)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
     var kind by rememberSaveable { mutableStateOf(SearchKind.SHOWS) }
-    val loader = rememberLoader("podcasts:home:${com.opentune.data.innertube.Innertube.currentRegion}") { Podcasts.home() }
-    val state by loader.state.collectAsState()
     val subscriptions by Podcasts.subscriptions.collectAsState()
     val progress by Podcasts.progress.collectAsState()
+    // The suggestions follow what was listened to: another episode to draw from loads them anew.
+    val seeds = remember(progress) { Podcasts.seeds(progress).map { it.videoId }.sorted().joinToString(",") }
+    val loader = rememberLoader("podcasts:home:${com.opentune.data.innertube.Innertube.currentRegion}:$seeds") { Podcasts.home() }
+    val state by loader.state.collectAsState()
     val inProgress = remember(progress) { Podcasts.inProgress(progress).take(10) }
     var refreshGeneration by remember { mutableIntStateOf(0) }
     var latest by remember { mutableStateOf<List<PodcastEpisode>>(emptyList()) }
@@ -100,13 +103,24 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
     var episodes by remember { mutableStateOf<List<PodcastEpisode>?>(null) }
     var searchError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
-    LaunchedEffect(query, kind, attempt) {
+    // A "Like …" chip: shows and episodes like one listened to, instead of a search.
+    var like by remember { mutableStateOf<PodcastEpisode?>(null) }
+    val likeChips = remember(progress) { Podcasts.seeds(progress, limit = 2).filter { it.showTitle.isNotBlank() } }
+    val topicUse by Podcasts.topicUse.collectAsState()
+    val topics = remember(topicUse) { Podcasts.topicsInOrder(topicUse) }
+    LaunchedEffect(query, kind, attempt, like) {
         val q = query.trim()
+        val seed = like
         shows = null; episodes = null; searchError = null
-        if (q.isEmpty()) return@LaunchedEffect
+        if (q.isEmpty() && seed == null) return@LaunchedEffect
         delay(350)
         try {
-            if (kind == SearchKind.SHOWS) shows = Podcasts.searchShows(q) else episodes = Podcasts.searchEpisodes(q)
+            if (seed != null) {
+                val (eps, related) = Podcasts.related(seed.videoId)
+                val own = setOfNotNull(seed.showBrowseId)
+                if (kind == SearchKind.SHOWS) shows = related.filter { it.browseId !in own }
+                else episodes = eps.filter { it.showBrowseId !in own }
+            } else if (kind == SearchKind.SHOWS) shows = Podcasts.searchShows(q) else episodes = Podcasts.searchEpisodes(q)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -126,7 +140,7 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
             item {
                 TextField(
                     value = query,
-                    onValueChange = { query = it },
+                    onValueChange = { query = it; like = null },
                     singleLine = true,
                     placeholder = { Text("Search shows and episodes") },
                     leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Search), null) },
@@ -143,13 +157,24 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
             }
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(Podcasts.TOPICS) { topic ->
-                        FilterChip(query == topic, { query = if (query == topic) "" else topic; kind = SearchKind.SHOWS }, { Text(topic) })
+                    // First, shows like the ones last listened to; then the topics, most picked first.
+                    items(likeChips, key = { "like:${it.videoId}" }) { seed ->
+                        FilterChip(like?.videoId == seed.videoId, {
+                            like = if (like?.videoId == seed.videoId) null else seed
+                            query = ""; kind = SearchKind.SHOWS
+                        }, { Text("Like ${seed.showTitle}", maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.widthIn(max = 220.dp))
+                    }
+                    items(topics, key = { "topic:$it" }) { topic ->
+                        FilterChip(query == topic, {
+                            like = null
+                            if (query != topic) Podcasts.pickedTopic(topic)
+                            query = if (query == topic) "" else topic; kind = SearchKind.SHOWS
+                        }, { Text(topic) })
                     }
                 }
             }
 
-            if (query.isNotBlank()) {
+            if (query.isNotBlank() || like != null) {
                 item {
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
                         SearchKind.entries.forEachIndexed { i, k ->
@@ -205,6 +230,16 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
                 is UiState.Error -> item { ErrorState(s.message, onRetry = { loader.reload() }) }
                 is UiState.Success -> {
                     val home = s.data
+                    home.becauseOf.forEach { (show, list) ->
+                        item(key = "because:$show") { SectionHeader(show, subtitle = "Because you listened to") }
+                        item(key = "becauseRow:$show") { ShowCarousel(list, onOpenShow) }
+                    }
+                    if (home.suggested.isNotEmpty()) {
+                        item(key = "suggestedHeader") { SectionHeader("Episodes you might like") }
+                        items(home.suggested, key = { "sug:${it.videoId}" }) { ep ->
+                            EpisodeRow(ep, actions, showShow = true, onOpenShow = onOpenShow) { actions.playEpisodes(listOf(ep), 0, ep.showTitle) }
+                        }
+                    }
                     if (home.shows.isNotEmpty()) {
                         item { SectionHeader("Shows to try") }
                         item { ShowCarousel(home.shows, onOpenShow) }

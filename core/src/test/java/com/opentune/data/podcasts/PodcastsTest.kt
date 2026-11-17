@@ -9,6 +9,75 @@ import org.junit.Test
 
 class PodcastsTest {
     @Test
+    fun randomTopicsOnlyWhenSuggestionsDontFillThePage() {
+        val show = PodcastShow("MPSPx", "X")
+        val ep = PodcastEpisode("e", "E", "S")
+        val two = Podcasts.ForYou(listOf("A" to listOf(show), "B" to listOf(show)), emptyList())
+        val oneAndEpisodes = Podcasts.ForYou(listOf("A" to listOf(show)), listOf(ep, ep.copy(videoId = "f"), ep.copy(videoId = "g")))
+        val thin = Podcasts.ForYou(listOf("A" to listOf(show)), listOf(ep))
+        assertTrue(Podcasts.enoughFor(two))
+        assertTrue(Podcasts.enoughFor(oneAndEpisodes))
+        assertFalse(Podcasts.enoughFor(thin))
+        // Enough: no random topics; a favourite one stays.
+        assertEquals(emptyList<String>(), Podcasts.topicsToShow(1, nothingElse = false, enough = true, favourites = emptyList()))
+        assertEquals(listOf("Science"), Podcasts.topicsToShow(1, nothingElse = false, enough = true, favourites = listOf("Science", "News")))
+        // Not enough: two, a favourite first. Nothing else at all: four.
+        assertEquals("Science", Podcasts.topicsToShow(1, nothingElse = false, enough = false, favourites = listOf("Science")).first())
+        assertEquals(2, Podcasts.topicsToShow(1, nothingElse = false, enough = false, favourites = emptyList()).size)
+        assertEquals(4, Podcasts.topicsToShow(1, nothingElse = true, enough = false, favourites = emptyList()).toSet().size)
+    }
+
+    @Test
+    fun topicsPickedMostComeFirst() {
+        val order = Podcasts.topicsInOrder(mapOf("Science" to 3, "Comedy" to 1))
+        assertEquals(listOf("Science", "Comedy", "News", "True crime"), order.take(4))
+        assertEquals(Podcasts.TOPICS.toSet(), order.toSet())
+        assertEquals(Podcasts.TOPICS, Podcasts.topicsInOrder(emptyMap()))
+    }
+
+    private fun related(): Pair<List<PodcastEpisode>, List<PodcastShow>> {
+        val root = kotlinx.serialization.json.Json.parseToJsonElement(javaClass.classLoader!!.getResource("podcasts/related.json")!!.readText())
+        return PodcastParser.episodesIn(root) to PodcastParser.showsIn(root)
+    }
+
+    @Test
+    fun relatedTabGivesEpisodesAndShows() {
+        // Saved from YouTube Music beside an episode of Kecy a politika, signed out.
+        val (episodes, shows) = related()
+        assertEquals(4, episodes.size)
+        assertEquals(4, shows.size)
+        assertTrue(shows.all { it.browseId.startsWith("MPSP") && it.title.isNotBlank() })
+    }
+
+    @Test
+    fun suggestionsLeaveOutWhatsKnownAndRepeatNothing() {
+        val r = related()
+        val (episodes, shows) = r
+        val seed = PodcastEpisode("seed1234567", "Kecy a politika 292", "Kecy a politika", showBrowseId = "MPSPseedshow")
+        val other = PodcastEpisode("seed7654321", "Another", "Other show", showBrowseId = "MPSPothershow")
+        val s = Podcasts.suggestions(
+            seeds = listOf(seed, other),
+            related = listOf(r, r),
+            subscribed = setOf(shows[0].browseId),
+            heard = setOf(episodes[0].videoId),
+        )
+        // One shelf: the second seed brought only shows already placed under the first.
+        assertEquals(1, s.shows.size)
+        assertEquals("Kecy a politika", s.shows[0].first)
+        assertEquals(shows.drop(1).map { it.browseId }, s.shows[0].second.map { it.browseId })
+        assertEquals(episodes.drop(1).map { it.videoId }, s.episodes.map { it.videoId })
+        // Nothing listened to yet, nothing loaded: no suggestions, no failure.
+        assertTrue(Podcasts.suggestions(listOf(seed), listOf(null), emptySet(), emptySet()).let { it.shows.isEmpty() && it.episodes.isEmpty() })
+    }
+
+    @Test
+    fun seedsAreTheLatestListenedOneAShow() {
+        fun p(id: String, show: String, at: Long) = Podcasts.Progress(PodcastEpisode(id, id, show, showBrowseId = "MPSP$show"), 60_000, 600_000, at)
+        val all = listOf(p("a", "x", 1), p("b", "x", 5), p("c", "y", 3), p("d", "z", 4), p("e", "w", 2)).associateBy { it.episode.videoId }
+        assertEquals(listOf("b", "d", "c"), Podcasts.seeds(all).map { it.videoId })
+    }
+
+    @Test
     fun frontPageTopicsDifferAndChangeDaily() {
         // Four when YouTube Music sends no podcasts of its own, all different.
         val four = Podcasts.topicPicks(day = 20_000, count = 4)
