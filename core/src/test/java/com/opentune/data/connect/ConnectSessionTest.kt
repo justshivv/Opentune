@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -37,9 +38,12 @@ class ConnectSessionTest {
 
     private class Hub {
         val flow = MutableSharedFlow<NostrEvent>(extraBufferCapacity = 1024)
-        var silent = mutableSetOf<String>()
-        fun transport() = object : RoomTransport {
-            override val events: SharedFlow<NostrEvent> = flow
+        /** Devices that stopped hearing anything, without saying goodbye. */
+        val deaf = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+        fun transport(id: String) = object : RoomTransport {
+            override val events: SharedFlow<NostrEvent> = MutableSharedFlow<NostrEvent>(extraBufferCapacity = 1024).also { mine ->
+                kotlinx.coroutines.GlobalScope.launch { flow.collect { if (id !in deaf) mine.emit(it) } }
+            }
             override val connected: StateFlow<Int> = MutableStateFlow(1)
             override fun start() = Unit
             override fun publish(event: NostrEvent) = flow.tryEmit(event)
@@ -78,7 +82,7 @@ class ConnectSessionTest {
         val notices = mutableListOf<String>()
         lateinit var session: ConnectSession
         fun start(): Dev {
-            session = ConnectSession(group, id, name, "phone", player, hub.transport(), view, { t, n -> notices += t.replace("{0}", n) }, scope, fast)
+            session = ConnectSession(group, id, name, "phone", player, hub.transport(id), view, { t, n -> notices += t.replace("{0}", n) }, scope, fast)
             onLoop { session.start() }
             return this
         }
@@ -136,7 +140,7 @@ class ConnectSessionTest {
         onLoop { a.player.track = track('x'); a.player.playing = true; a.session.localChanged() }
         eventually("b controls a") { b.view.value.controlling?.id == "a" }
         // a goes quiet without saying goodbye.
-        onLoop { a.session.stop() }
+        hub.deaf += "a"
         Thread.sleep(50)
         onLoop { b.session.intercept("next") }
         eventually("notice") { b.notices.contains("Phone isn't answering") }

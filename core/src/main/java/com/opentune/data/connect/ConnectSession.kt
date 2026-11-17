@@ -140,7 +140,8 @@ internal class ConnectSession(
                 handle(msg)
             }
         }
-        jobs += scope.launch(Dispatchers.Default) {
+        // Not in [jobs]: it has to outlive stop() long enough to send the goodbye.
+        scope.launch(Dispatchers.Default) {
             for (m in outbox) {
                 val event = NostrEvent.signed(key, KIND, listOf(listOf("t", group.tag)), ConnectMsg.fit(m, group))
                 if (!transport.publish(event)) Log.w(TAG, "no relay connected for ${m::class.simpleName}")
