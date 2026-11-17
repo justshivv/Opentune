@@ -231,7 +231,9 @@ fun ArtistLinks(
     }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         if (explicit) { ExplicitBadge(color = color); Spacer(Modifier.width(6.dp)) }
-        Text(text, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, style = style, color = color)
+        // A line too long for its row scrolls, the way the title does; the
+        // names stay links while it moves.
+        MarqueeText(text, Modifier.weight(1f, fill = false), style = style, color = color)
     }
 }
 
@@ -754,6 +756,14 @@ fun MessageState(
 @Composable
 fun MarqueeText(
     text: String,
+    modifier: Modifier = Modifier,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
+    color: Color = Color.Unspecified,
+) = MarqueeText(androidx.compose.ui.text.AnnotatedString(text), modifier, style, color)
+
+@Composable
+fun MarqueeText(
+    text: androidx.compose.ui.text.AnnotatedString,
     modifier: Modifier = Modifier,
     style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
     color: Color = Color.Unspecified,

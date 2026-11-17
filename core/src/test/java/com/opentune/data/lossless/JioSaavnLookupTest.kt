@@ -69,12 +69,19 @@ class JioSaavnLookupTest {
 
     @Test fun displayLineNamesEveryonePerformingButNotTheLyricistOrTheCast() {
         val info = track().getJSONObject("more_info")
-        // The byline names only the composer; the singer is on the recording too.
-        assertEquals("Madhubanti Bagchi, Amit Trivedi", JioSaavnSource.displayLine(info, "Amit Trivedi"))
+        // The byline names only the composer; the singer is on the recording too,
+        // and the byline's own artist leads the fuller line.
+        assertEquals("Amit Trivedi, Madhubanti Bagchi", JioSaavnSource.displayLine(info, "Amit Trivedi"))
         // A byline that already names everyone performing gets no replacement.
         assertNull(JioSaavnSource.displayLine(info, "Amit Trivedi, Madhubanti Bagchi"))
         // A byline the catalogue does not bill at all is never rewritten.
         assertNull(JioSaavnSource.displayLine(info, "Another Singer"))
+        // Filed under primary artists as well, the lyricist still stays out.
+        val info2 = track().getJSONObject("more_info")
+        info2.getJSONObject("artistMap").put("primary_artists", org.json.JSONArray()
+            .put(JSONObject().put("name", "Amitabh Bhattacharya"))
+            .put(JSONObject().put("name", "Madhubanti Bagchi")))
+        assertEquals("Amit Trivedi, Madhubanti Bagchi", JioSaavnSource.displayLine(info2, "Amit Trivedi"))
     }
 
     @Test fun verifiedLookupHandsTheFullerCreditToTheCaller() = runBlocking {
@@ -93,7 +100,7 @@ class JioSaavnLookupTest {
             }
         }
         assertEquals("https://aac.saavncdn.com/123/uyi_320.mp4", result)
-        assertEquals(listOf("Madhubanti Bagchi, Amit Trivedi"), lines)
+        assertEquals(listOf("Amit Trivedi, Madhubanti Bagchi"), lines)
     }
 
     @Test fun catalogMissAndNetworkFailureHaveDifferentFallbackReasons() = runBlocking {

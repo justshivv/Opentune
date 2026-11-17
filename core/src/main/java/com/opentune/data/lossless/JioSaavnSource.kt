@@ -88,31 +88,46 @@ internal object JioSaavnSource {
     /**
      * The credit line worth showing for a matched recording: everyone Saavn bills for
      * performing it — the primary and featured artists, plus the singer, composer and
-     * music credits — joined as one line. The lyricist and the cast are not performing
-     * artists and stay out. Only offered when it names everyone the queue's byline
-     * already names, plus more: a fuller credit may extend the byline, never rewrite it.
+     * music credits — joined as one line. A name the artists array credits only with
+     * words or a screen role is not a performer and never joins, even when Saavn also
+     * files it under primary artists, as soundtracks bill the lyricist there. Only
+     * offered when it names everyone the queue's byline already names, plus more: a
+     * fuller credit may extend the byline, never rewrite it. The byline's own artists
+     * lead, in their order; everyone else follows in the catalogue's order.
      */
     internal fun displayLine(info: JSONObject, byline: String): String? {
         val map = info.optJSONObject("artistMap") ?: return null
+        val performing = setOf("singer", "composer", "music", "primary_artists", "featured_artists")
+        val entries = map.optJSONArray("artists")
+        val roles = mutableMapOf<String, MutableSet<String>>()
+        for (i in 0 until (entries?.length() ?: 0)) {
+            val entry = entries?.optJSONObject(i) ?: continue
+            val name = entry.optString("name").let(JioSaavnRadio::unescape).trim()
+            if (name.isNotEmpty()) roles.getOrPut(CatalogIdentity.key(name)) { mutableSetOf() } += entry.optString("role")
+        }
+        val notPerforming = roles.filterValues { rs -> rs.none { it in performing } }.keys
         val names = mutableListOf<String>()
-        fun add(raw: String?) {
+        fun add(raw: String?, unlessBlocked: Boolean) {
             val name = raw?.let(JioSaavnRadio::unescape)?.trim().orEmpty()
-            if (name.isNotEmpty() && names.none { CatalogIdentity.key(it) == CatalogIdentity.key(name) }) names += name
+            if (name.isEmpty() || (unlessBlocked && CatalogIdentity.key(name) in notPerforming)) return
+            if (names.none { CatalogIdentity.key(it) == CatalogIdentity.key(name) }) names += name
         }
         for (field in listOf("primary_artists", "featured_artists")) {
-            val entries = map.optJSONArray(field)
-            for (i in 0 until (entries?.length() ?: 0)) add(entries?.optJSONObject(i)?.optString("name"))
+            val list = map.optJSONArray(field)
+            for (i in 0 until (list?.length() ?: 0)) add(list?.optJSONObject(i)?.optString("name"), unlessBlocked = true)
         }
-        val entries = map.optJSONArray("artists")
         for (i in 0 until (entries?.length() ?: 0)) {
             val entry = entries?.optJSONObject(i)
-            if (entry?.optString("role") in setOf("singer", "composer", "music", "primary_artists", "featured_artists")) add(entry?.optString("name"))
+            if (entry?.optString("role") in performing) add(entry?.optString("name"), unlessBlocked = false)
         }
         if (names.size < 2) return null
         val separators = Regex("\\s*(?:,|&|;|\\u2022)\\s*|\\s+(?:feat\\.?|ft\\.?|featuring)\\s+", RegexOption.IGNORE_CASE)
-        val billed = byline.split(separators).map { CatalogIdentity.key(it) }.filter(String::isNotEmpty)
+        val billed = byline.split(separators).map { CatalogIdentity.key(it) }.filter(String::isNotEmpty).distinct()
         val have = names.map { CatalogIdentity.key(it) }.toSet()
-        return if (billed.isNotEmpty() && billed.all { it in have } && names.size > billed.size) names.joinToString(", ") else null
+        if (billed.isEmpty() || !billed.all { it in have } || names.size <= billed.size) return null
+        val ordered = billed.map { b -> names.first { CatalogIdentity.key(it) == b } } +
+                names.filter { CatalogIdentity.key(it) !in billed }
+        return ordered.joinToString(", ")
     }
 
     internal fun streamUrl(info: JSONObject): String? {
