@@ -5,6 +5,7 @@ import com.opentune.data.DebugLog as Log
 import com.opentune.data.Http
 import com.opentune.data.innertube.Innertube
 import com.opentune.data.local.LocalMusic
+import com.opentune.data.podcasts.Podcasts
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import com.opentune.data.download.Downloads
@@ -124,6 +125,8 @@ object LyricsRepository {
         // under it, the lyrics found were another song's.
         val artist = credited.takeUnless { it.trim().lowercase() in NOT_AN_ARTIST }.orEmpty()
         withContext(Dispatchers.IO) { readOffline(videoId, durationMs) }?.let { return Found(it, true) }
+        // A podcast episode has no lyrics anywhere, and its title can match a song's: its words are its transcript.
+        if (isYouTubeId(videoId) && Podcasts.isEpisode(videoId)) return transcriptOf(videoId, durationMs)
         val settings = AppSettings.lyrics.value
         val chosen = settings.chosen[videoId]
         // The duration is in the key: lyrics found for one length aren't reused for another.
@@ -201,6 +204,18 @@ object LyricsRepository {
         val settled = !failed || rank(result) >= target
         if (result != null && durationMs > 0 && settled) cache[key] = result
         return Found(result, settled)
+    }
+
+    /** A podcast episode's transcript (see [PodcastTranscripts]); asked again later when YouTube didn't answer. */
+    private suspend fun transcriptOf(videoId: String, durationMs: Long): Found {
+        val key = "transcript|$videoId"
+        cache[key]?.let { return Found(it, true) }
+        val answer = withContext(Dispatchers.IO) { runCatching { PodcastTranscripts.lookup(videoId, durationMs) } }
+        answer.exceptionOrNull()?.let { if (it is kotlinx.coroutines.CancellationException) throw it; Log.w(TAG, "Transcript lookup failed for $videoId", it) }
+        val found = answer.getOrNull()
+        if (found != null) cache[key] = found
+        // None there (captions off) is an answer; a failure may be the network.
+        return Found(found, answer.isSuccess)
     }
 
     /** [lyrics] tidied, or null (with the reason logged) when it doesn't fit this track. */
