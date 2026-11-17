@@ -91,19 +91,36 @@ object PlaylistSync {
      */
     fun refresh(id: String? = null): Job = scope.launch {
         sending.withLock {
+            // The list the listener just opened is read first, before the
+            // edits still being sent get their turn: its update is the one
+            // being waited on, and a slow send must not hold it up. A list
+            // with edits of its own still waiting is left to the pass after
+            // the send, exactly as before.
+            var pulledFirst = false
+            val target = id?.let { wanted -> LibraryStore.playlists.value.firstOrNull { it.id == wanted && it.remoteId != null } }
+            if (target != null && AccountStore.signedIn.value && !isWaiting(target.id)) {
+                pull(target)
+                pulledFirst = true
+            }
             send()
             if (!AccountStore.signedIn.value) return@withLock
             val linked = LibraryStore.playlists.value.filter { it.remoteId != null && (id == null || it.id == id) }
             for (p in linked) {
+                if (p.id == id && pulledFirst) continue
                 if (isWaiting(p.id)) continue
-                try {
-                    LibraryStore.applyRemote(p.id, MusicRepository.remotePlaylist(p.remoteId ?: continue))
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "Couldn't read ${p.name} from YouTube Music", e)
-                }
+                pull(p)
             }
+        }
+    }
+
+    /** Brings one linked playlist up to date with what YouTube Music has. */
+    private suspend fun pull(p: LocalPlaylist) {
+        try {
+            LibraryStore.applyRemote(p.id, MusicRepository.remotePlaylist(p.remoteId ?: return))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Couldn't read ${p.name} from YouTube Music", e)
         }
     }
 

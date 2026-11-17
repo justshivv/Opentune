@@ -51,6 +51,17 @@ class LikedMergeTest {
         assertTrue(second.agreed.isEmpty())
     }
 
+    @Test fun syncWidensAStoredCreditThatNamesOnlyTheFirstPerformer() = runBlocking {
+        val stored = listOf(SongRef("one-kiss", "One Kiss", "Calvin Harris", null))
+        val fresh = Song("one-kiss", "One Kiss", "Calvin Harris, Dua Lipa", null)
+        val result = mergeLikedSongs(stored, listOf(fresh), setOf("one-kiss"), emptySet()) { _, _ -> true }
+        assertEquals("Calvin Harris, Dua Lipa", result.songs.single().artist)
+        // A fresh credit naming somebody else never rewrites the stored one.
+        val other = mergeLikedSongs(result.songs, listOf(Song("one-kiss", "One Kiss", "Dua Lipa", null)),
+            setOf("one-kiss"), emptySet()) { _, _ -> true }
+        assertEquals("Calvin Harris, Dua Lipa", other.songs.single().artist)
+    }
+
     @Test fun dislikesAndLocalFilesAreNotSentToYouTube() = runBlocking {
         val result = mergeLikedSongs(local("local:file"), listOf(song("disliked")), null, setOf("disliked")) { _, _ ->
             fail("No upload expected"); false

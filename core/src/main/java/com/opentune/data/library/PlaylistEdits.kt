@@ -5,6 +5,7 @@ import com.opentune.data.innertube.Innertube
 import com.opentune.data.innertube.InnertubeParser
 import com.opentune.data.model.PlaylistPrivacy
 import com.opentune.data.model.ShelfItem
+import com.opentune.data.model.Song
 import com.opentune.data.model.UserPlaylist
 import java.io.IOException
 import kotlinx.serialization.Serializable
@@ -121,8 +122,8 @@ object SyncQueue {
      */
     fun isTransient(error: Throwable): Boolean =
         error is IOException ||
-            error is Innertube.NotSignedInException ||
-            error is io.ktor.client.plugins.ServerResponseException
+                error is Innertube.NotSignedInException ||
+                error is io.ktor.client.plugins.ServerResponseException
 }
 
 /** Folding what YouTube Music has into a linked playlist. */
@@ -154,12 +155,23 @@ object PlaylistMerge {
      */
     fun pull(local: LocalPlaylist, remote: RemotePlaylist): LocalPlaylist {
         val there = LinkedHashMap<String, String?>()
-        remote.songs.forEach { there.putIfAbsent(it.videoId, it.setVideoId) }
+        val fresh = LinkedHashMap<String, Song>()
+        remote.songs.forEach {
+            there.putIfAbsent(it.videoId, it.setVideoId)
+            fresh.putIfAbsent(it.videoId, it)
+        }
         val wasThere = local.songs.any { it.setVideoId != null }
         if (there.isEmpty() && wasThere) return local
         val kept = local.songs.mapNotNull { s ->
             when {
-                s.videoId in there -> s.copy(setVideoId = there[s.videoId] ?: s.setVideoId)
+                // A kept song's credit widens with the fresh read, under the
+                // same rule as Liked: only by a credit naming it and more.
+                s.videoId in there -> s.copy(
+                    setVideoId = there[s.videoId] ?: s.setVideoId,
+                    artist = fresh[s.videoId]?.let {
+                        com.opentune.data.model.fullerArtist(s.artist, it.artist)
+                    } ?: s.artist,
+                )
                 s.setVideoId != null -> null
                 else -> s
             }

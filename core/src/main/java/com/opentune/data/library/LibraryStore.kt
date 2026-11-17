@@ -58,7 +58,12 @@ data class SongRef(
      */
     val addedAt: Long = 0,
 ) {
-    fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit)
+    fun toSong(): Song {
+        // A song taken from storage shows the fullest credit the book
+        // knows for it, even before its stored credit itself is healed.
+        val fuller = com.opentune.data.model.fullerArtist(artist, LibraryStore.artistLine(videoId))
+        return Song(videoId, title, fuller ?: artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit)
+    }
 
     companion object {
         fun of(song: Song) = SongRef(song.videoId, song.title, song.artist, song.thumbnailUrl, song.durationText, song.albumName, song.isExplicit)
@@ -120,6 +125,12 @@ private data class LibraryDocument(
     val hiddenArtists: List<HiddenArtist> = emptyList(),
     /** Lists that fill themselves from rules; see [SmartPlaylists]. */
     val smartPlaylists: List<SmartPlaylist> = emptyList(),
+    /**
+     * The fullest artist credit known for a song, by id. Every stored list
+     * widens it and is healed from it, so a fuller credit learned anywhere
+     * shows everywhere.
+     */
+    val artistLines: Map<String, String> = emptyMap(),
     /** The account the liked sync last ran for; null before the first run. */
     val likedSyncOwner: String? = null,
     /** The liked ids this phone and YouTube Music last agreed on. */
@@ -232,7 +243,10 @@ object LibraryStore {
     /** Saves at once a change still waiting for its save: the app is leaving the screen or closing. */
     fun flush() { saved?.flushIfDirty { json.encodeToString(LibraryDocument.serializer(), doc.value) } }
 
-    private fun publish(d: LibraryDocument) {
+    private var pushedLines: Map<String, String> = emptyMap()
+
+    private fun publish(raw: LibraryDocument) {
+        val d = healCredits(raw)
         doc.value = d
         // Newest like first, always: the order is read off the songs' own
         // like times, never off where a write happened to leave them.
@@ -243,6 +257,42 @@ object LibraryStore {
         _disliked.value = d.disliked
         _smart.value = d.smartPlaylists
         LibraryArtwork.keep(d.liked.map { it.thumbnailUrl } + d.playlists.flatMap { p -> p.songs.map { it.thumbnailUrl } })
+        // The other stores heal from the same book, whenever it grows.
+        if (d.artistLines != pushedLines) {
+            pushedLines = d.artistLines
+            com.opentune.data.history.History.applyArtistLines(d.artistLines)
+            com.opentune.data.download.Downloads.applyArtistLines(d.artistLines)
+        }
+    }
+
+    /**
+     * Heals every stored credit from the fullest known lines, learning the
+     * lines from the document itself first: a fuller credit stored anywhere
+     * — a sync, a fresh add — widens the same song in every other list.
+     */
+    private fun healCredits(d: LibraryDocument): LibraryDocument {
+        val lines = widestArtistLines(d.artistLines, (d.liked + d.playlists.flatMap { it.songs }).map { it.videoId to it.artist })
+        val liked = d.liked.map { widenRef(it, lines) }
+        val playlists = d.playlists.map { p -> p.copy(songs = p.songs.map { widenRef(it, lines) }) }
+        return if (lines == d.artistLines && liked == d.liked && playlists == d.playlists) d
+        else d.copy(liked = liked, playlists = playlists, artistLines = lines)
+    }
+
+    /** The fullest artist credit known for [videoId], when any list has named one. */
+    fun artistLine(videoId: String): String? = doc.value.artistLines[videoId]
+
+    /** The fullest artist credits known, by song id. */
+    fun artistLines(): Map<String, String> = doc.value.artistLines
+
+    /**
+     * Learns fuller credits seen outside the library (a play, the account's
+     * history). Whatever they widen is healed across the library, the
+     * listening history and the downloads by the next publish.
+     */
+    fun learnArtistLines(lines: Map<String, String>) {
+        if (lines.isEmpty()) return
+        if (widestArtistLines(doc.value.artistLines, lines.toList()) == doc.value.artistLines) return
+        update { d -> d.copy(artistLines = widestArtistLines(d.artistLines, lines.toList())) }
     }
 
     // Locked: the playlist sync writes back from its own thread.
@@ -548,4 +598,27 @@ object LibraryStore {
     fun exportJson(): JsonElement = json.encodeToJsonElement(LibraryDocument.serializer(), doc.value)
 
     fun importJson(element: JsonElement) = publish(json.decodeFromJsonElement(LibraryDocument.serializer(), element))
+}
+
+/**
+ * The fullest credit per song id: [known] widened by every credit in
+ * [credits], under the one rule — a credit is only ever widened by one
+ * that names it and more, never narrowed, never rewritten.
+ */
+internal fun widestArtistLines(known: Map<String, String>, credits: List<Pair<String, String>>): Map<String, String> {
+    var out: MutableMap<String, String>? = null
+    for ((id, artist) in credits) {
+        val wider = com.opentune.data.model.fullerArtist((out ?: known)[id], artist)
+        if (wider != null && wider != (out ?: known)[id]) {
+            if (out == null) out = LinkedHashMap(known)
+            out[id] = wider
+        }
+    }
+    return out ?: known
+}
+
+/** [ref] with its credit widened from [lines], when the book knows a fuller one. */
+internal fun widenRef(ref: SongRef, lines: Map<String, String>): SongRef {
+    val wider = com.opentune.data.model.fullerArtist(ref.artist, lines[ref.videoId])
+    return if (wider != null && wider != ref.artist) ref.copy(artist = wider) else ref
 }

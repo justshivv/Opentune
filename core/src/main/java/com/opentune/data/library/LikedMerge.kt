@@ -42,10 +42,20 @@ internal suspend fun mergeLikedSongs(
             else -> ref.copy(likedAt = now + (localOnly.size - localOnly.indexOf(ref)))
         }
     }
+    // A fresh read of the account's list also widens a credit stored when
+    // only the first performer was named: the new parse names everyone the
+    // row links, and a stored credit is only ever widened by one that names
+    // it and more — never rewritten, never narrowed.
+    val remoteById = remote.associateBy { it.videoId }
+    val refreshed = stamped.map { ref ->
+        val fresh = remoteById[ref.videoId] ?: return@map ref
+        val wider = com.opentune.data.model.fullerArtist(ref.artist, fresh.artist)
+        if (wider != null && wider != ref.artist) ref.copy(artist = wider) else ref
+    }
     // A failed write stays outside the agreement, and will be retried on the next sync.
-    val shared = stamped.mapTo(HashSet()) { it.videoId }.intersect(remoteIds + pushedLikes - pushedUnlikes)
+    val shared = refreshed.mapTo(HashSet()) { it.videoId }.intersect(remoteIds + pushedLikes - pushedUnlikes)
     // Remember unsuccessful unlikes too, so the next run can still remove them remotely.
-    return LikedMergeResult(stamped, shared + (removedHere - pushedUnlikes))
+    return LikedMergeResult(refreshed, shared + (removedHere - pushedUnlikes))
 }
 
 /** Preserve heart taps made while the remote list or writes were in flight. */

@@ -131,6 +131,13 @@ class PlaylistSyncTest {
         assertEquals("PLx", merged.remoteId)
     }
 
+    @Test fun pullingWidensAStoredCreditThatNamesOnlyTheFirstPerformer() {
+        val here = local(SongRef("one-kiss", "One Kiss", "Calvin Harris", null, setVideoId = "s1"))
+        val there = RemotePlaylist("Mine", PlaylistPrivacy.PRIVATE,
+            listOf(Song("one-kiss", "One Kiss", "Calvin Harris, Dua Lipa", null, setVideoId = "s1")))
+        assertEquals("Calvin Harris, Dua Lipa", PlaylistMerge.pull(here, there).songs.single().artist)
+    }
+
     @Test fun anEmptyAnswerDoesNotEmptyThePlaylist() {
         val here = local(ref("a", "s1"), ref("b", "s2"))
         assertEquals(here, PlaylistMerge.pull(here, RemotePlaylist("", null, emptyList())))

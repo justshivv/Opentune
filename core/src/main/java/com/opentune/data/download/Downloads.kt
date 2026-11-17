@@ -133,6 +133,7 @@ object Downloads {
             // A download interrupted by the process dying is picked up again by
             // WorkManager; until then it is simply queued.
             .mapValues { (_, e) -> if (e.state == DownloadState.DOWNLOADING) e.copy(state = DownloadState.QUEUED) else e }
+        applyArtistLines(com.opentune.data.library.LibraryStore.artistLines())
         scope.launch {
             _entries.drop(1).onEach { f.dirty = true }.debounce(500).collect { map ->
                 runCatching { f.write(json.encodeToString(serializer, map)) }
@@ -145,6 +146,17 @@ object Downloads {
 
     /** Saves at once a change still waiting for its save. */
     fun flush() { saved?.flushIfDirty { json.encodeToString(serializer, _entries.value) } }
+
+    /** Widens stored credits from the library's fullest known lines, under the same rule as everywhere. */
+    fun applyArtistLines(lines: Map<String, String>) {
+        if (lines.isEmpty() || _entries.value.isEmpty()) return
+        var changed = false
+        val next = _entries.value.mapValues { (_, e) ->
+            val wider = com.opentune.data.model.fullerArtist(e.song.artist, lines[e.song.videoId])
+            if (wider != null && wider != e.song.artist) { changed = true; e.copy(song = e.song.copy(artist = wider)) } else e
+        }
+        if (changed) _entries.value = next
+    }
 
     /** The finished file for [videoId], if it's been downloaded and is still there. */
     fun fileFor(videoId: String): File? {
@@ -272,8 +284,8 @@ object Downloads {
         // Recheck ownership in the atomic update: a manual save can promote an
         // entry after the smart worker takes its snapshot of cleanup candidates.
         fun eligible(entry: DownloadEntry?) = entry != null && (!onlySmart || entry.smartDownload) &&
-            (!onlyPending || entry.state != DownloadState.DONE) &&
-            (!onlyActive || entry.state == DownloadState.QUEUED || entry.state == DownloadState.DOWNLOADING)
+                (!onlyPending || entry.state != DownloadState.DONE) &&
+                (!onlyActive || entry.state == DownloadState.QUEUED || entry.state == DownloadState.DOWNLOADING)
         val entry = _entries.getAndUpdate { if (eligible(it[videoId])) it - videoId else it }[videoId]
             ?.takeIf { eligible(it) } ?: return
         val manager = WorkManager.getInstance(context)
@@ -725,7 +737,7 @@ internal object RangedFetch {
                     val request = Request.Builder().url(url).apply {
                         headers.forEach { (k, v) -> header(k, v) }
                         header("Accept-Encoding", "identity")
-            header("Range", "bytes=$start-$end")
+                        header("Range", "bytes=$start-$end")
                     }.build()
                     client.newCall(request).execute().use { response ->
                         if (response.code != 206) throw IOException("Server answered ${response.code}")

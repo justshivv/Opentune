@@ -37,7 +37,12 @@ data class PlayRecord(
     /** A listen made elsewhere on the account (YouTube Music, another app), brought in from its history. */
     val fromAccount: Boolean = false,
 ) {
-    fun toSong() = Song(videoId, title, artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit, artistId = artistId)
+    fun toSong(): Song {
+        // Same rule as the library's refs: the fullest credit the book
+        // knows for the song is the one it is shown and played with.
+        val fuller = com.opentune.data.model.fullerArtist(artist, com.opentune.data.library.LibraryStore.artistLine(videoId))
+        return Song(videoId, title, fuller ?: artist, thumbnailUrl, durationText, albumName = albumName, isExplicit = explicit, artistId = artistId)
+    }
 }
 
 data class TopEntry(val key: String, val title: String, val subtitle: String, val thumbnailUrl: String?, val plays: Int, val listenedMs: Long, val song: Song?)
@@ -101,9 +106,22 @@ object History {
     /** Records a listen and returns its key for [updateListened]. */
     fun record(song: Song, listenedMs: Long): Long {
         val now = System.currentTimeMillis()
-        val r = PlayRecord(song.videoId, song.title, song.artist, song.thumbnailUrl, song.durationText, song.albumName, now, listenedMs, song.isExplicit, song.artistId)
+        // The credit written is the fullest known for the song: the played
+        // song's own, widened by the library's book — and the book learns
+        // from the play in return, so one good credit heals every list.
+        val artist = com.opentune.data.model.fullerArtist(song.artist,
+            com.opentune.data.library.LibraryStore.artistLine(song.videoId)) ?: song.artist
+        val r = PlayRecord(song.videoId, song.title, artist, song.thumbnailUrl, song.durationText, song.albumName, now, listenedMs, song.isExplicit, song.artistId)
         _records.value = (listOf(r) + _records.value).take(MAX_RECORDS)
+        com.opentune.data.library.LibraryStore.learnArtistLines(mapOf(song.videoId to artist))
         return now
+    }
+
+    /** Widens stored credits from the library's fullest known lines. */
+    fun applyArtistLines(lines: Map<String, String>) {
+        if (lines.isEmpty() || _records.value.isEmpty()) return
+        val next = _records.value.map { widenRecord(it, lines) }
+        if (next != _records.value) _records.value = next
     }
 
     /**
@@ -114,6 +132,11 @@ object History {
      * the day, so each is placed in order through its day.
      */
     fun mergeAccount(sections: List<Pair<String, List<Song>>>, now: Long = System.currentTimeMillis()) {
+        // The account's history is parsed fresh, so its credits are whole:
+        // teach them to the library's book, which heals the local records
+        // of the same songs along with every list.
+        com.opentune.data.library.LibraryStore.learnArtistLines(
+            sections.flatMap { it.second }.associate { it.videoId to it.artist })
         val added = accountListens(_records.value, sections, now)
         if (added.isEmpty()) return
         _records.value = (_records.value + added).sortedByDescending { it.playedAt }.take(MAX_RECORDS)
@@ -209,4 +232,10 @@ object History {
     fun importJson(element: JsonElement) {
         _records.value = json.decodeFromJsonElement(serializer, element).sortedByDescending { it.playedAt }.take(MAX_RECORDS)
     }
+}
+
+/** [record] with its credit widened from [lines], under the one rule: only by a credit naming it and more. */
+internal fun widenRecord(record: PlayRecord, lines: Map<String, String>): PlayRecord {
+    val wider = com.opentune.data.model.fullerArtist(record.artist, lines[record.videoId])
+    return if (wider != null && wider != record.artist) record.copy(artist = wider) else record
 }
