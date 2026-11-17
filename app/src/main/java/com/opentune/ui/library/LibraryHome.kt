@@ -304,10 +304,10 @@ fun LibraryScreen(contentPadding: PaddingValues, actions: SongActions, nav: Libr
     val followedArtists = remember(followed) { followed.sortedByDescending { it.followedAt } }
     val smartPlaylists by LibraryStore.smartPlaylists.collectAsState()
     val shownSmart = remember(smartPlaylists, smartOrder) { smartOrder.sort(smartPlaylists) }
-    // Library's Recently played shelf: this app's own listens only (the
-    // account's listens live on the history page's Remote tab), each track
-    // once, latest first.
-    val recentSongs = remember(records) { History.recents(records.filter { !it.fromAccount }, 12) }
+    // Library's Recently played shelf: the merged history — this app's
+    // own listens and the ones synced in from the account together, each
+    // track once, latest first.
+    val recentSongs = remember(records) { History.recents(records, 12) }
     LaunchedEffect(tab) { if (tab == 1) YtmSync.check(); if (tab == 2) com.opentune.data.releases.ArtistSync.sync() }
     // In the list, which sources show all their playlists rather than the first few.
     val openGroups = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
