@@ -75,7 +75,7 @@ object SpotifySync {
     }
 
     @Serializable
-    private data class Saved(val lastSynced: Long = 0, val found: Map<String, SongRef> = emptyMap(), val mixes: List<Mix> = emptyList())
+    private data class Saved(val lastSynced: Long = 0, val found: Map<String, SongRef> = emptyMap(), val mixes: List<Mix> = emptyList(), val creditsReset: Boolean = false)
 
     /** The fewest songs found for a mix to be worth showing. */
     private const val MIX_MIN = 6
@@ -87,6 +87,8 @@ object SpotifySync {
     private var file: File? = null
     /** YouTube Music's song for each Spotify song id found so far. */
     private val found = ConcurrentHashMap<String, SongRef>()
+    /** Whether the one-time re-read for whole credits has been set up. */
+    @Volatile private var creditsReset = false
     private val _status = MutableStateFlow(Status())
     val status: StateFlow<Status> = _status.asStateFlow()
     private val _mixes = MutableStateFlow<List<Mix>>(emptyList())
@@ -98,7 +100,10 @@ object SpotifySync {
         file = f
         scope.launch {
             runCatching { json.decodeFromString(Saved.serializer(), f.readText()) }.getOrNull()?.let { saved ->
-                found.putAll(saved.found)
+                creditsReset = saved.creditsReset
+                // Matches saved before credits were kept whole are not
+                // trusted: the next sync finds those songs again.
+                if (saved.creditsReset) found.putAll(saved.found)
                 _mixes.value = saved.mixes
                 _status.update { it.copy(lastSynced = saved.lastSynced) }
             }
@@ -144,6 +149,16 @@ object SpotifySync {
     fun cancel() = job?.cancel()
 
     private suspend fun run(cookie: String, force: Boolean, withMixes: Boolean) {
+        // One-time: playlists stored before credits were kept whole are
+        // re-read once, so their songs are matched again and stored with
+        // every performer named. Forgetting the kept revisions is what
+        // makes the sync re-read them; the flag is saved with the sync.
+        if (!creditsReset) {
+            creditsReset = true
+            LibraryStore.playlists.value.filter { it.spotifyId != null && it.spotifyRevision != null }.forEach { p ->
+                LibraryStore.putSpotifyPlaylistRefs(p.spotifyId!!, p.name, p.songs, null, p.coverUrl)
+            }
+        }
         if (withMixes && com.opentune.data.settings.AppSettings.ui.value.spotifyMixes) {
             try {
                 syncMixes(cookie, force)
@@ -227,7 +242,7 @@ object SpotifySync {
 
     private fun save(lastSynced: Long) {
         val f = file ?: return
-        runCatching { f.writeText(json.encodeToString(Saved.serializer(), Saved(lastSynced, HashMap(found), _mixes.value))) }
+        runCatching { f.writeText(json.encodeToString(Saved.serializer(), Saved(lastSynced, HashMap(found), _mixes.value, creditsReset))) }
             .onFailure { Log.w(TAG, "couldn't save", it) }
     }
 }

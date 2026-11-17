@@ -65,6 +65,14 @@ class SpotifyTest {
         assertEquals(live, PlaylistImport.best(want, listOf(live), exactLength = false))
     }
 
+    @Test fun aMatchKeepsEveryArtistSpotifyNames() {
+        val want = Spotify.Track("I Could Be The One", listOf("Avicii", "Nicky Romero"), null, 456_000)
+        val narrow = Song("narrow00001", "I Could Be The One", "Avicii", null, durationText = "7:36", artistId = "UCavicii")
+        val got = PlaylistImport.best(want, listOf(narrow))
+        assertEquals("Avicii, Nicky Romero", got?.artist)
+        assertNull(got?.artistId)
+    }
+
     @Test fun aVariousArtistsUploadShowsWhoSings() {
         val want = Spotify.Track("Mast Kalander", listOf("Yo Yo Honey Singh", "Mika Singh"), null, 270_000)
         val upload = Song("vaupload001", "Mast Kalander", "Various Artist", null, durationText = "4:30")

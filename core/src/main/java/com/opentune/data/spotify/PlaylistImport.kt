@@ -152,7 +152,11 @@ object PlaylistImport {
             .filter { it.second >= 5 } // a title and the artist, or a title and the length
             .maxByOrNull { it.second }?.first ?: return null
         // An upload credited to "Various Artists" or the like is still the song; it shows who sings it.
-        return if (placeholder(key(pick.artist)) && track.artists.isNotEmpty()) pick.copy(artist = track.artists.joinToString(", "), artistId = null) else pick
+        if (placeholder(key(pick.artist)) && track.artists.isNotEmpty()) return pick.copy(artist = track.artists.joinToString(", "), artistId = null)
+        // Spotify names everyone on the track: when its list names the
+        // pick's artist and more, the fuller credit is the one to keep.
+        val fuller = com.opentune.data.model.fullerArtist(pick.artist, track.artists.joinToString(", "))
+        return if (fuller != null && fuller != pick.artist) pick.copy(artist = fuller, artistId = null) else pick
     }
 
     /** "Various Artists", "VA", "Unknown Artist": an upload's stand-in for whoever sings. */
