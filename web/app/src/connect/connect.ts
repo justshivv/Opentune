@@ -21,7 +21,8 @@ interface Saved {
   id: string;
   name: string;
   enabled: boolean;
-  accountSync: boolean;
+  /** May the key be kept in the YouTube account? null until asked, once, after signing in. */
+  accountSync: boolean | null;
 }
 
 function defaultName(): string {
@@ -32,7 +33,7 @@ function defaultName(): string {
 }
 
 function load(): Saved {
-  let saved: Partial<Saved> = {};
+  let saved: Partial<Saved> & { consent?: boolean | null } = {};
   try {
     saved = JSON.parse(localStorage.getItem(STORE_KEY) ?? '{}') as Partial<Saved>;
   } catch {
@@ -43,13 +44,15 @@ function load(): Saved {
     id: saved.id ?? crypto.randomUUID().replace(/-/g, '').slice(0, 12),
     name: saved.name ?? defaultName(),
     enabled: saved.enabled ?? true,
-    accountSync: saved.accountSync ?? true,
+    // Asked for, never assumed (`accountSync` was a default-on switch before).
+    accountSync: saved.consent ?? null,
   };
 }
 
 function save(s: Saved): void {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(s));
+    const { accountSync, ...rest } = s;
+    localStorage.setItem(STORE_KEY, JSON.stringify({ ...rest, consent: accountSync }));
   } catch {
     // Kept for this visit only.
   }
@@ -252,7 +255,7 @@ export function setAccountSync(on: boolean): void {
  * Signed out or without the extension, it quietly does nothing.
  */
 export async function syncAccount(push = false): Promise<void> {
-  if (!useConnect.getState().saved.accountSync) return;
+  if (useConnect.getState().saved.accountSync !== true) return;
   try {
     // YouTube.js comes with it; loaded only when the account is used.
     const { readSecret, write: writeToAccount } = await import('./accountSync');

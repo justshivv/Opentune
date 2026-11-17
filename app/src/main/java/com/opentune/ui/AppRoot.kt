@@ -226,6 +226,7 @@ fun AppRoot(vm: PlayerViewModel) {
             invite?.let { com.opentune.ui.components.InviteCard(it, onDismiss = { askStar = false }) }
         }
     }
+    if (update == null) com.opentune.ui.connect.AccountSyncAsk()
     update?.let { r ->
         com.opentune.ui.settings.UpdateDialog(
             r,

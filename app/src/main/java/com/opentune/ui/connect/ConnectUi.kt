@@ -61,6 +61,27 @@ import com.opentune.ui.together.QrCode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/**
+ * Asked once, after signing in to YouTube: may Connect keep its key in the
+ * account? Until the answer is yes, nothing is created there.
+ */
+@Composable
+fun AccountSyncAsk() {
+    val answer by Connect.accountSync.collectAsState()
+    val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
+    val enabled by Connect.enabled.collectAsState()
+    if (answer != null || !signedIn || !enabled) return
+    com.opentune.ui.components.FloatingDialog(
+        onDismissRequest = {},
+        properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+        icon = { Icon(ImageVector.vectorResource(AppIcons.Sync), null) },
+        title = { Text("Find your devices through YouTube?") },
+        text = { Text("OpenTune keeps a private playlist in your YouTube account that holds a key, so your devices find each other.") },
+        confirmButton = { com.opentune.ui.components.SheetButton("Turn on", onClick = { Connect.setAccountSync(true) }) },
+        dismissButton = { com.opentune.ui.components.SheetButton("Not now", onClick = { Connect.setAccountSync(false) }, closes = true) },
+    )
+}
+
 /** A device's icon by its form: "web" or "phone". */
 @Composable
 internal fun formIcon(form: String): ImageVector =
@@ -169,7 +190,7 @@ fun ConnectScreen(contentPadding: PaddingValues, joining: String?, onBack: () ->
         item {
             ToggleRow(
                 "Sync through my YouTube account",
-                accountSync,
+                accountSync == true,
                 { Connect.setAccountSync(it) },
                 summary = "Devices signed in to the same account join by themselves. Keeps a private, empty playlist named OpenTune Connect in your library.",
                 icon = ImageVector.vectorResource(AppIcons.Sync),

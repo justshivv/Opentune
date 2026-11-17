@@ -55,8 +55,13 @@ object Connect {
     private val _group = MutableStateFlow<ConnectGroup?>(null)
     val group: StateFlow<ConnectGroup?> = _group.asStateFlow()
 
-    private val _accountSync = MutableStateFlow(false)
-    val accountSync: StateFlow<Boolean> = _accountSync.asStateFlow()
+    private val _accountSync = MutableStateFlow<Boolean?>(null)
+    /**
+     * Whether Connect may keep its key in the YouTube account (a private
+     * playlist): null until the person has been asked, once, after signing
+     * in. Nothing is read or written there before a yes.
+     */
+    val accountSync: StateFlow<Boolean?> = _accountSync.asStateFlow()
 
     private val _name = MutableStateFlow("")
     val deviceName: StateFlow<String> = _name.asStateFlow()
@@ -86,7 +91,8 @@ object Connect {
         prefs = p
         myId = p.getString("device_id", null) ?: UUID.randomUUID().toString().replace("-", "").take(12).also { p.edit { putString("device_id", it) } }
         _enabled.value = p.getBoolean("enabled", true)
-        _accountSync.value = p.getBoolean("account_sync", true)
+        // Asked for, never assumed ("account_sync" was a default-on switch before).
+        _accountSync.value = if (p.contains("account_consent")) p.getBoolean("account_consent", false) else null
         _group.value = ConnectGroup.parse(p.getString("secret", null))
         _name.value = p.getString("name", null) ?: defaultName(context)
     }
@@ -138,7 +144,7 @@ object Connect {
 
     fun setAccountSync(on: Boolean) {
         _accountSync.value = on
-        prefs?.edit { putBoolean("account_sync", on) }
+        prefs?.edit { putBoolean("account_consent", on) }
         if (on) syncAccount()
     }
 
@@ -149,7 +155,7 @@ object Connect {
      * (a new secret after "Disconnect all").
      */
     fun syncAccount(push: Boolean = false) {
-        if (!_accountSync.value || !com.opentune.data.account.AccountStore.signedIn.value) return
+        if (_accountSync.value != true || !com.opentune.data.account.AccountStore.signedIn.value) return
         main.launch {
             runCatching {
                 kotlinx.coroutines.withContext(Dispatchers.IO) {

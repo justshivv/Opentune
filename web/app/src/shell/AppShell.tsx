@@ -22,6 +22,7 @@ import { useAllowGate } from './AllowGate';
 import { Appearance } from './Appearance';
 import { MobileDock } from './MobileDock';
 import { RoomNotice } from './RoomNotice';
+import { AccountSyncAsk } from './AccountSyncAsk';
 import { initConnect } from '@/connect/connect';
 import { ShortcutsHelp } from './ShortcutsHelp';
 import { Sidebar } from './Sidebar';
@@ -246,7 +247,7 @@ export function AppShell() {
           <FullScreenPlayer closing={!fullScreen} onClosed={() => setPlayerUp(false)} />
         </Suspense>
       )}
-      {gate}
+      {gate ?? <AccountSyncAsk />}
     </div>
   );
 }

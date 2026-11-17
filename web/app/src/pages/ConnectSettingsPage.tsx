@@ -108,7 +108,7 @@ export default function ConnectSettingsPage() {
           <Toggle
             label="Sync through my YouTube account"
             detail="Devices signed in to the same account join by themselves. Keeps a private, empty playlist named OpenTune Connect in your library."
-            checked={saved.accountSync}
+            checked={saved.accountSync === true}
             onChange={setAccountSync}
           />
         </section>
