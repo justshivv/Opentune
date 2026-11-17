@@ -22,7 +22,7 @@
 - **Key derivation:** `tag = hex(HKDF-SHA256(ikm=secret, salt=empty, info="opentune/connect/tag", L=16))` (32 hex chars). `key = HKDF-SHA256(ikm=secret, salt=empty, info="opentune/connect/key", L=32)`.
 - **Sealing:** AES-GCM, `base64(iv12 || ciphertext+tag16)`, the group tag as associated data. This is the same as the existing `gcmSeal` / `gcmOpen`.
 - **Secret encoding:** 32 bytes, base64url without padding.
-- **Links:** `opentune://connect/#<secret>` and `https://justshivv.github.io/Opentune/player/#connect=<secret>`.
+- **Links:** `opentune://connect/#<secret>` and `https://justshivv.github.io/Opentune/player/#/settings/devices?join=<secret>`.
 - **Timings:**
   - `presence` every 30 s; a device is gone after 75 s;
   - `state` every 5 s while playing, and on every change;
@@ -95,7 +95,7 @@ class ConnectGroup(val secret: ByteArray) {
     fun open(sealed: String): String? = gcmOpen(key, tag, sealed)
     val encoded: String get() = Base64.getUrlEncoder().withoutPadding().encodeToString(secret)
     val appLink: String get() = "opentune://connect/#$encoded"
-    val webLink: String get() = "https://justshivv.github.io/Opentune/player/#connect=$encoded"
+    val webLink: String get() = "https://justshivv.github.io/Opentune/player/#/settings/devices?join=$encoded"
     override fun equals(other: Any?) = other is ConnectGroup && other.secret.contentEquals(secret)
     override fun hashCode() = secret.contentHashCode()
 
@@ -107,7 +107,7 @@ class ConnectGroup(val secret: ByteArray) {
             val value = text?.trim() ?: return null
             val raw = when {
                 value.startsWith("opentune://connect/#") -> value.removePrefix("opentune://connect/#")
-                value.startsWith("https://justshivv.github.io/Opentune/player/") -> value.substringAfter("#connect=", "").substringBefore('&')
+                value.startsWith("https://justshivv.github.io/Opentune/player/") -> value.substringAfter("#/settings/devices?join=", "").substringBefore('&')
                 "://" in value -> return null
                 else -> value
             }
@@ -295,7 +295,7 @@ class ConnectGroup(val secret: ByteArray) {
   - `web/app/src/state/player.ts`: let a second hook set intercept controls. Add `setConnectHooks({ intercept, onIntent })`, called before the party hooks in `next`, `previous`, `togglePlay` and `seek`, and add `onIntent`;
   - `web/app/src/pageRegistry.tsx`: `/settings/devices`;
   - the player bar (`shell/PlayerBar.tsx`) and the full player (`shell/FullScreenPlayer.tsx`): a devices button, and a "Playing on" state.
-  - the app start (`shell/AppShell.tsx`): handle `#connect=` in the location hash.
+  - the app start (`shell/AppShell.tsx`): handle `#/settings/devices?join=` in the location hash.
 
 - [ ] **Step 1: Failing vitest tests.**
   - The shared vectors: the tag and opening `sealed` from `core/src/test/resources/connect/vectors.json`, copied to `web/app/src/connect/vectors.json`.

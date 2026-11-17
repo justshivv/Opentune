@@ -48,7 +48,7 @@ Two alternatives were rejected:
 ### Pairing
 
 1. **QR code or link.** Settings → Devices → Add a device shows a QR code, the link and a short text form of the secret.
-   - Links: `opentune://connect/#<base64url secret>` and `https://justshivv.github.io/Opentune/player/#connect=<…>`. The secret is only in the fragment, so it never reaches a server.
+   - Links: `opentune://connect/#<base64url secret>` and `https://justshivv.github.io/Opentune/player/#/settings/devices?join=<…>`. The secret is only in the fragment, so it never reaches a server.
    - Opening the link on a device that already has a different group asks before replacing it.
 2. **Through the YouTube account** (opt-in switch "Sync through my YouTube account"):
    - **Turning it on:** OpenTune looks in the account's playlists for a private playlist titled `OpenTune Connect`. If one exists, it reads the secret from its description (`opentune-connect:v1:<base64url>`) and joins that group. If none exists, it creates the playlist (privacy `PRIVATE`, no songs) with the current secret.
@@ -127,7 +127,7 @@ The target picks its own source for each track (lossless add-ons, YouTube) by it
   - "Sync through my YouTube account";
   - the paired devices seen recently (name, last seen);
   - Disconnect all.
-- **Web:** a Settings page `/settings/devices`, and opening `#connect=` joins.
+- **Web:** a Settings page `/settings/devices`, and opening `#/settings/devices?join=` joins.
 - **Translations:** every new string goes into the 26 translated languages.
 
 ## Code layout
