@@ -187,6 +187,18 @@ describe('sessions', () => {
     a!.session.stop(); b!.session.stop();
   });
 
+  it('keeps shuffle and repeat on screen over a report from before they landed', async () => {
+    const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
+    play(a!, track('x'));
+    await eventually('b controls a', () => b!.view?.activeId === 'a');
+    b!.session.intercept('shuffle', 0, 1);
+    b!.session.intercept('repeat', 0, 0, 'all');
+    b!.session.handle({ type: 'state', from: 'a', seq: Number.MAX_SAFE_INTEGER - 1, at: Date.now(), track: track('x'), playing: true });
+    expect(b!.view!.devices[0]!.state?.shuffle).toBe(true);
+    expect(b!.view!.devices[0]!.state?.repeat).toBe('all');
+    a!.session.stop(); b!.session.stop();
+  });
+
   it('sends shuffle and repeat to the device playing', async () => {
     const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
     play(a!, track('x'));

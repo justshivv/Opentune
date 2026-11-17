@@ -111,7 +111,7 @@ object Connect {
         watching = main.launch {
             merge(
                 combine(player.currentSong, player.isPlaying, player.queue, player.upNext, player.volume) { _, _, _, _, _ -> Unit },
-                combine(player.shuffleEnabled, player.repeatMode, player.audioFormat, com.opentune.data.NerdStats.playbackSource) { _, _, _, _ -> Unit },
+                combine(player.shuffleMode, player.repeatMode, player.audioFormat, com.opentune.data.NerdStats.playbackSource) { _, _, _, _ -> Unit },
                 player.seeks,
             ).debounce(300).collect { session?.localChanged() }
         }
@@ -302,7 +302,8 @@ internal class ConnectionConnectPlayer(private val c: PlayerConnection) : Connec
             pos = c.currentPositionMs(),
             queue = c.upNext.value.mapNotNull { queue.getOrNull(it)?.let(CTrack::of) },
             volume = c.volume.value,
-            shuffle = c.shuffleEnabled.value,
+            // The app's shuffle reorders the queue and leaves the player's own flag off.
+            shuffle = c.shuffleMode.value != com.opentune.playback.ShuffleMode.OFF,
             repeat = when (c.repeatMode.value) {
                 androidx.media3.common.Player.REPEAT_MODE_ONE -> "one"
                 androidx.media3.common.Player.REPEAT_MODE_ALL -> "all"
@@ -311,7 +312,15 @@ internal class ConnectionConnectPlayer(private val c: PlayerConnection) : Connec
             quality = runCatching { Connect.qualityLabel() }.getOrNull(),
         )
     }
-    override fun setShuffle(on: Boolean) { if (c.shuffleEnabled.value != on) c.toggleShuffle() }
+    override fun setShuffle(on: Boolean) {
+        val mode = c.shuffleMode.value
+        when {
+            on && mode == com.opentune.playback.ShuffleMode.OFF -> c.toggleShuffle()
+            // Smart shuffle goes off its own way: its next step is off.
+            !on && mode == com.opentune.playback.ShuffleMode.SMART -> c.cycleShuffle()
+            !on && mode == com.opentune.playback.ShuffleMode.ON -> c.toggleShuffle()
+        }
+    }
     override fun setRepeat(mode: String) {
         val want = when (mode) {
             "one" -> androidx.media3.common.Player.REPEAT_MODE_ONE

@@ -87,6 +87,7 @@ export interface Timings {
 }
 /** How long a play or pause pressed here outlasts reports from before it landed. */
 const GUESS_MS = 1_500;
+interface Guess { until: number; playing?: boolean; shuffle?: boolean; repeat?: string }
 /** How often a device left in a former group is told again where the others went. */
 const FORWARD_MS = 60_000;
 const DEFAULT_TIMINGS: Timings = { presenceMs: 30_000, goneMs: 75_000, stateMs: 5_000, commandMs: 5_000, transferMs: 8_000, tickMs: 1_000 };
@@ -114,7 +115,8 @@ export class ConnectSession {
   private readonly devices = new Map<string, Device>();
   private readonly pending = new Map<string, Pending>();
   /** Play or pause pressed here for a device: until when, and which it was. */
-  private readonly guesses = new Map<string, { until: number; playing: boolean }>();
+  /** Pressed here for a device a moment ago (play/pause, shuffle, repeat): until when, and what it was. */
+  private readonly guesses = new Map<string, Guess>();
   private mine: Snapshot | null = null;
   private mineAt = 0;
   private lastStateSent = 0;
@@ -201,6 +203,13 @@ export class ConnectSession {
   }
 
   /** A button pressed here while another device plays: sends it there. True when it went. */
+  /** Notes a change pressed here for [id], on top of the ones still waiting to show in its reports. */
+  private guess(id: string, change: Omit<Guess, 'until'>): void {
+    const now = this.clock();
+    const before = this.guesses.get(id);
+    this.guesses.set(id, { ...(before && now < before.until ? before : {}), ...change, until: now + GUESS_MS });
+  }
+
   intercept(action: string, pos = 0, value = 0, mode?: string): boolean {
     const target = controllingOf(this.view);
     if (!target) return false;
@@ -216,7 +225,9 @@ export class ConnectSession {
         : action === 'repeat' ? { ...shown, repeat: mode ?? shown.repeat }
         : null;
       if (guess) this.setDevice({ ...target, state: guess, receivedAt: now });
-      if (guess && (action === 'play' || action === 'pause')) this.guesses.set(target.id, { until: now + GUESS_MS, playing: !!guess.playing });
+      if (guess && (action === 'play' || action === 'pause')) this.guess(target.id, { playing: !!guess.playing });
+      if (guess && action === 'shuffle') this.guess(target.id, { shuffle: !!guess.shuffle });
+      if (guess && action === 'repeat') this.guess(target.id, { repeat: guess.repeat ?? 'off' });
     }
     this.command(target.id, action, {
       pos,
@@ -334,9 +345,12 @@ export class ConnectSession {
       case 'state': {
         // A play or pause pressed here a moment ago: a report from before it landed doesn't undo it on screen.
         const guess = this.guesses.get(msg.from);
-        if (guess) {
-          if (now < guess.until && !!msg.playing !== guess.playing) return this.touch(msg.from, now);
-          this.guesses.delete(msg.from);
+        if (guess && now >= guess.until) this.guesses.delete(msg.from);
+        else if (guess) {
+          if (guess.playing !== undefined && !!msg.playing !== guess.playing) return this.touch(msg.from, now);
+          const confirmed = (guess.shuffle === undefined || !!msg.shuffle === guess.shuffle) && (guess.repeat === undefined || (msg.repeat ?? 'off') === guess.repeat);
+          if (confirmed) this.guesses.delete(msg.from);
+          else msg = { ...msg, ...(guess.shuffle !== undefined ? { shuffle: guess.shuffle } : {}), ...(guess.repeat !== undefined ? { repeat: guess.repeat } : {}) };
         }
         const base: Device = known ?? { id: msg.from, name: '', form: '', lastSeen: now, state: null, receivedAt: 0, since: 0 };
         const took = base.state?.track?.id !== msg.track?.id || (!!msg.playing && !base.state?.playing);

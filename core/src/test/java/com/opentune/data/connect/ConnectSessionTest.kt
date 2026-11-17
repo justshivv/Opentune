@@ -274,6 +274,22 @@ class ConnectSessionTest {
         assertEquals(setOf("b"), a.others())
     }
 
+    @Test fun shuffleAndRepeatPressedHereArentUndoneByAReportFromBefore() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        eventually("connected") { a.others() == setOf("b") }
+        onLoop { a.player.track = track('x'); a.player.playing = true; a.session.localChanged() }
+        eventually("b controls a") { b.view.value.activeId == "a" }
+        onLoop {
+            b.session.intercept("shuffle", value = 1f)
+            b.session.intercept("repeat", mode = "all")
+            // a's report, sent before the presses reached it.
+            b.session.handle(ConnectMsg.State("a", Long.MAX_VALUE - 1, System.currentTimeMillis(), track = track('x'), playing = true))
+        }
+        assertEquals(true, onLoop { b.view.value.controlling?.state?.shuffle })
+        assertEquals("all", onLoop { b.view.value.controlling?.state?.repeat })
+    }
+
     @Test fun upNextIsChangedFromAnotherDevice() {
         val a = Dev("a", "Phone").start()
         val b = Dev("b", "Chrome").start()

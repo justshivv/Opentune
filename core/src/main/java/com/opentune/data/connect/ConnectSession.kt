@@ -154,8 +154,16 @@ internal class ConnectSession(
 
     private class Pending(val to: String, val job: Job, val onAck: (Ack) -> Unit)
     private val pending = HashMap<String, Pending>()
-    /** Play or pause pressed here for a device: until when, and which it was. */
-    private val guesses = HashMap<String, Pair<Long, Boolean>>()
+    /** Pressed here for a device a moment ago (play/pause, shuffle, repeat): until when, and what it was. */
+    private class Guess(val until: Long, val playing: Boolean? = null, val shuffle: Boolean? = null, val repeat: String? = null)
+    private val guesses = HashMap<String, Guess>()
+
+    /** Notes a change pressed here for [id], on top of the ones still waiting to show in its reports. */
+    private fun guess(id: String, playing: Boolean? = null, shuffle: Boolean? = null, repeat: String? = null) {
+        val now = clock()
+        val before = guesses[id]?.takeIf { now < it.until }
+        guesses[id] = Guess(now + GUESS_MS, playing ?: before?.playing, shuffle ?: before?.shuffle, repeat ?: before?.repeat)
+    }
 
     fun start() {
         // Numbered from the clock, so a restarted device's messages still count as newer than its last ones.
@@ -252,7 +260,9 @@ internal class ConnectSession(
                 else -> null
             }
             if (guess != null) setDevice(target.copy(state = guess, receivedAt = clock()))
-            if (guess != null && (action == "play" || action == "pause")) guesses[target.id] = clock() + GUESS_MS to guess.playing
+            if (guess != null && (action == "play" || action == "pause")) guess(target.id, playing = guess.playing)
+            if (guess != null && action == "shuffle") guess(target.id, shuffle = guess.shuffle)
+            if (guess != null && action == "repeat") guess(target.id, repeat = guess.repeat)
         }
         command(target.id, action, pos = pos, value = value, mode = mode) { ack ->
             if (!ack.ok && shown != null) { guesses.remove(target.id); setDevice(target.copy(state = shown)) }
@@ -326,13 +336,16 @@ internal class ConnectSession(
             }
             is State -> {
                 // A play or pause pressed here a moment ago: a report from before it landed doesn't undo it on screen.
-                guesses[msg.from]?.let { (until, playing) ->
-                    if (now < until && msg.playing != playing) { touch(msg.from, now); return }
-                    guesses.remove(msg.from)
+                var st: State = msg
+                guesses[msg.from]?.let { g ->
+                    if (now >= g.until) { guesses.remove(msg.from); return@let }
+                    if (g.playing != null && msg.playing != g.playing) { touch(msg.from, now); return }
+                    val confirmed = (g.shuffle == null || msg.shuffle == g.shuffle) && (g.repeat == null || msg.repeat == g.repeat)
+                    if (confirmed) guesses.remove(msg.from) else st = msg.copy(shuffle = g.shuffle ?: msg.shuffle, repeat = g.repeat ?: msg.repeat)
                 }
                 val base = known ?: Device(msg.from, "", "", now)
-                val since = msg.since ?: if (base.state?.track != msg.track || (msg.playing && base.state?.playing != true)) now else base.since
-                setDevice(base.copy(lastSeen = now, state = msg, receivedAt = now, since = since))
+                val since = st.since ?: if (base.state?.track != st.track || (st.playing && base.state?.playing != true)) now else base.since
+                setDevice(base.copy(lastSeen = now, state = st, receivedAt = now, since = since))
                 if (known == null) sayPresence()
             }
             is Leave -> {
@@ -346,7 +359,8 @@ internal class ConnectSession(
                 val ok = apply(msg)
                 send(Ack(myId, ++seq, now, to = msg.from, id = msg.id, ok = ok, reason = if (ok) null else "unplayable"))
                 // A play or pause shows in the player's state a moment later; its own change sends it then.
-                if (msg.action != "play" && msg.action != "pause") localChanged()
+                // The rest is told once the player has settled (its repeat, for one, arrives a moment after).
+                if (msg.action != "play" && msg.action != "pause") scope.launch { delay(SETTLE_MS); localChanged() }
             }
             is Transfer -> {
                 touch(msg.from, now)
@@ -490,6 +504,8 @@ internal class ConnectSession(
     companion object {
         /** How often a device left in a former group is told again where the others went. */
         const val FORWARD_MS = 60_000L
+        /** How long a command's change takes to show in the player's state. */
+        const val SETTLE_MS = 150L
         const val KIND = 21421
         /** How long a play or pause pressed here outlasts reports from before it landed. */
         private const val GUESS_MS = 1_500L

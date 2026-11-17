@@ -101,6 +101,17 @@ function fromCTrack(t: CTrack): Track {
 
 // ---- This browser's player, as Connect sees it ---------------------------------------------
 
+/** True while a command from another device is carried out here: the player's buttons then act here. */
+let applying = false;
+function here(f: () => void): void {
+  applying = true;
+  try {
+    f();
+  } finally {
+    applying = false;
+  }
+}
+
 /** The queue row of entry [at] in Snapshot.queue (the shareable songs after this one), checked against [id]. */
 function queuedRow(at: number, id: string): number | null {
   const { queue, index } = usePlayer.getState();
@@ -139,13 +150,13 @@ const webPlayer: ConnectPlayer = {
   previous: () => usePlayer.getState().previous(),
   seekTo: (ms) => partyPlayer.seekTo(ms / 1000),
   setVolume: (v) => usePlayer.getState().setVolume(v),
-  setShuffle: (on) => {
+  setShuffle: (on) => here(() => {
     if (usePlayer.getState().shuffle !== on) usePlayer.getState().toggleShuffle();
-  },
-  setRepeat: (mode) => {
+  }),
+  setRepeat: (mode) => here(() => {
     // Repeat only cycles here; at most three steps reach any mode.
     for (let i = 0; i < 3 && usePlayer.getState().repeat !== mode; i++) usePlayer.getState().cycleRepeat();
-  },
+  }),
   playTrack: (t) => {
     usePlayer.getState().playNext([fromCTrack(t)]);
     usePlayer.getState().next();
@@ -234,7 +245,7 @@ export function initConnect(): void {
     intercept: (control) => {
       const s = session;
       const target = controllingOf(useConnect.getState().view);
-      if (!s || !target) return false;
+      if (!s || !target || applying) return false;
       switch (control.kind) {
         case 'toggle': return s.intercept(target.state?.playing ? 'pause' : 'play');
         case 'next': return s.intercept('next');
