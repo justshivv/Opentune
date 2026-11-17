@@ -34,6 +34,7 @@ jobs:
           ./gradlew --no-daemon :core:testDebugUnitTest
           --tests '*LikedMergeTest'
           --tests '*SmartDownloadsTest'
+          --tests '*UnmeteredNetworkTest'
           --tests '*DownloadManagementTest'
           --tests '*RangedFetchTest'
           --tests '*BlendContinuityTest'

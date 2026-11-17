@@ -44,23 +44,27 @@ object SmartDownloads {
                             .drop(limit.coerceIn(10, 500)).forEach { Downloads.removeSmart(app, it.song.videoId) }
                         manager.enqueueUniquePeriodicWork(REFRESH, ExistingPeriodicWorkPolicy.UPDATE,
                             PeriodicWorkRequestBuilder<SmartDownloadWorker>(12, TimeUnit.HOURS)
-                                .setConstraints(constraints()).build())
+                                .setConstraints(constraints(app)).build())
                         manager.enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE,
-                            OneTimeWorkRequestBuilder<SmartDownloadWorker>().setConstraints(constraints()).build())
+                            OneTimeWorkRequestBuilder<SmartDownloadWorker>().setConstraints(constraints(app)).build())
                     }
                 }
         }
     }
 
-    private fun constraints() = Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED)
+    /** Behind a metered VPN on Wi-Fi "unmetered" never comes; the worker checks for Wi-Fi itself ([allowed]). */
+    private fun constraints(context: Context) = Constraints.Builder().setRequiredNetworkType(
+        if (context.getSystemService(ConnectivityManager::class.java)
+                ?.let(com.opentune.data.UnmeteredNetwork::behindMeteredVpn) == true) NetworkType.CONNECTED else NetworkType.UNMETERED)
         .setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build()
 
     internal fun allowed(context: Context): Boolean {
         val settings = AppSettings.library.value
         val manager = context.getSystemService(ConnectivityManager::class.java) ?: return false
         val network = manager.activeNetwork?.let(manager::getNetworkCapabilities)
-        val wifi = network?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true &&
-            network.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) && !manager.isActiveNetworkMetered
+        // Wi-Fi under a VPN counts as Wi-Fi.
+        val wifi = network?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true &&
+            com.opentune.data.UnmeteredNetwork.available(manager)
         val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val level = battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = battery?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
