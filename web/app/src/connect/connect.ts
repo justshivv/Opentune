@@ -42,7 +42,7 @@ function load(): Saved {
     id: saved.id ?? crypto.randomUUID().replace(/-/g, '').slice(0, 12),
     name: saved.name ?? defaultName(),
     enabled: saved.enabled ?? true,
-    accountSync: saved.accountSync ?? false,
+    accountSync: saved.accountSync ?? true,
   };
 }
 

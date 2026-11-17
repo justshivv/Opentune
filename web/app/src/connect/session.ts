@@ -121,6 +121,8 @@ export class ConnectSession {
   }
 
   start(): void {
+    // Numbered from the clock, so a restarted device's messages still count as newer than its last ones.
+    this.seq = Math.max(this.seq, this.clock());
     const filter = { kinds: [KIND], '#t': [this.group.tag], since: Math.floor(this.clock() / 1000) - 10 };
     this.pool = this.transport(filter, (e) => this.onEvent(e), (n) => this.update({ relays: n }));
     this.pool.start();

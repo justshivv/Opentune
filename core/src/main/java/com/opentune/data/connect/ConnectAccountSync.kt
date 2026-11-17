@@ -22,19 +22,22 @@ object ConnectAccountSync {
     /** The secret in any text from the playlist's page (its JSON as it came), or null. */
     fun secretIn(text: String): ConnectGroup? = SECRET.find(text)?.groupValues?.get(1)?.let(ConnectGroup::parse)
 
+    /** Whether [item] is the playlist kept for Connect, which OpenTune never shows. */
+    fun isConnectPlaylist(item: ShelfItem): Boolean = item.title == TITLE
+
     /** The playlist among the account's own, by its title. */
-    fun pick(playlists: List<ShelfItem>): ShelfItem? = playlists.firstOrNull { it.title == TITLE && it.browseId != null }
+    fun pick(playlists: List<ShelfItem>): ShelfItem? = playlists.firstOrNull { isConnectPlaylist(it) && it.browseId != null }
 
     /** The group kept in the account, or null when there's none yet. */
     suspend fun read(): ConnectGroup? {
-        val playlist = pick(MusicRepository.libraryPlaylists()) ?: return null
+        val playlist = pick(MusicRepository.libraryPlaylists(withConnect = true)) ?: return null
         val browseId = playlist.browseId!!.let { if (it.startsWith("VL")) it else "VL$it" }
         return secretIn(Innertube.browse(browseId).toString())
     }
 
     /** Puts [group] in the account: the playlist made if it isn't there, its description changed if it is. */
     suspend fun write(group: ConnectGroup) {
-        val playlist = pick(MusicRepository.libraryPlaylists())
+        val playlist = pick(MusicRepository.libraryPlaylists(withConnect = true))
         if (playlist == null) Innertube.createPlaylist(TITLE, PlaylistPrivacy.PRIVATE, description(group))
         else Innertube.setPlaylistDescription(playlist.browseId!!, description(group))
     }

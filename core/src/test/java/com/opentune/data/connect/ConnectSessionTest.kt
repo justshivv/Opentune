@@ -110,6 +110,20 @@ class ConnectSessionTest {
         eventually("a forgets b") { a.others().isEmpty() }
     }
 
+    @Test fun aRestartedDeviceIsHeardAgain() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        // b has said a lot before it goes, more than a new b could catch up with by counting from 0.
+        onLoop { ConnectSession::class.java.getDeclaredField("seq").apply { isAccessible = true }.setLong(b.session, 1_000_000_000L) }
+        eventually("each sees the other") { a.others() == setOf("b") }
+        Thread.sleep(300)
+        onLoop { b.session.stop() }
+        eventually("a forgets b") { a.others().isEmpty() }
+        Thread.sleep(20)
+        Dev("b", "Chrome").start()
+        eventually("a sees the new b") { a.others() == setOf("b") }
+    }
+
     @Test fun aDeviceJoiningAnotherGroupTakesTheOthersAlong() {
         val a = Dev("a", "Phone").start()
         val b = Dev("b", "Chrome").start()

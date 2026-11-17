@@ -86,7 +86,7 @@ object Connect {
         prefs = p
         myId = p.getString("device_id", null) ?: UUID.randomUUID().toString().replace("-", "").take(12).also { p.edit { putString("device_id", it) } }
         _enabled.value = p.getBoolean("enabled", true)
-        _accountSync.value = p.getBoolean("account_sync", false)
+        _accountSync.value = p.getBoolean("account_sync", true)
         _group.value = ConnectGroup.parse(p.getString("secret", null))
         _name.value = p.getString("name", null) ?: defaultName(context)
     }

@@ -132,6 +132,8 @@ internal class ConnectSession(
     private val pending = HashMap<String, Pending>()
 
     fun start() {
+        // Numbered from the clock, so a restarted device's messages still count as newer than its last ones.
+        seq = maxOf(seq, clock())
         view.value = ConnectView(myId, myName)
         transport.start()
         jobs += scope.launch { transport.connected.collect { n -> view.value = view.value.copy(relays = n) } }

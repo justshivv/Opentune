@@ -1,4 +1,5 @@
 import { createPlaylist } from '@/data/music/api';
+import { CONNECT_PLAYLIST_TITLE } from '@/data/music/library';
 import { getSignedInnertube } from '@/playback/youtube/innertube';
 import { ConnectGroup } from './group';
 
@@ -7,7 +8,7 @@ import { ConnectGroup } from './group';
  * ConnectAccountSync.kt does on the phone: in the description of a private,
  * empty playlist named [TITLE], so every device signed in to it joins by itself.
  */
-export const TITLE = 'OpenTune Connect';
+export const TITLE = CONNECT_PLAYLIST_TITLE;
 const PREFIX = 'opentune-connect:v1:';
 const SECRET = /opentune-connect:v1:([A-Za-z0-9_-]{43})/;
 

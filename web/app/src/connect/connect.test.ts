@@ -127,6 +127,22 @@ describe('sessions', () => {
     a!.session.stop(); b!.session.stop();
   });
 
+  it('hears a restarted device again', async () => {
+    const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
+    // b has said a lot before it goes, more than a new b could catch up with by counting from 0.
+    (b!.session as unknown as { seq: number }).seq = 1e9;
+    b!.session.rename('Chrome');
+    await eventually('see each other', () => a!.view?.devices.length === 1);
+    await new Promise((r) => setTimeout(r, 300));
+    b!.session.stop();
+    await eventually('a forgets b', () => a!.view!.devices.length === 0);
+    await new Promise((r) => setTimeout(r, 20));
+    const again = new ConnectSession(b!.session.group, 'b', 'Chrome', 'web', fakePlayer(true).player, () => {}, () => {}, fast, (b!.session as unknown as { transport: never }).transport);
+    again.start();
+    await eventually('a sees the new b', () => a!.view!.devices.length === 1);
+    a!.session.stop(); again.stop();
+  });
+
   it('takes the others along when a device joins another group', async () => {
     const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
     await eventually('see each other', () => a!.view?.devices.length === 1 && b!.view?.devices.length === 1);
