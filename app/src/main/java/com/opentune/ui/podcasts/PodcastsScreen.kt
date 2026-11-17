@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import com.opentune.data.model.UiState
 import com.opentune.data.model.artworkAt
@@ -85,10 +86,12 @@ private enum class SearchKind(val label: String) { SHOWS("Shows"), EPISODES("Epi
 fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenShow: (String) -> Unit, onOpenSettings: (() -> Unit)? = null, onOpenAudiobooks: (() -> Unit)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
     var kind by rememberSaveable { mutableStateOf(SearchKind.SHOWS) }
-    val loader = rememberLoader("podcasts:home:${com.opentune.data.innertube.Innertube.currentRegion}") { Podcasts.home() }
-    val state by loader.state.collectAsState()
     val subscriptions by Podcasts.subscriptions.collectAsState()
     val progress by Podcasts.progress.collectAsState()
+    // The suggestions follow what was listened to: another episode to draw from loads them anew.
+    val seeds = remember(progress) { Podcasts.seeds(progress).map { it.videoId }.sorted().joinToString(",") }
+    val loader = rememberLoader("podcasts:home:${com.opentune.data.innertube.Innertube.currentRegion}:$seeds") { Podcasts.home() }
+    val state by loader.state.collectAsState()
     val inProgress = remember(progress) { Podcasts.inProgress(progress).take(10) }
     var refreshGeneration by remember { mutableIntStateOf(0) }
     var latest by remember { mutableStateOf<List<PodcastEpisode>>(emptyList()) }
@@ -100,9 +103,32 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
     var episodes by remember { mutableStateOf<List<PodcastEpisode>?>(null) }
     var searchError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
-    LaunchedEffect(query, kind, attempt) {
+    // A chip that lists episodes instead of searching: a show listened to, or a quick filter.
+    var pick by remember { mutableStateOf<ChipPick?>(null) }
+    val topShows = remember(progress, subscriptions) { com.opentune.data.podcasts.PodcastInterests.topShows(progress.values, subscriptions) }
+    val topicUse by Podcasts.topicUse.collectAsState()
+    val topics = remember(topicUse, progress) { Podcasts.topicsInOrder(topicUse, progress.values) }
+    val suggested = (state as? UiState.Success)?.data?.suggested.orEmpty()
+    // Under half an hour, of what's new from the shows followed and what's suggested, not yet heard.
+    val short = remember(latest, suggested, progress) {
+        (latest + suggested).filter { ep ->
+            val p = progress[ep.videoId]
+            (p == null || !p.finished) && (com.opentune.data.podcasts.PodcastInterests.minutes(ep.durationText) ?: Int.MAX_VALUE) < 30
+        }.distinctBy { it.videoId }
+    }
+    LaunchedEffect(query, kind, attempt, pick) {
         val q = query.trim()
+        val chosen = pick
         shows = null; episodes = null; searchError = null
+        if (chosen != null) {
+            episodes = when (chosen) {
+                is ChipPick.Show -> try { Podcasts.show(chosen.show.browseId).episodes } catch (e: CancellationException) { throw e } catch (e: Exception) { searchError = e.message ?: "The show didn't load"; null }
+                ChipPick.Unfinished -> inProgress.map { it.episode }
+                ChipPick.NewFromYourShows -> latest
+                ChipPick.Short -> short
+            }
+            return@LaunchedEffect
+        }
         if (q.isEmpty()) return@LaunchedEffect
         delay(350)
         try {
@@ -126,7 +152,7 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
             item {
                 TextField(
                     value = query,
-                    onValueChange = { query = it },
+                    onValueChange = { query = it; pick = null },
                     singleLine = true,
                     placeholder = { Text("Search shows and episodes") },
                     leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Search), null) },
@@ -143,14 +169,28 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
             }
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(Podcasts.TOPICS) { topic ->
-                        FilterChip(query == topic, { query = if (query == topic) "" else topic; kind = SearchKind.SHOWS }, { Text(topic) })
+                    // The shows listened to most, then quick filters, then the topics, the listener's first.
+                    fun choose(p: ChipPick) { pick = if (pick == p) null else p; query = "" }
+                    items(topShows, key = { "show:${it.browseId}" }) { show ->
+                        val p = ChipPick.Show(show)
+                        FilterChip(pick == p, { choose(p) }, { Text(show.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.widthIn(max = 200.dp))
+                    }
+                    if (inProgress.isNotEmpty()) item(key = "unfinished") { FilterChip(pick == ChipPick.Unfinished, { choose(ChipPick.Unfinished) }, { Text("Unfinished") }) }
+                    if (latest.isNotEmpty()) item(key = "new") { FilterChip(pick == ChipPick.NewFromYourShows, { choose(ChipPick.NewFromYourShows) }, { Text("New from your shows") }) }
+                    if (short.isNotEmpty()) item(key = "short") { FilterChip(pick == ChipPick.Short, { choose(ChipPick.Short) }, { Text("Under 30 min") }) }
+                    items(topics, key = { "topic:$it" }) { topic ->
+                        FilterChip(query == topic, {
+                            pick = null
+                            if (query != topic) Podcasts.pickedTopic(topic)
+                            query = if (query == topic) "" else topic; kind = SearchKind.SHOWS
+                        }, { Text(topic) })
                     }
                 }
             }
 
-            if (query.isNotBlank()) {
-                item {
+            if (query.isNotBlank() || pick != null) {
+                // A show or a filter lists episodes; only a search has shows to choose from.
+                if (pick == null) item {
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
                         SearchKind.entries.forEachIndexed { i, k ->
                             SegmentedButton(kind == k, { kind = k }, SegmentedButtonDefaults.itemShape(i, SearchKind.entries.size)) { Text(k.label) }
@@ -159,7 +199,7 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
                 }
                 when {
                     searchError != null -> item { ErrorState(searchError!!, onRetry = { attempt++ }) }
-                    kind == SearchKind.SHOWS -> {
+                    pick == null && kind == SearchKind.SHOWS -> {
                         val s = shows
                         if (s == null) items(6) { SongRowPlaceholder() }
                         else if (s.isEmpty()) item { MessageState(ImageVector.vectorResource(AppIcons.Podcasts), "No shows found") }
@@ -205,6 +245,16 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
                 is UiState.Error -> item { ErrorState(s.message, onRetry = { loader.reload() }) }
                 is UiState.Success -> {
                     val home = s.data
+                    home.becauseOf.forEach { (show, list) ->
+                        item(key = "because:$show") { SectionHeader(show, subtitle = "Because you listened to") }
+                        item(key = "becauseRow:$show") { ShowCarousel(list, onOpenShow) }
+                    }
+                    if (home.suggested.isNotEmpty()) {
+                        item(key = "suggestedHeader") { SectionHeader("Episodes you might like") }
+                        items(home.suggested, key = { "sug:${it.videoId}" }) { ep ->
+                            EpisodeRow(ep, actions, showShow = true, onOpenShow = onOpenShow) { actions.playEpisodes(listOf(ep), 0, ep.showTitle) }
+                        }
+                    }
                     if (home.shows.isNotEmpty()) {
                         item { SectionHeader("Shows to try") }
                         item { ShowCarousel(home.shows, onOpenShow) }
@@ -436,4 +486,12 @@ fun PodcastShowScreen(browseId: String, contentPadding: PaddingValues, actions: 
             }
         }
     }
+}
+
+/** A chip that lists episodes rather than searching: a show's own, or a quick filter of the listener's. */
+private sealed interface ChipPick {
+    data class Show(val show: PodcastShow) : ChipPick
+    data object Unfinished : ChipPick
+    data object NewFromYourShows : ChipPick
+    data object Short : ChipPick
 }

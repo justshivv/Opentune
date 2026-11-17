@@ -1620,7 +1620,7 @@ private fun settingsSections(
                 Entry("Stream downloaded songs", "downloaded songs play from downloads when online offline file internet mobile data wifi quality") {
                     val pbd by AppSettings.playback.collectAsState()
                     NavRow("Stream downloaded songs", { downloadedPlaybackDialog = true }, icon = ImageVector.vectorResource(AppIcons.Wifi),
-                        summary = "${pbd.downloadedPlayback.label} · ${pbd.downloadedPlayback.summary}")
+                        summary = "${com.opentune.i18n.Tr.t(pbd.downloadedPlayback.label)} · ${com.opentune.i18n.Tr.t(pbd.downloadedPlayback.summary)}")
                 },
                 Entry("Prefer the download when it's as good", "downloaded songs downloads file quality lossless data stream only when better") {
                     val pbd by AppSettings.playback.collectAsState()
