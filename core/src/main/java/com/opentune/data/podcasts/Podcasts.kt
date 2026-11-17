@@ -92,9 +92,9 @@ object Podcasts {
         save()
     }
 
-    /** The topics, those picked most first; the rest keep their order. */
-    fun topicsInOrder(use: Map<String, Int> = _topicUse.value): List<String> =
-        TOPICS.withIndex().sortedWith(compareByDescending<IndexedValue<String>> { use[it.value] ?: 0 }.thenBy { it.index }).map { it.value }
+    /** The topics, the listener's first: those picked most and those their listening falls under (see [PodcastInterests]). */
+    fun topicsInOrder(use: Map<String, Int> = _topicUse.value, progress: Collection<Progress> = _progress.value.values): List<String> =
+        PodcastInterests.topicsInOrder(use, PodcastInterests.topicScores(progress))
 
     // ---- Subscriptions ------------------------------------------------------
 
@@ -169,7 +169,7 @@ object Podcasts {
             // Explore and Home carry no podcasts), since topics are found by search, which works.
             val day = (System.currentTimeMillis() / 86_400_000L).toInt() + homeVisits.getAndIncrement()
             val nothingElse = popular.isEmpty() && shows.isEmpty() && mine.shows.isEmpty() && mine.episodes.isEmpty()
-            val favourites = topicsInOrder().filter { (_topicUse.value[it] ?: 0) > 0 }
+            val favourites = PodcastInterests.favouriteTopics(_topicUse.value, PodcastInterests.topicScores(_progress.value.values))
             val picks = topicsToShow(day, nothingElse, enoughFor(mine), favourites)
             val more = picks.map { topic -> async { topic to runCatching { searchShows(topic) }.getOrDefault(emptyList()) } }.awaitAll()
                 .filter { it.second.isNotEmpty() }
