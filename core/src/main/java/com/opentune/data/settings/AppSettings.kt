@@ -947,10 +947,11 @@ object AppSettings {
                 caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
+    /** On mobile data or another metered network; Wi-Fi under a VPN counts as Wi-Fi. */
     fun onMeteredNetwork(): Boolean {
         val cm = connectivity ?: return false
-        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
-        return !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return !com.opentune.data.UnmeteredNetwork.available(cm)
     }
 
     fun init(context: Context) {

@@ -138,6 +138,7 @@ object Downloads {
                 runCatching { f.write(json.encodeToString(serializer, map)) }
             }
         }
+        watchNetwork(context.applicationContext)
     }
 
     private var saved: com.opentune.data.SavedFile? = null
@@ -193,9 +194,17 @@ object Downloads {
 
     private fun schedule(context: Context, song: SongRef, preferLossless: Boolean = false, preferredKey: String? = null, smart: Boolean = false) {
         val wifiOnly = smart || AppSettings.library.value.downloadWifiOnly
+        // Behind a VPN that calls itself metered Android's "unmetered" never comes, even on
+        // Wi-Fi: the job waits for any connection and the worker checks for Wi-Fi itself.
+        val network = when {
+            !wifiOnly -> NetworkType.CONNECTED
+            context.getSystemService(android.net.ConnectivityManager::class.java)
+                ?.let(com.opentune.data.UnmeteredNetwork::behindMeteredVpn) == true -> NetworkType.CONNECTED
+            else -> NetworkType.UNMETERED
+        }
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()
             .setInputData(workDataOf(DownloadWorker.KEY_ID to song.videoId))
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(network)
                 .setRequiresBatteryNotLow(smart).setRequiresStorageNotLow(true).build())
             // Started straight away rather than whenever Android next runs background work,
             // which on a phone saving battery could be a long while; past the quota it's ordinary work.
@@ -217,11 +226,38 @@ object Downloads {
         _entries.value.values.filter { it.state == DownloadState.QUEUED }.forEach { schedule(context, it.song, it.preferLossless, it.preferredRenditionKey, it.smartDownload) }
     }
 
-    /** Downloads wait because only Wi-Fi is allowed and the phone is on mobile data (or another metered network). */
+    /**
+     * Downloads wait because only Wi-Fi is allowed and the phone is on mobile data (or another
+     * metered network). Wi-Fi under a VPN counts as Wi-Fi.
+     */
     fun waitingForWifi(context: Context): Boolean {
         if (!AppSettings.library.value.downloadWifiOnly) return false
         val cm = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return false
-        return cm.activeNetwork == null || cm.isActiveNetworkMetered
+        return !com.opentune.data.UnmeteredNetwork.available(cm)
+    }
+
+    /** Whether the phone is behind a metered VPN on Wi-Fi, as of the last network change seen. */
+    @Volatile private var behindVpn: Boolean? = null
+
+    /**
+     * Waiting downloads are scheduled for the network as it was: a VPN coming up or going
+     * away on Wi-Fi changes which constraint lets them run, so they're scheduled again.
+     */
+    private fun watchNetwork(context: Context) {
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        fun check() {
+            val now = com.opentune.data.UnmeteredNetwork.behindMeteredVpn(cm)
+            val before = behindVpn
+            behindVpn = now
+            // On start only a VPN matters: jobs queued while the app was closed waited for "unmetered".
+            if (now != before && (before != null || now)) runCatching { requeueWaiting(context) }
+        }
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) = check()
+            override fun onCapabilitiesChanged(network: android.net.Network, caps: android.net.NetworkCapabilities) = check()
+            override fun onLost(network: android.net.Network) = check()
+        }
+        runCatching { cm.registerDefaultNetworkCallback(callback) }
     }
 
     fun remove(context: Context, videoId: String) = remove(context, videoId, onlyActive = false)
@@ -334,6 +370,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val entry = Downloads.entries.value[id] ?: return Result.failure()
         if (entry.workId != null && entry.workId != this.id.toString()) return Result.success()
         if (entry.smartDownload && !SmartDownloads.allowed(applicationContext)) return Result.retry()
+        // Scheduled for any connection because of a VPN (see Downloads.schedule): still Wi-Fi only.
+        if (!entry.smartDownload && Downloads.waitingForWifi(applicationContext)) return Result.retry()
         runCatching { setForeground(foregroundInfo(entry.song.title, 0f)) }
         fun publish(transform: (DownloadEntry) -> DownloadEntry) {
             if (!Downloads.updateWorker(id, entry.workId, transform)) throw CancellationException("Download removed or replaced")
