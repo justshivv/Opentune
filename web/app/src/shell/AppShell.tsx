@@ -22,8 +22,7 @@ import { useAllowGate } from './AllowGate';
 import { Appearance } from './Appearance';
 import { MobileDock } from './MobileDock';
 import { RoomNotice } from './RoomNotice';
-import { initConnect, useControlling } from '@/connect/connect';
-import { RemoteFullScreen } from '@/connect/RemoteFullScreen';
+import { initConnect } from '@/connect/connect';
 import { ShortcutsHelp } from './ShortcutsHelp';
 import { Sidebar } from './Sidebar';
 
@@ -138,8 +137,6 @@ export function AppShell() {
   const { locked, gate } = useAllowGate();
   const bannerDismissed = useUi((s) => s.installBannerDismissed);
   const dismissBanner = useUi((s) => s.dismissInstallBanner);
-  // Another of the person's devices playing: the full-screen player shows that one (Connect).
-  const remote = useControlling();
   const fullScreen = useUi((s) => s.fullScreen);
   // The full player stays up after it's asked to close, until it has folded back into the mini player.
   const [playerUp, setPlayerUp] = useState(fullScreen);
@@ -246,11 +243,7 @@ export function AppShell() {
       {banner}
       {(fullScreen || playerUp) && (
         <Suspense fallback={null}>
-          {remote ? (
-            <RemoteFullScreen device={remote} closing={!fullScreen} onClosed={() => setPlayerUp(false)} />
-          ) : (
-            <FullScreenPlayer closing={!fullScreen} onClosed={() => setPlayerUp(false)} />
-          )}
+          <FullScreenPlayer closing={!fullScreen} onClosed={() => setPlayerUp(false)} />
         </Suspense>
       )}
       {gate}

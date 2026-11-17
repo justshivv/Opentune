@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useShownNowPlaying } from '@/connect/shown';
 import { create } from 'zustand';
 import { usePlayer } from '@/state/player';
 import { queryClient } from '@/lib/queryClient';
@@ -38,9 +39,12 @@ function reportState(videoId: string, source: LyricsSourceId, state: SourceState
 
 /** The playing track's lyrics, from the provider chain or the provider picked for it. */
 export function useLyrics() {
-  const videoId = usePlayer((s) => s.nowPlaying?.videoId ?? null);
-  const title = usePlayer((s) => s.nowPlaying?.title ?? '');
-  const artist = usePlayer((s) => s.nowPlaying?.artist ?? '');
+  // The song shown, which may be playing on the person's other device (Connect).
+  const shown = useShownNowPlaying();
+  const videoId = shown?.videoId || null;
+  const title = shown?.title ?? '';
+  const artist = shown?.artist ?? '';
+  const shownDuration = shown?.durationSec ?? 0;
   const only = useLyricsUi((s) => (videoId ? s.picked[videoId] : undefined));
   const order = useLyricsSettings((s) => s.order.filter((id) => !s.disabled.includes(id)).join(','));
   const preferSyllables = useLyricsSettings((s) => s.preferSyllables);
@@ -54,14 +58,15 @@ export function useLyrics() {
     queryFn: () => {
       const player = usePlayer.getState();
       const entry = player.queue[player.index];
-      const durationSec = entry?.track.durationSec || player.nowPlaying?.durationSec || 0;
+      const here = entry?.track.videoId === videoId;
+      const durationSec = (here ? entry?.track.durationSec : 0) || shownDuration;
       return lookupLyrics(
         {
           videoId: videoId!,
           title,
           artist,
           durationMs: Math.round(durationSec * 1000),
-          album: entry?.track.album?.name ?? null,
+          album: here ? entry?.track.album?.name ?? null : null,
         },
         { ...(only && { only }), onSource: (source, state) => reportState(videoId!, source, state) },
       );
