@@ -126,7 +126,10 @@ private const val SEARCH_ROUTE = "search"
 @Composable
 fun AppRoot(vm: PlayerViewModel) {
     val nav = rememberNavController()
-    val song by vm.currentSong.collectAsState()
+    val localSong by vm.currentSong.collectAsState()
+    // Another of the person's devices playing: the mini player shows it here too (see Connect).
+    val remoteDevice by com.opentune.data.connect.Connect.controlling.collectAsState()
+    val song = localSong ?: remoteDevice?.state?.track?.toSong()
     val isPlaying by vm.isPlaying.collectAsState()
     val playbackError by vm.playbackError.collectAsState()
     var playerOpen by rememberSaveable { mutableStateOf(false) }
@@ -411,6 +414,7 @@ fun AppRoot(vm: PlayerViewModel) {
             }
             is LinkTarget.SpotifyImport -> nav.navigate("import?link=${Uri.encode(link.text)}")
             is LinkTarget.Together -> { playerOpen = false; nav.navigate("together?code=${link.code}") }
+            is LinkTarget.Connect -> { playerOpen = false; nav.navigate("connect?join=${Uri.encode(link.secret)}") }
             is LinkTarget.Recognize -> { playerOpen = false; nav.navigate("recognize?listen=true") { launchSingleTop = true } }
             is LinkTarget.Player -> playerOpen = true
             is LinkTarget.PlaySearch -> {
@@ -441,6 +445,11 @@ fun AppRoot(vm: PlayerViewModel) {
     // the tree, so neither starts over (the activity handles the size change
     // itself rather than being recreated; see the manifest).
     val window = with(androidx.compose.ui.platform.LocalDensity.current) { androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.toSize().toDpSize() }
+    val devicesOpen by com.opentune.ui.connect.ConnectUi.devicesOpen.collectAsState()
+    if (devicesOpen) com.opentune.ui.connect.DevicesSheet(
+        onDismiss = com.opentune.ui.connect.ConnectUi::closeDevices,
+        onSettings = { playerOpen = false; nav.navigate("connect") },
+    )
     val layout = appLayout(window.width.value.toInt(), window.height.value.toInt(), song != null, paneCollapsed, chromeUi.wideLayout, chromeUi.sidePlayer)
     // Docked beside the page, the player is never also opened over it.
     val sheetOpen = playerOpen && !layout.sidePlayer
@@ -712,7 +721,14 @@ fun AppRoot(vm: PlayerViewModel) {
                                 onSignIn = { nav.navigate("login") },
                                 onTogether = { nav.navigate("together") },
                                 onRemote = { nav.navigate("tv-remote") },
+                                onConnect = { nav.navigate("connect") },
                             )
+                        }
+                        page(
+                            "connect?join={join}",
+                            arguments = listOf(androidx.navigation.navArgument("join") { nullable = true; defaultValue = null }),
+                        ) { entry ->
+                            com.opentune.ui.connect.ConnectScreen(content, entry.arguments?.getString("join"), onBack = { nav.popBackStack() })
                         }
                         page("tv-remote") {
                             com.opentune.ui.remote.TvRemoteScreen(content, onBack = { nav.popBackStack() })
@@ -961,7 +977,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 // Out of the mini player as one card, and back into it.
                 var sheetSettled by remember { mutableStateOf(false) }
                 com.opentune.ui.components.PlayerSheet(
-                    open = sheetOpen && song != null,
+                    open = sheetOpen && localSong != null,
                     onSettled = { sheetSettled = it },
                     face = { round -> MiniPlayerBar(vm, onExpand = {}, modifier = Modifier.fillMaxSize(), inline = round, replica = true) },
                 ) {
@@ -969,7 +985,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 }
             } else {
                 AnimatedVisibility(
-                    visible = sheetOpen && song != null,
+                    visible = sheetOpen && localSong != null,
                     enter = PageMotion.playerIn(chromeUi.playerMotion, chromeUi.reduceAnimation),
                     exit = PageMotion.playerOut(chromeUi.playerMotion, chromeUi.reduceAnimation),
                 ) {
@@ -983,7 +999,7 @@ fun AppRoot(vm: PlayerViewModel) {
                 seed = com.opentune.ui.theme.rememberArtworkSeed(song?.thumbnailUrl),
                 settings = notificationTheme,
                 neutral = chromeUi.playerStyle == com.opentune.data.settings.PlayerStyle.APPLE_MUSIC,
-                active = sheetOpen && song != null,
+                active = sheetOpen && localSong != null,
             ) {
                 com.opentune.ui.components.PillHost(chromeUi.reduceAnimation, Modifier.align(Alignment.TopCenter))
             }

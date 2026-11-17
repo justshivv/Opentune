@@ -85,6 +85,7 @@ fun LinkDeviceScreen(
     onSignIn: () -> Unit,
     onTogether: () -> Unit,
     onRemote: () -> Unit = {},
+    onConnect: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var target by rememberSaveable { mutableStateOf(LinkTarget.TV) }
@@ -160,8 +161,11 @@ fun LinkDeviceScreen(
                                     { SheetButton("Open here", onClick = { open(WEB_PLAYER) }, icon = ImageVector.vectorResource(AppIcons.OpenInNew)) },
                                 )
                             }
-                            Step(2, "Add the companion extension", "It lets the page reach YouTube Music from your own browser. Choose Get the Extension in the web player.", last = true)
-                            Note(ImageVector.vectorResource(AppIcons.Lock), "A preview. What you save there stays in that browser; it doesn't sync with this phone.")
+                            Step(2, "Add the companion extension", "It lets the page reach YouTube Music from your own browser. Choose Get the Extension in the web player.")
+                            Step(3, "Connect it to this phone", "See and control what plays on the computer from here, and move the music between them.", last = true) {
+                                Buttons({ SheetButton("Your devices", onClick = onConnect, icon = ImageVector.vectorResource(AppIcons.Devices), tone = SheetTone.Primary) })
+                            }
+                            Note(ImageVector.vectorResource(AppIcons.Lock), "Your library and settings there stay in that browser.")
                         }
                         LinkTarget.SPEAKER -> DeviceCard(
                             "On a speaker or smart TV",

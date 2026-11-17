@@ -20,6 +20,8 @@ sealed interface LinkTarget {
     data class SpotifyImport(val text: String) : LinkTarget
     /** An invite to a Listen together room. */
     data class Together(val code: String) : LinkTarget
+    /** A link adding this phone to the person's devices (see Connect). */
+    data class Connect(val secret: String) : LinkTarget
     /** From the widget or Quick Settings tile: start listening for a song nearby. */
     data object Recognize : LinkTarget
     /** Open the app with the player up. */
@@ -85,6 +87,10 @@ object Links {
             Intent.ACTION_VIEW -> intent.dataString
             Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
             else -> null
+        }
+        com.opentune.data.connect.ConnectGroup.parse(text)?.let {
+            _incoming.value = LinkTarget.Connect(it.encoded)
+            return
         }
         com.opentune.data.together.RoomCode.find(text)?.let {
             _incoming.value = LinkTarget.Together(it.raw)

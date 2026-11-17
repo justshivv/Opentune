@@ -112,6 +112,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="justshivv.github.io" android:pathPrefix="/Opentune/pair/" />
             </intent-filter>
+            <!-- Adding this phone to the person's devices: opentune://connect/#<secret>. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="opentune" android:host="connect" />
+            </intent-filter>
             <!-- Invites to a Listen together room: opentune://together/<code>. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

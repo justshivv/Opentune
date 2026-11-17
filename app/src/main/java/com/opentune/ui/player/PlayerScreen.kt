@@ -1336,13 +1336,29 @@ fun PlayerLayout(
                                     }
                                 }
                             }
-                            if (!minimal && roomy && (sleepLabel != null || !state.ui.hideOutputDevice)) Text(
-                                sleepLabel ?: device,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
-                            )
+                            val connectOn = com.opentune.data.connect.Connect.view.collectAsState().value != null
+                            if (!minimal && roomy && (sleepLabel != null || !state.ui.hideOutputDevice || connectOn)) Row(
+                                Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                // With Connect on, the line also opens the person's other devices.
+                                Row(
+                                    Modifier.clip(CircleShape)
+                                        .then(if (connectOn) Modifier.clickable { com.opentune.ui.connect.ConnectUi.openDevices() } else Modifier)
+                                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    if (connectOn) Icon(ImageVector.vectorResource(AppIcons.Devices), null, Modifier.size(16.dp).padding(end = 2.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (connectOn) Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        sleepLabel ?: device.takeIf { !state.ui.hideOutputDevice } ?: com.opentune.i18n.Tr.t("Your devices"),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            }
                         }
                     }
                     // With the controls away nothing is drawn in their place (a touch or a swipe
@@ -1837,6 +1853,8 @@ fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier 
     val duration by vm.durationMs.collectAsState()
     val position = rememberPlaybackPosition(vm)
     val haptics = com.opentune.ui.components.rememberHaptics()
+    val remote by com.opentune.data.connect.Connect.controlling.collectAsState()
+    remote?.let { device -> RemoteMiniPlayer(device, modifier, inline, replica); return }
     val s = song ?: return
     MiniPlayer(
         song = s,
@@ -1852,6 +1870,39 @@ fun MiniPlayerBar(vm: PlayerViewModel, onExpand: () -> Unit, modifier: Modifier 
         onPrevious = { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.PREVIOUS); vm.skipPrevious() },
         onClick = onExpand,
         onDismiss = { vm.dismiss() },
+        modifier = modifier,
+        inline = inline,
+        replica = replica,
+    )
+}
+
+/**
+ * The mini player while another of the person's devices plays: its song,
+ * "Playing on" it in place of the artist, and its buttons acting there.
+ * A tap opens the devices, to bring the music here or move it on.
+ */
+@Composable
+private fun RemoteMiniPlayer(device: com.opentune.data.connect.Device, modifier: Modifier, inline: Boolean, replica: Boolean) {
+    val state = device.state ?: return
+    val track = state.track
+    val name = device.name.ifBlank { com.opentune.i18n.Tr.t("another device") }
+    val song = (track?.toSong() ?: com.opentune.data.model.Song("", com.opentune.i18n.Tr.t("Something of its own"), "", null))
+        .copy(artist = com.opentune.i18n.Tr.f("Playing on {0}", name))
+    val length = remember(track?.length) {
+        track?.length?.split(':')?.mapNotNull { it.toLongOrNull() }?.takeIf { it.isNotEmpty() }?.fold(0L) { a, b -> a * 60 + b }?.times(1000) ?: 0L
+    }
+    val haptics = com.opentune.ui.components.rememberHaptics()
+    MiniPlayer(
+        song = song,
+        isPlaying = state.playing,
+        isBuffering = false,
+        hasNext = true,
+        progress = { if (length > 0) (device.positionAt(System.currentTimeMillis()).toFloat() / length).coerceIn(0f, 1f) else 0f },
+        onTogglePlay = { haptics.tick(); com.opentune.data.connect.Connect.togglePlayPause() },
+        onNext = { haptics.tick(); com.opentune.data.connect.Connect.skipNext() },
+        onPrevious = { haptics.tick(); com.opentune.data.connect.Connect.skipPrevious() },
+        onClick = { com.opentune.ui.connect.ConnectUi.openDevices() },
+        onDismiss = { if (state.playing) com.opentune.data.connect.Connect.togglePlayPause() },
         modifier = modifier,
         inline = inline,
         replica = replica,
