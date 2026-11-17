@@ -90,9 +90,13 @@ sealed interface ConnectMsg {
         val playing: Boolean = true,
     ) : ConnectMsg
 
-    /** A device turning Connect off or closing. */
+    /**
+     * A device turning Connect off or closing. [next] is set when it joins
+     * another group of the person's devices: the secret of that group, so the
+     * devices here follow it and no device is left behind by pairing.
+     */
     @Serializable @SerialName("leave")
-    data class Leave(override val from: String, override val seq: Long, override val at: Long) : ConnectMsg
+    data class Leave(override val from: String, override val seq: Long, override val at: Long, val next: String? = null) : ConnectMsg
 
     /** Clock check: [c] is the asker's clock. */
     @Serializable @SerialName("ping")

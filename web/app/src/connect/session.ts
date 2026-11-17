@@ -114,6 +114,8 @@ export class ConnectSession {
     private readonly timings: Timings = DEFAULT_TIMINGS,
     private readonly transport: TransportFactory = relays,
     private readonly clock: () => number = Date.now,
+    /** Another device here moved to the group with this secret: this one follows. */
+    private readonly moved: (secret: string) => void = () => {},
   ) {
     this.view = { myId, myName, relays: 0, devices: [], activeId: null, pending: [] };
   }
@@ -130,9 +132,10 @@ export class ConnectSession {
     this.sayState();
   }
 
-  stop(): void {
+  /** Leaves the group; [next] (another group's secret) takes the devices here along. */
+  stop(next?: string): void {
     if (this.stopped) return;
-    this.send({ type: 'leave', from: this.myId, seq: ++this.seq, at: this.clock() });
+    this.send({ type: 'leave', from: this.myId, seq: ++this.seq, at: this.clock(), ...(next ? { next } : {}) });
     this.stopped = true;
     if (this.ticker) clearInterval(this.ticker);
     for (const p of this.pending.values()) clearTimeout(p.timer);
@@ -266,7 +269,9 @@ export class ConnectSession {
       }
       case 'leave':
         this.devices.delete(msg.from);
-        return this.refresh();
+        this.refresh();
+        if (typeof msg.next === 'string') this.moved(msg.next);
+        return;
       case 'command': {
         this.touch(msg.from, now);
         if (msg.to !== this.myId) return;

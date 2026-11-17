@@ -80,9 +80,10 @@ class ConnectSessionTest {
     private inner class Dev(val id: String, val name: String, val player: FakePlayer = FakePlayer()) {
         val view = MutableStateFlow(ConnectView(id, name))
         val notices = mutableListOf<String>()
+        val movedTo = mutableListOf<String>()
         lateinit var session: ConnectSession
         fun start(): Dev {
-            session = ConnectSession(group, id, name, "phone", player, hub.transport(id), view, { t, n -> notices += t.replace("{0}", n) }, scope, fast)
+            session = ConnectSession(group, id, name, "phone", player, hub.transport(id), view, { t, n -> notices += t.replace("{0}", n) }, scope, fast, moved = { movedTo += it })
             onLoop { session.start() }
             return this
         }
@@ -107,6 +108,17 @@ class ConnectSessionTest {
         assertEquals("Chrome", a.view.value.devices.single().name)
         onLoop { b.session.stop() }
         eventually("a forgets b") { a.others().isEmpty() }
+    }
+
+    @Test fun aDeviceJoiningAnotherGroupTakesTheOthersAlong() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        eventually("each sees the other") { a.others() == setOf("b") && b.others() == setOf("a") }
+        onLoop { b.session.stop(next = "the-new-secret") }
+        eventually("a follows b") { a.movedTo == listOf("the-new-secret") && a.others().isEmpty() }
+        onLoop { a.session.stop() }
+        Thread.sleep(200)
+        assertEquals(emptyList<String>(), b.movedTo)
     }
 
     @Test fun theDevicePlayingIsTheOneShownElsewhere() {

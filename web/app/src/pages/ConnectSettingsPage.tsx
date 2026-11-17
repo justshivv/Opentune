@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { renderSVG } from 'uqr';
 import { PageHeader } from '@/components/PageHeader';
-import { disconnectAll, ensureGroup, joinGroup, setAccountSync, setDeviceName, setEnabled, useConnect, wouldReplace } from '@/connect/connect';
+import { disconnectAll, ensureGroup, joinGroup, setAccountSync, setDeviceName, setEnabled, useConnect } from '@/connect/connect';
 import { DeviceIcon, doing } from '@/connect/parts';
 import { Toggle } from './IntegrationSettings';
 import { settingsUi } from './settingsStyles';
@@ -23,20 +23,18 @@ export default function ConnectSettingsPage() {
   const view = useConnect((s) => s.view);
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const [offered, setOffered] = useState<string | null>(null);
   const [paste, setPaste] = useState('');
   const [error, setError] = useState('');
   const [name, setName] = useState(saved.name);
   const [copied, setCopied] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
-  // A link from another device: straight in with no group yet, asked first over another one.
+  // A link from another device: straight in. This browser's other devices come along.
   useEffect(() => {
     const join = params.get('join');
     if (!join) return;
     navigate('/settings/devices', { replace: true });
-    if (wouldReplace(join)) setOffered(join);
-    else joinGroup(join);
+    joinGroup(join);
   }, [params, navigate]);
 
   // Every visit to this page has a group to show: made here if this is the first device.
@@ -47,7 +45,6 @@ export default function ConnectSettingsPage() {
   const qr = useMemo(() => (link ? renderSVG(link.app, { ecc: 'M', border: 0, pixelSize: 4, blackColor: '#000', whiteColor: '#fff' }) : null), [link]);
 
   const add = () => {
-    if (wouldReplace(paste)) return setOffered(paste);
     if (!joinGroup(paste)) return setError('That isn’t a devices link. Copy it from OpenTune on your phone: Settings › Link a device › Your devices.');
     setError('');
     setPaste('');
@@ -67,17 +64,6 @@ export default function ConnectSettingsPage() {
         <p className="mx-4 mb-5 type-body-tall text-secondary">
           See what plays on your phone from here and control it, or move the music from one to the other. Only your own devices can read what they say to each other.
         </p>
-
-        {offered && (
-          <section className={`${settingsUi.group} mb-5 p-4`}>
-            <p className="type-body-emphasized text-primary">Join these devices?</p>
-            <p className="mt-1 type-callout text-secondary">This browser is already with other devices. Joining leaves them.</p>
-            <div className="mt-3 flex gap-2">
-              <button className={primary} onClick={() => { joinGroup(offered); setOffered(null); }}>Join</button>
-              <button className={secondary} onClick={() => setOffered(null)}>Cancel</button>
-            </div>
-          </section>
-        )}
 
         <section className={settingsUi.group}>
           <Toggle label="Connect to your devices" checked={saved.enabled} onChange={setEnabled} />

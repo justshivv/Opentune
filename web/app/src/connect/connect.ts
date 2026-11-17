@@ -164,7 +164,7 @@ function restart(): void {
     if (!saved.enabled) return;
     const s = new ConnectSession(group, saved.id, saved.name, 'web', webPlayer, (view) => {
       if (session === s) useConnect.setState({ view });
-    }, notice);
+    }, notice, undefined, undefined, undefined, (secret) => joinGroup(secret, false));
     session = s;
     s.start();
     // The player changing (a song, play/pause, the queue) goes out a moment after it settles.
@@ -260,23 +260,24 @@ export async function ensureGroup(): Promise<ConnectGroup> {
   return fresh;
 }
 
-/** Makes this browser one of the group in [text] (a link or the secret); false if it isn't one. */
-export function joinGroup(text: string): boolean {
+/**
+ * Makes this browser one of the group in [text] (a link or the secret); false
+ * if it isn't one. With [bring], the devices of its old group come along:
+ * pairing only ever adds devices, it never leaves some behind.
+ */
+export function joinGroup(text: string, bring = true): boolean {
   const raw = ConnectGroup.parse(text);
   if (!raw) return false;
   if (raw !== useConnect.getState().saved.secret) {
+    if (bring && session) {
+      session.stop(raw);
+      session = null;
+    }
     update({ secret: raw });
     restart();
   }
   return true;
 }
-
-/** A link from another device that would replace this browser's group: asked first. */
-export const wouldReplace = (text: string): boolean => {
-  const raw = ConnectGroup.parse(text);
-  const mine = useConnect.getState().saved.secret;
-  return !!raw && !!mine && raw !== mine;
-};
 
 /** A new secret: every other device falls out until it's added again. */
 export async function disconnectAll(): Promise<void> {

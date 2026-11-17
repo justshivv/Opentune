@@ -112,6 +112,8 @@ internal class ConnectSession(
     private val scope: CoroutineScope,
     private val timings: Timings = Timings(),
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Another device here moved to the group with this secret: this one follows. */
+    private val moved: (secret: String) -> Unit = {},
 ) {
     private val key = Schnorr.newPrivateKey()
     private val myPub = Schnorr.publicKey(key).toHex()
@@ -159,8 +161,9 @@ internal class ConnectSession(
         sayState()
     }
 
-    fun stop() {
-        send(Leave(myId, ++seq, clock()))
+    /** Leaves the group; [next] (another group's secret) takes the devices here along. */
+    fun stop(next: String? = null) {
+        send(Leave(myId, ++seq, clock(), next = next))
         jobs.forEach { it.cancel() }
         pending.values.forEach { it.job.cancel() }
         scope.launch {
@@ -275,6 +278,7 @@ internal class ConnectSession(
             is Leave -> {
                 devices.remove(msg.from)
                 refresh()
+                msg.next?.let(moved)
             }
             is Command -> {
                 touch(msg.from, now)

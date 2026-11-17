@@ -168,19 +168,29 @@ object Connect {
     /** The group, made now if this device has none yet. */
     fun ensureGroup(): ConnectGroup = _group.value ?: ConnectGroup.generate().also { join(it) }
 
-    /** Makes this device one of [group]'s. */
-    fun join(group: ConnectGroup) {
+    /**
+     * Makes this device one of [group]'s. With [bring], the devices of its
+     * old group come along: pairing only ever adds devices, it never leaves
+     * some behind.
+     */
+    fun join(group: ConnectGroup, bring: Boolean = true) {
         if (group == _group.value) return
         _group.value = group
         prefs?.edit { putString("secret", group.encoded) }
+        if (bring) session?.let { it.stop(next = group.encoded); session = null }
         restart()
+    }
+
+    /** Pairing with another device's code: its group, with this one's devices brought along and kept in the account. */
+    fun pair(group: ConnectGroup) {
+        join(group)
+        syncAccount(push = true)
     }
 
     /** A new secret: every other device falls out until it's added again. */
     fun disconnectAll(): ConnectGroup {
         val fresh = ConnectGroup.generate()
-        _group.value = null
-        join(fresh)
+        join(fresh, bring = false)
         syncAccount(push = true)
         return fresh
     }
@@ -221,6 +231,7 @@ object Connect {
         session = ConnectSession(
             group, myId, _name.value, FORM, ConnectionConnectPlayer(player), RelayPool(Together.RELAYS, filter), view,
             { template, name -> _notices.tryEmit(Tr.f(template, name)) }, main,
+            moved = { secret -> ConnectGroup.parse(secret)?.let { main.launch { join(it, bring = false) } } },
         ).also { it.start() }
     }
 

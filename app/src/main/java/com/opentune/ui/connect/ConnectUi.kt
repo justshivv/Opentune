@@ -166,33 +166,19 @@ fun ConnectScreen(contentPadding: PaddingValues, joining: String?, onBack: () ->
     var editingName by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     var scanning by remember { mutableStateOf(false) }
-    var offered by remember { mutableStateOf(joining?.let(ConnectGroup::parse)) }
 
     fun join(g: ConnectGroup) {
-        Connect.join(g)
-        Pills.info(Tr.t("This phone is one of your devices now"), context)
+        val already = Connect.group.value == g
+        Connect.pair(g)
+        if (!already) Pills.info(Tr.t("This phone is one of your devices now"), context)
     }
 
-    // A link from another device: straight in when this phone has no group, asked first when it has another.
-    LaunchedEffect(Unit) {
-        val g = offered ?: return@LaunchedEffect
-        if (Connect.group.value == null || Connect.group.value == g) { join(g); offered = null }
-    }
-    offered?.let { g ->
-        AlertDialog(
-            onDismissRequest = { offered = null },
-            title = { Text("Join these devices?") },
-            text = { Text("This phone is already with other devices. Joining leaves them.") },
-            confirmButton = { TextButton({ join(g); offered = null }) { Text("Join") } },
-            dismissButton = { TextButton({ offered = null }) { Text("Cancel") } },
-        )
-    }
+    // A link from another device: straight in. This phone's other devices come along.
+    LaunchedEffect(joining) { joining?.let(ConnectGroup::parse)?.let(::join) }
     if (scanning) com.opentune.ui.account.QrScannerDialog(onDismiss = { scanning = false }) { text ->
         scanning = false
         val g = ConnectGroup.parse(text)
-        if (g == null) Pills.error(Tr.t("That isn't a devices code"), context)
-        else if (group != null && group != g) offered = g
-        else join(g)
+        if (g == null) Pills.error(Tr.t("That isn't a devices code"), context) else join(g)
     }
     if (confirmReset) AlertDialog(
         onDismissRequest = { confirmReset = false },

@@ -33,7 +33,8 @@ export type ConnectMsg =
   | (Base & { type: 'command'; to: string; id: string; action: string; pos?: number; value?: number; track?: CTrack | null; tracks?: CTrack[] })
   | (Base & { type: 'ack'; to: string; id: string; ok?: boolean; reason?: string | null })
   | (Base & { type: 'transfer'; to: string; id: string; queue?: CTrack[]; index?: number; pos?: number; playing?: boolean })
-  | (Base & { type: 'leave' })
+  // [next]: the secret of the group the device moved to; the devices here follow it.
+  | (Base & { type: 'leave'; next?: string })
   | (Base & { type: 'ping'; to: string; c: number })
   | (Base & { type: 'pong'; to: string; c: number; h: number });
 

@@ -101,8 +101,8 @@ async function devices(...names: [string, string, boolean?][]) {
   const transport = bus();
   return names.map(([id, name, playable]) => {
     const { s, player } = fakePlayer(playable ?? true);
-    const d = { id, s, view: null as ConnectView | null, notices: [] as string[], session: null as unknown as ConnectSession };
-    d.session = new ConnectSession(group, id, name, 'web', player, (v) => { d.view = v; }, (t, n) => d.notices.push(t.replace('{0}', n)), fast, transport);
+    const d = { id, s, view: null as ConnectView | null, notices: [] as string[], movedTo: [] as string[], session: null as unknown as ConnectSession };
+    d.session = new ConnectSession(group, id, name, 'web', player, (v) => { d.view = v; }, (t, n) => d.notices.push(t.replace('{0}', n)), fast, transport, undefined, (secret) => d.movedTo.push(secret));
     d.session.start();
     return d;
   });
@@ -125,6 +125,14 @@ describe('sessions', () => {
     expect(b!.notices).toEqual([]);
     expect(a!.session.intercept('pause')).toBe(false);
     a!.session.stop(); b!.session.stop();
+  });
+
+  it('takes the others along when a device joins another group', async () => {
+    const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
+    await eventually('see each other', () => a!.view?.devices.length === 1 && b!.view?.devices.length === 1);
+    b!.session.stop('the-new-secret');
+    await eventually('a follows b', () => a!.movedTo.join() === 'the-new-secret' && a!.view!.devices.length === 0);
+    a!.session.stop();
   });
 
   it('names a device that does not answer, and forgets it', async () => {
