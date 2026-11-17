@@ -37,6 +37,13 @@ internal interface ConnectPlayer {
     fun setRepeat(mode: String)
     fun playTrack(t: CTrack)
     fun addToQueue(ts: List<CTrack>)
+    /**
+     * Plays, or takes out, entry [at] of the queue this device last told
+     * ([Snapshot.queue]) when it's still [id]; otherwise the first one that
+     * is. False when there's none.
+     */
+    fun playQueued(at: Int, id: String): Boolean
+    fun removeQueued(at: Int, id: String): Boolean
     /** Loads [queue] from [index] at [pos] ms; false when none of it can play here. */
     fun load(queue: List<CTrack>, index: Int, pos: Long, playing: Boolean): Boolean
 }
@@ -124,10 +131,17 @@ internal class ConnectSession(
     private val clock: () -> Long = System::currentTimeMillis,
     /** Another device here moved to the group with this secret: this one follows. */
     private val moved: (secret: String) -> Unit = {},
+    /**
+     * Groups this device was in before: a device still there (it was off
+     * when the groups were merged) is told where everyone went.
+     */
+    private val former: List<ConnectGroup> = emptyList(),
 ) {
     private val key = Schnorr.newPrivateKey()
     private val myPub = Schnorr.publicKey(key).toHex()
-    private val outbox = Channel<ConnectMsg>(Channel.UNLIMITED)
+    private val outbox = Channel<Pair<ConnectMsg, ConnectGroup>>(Channel.UNLIMITED)
+    /** When each device left behind in a former group was last told to follow. */
+    private val forwarded = HashMap<String, Long>()
     private val jobs = mutableListOf<Job>()
     private var seq = 0L
     private val lastSeq = HashMap<String, Long>()
@@ -159,14 +173,17 @@ internal class ConnectSession(
         jobs += scope.launch {
             transport.events.collect { event ->
                 if (event.pubkey == myPub) return@collect
-                val msg = withContext(Dispatchers.Default) { group.open(event.content)?.let(ConnectMsg::decode) } ?: return@collect
-                handle(msg)
+                val (msg, from) = withContext(Dispatchers.Default) {
+                    group.open(event.content)?.let(ConnectMsg::decode)?.let { it to group }
+                        ?: former.firstNotNullOfOrNull { g -> g.open(event.content)?.let(ConnectMsg::decode)?.let { it to g } }
+                } ?: return@collect
+                if (from === group) handle(msg) else forward(msg, from)
             }
         }
         // Not in [jobs]: it has to outlive stop() long enough to send the goodbye.
         scope.launch(Dispatchers.Default) {
-            for (m in outbox) {
-                val event = NostrEvent.signed(key, KIND, listOf(listOf("t", group.tag)), ConnectMsg.fit(m, group))
+            for ((m, g) in outbox) {
+                val event = NostrEvent.signed(key, KIND, listOf(listOf("t", g.tag)), ConnectMsg.fit(m, g))
                 if (!transport.publish(event)) Log.w(TAG, "no relay connected for ${m::class.simpleName}")
             }
         }
@@ -245,6 +262,11 @@ internal class ConnectSession(
 
     fun playTrackOn(deviceId: String, track: CTrack) = command(deviceId, "playTrack", track = track)
     fun addToQueueOn(deviceId: String, tracks: List<CTrack>) = command(deviceId, "addToQueue", tracks = tracks)
+
+    /** Plays entry [at] of [deviceId]'s Up Next ([track], so a queue changed meanwhile still finds it). */
+    fun jumpOn(deviceId: String, at: Int, track: CTrack) = command(deviceId, "jump", pos = at.toLong(), track = track)
+    /** Takes entry [at] ([track]) out of [deviceId]'s Up Next. */
+    fun removeOn(deviceId: String, at: Int, track: CTrack) = command(deviceId, "remove", pos = at.toLong(), track = track)
 
     /**
      * Moves playback to [deviceId] (this device's own id pulls it here). The
@@ -357,6 +379,8 @@ internal class ConnectSession(
             "repeat" -> player.setRepeat(c.mode?.takeIf { it in setOf("off", "all", "one") } ?: return false)
             "playTrack" -> player.playTrack(c.track ?: return false)
             "addToQueue" -> player.addToQueue(c.tracks)
+            "jump" -> return player.playQueued(c.pos.toInt(), c.track?.id ?: return false)
+            "remove" -> return player.removeQueued(c.pos.toInt(), c.track?.id ?: return false)
             else -> return false
         }
         return true
@@ -414,8 +438,18 @@ internal class ConnectSession(
         send(State(myId, ++seq, clock(), track = s.track, private = s.private, playing = s.playing, pos = s.pos, queue = s.queue.take(ConnectMsg.MAX_QUEUE), volume = s.volume, shuffle = s.shuffle, repeat = s.repeat, since = mineAt.takeIf { it > 0 }, quality = s.quality))
     }
 
-    private fun send(m: ConnectMsg) {
-        outbox.trySend(m)
+    private fun send(m: ConnectMsg, to: ConnectGroup = group) {
+        outbox.trySend(m to to)
+    }
+
+    /** A device heard in a former group: told, at most once a minute, to come over to this one. */
+    private fun forward(msg: ConnectMsg, old: ConnectGroup) {
+        if (msg.from == myId || msg is Leave) return
+        val key = "${old.tag}/${msg.from}"
+        val now = clock()
+        if (now - (forwarded[key] ?: 0L) < FORWARD_MS) return
+        forwarded[key] = now
+        send(Leave(myId, ++seq, now, next = group.encoded), old)
     }
 
     // ---- The view --------------------------------------------------------------------------
@@ -454,6 +488,8 @@ internal class ConnectSession(
     private fun newId() = UUID.randomUUID().toString().take(12)
 
     companion object {
+        /** How often a device left in a former group is told again where the others went. */
+        const val FORWARD_MS = 60_000L
         const val KIND = 21421
         /** How long a play or pause pressed here outlasts reports from before it landed. */
         private const val GUESS_MS = 1_500L

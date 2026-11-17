@@ -14,6 +14,7 @@ import { ConnectSession, controllingOf, type ConnectPlayer, type ConnectView, ty
  */
 
 const STORE_KEY = 'opentune:connect';
+const MAX_FORMER = 3;
 const SOURCE = { title: 'From your devices', type: 'queue' as const };
 
 interface Saved {
@@ -23,6 +24,8 @@ interface Saved {
   enabled: boolean;
   /** May the key be kept in the YouTube account? null until asked, once, after signing in. */
   accountSync: boolean | null;
+  /** Groups this browser was in before, listened to for their devices that missed a merge. */
+  former: string[];
 }
 
 function defaultName(): string {
@@ -46,6 +49,7 @@ function load(): Saved {
     enabled: saved.enabled ?? true,
     // Asked for, never assumed (`accountSync` was a default-on switch before).
     accountSync: saved.consent ?? null,
+    former: saved.former ?? [],
   };
 }
 
@@ -97,6 +101,16 @@ function fromCTrack(t: CTrack): Track {
 
 // ---- This browser's player, as Connect sees it ---------------------------------------------
 
+/** The queue row of entry [at] in Snapshot.queue (the shareable songs after this one), checked against [id]. */
+function queuedRow(at: number, id: string): number | null {
+  const { queue, index } = usePlayer.getState();
+  const rows: number[] = [];
+  for (let i = index + 1; i < queue.length; i++) if (toCTrack(queue[i]!.track)) rows.push(i);
+  const exact = rows[at];
+  if (exact !== undefined && queue[exact]!.track.videoId === id) return exact;
+  return rows.find((r) => queue[r]!.track.videoId === id) ?? null;
+}
+
 const webPlayer: ConnectPlayer = {
   snapshot(): Snapshot | null {
     const { queue, index, nowPlaying, volume, shuffle, repeat, status } = usePlayer.getState();
@@ -137,6 +151,18 @@ const webPlayer: ConnectPlayer = {
     usePlayer.getState().next();
   },
   addToQueue: (ts) => usePlayer.getState().addToQueue(ts.map(fromCTrack)),
+  playQueued: (at, id) => {
+    const row = queuedRow(at, id);
+    if (row === null) return false;
+    usePlayer.getState().jumpTo(row);
+    return true;
+  },
+  removeQueued: (at, id) => {
+    const row = queuedRow(at, id);
+    if (row === null) return false;
+    usePlayer.getState().removeAt(row);
+    return true;
+  },
   // A tab nobody has clicked in since it loaded may not start sound (the browser's autoplay rule).
   needsTap: () => navigator.userActivation ? !navigator.userActivation.hasBeenActive : false,
   load: (queue, index, pos, playing) => {
@@ -171,11 +197,12 @@ function restart(): void {
     if (!saved.secret) return useConnect.setState({ link: null });
     const group = await ConnectGroup.fromText(saved.secret);
     if (!group) return;
+    const former = (await Promise.all(saved.former.map((f) => ConnectGroup.fromText(f)))).filter((g): g is ConnectGroup => !!g && g.encoded !== group.encoded);
     useConnect.setState({ link: { app: group.appLink, web: group.webLink } });
     if (!saved.enabled) return;
     const s = new ConnectSession(group, saved.id, saved.name, 'web', webPlayer, (view) => {
       if (session === s) useConnect.setState({ view });
-    }, notice, undefined, undefined, undefined, (secret) => joinGroup(secret, false));
+    }, notice, undefined, undefined, undefined, (secret) => joinGroup(secret, false), former);
     session = s;
     s.start();
     // The player changing (a song, play/pause, the queue) goes out a moment after it settles.
@@ -275,7 +302,8 @@ export async function ensureGroup(): Promise<ConnectGroup> {
   const current = await ConnectGroup.fromText(useConnect.getState().saved.secret);
   if (current) return current;
   const fresh = await ConnectGroup.generate();
-  update({ secret: fresh.encoded });
+  // Nobody is told where it went: the devices left behind stay out.
+  update({ secret: fresh.encoded, former: [] });
   restart();
   return fresh;
 }
@@ -293,7 +321,9 @@ export function joinGroup(text: string, bring = true): boolean {
       session.stop(raw);
       session = null;
     }
-    update({ secret: raw });
+    // The old group is listened to for a while longer, for its devices that were off just now.
+    const { secret: old, former } = useConnect.getState().saved;
+    update({ secret: raw, former: [...(old ? [old] : []), ...former].filter((f, i, all) => f !== raw && all.indexOf(f) === i).slice(0, MAX_FORMER) });
     restart();
   }
   return true;
@@ -308,6 +338,15 @@ export async function disconnectAll(): Promise<void> {
 }
 
 export const transferTo = (deviceId: string) => session?.transferTo(deviceId);
+/** Plays, or takes out, entry [at] ([track]) of the Up Next on the device playing elsewhere. */
+export function playQueuedRemote(at: number, track: CTrack): void {
+  const target = controllingOf(useConnect.getState().view);
+  if (target) session?.jumpOn(target.id, at, track);
+}
+export function removeQueuedRemote(at: number, track: CTrack): void {
+  const target = controllingOf(useConnect.getState().view);
+  if (target) session?.removeOn(target.id, at, track);
+}
 /** Seeks the device playing elsewhere to [ms]. */
 export const seekRemote = (ms: number) => session?.intercept('seek', Math.round(ms)) ?? false;
 export const sendVolume = (value: number) => session?.intercept('volume', 0, value) ?? false;

@@ -23,6 +23,13 @@ export interface ConnectPlayer {
   setRepeat(mode: string): void;
   playTrack(t: CTrack): void;
   addToQueue(ts: CTrack[]): void;
+  /**
+   * Plays, or takes out, entry [at] of the queue this device last told
+   * (Snapshot.queue) when it's still [id]; otherwise the first one that is.
+   * False when there's none.
+   */
+  playQueued(at: number, id: string): boolean;
+  removeQueued(at: number, id: string): boolean;
   /** Loads [queue] from [index] at [pos] ms; false when none of it can play here. */
   load(queue: CTrack[], index: number, pos: number, playing: boolean): boolean;
   /** True while this device can't start sound by itself (a browser tab nobody has clicked in yet). */
@@ -80,6 +87,8 @@ export interface Timings {
 }
 /** How long a play or pause pressed here outlasts reports from before it landed. */
 const GUESS_MS = 1_500;
+/** How often a device left in a former group is told again where the others went. */
+const FORWARD_MS = 60_000;
 const DEFAULT_TIMINGS: Timings = { presenceMs: 30_000, goneMs: 75_000, stateMs: 5_000, commandMs: 5_000, transferMs: 8_000, tickMs: 1_000 };
 
 const relays: TransportFactory = (filter, onEvent, onConnected) => new RelayPool(RELAYS, filter, onEvent, onConnected);
@@ -114,6 +123,8 @@ export class ConnectSession {
   private sending: Promise<void> = Promise.resolve();
   private reading: Promise<void> = Promise.resolve();
   private stopped = false;
+  /** When each device left behind in a former group was last told to follow. */
+  private readonly forwarded = new Map<string, number>();
   view: ConnectView;
 
   constructor(
@@ -130,6 +141,8 @@ export class ConnectSession {
     private readonly clock: () => number = Date.now,
     /** Another device here moved to the group with this secret: this one follows. */
     private readonly moved: (secret: string) => void = () => {},
+    /** Groups this device was in before: a device still there (it was off when they were merged) is told where everyone went. */
+    private readonly former: ConnectGroup[] = [],
   ) {
     this.view = { myId, myName, relays: 0, devices: [], activeId: null, pending: [] };
   }
@@ -137,7 +150,7 @@ export class ConnectSession {
   start(): void {
     // Numbered from the clock, so a restarted device's messages still count as newer than its last ones.
     this.seq = Math.max(this.seq, this.clock());
-    const filter = { kinds: [KIND], '#t': [this.group.tag], since: Math.floor(this.clock() / 1000) - 10 };
+    const filter = { kinds: [KIND], '#t': [this.group, ...this.former].map((g) => g.tag), since: Math.floor(this.clock() / 1000) - 10 };
     this.pool = this.transport(filter, (e) => this.onEvent(e), (n) => {
       // What was said with no relay connected (at start, or after losing them all) went nowhere: said again.
       const reached = this.view.relays === 0 && n > 0;
@@ -227,6 +240,16 @@ export class ConnectSession {
     this.command(deviceId, 'addToQueue', { tracks });
   }
 
+  /** Plays entry [at] of [deviceId]'s Up Next ([track], so a queue changed meanwhile still finds it). */
+  jumpOn(deviceId: string, at: number, track: CTrack): void {
+    this.command(deviceId, 'jump', { pos: at, track });
+  }
+
+  /** Takes entry [at] ([track]) out of [deviceId]'s Up Next. */
+  removeOn(deviceId: string, at: number, track: CTrack): void {
+    this.command(deviceId, 'remove', { pos: at, track });
+  }
+
   /** Moves playback to [deviceId]; this device's own id pulls it here. */
   transferTo(deviceId: string): void {
     const activeId = this.view.activeId;
@@ -279,7 +302,15 @@ export class ConnectSession {
     this.reading = this.reading.then(async () => {
       const plain = await this.group.open(event.content);
       const msg = plain ? decode(plain) : null;
-      if (msg && !this.stopped) this.handle(msg);
+      if (msg) {
+        if (!this.stopped) this.handle(msg);
+        return;
+      }
+      for (const old of this.former) {
+        const before = await old.open(event.content);
+        const heard = before ? decode(before) : null;
+        if (heard) return this.forward(heard, old);
+      }
     });
   }
 
@@ -374,6 +405,8 @@ export class ConnectSession {
         return true;
       case 'playTrack': if (!c.track) return false; this.player.playTrack(c.track); return true;
       case 'addToQueue': this.player.addToQueue(c.tracks ?? []); return true;
+      case 'jump': return !!c.track && this.player.playQueued(c.pos ?? 0, c.track.id);
+      case 'remove': return !!c.track && this.player.removeQueued(c.pos ?? 0, c.track.id);
       default: return false;
     }
   }
@@ -437,11 +470,21 @@ export class ConnectSession {
     });
   }
 
-  private send(m: ConnectMsg): void {
+  /** A device heard in a former group: told, at most once a minute, to come over to this one. */
+  private forward(msg: ConnectMsg, old: ConnectGroup): void {
+    if (this.stopped || msg.from === this.myId || msg.type === 'leave') return;
+    const key = `${old.tag}/${msg.from}`;
+    const now = this.clock();
+    if (now - (this.forwarded.get(key) ?? 0) < FORWARD_MS) return;
+    this.forwarded.set(key, now);
+    this.send({ type: 'leave', from: this.myId, seq: ++this.seq, at: now, next: this.group.encoded }, old);
+  }
+
+  private send(m: ConnectMsg, to: ConnectGroup = this.group): void {
     if (this.stopped) return;
     this.sending = this.sending.then(async () => {
       try {
-        const event = await signedEvent(this.key, KIND, [['t', this.group.tag]], await fit(m, this.group));
+        const event = await signedEvent(this.key, KIND, [['t', to.tag]], await fit(m, to));
         this.pool?.publish(event);
       } catch {
         // Best effort, like the rest of the relays' traffic.

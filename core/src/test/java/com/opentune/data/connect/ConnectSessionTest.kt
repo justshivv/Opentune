@@ -74,6 +74,19 @@ class ConnectSessionTest {
         override fun setRepeat(mode: String) { calls += "repeat $mode" }
         override fun playTrack(t: CTrack) { calls += "playTrack ${t.id}"; track = t; playing = true }
         override fun addToQueue(ts: List<CTrack>) { calls += "add ${ts.size}"; queue = queue + ts }
+        private fun at(at: Int, id: String): Int? = at.takeIf { queue.getOrNull(it)?.id == id } ?: queue.indexOfFirst { it.id == id }.takeIf { it >= 0 }
+        override fun playQueued(at: Int, id: String): Boolean {
+            val i = at(at, id) ?: return false
+            calls += "jump $i"
+            track = queue[i]; queue = queue.drop(i + 1)
+            return true
+        }
+        override fun removeQueued(at: Int, id: String): Boolean {
+            val i = at(at, id) ?: return false
+            calls += "remove $i"
+            queue = queue.filterIndexed { j, _ -> j != i }
+            return true
+        }
         override fun load(queue: List<CTrack>, index: Int, pos: Long, playing: Boolean): Boolean {
             calls += "load ${queue.size} $index $pos $playing"
             if (!playable) return false
@@ -82,13 +95,21 @@ class ConnectSessionTest {
         }
     }
 
-    private inner class Dev(val id: String, val name: String, val player: FakePlayer = FakePlayer(), val timings: Timings = fast, val connectMs: Long = 0) {
+    private inner class Dev(
+        val id: String,
+        val name: String,
+        val player: FakePlayer = FakePlayer(),
+        val timings: Timings = fast,
+        val connectMs: Long = 0,
+        val g: ConnectGroup = group,
+        val former: List<ConnectGroup> = emptyList(),
+    ) {
         val view = MutableStateFlow(ConnectView(id, name))
         val notices = mutableListOf<String>()
         val movedTo = mutableListOf<String>()
         lateinit var session: ConnectSession
         fun start(): Dev {
-            session = ConnectSession(group, id, name, "phone", player, hub.transport(id, connectMs), view, { t, n -> notices += t.replace("{0}", n) }, scope, timings, moved = { movedTo += it })
+            session = ConnectSession(g, id, name, "phone", player, hub.transport(id, connectMs), view, { t, n -> notices += t.replace("{0}", n) }, scope, timings, moved = { movedTo += it }, former = former)
             onLoop { session.start() }
             return this
         }
@@ -238,6 +259,32 @@ class ConnectSessionTest {
         eventually("b controls a") { b.view.value.activeId == "a" }
         onLoop { b.session.intercept("repeat", mode = "all"); b.session.intercept("shuffle", value = 1f) }
         eventually("a set") { a.player.calls.containsAll(listOf("repeat all", "shuffle true")) }
+    }
+
+    @Test fun aDeviceThatMissedAMergeIsToldWhereTheOthersWent() {
+        val merged = ConnectGroup.generate()
+        // a moved from [group] to [merged] while c was off; c comes back still in [group].
+        val a = Dev("a", "Phone", g = merged, former = listOf(group)).start()
+        val c = Dev("c", "Laptop").start()
+        eventually("c is told") { c.movedTo == listOf(merged.encoded) }
+        // Someone in the new group isn't told anything.
+        val b = Dev("b", "Chrome", g = merged).start()
+        eventually("a and b meet") { a.others() == setOf("b") }
+        assertEquals(emptyList<String>(), b.movedTo)
+        assertEquals(setOf("b"), a.others())
+    }
+
+    @Test fun upNextIsChangedFromAnotherDevice() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        eventually("connected") { a.others() == setOf("b") }
+        onLoop { a.player.track = track('x'); a.player.queue = listOf(track('p'), track('q'), track('r')); a.player.playing = true; a.session.localChanged() }
+        eventually("b sees a's queue") { b.view.value.controlling?.state?.queue?.size == 3 }
+        onLoop { b.session.removeOn("a", 0, track('p')) }
+        eventually("p gone") { a.player.queue.map { it.id.first() } == listOf('q', 'r') }
+        // b still shows p first; r is entry 2 there, and is found by its id.
+        onLoop { b.session.jumpOn("a", 2, track('r')) }
+        eventually("r plays") { a.player.track?.id?.first() == 'r' }
     }
 
     @Test fun aControllerMovesPlaybackBetweenTwoOthersOrToItself() {

@@ -84,6 +84,21 @@ function fakePlayer(playable = true) {
     needsTap: () => s.needsTap,
     playTrack: (t) => { s.track = t; s.playing = true; },
     addToQueue: (ts) => { s.queue = [...s.queue, ...ts]; },
+    playQueued: (at, id) => {
+      const i = s.queue[at]?.id === id ? at : s.queue.findIndex((t) => t.id === id);
+      if (i < 0) return false;
+      s.calls.push(`jump ${i}`);
+      s.track = s.queue[i]!;
+      s.queue = s.queue.slice(i + 1);
+      return true;
+    },
+    removeQueued: (at, id) => {
+      const i = s.queue[at]?.id === id ? at : s.queue.findIndex((t) => t.id === id);
+      if (i < 0) return false;
+      s.calls.push(`remove ${i}`);
+      s.queue = s.queue.filter((_, j) => j !== i);
+      return true;
+    },
     load: (queue, index, pos, playing) => {
       s.calls.push(`load ${queue.length}`);
       if (!playable) return false;
@@ -180,6 +195,40 @@ describe('sessions', () => {
     b!.session.intercept('shuffle', 0, 1);
     await eventually('a set', () => a!.s.calls.includes('repeat all') && a!.s.calls.includes('shuffle true'));
     a!.session.stop(); b!.session.stop();
+  });
+
+  it('changes the Up Next of another device', async () => {
+    const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
+    a!.s.queue = [track('p'), track('q'), track('r')];
+    play(a!, track('x'));
+    await eventually('b sees the queue', () => b!.view?.devices[0]?.state?.queue.length === 3);
+    b!.session.removeOn('a', 0, track('p'));
+    await eventually('p gone', () => a!.s.queue.map((t) => t.id[0]).join('') === 'qr');
+    // b may still show p first; r is entry 2 there, and is found by its id.
+    b!.session.jumpOn('a', 2, track('r'));
+    await eventually('r plays', () => a!.s.track?.id[0] === 'r');
+    a!.session.stop(); b!.session.stop();
+  });
+
+  it('tells a device that missed a merge where the others went', async () => {
+    const transport = bus();
+    const old = await ConnectGroup.generate();
+    const merged = await ConnectGroup.generate();
+    const make = (id: string, g: ConnectGroup, former: ConnectGroup[] = []) => {
+      const { player } = fakePlayer();
+      const d = { movedTo: [] as string[], session: null as unknown as ConnectSession };
+      d.session = new ConnectSession(g, id, id, 'web', player, () => {}, () => {}, fast, transport, undefined, (secret) => d.movedTo.push(secret), former);
+      d.session.start();
+      return d;
+    };
+    // a moved from old to merged while c was off; c comes back still in old.
+    const a = make('a', merged, [old]);
+    const c = make('c', old);
+    await eventually('c is told', () => c.movedTo.length === 1 && c.movedTo[0] === merged.encoded);
+    const b = make('b', merged);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(b.movedTo).toEqual([]);
+    a.session.stop(); b.session.stop(); c.session.stop();
   });
 
   it('hears a restarted device again', async () => {

@@ -180,13 +180,20 @@ object Connect {
      * old group come along: pairing only ever adds devices, it never leaves
      * some behind.
      */
-    fun join(group: ConnectGroup, bring: Boolean = true) {
+    fun join(group: ConnectGroup, bring: Boolean = true, remember: Boolean = true) {
         if (group == _group.value) return
+        val old = _group.value
         _group.value = group
-        prefs?.edit { putString("secret", group.encoded) }
+        // The old group is listened to for a while longer, for its devices that were off just now.
+        val former = if (remember) (listOfNotNull(old?.encoded) + formerSecrets()).filter { it != group.encoded }.distinct().take(MAX_FORMER) else emptyList()
+        prefs?.edit { putString("secret", group.encoded); putString("former", former.joinToString(",")) }
         if (bring) session?.let { it.stop(next = group.encoded); session = null }
         restart()
     }
+
+    private const val MAX_FORMER = 3
+
+    private fun formerSecrets(): List<String> = prefs?.getString("former", null)?.split(',')?.filter { it.isNotBlank() }.orEmpty()
 
     /** Pairing with another device's code: its group, with this one's devices brought along and kept in the account. */
     fun pair(group: ConnectGroup) {
@@ -197,7 +204,8 @@ object Connect {
     /** A new secret: every other device falls out until it's added again. */
     fun disconnectAll(): ConnectGroup {
         val fresh = ConnectGroup.generate()
-        join(fresh, bring = false)
+        // Nobody is told where it went: the devices left behind stay out.
+        join(fresh, bring = false, remember = false)
         syncAccount(push = true)
         return fresh
     }
@@ -214,6 +222,18 @@ object Connect {
         return session?.intercept(if (target.state?.playing == true) "pause" else "play") ?: false
     }
     fun skipNext(): Boolean = session?.intercept("next") ?: false
+    /** Plays entry [at] ([track]) of the Up Next on the device playing elsewhere. */
+    fun playQueued(at: Int, track: CTrack): Boolean {
+        val target = controlling.value ?: return false
+        session?.jumpOn(target.id, at, track) ?: return false
+        return true
+    }
+    /** Takes entry [at] ([track]) out of the Up Next on the device playing elsewhere. */
+    fun removeQueued(at: Int, track: CTrack): Boolean {
+        val target = controlling.value ?: return false
+        session?.removeOn(target.id, at, track) ?: return false
+        return true
+    }
     fun skipPrevious(): Boolean = session?.intercept("previous") ?: false
     fun seekTo(positionMs: Long): Boolean = session?.intercept("seek", pos = positionMs) ?: false
     fun setVolume(value: Float): Boolean = session?.intercept("volume", value = value) ?: false
@@ -242,9 +262,10 @@ object Connect {
         val group = _group.value ?: return
         val player = connection ?: return
         if (!_enabled.value) return
+        val former = formerSecrets().mapNotNull(ConnectGroup::parse).filter { it != group }
         val filter = buildJsonObject {
             put("kinds", JsonArray(listOf(JsonPrimitive(ConnectSession.KIND))))
-            put("#t", JsonArray(listOf(JsonPrimitive(group.tag))))
+            put("#t", JsonArray((listOf(group) + former).map { JsonPrimitive(it.tag) }))
             put("since", System.currentTimeMillis() / 1000 - 10)
         }
         val view = MutableStateFlow(ConnectView(myId, _name.value))
@@ -253,6 +274,7 @@ object Connect {
             group, myId, _name.value, FORM, ConnectionConnectPlayer(player), RelayPool(Together.RELAYS, filter), view,
             { template, name -> _notices.tryEmit(Tr.f(template, name)) }, main,
             moved = { secret -> ConnectGroup.parse(secret)?.let { main.launch { join(it, bring = false) } } },
+            former = former,
         ).also { it.start() }
     }
 
@@ -309,6 +331,21 @@ internal class ConnectionConnectPlayer(private val c: PlayerConnection) : Connec
         c.skipNext()
     }
     override fun addToQueue(ts: List<CTrack>) = ts.forEach { c.addToQueue(it.toSong()) }
+
+    /** The queue row of entry [at] in [Snapshot.queue] (the shareable songs after this one), checked against [id]. */
+    private fun row(at: Int, id: String): Int? {
+        val queue = c.queue.value
+        val rows = c.upNext.value.filter { queue.getOrNull(it)?.let(CTrack::of) != null }
+        return rows.getOrNull(at)?.takeIf { queue[it].videoId == id } ?: rows.firstOrNull { queue[it].videoId == id }
+    }
+    override fun playQueued(at: Int, id: String): Boolean {
+        c.playQueueItem(row(at, id) ?: return false)
+        return true
+    }
+    override fun removeQueued(at: Int, id: String): Boolean {
+        c.removeQueueItem(row(at, id) ?: return false)
+        return true
+    }
     override fun load(queue: List<CTrack>, index: Int, pos: Long, playing: Boolean): Boolean {
         if (queue.isEmpty() || index !in queue.indices) return false
         val songs: List<Song> = queue.map { it.toSong() }
