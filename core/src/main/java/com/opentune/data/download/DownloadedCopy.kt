@@ -95,6 +95,17 @@ object DownloadedCopy {
             DownloadedPlayback.ONLINE -> false
         }
 
+    /** How long a FLAC search that found nothing is believed: catalogues grow, so not for ever. */
+    const val MISS_KEEP_MS = 7L * 24 * 60 * 60 * 1000
+
+    /** The add-ons in use, so a miss stops holding once one is added, removed or switched. */
+    fun addonSet(): String = com.opentune.data.addons.AddonStore.addons.value
+        .filter(com.opentune.data.addons.AddonStore::usable).map { it.key }.sorted().joinToString(",")
+
+    /** Whether [miss] still says there's no FLAC: recent, and with the same add-ons on as now. */
+    fun missHolds(miss: LosslessMiss?, nowMs: Long, addonsNow: String): Boolean =
+        miss != null && miss.addons == addonsNow && nowMs - miss.at in 0 until MISS_KEEP_MS
+
     /** "1:38" or "1:02:03" in milliseconds, or 0. */
     fun durationMs(text: String?): Long =
         text?.split(':')?.mapNotNull { it.trim().toLongOrNull() }?.takeIf { it.isNotEmpty() }

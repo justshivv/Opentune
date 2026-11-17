@@ -305,8 +305,8 @@ object ExternalStreams {
             // Servers that erred or didn't answer say nothing about whether the song is there.
             val erred = erredNow.isNotEmpty() || detail.any { line -> TRANSIENT.any { it in line } }
             if (erred) transientMiss += videoId
-            else { transientMiss.remove(videoId); remember(losslessMissUntil, videoId) }
-        } else if (track != null || earlier != null) transientMiss.remove(videoId)
+            else { transientMiss.remove(videoId); remember(losslessMissUntil, videoId); com.opentune.data.download.Downloads.noteLosslessLookup(videoId, found = false) }
+        } else if (track != null || earlier != null) { transientMiss.remove(videoId); com.opentune.data.download.Downloads.noteLosslessLookup(videoId, found = true) }
         if (askedSaavn && saavn == null) remember(saavnMissUntil, videoId)
         // Only re-asked add-ons came back, and what they had is no better than the file on record.
         if (earlier != null) {

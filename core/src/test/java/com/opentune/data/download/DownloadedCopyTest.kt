@@ -81,6 +81,17 @@ class DownloadedCopyTest {
         assertTrue(PlaybackSettings().streamDownloadsOnlyIfBetter)
     }
 
+    @Test fun aFlacMissHoldsForAWeekWithTheSameAddons() {
+        val day = 24L * 60 * 60 * 1000
+        val miss = LosslessMiss(at = 10 * day, addons = "bridge")
+        assertTrue(DownloadedCopy.missHolds(miss, 10 * day, "bridge"))
+        assertTrue(DownloadedCopy.missHolds(miss, 16 * day, "bridge"))
+        assertFalse("a week on, catalogues may have it", DownloadedCopy.missHolds(miss, 17 * day, "bridge"))
+        assertFalse("another add-on may have it", DownloadedCopy.missHolds(miss, 11 * day, "bridge,other"))
+        assertFalse("a clock set back doesn't stretch it", DownloadedCopy.missHolds(miss, 9 * day, "bridge"))
+        assertFalse(DownloadedCopy.missHolds(null, 10 * day, "bridge"))
+    }
+
     @Test fun losslessRedownloadOfferedOnlyWhereItHelps() {
         val youtube = done("/d/x.webm")
         assertTrue(DownloadedCopy.canRedownloadLossless(youtube, addonCanDownload = true))

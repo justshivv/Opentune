@@ -87,10 +87,24 @@ class DownloadUpgradeTest {
         assertFalse(Downloads.updateUpgrade(song.videoId, work, 0.9f))
     }
 
+    @Test fun flacSearchResultIsKeptWithTheDownload() {
+        Downloads.noteLosslessLookup(song.videoId, found = false)
+        val miss = Downloads.entryNow(song.videoId)!!.losslessMiss
+        assertNotNull(miss)
+        assertTrue(DownloadedCopy.missHolds(miss, System.currentTimeMillis(), miss!!.addons))
+        // Found later (a catalogue grew, an add-on was added): the miss goes.
+        Downloads.noteLosslessLookup(song.videoId, found = true)
+        assertNull(Downloads.entryNow(song.videoId)!!.losslessMiss)
+        // Songs that aren't downloaded aren't recorded at all.
+        Downloads.noteLosslessLookup("not-downloaded", found = false)
+        assertNull(Downloads.entryNow("not-downloaded"))
+    }
+
     @Test fun indexWrittenBeforeThisChangeStillReads() {
         val old = """{"song":{"videoId":"x","title":"T","artist":"A"},"state":"DONE","path":"/d/x.webm"}"""
         val entry = Json { ignoreUnknownKeys = true }.decodeFromString(DownloadEntry.serializer(), old)
         assertNull(entry.upgrade)
         assertNull(entry.codec)
+        assertNull(entry.losslessMiss)
     }
 }
