@@ -180,8 +180,8 @@ object Downloads {
     }
 
     /**
-     * The file to play for [videoId] right now: always offline, online as "Downloaded
-     * songs play from" says, and with "Stream only when it's better" whenever no stream beats it.
+     * The file to play for [videoId] right now: always offline, online as "Stream downloaded
+     * songs" says, and with "Prefer the download when it's as good" whenever no stream beats it.
      */
     fun playableFile(videoId: String): File? {
         val file = fileFor(videoId) ?: return null
@@ -424,7 +424,7 @@ object Downloads {
 
     /**
      * What a FLAC search for a downloaded song found, kept with the download: a miss lets
-     * "Stream only when it's better" play the file instead of streaming in hope of a FLAC.
+     * "Prefer the download when it's as good" play the file instead of streaming in hope of a FLAC.
      */
     fun noteLosslessLookup(videoId: String, found: Boolean) {
         if (_entries.value[videoId] == null) return

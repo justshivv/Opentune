@@ -6,11 +6,11 @@ import java.io.File
 /** "Download again in lossless" found no add-on with a lossless file to hand over. */
 internal class NoLosslessCopy : Exception("No lossless copy to download")
 
-/** Where a downloaded song plays from while there is internet. Offline it always plays its file. */
+/** "Stream downloaded songs": when a downloaded song streams. Offline it always plays its file. */
 enum class DownloadedPlayback(val label: String, val summary: String) {
-    FILE("Always from the file", "Downloaded songs never use data"),
-    WIFI("Stream on Wi-Fi only", "Best quality stream on Wi-Fi, the file on mobile data"),
-    ONLINE("Stream whenever online", "Best quality stream with any internet, the file offline"),
+    FILE("Never", "Always plays the saved file, uses no data"),
+    WIFI("On Wi-Fi only", "Streams on Wi-Fi, the saved file on mobile data"),
+    ONLINE("Whenever online", "Streams with any internet, the saved file offline"),
 }
 
 /** The choice, kept as the two switches settings already had so earlier choices carry over. */
