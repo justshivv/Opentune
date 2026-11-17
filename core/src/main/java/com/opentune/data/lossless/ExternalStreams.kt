@@ -55,6 +55,24 @@ object ExternalStreams {
      */
     private val saavnReports = ConcurrentHashMap<String, String>()
 
+    /**
+     * The fuller artist credit JioSaavn billed for a song it matched, by video id:
+     * everyone performing on the recording, where the queue's own byline names
+     * only some of them. Display only — stream choice never reads it.
+     */
+    private val catalogArtists = ConcurrentHashMap<String, String>()
+    /** Fires with a video id when its fuller artist credit lands. */
+    val artistsReady: kotlinx.coroutines.flow.SharedFlow<String> get() = _artistsReady
+    private val _artistsReady = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    /** The catalogue's fuller artist credit for [videoId], when one was found. */
+    fun artistLine(videoId: String): String? = catalogArtists[videoId]
+
+    internal fun rememberArtistLine(videoId: String, line: String) {
+        if (catalogArtists.size > 256) catalogArtists.clear()
+        if (catalogArtists.put(videoId, line) != line) _artistsReady.tryEmit(videoId)
+    }
+
     /** What the add-ons and JioSaavn each said for [videoId], add-ons first, each line once. */
     fun selectionDetail(videoId: String): String? =
         ((reports[videoId]?.lines().orEmpty()) + (saavnReports[videoId]?.lines().orEmpty()))
@@ -97,7 +115,8 @@ object ExternalStreams {
     private suspend fun lookupJioSaavn(song: Song, durationMs: Long): Rendition? {
         val duration = CatalogMetadata.duration(song, durationMs)
         if (duration <= 0) return null
-        val url = JioSaavnSource.resolve(song, duration, report = { reportSaavn(song.videoId, it) }) ?: return null
+        val url = JioSaavnSource.resolve(song, duration, report = { reportSaavn(song.videoId, it) },
+            onArtists = { rememberArtistLine(song.videoId, it) }) ?: return null
         val rendition = Rendition(java.util.UUID.randomUUID().toString(), url, "JioSaavn · 320 kbps (lossy)", false, now(),
             provider = "JioSaavn", kbps = 320, sessionRevision = com.opentune.data.addons.AddonStore.revision.value)
         // Keep this lossy fallback address, but never overwrite a FLAC which
@@ -299,7 +318,8 @@ object ExternalStreams {
         if (earlier != null && earlier === held && fresh == null) detail += com.opentune.i18n.Tr.f("{0}: verified FLAC, found earlier and available for playback", earlier.provider)
         if (allowed(true)) detail += if (track == null && earlier == null) "FLAC: no verified matching stream available" else "Verified FLAC available; the track info above shows the source currently playing"
         val askedSaavn = !losslessOnly && track == null && earlier == null && allowed(false) && !saavnMissed && (beforePlayback || StreamResolver.worthExternalUpgrade(videoId, 320))
-        val saavn = if (askedSaavn) JioSaavnSource.resolve(song, duration, report = { detail += it }) else null
+        val saavn = if (askedSaavn) JioSaavnSource.resolve(song, duration, report = { detail += it },
+            onArtists = { rememberArtistLine(song.videoId, it) }) else null
         report(videoId, detail.joinToString("\n").ifEmpty { "No external source eligible for this quality setting." })
         if (track == null && earlier == null && allowed(true) && !losslessMissed) {
             // Servers that erred or didn't answer say nothing about whether the song is there.

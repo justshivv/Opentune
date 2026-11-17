@@ -37,8 +37,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val artwork = com.opentune.data.covers.PlaybackArtwork()
     /** A sharper catalogue cover found for the playing track, by its id. */
     private val betterCover = MutableStateFlow<Pair<String, String>?>(null)
-    val currentSong = combine(player.currentSong, betterCover) { song, better ->
-        song?.copy(thumbnailUrl = artwork.choose(song, better?.takeIf { it.first == song.videoId }?.second)) ?: run { artwork.clear(); null }
+    /** The fuller artist credit the catalogue bills for the playing track, by its id. */
+    private val fullerArtist = MutableStateFlow<Pair<String, String>?>(null)
+    val currentSong = combine(player.currentSong, betterCover, fullerArtist) { song, better, fuller ->
+        song?.copy(
+            thumbnailUrl = artwork.choose(song, better?.takeIf { it.first == song.videoId }?.second),
+            artist = fuller?.takeIf { it.first == song.videoId }?.second ?: song.artist,
+        ) ?: run { artwork.clear(); null }
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
 
     /** Apple's animated cover and Spotify's Canvas found for the playing track, by its id. */
@@ -92,6 +97,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         val cached = if (AppSettings.ui.value.albumCovers) com.opentune.data.covers.AlbumCovers.cached(song) else null
                         warmArtwork(saved ?: cached ?: song.thumbnailUrl)
                     } }
+                }
+            }
+        }
+        viewModelScope.launch {
+            // The catalogue's fuller credit can be on record already (the song
+            // played before) or land while it plays; both paths land here.
+            player.currentSong.distinctUntilChangedBy { it?.videoId }.collectLatest { song ->
+                fullerArtist.value = song?.videoId?.let { id ->
+                    com.opentune.data.lossless.ExternalStreams.artistLine(id)?.let { id to it }
+                }
+            }
+        }
+        viewModelScope.launch {
+            com.opentune.data.lossless.ExternalStreams.artistsReady.collect { id ->
+                if (player.currentSong.value?.videoId == id) {
+                    com.opentune.data.lossless.ExternalStreams.artistLine(id)?.let { fullerArtist.value = id to it }
                 }
             }
         }

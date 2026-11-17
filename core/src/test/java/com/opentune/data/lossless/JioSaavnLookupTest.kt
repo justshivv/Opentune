@@ -67,6 +67,35 @@ class JioSaavnLookupTest {
         assertEquals(listOf("JioSaavn: verified 320 kbps stream"), messages)
     }
 
+    @Test fun displayLineNamesEveryonePerformingButNotTheLyricistOrTheCast() {
+        val info = track().getJSONObject("more_info")
+        // The byline names only the composer; the singer is on the recording too.
+        assertEquals("Madhubanti Bagchi, Amit Trivedi", JioSaavnSource.displayLine(info, "Amit Trivedi"))
+        // A byline that already names everyone performing gets no replacement.
+        assertNull(JioSaavnSource.displayLine(info, "Amit Trivedi, Madhubanti Bagchi"))
+        // A byline the catalogue does not bill at all is never rewritten.
+        assertNull(JioSaavnSource.displayLine(info, "Another Singer"))
+    }
+
+    @Test fun verifiedLookupHandsTheFullerCreditToTheCaller() = runBlocking {
+        val track = track()
+        val cipher = Cipher.getInstance("DES/ECB/PKCS5Padding").apply {
+            init(Cipher.ENCRYPT_MODE, SecretKeySpec("38346591".toByteArray(), "DES"))
+        }
+        track.getJSONObject("more_info").put("encrypted_media_url",
+            Base64.getEncoder().encodeToString(cipher.doFinal("https://aac.saavncdn.com/123/uyi_96.mp4".toByteArray())))
+        val lines = mutableListOf<String>()
+        val result = JioSaavnSource.resolve(song, 253_000, onArtists = { lines += it }) { request, limit, prefix ->
+            when (request.url.queryParameter("__call")) {
+                "search.getResults" -> data(search(track).toString())
+                "song.getDetails" -> data(JSONObject().put("GHXYZHMU", track).toString())
+                else -> LosslessHttp.Data(ByteArray(64).apply { "ftyp".toByteArray().copyInto(this, 4) }, 10_506_899)
+            }
+        }
+        assertEquals("https://aac.saavncdn.com/123/uyi_320.mp4", result)
+        assertEquals(listOf("Madhubanti Bagchi, Amit Trivedi"), lines)
+    }
+
     @Test fun catalogMissAndNetworkFailureHaveDifferentFallbackReasons() = runBlocking {
         val messages = mutableListOf<String>()
         assertNull(JioSaavnSource.resolve(song, 253_000, report = { messages += it }) { _, _, _ -> data("{\"results\":[]}") })

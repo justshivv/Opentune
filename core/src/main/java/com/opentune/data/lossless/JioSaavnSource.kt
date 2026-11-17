@@ -16,7 +16,8 @@ import javax.crypto.spec.SecretKeySpec
 /** Public catalog/CDN protocol adapted from BitChord (GPLv3); verified 320 kbps AAC, not lossless. */
 internal object JioSaavnSource {
     suspend fun resolve(song: Song, durationMs: Long, report: (String) -> Unit = {},
-        read: suspend (Request, Int, Boolean) -> LosslessHttp.Data = { request, limit, prefix -> LosslessHttp.read(request, limit, prefix) },
+                        onArtists: (String) -> Unit = {},
+                        read: suspend (Request, Int, Boolean) -> LosslessHttp.Data = { request, limit, prefix -> LosslessHttp.read(request, limit, prefix) },
     ): String? = withContext(Dispatchers.IO) {
         suspend fun json(url: String) = JSONObject(read(Request.Builder().url(url).build(), 1_048_576, false).bytes.toString(Charsets.UTF_8))
         var reported = false
@@ -43,6 +44,7 @@ internal object JioSaavnSource {
                 val request = Request.Builder().url(url).header("Range", "bytes=0-63").build()
                 val data = read(request, 64, true)
                 if (!verified320(data.bytes, data.totalBytes, durationMs)) return@withTimeoutOrNull rejected("stream failed the audio/bitrate check")
+                displayLine(info, song.artist)?.let(onArtists)
                 report("JioSaavn: verified 320 kbps stream")
                 url
             }
@@ -83,6 +85,36 @@ internal object JioSaavnSource {
         }.filter(String::isNotBlank).distinct()
     }
 
+    /**
+     * The credit line worth showing for a matched recording: everyone Saavn bills for
+     * performing it — the primary and featured artists, plus the singer, composer and
+     * music credits — joined as one line. The lyricist and the cast are not performing
+     * artists and stay out. Only offered when it names everyone the queue's byline
+     * already names, plus more: a fuller credit may extend the byline, never rewrite it.
+     */
+    internal fun displayLine(info: JSONObject, byline: String): String? {
+        val map = info.optJSONObject("artistMap") ?: return null
+        val names = mutableListOf<String>()
+        fun add(raw: String?) {
+            val name = raw?.let(JioSaavnRadio::unescape)?.trim().orEmpty()
+            if (name.isNotEmpty() && names.none { CatalogIdentity.key(it) == CatalogIdentity.key(name) }) names += name
+        }
+        for (field in listOf("primary_artists", "featured_artists")) {
+            val entries = map.optJSONArray(field)
+            for (i in 0 until (entries?.length() ?: 0)) add(entries?.optJSONObject(i)?.optString("name"))
+        }
+        val entries = map.optJSONArray("artists")
+        for (i in 0 until (entries?.length() ?: 0)) {
+            val entry = entries?.optJSONObject(i)
+            if (entry?.optString("role") in setOf("singer", "composer", "music", "primary_artists", "featured_artists")) add(entry?.optString("name"))
+        }
+        if (names.size < 2) return null
+        val separators = Regex("\\s*(?:,|&|;|\\u2022)\\s*|\\s+(?:feat\\.?|ft\\.?|featuring)\\s+", RegexOption.IGNORE_CASE)
+        val billed = byline.split(separators).map { CatalogIdentity.key(it) }.filter(String::isNotEmpty)
+        val have = names.map { CatalogIdentity.key(it) }.toSet()
+        return if (billed.isNotEmpty() && billed.all { it in have } && names.size > billed.size) names.joinToString(", ") else null
+    }
+
     internal fun streamUrl(info: JSONObject): String? {
         if (!info.optString("320kbps").equals("true", true)) return null
         val cipher = Cipher.getInstance("DES/ECB/PKCS5Padding")
@@ -102,7 +134,7 @@ internal object JioSaavnSource {
 
     internal fun verified320(bytes: ByteArray, totalBytes: Long?, durationMs: Long): Boolean =
         bytes.size >= 12 && String(bytes, 4, 4, Charsets.US_ASCII) == "ftyp" &&
-            totalBytes != null && durationMs > 0 && totalBytes * 8 / durationMs in 256..380
+                totalBytes != null && durationMs > 0 && totalBytes * 8 / durationMs in 256..380
 
     private fun api(method: String, vararg parameters: Pair<String, String>): String =
         "https://www.jiosaavn.com/api.php".toHttpUrl().newBuilder()
