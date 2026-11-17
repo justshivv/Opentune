@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.opentune.data.Pills
+import com.opentune.i18n.Tr
 import com.opentune.data.comments.SongComments
 import com.opentune.data.model.Song
 import com.opentune.ui.components.Artwork
@@ -343,11 +344,13 @@ private fun CommentRow(
                 }
             }
             if (c.replies != null) {
-                val label = "${c.replies} ${if (c.replies == "1") "reply" else "replies"}"
+                // YouTube's own count ("976", "1.2K"), in the reader's language around it.
+                val label = if (c.replies == "1") Tr.t("1 reply") else Tr.f("{0} replies", c.replies)
                 if (onReplies != null) {
                     Row(Modifier.clip(Tap).clickable(onClick = onReplies).padding(vertical = 4.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(ImageVector.vectorResource(if (repliesOpen) AppIcons.ExpandLess else AppIcons.ExpandMore), null, Modifier.size(18.dp), tint = scheme.primary)
-                        Text(" ${if (repliesOpen) "Hide replies" else label}", style = small, color = scheme.primary, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (repliesOpen) Tr.t("Hide replies") else label, style = small, color = scheme.primary, fontWeight = FontWeight.SemiBold)
                     }
                 } else {
                     Text(label, style = small, color = scheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
@@ -381,7 +384,7 @@ private fun Composer(
     Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
         if (replyingTo != null) {
             Row(Modifier.padding(start = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Replying to ${replyingTo.author}", style = MaterialTheme.typography.labelMedium,
+                Text(Tr.f("Replying to {0}", replyingTo.author), style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.weight(1f))
                 IconButton(onClick = onCancelReply, modifier = Modifier.size(28.dp)) {
                     Icon(ImageVector.vectorResource(AppIcons.Close), "Cancel reply", Modifier.size(16.dp))
