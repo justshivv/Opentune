@@ -984,7 +984,7 @@ private fun settingsSections(
                         pb.preloadBoostOnWifi,
                         { v -> AppSettings.updatePlayback { it.copy(preloadBoostOnWifi = v) } },
                         summary = "Pre-buffers 20 seconds ahead and resolves 3 songs early when connected to Wi-Fi",
-                        icon = Icons.Rounded.Wifi,
+                        icon = ImageVector.vectorResource(AppIcons.Wifi),
                     )
                 } else null,
                 Entry("Upgrade quality while playing", "better stream premium 256 opus swap") {
@@ -1815,7 +1815,7 @@ private fun settingsSections(
                     ToggleRow("Hide volume bar", ui.hideVolumeBar, { v -> AppSettings.updateUi { it.copy(hideVolumeBar = v) } }, summary = "Removes the volume slider from the player", icon = ImageVector.vectorResource(AppIcons.VolumeOff))
                 },
                 Entry("Hide device volume bar", "system volume panel keys") {
-                    ToggleRow("Hide device volume bar", ui.hideDeviceVolumeBar, { v -> AppSettings.updateUi { it.copy(hideDeviceVolumeBar = v) } }, summary = "Volume keys change the volume with no Android panel over the player; needs the volume slider shown", icon = Icons.AutoMirrored.Rounded.VolumeUp, enabled = !ui.hideVolumeBar)
+                    ToggleRow("Hide device volume bar", ui.hideDeviceVolumeBar, { v -> AppSettings.updateUi { it.copy(hideDeviceVolumeBar = v) } }, summary = "Volume keys change the volume with no Android panel over the player; needs the volume slider shown", icon = ImageVector.vectorResource(AppIcons.VolumeUp), enabled = !ui.hideVolumeBar)
                 },
                 Entry("Lyrics preview", "player lyrics line apple music classic theme") {
                     ToggleRow("Lyrics preview", ui.lyricsPreview, { v -> AppSettings.updateUi { it.copy(lyricsPreview = v) } },
