@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.opentune.data.model.Song
 import kotlinx.coroutines.runBlocking
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -257,5 +258,35 @@ class AddonResolverTest {
         assertTrue(AddonResolver.notePaused("paused-test", AddonHttp.Failure(503, 21_600, paused = true)))
         assertTrue(AddonResolver.paused("paused-test"))
         assertFalse(AddonResolver.paused("another"))
+    }
+
+    /**
+     * The shape that played in BitChord and not here: a YouTube title with the film in it and one
+     * singer credited, against a catalogue listing the plain title, both singers and a master a
+     * few seconds longer, served as a FLAC with an ID3 tag in front.
+     */
+    @Test fun aPackagedTitleAndPartialCreditFindTheTaggedFlac() = runBlocking {
+        add("unified")
+        val searched = mutableListOf<String>()
+        val packaged = Song(videoId = "paniyon", title = "Paniyon Sa (From \"Satyamev Jayate\")", artist = "Atif Aslam", thumbnailUrl = null)
+        val client = AddonClient("https://unified.example/", { url ->
+            when {
+                "manifest.json" in url -> """{"id":"unified","name":"Unified","version":"1"}"""
+                "/search" in url -> {
+                    searched += url.toHttpUrl().queryParameter("q").orEmpty()
+                    """{"tracks":[{"id":"paniyon","title":"Paniyon Sa","artist":"Atif Aslam, Tulsi Kumar","album":"Satyamev Jayate","duration":249}]}"""
+                }
+                else -> """{"url":"https://cdn.example/paniyon.flac","quality":"LOSSLESS"}"""
+            }
+        })
+        val tag = ByteArray(1_010).apply { "ID3".toByteArray().copyInto(this); this[3] = 4; this[8] = 7; this[9] = 0x68 } // 1000-byte body
+        val file = tag + header(24, 48_000, seconds = 249)
+        val lines = mutableListOf<String>()
+        val result = AddonResolver.resolve(packaged, 245_000, clientFor = { client }, report = { lines += it },
+            probe = { _, size, _ -> file.copyOf(minOf(size, file.size)) })
+        assertNotNull(lines.joinToString("\n"), result)
+        assertEquals(24, result!!.bits); assertEquals(48_000, result.sampleRate)
+        assertEquals("paniyon sa atif aslam", searched.first())
+        assertTrue(lines.contains("Unified: verified FLAC"))
     }
 }

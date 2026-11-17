@@ -1,6 +1,7 @@
 package com.opentune.data.addons
 
-import com.opentune.data.lossless.CatalogIdentity
+import com.opentune.data.lossless.LosslessHeader
+import com.opentune.data.lossless.TrackMatcher
 import com.opentune.data.lossless.LosslessSource
 import com.opentune.data.model.Song
 import kotlinx.coroutines.CancellationException
@@ -92,7 +93,11 @@ object AddonResolver {
         clientFor: (String) -> AddonClient = AddonClient::forBase,
         probe: suspend (String, Int, Boolean) -> ByteArray = AddonHttp::bytes): List<AddonStream> = withContext(Dispatchers.IO) {
         if (durationMs <= 0) return@withContext emptyList()
-        val identity = CatalogIdentity(song.title, song.artist, null, durationMs)
+        // What the add-ons are asked for and judged against: BitChord's matcher, so the packaging
+        // on a YouTube title ("(From …)", "(feat. …)", "- Remastered") and a credit that names one
+        // singer where the catalogue names two don't hide a recording the add-on has.
+        val target = TrackMatcher.Target(song.title, song.artist, (durationMs / 1000).toInt().takeIf { it > 0 },
+            song.albumName, isVideo = song.isVideo)
         // The best each add-on has: hi-res where it offers it, else lossless.
         val tier = "HI_RES_LOSSLESS"
         /** [outcome]: asked over the network at all, and erred rather than answered. */
@@ -131,8 +136,7 @@ object AddonResolver {
                         if (!permitted()) return@lookup null
                         stage = "searching catalogue"
                         report("${addon.manifest.name}: $stage")
-                        val candidates = client.search("${song.title} ${song.artist}", manifest, tier)
-                            .filter { identity.matches(it.title, listOf(it.artist), it.album, it.durationMs) }
+                        val candidates = matching(target) { query -> client.search(query, manifest, tier) }
                         if (candidates.isEmpty()) { report(com.opentune.i18n.Tr.f("{0}: no matching recording", manifest.name)); return@lookup null }
                         // Its last link for this song broke: a new one, not the cached one.
                         val fresh = staleLinks.remove("${addon.key}:${song.videoId}")
@@ -159,17 +163,32 @@ object AddonResolver {
                             if (!permitted()) return@lookup null
                             stage = "checking audio header"
                             report("${addon.manifest.name}: $stage")
+                            var verified = false
                             val checked = if (stream.transport == null && stream.codec == "flac") {
-                                // STREAMINFO is the first 42 bytes. Waiting for 64 KB
-                                // adds a second transfer delay on throttled file hosts.
-                                val info = LosslessSource.flacInfo(probe(stream.url, 42, true))
-                                if (info == null || !LosslessSource.durationMatches(durationMs, info.durationMs)) {
-                                    report(com.opentune.i18n.Tr.f("{0}: FLAC header or duration did not match", manifest.name)); continue
+                                when (val header = LosslessHeader.read(stream.url, probe)) {
+                                    is LosslessHeader.Flac -> {
+                                        val info = header.info
+                                        if (!LosslessHeader.sameRecording(durationMs, track.durationMs, info.durationMs)) {
+                                            report(com.opentune.i18n.Tr.f("{0}: FLAC header or duration did not match", manifest.name)); continue
+                                        }
+                                        verified = true
+                                        // FLAC has no fixed bitrate and most add-ons don't state one: its average is the
+                                        // file's size over its length (bytes × 8 ÷ ms is kbit/s).
+                                        val average = AddonHttp.lengthOf(stream.url)?.takeIf { info.durationMs > 0 }?.let { (it * 8 / info.durationMs).toInt() }
+                                        stream.copy(bits = info.bits, sampleRate = info.sampleRate, kbps = stream.kbps ?: average)
+                                    }
+                                    // FLAC (or ALAC) in an MP4, as some catalogues serve it: the decoder reads
+                                    // its depth and rate once it plays, when the header here didn't have them.
+                                    is LosslessHeader.Mp4 -> stream.copy(bits = header.info?.bits, sampleRate = header.info?.rate)
+                                    // Lossless, but not a header read here (Ogg FLAC, WAV), or the start of the
+                                    // file couldn't be fetched just now: taken on the add-on's word, as BitChord
+                                    // does, and the decoder says what it really is once it plays. Its claimed depth
+                                    // and rate are left out, so it never outranks a file whose header was measured.
+                                    LosslessHeader.Unchecked -> stream.copy(bits = null, sampleRate = null)
+                                    LosslessHeader.NotLossless -> {
+                                        report(com.opentune.i18n.Tr.f("{0}: file labelled lossless is not lossless audio", manifest.name)); continue
+                                    }
                                 }
-                                // FLAC has no fixed bitrate and most add-ons don't state one: its average is the
-                                // file's size over its length (bytes × 8 ÷ ms is kbit/s).
-                                val average = AddonHttp.lengthOf(stream.url)?.takeIf { info.durationMs > 0 }?.let { (it * 8 / info.durationMs).toInt() }
-                                stream.copy(bits = info.bits, sampleRate = info.sampleRate, kbps = stream.kbps ?: average)
                             } else {
                                 val prefix = probe(stream.url, 65536, true)
                                 if (stream.transport != null) {
@@ -189,7 +208,7 @@ object AddonResolver {
                                     else stream.copy(bits = null, sampleRate = null)
                                 } else stream
                             }
-                            report("${manifest.name}: ${if (stream.transport == null && stream.codec == "flac") "verified FLAC" else "lossless requested; decoder confirms quality during playback"}")
+                            report("${manifest.name}: ${if (verified) "verified FLAC" else "lossless requested; decoder confirms quality during playback"}")
                             return@lookup checked.copy(addonId = addon.key, provider = manifest.name,
                                 trackId = if (track.streamUrl != null && stream.url == track.streamUrl) "" else track.id, tier = asked)
                         }
@@ -256,6 +275,30 @@ object AddonResolver {
         }
         ranked(found.toList())
     }
+
+    /**
+     * The rows of an add-on's catalogue that are [target], in the order worth opening, as BitChord
+     * finds them: its queries in turn (the title without its packaging and the first artist, then
+     * the title alone, and the other script for a kana title), stopping at the first that turns up
+     * the recording. Within that, a row of the same length (to [SAME_RECORDING_SEC]) goes first,
+     * and only those when there are any: a different cut under the right title loses to the album
+     * one. A later query that fails is taken as no more to find, not as the add-on failing.
+     */
+    internal suspend fun matching(target: TrackMatcher.Target, search: suspend (String) -> List<AddonTrack>): List<AddonTrack> {
+        for ((i, query) in TrackMatcher.queries(target).withIndex()) {
+            val rows = if (i == 0) search(query) else try { search(query) } catch (e: CancellationException) { throw e } catch (_: Exception) { return emptyList() }
+            val of = java.util.IdentityHashMap<TrackMatcher.Candidate, AddonTrack>()
+            val candidates = rows.map { row -> TrackMatcher.Candidate.of(row.title, row.artist, row.album, row.durationMs).also { of[it] = row } }
+            val ranked = TrackMatcher.ranked(candidates, target)
+            if (ranked.isEmpty()) continue
+            val sameLength = ranked.filter { TrackMatcher.withinSeconds(it, target, SAME_RECORDING_SEC) }
+            return sameLength.ifEmpty { ranked }.mapNotNull { of[it] }
+        }
+        return emptyList()
+    }
+
+    /** Runtimes this close are one recording; a row this close to the song is opened before any other. */
+    private const val SAME_RECORDING_SEC = 3
 
     /** [found]'s streams, best quality first, the earlier in the listener's order on a tie. */
     internal fun ranked(found: List<AddonStream?>): List<AddonStream> =

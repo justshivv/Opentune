@@ -80,5 +80,10 @@ applies to the derived files; OpenTune is also GPL-3.0.
 STREAMINFO measurement approach from `AudioOutputPolicy.kt` and
 `PlaybackService.kt` at the same commit. It excludes affected Samsung vendor
 FLAC decoders and reads actual FLAC metadata rather than treating float PCM
-as proof of a hi-res master. No proprietary SF Pro font files are bundled in
+as proof of a hi-res master. `TrackMatcher` (in `core/.../data/lossless`)
+is BitChord's `TrackMatcher.kt` from commit
+`acf219a7e4a7f52f026d4336d5c7ac5cf7bfafcc`, with catalogue rows as its own
+`Candidate` type and only the helpers OpenTune uses kept: it decides which
+add-on search rows are the song being played, and what to search for. No
+proprietary SF Pro font files are bundled in
 the browser preview; it uses DM Sans and system fallbacks.
