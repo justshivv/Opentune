@@ -87,7 +87,7 @@ export function ShelfScroller({ kind, children }: { kind: ShelfKind; children: R
 }
 
 /** A shelf's title, a link with a chevron when there's a page behind it. */
-function ShelfTitle({ title, to }: { title: string; to?: string | null }) {
+function ShelfTitle({ title, to, action }: { title: string; to?: string | null; action?: ReactNode }) {
   return (
     <div className={shelfHeader}>
       <h2 className="type-title-2-emphasized tracking-[-0.01em]">
@@ -100,6 +100,7 @@ function ShelfTitle({ title, to }: { title: string; to?: string | null }) {
           title
         )}
       </h2>
+      {action && <div className="ml-auto flex items-center">{action}</div>}
     </div>
   );
 }
@@ -136,11 +137,14 @@ export function TrackShelf({ title, to, tracks, source }: { title: string; to?: 
   );
 }
 
-/** A titled horizontal shelf (report §2): grid columns per breakpoint, scroll-snap, hover arrows. */
-export function ShelfView({ shelf }: { shelf: Shelf }) {
+/**
+ * A titled horizontal shelf (report §2): grid columns per breakpoint, scroll-snap, hover arrows.
+ * [action] sits at the end of its title row (Home's close button on the featured playlists).
+ */
+export function ShelfView({ shelf, action }: { shelf: Shelf; action?: ReactNode }) {
   return (
     <section className={shelfSection} aria-label={shelf.title}>
-      <ShelfTitle title={shelf.title} to={shelf.seeAll ? browseHref(shelf.seeAll) : null} />
+      <ShelfTitle title={shelf.title} to={shelf.seeAll ? browseHref(shelf.seeAll) : null} action={action} />
       <ShelfScroller key={shelf.items.length} kind={shelf.layout}>
         {shelf.items.map((item, i) => (
           <li key={`${item.id}-${i}`}>{renderItem(shelf, item)}</li>
