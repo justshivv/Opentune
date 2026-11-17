@@ -53,6 +53,15 @@ class TrackMatcherTest {
         assertNull(TrackMatcher.score(row("Jhak Maar Ke", "Neeraj Shridhar", 241), target))
     }
 
+    @Test fun aHyphenatedActSharesItsMembersFullNames() {
+        // YouTube bills the act; the store bills its members. A master a few
+        // seconds longer than YouTube's copy is refused without the shared
+        // credit: the credits-disagree fallback only covers two seconds.
+        val target = Target("Tainu Khabar Nahi", "Sachin-Jigar", 188)
+        assertNotNull(TrackMatcher.score(row("Tainu Khabar Nahi", "Sachin Sanghvi, Jigar Saraiya, Arijit Singh", 191), target))
+        assertNull(TrackMatcher.score(row("Tainu Khabar Nahi", "Vishal Dadlani, Shekhar Ravjiani", 196), target))
+    }
+
     @Test fun queriesDropThePackagingAndTryTheTitleAlone() {
         val queries = TrackMatcher.queries(Target("Paniyon Sa (From \"Satyamev Jayate\")", "Atif Aslam, Tulsi Kumar"))
         assertEquals(listOf("paniyon sa atif aslam", "paniyon sa"), queries)

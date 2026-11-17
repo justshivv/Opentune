@@ -614,9 +614,14 @@ internal object TrackMatcher {
      * not one of its artists, while "Atif Aslam" is genuinely one of
      * "Atif Aslam, Tulsi Kumar". Single letters go — an initialled
      * "A. R. Rahman" and a plain "AR Rahman" are the same person.
+     *
+     * A hyphenated act name ("Sachin-Jigar") is its members: catalogues bill
+     * the same act by the members' full names ("Sachin Sanghvi", "Jigar
+     * Saraiya"), and as one fused name it shares no artist with either.
      */
     internal fun artistNames(value: String): Set<List<String>> = normalize(value)
         .split(ARTIST_SEPARATORS)
+        .flatMap { name -> name.split('-') }
         .map { name ->
             name.split(WORD_SPLIT)
                 .map { it.replace(NON_ALNUM, "") }

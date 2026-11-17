@@ -32,6 +32,14 @@ class CatalogSourceTest {
         assertTrue(instrumental.matches("Tum Hi Ho", listOf("Arijit Singh"), "Aashiqui 2 (Instrumental)", 262_000))
     }
 
+    @Test fun hyphenatedActsMatchWhenTheCatalogBillsTheMembers() {
+        val song = CatalogIdentity("Tainu Khabar Nahi", "Sachin-Jigar", "Munjya", 188_000)
+        assertTrue(song.matches("Tainu Khabar Nahi", listOf("Sachin Sanghvi", "Jigar Saraiya", "Arijit Singh"), "Munjya", 188_000))
+        // Every member must be there: one member and the singer is not the act.
+        assertFalse(song.matches("Tainu Khabar Nahi", listOf("Sachin Sanghvi", "Arijit Singh"), "Munjya", 188_000))
+        assertFalse(song.matches("Tainu Khabar Nahi", listOf("Vishal Dadlani", "Shekhar Ravjiani"), "Munjya", 188_000))
+    }
+
     @Test fun keepsNonLatinNamesDistinct() {
         assertNotEquals(CatalogIdentity.key("你好"), CatalogIdentity.key("再见"))
         assertNotEquals(CatalogIdentity.key("हुस्न"), "")

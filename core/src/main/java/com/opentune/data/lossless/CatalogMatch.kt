@@ -40,7 +40,18 @@ internal data class CatalogIdentity(val title: String, val artist: String, val a
             val separators = Regex("\\s*(?:,|&|;|\\u2022)\\s*|\\s+(?:feat\\.?|ft\\.?|featuring)\\s+", RegexOption.IGNORE_CASE)
             val wanted = credit.split(separators).map(::key).filter(String::isNotEmpty)
             val available = artists.flatMap { listOf(key(it)) + it.split(separators).map(::key) }.toSet()
-            return wanted.size > 1 && wanted.all { it in available }
+            if (wanted.size > 1 && wanted.all { it in available }) return true
+            // A hyphenated act (Sachin-Jigar, Shankar-Ehsaan-Loy) is billed by
+            // its members' full names on other catalogs (Sachin Sanghvi, Jigar
+            // Saraiya), where the act's own name never appears. A member is
+            // billed by first name, so it matches the entry it opens; every
+            // member must be there, as in the split above.
+            val members = credit.split(
+                Regex("\\s*(?:,|&|;|\\u2022|-)\\s*|\\s+(?:feat\\.?|ft\\.?|featuring)\\s+", RegexOption.IGNORE_CASE),
+            ).map(::key).filter(String::isNotEmpty)
+            return members.size > 1 && members.all { member ->
+                available.any { it == member || it.startsWith("$member ") }
+            }
         }
 
         fun key(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFKC)
