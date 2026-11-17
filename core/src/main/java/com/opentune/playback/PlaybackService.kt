@@ -908,6 +908,44 @@ class PlaybackService : MediaLibraryService() {
      * list they were shown in; [CarLibrary.resolve] queues that list.
      */
     private val sessionCallback = object : MediaLibrarySession.Callback {
+        /**
+         * While another of the person's devices plays (Connect), the buttons
+         * on headphones, a car or a watch act there, whichever session the
+         * system sends them to.
+         */
+        override fun onMediaButtonEvent(session: MediaSession, controllerInfo: MediaSession.ControllerInfo, intent: Intent): Boolean {
+            if (com.opentune.data.connect.Connect.controlling.value == null) return false
+            val key = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent::class.java)
+            } else {
+                @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+            } ?: return false
+            val act: (() -> Unit) = when (key.keyCode) {
+                android.view.KeyEvent.KEYCODE_HEADSETHOOK, android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> { { com.opentune.data.connect.Connect.togglePlayPause() } }
+                android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> { { if (com.opentune.data.connect.Connect.controlling.value?.state?.playing != true) com.opentune.data.connect.Connect.togglePlayPause() } }
+                android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> { { if (com.opentune.data.connect.Connect.controlling.value?.state?.playing == true) com.opentune.data.connect.Connect.togglePlayPause() } }
+                android.view.KeyEvent.KEYCODE_MEDIA_NEXT -> { { com.opentune.data.connect.Connect.skipNext() } }
+                android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { { com.opentune.data.connect.Connect.skipPrevious() } }
+                else -> return false
+            }
+            // Down acts once; up (and held repeats) are taken quietly.
+            if (key.action == android.view.KeyEvent.ACTION_DOWN && key.repeatCount == 0) act()
+            return true
+        }
+
+        /** The same for transport commands from other apps (Bluetooth, Android Auto); the app's own go through Connect already. */
+        override fun onPlayerCommandRequest(session: MediaSession, controller: MediaSession.ControllerInfo, playerCommand: Int): Int {
+            val remote = com.opentune.data.connect.Connect.controlling.value
+            if (remote == null || controller.packageName == packageName) return SessionResult.RESULT_SUCCESS
+            when (playerCommand) {
+                Player.COMMAND_PLAY_PAUSE -> com.opentune.data.connect.Connect.togglePlayPause()
+                Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> com.opentune.data.connect.Connect.skipNext()
+                Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> com.opentune.data.connect.Connect.skipPrevious()
+                else -> return SessionResult.RESULT_SUCCESS
+            }
+            return SessionError.INFO_CANCELLED
+        }
+
         /** Every controller (notification, Android Auto, Bluetooth) also gets Like and Shuffle. */
         override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
