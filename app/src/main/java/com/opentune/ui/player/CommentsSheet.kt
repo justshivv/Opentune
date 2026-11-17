@@ -176,7 +176,7 @@ internal fun CommentsSheet(
         AlertDialog(
             onDismissRequest = { deleting = null },
             title = { Text("Delete comment?") },
-            text = { Text("It's deleted from YouTube for good, with any replies to it.") },
+            text = { Text("It will be deleted from YouTube for good, along with any replies.") },
             confirmButton = {
                 TextButton(onClick = {
                     deleting = null
