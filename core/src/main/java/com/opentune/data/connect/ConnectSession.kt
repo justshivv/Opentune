@@ -136,7 +136,14 @@ internal class ConnectSession(
         seq = maxOf(seq, clock())
         view.value = ConnectView(myId, myName)
         transport.start()
-        jobs += scope.launch { transport.connected.collect { n -> view.value = view.value.copy(relays = n) } }
+        jobs += scope.launch {
+            transport.connected.collect { n ->
+                // What was said with no relay connected (at start, or after losing them all) went nowhere: said again.
+                val reached = view.value.relays == 0 && n > 0
+                view.value = view.value.copy(relays = n)
+                if (reached) { sayPresence(); sayState() }
+            }
+        }
         jobs += scope.launch {
             transport.events.collect { event ->
                 if (event.pubkey == myPub) return@collect

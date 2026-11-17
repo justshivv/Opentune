@@ -40,13 +40,16 @@ class ConnectSessionTest {
         val flow = MutableSharedFlow<NostrEvent>(extraBufferCapacity = 1024)
         /** Devices that stopped hearing anything, without saying goodbye. */
         val deaf = java.util.Collections.synchronizedSet(mutableSetOf<String>())
-        fun transport(id: String) = object : RoomTransport {
+        /** Like real relays, nothing goes out until the transport has connected, [connectMs] after it starts. */
+        fun transport(id: String, connectMs: Long = 0) = object : RoomTransport {
             override val events: SharedFlow<NostrEvent> = MutableSharedFlow<NostrEvent>(extraBufferCapacity = 1024).also { mine ->
                 kotlinx.coroutines.GlobalScope.launch { flow.collect { if (id !in deaf) mine.emit(it) } }
             }
-            override val connected: StateFlow<Int> = MutableStateFlow(1)
-            override fun start() = Unit
-            override fun publish(event: NostrEvent) = flow.tryEmit(event)
+            override val connected = MutableStateFlow(if (connectMs == 0L) 1 else 0)
+            override fun start() {
+                if (connectMs > 0) kotlinx.coroutines.GlobalScope.launch { kotlinx.coroutines.delay(connectMs); connected.value = 1 }
+            }
+            override fun publish(event: NostrEvent) = connected.value > 0 && flow.tryEmit(event)
             override fun close() = Unit
         }
     }
@@ -77,13 +80,13 @@ class ConnectSessionTest {
         }
     }
 
-    private inner class Dev(val id: String, val name: String, val player: FakePlayer = FakePlayer()) {
+    private inner class Dev(val id: String, val name: String, val player: FakePlayer = FakePlayer(), val timings: Timings = fast, val connectMs: Long = 0) {
         val view = MutableStateFlow(ConnectView(id, name))
         val notices = mutableListOf<String>()
         val movedTo = mutableListOf<String>()
         lateinit var session: ConnectSession
         fun start(): Dev {
-            session = ConnectSession(group, id, name, "phone", player, hub.transport(id), view, { t, n -> notices += t.replace("{0}", n) }, scope, fast, moved = { movedTo += it })
+            session = ConnectSession(group, id, name, "phone", player, hub.transport(id, connectMs), view, { t, n -> notices += t.replace("{0}", n) }, scope, timings, moved = { movedTo += it })
             onLoop { session.start() }
             return this
         }
@@ -108,6 +111,13 @@ class ConnectSessionTest {
         assertEquals("Chrome", a.view.value.devices.single().name)
         onLoop { b.session.stop() }
         eventually("a forgets b") { a.others().isEmpty() }
+    }
+
+    @Test fun aDeviceSaysItIsHereOnceARelayConnects() {
+        val slow = fast.copy(presenceMs = 60_000)
+        val a = Dev("a", "Phone", timings = slow, connectMs = 50).start()
+        val b = Dev("b", "Chrome", timings = slow, connectMs = 50).start()
+        eventually("each sees the other", ms = 1_000) { a.others() == setOf("b") && b.others() == setOf("a") }
     }
 
     @Test fun aRestartedDeviceIsHeardAgain() {

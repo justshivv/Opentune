@@ -53,13 +53,17 @@ describe('messages, as the phone writes them', () => {
 
 // ---- Sessions against each other ---------------------------------------------------------------
 
-function bus(): TransportFactory {
+/** Relays in memory. Like real ones, nothing goes out until a transport has connected, [connectMs] after it starts. */
+function bus(connectMs = 0): TransportFactory {
   const listeners = new Set<(e: NostrEvent) => void>();
-  return (_filter, onEvent, onConnected) => ({
-    start: () => { listeners.add(onEvent); setTimeout(() => onConnected(1), 0); },
-    publish: (e) => { listeners.forEach((l) => setTimeout(() => l(e), 2)); return true; },
-    close: () => listeners.delete(onEvent),
-  });
+  return (_filter, onEvent, onConnected) => {
+    let open = false;
+    return {
+      start: () => { listeners.add(onEvent); setTimeout(() => { open = true; onConnected(1); }, connectMs); },
+      publish: (e) => { if (!open) return false; listeners.forEach((l) => setTimeout(() => l(e), 2)); return true; },
+      close: () => listeners.delete(onEvent),
+    };
+  };
 }
 
 const fast: Timings = { presenceMs: 200, goneMs: 700, stateMs: 100, commandMs: 400, transferMs: 400, tickMs: 20 };
@@ -97,12 +101,15 @@ async function eventually(what: string, check: () => boolean, ms = 3_000): Promi
 }
 
 async function devices(...names: [string, string, boolean?][]) {
+  return devicesWith(fast, bus(), ...names);
+}
+
+async function devicesWith(timings: Timings, transport: TransportFactory, ...names: [string, string, boolean?][]) {
   const group = await ConnectGroup.generate();
-  const transport = bus();
   return names.map(([id, name, playable]) => {
     const { s, player } = fakePlayer(playable ?? true);
     const d = { id, s, view: null as ConnectView | null, notices: [] as string[], movedTo: [] as string[], session: null as unknown as ConnectSession };
-    d.session = new ConnectSession(group, id, name, 'web', player, (v) => { d.view = v; }, (t, n) => d.notices.push(t.replace('{0}', n)), fast, transport, undefined, (secret) => d.movedTo.push(secret));
+    d.session = new ConnectSession(group, id, name, 'web', player, (v) => { d.view = v; }, (t, n) => d.notices.push(t.replace('{0}', n)), timings, transport, undefined, (secret) => d.movedTo.push(secret));
     d.session.start();
     return d;
   });
@@ -124,6 +131,12 @@ describe('sessions', () => {
     await eventually('answered', () => b!.view!.pending.length === 0);
     expect(b!.notices).toEqual([]);
     expect(a!.session.intercept('pause')).toBe(false);
+    a!.session.stop(); b!.session.stop();
+  });
+
+  it('says it is here once a relay connects, not only on the next round', async () => {
+    const [a, b] = await devicesWith({ ...fast, presenceMs: 60_000 }, bus(50), ['a', 'Phone'], ['b', 'Chrome']);
+    await eventually('see each other', () => a!.view?.devices.length === 1 && b!.view?.devices.length === 1, 1_000);
     a!.session.stop(); b!.session.stop();
   });
 

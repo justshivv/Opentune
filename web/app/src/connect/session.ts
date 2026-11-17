@@ -124,7 +124,15 @@ export class ConnectSession {
     // Numbered from the clock, so a restarted device's messages still count as newer than its last ones.
     this.seq = Math.max(this.seq, this.clock());
     const filter = { kinds: [KIND], '#t': [this.group.tag], since: Math.floor(this.clock() / 1000) - 10 };
-    this.pool = this.transport(filter, (e) => this.onEvent(e), (n) => this.update({ relays: n }));
+    this.pool = this.transport(filter, (e) => this.onEvent(e), (n) => {
+      // What was said with no relay connected (at start, or after losing them all) went nowhere: said again.
+      const reached = this.view.relays === 0 && n > 0;
+      this.update({ relays: n });
+      if (reached && !this.stopped) {
+        this.sayPresence();
+        this.sayState();
+      }
+    });
     this.pool.start();
     this.ticker = setInterval(() => this.tick(), this.timings.tickMs);
     this.mine = this.player.snapshot();
