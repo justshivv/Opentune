@@ -1212,6 +1212,15 @@ object Innertube {
         }
     }
 
+    suspend fun setPlaylistDescription(playlistId: String, description: String) {
+        editPlaylist(playlistId) {
+            addJsonObject {
+                put("action", "ACTION_SET_PLAYLIST_DESCRIPTION")
+                put("playlistDescription", description)
+            }
+        }
+    }
+
     suspend fun setPlaylistPrivacy(playlistId: String, privacy: PlaylistPrivacy) {
         editPlaylist(playlistId) {
             addJsonObject {

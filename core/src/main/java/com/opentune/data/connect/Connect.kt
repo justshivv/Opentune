@@ -109,6 +109,8 @@ object Connect {
             ).debounce(300).collect { session?.localChanged() }
         }
         restart()
+        // Once signed in (at start, or later), the account's group is looked for.
+        main.launch { com.opentune.data.account.AccountStore.signedIn.collect { if (it) syncAccount() } }
     }
 
     fun detach() {
@@ -136,7 +138,32 @@ object Connect {
     fun setAccountSync(on: Boolean) {
         _accountSync.value = on
         prefs?.edit { putBoolean("account_sync", on) }
+        if (on) syncAccount()
     }
+
+    /**
+     * With account sync on and signed in: joins the group kept in the account,
+     * or keeps this device's group there when the account has none yet.
+     * [push] puts this device's group there even when the account has one
+     * (a new secret after "Disconnect all").
+     */
+    fun syncAccount(push: Boolean = false) {
+        if (!_accountSync.value || !com.opentune.data.account.AccountStore.signedIn.value) return
+        main.launch {
+            runCatching {
+                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    val kept = if (push) null else ConnectAccountSync.read()
+                    if (kept == null) ConnectAccountSync.write(ensureGroupOff())
+                    kept
+                }
+            }.onSuccess { kept -> if (kept != null && kept != _group.value) join(kept) }
+                .onFailure { com.opentune.data.DebugLog.w("Connect", "account sync: ${it.message}") }
+        }
+    }
+
+    /** [ensureGroup] from a background thread: the group is made, its restart left to the main one. */
+    private suspend fun ensureGroupOff(): ConnectGroup =
+        _group.value ?: kotlinx.coroutines.withContext(Dispatchers.Main) { ensureGroup() }
 
     /** The group, made now if this device has none yet. */
     fun ensureGroup(): ConnectGroup = _group.value ?: ConnectGroup.generate().also { join(it) }
@@ -154,6 +181,7 @@ object Connect {
         val fresh = ConnectGroup.generate()
         _group.value = null
         join(fresh)
+        syncAccount(push = true)
         return fresh
     }
 

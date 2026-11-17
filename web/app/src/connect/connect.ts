@@ -208,6 +208,7 @@ export function initConnect(): void {
   });
   addEventListener('pagehide', () => session?.stop());
   restart();
+  void syncAccount();
 }
 
 export function setEnabled(on: boolean): void {
@@ -224,6 +225,29 @@ export function setDeviceName(name: string): void {
 
 export function setAccountSync(on: boolean): void {
   update({ accountSync: on });
+  if (on) void syncAccount();
+}
+
+/**
+ * With account sync on: joins the group kept in the YouTube account, or keeps
+ * this browser's group there when the account has none yet. [push] puts this
+ * browser's group there regardless (a new secret after "Disconnect all").
+ * Signed out or without the extension, it quietly does nothing.
+ */
+export async function syncAccount(push = false): Promise<void> {
+  if (!useConnect.getState().saved.accountSync) return;
+  try {
+    // YouTube.js comes with it; loaded only when the account is used.
+    const { readSecret, write: writeToAccount } = await import('./accountSync');
+    const kept = push ? null : await readSecret();
+    if (kept) {
+      joinGroup(kept);
+      return;
+    }
+    await writeToAccount(await ensureGroup());
+  } catch {
+    // Not signed in, or YouTube said no: the devices can still be added by hand.
+  }
 }
 
 /** The group, made now if this browser has none yet. */
@@ -259,6 +283,7 @@ export async function disconnectAll(): Promise<void> {
   const fresh = await ConnectGroup.generate();
   update({ secret: fresh.encoded });
   restart();
+  await syncAccount(true);
 }
 
 export const transferTo = (deviceId: string) => session?.transferTo(deviceId);

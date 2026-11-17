@@ -184,3 +184,15 @@ describe('sessions', () => {
     a!.session.stop();
   });
 });
+
+describe('the group kept in the YouTube account', () => {
+  it('finds its playlist and reads the secret back', async () => {
+    const { description, pick, secretIn } = await import('./accountSync');
+    const g = await ConnectGroup.generate();
+    expect(secretIn(JSON.stringify({ header: { description: { runs: [{ text: description(g) }] } } }))).toBe(g.encoded);
+    expect(secretIn('{"header":{"description":"just a playlist"}}')).toBeNull();
+    const item = (title: string, id: string) => ({ musicTwoRowItemRenderer: { title: { runs: [{ text: title, navigationEndpoint: { browseEndpoint: { browseId: id } } }] } } });
+    expect(pick({ contents: [item('OpenTune Connect fans', 'VLPL9'), item('OpenTune Connect', 'VLPL123')] })).toBe('VLPL123');
+    expect(pick({ contents: [item('Liked Music', 'VLLM')] })).toBeNull();
+  });
+});
