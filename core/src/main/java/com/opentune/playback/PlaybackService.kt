@@ -280,7 +280,10 @@ class PlaybackService : MediaLibraryService() {
                 val choosing = ResolvingDataSource.Factory(cached) { spec ->
                     startupSelections[token] = selection
                     val resolved = runBlocking { selection.resolve(spec) }
-                    scope.launch { updateExternalStats(); applyLoudness() }
+                    scope.launch {
+                        updateExternalStats(); applyLoudness()
+                        if (selection.selected?.let(::externalStreamKeyOf) == null) lookAgainPreloaded(token, mediaItem)
+                    }
                     resolved
                 }
                 return DefaultMediaSourceFactory(SchemeRoutingDataSource.Factory(choosing, direct))
@@ -1494,7 +1497,11 @@ class PlaybackService : MediaLibraryService() {
         // The search and its handoff are one upgrade; don't hide the pending FLAC
         // lookup merely because the intermediate JioSaavn handoff completed.
         upgradeAsked = asked
-        if (asked || (!quiet && ExternalStreams.allowed(true))) NerdStats.onUpgrade(id)
+        // A song whose source isn't chosen yet may well start on its FLAC: "upgrading" waits for that.
+        val token = startupToken(uri)
+        fun choosing() = token != null && startupSelections[token]?.selected == null
+        fun announce() { if (asked || (!quiet && ExternalStreams.allowed(true))) NerdStats.onUpgrade(id) }
+        if (!choosing()) announce()
         // Asked for from the menu: say how it went, whatever the outcome.
         fun tell(message: String) { if (asked) PlaybackRequests.report(message) }
         fun swapped(ok: Boolean) = tell(
@@ -1513,12 +1520,13 @@ class PlaybackService : MediaLibraryService() {
             }
         }
         upgradeJob = scope.launch {
-            val startup = startupToken(uri)?.let { startupSelections[it] }
-            if (startup != null && startup.selected == null) {
-                if (kotlinx.coroutines.withTimeoutOrNull(30_000) {
-                        while (startup.selected == null) delay(100)
-                        true
-                    } != true) return@launch
+            // Waits for the source to be chosen even before its choice has begun: a song not
+            // preloaded opens its source only after this runs, and taken for YouTube meanwhile,
+            // one starting on its FLAC was "upgraded" onto that same FLAC, reloading for seconds.
+            if (choosing()) {
+                if (!awaitStartupChoice(::choosing)) return@launch
+                if (alreadyExternal() && !force) return@launch
+                announce()
             }
             if (alreadyExternal() && !force) return@launch
             val duration = player.duration.takeIf { it > 0 } ?: item.toSong().durationMillis()
@@ -1759,11 +1767,66 @@ class PlaybackService : MediaLibraryService() {
             lossless = {
                 if (lossless) {
                     awaitForegroundLookup(song.videoId, { ExternalStreams.playingVideoId }, ExternalStreams::awaitingFirstLossless)
-                    ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true)
+                    val found = ExternalStreams.find(song, song.durationMillis(), beforePlayback = true, losslessOnly = true)
+                    if (found?.lossless == true) withContext(Dispatchers.Main) { startAheadOnLossless(song.videoId) }
                 }
             },
             lossy = { if (saavn) ExternalStreams.findJioSaavn(song, song.durationMillis()) },
         )
+    }
+
+    /** How a queue item with [uri] was opened, for [aheadToStartOnFlac]. */
+    private fun openedAs(uri: Uri?): AheadOpened {
+        if (uri == null) return AheadOpened.NOT_YET
+        if (externalStreamKeyOf(uri) != null) return AheadOpened.EXTERNAL
+        val selected = startupToken(uri)?.let { startupSelections[it]?.selected } ?: return AheadOpened.NOT_YET
+        return if (externalStreamKeyOf(selected) != null) AheadOpened.EXTERNAL else AheadOpened.YOUTUBE
+    }
+
+    /** Startup tokens of songs ahead already looked up again by [lookAgainPreloaded]. */
+    private val lookedAgain = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * A song ahead preloaded on YouTube with no FLAC on record: none found yet, or the one found
+     * when the song before it began has expired (they're kept five minutes, and a long song
+     * outlasts that). Its search goes out again, so a FLAC found still starts it, through
+     * [startAheadOnLossless], instead of it starting on YouTube and switching mid-song.
+     */
+    private fun lookAgainPreloaded(token: String, item: MediaItem) {
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val id = item.mediaId
+        if (lookedAgain.size > 256) lookedAgain.clear()
+        if (!lookAgainForFlac(playing = player.currentMediaItem?.mediaId == id, losslessAllowed = ExternalStreams.allowed(true),
+                firstForThisOpening = token !in lookedAgain, searching = aheadJobs[id]?.isActive == true)) return
+        lookedAgain += token
+        aheadJobs[id] = scope.launch(Dispatchers.IO) {
+            aheadSlots.withPermit { readyAhead(item.toSong(), saavn = false, lossless = true) }
+        }
+    }
+
+    /**
+     * A song ahead whose FLAC turned up after ExoPlayer had already preloaded it. Preloading
+     * opens the next song's source while this one plays (with the song cache, often within
+     * its first seconds) and [StartupSelection] fixes the source at that moment, so the song
+     * would start on YouTube and then switch to the FLAC mid-song, which is heard. Pointed at
+     * the FLAC while it still waits, it starts on it instead and nothing switches.
+     */
+    private fun startAheadOnLossless(id: String) {
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        if (crossfade?.blending == true || !ExternalStreams.allowed(true)) return
+        // The same files StartupSelection would start the song on, had it been asked now.
+        val rendition = ExternalStreams.cached(id)?.takeIf { it.lossless && it.mimeType == null } ?: return
+        val indices = player.upcomingPlayOrder().drop(1).take(PREFETCH_LOSSLESS_AHEAD)
+        val ahead = indices.map { index ->
+            val item = player.getMediaItemAt(index)
+            item.mediaId to openedAs(item.localConfiguration?.uri)
+        }
+        for (position in aheadToStartOnFlac(id, ahead)) {
+            val index = indices[position]
+            val item = player.getMediaItemAt(index)
+            Log.d(TAG, "Song ahead $id was preloaded on YouTube; starting it on ${rendition.label} instead")
+            player.replaceMediaItem(index, item.buildUpon().setUri(externalStreamUri(id, rendition.key)).setMimeType(rendition.mimeType).build())
+        }
     }
 
     /**
