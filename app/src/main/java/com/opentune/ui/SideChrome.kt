@@ -23,11 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.SkipNext
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -53,6 +48,8 @@ import com.opentune.data.settings.DockLens
 import com.opentune.ui.components.Haptics
 import com.opentune.ui.components.glass
 import com.opentune.ui.components.rememberHaptics
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** How wide the rail's glass is. */
 private val RAIL_WIDTH = 72.dp
@@ -216,13 +213,13 @@ internal fun NowPlayingStrip(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            StripButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Show player", ink.search, onClick = onExpand)
+            StripButton(ImageVector.vectorResource(AppIcons.KeyboardArrowLeft), "Show player", ink.search, onClick = onExpand)
             cover(Modifier.size(56.dp))
-            StripButton(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", ink.search) {
+            StripButton(if (isPlaying) ImageVector.vectorResource(AppIcons.Pause) else ImageVector.vectorResource(AppIcons.PlayArrow), if (isPlaying) "Pause" else "Play", ink.search) {
                 haptics.pattern(if (isPlaying) Haptics.Pattern.PAUSE else Haptics.Pattern.PLAY)
                 onTogglePlay()
             }
-            StripButton(Icons.Rounded.SkipNext, "Next", ink.search.copy(alpha = if (hasNext) 1f else 0.4f), enabled = hasNext) {
+            StripButton(ImageVector.vectorResource(AppIcons.SkipNext), "Next", ink.search.copy(alpha = if (hasNext) 1f else 0.4f), enabled = hasNext) {
                 haptics.pattern(Haptics.Pattern.NEXT)
                 onNext()
             }

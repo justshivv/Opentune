@@ -56,12 +56,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.VolumeDown
-import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.CircularProgressIndicator
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
@@ -85,8 +79,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.opentune.ui.components.glass
 import androidx.compose.runtime.snapshotFlow
 import com.opentune.ui.components.pressable
-import androidx.compose.material.icons.rounded.FastRewind
-import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -152,6 +144,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import coil3.request.allowHardware
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * The full player's backdrop, in the style chosen in settings. With
@@ -1469,10 +1464,10 @@ private fun MiniRow(
         Box(Modifier.size(46.dp).clip(CircleShape).clickable(onClick = onTogglePlay), contentAlignment = Alignment.Center) {
             ProgressRing(progress, accent, track, stroke = 2.5.dp, modifier = Modifier.matchParentSize().padding(3.dp))
             if (isBuffering) CircularProgressIndicator(Modifier.matchParentSize().padding(3.dp), strokeWidth = 2.5.dp, color = accent)
-            Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (isPlaying) "Pause" else "Play", Modifier.size(24.dp))
+            Icon(if (isPlaying) ImageVector.vectorResource(AppIcons.Pause) else ImageVector.vectorResource(AppIcons.PlayArrow), if (isPlaying) "Pause" else "Play", Modifier.size(24.dp))
         }
         IconButton(onClick = onNext, enabled = hasNext) {
-            Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(26.dp))
+            Icon(ImageVector.vectorResource(AppIcons.SkipNext), "Next", Modifier.size(26.dp))
         }
     }
 }
@@ -1679,7 +1674,7 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
     val focusInk = MaterialTheme.colorScheme.primary
     val step = if (receiver != null) 0.05f else 1f / max
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.AutoMirrored.Rounded.VolumeDown, "Volume down", tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        Icon(ImageVector.vectorResource(AppIcons.VolumeDown), "Volume down", tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp).clickable { adjust(-step) })
         val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
         val fill = MaterialTheme.colorScheme.onSurface
@@ -1728,7 +1723,7 @@ internal fun OutputVolumeBar(receiver: com.opentune.cast.Receiver?, modifier: Mo
             if (focused) drawRoundRect(focusInk, Offset(0f, y - 3.dp.toPx()), Size(size.width, h + 6.dp.toPx()), CornerRadius(h), style = Stroke(2.dp.toPx()))
             drawRoundRect(fill, Offset(0f, y), Size(size.width * f, h), CornerRadius(h / 2))
         }
-        Icon(Icons.AutoMirrored.Rounded.VolumeUp, "Volume up", tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        Icon(ImageVector.vectorResource(AppIcons.VolumeUp), "Volume up", tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp).clickable { adjust(step) })
     }
 }

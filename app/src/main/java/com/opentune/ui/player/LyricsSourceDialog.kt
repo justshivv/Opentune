@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import com.opentune.ui.theme.Icon
@@ -31,6 +29,9 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.LyricsSource
 import com.opentune.ui.components.FloatingDialog
 import com.opentune.ui.components.SheetButton
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Every lyrics source asked for this song at once, each row saying what it
@@ -102,7 +103,7 @@ private fun SourceRow(title: String, detail: String, picked: Boolean, enabled: B
         }
         when {
             waiting -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            picked -> Icon(Icons.Rounded.Check, "In use", Modifier.size(24.dp))
+            picked -> Icon(ImageVector.vectorResource(AppIcons.Check), "In use", Modifier.size(24.dp))
         }
     }
     HorizontalDivider()

@@ -9,10 +9,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
 import com.opentune.ui.theme.Icon
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.FastForward
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,11 +40,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.ui.unit.sp
 import com.opentune.data.NerdStats
 import com.opentune.playback.AudioFormatInfo
 import java.util.Locale
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 @Composable
 internal fun SourceQualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -97,7 +95,7 @@ private fun MixBadge(modifier: Modifier, onClick: () -> Unit) {
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
-        Icon(androidx.compose.material.icons.Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = colors.primary)
+        Icon(ImageVector.vectorResource(AppIcons.AutoAwesome), null, Modifier.size(16.dp), tint = colors.primary)
         Spacer(Modifier.width(6.dp))
         Text(shown.value.label, style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant,
             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, letterSpacing = 0.6.sp,
@@ -139,7 +137,7 @@ private fun QualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () 
         colors = ButtonDefaults.textButtonColors(contentColor = colors.onSurfaceVariant),
         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) {
         // Lossless gets the waveform; a lossy stream the plain HQ mark (a headphone read as the output, not the quality).
-        Icon(if (lossless) androidx.compose.material.icons.Icons.Rounded.GraphicEq else androidx.compose.material.icons.Icons.Rounded.HighQuality,
+        Icon(if (lossless) ImageVector.vectorResource(AppIcons.GraphicEq) else ImageVector.vectorResource(AppIcons.HighQuality),
             null, Modifier.size(16.dp))
         Spacer(Modifier.width(5.dp))
         Text(label, style = MaterialTheme.typography.labelMedium,
@@ -313,7 +311,7 @@ internal fun SkipToChorus(onClick: () -> Unit) {
         border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.6f)),
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
     ) {
-        Icon(Icons.Rounded.FastForward, null, Modifier.size(16.dp))
+        Icon(ImageVector.vectorResource(AppIcons.FastForward), null, Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
         Text("Skip to chorus", style = MaterialTheme.typography.labelMedium, maxLines = 1)
     }

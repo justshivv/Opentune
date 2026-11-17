@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -20,8 +21,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,32 +32,38 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.opentune.data.library.LikedSync
+import com.opentune.data.library.YtmSync
 import com.opentune.i18n.Tr
 import com.opentune.ui.theme.Text
 import kotlinx.coroutines.delay
 
 /** What the pill says about [status]; null when there's nothing to say. */
-internal fun likedSyncLine(status: LikedSync.Status, justFinished: Boolean): String? = when {
+internal fun ytmSyncLine(status: YtmSync.Status, justFinished: Boolean): String? = when {
+    status.running && status.checking -> Tr.t("Checking YouTube Music for changes…")
+    status.running && status.current != null && status.count > 1 -> Tr.f("Updating {0} · {1} of {2}", status.current, status.index, status.count)
+    status.running && status.current != null -> Tr.f("Updating {0}", status.current)
     status.running -> Tr.t("Checking YouTube Music for changes…")
-    status.failed -> Tr.t("Couldn't check YouTube Music")
-    justFinished && status.changed == 0 -> Tr.t("Up to date with YouTube Music")
-    justFinished && status.changed == 1 -> Tr.t("1 song updated")
-    justFinished -> Tr.f("{0} songs updated", status.changed)
+    // A check that failed says why, and stays until the next one.
+    status.error != null -> Tr.t(status.error.orEmpty())
+    justFinished && status.error == null && status.changed == 0 -> Tr.t("Up to date with YouTube Music")
+    justFinished && status.error == null && status.changed == 1 -> Tr.t("1 song updated")
+    justFinished && status.error == null -> Tr.f("{0} songs updated", status.changed)
     else -> null
 }
 
 /**
- * The Liked page's sign that it is checking with YouTube Music: the same
- * capsule as the Spotify page's, with the heart breathing while it asks and,
- * for a moment afterwards, what it found; a check that failed says so until
- * the next one. Nothing shows when there's nothing to say.
+ * The Playlists face's sign that it is checking with YouTube Music: a small
+ * capsule with YouTube Music's mark breathing while it asks, the part being
+ * checked while it works, and for a moment afterwards what it found; a check
+ * that failed says why until the next one. Nothing shows when there's
+ * nothing to say. Spotify's face carries the same capsule for its own check.
  */
 @Composable
-fun LikedSyncPill(status: LikedSync.Status, modifier: Modifier = Modifier) {
+fun YtmSyncPill(status: YtmSync.Status, modifier: Modifier = Modifier) {
     var wasRunning by remember { mutableStateOf(status.running) }
     var justFinished by remember { mutableStateOf(false) }
     LaunchedEffect(status.running) {
@@ -69,7 +74,7 @@ fun LikedSyncPill(status: LikedSync.Status, modifier: Modifier = Modifier) {
         }
         wasRunning = status.running
     }
-    val line = likedSyncLine(status, justFinished)
+    val line = ytmSyncLine(status, justFinished)
     AnimatedVisibility(
         visible = line != null,
         enter = fadeIn(tween(220)) + expandVertically(tween(260)),
@@ -82,7 +87,7 @@ fun LikedSyncPill(status: LikedSync.Status, modifier: Modifier = Modifier) {
                     .padding(start = 8.dp, end = 16.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val breathing = rememberInfiniteTransition(label = "likedCheck")
+                val breathing = rememberInfiniteTransition(label = "ytmCheck")
                 val pulse by breathing.animateFloat(
                     0.82f, 1f, infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse",
                 )

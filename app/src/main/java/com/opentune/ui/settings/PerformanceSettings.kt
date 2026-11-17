@@ -7,10 +7,6 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.BatteryChargingFull
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.AlertDialog
 import com.opentune.ui.theme.Icon
 import com.opentune.ui.theme.Text
@@ -37,6 +33,9 @@ import com.opentune.ui.components.RowDivider
 import com.opentune.ui.components.SettingRow
 import com.opentune.ui.components.ToggleRow
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * High performance mode and the refresh rate it asks for. Turning it on also
@@ -75,11 +74,11 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
             if (v && !unrestricted) { askedThisRun = true; askBattery = true }
         },
         summary = if (ui.highRefreshRate) com.opentune.i18n.Tr.f("{0} Hz requested. Android may lower it when needed.", chosen) else "Runs the screen at a faster rate while OpenTune is open, for smoother scrolling",
-        icon = Icons.Rounded.Speed,
+        icon = ImageVector.vectorResource(AppIcons.Speed),
     )
     if (ui.highRefreshRate && rates.size > 1) {
         RowDivider()
-        SettingRow("Refresh rate", icon = Icons.Rounded.GraphicEq, below = {
+        SettingRow("Refresh rate", icon = ImageVector.vectorResource(AppIcons.GraphicEq), below = {
             PillSegmented(
                 options = rates,
                 selected = chosen,
@@ -93,7 +92,7 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
         SettingRow(
             "Allow unrestricted battery use",
             summary = "Keeps Android from slowing OpenTune down to save power",
-            icon = Icons.Rounded.BatteryChargingFull,
+            icon = ImageVector.vectorResource(AppIcons.BatteryChargingFull),
             onClick = { requestUnrestricted(context) },
         )
     }
@@ -101,7 +100,7 @@ internal fun HighPerformanceRows(ui: InterfaceSettings) {
     if (askBattery) {
         AlertDialog(
             onDismissRequest = { askBattery = false },
-            icon = { Icon(Icons.Rounded.BatteryChargingFull, null) },
+            icon = { Icon(ImageVector.vectorResource(AppIcons.BatteryChargingFull), null) },
             title = { com.opentune.ui.components.FrostBehind(enabled = !com.opentune.data.settings.AppSettings.ui.collectAsState().value.reduceBlur); Text("Allow unrestricted battery use?") },
             text = {
                 Text(

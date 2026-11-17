@@ -5,8 +5,6 @@ import android.graphics.Bitmap
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -26,6 +24,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 private const val DISCORD_LOGIN = "https://discord.com/login"
 
@@ -267,7 +268,7 @@ fun DiscordLoginScreen(onDone: () -> Unit) {
     SignInPage(
         service = "Discord",
         brand = DiscordBlurple,
-        icon = Icons.Rounded.Headphones,
+        icon = ImageVector.vectorResource(AppIcons.Headphones),
         logo = com.opentune.R.drawable.ic_discord,
         url = if (onPage) pageAddress else null,
         pageColor = if (onPage) pageColor else null,

@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.opentune.data.ExploreFeed
 import androidx.compose.runtime.getValue
@@ -31,8 +30,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -78,6 +75,9 @@ import com.opentune.ui.components.pressable
 import kotlinx.coroutines.sync.withPermit
 import com.opentune.ui.rememberLoader
 import kotlin.math.absoluteValue
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Explore as a board, Pinterest-style: artist pills to jump straight to an
@@ -166,7 +166,7 @@ internal fun ExploreBoard(
         }
         if (tiles.isEmpty()) {
             item(span = StaggeredGridItemSpan.FullLine, key = "empty") {
-                MessageState(Icons.Filled.Explore, "Nothing to explore", message = "YouTube Music didn't send anything for this.")
+                MessageState(ImageVector.vectorResource(AppIcons.Explore), "Nothing to explore", message = "YouTube Music didn't send anything for this.")
             }
         }
         items(tiles, key = { it.key }) { tile ->
@@ -218,7 +218,7 @@ private fun ArtistPill(artist: ExploreFeed.Artist, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             if (artist.thumbnailUrl != null) {
-                Artwork(artist.thumbnailUrl.artworkAt(120), Modifier.matchParentSize(), CircleShape, placeholder = Icons.Filled.Person)
+                Artwork(artist.thumbnailUrl.artworkAt(120), Modifier.matchParentSize(), CircleShape, placeholder = ImageVector.vectorResource(AppIcons.Person))
             }
         }
         Text(

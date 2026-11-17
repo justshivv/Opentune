@@ -13,14 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Headphones
-import androidx.compose.material.icons.rounded.Smartphone
-import androidx.compose.material.icons.rounded.Speaker
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -40,6 +32,8 @@ import com.opentune.ui.player.icon
 import com.opentune.ui.player.isHeadset
 import com.opentune.ui.player.rememberOutputDeviceName
 import com.opentune.ui.player.rememberOutputRoute
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Where the sound goes, in one place: this phone or the headphones plugged
@@ -55,23 +49,23 @@ fun AudioOutputSheet(onDismiss: () -> Unit, onCast: () -> Unit, onPipeline: () -
     val output = rememberOutputDeviceName()
     val deviceName = castSession?.target?.name ?: output.ifBlank { "This phone" }
     val casting = castingTo()
-    FloatingCard(onDismiss = onDismiss, title = "Audio output", icon = Icons.Rounded.Speaker) {
+    FloatingCard(onDismiss = onDismiss, title = "Audio output", icon = ImageVector.vectorResource(AppIcons.Speaker)) {
         Column(Modifier.padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             OutputRow(
-                icon = if (route == OutputRoute.CAST) Icons.Rounded.Smartphone else route.icon,
+                icon = if (route == OutputRoute.CAST) ImageVector.vectorResource(AppIcons.Smartphone) else route.icon,
                 title = if (route == OutputRoute.CAST) "This phone" else deviceName,
                 subtitle = if (casting == null) "Playing here" else "Silent here while casting",
                 selected = casting == null,
             ) { haptics.tick(); onDismiss() }
             OutputRow(
-                icon = Icons.Rounded.Cast,
+                icon = ImageVector.vectorResource(AppIcons.Cast),
                 title = "Cast",
                 subtitle = casting ?: "Chromecast and Google Cast speakers",
                 selected = casting != null,
                 chevron = true,
             ) { haptics.tick(); onCast() }
             OutputRow(
-                icon = Icons.Rounded.GraphicEq,
+                icon = ImageVector.vectorResource(AppIcons.GraphicEq),
                 title = "Audio pipeline",
                 subtitle = "Live signal path, decoder to output",
                 chevron = true,
@@ -110,7 +104,7 @@ private fun OutputRow(
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (selected) Icon(Icons.Rounded.Check, "Selected", tint = scheme.primary, modifier = Modifier.size(22.dp))
-        else if (chevron) Icon(Icons.Rounded.ChevronRight, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+        if (selected) Icon(ImageVector.vectorResource(AppIcons.Check), "Selected", tint = scheme.primary, modifier = Modifier.size(22.dp))
+        else if (chevron) Icon(ImageVector.vectorResource(AppIcons.ChevronRight), null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
     }
 }

@@ -18,9 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Celebration
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.FilledTonalButton
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import com.opentune.data.Festivals
 import com.opentune.data.radio.ApproxLocation
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Home's festival corner: once, a question about using the phone's rough location
@@ -112,7 +112,7 @@ internal fun FestivalCard() {
                     Text("Wishing you and your family a joyful day.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
                 }
                 IconButton(onClick = { Festivals.dismiss(context, today); festival = null }) {
-                    Icon(Icons.Rounded.Close, "Close")
+                    Icon(ImageVector.vectorResource(AppIcons.Close), "Close")
                 }
             }
         }
@@ -131,7 +131,7 @@ private fun Banner(content: @Composable androidx.compose.foundation.layout.RowSc
             .padding(start = 18.dp, end = 6.dp, top = 16.dp, bottom = 16.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Icon(Icons.Rounded.Celebration, null, Modifier.size(30.dp), tint = scheme.onPrimaryContainer)
+        Icon(ImageVector.vectorResource(AppIcons.Celebration), null, Modifier.size(30.dp), tint = scheme.onPrimaryContainer)
         Spacer(Modifier.width(14.dp))
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides scheme.onPrimaryContainer) {
             content()

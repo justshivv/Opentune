@@ -20,11 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Podcasts
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.FilterChip
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
@@ -69,6 +64,9 @@ import com.opentune.ui.components.pressable
 import com.opentune.ui.rememberLoader
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Plays [episodes] from [index] as a queue, each remembered so its place is kept. */
 fun SongActions.playEpisodes(episodes: List<PodcastEpisode>, index: Int, source: String?) {
@@ -131,8 +129,8 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
                     onValueChange = { query = it },
                     singleLine = true,
                     placeholder = { Text("Search shows and episodes") },
-                    leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
+                    leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Search), null) },
+                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Clear") } },
                     shape = RoundedCornerShape(20.dp),
                     colors = TextFieldDefaults.colors(
                         focusedIndicatorColor = Color.Transparent,
@@ -164,13 +162,13 @@ fun PodcastsScreen(contentPadding: PaddingValues, actions: SongActions, onOpenSh
                     kind == SearchKind.SHOWS -> {
                         val s = shows
                         if (s == null) items(6) { SongRowPlaceholder() }
-                        else if (s.isEmpty()) item { MessageState(Icons.Rounded.Podcasts, "No shows found") }
+                        else if (s.isEmpty()) item { MessageState(ImageVector.vectorResource(AppIcons.Podcasts), "No shows found") }
                         else items(s, key = { it.browseId }) { ShowRow(it) { onOpenShow(it.browseId) } }
                     }
                     else -> {
                         val e = episodes
                         if (e == null) items(6) { SongRowPlaceholder() }
-                        else if (e.isEmpty()) item { MessageState(Icons.Rounded.Podcasts, "No episodes found") }
+                        else if (e.isEmpty()) item { MessageState(ImageVector.vectorResource(AppIcons.Podcasts), "No episodes found") }
                         else items(e, key = { it.videoId }) { ep ->
                             EpisodeRow(ep, actions, showShow = true, onOpenShow = onOpenShow) { actions.playEpisodes(listOf(ep), 0, ep.showTitle) }
                         }
@@ -232,7 +230,7 @@ private fun ShowCarousel(shows: List<PodcastShow>, onOpenShow: (String) -> Unit)
     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(shows, key = { it.browseId }) { show ->
             Column(Modifier.width(140.dp).pressable({ onOpenShow(show.browseId) })) {
-                Artwork(show.thumbnailUrl.artworkAt(360), Modifier.size(140.dp), RoundedCornerShape(18.dp), placeholder = Icons.Rounded.Podcasts)
+                Artwork(show.thumbnailUrl.artworkAt(360), Modifier.size(140.dp), RoundedCornerShape(18.dp), placeholder = ImageVector.vectorResource(AppIcons.Podcasts))
                 Text(show.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
                 if (show.author.isNotBlank()) {
                     Text(show.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -246,7 +244,7 @@ private fun ShowCarousel(shows: List<PodcastShow>, onOpenShow: (String) -> Unit)
 private fun ContinueCard(p: Podcasts.Progress, onPlay: () -> Unit) {
     Column(Modifier.width(240.dp).pressable(onPlay)) {
         Box {
-            Artwork(p.episode.thumbnailUrl, Modifier.fillMaxWidth().aspectRatio(16f / 9f), RoundedCornerShape(16.dp), placeholder = Icons.Rounded.Podcasts)
+            Artwork(p.episode.thumbnailUrl, Modifier.fillMaxWidth().aspectRatio(16f / 9f), RoundedCornerShape(16.dp), placeholder = ImageVector.vectorResource(AppIcons.Podcasts))
             LinearProgressIndicator(
                 progress = { p.fraction },
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp).height(4.dp),
@@ -273,7 +271,7 @@ private fun remaining(p: Podcasts.Progress): String {
 @Composable
 fun ShowRow(show: PodcastShow, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Artwork(show.thumbnailUrl.artworkAt(200), Modifier.size(64.dp), RoundedCornerShape(14.dp), placeholder = Icons.Rounded.Podcasts)
+        Artwork(show.thumbnailUrl.artworkAt(200), Modifier.size(64.dp), RoundedCornerShape(14.dp), placeholder = ImageVector.vectorResource(AppIcons.Podcasts))
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(show.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -300,7 +298,7 @@ fun EpisodeRow(
     var expanded by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().clickable(onClick = onPlay).padding(horizontal = 16.dp, vertical = 10.dp).animateContentSize()) {
         Row(verticalAlignment = Alignment.Top) {
-            Artwork(episode.thumbnailUrl, Modifier.width(120.dp).aspectRatio(16f / 9f), RoundedCornerShape(12.dp), placeholder = Icons.Rounded.Podcasts)
+            Artwork(episode.thumbnailUrl, Modifier.width(120.dp).aspectRatio(16f / 9f), RoundedCornerShape(12.dp), placeholder = ImageVector.vectorResource(AppIcons.Podcasts))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -330,7 +328,7 @@ fun EpisodeRow(
                 }
                 when {
                     saved?.finished == true -> Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.CheckCircle, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(ImageVector.vectorResource(AppIcons.CheckCircle), null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                         Text("Played", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 4.dp))
                     }
                     saved != null && saved.fraction > 0.01f -> LinearProgressIndicator(
@@ -397,7 +395,7 @@ fun PodcastShowScreen(browseId: String, contentPadding: PaddingValues, actions: 
                 val subscribed = subscriptions.any { it.browseId == show.browseId }
                 item {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(show.thumbnailUrl.artworkAt(600), Modifier.size(140.dp), RoundedCornerShape(24.dp), placeholder = Icons.Rounded.Podcasts)
+                        Artwork(show.thumbnailUrl.artworkAt(600), Modifier.size(140.dp), RoundedCornerShape(24.dp), placeholder = ImageVector.vectorResource(AppIcons.Podcasts))
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(show.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 3, overflow = TextOverflow.Ellipsis)

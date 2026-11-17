@@ -45,11 +45,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.CircularProgressIndicator
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
@@ -97,8 +94,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import com.opentune.data.settings.AppSettings
+import com.opentune.data.settings.SheetStyle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Lets what's inside a [FloatingCard] close it with its exit motion. */
 class FloatingCardScope internal constructor(private val closeWith: (after: (() -> Unit)?) -> Unit) {
@@ -109,11 +109,13 @@ class FloatingCardScope internal constructor(private val closeWith: (after: (() 
 val LocalFloatingCard = compositionLocalOf<FloatingCardScope?> { null }
 
 /**
- * The app's popup: a rounded card that rises from the bottom over a frosted
- * blur of the screen (dimmed where the phone can't blur behind a window),
- * with a grab handle, an optional icon and title, and a round close button.
- * Dragging the top of the card down, tapping outside or pressing back plays
- * it out the way it came.
+ * The app's one sheet, and every popup in the app is built on it: full width,
+ * flush to the bottom of the screen, rounded only at the top, rising over
+ * the page. Its fill is the reader's choice (see [SheetStyle]): a frosted
+ * blur of the screen behind it, or the app's own theme, solid, wearing
+ * whatever theme the page under it wears. It has a grab handle, an optional
+ * icon and title, and a round close button. Dragging the top of the sheet
+ * down, tapping outside or pressing back plays it out the way it came.
  *
  * [content] is laid out in a column that keeps to the screen, so a list
  * inside can scroll. [actions] sit in a row along the bottom.
@@ -184,8 +186,11 @@ fun FloatingCard(
         ),
     ) {
         // The screen behind frosted by the app itself; the window's blur only where that can't be done.
-        var frost by remember { mutableStateOf(if (ui.reduceBlur) Frost.FAILED else Frost.PENDING) }
-        val windowFrost = FrostBehind(enabled = !ui.reduceBlur, standIn = frost != Frost.FAILED)
+        // The theme look never frosts: the sheet is the app's own surface, solid,
+        // so it starts where a failed frost ends up and skips the wait for one.
+        val themed = ui.sheetStyle == SheetStyle.THEME
+        var frost by remember { mutableStateOf(if (ui.reduceBlur || themed) Frost.FAILED else Frost.PENDING) }
+        val windowFrost = FrostBehind(enabled = !ui.reduceBlur && !themed, standIn = frost != Frost.FAILED)
         val frosted = windowFrost || frost == Frost.READY
         val dark = MaterialTheme.colorScheme.surface.luminance() <= 0.5f
         val shown by animateFloatAsState(
@@ -338,11 +343,15 @@ fun FloatingCard(
                         .insetBy {
                             val e = edgeLayout()
                             val bars = if (fullscreen) e else 1f
-                            val side = (12.dp * e).roundToPx()
-                            InsetsPx(side, (barsTop * bars).roundToPx() + side, side, (barsBottom * bars).roundToPx() + side)
+                            // Full width, flush to the bottom edge, always: the only room
+                            // kept is above the sheet, and only while it isn't the whole
+                            // page. The navigation bar's room moves inside the sheet
+                            // (the inner insets below), so its fill runs to the very
+                            // bottom of the screen while its content never sits under
+                            // the bar.
+                            InsetsPx(0, (barsTop * bars).roundToPx() + (12.dp * e).roundToPx(), 0, 0)
                         }
                         .imePadding()
-                        .widthIn(max = if (fullscreen) maxWidth else 560.dp)
                         .fillMaxWidth()
                         .then(
                             if (expandable) {
@@ -385,14 +394,13 @@ fun FloatingCard(
                         .graphicsLayer {
                             transformOrigin = TransformOrigin(0.5f, 1f)
                             translationY = (1f - shown) * size.height * 0.5f + drag
-                            val s = 0.92f + 0.08f * shown
-                            scaleX = s
-                            scaleY = s
                             alpha = shown.coerceIn(0f, 1f)
-                            // The card's corners, squared off as it takes the whole page, are
-                            // the layer's own shape: set here in the draw phase, a pull changes
-                            // them without recomposing the card to do it.
-                            shape = RoundedCornerShape(32.dp * edgeNow())
+                            // The sheet's top corners, squared off as it takes the whole
+                            // page, are the layer's own shape: set here in the draw phase,
+                            // a pull changes them without recomposing the sheet to do it.
+                            // The bottom corners are the screen's own: the sheet runs to
+                            // its edges, so they are never rounded.
+                            shape = RoundedCornerShape(topStart = 32.dp * edgeNow(), topEnd = 32.dp * edgeNow())
                             clip = true
                             // No drop shadow under glass, whichever blur is behind it: Android
                             // draws the shadow under the whole card, a little lower and inset,
@@ -432,7 +440,7 @@ fun FloatingCard(
                             val e = edgeNow()
                             if (e > 0f) {
                                 val stroke = 1.dp.toPx()
-                                val outline = RoundedCornerShape(32.dp * e).createOutline(Size(size.width - stroke, size.height - stroke), layoutDirection, this)
+                                val outline = RoundedCornerShape(topStart = 32.dp * e, topEnd = 32.dp * e).createOutline(Size(size.width - stroke, size.height - stroke), layoutDirection, this)
                                 drawContext.canvas.save()
                                 drawContext.canvas.translate(stroke / 2f, stroke / 2f)
                                 if (frosted) {
@@ -447,7 +455,9 @@ fun FloatingCard(
                         .pointerInput(Unit) { detectTapGestures { } }
                         .insetBy {
                             val insideF = if (fullscreen) 1f - edgeLayout() else 0f
-                            InsetsPx(10.dp.roundToPx(), 10.dp.roundToPx() + (barsTop * insideF).roundToPx(), 10.dp.roundToPx(), 14.dp.roundToPx() + (barsBottom * insideF).roundToPx())
+                            // The bottom room is the navigation bar's at every height:
+                            // the sheet's fill runs under it, its content never does.
+                            InsetsPx(10.dp.roundToPx(), 10.dp.roundToPx() + (barsTop * insideF).roundToPx(), 10.dp.roundToPx(), 14.dp.roundToPx() + barsBottom.roundToPx())
                         },
                 ) {
                     // The handle and title pull the card down; content below keeps its own gestures.
@@ -501,7 +511,7 @@ fun FloatingCard(
                                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                             .clickable(onClickLabel = "Close", role = Role.Button) { card.close() },
                                         contentAlignment = Alignment.Center,
-                                    ) { Icon(Icons.Rounded.Close, "Close", Modifier.size(20.dp)) }
+                                    ) { Icon(ImageVector.vectorResource(AppIcons.Close), "Close", Modifier.size(20.dp)) }
                                 }
                             }
                         } else {

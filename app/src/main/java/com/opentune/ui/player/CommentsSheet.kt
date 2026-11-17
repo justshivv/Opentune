@@ -14,11 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material.icons.rounded.ChatBubbleOutline
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material3.CircularProgressIndicator
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +39,9 @@ import com.opentune.data.model.Song
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.FloatingCard
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * The comments on [song], from YouTube: the song's own, or its music video's when the
@@ -100,7 +98,7 @@ internal fun CommentsSheet(
     FloatingCard(
         onDismiss = onDismiss,
         title = "Comments",
-        icon = Icons.Rounded.ChatBubbleOutline,
+        icon = ImageVector.vectorResource(AppIcons.ChatBubbleOutline),
         subtitle = when {
             thread?.fromVideo == true -> "From the music video on YouTube"
             else -> "From YouTube"
@@ -151,7 +149,7 @@ private fun Note(text: String, modifier: Modifier = Modifier) {
 private fun CommentRow(c: SongComments.Comment) {
     val scheme = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
-        Artwork(c.avatarUrl, Modifier.size(36.dp), CircleShape, placeholder = Icons.Rounded.Person)
+        Artwork(c.avatarUrl, Modifier.size(36.dp), CircleShape, placeholder = ImageVector.vectorResource(AppIcons.Person))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -165,7 +163,7 @@ private fun CommentRow(c: SongComments.Comment) {
             if (c.likes != null || c.replies != null) {
                 Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (c.likes != null) {
-                        Icon(Icons.Rounded.ThumbUp, null, Modifier.size(14.dp), tint = scheme.onSurfaceVariant)
+                        Icon(ImageVector.vectorResource(AppIcons.ThumbUp), null, Modifier.size(14.dp), tint = scheme.onSurfaceVariant)
                         Text(" ${c.likes}", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
                     }
                     if (c.replies != null) {
@@ -203,7 +201,7 @@ private fun Composer(onPost: suspend (String) -> String?, scope: kotlinx.corouti
                 }
             }) {
                 if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Icon(Icons.AutoMirrored.Rounded.Send, "Post comment")
+                else Icon(ImageVector.vectorResource(AppIcons.Send), "Post comment")
             }
         }
         Text(error ?: "Posted publicly on YouTube, under your account.",

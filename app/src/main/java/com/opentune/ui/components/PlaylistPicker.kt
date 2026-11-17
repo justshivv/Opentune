@@ -26,13 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.PhoneAndroid
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +53,8 @@ import com.opentune.data.model.UserPlaylist
 import com.opentune.data.model.artworkAt
 import com.opentune.ui.theme.Icon
 import com.opentune.ui.theme.Text
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** A playlist to pick, with how much of what's being added is in it already. */
 internal data class PickTarget(
@@ -182,11 +177,11 @@ internal fun PlaylistPicker(
                     if (q.isEmpty()) NewTile(if (single != null) "With this song in it" else com.opentune.i18n.Tr.f("With these {0} songs in it", songs.size)) { naming = true }
                     val choosing = picked.isNotEmpty()
                     if (mine.isNotEmpty()) {
-                        SectionLabel(Icons.Rounded.PhoneAndroid, "Your playlists")
+                        SectionLabel(ImageVector.vectorResource(AppIcons.PhoneAndroid), "Your playlists")
                         mine.forEach { t -> TargetRow(t, adding, t.key in picked, choosing, onTap = { if (choosing) toggle(t) else addOne(t) }, onPick = { if (whole(t)) untick(t) else toggle(t) }) }
                     }
                     if (theirs.isNotEmpty()) {
-                        SectionLabel(Icons.AutoMirrored.Rounded.QueueMusic, "On YouTube Music")
+                        SectionLabel(ImageVector.vectorResource(AppIcons.QueueMusic), "On YouTube Music")
                         theirs.forEach { t -> TargetRow(t, adding, t.key in picked, choosing, onTap = { if (choosing) toggle(t) else addOne(t) }, onPick = { if (whole(t)) untick(t) else toggle(t) }) }
                     }
                     if (mine.isNotEmpty() || theirs.isNotEmpty()) Text(
@@ -240,13 +235,13 @@ private fun FindField(query: String, onQuery: (String) -> Unit, modifier: Modifi
         modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(16.dp)).background(c.onSurface.copy(alpha = FIELD_TINT)).padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Search, null, tint = c.onSurfaceVariant, modifier = Modifier.size(20.dp))
+        Icon(ImageVector.vectorResource(AppIcons.Search), null, tint = c.onSurfaceVariant, modifier = Modifier.size(20.dp))
         Box(Modifier.weight(1f).padding(start = 10.dp)) {
             if (query.isEmpty()) Text("Find a playlist", style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant)
             BasicTextField(query, onQuery, singleLine = true, textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.onSurface),
                 cursorBrush = SolidColor(c.primary), modifier = Modifier.fillMaxWidth())
         }
-        if (query.isNotEmpty()) androidx.compose.material3.IconButton(onClick = { onQuery("") }) { Icon(Icons.Rounded.Close, "Clear", Modifier.size(20.dp)) }
+        if (query.isNotEmpty()) androidx.compose.material3.IconButton(onClick = { onQuery("") }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Clear", Modifier.size(20.dp)) }
     }
 }
 
@@ -270,7 +265,7 @@ private fun NewTile(line: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(c.primary), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Add, null, tint = c.onPrimary, modifier = Modifier.size(28.dp))
+            Icon(ImageVector.vectorResource(AppIcons.Add), null, tint = c.onPrimary, modifier = Modifier.size(28.dp))
         }
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
             Text("New playlist", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -330,9 +325,9 @@ private fun TargetRow(t: PickTarget, adding: Int, picked: Boolean, choosing: Boo
                 contentAlignment = Alignment.Center,
             ) {
                 when {
-                    picked -> Icon(Icons.Rounded.Check, "Picked", tint = c.onPrimary, modifier = Modifier.size(18.dp))
-                    all -> Icon(Icons.Rounded.Check, "In this playlist", tint = c.primary, modifier = Modifier.size(18.dp))
-                    !choosing -> Icon(Icons.Rounded.Add, null, tint = c.onSurface, modifier = Modifier.size(18.dp))
+                    picked -> Icon(ImageVector.vectorResource(AppIcons.Check), "Picked", tint = c.onPrimary, modifier = Modifier.size(18.dp))
+                    all -> Icon(ImageVector.vectorResource(AppIcons.Check), "In this playlist", tint = c.primary, modifier = Modifier.size(18.dp))
+                    !choosing -> Icon(ImageVector.vectorResource(AppIcons.Add), null, tint = c.onSurface, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -408,7 +403,7 @@ internal fun localTarget(p: LocalPlaylist, already: Int, add: () -> Unit, remove
 /** One of the account's playlists on YouTube Music, to pick. */
 internal fun accountTarget(p: UserPlaylist, already: Int?, add: () -> Unit, remove: (() -> Unit)? = null) = PickTarget(
     "yt:${p.playlistId}", p.title, p.subtitle.ifBlank { "YouTube Music" }, already,
-    { m -> Artwork(p.thumbnailUrl, m, RectangleShape, placeholder = Icons.AutoMirrored.Rounded.QueueMusic) },
+    { m -> Artwork(p.thumbnailUrl, m, RectangleShape, placeholder = ImageVector.vectorResource(AppIcons.QueueMusic)) },
     add,
     remove,
 )

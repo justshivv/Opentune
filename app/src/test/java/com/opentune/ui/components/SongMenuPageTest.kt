@@ -10,6 +10,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -17,7 +20,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import com.opentune.data.model.Song
-import androidx.compose.material.icons.rounded.BugReport
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -41,7 +43,7 @@ class SongMenuPageTest {
             MaterialTheme(darkColorScheme()) {
                 Box(Modifier.fillMaxSize().background(Color(0xFF203040)))
                 if (open) SongMenuSheet(song, onDismiss = { open = false }, asPage = true, end = { close ->
-                    MenuRow(androidx.compose.material.icons.Icons.Rounded.BugReport, "Copy log") { close() }
+                    MenuRow(ImageVector.vectorResource(AppIcons.BugReport), "Copy log") { close() }
                 })
             }
         }

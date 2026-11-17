@@ -31,20 +31,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.CameraAlt
-import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.Laptop
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.QrCode2
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Speaker
-import androidx.compose.material.icons.rounded.Tv
-import androidx.compose.material.icons.rounded.Watch
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -74,14 +60,16 @@ import com.opentune.ui.components.PageHeader
 import com.opentune.ui.components.SheetButton
 import com.opentune.ui.components.SheetTone
 import com.opentune.ui.components.rememberHaptics
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** The other screens OpenTune can reach from this one. */
-internal enum class LinkTarget(val label: String, val icon: ImageVector) {
-    TV("TV", Icons.Rounded.Tv),
-    COMPUTER("Computer", Icons.Rounded.Laptop),
-    SPEAKER("Speaker", Icons.Rounded.Speaker),
-    FRIEND("Friend", Icons.Rounded.Groups),
-    WATCH("Watch", Icons.Rounded.Watch),
+internal enum class LinkTarget(val label: String, val iconRes: Int) {
+    TV("TV", AppIcons.Tv),
+    COMPUTER("Computer", AppIcons.Laptop),
+    SPEAKER("Speaker", AppIcons.Speaker),
+    FRIEND("Friend", AppIcons.Groups),
+    WATCH("Watch", AppIcons.Watch),
 }
 
 /**
@@ -168,12 +156,12 @@ fun LinkDeviceScreen(
                                         .padding(horizontal = 10.dp, vertical = 6.dp),
                                 )
                                 Buttons(
-                                    { SheetButton("Share", onClick = { share(WEB_PLAYER) }, icon = Icons.Rounded.Share, tone = SheetTone.Primary) },
-                                    { SheetButton("Open here", onClick = { open(WEB_PLAYER) }, icon = Icons.AutoMirrored.Rounded.OpenInNew) },
+                                    { SheetButton("Share", onClick = { share(WEB_PLAYER) }, icon = ImageVector.vectorResource(AppIcons.Share), tone = SheetTone.Primary) },
+                                    { SheetButton("Open here", onClick = { open(WEB_PLAYER) }, icon = ImageVector.vectorResource(AppIcons.OpenInNew)) },
                                 )
                             }
                             Step(2, "Add the companion extension", "It lets the page reach YouTube Music from your own browser. Choose Get the Extension in the web player.", last = true)
-                            Note(Icons.Rounded.Lock, "A preview. What you save there stays in that browser; it doesn't sync with this phone.")
+                            Note(ImageVector.vectorResource(AppIcons.Lock), "A preview. What you save there stays in that browser; it doesn't sync with this phone.")
                         }
                         LinkTarget.SPEAKER -> DeviceCard(
                             "On a speaker or smart TV",
@@ -181,7 +169,7 @@ fun LinkDeviceScreen(
                         ) {
                             Step(1, "Join the same Wi-Fi", "The speaker or TV and this phone need to be on the same network.")
                             Step(2, "Pick it from the list", "OpenTune looks for devices nearby. The phone stays the remote.", last = true) {
-                                Buttons({ SheetButton("Find devices", onClick = { casting = true }, icon = Icons.Rounded.Cast, tone = SheetTone.Primary) })
+                                Buttons({ SheetButton("Find devices", onClick = { casting = true }, icon = ImageVector.vectorResource(AppIcons.Cast), tone = SheetTone.Primary) })
                             }
                         }
                         LinkTarget.FRIEND -> DeviceCard(
@@ -190,7 +178,7 @@ fun LinkDeviceScreen(
                         ) {
                             Step(1, "Start a room", "You get a code and a link to send.")
                             Step(2, "Your friend joins", "They open the link, or type the code in OpenTune.", last = true) {
-                                Buttons({ SheetButton("Listen together", onClick = onTogether, icon = Icons.Rounded.Groups, tone = SheetTone.Primary) })
+                                Buttons({ SheetButton("Listen together", onClick = onTogether, icon = ImageVector.vectorResource(AppIcons.Groups), tone = SheetTone.Primary) })
                             }
                         }
                         LinkTarget.WATCH -> DeviceCard(
@@ -198,7 +186,7 @@ fun LinkDeviceScreen(
                             "A separate Wear OS app plays on the watch itself, over its Wi-Fi or LTE and Bluetooth headphones, with no phone needed.",
                         ) {
                             Step(1, "Build the watch app", "It isn't in the releases yet. It's the wear folder in the source code.", last = true) {
-                                Buttons({ SheetButton("Source code", onClick = { open(SOURCE) }, icon = Icons.Rounded.Code) })
+                                Buttons({ SheetButton("Source code", onClick = { open(SOURCE) }, icon = ImageVector.vectorResource(AppIcons.Code)) })
                             }
                         }
                     }
@@ -220,19 +208,19 @@ private fun TvSteps(
     onRemote: () -> Unit,
 ) {
     DeviceCard("Remote control", "Use this phone as a trackpad and remote for OpenTune on the TV: a cursor you steer with a finger, or a pad of buttons.", compact = true) {
-        Buttons({ SheetButton("Control the TV", onClick = onRemote, icon = Icons.Rounded.Tv, tone = SheetTone.Primary) })
+        Buttons({ SheetButton("Control the TV", onClick = onRemote, icon = ImageVector.vectorResource(AppIcons.Tv), tone = SheetTone.Primary) })
     }
     DeviceCard("Android TV", "Sign the TV in with this phone's YouTube Music account. No typing with the remote.") {
         Step(1, "Install OpenTune for TV", "A separate app made for the remote. Get OpenTune-TV from the latest release.") {
             Buttons(
-                { SheetButton("Get the app", onClick = { open(RELEASES) }, icon = Icons.Rounded.Download) },
-                { SheetButton("Share", onClick = { share(RELEASES) }, icon = Icons.Rounded.Share) },
+                { SheetButton("Get the app", onClick = { open(RELEASES) }, icon = ImageVector.vectorResource(AppIcons.Download)) },
+                { SheetButton("Share", onClick = { share(RELEASES) }, icon = ImageVector.vectorResource(AppIcons.Share)) },
             )
         }
         Step(2, "Show the code on the TV", "On the TV, open Settings, then Account, and choose Sign in.")
         Step(3, "Scan it with this phone", "Scan it right here in OpenTune, or with the phone's own camera app, then approve on this phone.", last = true) {
             if (signedIn) {
-                Buttons({ SheetButton("Open the camera", onClick = camera, icon = Icons.Rounded.CameraAlt, tone = SheetTone.Primary) })
+                Buttons({ SheetButton("Open the camera", onClick = camera, icon = ImageVector.vectorResource(AppIcons.CameraAlt), tone = SheetTone.Primary) })
             } else {
                 Text(
                     "Sign in to YouTube Music on this phone first.",
@@ -242,8 +230,8 @@ private fun TvSteps(
                 Buttons({ SheetButton("Sign in", onClick = onSignIn, tone = SheetTone.Primary) })
             }
         }
-        Buttons({ SheetButton("TV information", onClick = { open(com.opentune.data.config.RemoteConfig.current.tv) }, icon = Icons.AutoMirrored.Rounded.OpenInNew) })
-        Note(Icons.Rounded.Lock, "Both on the same Wi-Fi. The code lasts two minutes, and the session goes straight to the TV, encrypted. Each keeps its own library.")
+        Buttons({ SheetButton("TV information", onClick = { open(com.opentune.data.config.RemoteConfig.current.tv) }, icon = ImageVector.vectorResource(AppIcons.OpenInNew)) })
+        Note(ImageVector.vectorResource(AppIcons.Lock), "Both on the same Wi-Fi. The code lasts two minutes, and the session goes straight to the TV, encrypted. Each keeps its own library.")
     }
 }
 
@@ -279,7 +267,7 @@ private fun DeviceTile(target: LinkTarget, selected: Boolean, modifier: Modifier
             .padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(target.icon, null, Modifier.size(26.dp), tint = ink)
+        Icon(ImageVector.vectorResource(target.iconRes), null, Modifier.size(26.dp), tint = ink)
         Spacer(Modifier.height(6.dp))
         Text(target.label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1, textAlign = TextAlign.Center)
     }

@@ -29,8 +29,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.opentune.data.account.AccountStore
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 private const val MUSIC = "https://music.youtube.com"
 private const val DESTROY_AFTER_MS = 1_500L
@@ -79,7 +80,7 @@ fun LoginScreen(onDone: () -> Unit) {
     SignInPage(
         service = "YouTube Music",
         brand = YouTubeMusicRed,
-        icon = Icons.Rounded.PlayCircle,
+        icon = ImageVector.vectorResource(AppIcons.PlayCircle),
         logo = com.opentune.R.drawable.ic_youtube_music,
         url = pageAddress,
         pageColor = pageColor,

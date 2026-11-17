@@ -16,8 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material3.Button
 import androidx.compose.material3.TextButton
 import com.opentune.ui.theme.Icon
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Android
 import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.components.ReleaseHero
 import com.opentune.ui.components.ReleaseNotes
@@ -47,6 +45,9 @@ import com.opentune.ui.components.SheetButton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Downloading a release's APK and handing it to Android's installer, with the
@@ -146,7 +147,7 @@ fun UpdateDialog(found: UpdateCheck.Release, onDismiss: () -> Unit, onNotNow: (U
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Ready for your phone", style = MaterialTheme.typography.titleMedium)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Icon(Icons.Rounded.Android, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(ImageVector.vectorResource(AppIcons.Android), null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(apk.name, style = MaterialTheme.typography.bodyMedium)
                             Text(if (apk.bytes > 0) com.opentune.i18n.Tr.f("Android app · {0}", Formatter.formatShortFileSize(context, apk.bytes)) else "Android app",

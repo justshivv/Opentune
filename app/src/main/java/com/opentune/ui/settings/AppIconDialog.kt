@@ -13,8 +13,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
 import com.opentune.ui.theme.Icon
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -36,6 +34,9 @@ import com.opentune.R
 import com.opentune.ui.components.FloatingCard
 import com.opentune.ui.components.SheetButton
 import com.opentune.ui.components.SheetTone
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 internal enum class AppIcon(val title: String, val resource: Int) {
     // The names are the launcher aliases in the manifest: kept as they are so a choice made
@@ -105,7 +106,7 @@ internal fun AppIconDialog(onDismiss: () -> Unit) {
                                     Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 6.dp).size(24.dp).clip(CircleShape)
                                         .background(MaterialTheme.colorScheme.primary),
                                     contentAlignment = Alignment.Center,
-                                ) { Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onPrimary) }
+                                ) { Icon(ImageVector.vectorResource(AppIcons.Check), null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onPrimary) }
                             }
                             Text(
                                 icon.title, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelLarge,

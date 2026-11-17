@@ -38,14 +38,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.NorthWest
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import com.opentune.ui.theme.Icon
@@ -84,7 +76,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.opentune.data.model.Song
 import com.opentune.data.model.UiState
 import com.opentune.data.model.artworkAt
@@ -94,6 +85,9 @@ import com.opentune.ui.components.ErrorState
 import com.opentune.ui.components.MessageState
 import com.opentune.ui.components.SongListItem
 import com.opentune.ui.components.SongRowPlaceholder
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Asks the search page to put the cursor in its bar: the search button tapped while it's open. */
 object SearchFocus {
@@ -198,9 +192,9 @@ fun SearchScreen(
             },
             trailingIcon = {
                 if (query.isNotEmpty()) {
-                    IconButton(onClick = { vm.onQueryChange("") }) { Icon(Icons.Filled.Close, "Clear") }
+                    IconButton(onClick = { vm.onQueryChange("") }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Clear") }
                 } else if (onRecognize != null) {
-                    IconButton(onClick = onRecognize) { Icon(Icons.Filled.GraphicEq, "Name a song playing nearby") }
+                    IconButton(onClick = onRecognize) { Icon(ImageVector.vectorResource(AppIcons.GraphicEq), "Name a song playing nearby") }
                 }
             },
             colors = TextFieldDefaults.colors(
@@ -266,7 +260,7 @@ fun SearchScreen(
 internal fun SearchLeadingIcon(back: Boolean, onBack: () -> Unit, onSearch: () -> Unit) {
     IconButton(onClick = if (back) onBack else onSearch, modifier = Modifier.size(48.dp)) {
         androidx.compose.animation.Crossfade(back, modifier = Modifier.size(24.dp), animationSpec = tween(160), label = "searchLead") { showBack ->
-            Icon(if (showBack) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.Search,
+            Icon(if (showBack) ImageVector.vectorResource(AppIcons.ArrowBack) else ImageVector.vectorResource(AppIcons.Search),
                 if (showBack) "Back to Explore" else "Search", modifier = Modifier.fillMaxSize())
         }
     }
@@ -293,7 +287,7 @@ private fun Typing(
             if (recent.isEmpty()) {
                 item {
                     MessageState(
-                        Icons.Filled.Search,
+                        ImageVector.vectorResource(AppIcons.Search),
                         "Find something to play",
                         message = "Search for a song, artist, album or playlist.",
                         modifier = Modifier.padding(top = 48.dp),
@@ -307,8 +301,8 @@ private fun Typing(
                     }
                 }
                 items(recent) { q ->
-                    QueryRow(q, Icons.Filled.History, onClick = { onPick(q) }) {
-                        IconButton(onClick = { AppSettings.removeRecentSearch(q) }) { Icon(Icons.Filled.Close, "Remove") }
+                    QueryRow(q, ImageVector.vectorResource(AppIcons.History), onClick = { onPick(q) }) {
+                        IconButton(onClick = { AppSettings.removeRecentSearch(q) }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Remove") }
                     }
                 }
             }
@@ -316,9 +310,9 @@ private fun Typing(
             // A few ways to finish the words, then what they already find.
             val shownSuggestions = if (live.isEmpty()) suggestions else suggestions.take(LIVE_SUGGESTIONS)
             items(shownSuggestions, key = { "s:$it" }) { s ->
-                QueryRow(s, Icons.Filled.Search, onClick = { onPick(s) }) {
+                QueryRow(s, ImageVector.vectorResource(AppIcons.Search), onClick = { onPick(s) }) {
                     IconButton(onClick = { onFill(s) }) {
-                        Icon(Icons.Filled.NorthWest, "Use this", modifier = Modifier.size(20.dp))
+                        Icon(ImageVector.vectorResource(AppIcons.NorthWest), "Use this", modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -395,7 +389,7 @@ private fun Results(
             ErrorState(state.message, onRetry)
         }
         is UiState.Success -> if (state.data.isEmpty()) {
-            MessageState(Icons.Filled.SearchOff, "No results", Modifier.padding(top = 48.dp), message = "Try different words or another filter.")
+            MessageState(ImageVector.vectorResource(AppIcons.SearchOff), "No results", Modifier.padding(top = 48.dp), message = "Try different words or another filter.")
         } else {
             // The mixed page comes back as one list; show it in sections the way
             // YouTube Music does: songs, then artists, albums, playlists.
@@ -474,7 +468,7 @@ private fun TopResult(song: Song, onPlay: () -> Unit, isCurrent: Boolean = false
                 )
                 com.opentune.ui.components.SubtitleLine(song.artist, explicit = song.isExplicit == true, color = MaterialTheme.colorScheme.onSecondaryContainer)
             }
-            FilledIconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.PlayArrow, "Play") }
+            FilledIconButton(onClick = onPlay, modifier = Modifier.size(48.dp)) { Icon(ImageVector.vectorResource(AppIcons.PlayArrow), "Play") }
         }
     }
 }
@@ -666,8 +660,8 @@ private fun AddonResults(
                     }
                 }
                 items(recent, key = { "ar:$it" }) { q ->
-                    QueryRow(q, Icons.Filled.History, onClick = { onPick(q) }) {
-                        IconButton(onClick = { AppSettings.removeRecentAddonSearch(q) }) { Icon(Icons.Filled.Close, "Remove") }
+                    QueryRow(q, ImageVector.vectorResource(AppIcons.History), onClick = { onPick(q) }) {
+                        IconButton(onClick = { AppSettings.removeRecentAddonSearch(q) }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Remove") }
                     }
                 }
             }
@@ -703,7 +697,7 @@ internal fun AddonRow(hit: AddonHit, onClick: () -> Unit) {
         Column(Modifier.weight(1f).padding(start = 14.dp)) {
             Text(t.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.GraphicEq, null, Modifier.size(14.dp), tint = colors.onSurfaceVariant)
+                Icon(ImageVector.vectorResource(AppIcons.GraphicEq), null, Modifier.size(14.dp), tint = colors.onSurfaceVariant)
                 Text(
                     listOf(quality, t.artist.ifBlank { hit.manifest.name }).joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,

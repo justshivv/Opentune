@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +28,9 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.ui.components.FloatingDialog
 import com.opentune.ui.components.SheetButton
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Searches AutoEq's measured headphones and applies the chosen model's
@@ -60,7 +61,7 @@ fun HeadphonePickerDialog(onDismiss: () -> Unit) {
                 OutlinedTextField(
                     query, { query = it },
                     placeholder = { Text("e.g. HD 650, Galaxy Buds") },
-                    leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Search), null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )

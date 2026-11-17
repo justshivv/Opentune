@@ -41,8 +41,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -76,6 +74,8 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** The content layer that floating glass blurs, provided by the app shell. */
 val LocalHazeState = staticCompositionLocalOf<HazeState?> { null }
@@ -452,7 +452,7 @@ fun GlassIconButton(
 
 @Composable
 fun GlassBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick, modifier)
+    GlassIconButton(ImageVector.vectorResource(AppIcons.ArrowBack), "Back", onClick, modifier)
 }
 
 /** A page's top: optional glass back button and a large title. Draws under the status bar inset. */

@@ -10,10 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.FilterChip
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +29,9 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Ways to back the project: a star on GitHub, or money over UPI. */
 object Support {
@@ -114,7 +113,7 @@ fun SupportDialog(onDismiss: () -> Unit) {
     val rupees = text.toDoubleOrNull()?.takeIf { it >= 1 && it <= 100_000 }
     FloatingDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Rounded.Favorite, null) },
+        icon = { Icon(ImageVector.vectorResource(AppIcons.Favorite), null) },
         title = { Text("Support OpenTune") },
         text = {
             Column {
@@ -163,7 +162,7 @@ fun InviteCard(invite: Support.Invite, onDismiss: () -> Unit) {
     val discord = invite == Support.Invite.DISCORD
     FloatingDialog(
         onDismissRequest = onDismiss,
-        icon = { if (discord) Icon(com.opentune.ui.settings.discordLogo, null) else Icon(Icons.Rounded.Star, null) },
+        icon = { if (discord) Icon(com.opentune.ui.settings.discordLogo, null) else Icon(ImageVector.vectorResource(AppIcons.Star), null) },
         title = { Text(if (discord) "Come say hi on Discord" else "Made for music. Built together.") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -178,7 +177,7 @@ fun InviteCard(invite: Support.Invite, onDismiss: () -> Unit) {
                         containerColor = com.opentune.ui.settings.DISCORD_BLURPLE, contentColor = androidx.compose.ui.graphics.Color.White,
                     ) else androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(),
                 ) {
-                    Icon(if (discord) com.opentune.ui.settings.discordLogo else Icons.Rounded.Star, null, Modifier.size(18.dp))
+                    Icon(if (discord) com.opentune.ui.settings.discordLogo else ImageVector.vectorResource(AppIcons.Star), null, Modifier.size(18.dp))
                     Text(if (discord) "Join the Discord" else "Star on GitHub", Modifier.padding(start = 8.dp))
                 }
                 androidx.compose.material3.TextButton(onClick = { Support.answered(context, invite, never = true); onDismiss() }) {

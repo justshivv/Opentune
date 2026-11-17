@@ -449,6 +449,8 @@ data class InterfaceSettings(
     val openingAnimation: Boolean = true,
     /** Solid fills instead of frosted glass. */
     val reduceBlur: Boolean = false,
+    /** How every sheet is filled: frosted blur, or the app's own theme. */
+    val sheetStyle: SheetStyle = SheetStyle.BLUR,
     val fullScreenCover: Boolean = false,
     /** Playlist and album pages open with their cover filling the top of the page, edge to edge. */
     val fullScreenListCover: Boolean = false,
@@ -631,6 +633,13 @@ enum class PlayerMotion(val label: String, val summary: String) {
     BOUNCY("Bouncy", "Overshoots the top a little and bounces into place"),
     SNAPPY("Snappy", "Up and down in a blink"),
     ECHO("Echo", "A soft spring that settles without bouncing"),
+}
+
+/** What fills every sheet in the app: a frosted blur of what's behind it, or the app's own theme. */
+@Serializable
+enum class SheetStyle(val label: String, val summary: String) {
+    BLUR("Blur", "A frosted blur of the page behind the sheet"),
+    THEME("Dynamic theme", "The app's own theme, changing with the page the sheet opens over"),
 }
 
 /** The glass the floating parts of the app are made of. */

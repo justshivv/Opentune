@@ -52,27 +52,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Logout
-import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
-import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material.icons.automirrored.rounded.VolumeOff
-import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.Call
-import androidx.compose.material.icons.rounded.CallEnd
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.HowToReg
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.Mic
-import androidx.compose.material.icons.rounded.MicOff
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.PersonAdd
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.SportsEsports
-import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -145,6 +124,9 @@ import com.opentune.ui.components.glass
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Listen together: start a room or join one by code, then see who's in,
@@ -343,7 +325,7 @@ private fun Hero() {
         Box(
             Modifier.size(76.dp).background(scheme.primaryContainer, CircleShape),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.Groups, null, Modifier.size(40.dp), tint = scheme.onPrimaryContainer) }
+        ) { Icon(ImageVector.vectorResource(AppIcons.Groups), null, Modifier.size(40.dp), tint = scheme.onPrimaryContainer) }
     }
 }
 
@@ -383,7 +365,7 @@ private fun NameField(name: String, onChange: (String) -> Unit, enabled: Boolean
             .semantics { contentDescription = "Your name" },
         decorationBox = { field ->
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Person, null, Modifier.size(22.dp), tint = if (focused) scheme.primary else scheme.onSurfaceVariant)
+                Icon(ImageVector.vectorResource(AppIcons.Person), null, Modifier.size(22.dp), tint = if (focused) scheme.primary else scheme.onSurfaceVariant)
                 Spacer(Modifier.width(12.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (name.isEmpty()) Text("How friends will see you", style = MaterialTheme.typography.titleMedium, color = scheme.onSurfaceVariant.copy(alpha = 0.7f))
@@ -422,7 +404,7 @@ private fun StartButton(opening: Boolean, enabled: Boolean, onClick: () -> Unit)
             ) { busy ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = scheme.onPrimary, strokeWidth = 2.dp)
-                    else Icon(Icons.Rounded.Groups, null, Modifier.size(22.dp), tint = scheme.onPrimary)
+                    else Icon(ImageVector.vectorResource(AppIcons.Groups), null, Modifier.size(22.dp), tint = scheme.onPrimary)
                     Spacer(Modifier.width(10.dp))
                     Text(
                         if (busy) "Opening the room…" else "Start a room",
@@ -447,7 +429,7 @@ private fun PrivacyNote() {
             .padding(16.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Icon(Icons.Rounded.Lock, null, Modifier.size(20.dp), tint = scheme.onSurfaceVariant)
+        Icon(ImageVector.vectorResource(AppIcons.Lock), null, Modifier.size(20.dp), tint = scheme.onSurfaceVariant)
         Spacer(Modifier.width(12.dp))
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("How rooms work", style = MaterialTheme.typography.titleSmall)
@@ -696,7 +678,7 @@ private fun RoomIsland(
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                         Icon(
-                            Icons.Rounded.KeyboardArrowUp, null,
+                            ImageVector.vectorResource(AppIcons.KeyboardArrowUp), null,
                             Modifier.size(18.dp).graphicsLayer { rotationZ = 180f * turn },
                             tint = scheme.onSurfaceVariant,
                         )
@@ -814,13 +796,13 @@ private fun TalkButtons(inCall: Boolean) {
                 colors = if (callMuted) IconButtonDefaults.filledTonalIconButtonColors(containerColor = scheme.errorContainer, contentColor = scheme.onErrorContainer)
                     else IconButtonDefaults.filledTonalIconButtonColors(containerColor = scheme.surfaceContainerHighest),
             ) {
-                Icon(if (callMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (callMuted) "Unmute" else "Mute")
+                Icon(if (callMuted) ImageVector.vectorResource(AppIcons.MicOff) else ImageVector.vectorResource(AppIcons.Mic), if (callMuted) "Unmute" else "Mute")
             }
             FilledIconButton(
                 onClick = { haptics.tick(); Together.endCall() },
                 modifier = Modifier.size(ISLAND_ROW),
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = scheme.error, contentColor = scheme.onError),
-            ) { Icon(Icons.Rounded.CallEnd, "Leave the call") }
+            ) { Icon(ImageVector.vectorResource(AppIcons.CallEnd), "Leave the call") }
         } else {
             FilledTonalIconButton(
                 onClick = {
@@ -831,14 +813,14 @@ private fun TalkButtons(inCall: Boolean) {
                 },
                 modifier = Modifier.size(ISLAND_ROW),
                 colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = scheme.surfaceContainerHighest),
-            ) { Icon(Icons.Rounded.Call, "Join the call") }
+            ) { Icon(ImageVector.vectorResource(AppIcons.Call), "Join the call") }
             val talking = recording == true
             val fill by animateColorAsState(if (talking) scheme.error else scheme.primary, label = "talk")
             HoldToRecord(
                 live = true,
                 Modifier.size(ISLAND_ROW).background(fill, CircleShape).semantics { contentDescription = "Hold to talk" },
             ) { held ->
-                Icon(Icons.Rounded.Mic, null, Modifier.size(24.dp), tint = if (held) scheme.onError else scheme.onPrimary)
+                Icon(ImageVector.vectorResource(AppIcons.Mic), null, Modifier.size(24.dp), tint = if (held) scheme.onError else scheme.onPrimary)
             }
         }
     }
@@ -859,7 +841,7 @@ private fun HearTalk(inCall: Boolean) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val ink = if (muted) scheme.onSurfaceVariant else scheme.onSecondaryContainer
-            Icon(if (muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp, null, Modifier.size(18.dp), tint = ink)
+            Icon(if (muted) ImageVector.vectorResource(AppIcons.VolumeOff) else ImageVector.vectorResource(AppIcons.VolumeUp), null, Modifier.size(18.dp), tint = ink)
             Spacer(Modifier.width(6.dp))
             Text("Hear talk", style = MaterialTheme.typography.labelLarge, color = ink)
         }
@@ -899,14 +881,14 @@ private fun MessageBox(message: String, onChange: (String) -> Unit, onSend: () -
             },
         )
         if (message.isNotBlank()) {
-            FilledIconButton(onClick = onSend, Modifier.size(ISLAND_ROW)) { Icon(Icons.AutoMirrored.Rounded.Send, "Send") }
+            FilledIconButton(onClick = onSend, Modifier.size(ISLAND_ROW)) { Icon(ImageVector.vectorResource(AppIcons.Send), "Send") }
         } else if (voiceNotes) {
             val note = recording == false
             HoldToRecord(
                 live = false,
                 Modifier.size(ISLAND_ROW).background(if (note) scheme.error else scheme.surfaceContainerHighest, CircleShape),
             ) { held ->
-                Icon(Icons.Rounded.GraphicEq,"Hold to record a voice note", Modifier.size(24.dp), tint = if (held) scheme.onError else scheme.onSurfaceVariant)
+                Icon(ImageVector.vectorResource(AppIcons.GraphicEq),"Hold to record a voice note", Modifier.size(24.dp), tint = if (held) scheme.onError else scheme.onSurfaceVariant)
             }
         }
     }
@@ -928,10 +910,10 @@ private fun CodeCard(r: Together.Room, onInvite: () -> Unit, onCopy: () -> Unit)
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = onInvite, Modifier.weight(1f).height(48.dp)) {
-                    Icon(Icons.Rounded.PersonAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Invite")
+                    Icon(ImageVector.vectorResource(AppIcons.PersonAdd), null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Invite")
                 }
                 FilledTonalButton(onClick = onCopy, Modifier.weight(1f).height(48.dp)) {
-                    Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Copy code")
+                    Icon(ImageVector.vectorResource(AppIcons.ContentCopy), null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Copy code")
                 }
             }
         }
@@ -953,7 +935,7 @@ private fun CodeCard(r: Together.Room, onInvite: () -> Unit, onCopy: () -> Unit)
             onClick = { if (r.hosting && r.phase != Together.Phase.Ended) confirmEnd = true else Together.leave() },
             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
         ) {
-            Icon(Icons.AutoMirrored.Rounded.Logout, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+            Icon(ImageVector.vectorResource(AppIcons.Logout), null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
             Text(
                 when {
                     r.phase == Together.Phase.Ended -> "Close"
@@ -1065,13 +1047,13 @@ private fun RoomSettings(r: Together.Room) {
             ToggleRow(
                 "Everyone can control playback", r.open, { Together.setOpen(it) },
                 summary = if (r.open) "Guests can play, pause, seek and skip" else "Guests can add songs; only you play, pause and skip",
-                icon = Icons.Rounded.SportsEsports,
+                icon = ImageVector.vectorResource(AppIcons.SportsEsports),
             )
             RowDivider()
             ToggleRow(
                 "Ask before letting people in", r.askToJoin, { Together.setAskToJoin(it) },
                 summary = if (r.askToJoin) "People with the code wait until you let them in" else "Anyone with the code comes straight in",
-                icon = Icons.Rounded.HowToReg,
+                icon = ImageVector.vectorResource(AppIcons.HowToReg),
             )
         } else {
             val playNow by Together.picksPlayNow.collectAsState()
@@ -1082,7 +1064,7 @@ private fun RoomSettings(r: Together.Room) {
                     r.open -> "On: a song you pick starts for everyone"
                     else -> com.opentune.i18n.Tr.f("On, once {0} lets guests control playback. Until then songs go into the queue", r.hostName ?: com.opentune.i18n.Tr.t("the host"))
                 },
-                icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+                icon = ImageVector.vectorResource(AppIcons.PlaylistPlay),
             )
         }
     }
@@ -1263,7 +1245,7 @@ private fun VoiceBubble(clip: Together.VoiceClip) {
     val isPlaying = playing == clip.id
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { Together.playClip(clip) }, enabled = clip.cfg != null && clip.frames.isNotEmpty()) {
-            Icon(if (isPlaying) Icons.Rounded.Stop else Icons.Rounded.PlayArrow, if (isPlaying) "Stop" else "Play")
+            Icon(if (isPlaying) ImageVector.vectorResource(AppIcons.Stop) else ImageVector.vectorResource(AppIcons.PlayArrow), if (isPlaying) "Stop" else "Play")
         }
         Column {
             Text(

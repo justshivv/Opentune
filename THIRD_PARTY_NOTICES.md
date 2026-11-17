@@ -87,3 +87,9 @@ is BitChord's `TrackMatcher.kt` from commit
 add-on search rows are the song being played, and what to search for. No
 proprietary SF Pro font files are bundled in
 the browser preview; it uses DM Sans and system fallbacks.
+
+## Material Symbols icons
+
+The settings icons are Google's [Material Symbols](https://fonts.google.com/icons)
+in the Rounded style, licensed under the Apache License 2.0. In the app they
+are the `symbol_*` vector drawables, listed in `ui/theme/AppIcons.kt`.

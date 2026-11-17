@@ -7,9 +7,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CloudDone
-import androidx.compose.material.icons.rounded.CloudOff
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -33,6 +30,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Offset of the app page inside the window while a connectivity notice has reserved space. */
 internal val LocalPageTopOffset = staticCompositionLocalOf { 0f }
@@ -102,7 +102,7 @@ internal fun ConnectionNoticeLayout(
                 Row(Modifier.fillMaxWidth().background(face).semantics { liveRegion = LiveRegionMode.Polite }
                     .padding(horizontal = 24.dp, vertical = 18.dp),
                     horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (online) Icons.Rounded.CloudDone else Icons.Rounded.CloudOff, null, Modifier.size(28.dp), tint = ink)
+                    Icon(if (online) ImageVector.vectorResource(AppIcons.CloudDone) else ImageVector.vectorResource(AppIcons.CloudOff), null, Modifier.size(28.dp), tint = ink)
                     Spacer(Modifier.width(14.dp))
                     Text(if (online) "You're back online." else "You're offline. Check your internet connection.",
                         style = MaterialTheme.typography.titleSmall, color = ink)

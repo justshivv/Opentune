@@ -5,15 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.LibraryMusic
-import androidx.compose.material.icons.outlined.Podcasts
-import androidx.compose.material.icons.rounded.Explore
-import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.Podcasts
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.Modifier
@@ -44,11 +39,12 @@ import org.robolectric.annotation.GraphicsMode
 class DockScreenshotTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
-    private val tabs = listOf(
-        ChromeTab("Home", Icons.Outlined.Home, Icons.Rounded.Home),
-        ChromeTab("Explore", Icons.Outlined.Explore, Icons.Rounded.Explore),
-        ChromeTab("Podcasts", Icons.Outlined.Podcasts, Icons.Rounded.Podcasts),
-        ChromeTab("Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
+    @Composable
+    private fun tabs() = listOf(
+        ChromeTab("Home", ImageVector.vectorResource(AppIcons.HomeOutline), ImageVector.vectorResource(AppIcons.Home)),
+        ChromeTab("Explore", ImageVector.vectorResource(AppIcons.ExploreOutline), ImageVector.vectorResource(AppIcons.Explore)),
+        ChromeTab("Podcasts", ImageVector.vectorResource(AppIcons.Podcasts), ImageVector.vectorResource(AppIcons.Podcasts)),
+        ChromeTab("Library", ImageVector.vectorResource(AppIcons.LibraryMusicOutline), ImageVector.vectorResource(AppIcons.LibraryMusic)),
     )
 
     @Test fun dock() {
@@ -57,7 +53,7 @@ class DockScreenshotTest {
                 Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF3A2A4A), Color(0xFF101014)))).padding(vertical = 24.dp)) {
                     BottomChrome(
                         inline = false,
-                        tabs = tabs,
+                        tabs = tabs(),
                         selected = 1,
                         onSelect = {},
                         onExpand = {},
@@ -80,7 +76,7 @@ class DockScreenshotTest {
                 Box(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(Color(0xFFE0457B), Color(0xFF3A7BD5), Color(0xFFF2C14E)))).padding(vertical = 24.dp)) {
                     BottomChrome(
                         inline = false,
-                        tabs = tabs,
+                        tabs = tabs(),
                         selected = 1,
                         onSelect = {},
                         onExpand = {},
@@ -113,7 +109,7 @@ class DockScreenshotTest {
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF3A2A4A), Color(0xFF101014)))).padding(bottom = 24.dp), contentAlignment = Alignment.BottomCenter) {
                     BottomChrome(
                         inline = inline,
-                        tabs = tabs,
+                        tabs = tabs(),
                         selected = 1,
                         onSelect = {},
                         onExpand = {},

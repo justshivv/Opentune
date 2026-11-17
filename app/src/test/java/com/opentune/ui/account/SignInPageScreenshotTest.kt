@@ -3,9 +3,9 @@ package com.opentune.ui.account
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
@@ -42,7 +42,7 @@ class SignInPageScreenshotTest {
                 SignInPage(
                     service = if (spotify) "Spotify" else "YouTube Music",
                     brand = if (spotify) SpotifyGreen else YouTubeMusicRed,
-                    icon = if (spotify) Icons.Rounded.GraphicEq else Icons.Rounded.PlayCircle,
+                    icon = if (spotify) ImageVector.vectorResource(AppIcons.GraphicEq) else ImageVector.vectorResource(AppIcons.PlayCircle),
                     gives = if (spotify) "Your playlists in Library, each song's Canvas, and suggestions made for you" else "Your playlists, liked songs, history and recommendations",
                     loading = true,
                     onBack = {},

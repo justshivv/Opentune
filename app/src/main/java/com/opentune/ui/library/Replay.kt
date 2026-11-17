@@ -28,9 +28,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.IosShare
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
 import com.opentune.ui.theme.Text
@@ -85,6 +82,9 @@ import java.util.Calendar
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Which stretch of listening Replay covers: this calendar week, month or year, or all of it. */
 internal enum class ReplayRange(val label: String, val word: String, val opening: String) {
@@ -338,7 +338,7 @@ internal fun ReplayStory(summary: ReplaySummary, range: ReplayRange, onDismiss: 
                 }
             }
             IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(4.dp)) {
-                Icon(Icons.Rounded.Close, "Close", tint = Color.White)
+                Icon(ImageVector.vectorResource(AppIcons.Close), "Close", tint = Color.White)
             }
             IconButton(
                 onClick = {
@@ -349,7 +349,7 @@ internal fun ReplayStory(summary: ReplaySummary, range: ReplayRange, onDismiss: 
                 },
                 modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp)
                     .size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f)),
-            ) { Icon(Icons.Rounded.IosShare, "Share this page", tint = Color.White) }
+            ) { Icon(ImageVector.vectorResource(AppIcons.IosShare), "Share this page", tint = Color.White) }
         }
     }
 }

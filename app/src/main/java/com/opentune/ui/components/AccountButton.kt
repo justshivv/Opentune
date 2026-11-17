@@ -4,8 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Settings
 import com.opentune.ui.theme.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -14,6 +12,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.opentune.data.account.AccountStore
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * The button at the top of a tab's page that opens Settings: the account's
@@ -41,16 +42,16 @@ fun AccountButton(
             ) {
                 val photo = account?.thumbnailUrl
                 if (photo != null) Artwork(photo, Modifier.size(40.dp), CircleShape)
-                else Icon(Icons.Rounded.Settings, "Settings", Modifier.size(24.dp))
+                else Icon(ImageVector.vectorResource(AppIcons.Settings), "Settings", Modifier.size(24.dp))
             }
         }
         return
     }
     WithUpdateDot {
-        GlassIconButton(Icons.Rounded.Settings, "Settings", onClick) {
+        GlassIconButton(ImageVector.vectorResource(AppIcons.Settings), "Settings", onClick) {
             val photo = account?.thumbnailUrl
             if (photo != null) Artwork(photo, Modifier.size(44.dp), CircleShape)
-            else Icon(Icons.Rounded.Settings, "Settings", Modifier.size(26.dp))
+            else Icon(ImageVector.vectorResource(AppIcons.Settings), "Settings", Modifier.size(26.dp))
         }
     }
 }

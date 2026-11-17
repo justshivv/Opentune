@@ -43,12 +43,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import com.opentune.ui.theme.Icon
@@ -98,6 +92,9 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Finding out what's playing nearby. A round button with the OpenTune mark
@@ -148,7 +145,7 @@ fun RecognizeScreen(contentPadding: PaddingValues, onPlay: (Song) -> Unit, onBac
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item(key = "top") {
             Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+                IconButton(onClick = onBack) { Icon(ImageVector.vectorResource(AppIcons.ArrowBack), "Back") }
                 Text("What's this song?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             }
         }
@@ -189,7 +186,7 @@ fun RecognizeScreen(contentPadding: PaddingValues, onPlay: (Song) -> Unit, onBac
                             )
                             if (stage == Stage.MISSED || stage == Stage.FAILED) {
                                 TextButton(onClick = { listen() }, modifier = Modifier.padding(top = 6.dp)) {
-                                    Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
+                                    Icon(ImageVector.vectorResource(AppIcons.Refresh), null, Modifier.size(18.dp))
                                     Spacer(Modifier.width(6.dp))
                                     Text("Try again")
                                 }
@@ -224,7 +221,7 @@ fun RecognizeScreen(contentPadding: PaddingValues, onPlay: (Song) -> Unit, onBac
                         Text(song.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(song.artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    IconButton(onClick = { Recognizer.forget(song) }) { Icon(Icons.Rounded.Close, "Remove", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    IconButton(onClick = { Recognizer.forget(song) }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Remove", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
         }
@@ -278,12 +275,12 @@ private fun FoundCard(song: Recognized, finding: Boolean, onPlay: () -> Unit, on
     Spacer(Modifier.height(16.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Button(onClick = onPlay, enabled = !finding) {
-            Icon(Icons.Rounded.PlayArrow, null)
+            Icon(ImageVector.vectorResource(AppIcons.PlayArrow), null)
             Spacer(Modifier.width(6.dp))
             Text(if (finding) "Finding it…" else "Play")
         }
         FilledTonalButton(onClick = onAgain) {
-            Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
+            Icon(ImageVector.vectorResource(AppIcons.Refresh), null, Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text("Listen again")
         }
@@ -292,7 +289,7 @@ private fun FoundCard(song: Recognized, finding: Boolean, onPlay: () -> Unit, on
         TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }) {
             Text("Open in Shazam")
             Spacer(Modifier.width(6.dp))
-            Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
+            Icon(ImageVector.vectorResource(AppIcons.OpenInNew), null, Modifier.size(16.dp))
         }
     }
 }

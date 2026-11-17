@@ -60,13 +60,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Lyrics
-import androidx.compose.material.icons.rounded.FormatQuote
-import androidx.compose.material.icons.rounded.Translate
-import androidx.compose.material.icons.rounded.Sync
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AssistChip
@@ -121,6 +114,8 @@ import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.LyricsAlign
 import kotlin.math.abs
 import kotlinx.coroutines.delay
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 @Composable
 fun LyricsView(
@@ -165,7 +160,7 @@ fun LyricsView(
                 }
             }
             is LyricsState.NotFound -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                MessageState(Icons.Rounded.Lyrics, "No lyrics for this one", message = "None of your lyrics sources has this track yet. You can change them in Settings › Lyrics sources.")
+                MessageState(ImageVector.vectorResource(AppIcons.Lyrics), "No lyrics for this one", message = "None of your lyrics sources has this track yet. You can change them in Settings › Lyrics sources.")
             }
             is LyricsState.Found -> when (val lyrics = state.lyrics) {
                 is Lyrics.Synced ->
@@ -199,7 +194,7 @@ fun LyricsView(
                     // One sheet for the words themselves: romanized lines under another
                     // script, and a translation under every line.
                     val lyricsSettings = AppSettings.lyrics.collectAsState().value
-                    LyricActionButton(Icons.Rounded.Translate, "Translate or romanize lyrics", active = lyricsSettings.romanize || lyricsSettings.translateTo.isNotBlank()) {
+                    LyricActionButton(ImageVector.vectorResource(AppIcons.Translate), "Translate or romanize lyrics", active = lyricsSettings.romanize || lyricsSettings.translateTo.isNotBlank()) {
                         haptics.tick()
                         textSheet = true
                     }
@@ -213,7 +208,7 @@ fun LyricsView(
                             }
                         }
                         val lines = remember(timed) { timed.map { it.first } }
-                        LyricActionButton(Icons.Rounded.FormatQuote, "Share lyrics") {
+                        LyricActionButton(ImageVector.vectorResource(AppIcons.FormatQuote), "Share lyrics") {
                             haptics.tick()
                             val now = position()
                             if (found is Lyrics.Synced && synced) {
@@ -275,7 +270,7 @@ internal fun SelectionBar(count: Int, onCancel: () -> Unit, onShare: () -> Unit,
         Box(
             Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f)).clickable(onClick = onCancel),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.Close, com.opentune.ui.theme.tr("Cancel"), tint = Color.White, modifier = Modifier.size(22.dp)) }
+        ) { Icon(ImageVector.vectorResource(AppIcons.Close), com.opentune.ui.theme.tr("Cancel"), tint = Color.White, modifier = Modifier.size(22.dp)) }
         androidx.compose.animation.AnimatedContent(
             targetState = count,
             transitionSpec = {
@@ -304,7 +299,7 @@ internal fun SelectionBar(count: Int, onCancel: () -> Unit, onShare: () -> Unit,
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.IosShare, null, tint = shareInk, modifier = Modifier.size(20.dp))
+            Icon(ImageVector.vectorResource(AppIcons.IosShare), null, tint = shareInk, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
             Text(com.opentune.ui.theme.tr("Share"), color = shareInk, style = MaterialTheme.typography.titleSmall,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
@@ -589,7 +584,7 @@ private fun SyncedLyrics(
             AssistChip(
                 onClick = { following = true },
                 label = { Text("Back to the music") },
-                leadingIcon = { Icon(Icons.Rounded.Sync, null, Modifier.size(18.dp)) },
+                leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Sync), null, Modifier.size(18.dp)) },
                 colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
             )
         }

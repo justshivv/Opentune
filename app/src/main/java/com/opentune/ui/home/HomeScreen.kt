@@ -31,17 +31,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.automirrored.rounded.ViewList
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.GridView
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.LocalFireDepartment
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Headphones
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.foundation.layout.Spacer
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.IconButton
@@ -97,6 +86,9 @@ import com.opentune.ui.rememberLoader
 import com.opentune.ui.toSong
 import com.opentune.ui.type
 import com.opentune.ui.cardMenu
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -388,17 +380,17 @@ fun HomeScreen(
                             }
                         }
                         if (onRecognize != null) {
-                            GlassIconButton(Icons.Rounded.GraphicEq, "Name a song playing nearby", onRecognize, size = 48.dp)
+                            GlassIconButton(ImageVector.vectorResource(AppIcons.GraphicEq), "Name a song playing nearby", onRecognize, size = 48.dp)
                         }
                         com.opentune.ui.components.WithUpdateDot {
                             // The account menu (switch, add, manage, Settings) where the shell provides it.
                             val menu = com.opentune.ui.components.LocalAccountMenu.current
                             var menuOpen by remember { mutableStateOf(false) }
                             if (menuOpen && menu != null) com.opentune.ui.components.AccountMenu(menu, onDismiss = { menuOpen = false })
-                            GlassIconButton(Icons.Rounded.Person, "Account and settings", if (menu != null) ({ menuOpen = true }) else onOpenSettings, size = 48.dp) {
+                            GlassIconButton(ImageVector.vectorResource(AppIcons.Person), "Account and settings", if (menu != null) ({ menuOpen = true }) else onOpenSettings, size = 48.dp) {
                                 val photo = account?.thumbnailUrl
                                 if (photo != null) Artwork(photo, Modifier.size(48.dp), CircleShape)
-                                else Icon(Icons.Rounded.Person, "Account and settings", Modifier.size(24.dp))
+                                else Icon(ImageVector.vectorResource(AppIcons.Person), "Account and settings", Modifier.size(24.dp))
                             }
                         }
                     }
@@ -426,7 +418,7 @@ fun HomeScreen(
             if ("quick-picks" in on) item(key = "quick-picks") {
                 val historyAction: @Composable () -> Unit = {
                     IconButton(onClick = { historyOpen = true }, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.History, "Recently played", Modifier.size(22.dp))
+                        Icon(ImageVector.vectorResource(AppIcons.History), "Recently played", Modifier.size(22.dp))
                     }
                 }
                 val title = runtime.title("quick-picks", "Quick picks")
@@ -459,7 +451,7 @@ fun HomeScreen(
                             songRows = false, covers = covers, coverKey = "featured-playlists", action = {
                                 // Closed until a playlist is added that wasn't there now.
                                 IconButton(onClick = { com.opentune.data.config.HomeDismissals.dismissPlaylists(runtime.playlists.map { it.id }) }, modifier = Modifier.size(48.dp)) {
-                                    Icon(Icons.Rounded.Close, "Dismiss", Modifier.size(22.dp))
+                                    Icon(ImageVector.vectorResource(AppIcons.Close), "Dismiss", Modifier.size(22.dp))
                                 }
                             })
                     }
@@ -496,7 +488,7 @@ private fun Recents(songs: List<Song>, asGrid: Boolean, actions: SongActions, on
         SectionHeader("Recents", action = {
             IconButton(onClick = onToggleLayout) {
                 Icon(
-                    if (asGrid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                    if (asGrid) ImageVector.vectorResource(AppIcons.ViewList) else ImageVector.vectorResource(AppIcons.GridView),
                     if (asGrid) "Show as list" else "Show as grid",
                 )
             }
@@ -757,7 +749,7 @@ internal fun DaylistHero(mix: com.opentune.data.history.DailyMixes.Mix, onPlay: 
                         .padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Rounded.PlayArrow, null, tint = androidx.compose.ui.graphics.Color.Black, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(AppIcons.PlayArrow), null, tint = androidx.compose.ui.graphics.Color.Black, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Play", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                         color = androidx.compose.ui.graphics.Color.Black)
@@ -785,11 +777,11 @@ internal fun StreakPills(badges: List<com.opentune.data.history.Streaks.Badge>) 
         items(badges.size) { i ->
             val (icon, text) = when (val b = badges[i]) {
                 is com.opentune.data.history.Streaks.Badge.DayStreak ->
-                    Icons.Rounded.LocalFireDepartment to com.opentune.i18n.Tr.f("{0}-day streak", b.days)
+                    ImageVector.vectorResource(AppIcons.LocalFireDepartment) to com.opentune.i18n.Tr.f("{0}-day streak", b.days)
                 is com.opentune.data.history.Streaks.Badge.NewArtists ->
-                    Icons.Rounded.AutoAwesome to com.opentune.i18n.Tr.f("{0} new artists this week", b.count)
+                    ImageVector.vectorResource(AppIcons.AutoAwesome) to com.opentune.i18n.Tr.f("{0} new artists this week", b.count)
                 is com.opentune.data.history.Streaks.Badge.ArtistHours ->
-                    Icons.Rounded.Headphones to (if (b.hours == 1) com.opentune.i18n.Tr.f("Your first hour of {0}", b.artist)
+                    ImageVector.vectorResource(AppIcons.Headphones) to (if (b.hours == 1) com.opentune.i18n.Tr.f("Your first hour of {0}", b.artist)
                     else com.opentune.i18n.Tr.f("{0} hours of {1}", b.hours, b.artist))
             }
             Row(

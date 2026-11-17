@@ -1,11 +1,6 @@
 package com.opentune.ui
 
 
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.Podcasts
-import androidx.compose.material.icons.outlined.LibraryMusic
-import androidx.compose.material.icons.rounded.Podcasts
 import com.opentune.ui.server.ServerAlbumScreen
 import com.opentune.ui.server.ServerArtistScreen
 import com.opentune.ui.server.ServerArtistsScreen
@@ -41,11 +36,6 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.toSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Explore
-import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -113,6 +103,8 @@ import com.opentune.ui.settings.EqualizerScreen
 import com.opentune.ui.settings.SettingsScreen
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** A tab tapped again while its root page is showing, for the page to scroll back to its top and refresh. */
 object TabEvents {
@@ -121,11 +113,11 @@ object TabEvents {
     fun reselect(route: String) { _reselected.tryEmit(route) }
 }
 
-private enum class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
-    HOME("home", "Home", Icons.Outlined.Home, Icons.Rounded.Home),
-    EXPLORE("explore", "Explore", Icons.Outlined.Explore, Icons.Rounded.Explore),
-    PODCASTS("podcasts", "Podcasts", Icons.Outlined.Podcasts, Icons.Rounded.Podcasts),
-    LIBRARY("library", "Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
+private enum class Tab(val route: String, val label: String, val iconRes: Int, val selectedIconRes: Int) {
+    HOME("home", "Home", AppIcons.HomeOutline, AppIcons.Home),
+    EXPLORE("explore", "Explore", AppIcons.ExploreOutline, AppIcons.Explore),
+    PODCASTS("podcasts", "Podcasts", AppIcons.Podcasts, AppIcons.Podcasts),
+    LIBRARY("library", "Library", AppIcons.LibraryMusicOutline, AppIcons.LibraryMusic),
 }
 
 private const val SEARCH_ROUTE = "search"
@@ -154,7 +146,7 @@ fun AppRoot(vm: PlayerViewModel) {
     // Explore without a tab of its own lives on the Search page instead.
     val separateExplore = chromeUi.separateExplore
     val dockTabs = remember(separateExplore) { if (separateExplore) Tab.entries.toList() else Tab.entries - Tab.EXPLORE }
-    val chromeTabs = remember(dockTabs) { dockTabs.map { ChromeTab(it.label, it.icon, it.selectedIcon) } }
+    val chromeTabs = dockTabs.map { ChromeTab(it.label, ImageVector.vectorResource(it.iconRes), ImageVector.vectorResource(it.selectedIconRes)) }
     // A page opened from inside the player (the artist, from a tap on their
     // name) folds the player away; back from that page opens the player
     // again, as it was left. Held: the page the player was over, and the page
@@ -194,6 +186,9 @@ fun AppRoot(vm: PlayerViewModel) {
         lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
             com.opentune.data.Usage.active()
             com.opentune.ui.components.Support.usedToday(appContext)
+            // The opening comes first: these checks wait a few seconds, so they
+            // never compete with the first frames and the entry motion.
+            kotlinx.coroutines.delay(3_000)
             while (true) {
                 if (com.opentune.data.settings.AppSettings.ui.value.checkForUpdates && update == null) {
                     update = com.opentune.data.UpdateCheck.checkIfDue(appContext)
@@ -238,6 +233,10 @@ fun AppRoot(vm: PlayerViewModel) {
         )
     }
 
+    // The opening animation, once per launch: the app comes forward out of
+    // the mark as the screen dives into it.
+    var opening by remember { mutableStateOf(!com.opentune.ui.components.Opening.played && chromeUi.openingAnimation && !chromeUi.reduceAnimation) }
+    var dive by remember { androidx.compose.runtime.mutableFloatStateOf(if (opening) 0f else 1f) }
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
@@ -371,8 +370,6 @@ fun AppRoot(vm: PlayerViewModel) {
         importPlaylist = { nav.navigate("import") },
         wrapped = { nav.navigate("wrapped") },
         history = { nav.navigate("history") },
-        allPlaylists = { nav.navigate("playlists") },
-        spotify = { nav.navigate("spotify-playlists") },
         smart = { id -> nav.navigate("smart/${Uri.encode(id)}") },
         newSmart = { nav.navigate("smart-edit") },
     ) }
@@ -538,10 +535,6 @@ fun AppRoot(vm: PlayerViewModel) {
         nav.navigate("mood/${Uri.encode(mood.browseId)}?params=${Uri.encode(mood.params.orEmpty())}&title=${Uri.encode(mood.title)}")
     }
 
-    // The opening animation, once per launch: the app comes forward out of
-    // the mark as the screen dives into it.
-    var opening by remember { mutableStateOf(!com.opentune.ui.components.Opening.played && chromeUi.openingAnimation && !chromeUi.reduceAnimation) }
-    var dive by remember { androidx.compose.runtime.mutableFloatStateOf(if (opening) 0f else 1f) }
     LaunchedEffect(Unit) { com.opentune.ui.components.Opening.played = true }
 
     // Back on the first page while music plays: the app shrinks up into a pill at the
@@ -627,10 +620,12 @@ fun AppRoot(vm: PlayerViewModel) {
                         navController = nav,
                         startDestination = Tab.HOME.route,
                         modifier = Modifier.align(Alignment.TopCenter).then(pageArea).fillMaxSize(),
-                        enterTransition = { PageMotion.enter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                        exitTransition = { PageMotion.exit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                        popEnterTransition = { PageMotion.popEnter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
-                        popExitTransition = { PageMotion.popExit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                        // The first appearance is no navigation: the opening page is simply
+                        // there, as if it had always been — it never flies in.
+                        enterTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.EnterTransition.None else PageMotion.enter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                        exitTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.ExitTransition.None else PageMotion.exit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                        popEnterTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.EnterTransition.None else PageMotion.popEnter(chromeUi.pageTransition, chromeUi.reduceAnimation) },
+                        popExitTransition = { if (initialState.destination.route == targetState.destination.route) androidx.compose.animation.ExitTransition.None else PageMotion.popExit(chromeUi.pageTransition, chromeUi.reduceAnimation) },
                     ) {
                         page(Tab.HOME.route) {
                             HomeScreen(
@@ -732,8 +727,6 @@ fun AppRoot(vm: PlayerViewModel) {
                         page("downloaded/{id}", listOf(navArgument("id") { type = NavType.StringType })) { e ->
                             com.opentune.ui.library.DownloadedListScreen(e.arguments?.getString("id").orEmpty(), content, actions, onBack = { nav.popBackStack() })
                         }
-                        page("playlists") { com.opentune.ui.library.AllPlaylistsScreen(content, libraryNav, onBack = { nav.popBackStack() }) }
-                        page("spotify-playlists") { com.opentune.ui.library.AllPlaylistsScreen(content, libraryNav, onBack = { nav.popBackStack() }, spotify = true) }
                         page("liked") {
                             LikedScreen(content, actions, onBack = { nav.popBackStack() })
                         }
@@ -995,9 +988,9 @@ fun AppRoot(vm: PlayerViewModel) {
                 com.opentune.ui.components.PillHost(chromeUi.reduceAnimation, Modifier.align(Alignment.TopCenter))
             }
         }
-        if (opening) {
-            com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })
-        }
+    }
+    if (opening) {
+        com.opentune.ui.components.OpeningReveal(onDive = { dive = it }, onDone = { opening = false; dive = 1f })
     }
 }
 

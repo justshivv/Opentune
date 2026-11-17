@@ -12,10 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Link
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.Public
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
@@ -27,6 +23,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.opentune.data.model.PlaylistPrivacy
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** What each privacy means, in a few words. */
 val PlaylistPrivacy.meaning: String
@@ -36,11 +34,11 @@ val PlaylistPrivacy.meaning: String
         PlaylistPrivacy.PUBLIC -> "Anyone can find and open it"
     }
 
-val PlaylistPrivacy.icon: ImageVector
+val PlaylistPrivacy.iconRes: Int
     get() = when (this) {
-        PlaylistPrivacy.PRIVATE -> Icons.Rounded.Lock
-        PlaylistPrivacy.UNLISTED -> Icons.Rounded.Link
-        PlaylistPrivacy.PUBLIC -> Icons.Rounded.Public
+        PlaylistPrivacy.PRIVATE -> AppIcons.Lock
+        PlaylistPrivacy.UNLISTED -> AppIcons.Link
+        PlaylistPrivacy.PUBLIC -> AppIcons.Public
     }
 
 /**
@@ -96,7 +94,7 @@ fun PrivacyButton(privacy: PlaylistPrivacy?, onClick: () -> Unit, modifier: Modi
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon((privacy ?: PlaylistPrivacy.PRIVATE).icon, null, Modifier.size(20.dp))
+        Icon(ImageVector.vectorResource((privacy ?: PlaylistPrivacy.PRIVATE).iconRes), null, Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Text(privacy?.label ?: "Privacy", style = MaterialTheme.typography.labelLarge)
     }
@@ -110,7 +108,7 @@ fun PrivacyButton(privacy: PlaylistPrivacy?, onClick: () -> Unit, modifier: Modi
 fun PrivateShareDialog(onMakePublic: () -> Unit, onShareAnyway: () -> Unit, onDismiss: () -> Unit) {
     FloatingDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Rounded.Lock, null) },
+        icon = { Icon(ImageVector.vectorResource(AppIcons.Lock), null) },
         title = { Text("This playlist is private") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

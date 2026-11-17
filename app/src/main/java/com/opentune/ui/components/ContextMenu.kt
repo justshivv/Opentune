@@ -28,32 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
-import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.CheckCircleOutline
-import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.People
-import androidx.compose.material.icons.rounded.BookmarkAdd
-import androidx.compose.material.icons.rounded.BookmarkRemove
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.DeleteSweep
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.PushPin
 import com.opentune.data.model.durationMillis
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Radio
-import androidx.compose.material.icons.rounded.RemoveCircleOutline
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material.icons.rounded.ThumbDownOffAlt
 import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -98,6 +73,8 @@ import com.opentune.data.model.Song
 import com.opentune.data.settings.AppSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * Where a long-pressed item sits on the screen, in px, kept up to date as it
@@ -373,39 +350,39 @@ fun SongContextMenu(
     // Kept audio, separate from a download: the song cache that makes replays instant.
     val cached = remember(song.videoId) { !local && com.opentune.playback.AudioCache.holds(context, song.videoId) }
     val entries = buildList {
-        onSelect?.let { add(MenuEntry("Select", Icons.Rounded.CheckCircleOutline, 0) { it() }) }
-        add(MenuEntry(if (isLiked) "Remove from Liked Music" else "Like", if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, 0) { LibraryStore.setLiked(song, !isLiked) })
-        if (actions != null) add(MenuEntry("Dislike", Icons.Rounded.ThumbDownOffAlt, 0) { actions.dislike(song) })
-        add(MenuEntry("Add to playlist", Icons.AutoMirrored.Rounded.PlaylistAdd, 0) { next = "playlist" })
-        onRemoveFromPlaylist?.let { add(MenuEntry("Remove from this playlist", Icons.Rounded.RemoveCircleOutline, 0) { it() }) }
+        onSelect?.let { add(MenuEntry("Select", ImageVector.vectorResource(AppIcons.CheckCircleOutline), 0) { it() }) }
+        add(MenuEntry(if (isLiked) "Remove from Liked Music" else "Like", if (isLiked) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder), 0) { LibraryStore.setLiked(song, !isLiked) })
+        if (actions != null) add(MenuEntry("Dislike", ImageVector.vectorResource(AppIcons.ThumbDownOffAlt), 0) { actions.dislike(song) })
+        add(MenuEntry("Add to playlist", ImageVector.vectorResource(AppIcons.PlaylistAdd), 0) { next = "playlist" })
+        onRemoveFromPlaylist?.let { add(MenuEntry("Remove from this playlist", ImageVector.vectorResource(AppIcons.RemoveCircleOutline), 0) { it() }) }
         if (!local) add(
             when (download?.state) {
-                DownloadState.DONE -> MenuEntry("Remove download", Icons.Rounded.DeleteOutline) { Downloads.remove(context, song.videoId) }
-                DownloadState.QUEUED, DownloadState.DOWNLOADING -> MenuEntry("Cancel download", Icons.Rounded.DeleteOutline) { Downloads.remove(context, song.videoId) }
-                DownloadState.FAILED -> MenuEntry("Retry download", Icons.Rounded.Download) { Downloads.retry(context, song.videoId) }
-                null -> MenuEntry("Download", Icons.Rounded.Download) { Downloads.enqueue(context, song) }
+                DownloadState.DONE -> MenuEntry("Remove download", ImageVector.vectorResource(AppIcons.DeleteOutline)) { Downloads.remove(context, song.videoId) }
+                DownloadState.QUEUED, DownloadState.DOWNLOADING -> MenuEntry("Cancel download", ImageVector.vectorResource(AppIcons.DeleteOutline)) { Downloads.remove(context, song.videoId) }
+                DownloadState.FAILED -> MenuEntry("Retry download", ImageVector.vectorResource(AppIcons.Download)) { Downloads.retry(context, song.videoId) }
+                null -> MenuEntry("Download", ImageVector.vectorResource(AppIcons.Download)) { Downloads.enqueue(context, song) }
             },
         )
-        if (cached && download?.state != DownloadState.DONE) add(MenuEntry("Remove from cache", Icons.Rounded.DeleteSweep) {
+        if (cached && download?.state != DownloadState.DONE) add(MenuEntry("Remove from cache", ImageVector.vectorResource(AppIcons.DeleteSweep)) {
             com.opentune.playback.AudioCache.remove(context, song.videoId)
         })
         if (actions != null) {
-            if (!local) add(MenuEntry("Start radio", Icons.Rounded.Radio) { actions.startRadio(song) })
-            add(MenuEntry("Play next", Icons.AutoMirrored.Rounded.PlaylistPlay) { actions.playNext(song) })
-            add(MenuEntry("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic) { actions.addToQueue(song) })
-            song.albumId?.let { id -> add(MenuEntry("Open album", Icons.Rounded.Album) { actions.openAlbum(id) }) }
+            if (!local) add(MenuEntry("Start radio", ImageVector.vectorResource(AppIcons.Radio)) { actions.startRadio(song) })
+            add(MenuEntry("Play next", ImageVector.vectorResource(AppIcons.PlaylistPlay)) { actions.playNext(song) })
+            add(MenuEntry("Add to queue", ImageVector.vectorResource(AppIcons.QueueMusic)) { actions.addToQueue(song) })
+            song.albumId?.let { id -> add(MenuEntry("Open album", ImageVector.vectorResource(AppIcons.Album)) { actions.openAlbum(id) }) }
             when {
-                actions.viewArtist != null && !local -> add(MenuEntry("Open artist", Icons.Rounded.Person) { actions.viewArtist.invoke(song) })
-                song.artistId != null -> add(MenuEntry("Open artist", Icons.Rounded.Person) { actions.openArtist(song.artistId!!) })
+                actions.viewArtist != null && !local -> add(MenuEntry("Open artist", ImageVector.vectorResource(AppIcons.Person)) { actions.viewArtist.invoke(song) })
+                song.artistId != null -> add(MenuEntry("Open artist", ImageVector.vectorResource(AppIcons.Person)) { actions.openArtist(song.artistId!!) })
             }
         }
-        add(MenuEntry("Song info", Icons.Rounded.Info) { next = "info" })
-        if (!local) add(MenuEntry("View credits", Icons.Rounded.People) { next = "credits" })
-        if (!local) add(MenuEntry("Share", Icons.Rounded.Share) {
+        add(MenuEntry("Song info", ImageVector.vectorResource(AppIcons.Info)) { next = "info" })
+        if (!local) add(MenuEntry("View credits", ImageVector.vectorResource(AppIcons.People)) { next = "credits" })
+        if (!local) add(MenuEntry("Share", ImageVector.vectorResource(AppIcons.Share)) {
             val (at, length) = actions?.progressOf?.invoke(song) ?: (0L to 0L)
             com.opentune.ui.share.ShareCard.share(context, song, at, length)
         })
-        add(MenuEntry("More options", Icons.Rounded.MoreHoriz) { next = "more" })
+        add(MenuEntry("More options", ImageVector.vectorResource(AppIcons.MoreHoriz)) { next = "more" })
     }
     ContextMenu(anchor, onDismiss = { if (next == null) onDismiss() }, entries = entries, liftCorner = liftCorner, preview = preview)
 }
@@ -465,17 +442,17 @@ fun CollectionContextMenu(
     }
     val entries = buildList {
         if (actions != null) {
-            add(MenuEntry("Play", Icons.Rounded.PlayArrow) { actions.play(list.browseId, list.title, false) })
-            add(MenuEntry("Shuffle", Icons.Rounded.Shuffle) { actions.play(list.browseId, list.title, true) })
-            add(MenuEntry("Play next", Icons.AutoMirrored.Rounded.PlaylistPlay) { actions.playNext(list.browseId) })
-            add(MenuEntry("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic) { actions.addToQueue(list.browseId) })
-            add(MenuEntry("Add to playlist", Icons.AutoMirrored.Rounded.PlaylistAdd) { adding = true })
-            add(MenuEntry("Download all", Icons.Rounded.Download) { actions.downloadAll(list.browseId) })
-            add(MenuEntry(com.opentune.i18n.Tr.f("Open {0}", kind), Icons.AutoMirrored.Rounded.KeyboardArrowRight) { actions.open(list.browseId, list.type) })
+            add(MenuEntry("Play", ImageVector.vectorResource(AppIcons.PlayArrow)) { actions.play(list.browseId, list.title, false) })
+            add(MenuEntry("Shuffle", ImageVector.vectorResource(AppIcons.Shuffle)) { actions.play(list.browseId, list.title, true) })
+            add(MenuEntry("Play next", ImageVector.vectorResource(AppIcons.PlaylistPlay)) { actions.playNext(list.browseId) })
+            add(MenuEntry("Add to queue", ImageVector.vectorResource(AppIcons.QueueMusic)) { actions.addToQueue(list.browseId) })
+            add(MenuEntry("Add to playlist", ImageVector.vectorResource(AppIcons.PlaylistAdd)) { adding = true })
+            add(MenuEntry("Download all", ImageVector.vectorResource(AppIcons.Download)) { actions.downloadAll(list.browseId) })
+            add(MenuEntry(com.opentune.i18n.Tr.f("Open {0}", kind), ImageVector.vectorResource(AppIcons.KeyboardArrowRight)) { actions.open(list.browseId, list.type) })
         }
-        add(MenuEntry("Share", Icons.Rounded.Share) { com.opentune.ui.share.ListShare.shareList(context, list.title, list.browseId, listOf(list.thumbnailUrl), list.subtitle) })
+        add(MenuEntry("Share", ImageVector.vectorResource(AppIcons.Share)) { com.opentune.ui.share.ListShare.shareList(context, list.title, list.browseId, listOf(list.thumbnailUrl), list.subtitle) })
         add(
-            MenuEntry(if (isSaved) "Unpin" else "Pin", if (isSaved) Icons.Rounded.BookmarkRemove else Icons.Rounded.PushPin) {
+            MenuEntry(if (isSaved) "Unpin" else "Pin", if (isSaved) ImageVector.vectorResource(AppIcons.BookmarkRemove) else ImageVector.vectorResource(AppIcons.PushPin)) {
                 LibraryStore.setSaved(com.opentune.data.library.SavedList(list.browseId, list.title, list.subtitle, list.thumbnailUrl), !isSaved)
             },
         )

@@ -1,7 +1,7 @@
 package com.opentune.ui.browse
 
 import com.opentune.ui.components.pinnedToTop
-import com.opentune.ui.components.icon
+import com.opentune.ui.components.iconRes
 import com.opentune.ui.components.meaning
 import com.opentune.ui.components.GlassPage
 import com.opentune.ui.components.LocalHazeState
@@ -37,34 +37,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Reorder
-import androidx.compose.material.icons.filled.SortByAlpha
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.BookmarkRemove
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.focus.focusRequester
 import com.opentune.data.model.durationMillis
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.opentune.ui.theme.Icon
@@ -107,6 +85,9 @@ import com.opentune.ui.components.Placeholder
 import com.opentune.ui.components.SongListItem
 import com.opentune.ui.components.SongRowPlaceholder
 import com.opentune.ui.rememberLoader
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /** Callbacks every track list needs. */
 @androidx.compose.runtime.Immutable
@@ -218,7 +199,7 @@ private val FROST_TAIL = 22.dp
 private fun PlayShuffleButtons(enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit, modifier: Modifier = Modifier, onSmartShuffle: (() -> Unit)? = null) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Button(onClick = onPlay, enabled = enabled, modifier = Modifier.weight(1f).height(52.dp)) {
-            Icon(Icons.Filled.PlayArrow, null)
+            Icon(ImageVector.vectorResource(AppIcons.PlayArrow), null)
             Spacer(Modifier.width(8.dp))
             Text(com.opentune.ui.theme.tr("Play"))
         }
@@ -253,7 +234,7 @@ internal fun ShuffleButton(onShuffle: () -> Unit, onSmartShuffle: (() -> Unit)?,
     )
     if (compact) {
         Box(modifier.size(44.dp).glass(androidx.compose.foundation.shape.CircleShape).then(press), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Shuffle, "Shuffle", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+            Icon(ImageVector.vectorResource(AppIcons.Shuffle), "Shuffle", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
         }
     } else {
         // Drawn like a FilledTonalButton, which has no long press of its own.
@@ -265,7 +246,7 @@ internal fun ShuffleButton(onShuffle: () -> Unit, onSmartShuffle: (() -> Unit)?,
             modifier = modifier.height(52.dp).then(press),
         ) {
             Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Shuffle, null)
+                Icon(ImageVector.vectorResource(AppIcons.Shuffle), null)
                 Spacer(Modifier.width(8.dp))
                 Text(com.opentune.ui.theme.tr("Shuffle"), style = MaterialTheme.typography.labelLarge)
             }
@@ -518,15 +499,15 @@ internal fun ListSortMenu(
                 leadingIcon = {
                     Icon(
                         when (o) {
-                            ListOrder.DEFAULT -> Icons.Filled.Reorder
-                            ListOrder.RECENT -> Icons.Filled.History
-                            ListOrder.A_TO_Z, ListOrder.Z_TO_A -> Icons.Filled.SortByAlpha
+                            ListOrder.DEFAULT -> ImageVector.vectorResource(AppIcons.Reorder)
+                            ListOrder.RECENT -> ImageVector.vectorResource(AppIcons.History)
+                            ListOrder.A_TO_Z, ListOrder.Z_TO_A -> ImageVector.vectorResource(AppIcons.SortByAlpha)
                         },
                         null,
                         Modifier.size(20.dp),
                     )
                 },
-                trailingIcon = if (o == order) ({ Icon(Icons.Filled.Check, null) }) else null,
+                trailingIcon = if (o == order) ({ Icon(ImageVector.vectorResource(AppIcons.Check), null) }) else null,
                 onClick = { onPick(o) },
             )
         }
@@ -640,7 +621,7 @@ internal fun FullListCover(url: String?, modifier: Modifier = Modifier, cover: (
     Box(modifier.fillMaxWidth().aspectRatio(1f).clipToBounds()) {
         if (cover != null) cover()
         else Artwork(url, Modifier.matchParentSize(), shape = androidx.compose.ui.graphics.RectangleShape,
-            placeholder = Icons.Filled.Album, contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            placeholder = ImageVector.vectorResource(AppIcons.Album), contentScale = androidx.compose.ui.layout.ContentScale.Fit,
             containerColor = Color.Transparent)
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(
             0f to Color.Black.copy(alpha = 0.25f), 0.16f to Color.Transparent,
@@ -667,7 +648,7 @@ internal fun PlaylistHeading(title: String, subtitle: String, thumbnail: String?
             thumbnail.artworkAt(HEADER_ART_PX),
             coverSize.shadow(24.dp, MaterialTheme.shapes.large),
             shape = MaterialTheme.shapes.large,
-            placeholder = Icons.Filled.Album,
+            placeholder = ImageVector.vectorResource(AppIcons.Album),
         )
         else Box(coverSize.shadow(24.dp, MaterialTheme.shapes.large)) { cover() }
         Text(
@@ -719,7 +700,7 @@ internal fun ListPlayRow(
             modifier = Modifier.weight(1f).height(56.dp),
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colors.onSurface, contentColor = colors.surface),
         ) {
-            Icon(Icons.Filled.PlayArrow, null)
+            Icon(ImageVector.vectorResource(AppIcons.PlayArrow), null)
             Spacer(Modifier.width(8.dp))
             Text(com.opentune.ui.theme.tr("Play"), style = MaterialTheme.typography.titleMedium)
         }
@@ -727,7 +708,7 @@ internal fun ListPlayRow(
             Modifier.size(56.dp).glass(androidx.compose.foundation.shape.CircleShape).clip(androidx.compose.foundation.shape.CircleShape).clickable(enabled = enabled, onClick = onSave),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(if (saved) Icons.Filled.Check else Icons.Filled.Add, actionLabel ?: if (saved) "Remove from library" else "Save to library", tint = colors.onSurface)
+            Icon(if (saved) ImageVector.vectorResource(AppIcons.Check) else ImageVector.vectorResource(AppIcons.Add), actionLabel ?: if (saved) "Remove from library" else "Save to library", tint = colors.onSurface)
         }
     }
 }
@@ -750,7 +731,7 @@ internal fun ListSearchField(query: String, onQuery: (String) -> Unit, onClear: 
             .background(colors.surfaceContainerHigh.copy(alpha = 0.85f)).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.Search, null, tint = colors.onSurfaceVariant)
+        Icon(ImageVector.vectorResource(AppIcons.Search), null, tint = colors.onSurfaceVariant)
         Spacer(Modifier.width(12.dp))
         Box(Modifier.weight(1f)) {
             if (query.isEmpty()) Text(com.opentune.ui.theme.tr("Search this list"), style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
@@ -762,7 +743,7 @@ internal fun ListSearchField(query: String, onQuery: (String) -> Unit, onClear: 
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         }
-        if (query.isNotEmpty()) androidx.compose.material3.IconButton(onClick = onClear) { Icon(Icons.Filled.Close, "Clear search") }
+        if (query.isNotEmpty()) androidx.compose.material3.IconButton(onClick = onClear) { Icon(ImageVector.vectorResource(AppIcons.Close), "Clear search") }
     }
 }
 
@@ -848,26 +829,26 @@ private fun ListMoreSheet(c: com.opentune.data.Collection, isAlbum: Boolean, act
         val card = com.opentune.ui.components.LocalFloatingCard.current
         val close: () -> Unit = { card?.close() ?: onDismiss() }
         Column {
-            com.opentune.ui.components.MenuRow(Icons.Filled.Refresh, "Refresh") { close(); onRefresh() }
-            com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Filled.PlaylistPlay, "Play next") { close(); c.songs.asReversed().forEach(actions.playNext) }
-            com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Filled.QueueMusic, "Add to queue") { close(); c.songs.forEach(actions.addToQueue) }
-            if (c.songs.isNotEmpty()) com.opentune.ui.components.MenuRow(Icons.AutoMirrored.Filled.PlaylistAdd, if (isAlbum) "Add album to playlist" else "Add all to playlist") { adding = true }
-            com.opentune.ui.components.MenuRow(Icons.Filled.Download, "Download all") {
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Refresh), "Refresh") { close(); onRefresh() }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.PlaylistPlay), "Play next") { close(); c.songs.asReversed().forEach(actions.playNext) }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.QueueMusic), "Add to queue") { close(); c.songs.forEach(actions.addToQueue) }
+            if (c.songs.isNotEmpty()) com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.PlaylistAdd), if (isAlbum) "Add album to playlist" else "Add all to playlist") { adding = true }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Download), "Download all") {
                 close()
                 c.songs.forEach { com.opentune.data.download.Downloads.enqueue(context, it) }
                 com.opentune.data.Pills.done(com.opentune.i18n.Tr.f("Downloading {0} songs", c.songs.size), context)
             }
-            com.opentune.ui.components.MenuRow(Icons.Filled.Share, "Share") { close(); com.opentune.ui.share.ListShare.shareList(context, c.title, c.browseId, com.opentune.ui.share.ListShare.coversFor(c.thumbnailUrl, c.songs, album = c.browseId.startsWith("MPRE")), c.subtitle) }
+            com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.Share), "Share") { close(); com.opentune.ui.share.ListShare.shareList(context, c.title, c.browseId, com.opentune.ui.share.ListShare.coversFor(c.thumbnailUrl, c.songs, album = c.browseId.startsWith("MPRE")), c.subtitle) }
             val ownNow = own
             if (ownNow != null) {
-                com.opentune.ui.components.MenuRow((ownNow.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).icon, (ownNow.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).meaning) { ownNow.choose() }
+                com.opentune.ui.components.MenuRow(ImageVector.vectorResource((ownNow.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).iconRes), (ownNow.privacy ?: com.opentune.data.model.PlaylistPrivacy.PRIVATE).meaning) { ownNow.choose() }
             }
-            com.opentune.ui.components.MenuRow(if (saved) Icons.Filled.BookmarkRemove else Icons.Filled.PushPin, if (saved) "Unpin" else "Pin") {
+            com.opentune.ui.components.MenuRow(if (saved) ImageVector.vectorResource(AppIcons.BookmarkRemove) else ImageVector.vectorResource(AppIcons.PushPin), if (saved) "Unpin" else "Pin") {
                 close()
                 com.opentune.data.library.LibraryStore.setSaved(com.opentune.data.library.SavedList(c.browseId, c.title, c.subtitle, c.thumbnailUrl), !saved)
             }
             if (accountSaved.saved) {
-                com.opentune.ui.components.MenuRow(Icons.Filled.BookmarkRemove, "Remove from your library") { close(); accountSaved.ask() }
+                com.opentune.ui.components.MenuRow(ImageVector.vectorResource(AppIcons.BookmarkRemove), "Remove from your library") { close(); accountSaved.ask() }
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -1019,14 +1000,14 @@ fun CollectionScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             androidx.compose.material3.IconButton(onClick = { if (searching) search.close() else search.open = true }) {
-                                Icon(if (searching) Icons.Filled.Close else Icons.Filled.Search, if (searching) "Stop searching" else "Search this list")
+                                Icon(if (searching) ImageVector.vectorResource(AppIcons.Close) else ImageVector.vectorResource(AppIcons.Search), if (searching) "Stop searching" else "Search this list")
                             }
                             Box {
-                                androidx.compose.material3.IconButton(onClick = { sortOpen = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort") }
+                                androidx.compose.material3.IconButton(onClick = { sortOpen = true }) { Icon(ImageVector.vectorResource(AppIcons.Sort), "Sort") }
                                 // An album's songs aren't added to it: no "Recently added" there.
                                 ListSortMenu(sortOpen, order, includeRecent = !browseId.startsWith("MPRE"), onPick = { order = it; sortOpen = false }, onDismiss = { sortOpen = false })
                             }
-                            androidx.compose.material3.IconButton(onClick = { moreOpen = true }, enabled = loaded != null) { Icon(Icons.Filled.MoreHoriz, "More") }
+                            androidx.compose.material3.IconButton(onClick = { moreOpen = true }, enabled = loaded != null) { Icon(ImageVector.vectorResource(AppIcons.MoreHoriz), "More") }
                         }
                     }
                 }

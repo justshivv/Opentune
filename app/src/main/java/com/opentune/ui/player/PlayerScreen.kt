@@ -50,35 +50,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.ChatBubbleOutline
-import androidx.compose.material.icons.rounded.People
-import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
-import androidx.compose.material.icons.rounded.Bedtime
-import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.Headphones
-import androidx.compose.material.icons.rounded.Smartphone
-import androidx.compose.material.icons.rounded.Speed
-import androidx.compose.material.icons.rounded.BugReport
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Equalizer
-import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.HighQuality
-import androidx.compose.material.icons.rounded.Lyrics
-import androidx.compose.material.icons.rounded.SubtitlesOff
-import androidx.compose.material.icons.rounded.Subtitles
-import androidx.compose.material.icons.rounded.Route
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import com.opentune.ui.theme.Icon
@@ -164,6 +135,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * The playback position, refreshed every frame while playing and the caller
@@ -676,7 +650,7 @@ fun PlayerLayout(
                     AssistChip(
                         onClick = { showSpeed = true },
                         label = { Text(if (sound.speed == 1f) "Speed: 1×" else "Speed: %.2f×".format(sound.speed)) },
-                        leadingIcon = { Icon(Icons.Rounded.Speed, null, Modifier.size(18.dp)) },
+                        leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Speed), null, Modifier.size(18.dp)) },
                         colors = AssistChipDefaults.assistChipColors(
                             containerColor = if (sound.speed != 1f) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                             labelColor = if (sound.speed != 1f) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
@@ -689,7 +663,7 @@ fun PlayerLayout(
                     AssistChip(
                         onClick = { showRemix = true },
                         label = { Text(RemixPreset.matching(sound)?.label ?: "Custom remix") },
-                        leadingIcon = { Icon(Icons.Rounded.GraphicEq, null, Modifier.size(18.dp)) },
+                        leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.GraphicEq), null, Modifier.size(18.dp)) },
                         colors = AssistChipDefaults.assistChipColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -970,7 +944,7 @@ fun PlayerLayout(
                                 Modifier.align(Alignment.CenterEnd).size(40.dp).clip(CircleShape).clickable(onClick = actions.collapse),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Hide player", Modifier.size(26.dp))
+                                Icon(ImageVector.vectorResource(AppIcons.KeyboardArrowRight), "Hide player", Modifier.size(26.dp))
                             }
                             Box(Modifier.padding(horizontal = 44.dp)) { statusLine() }
                         }
@@ -1332,7 +1306,7 @@ fun PlayerLayout(
                                                     // Each half is the button: a press fills the half, not a circle round the icon.
                                                     // Apple Music's has where it's playing, then who's listening with you.
                                                     if (!apple) {
-                                                        PillButton(Icons.Rounded.Bedtime, "Sleep timer", sleepLabel != null, { showSleep = true }, enabled = enabled)
+                                                        PillButton(ImageVector.vectorResource(AppIcons.BedtimeOutline), "Sleep timer", sleepLabel != null, { showSleep = true }, enabled = enabled)
                                                         androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
                                                     }
                                                     PillButton(
@@ -1345,12 +1319,12 @@ fun PlayerLayout(
                                                     )
                                                     if (state.ui.commentsButton) {
                                                         androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
-                                                        PillButton(Icons.Rounded.ChatBubbleOutline, "Comments", showComments, { showComments = true }, enabled = enabled)
+                                                        PillButton(ImageVector.vectorResource(AppIcons.ChatBubbleOutline), "Comments", showComments, { showComments = true }, enabled = enabled)
                                                     }
                                                     if (apple) {
                                                         val room by Together.room.collectAsState()
                                                         androidx.compose.material3.VerticalDivider(Modifier.height(30.dp), color = Color.White.copy(alpha = 0.18f))
-                                                        PillButton(Icons.Rounded.Person, "Listen together", room != null, actions.openTogether, enabled = enabled)
+                                                        PillButton(ImageVector.vectorResource(AppIcons.PersonOutline), "Listen together", room != null, actions.openTogether, enabled = enabled)
                                                     }
                                                 }
                                             },
@@ -1358,7 +1332,7 @@ fun PlayerLayout(
                                                 ModesPill(state.shuffleMode, state.smartShuffleAvailable, state.repeatMode, actions.toggleShuffle, actions.cycleRepeat, filled = false, enabled = enabled)
                                             },
                                         )
-                                        GlassToggle(Icons.AutoMirrored.Rounded.FormatListBulleted, "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
+                                        GlassToggle(ImageVector.vectorResource(AppIcons.FormatListBulleted), "Queue", pane == Pane.QUEUE, { toggle(Pane.QUEUE) })
                                     }
                                 }
                             }
@@ -1506,34 +1480,34 @@ fun PlayerLayout(
                 current,
                 onDismiss = { showMenu = false },
                 top = { close ->
-                    MenuRow(Icons.Rounded.HighQuality, "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
+                    MenuRow(ImageVector.vectorResource(AppIcons.HighQuality), "Upgrade quality") { close(); PlaybackRequests.upgradeQuality() }
                     // Always here: the Comments button setting only takes it out of the button pill.
-                    MenuRow(Icons.Rounded.ChatBubbleOutline, "Comments") { close(); showComments = true }
+                    MenuRow(ImageVector.vectorResource(AppIcons.ChatBubbleOutline), "Comments") { close(); showComments = true }
                 },
                 tools = { close ->
-                    MenuRow(Icons.Rounded.Info, "Track details") { close(); showDetails = true }
-                    if (!current.videoId.startsWith("local:")) MenuRow(Icons.Rounded.People, "View credits") { close(); showCredits = true }
-                    MenuRow(Icons.Rounded.Route, "Signal path") { close(); showSignal = true }
-                    MenuRow(Icons.Rounded.Groups, "Listen together") { close(); actions.openTogether() }
-                    MenuRow(Icons.Rounded.Bedtime, sleepLabel ?: "Sleep timer") { close(); showSleep = true }
-                    MenuRow(Icons.Rounded.Tune, "Lyrics offset") { close(); showOffset = true }
-                    MenuRow(Icons.Rounded.Lyrics, "Lyrics source") { close(); showLyricsSource = true }
-                    MenuRow(if (state.ui.lyricsPreview) Icons.Rounded.SubtitlesOff else Icons.Rounded.Subtitles, if (state.ui.lyricsPreview) "Hide lyrics preview" else "Show lyrics preview") {
+                    MenuRow(ImageVector.vectorResource(AppIcons.Info), "Track details") { close(); showDetails = true }
+                    if (!current.videoId.startsWith("local:")) MenuRow(ImageVector.vectorResource(AppIcons.People), "View credits") { close(); showCredits = true }
+                    MenuRow(ImageVector.vectorResource(AppIcons.Route), "Signal path") { close(); showSignal = true }
+                    MenuRow(ImageVector.vectorResource(AppIcons.Groups), "Listen together") { close(); actions.openTogether() }
+                    MenuRow(ImageVector.vectorResource(AppIcons.Bedtime), sleepLabel ?: "Sleep timer") { close(); showSleep = true }
+                    MenuRow(ImageVector.vectorResource(AppIcons.Tune), "Lyrics offset") { close(); showOffset = true }
+                    MenuRow(ImageVector.vectorResource(AppIcons.Lyrics), "Lyrics source") { close(); showLyricsSource = true }
+                    MenuRow(if (state.ui.lyricsPreview) ImageVector.vectorResource(AppIcons.SubtitlesOff) else ImageVector.vectorResource(AppIcons.Subtitles), if (state.ui.lyricsPreview) "Hide lyrics preview" else "Show lyrics preview") {
                         close()
                         AppSettings.updateUi { it.copy(lyricsPreview = !it.lyricsPreview) }
                     }
                     if (com.opentune.data.lyrics.Romanizer.available) {
-                        MenuRow(Icons.Rounded.Translate, if (lyricsSettings.romanize) "Hide romanized lyrics" else "Show romanized lyrics") {
+                        MenuRow(ImageVector.vectorResource(AppIcons.Translate), if (lyricsSettings.romanize) "Hide romanized lyrics" else "Show romanized lyrics") {
                             close()
                             AppSettings.updateLyrics { it.copy(romanize = !it.romanize) }
                         }
                     }
-                    MenuRow(Icons.Rounded.Equalizer, "Equalizer") { close(); actions.openEqualizer() }
-                    if (isEpisode)MenuRow(Icons.Rounded.Speed, if (sound.speed != 1f) "Playback speed (%.2f×)".format(sound.speed) else "Playback speed") { close(); showSpeed = true }
-                    MenuRow(Icons.Rounded.GraphicEq, "Remix") { close(); showRemix = true }
+                    MenuRow(ImageVector.vectorResource(AppIcons.Equalizer), "Equalizer") { close(); actions.openEqualizer() }
+                    if (isEpisode)MenuRow(ImageVector.vectorResource(AppIcons.Speed), if (sound.speed != 1f) "Playback speed (%.2f×)".format(sound.speed) else "Playback speed") { close(); showSpeed = true }
+                    MenuRow(ImageVector.vectorResource(AppIcons.GraphicEq), "Remix") { close(); showRemix = true }
                 },
                 end = { close ->
-                    MenuRow(Icons.Rounded.BugReport, "Copy log") {
+                    MenuRow(ImageVector.vectorResource(AppIcons.BugReport), "Copy log") {
                         close()
                         scope.launch {
                             val log = LogExport.recent()
@@ -1646,7 +1620,7 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
             .clickable(onClick = onMore),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Rounded.MoreHoriz, "More", Modifier.size(if (apple) 24.dp else 26.dp))
+        Icon(ImageVector.vectorResource(AppIcons.MoreHoriz), "More", Modifier.size(if (apple) 24.dp else 26.dp))
     }
 }
 
@@ -1724,7 +1698,7 @@ private fun StarButton(liked: Boolean, onClick: () -> Unit) {
             },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(if (liked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+        Icon(if (liked) ImageVector.vectorResource(AppIcons.Star) else ImageVector.vectorResource(AppIcons.StarBorder),
             if (liked) "Remove from Liked" else "Favourite", Modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
             tint = if (liked) Color(0xFFFA2D48) else LocalContentColor.current)
     }
@@ -1767,7 +1741,7 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            Icon(if (liked) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder),
                 if (liked) "Remove from Liked" else "Like", Modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
                 tint = if (liked) Color(0xFFFF4D6D) else LocalContentColor.current)
         }
@@ -1899,7 +1873,7 @@ private fun TogetherPill(room: Together.Room, onClick: () -> Unit) {
                 },
             )
         },
-        leadingIcon = { Icon(Icons.Rounded.Groups, null, Modifier.size(18.dp)) },
+        leadingIcon = { Icon(ImageVector.vectorResource(AppIcons.Groups), null, Modifier.size(18.dp)) },
         colors = AssistChipDefaults.assistChipColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             labelColor = MaterialTheme.colorScheme.onPrimaryContainer,

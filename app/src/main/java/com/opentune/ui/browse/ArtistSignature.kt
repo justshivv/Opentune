@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
-import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -40,8 +39,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.rounded.Draw
-import androidx.compose.material.icons.rounded.Link
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
@@ -52,6 +49,9 @@ import com.opentune.data.covers.ArtistSignature
 import com.opentune.data.covers.ArtistSignatures
 import com.opentune.data.settings.AppSettings
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * The artist's name over their photo: their handwritten signature in white
@@ -163,14 +163,14 @@ internal fun ArtistSignatureSettings(startEditing: Boolean = false) {
     com.opentune.ui.components.ToggleRow(
         "Artist signatures", ui.artistSignatures, { v -> AppSettings.updateUi { it.copy(artistSignatures = v) } },
         summary = "An artist's handwritten signature over their photo, in place of their name, when there's one",
-        icon = androidx.compose.material.icons.Icons.Rounded.Draw,
+        icon = ImageVector.vectorResource(AppIcons.Draw),
         beta = true,
     )
     if (ui.artistSignatures) {
         com.opentune.ui.components.SettingRow(
             "Signature service",
             summary = ArtistSignatures.shown(ui.signatureApi).removePrefix("https://").removePrefix("http://"),
-            icon = androidx.compose.material.icons.Icons.Rounded.Link,
+            icon = ImageVector.vectorResource(AppIcons.Link),
             onClick = { editing = true },
         )
     }
@@ -212,7 +212,7 @@ internal fun ArtistSignatureSettings(startEditing: Boolean = false) {
             confirm = "Save", confirming = "Checking…",
             onConfirm = ::save,
             onDismiss = { if (!checking) editing = false },
-            icon = androidx.compose.material.icons.Icons.Rounded.Draw,
+            icon = ImageVector.vectorResource(AppIcons.Draw),
             blankAllowed = true,
             extra = if (ArtistSignatures.normalize(address.trim()) != ArtistSignatures.normalize(ArtistSignatures.DEFAULT_API)) ({
                 // One tap back to the standard service, shown while another is typed in.
@@ -222,7 +222,7 @@ internal fun ArtistSignatureSettings(startEditing: Boolean = false) {
                         .padding(horizontal = 4.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Restore, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    androidx.compose.material3.Icon(ImageVector.vectorResource(AppIcons.Restore), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                     androidx.compose.foundation.layout.Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text("Use the standard service", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)

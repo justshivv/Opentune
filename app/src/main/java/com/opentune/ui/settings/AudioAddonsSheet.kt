@@ -28,9 +28,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import com.opentune.ui.theme.Text
 import com.opentune.ui.theme.Icon
@@ -45,6 +42,9 @@ import com.opentune.data.addons.*
 import com.opentune.data.settings.AppSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,9 +130,9 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
     Surface(Modifier.fillMaxSize(), color = c.background) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+                IconButton(onClick = onDismiss) { Icon(ImageVector.vectorResource(AppIcons.ArrowBack), "Back") }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { scope.launch { onNotice(if (AddonRefresh.refresh(force = true)) "Audio sources refreshed" else "Couldn't refresh. Your saved sources are still available.") } }) { Icon(Icons.Rounded.Refresh, "Refresh audio sources") }
+                IconButton(onClick = { scope.launch { onNotice(if (AddonRefresh.refresh(force = true)) "Audio sources refreshed" else "Couldn't refresh. Your saved sources are still available.") } }) { Icon(ImageVector.vectorResource(AppIcons.Refresh), "Refresh audio sources") }
             }
             Text("Audio sources", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 24.dp))
             Text(
@@ -146,10 +146,10 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
                         .background(c.secondaryContainer).clickable { onNotice(null) }.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Rounded.Info, null, tint = c.onSecondaryContainer, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(AppIcons.Info), null, tint = c.onSecondaryContainer, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = c.onSecondaryContainer, modifier = Modifier.weight(1f))
-                    Icon(Icons.Rounded.Close, "Dismiss", tint = c.onSecondaryContainer, modifier = Modifier.size(18.dp))
+                    Icon(ImageVector.vectorResource(AppIcons.Close), "Dismiss", tint = c.onSecondaryContainer, modifier = Modifier.size(18.dp))
                 }
             }
 
@@ -157,7 +157,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
             com.opentune.ui.components.GroupCard {
                 if (addons.isEmpty()) {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Rounded.Extension, null, tint = c.onSurfaceVariant, modifier = Modifier.size(32.dp))
+                        Icon(ImageVector.vectorResource(AppIcons.Extension), null, tint = c.onSurfaceVariant, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.height(10.dp))
                         Text("No lossless sources yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text("Add one with its URL. Until then, songs play from the sources below.", style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
@@ -242,7 +242,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
                             }
                             Spacer(Modifier.width(8.dp))
                             com.opentune.ui.components.AppSwitch(on, { AddonStore.enable(addon.key, it) }, enabled = !addon.ownerOff)
-                            Icon(Icons.Rounded.DragHandle, null, Modifier.size(48.dp)
+                            Icon(ImageVector.vectorResource(AppIcons.DragHandle), null, Modifier.size(48.dp)
                                 .semantics {
                                     contentDescription = com.opentune.i18n.Tr.f("Reorder {0}", addon.manifest.name)
                                     customActions = listOf(
@@ -301,7 +301,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
 
             com.opentune.ui.components.GroupLabel("Always available")
             com.opentune.ui.components.GroupCard {
-                FixedSource(Icons.Rounded.GraphicEq, "JioSaavn", "Fast 320 kbps fallback · lossy") {
+                FixedSource(ImageVector.vectorResource(AppIcons.GraphicEq), "JioSaavn", "Fast 320 kbps fallback · lossy") {
                     com.opentune.ui.components.AppSwitch(playback.jioSaavnQuality, { AppSettings.updatePlayback { p -> p.copy(jioSaavnQuality = it) } })
                 }
                 com.opentune.ui.components.RowDivider()
@@ -316,7 +316,7 @@ internal fun AudioAddonsPage(onDismiss: () -> Unit, onAdd: () -> Unit, notice: S
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(40.dp).clip(CircleShape).background(c.onSurface), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Add, null, tint = c.surface)
+                    Icon(ImageVector.vectorResource(AppIcons.Add), null, tint = c.surface)
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {

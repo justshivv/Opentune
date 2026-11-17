@@ -17,10 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -39,6 +35,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.opentune.ui.theme.Icon
 import com.opentune.ui.theme.Text
+import androidx.compose.ui.res.vectorResource
+import com.opentune.ui.theme.AppIcons
 
 /**
  * A card for typing or pasting a web address: what it's for in a line, the link field with
@@ -60,7 +58,7 @@ internal fun LinkEntryCard(
     confirming: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    icon: ImageVector = Icons.Rounded.Link,
+    icon: ImageVector = ImageVector.vectorResource(AppIcons.Link),
     /** A blank field may be confirmed (it means the standard address). */
     blankAllowed: Boolean = false,
     extra: (@Composable () -> Unit)? = null,
@@ -92,7 +90,7 @@ internal fun LinkEntryCard(
                     .padding(start = 16.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Rounded.Link, null, tint = c.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                Icon(ImageVector.vectorResource(AppIcons.Link), null, tint = c.onSurfaceVariant, modifier = Modifier.size(22.dp))
                 Box(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                     if (input.isEmpty()) Text("https://…", style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant)
                     BasicTextField(
@@ -112,7 +110,7 @@ internal fun LinkEntryCard(
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                     ) { Text("Paste", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = c.surface) }
                 } else if (!working) {
-                    IconButton(onClick = { onInput("") }) { Icon(Icons.Rounded.Close, "Clear", Modifier.size(20.dp)) }
+                    IconButton(onClick = { onInput("") }) { Icon(ImageVector.vectorResource(AppIcons.Close), "Clear", Modifier.size(20.dp)) }
                 }
             }
             when {
@@ -120,7 +118,7 @@ internal fun LinkEntryCard(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.errorContainer).padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Rounded.ErrorOutline, null, tint = c.onErrorContainer, modifier = Modifier.size(20.dp))
+                    Icon(ImageVector.vectorResource(AppIcons.ErrorOutline), null, tint = c.onErrorContainer, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     Text(error, style = MaterialTheme.typography.bodyMedium, color = c.onErrorContainer)
                 }
