@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Track } from '@/data/music/types';
 import { getAudio, partyPlayer, setConnectHooks, usePlayer } from '@/state/player';
 import { toRoomTrack } from '@/together/room';
+import { qualityLabel } from '@/shell/quality';
 import { ConnectGroup } from './group';
 import type { CTrack } from './messages';
 import { ConnectSession, controllingOf, type ConnectPlayer, type ConnectView, type Device, type Snapshot } from './session';
@@ -95,7 +96,7 @@ function fromCTrack(t: CTrack): Track {
 
 const webPlayer: ConnectPlayer = {
   snapshot(): Snapshot | null {
-    const { queue, index, nowPlaying, volume, shuffle, repeat } = usePlayer.getState();
+    const { queue, index, nowPlaying, volume, shuffle, repeat, status } = usePlayer.getState();
     if (!nowPlaying) return null;
     const entry = queue[index];
     const track = toCTrack(entry?.track);
@@ -109,6 +110,7 @@ const webPlayer: ConnectPlayer = {
       volume,
       shuffle,
       repeat,
+      quality: nowPlaying.streamInfo ? qualityLabel(nowPlaying.streamInfo, false, status).text : null,
     };
   },
   play: () => {
@@ -120,6 +122,13 @@ const webPlayer: ConnectPlayer = {
   previous: () => usePlayer.getState().previous(),
   seekTo: (ms) => partyPlayer.seekTo(ms / 1000),
   setVolume: (v) => usePlayer.getState().setVolume(v),
+  setShuffle: (on) => {
+    if (usePlayer.getState().shuffle !== on) usePlayer.getState().toggleShuffle();
+  },
+  setRepeat: (mode) => {
+    // Repeat only cycles here; at most three steps reach any mode.
+    for (let i = 0; i < 3 && usePlayer.getState().repeat !== mode; i++) usePlayer.getState().cycleRepeat();
+  },
   playTrack: (t) => {
     usePlayer.getState().playNext([fromCTrack(t)]);
     usePlayer.getState().next();
@@ -168,7 +177,11 @@ function restart(): void {
     s.start();
     // The player changing (a song, play/pause, the queue) goes out a moment after it settles.
     unsubscribe = usePlayer.subscribe((now, before) => {
-      if (now.nowPlaying?.videoId === before.nowPlaying?.videoId && now.status === before.status && now.queue === before.queue && now.volume === before.volume) return;
+      if (
+        now.nowPlaying?.videoId === before.nowPlaying?.videoId && now.nowPlaying?.streamInfo === before.nowPlaying?.streamInfo &&
+        now.status === before.status && now.queue === before.queue && now.volume === before.volume &&
+        now.shuffle === before.shuffle && now.repeat === before.repeat
+      ) return;
       if (settle) clearTimeout(settle);
       settle = setTimeout(() => session?.localChanged(), 300);
     });
@@ -197,6 +210,11 @@ export function initConnect(): void {
         case 'next': return s.intercept('next');
         case 'previous': return s.intercept('previous');
         case 'seek': return s.intercept('seek', Math.round(control.ms));
+        case 'shuffle': return s.intercept('shuffle', 0, target.state?.shuffle ? 0 : 1);
+        case 'repeat': {
+          const next = target.state?.repeat === 'off' ? 'all' : target.state?.repeat === 'all' ? 'one' : 'off';
+          return s.intercept('repeat', 0, 0, next);
+        }
       }
     },
     // Seeks and play/pause pressed here don't change the store's song or queue.

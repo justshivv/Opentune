@@ -193,6 +193,8 @@ function hintOf(track: Track): NowPlaying {
 // come back around as a control.
 
 export type PartyControl = { kind: 'toggle' } | { kind: 'next' } | { kind: 'previous' } | { kind: 'seek'; ms: number };
+/** What Connect can take over: the party's controls, and shuffle and repeat. */
+export type ConnectControl = PartyControl | { kind: 'shuffle' } | { kind: 'repeat' };
 
 export interface PartyHooks {
   /** The user did something to playback, or the queue moved on by itself. */
@@ -221,7 +223,7 @@ const intent = () => {
 
 export interface ConnectHooks {
   /** True when another device took the control, so nothing happens here. */
-  intercept(control: PartyControl): boolean;
+  intercept(control: ConnectControl): boolean;
   /** The user did something to playback here. */
   onIntent?(): void;
 }
@@ -448,6 +450,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   toggleShuffle() {
+    if (connectHooks?.intercept({ kind: 'shuffle' })) return;
     const { queue, index, shuffle } = get();
     const head = queue.slice(0, index + 1);
     const upcoming = queue.slice(index + 1);
@@ -470,6 +473,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   cycleRepeat() {
+    if (connectHooks?.intercept({ kind: 'repeat' })) return;
     const repeat: RepeatMode = { off: 'all', all: 'one', one: 'off' }[get().repeat] as RepeatMode;
     set({ repeat });
     saveSettings(get());

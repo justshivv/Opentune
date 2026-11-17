@@ -29,8 +29,13 @@ export type ConnectMsg =
       volume?: number;
       shuffle?: boolean;
       repeat?: string;
+      // When this device took the music (started it, changed the song, was handed it), on its own clock; pausing doesn't count.
+      since?: number | null;
+      // How it sounds there, in that device's words ("Lossless", "Good Quality").
+      quality?: string | null;
     })
-  | (Base & { type: 'command'; to: string; id: string; action: string; pos?: number; value?: number; track?: CTrack | null; tracks?: CTrack[] })
+  // [mode], for repeat: "off", "all" or "one".
+  | (Base & { type: 'command'; to: string; id: string; action: string; pos?: number; value?: number; track?: CTrack | null; tracks?: CTrack[]; mode?: string | null })
   | (Base & { type: 'ack'; to: string; id: string; ok?: boolean; reason?: string | null })
   | (Base & { type: 'transfer'; to: string; id: string; queue?: CTrack[]; index?: number; pos?: number; playing?: boolean })
   // [next]: the secret of the group the device moved to; the devices here follow it.

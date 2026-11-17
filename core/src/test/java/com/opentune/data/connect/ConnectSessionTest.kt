@@ -70,6 +70,8 @@ class ConnectSessionTest {
         override fun previous() { calls += "previous" }
         override fun seekTo(ms: Long) { calls += "seek $ms"; pos = ms }
         override fun setVolume(v: Float) { calls += "volume $v"; vol = v }
+        override fun setShuffle(on: Boolean) { calls += "shuffle $on" }
+        override fun setRepeat(mode: String) { calls += "repeat $mode" }
         override fun playTrack(t: CTrack) { calls += "playTrack ${t.id}"; track = t; playing = true }
         override fun addToQueue(ts: List<CTrack>) { calls += "add ${ts.size}"; queue = queue + ts }
         override fun load(queue: List<CTrack>, index: Int, pos: Long, playing: Boolean): Boolean {
@@ -195,6 +197,47 @@ class ConnectSessionTest {
         assertTrue(b.player.pos in 60_000..61_000)
         eventually("a stops") { !a.player.playing }
         eventually("both show b") { a.view.value.activeId == "b" && b.view.value.activeId == "b" }
+    }
+
+    @Test fun pausedMusicMovesAndStaysWhereItWasMoved() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        eventually("connected") { a.others() == setOf("b") }
+        onLoop { a.player.track = track('x'); a.player.playing = true; a.session.localChanged() }
+        eventually("b sees a") { b.view.value.activeId == "a" }
+        onLoop { a.player.playing = false; a.session.localChanged() }
+        Thread.sleep(50)
+        onLoop { b.session.transferTo("b") }
+        eventually("b has it") { b.player.track == track('x') && !b.player.playing }
+        // a, told to pause (it already is), says so again: that doesn't take the music back.
+        Thread.sleep(100)
+        onLoop { a.session.localChanged() }
+        Thread.sleep(200)
+        eventually("both show b") { a.view.value.activeId == "b" && b.view.value.activeId == "b" }
+    }
+
+    @Test fun aReportFromBeforeAPauseDoesNotUndoItOnScreen() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        eventually("connected") { a.others() == setOf("b") }
+        onLoop { a.player.track = track('x'); a.player.playing = true; a.session.localChanged() }
+        eventually("b controls a") { b.view.value.controlling?.state?.playing == true }
+        onLoop {
+            b.session.intercept("pause")
+            // a's report, sent before the pause reached it.
+            b.session.handle(ConnectMsg.State("a", Long.MAX_VALUE - 1, System.currentTimeMillis(), track = track('x'), playing = true))
+        }
+        assertEquals(false, onLoop { b.view.value.controlling?.state?.playing })
+    }
+
+    @Test fun shuffleAndRepeatActOnTheDevicePlaying() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        eventually("connected") { a.others() == setOf("b") }
+        onLoop { a.player.track = track('x'); a.player.playing = true; a.session.localChanged() }
+        eventually("b controls a") { b.view.value.activeId == "a" }
+        onLoop { b.session.intercept("repeat", mode = "all"); b.session.intercept("shuffle", value = 1f) }
+        eventually("a set") { a.player.calls.containsAll(listOf("repeat all", "shuffle true")) }
     }
 
     @Test fun aControllerMovesPlaybackBetweenTwoOthersOrToItself() {

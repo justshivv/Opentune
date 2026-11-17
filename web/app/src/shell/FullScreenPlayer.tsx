@@ -33,7 +33,7 @@ import { albumPageFor } from './nowPlayingLinks';
 import { UpNext } from './UpNext';
 import { useAppearance } from '@/state/appearance';
 import { useArtworkColor } from '@/lib/artworkColor';
-import { QualityLabel } from './QualityLabel';
+import { QualityLabel, RemoteQualityLabel } from './QualityLabel';
 import { useScrubber } from './useScrubber';
 import { MorphPlayButton } from './MorphPlayButton';
 import { morphPlayer } from './playerMorph';
@@ -69,7 +69,7 @@ function Scrubber() {
       </div>
       <div className="ot-quality-row">
         <span ref={elapsed} />
-        {remote ? <span /> : <QualityLabel />}
+        {remote ? <RemoteQualityLabel text={remote.state?.quality ?? null} /> : <QualityLabel />}
         <span ref={remaining} />
       </div>
     </div>
@@ -91,8 +91,10 @@ function Transport() {
   const playing = remote ? !!remote.state?.playing : playingHere;
   const buffering = usePlayer((s) => s.status === 'buffering' || s.status === 'loading') && !remote;
   const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0)) || !!remote;
-  const shuffle = usePlayer((s) => s.shuffle);
-  const repeat = usePlayer((s) => s.repeat);
+  const localShuffle = usePlayer((s) => s.shuffle);
+  const localRepeat = usePlayer((s) => s.repeat);
+  const shuffle = remote ? !!remote.state?.shuffle : localShuffle;
+  const repeat = remote ? (remote.state?.repeat ?? 'off') : localRepeat;
   const { togglePlay, next, previous, toggleShuffle, cycleRepeat } = usePlayer.getState();
 
   return (

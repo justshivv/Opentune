@@ -18,6 +18,9 @@ export interface ConnectPlayer {
   previous(): void;
   seekTo(ms: number): void;
   setVolume(v: number): void;
+  setShuffle(on: boolean): void;
+  /** "off", "all" or "one". */
+  setRepeat(mode: string): void;
   playTrack(t: CTrack): void;
   addToQueue(ts: CTrack[]): void;
   /** Loads [queue] from [index] at [pos] ms; false when none of it can play here. */
@@ -36,6 +39,8 @@ export interface Snapshot {
   volume: number;
   shuffle: boolean;
   repeat: string;
+  /** How it sounds here, in this device's words; null when it can't say. */
+  quality?: string | null;
 }
 
 export interface Device {
@@ -46,6 +51,8 @@ export interface Device {
   state: StateMsg | null;
   /** This device's clock when [state] came. */
   receivedAt: number;
+  /** When it took the music (see StateMsg.since). */
+  since: number;
 }
 
 export const positionAt = (d: Device, now: number) => (d.state ? (d.state.playing ? (d.state.pos ?? 0) + (now - d.receivedAt) : (d.state.pos ?? 0)) : 0);
@@ -71,6 +78,8 @@ export interface Timings {
   transferMs: number;
   tickMs: number;
 }
+/** How long a play or pause pressed here outlasts reports from before it landed. */
+const GUESS_MS = 1_500;
 const DEFAULT_TIMINGS: Timings = { presenceMs: 30_000, goneMs: 75_000, stateMs: 5_000, commandMs: 5_000, transferMs: 8_000, tickMs: 1_000 };
 
 const relays: TransportFactory = (filter, onEvent, onConnected) => new RelayPool(RELAYS, filter, onEvent, onConnected);
@@ -95,6 +104,8 @@ export class ConnectSession {
   private readonly lastSeq = new Map<string, number>();
   private readonly devices = new Map<string, Device>();
   private readonly pending = new Map<string, Pending>();
+  /** Play or pause pressed here for a device: until when, and which it was. */
+  private readonly guesses = new Map<string, { until: number; playing: boolean }>();
   private mine: Snapshot | null = null;
   private mineAt = 0;
   private lastStateSent = 0;
@@ -169,14 +180,15 @@ export class ConnectSession {
     this.mine = now;
     if (!now) return this.refresh();
     const started = now.playing && !before?.playing;
-    if (now.track?.id !== before?.track?.id || now.playing !== before?.playing || now.private !== before?.private) this.mineAt = this.clock();
+    // Taking the music: a new song, or starting it. Pausing leaves it where it was taken.
+    if (now.track?.id !== before?.track?.id || now.private !== before?.private || started) this.mineAt = this.clock();
     if (started) for (const d of this.devices.values()) if (d.state?.playing) this.command(d.id, 'pause', { quiet: true });
     this.sayState();
     this.refresh();
   }
 
   /** A button pressed here while another device plays: sends it there. True when it went. */
-  intercept(action: string, pos = 0, value = 0): boolean {
+  intercept(action: string, pos = 0, value = 0, mode?: string): boolean {
     const target = controllingOf(this.view);
     if (!target) return false;
     const shown = target.state;
@@ -187,14 +199,21 @@ export class ConnectSession {
         : action === 'pause' ? { ...shown, playing: false, pos: positionAt(target, now) }
         : action === 'seek' ? { ...shown, pos }
         : action === 'volume' ? { ...shown, volume: value }
+        : action === 'shuffle' ? { ...shown, shuffle: value > 0.5 }
+        : action === 'repeat' ? { ...shown, repeat: mode ?? shown.repeat }
         : null;
       if (guess) this.setDevice({ ...target, state: guess, receivedAt: now });
+      if (guess && (action === 'play' || action === 'pause')) this.guesses.set(target.id, { until: now + GUESS_MS, playing: !!guess.playing });
     }
     this.command(target.id, action, {
       pos,
       value,
+      ...(mode ? { mode } : {}),
       onAck: (ack) => {
-        if (!ack.ok && shown) this.setDevice({ ...target, state: shown });
+        if (!ack.ok && shown) {
+          this.guesses.delete(target.id);
+          this.setDevice({ ...target, state: shown });
+        }
       },
     });
     return true;
@@ -233,6 +252,8 @@ export class ConnectSession {
     if (deviceId === this.myId) {
       if (this.player.load(queue, 0, pos, playing)) {
         this.command(source.id, 'pause', { quiet: true });
+        this.mine = null;
+        this.mineAt = this.clock();
         this.localChanged();
       } else this.notice(CANT_PLAY, this.myName);
       return;
@@ -271,7 +292,7 @@ export class ConnectSession {
     const known = this.devices.get(msg.from);
     switch (msg.type) {
       case 'presence': {
-        const base = known ?? { id: msg.from, name: msg.name, form: msg.form, lastSeen: now, state: null, receivedAt: 0 };
+        const base: Device = known ?? { id: msg.from, name: msg.name, form: msg.form, lastSeen: now, state: null, receivedAt: 0, since: 0 };
         this.setDevice({ ...base, name: msg.name, form: msg.form, lastSeen: now });
         if (!known) {
           this.sayPresence();
@@ -280,8 +301,16 @@ export class ConnectSession {
         return;
       }
       case 'state': {
-        const base = known ?? { id: msg.from, name: '', form: '', lastSeen: now, state: null, receivedAt: 0 };
-        this.setDevice({ ...base, lastSeen: now, state: msg, receivedAt: now });
+        // A play or pause pressed here a moment ago: a report from before it landed doesn't undo it on screen.
+        const guess = this.guesses.get(msg.from);
+        if (guess) {
+          if (now < guess.until && !!msg.playing !== guess.playing) return this.touch(msg.from, now);
+          this.guesses.delete(msg.from);
+        }
+        const base: Device = known ?? { id: msg.from, name: '', form: '', lastSeen: now, state: null, receivedAt: 0, since: 0 };
+        const took = base.state?.track?.id !== msg.track?.id || (!!msg.playing && !base.state?.playing);
+        const since = typeof msg.since === 'number' ? msg.since : took ? now : base.since;
+        this.setDevice({ ...base, lastSeen: now, state: msg, receivedAt: now, since });
         if (!known) this.sayPresence();
         return;
       }
@@ -309,6 +338,7 @@ export class ConnectSession {
         this.send({ type: 'ack', from: this.myId, seq: ++this.seq, at: now, to: msg.from, id: msg.id, ok, ...(ok ? {} : { reason: reason ?? 'unplayable' }) });
         if (ok) {
           this.mine = null;
+          this.mineAt = this.clock();
           setTimeout(() => this.localChanged(), 50);
         }
         return;
@@ -337,6 +367,11 @@ export class ConnectSession {
       case 'previous': this.player.previous(); return true;
       case 'seek': this.player.seekTo(c.pos ?? 0); return true;
       case 'volume': this.player.setVolume(c.value ?? 1); return true;
+      case 'shuffle': this.player.setShuffle((c.value ?? 0) > 0.5); return true;
+      case 'repeat':
+        if (c.mode !== 'off' && c.mode !== 'all' && c.mode !== 'one') return false;
+        this.player.setRepeat(c.mode);
+        return true;
       case 'playTrack': if (!c.track) return false; this.player.playTrack(c.track); return true;
       case 'addToQueue': this.player.addToQueue(c.tracks ?? []); return true;
       default: return false;
@@ -348,7 +383,7 @@ export class ConnectSession {
   private command(
     to: string,
     action: string,
-    o: { pos?: number; value?: number; track?: CTrack; tracks?: CTrack[]; quiet?: boolean; onAck?: (a: Ack) => void } = {},
+    o: { pos?: number; value?: number; track?: CTrack; tracks?: CTrack[]; mode?: string; quiet?: boolean; onAck?: (a: Ack) => void } = {},
   ): void {
     const id = newId();
     this.send({
@@ -356,6 +391,7 @@ export class ConnectSession {
       ...(o.pos ? { pos: Math.round(o.pos) } : {}),
       ...(o.value ? { value: o.value } : {}),
       ...(o.track ? { track: o.track } : {}),
+      ...(o.mode ? { mode: o.mode } : {}),
       ...(o.tracks?.length ? { tracks: o.tracks } : {}),
     });
     if (!o.quiet) this.expect(id, to, this.timings.commandMs, o.onAck ?? (() => {}));
@@ -396,6 +432,8 @@ export class ConnectSession {
       type: 'state', from: this.myId, seq: ++this.seq, at: this.clock(),
       track: s.track, private: s.private, playing: s.playing, pos: Math.round(s.pos), queue: s.queue.slice(0, MAX_QUEUE),
       volume: s.volume, shuffle: s.shuffle, repeat: s.repeat,
+      ...(this.mineAt > 0 ? { since: this.mineAt } : {}),
+      ...(s.quality ? { quality: s.quality } : {}),
     });
   }
 
@@ -438,11 +476,11 @@ export class ConnectSession {
     const m = this.mine;
     const meHas = !!m && (!!m.track || m.private);
     if (meHas && m!.playing) return this.myId;
-    const newest = (list: Device[]) => list.reduce<Device | null>((a, b) => (!a || b.receivedAt > a.receivedAt ? b : a), null);
+    const newest = (list: Device[]) => list.reduce<Device | null>((a, b) => (!a || b.since > a.since ? b : a), null);
     const playing = newest(others.filter((d) => hasSomething(d) && d.state!.playing));
     if (playing) return playing.id;
     const latest = newest(others.filter(hasSomething));
-    if (meHas && (!latest || this.mineAt >= latest.receivedAt)) return this.myId;
+    if (meHas && (!latest || this.mineAt >= latest.since)) return this.myId;
     return latest?.id ?? null;
   }
 

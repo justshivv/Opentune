@@ -79,6 +79,8 @@ function fakePlayer(playable = true) {
     previous: () => { s.calls.push('previous'); },
     seekTo: (ms) => { s.calls.push(`seek ${ms}`); s.pos = ms; },
     setVolume: (v) => { s.calls.push(`volume ${v}`); s.volume = v; },
+    setShuffle: (on) => { s.calls.push(`shuffle ${on}`); },
+    setRepeat: (mode) => { s.calls.push(`repeat ${mode}`); },
     needsTap: () => s.needsTap,
     playTrack: (t) => { s.track = t; s.playing = true; },
     addToQueue: (ts) => { s.queue = [...s.queue, ...ts]; },
@@ -138,6 +140,45 @@ describe('sessions', () => {
   it('says it is here once a relay connects, not only on the next round', async () => {
     const [a, b] = await devicesWith({ ...fast, presenceMs: 60_000 }, bus(50), ['a', 'Phone'], ['b', 'Chrome']);
     await eventually('see each other', () => a!.view?.devices.length === 1 && b!.view?.devices.length === 1, 1_000);
+    a!.session.stop(); b!.session.stop();
+  });
+
+  it('moves paused music, and it stays where it was moved', async () => {
+    const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
+    await eventually('see each other', () => a!.view?.devices.length === 1 && b!.view?.devices.length === 1);
+    play(a!, track('x'));
+    await eventually('b sees a', () => b!.view?.activeId === 'a');
+    a!.s.playing = false;
+    a!.session.localChanged();
+    await new Promise((r) => setTimeout(r, 50));
+    b!.session.transferTo('b');
+    await eventually('b has it', () => b!.s.track?.id === track('x').id && !b!.s.playing);
+    // a, told to pause (it already is), says so again: that doesn't take the music back.
+    await new Promise((r) => setTimeout(r, 100));
+    a!.session.localChanged();
+    await new Promise((r) => setTimeout(r, 200));
+    expect(a!.view?.activeId).toBe('b');
+    expect(b!.view?.activeId).toBe('b');
+    a!.session.stop(); b!.session.stop();
+  });
+
+  it('keeps a pause on screen over a report from before it landed', async () => {
+    const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
+    play(a!, track('x'));
+    await eventually('b controls a', () => b!.view?.activeId === 'a' && !!b!.view.devices[0]?.state?.playing);
+    b!.session.intercept('pause');
+    b!.session.handle({ type: 'state', from: 'a', seq: Number.MAX_SAFE_INTEGER - 1, at: Date.now(), track: track('x'), playing: true });
+    expect(b!.view!.devices[0]!.state?.playing).toBe(false);
+    a!.session.stop(); b!.session.stop();
+  });
+
+  it('sends shuffle and repeat to the device playing', async () => {
+    const [a, b] = await devices(['a', 'Phone'], ['b', 'Chrome']);
+    play(a!, track('x'));
+    await eventually('b controls a', () => b!.view?.activeId === 'a');
+    b!.session.intercept('repeat', 0, 0, 'all');
+    b!.session.intercept('shuffle', 0, 1);
+    await eventually('a set', () => a!.s.calls.includes('repeat all') && a!.s.calls.includes('shuffle true'));
     a!.session.stop(); b!.session.stop();
   });
 

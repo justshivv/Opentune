@@ -79,10 +79,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val isBuffering = combine(player.isBuffering, remote) { here, far -> far == null && here }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
     val loadingMessage = player.loadingMessage
-    val shuffleEnabled = player.shuffleEnabled
-    val shuffleMode = player.shuffleMode
-    val smartShuffleAvailable = player.smartShuffleAvailable
-    val repeatMode = player.repeatMode
+    val shuffleEnabled = combine(player.shuffleEnabled, remote) { here, far -> far?.state?.shuffle ?: here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+    val shuffleMode = combine(player.shuffleMode, remote) { here, far ->
+        far?.state?.let { if (it.shuffle) com.opentune.playback.ShuffleMode.ON else com.opentune.playback.ShuffleMode.OFF } ?: here
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, com.opentune.playback.ShuffleMode.OFF)
+    val smartShuffleAvailable = combine(player.smartShuffleAvailable, remote) { here, far -> far == null && here }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+    val repeatMode = combine(player.repeatMode, remote) { here, far ->
+        when (far?.state?.repeat) {
+            null -> here
+            "one" -> androidx.media3.common.Player.REPEAT_MODE_ONE
+            "all" -> androidx.media3.common.Player.REPEAT_MODE_ALL
+            else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+        }
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, androidx.media3.common.Player.REPEAT_MODE_OFF)
     val durationMs = combine(player.durationMs, remote) { here, far -> far?.state?.track?.lengthMs?.takeIf { it > 0 } ?: here }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, 0L)
     val playbackError = player.error
@@ -96,6 +107,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         Together.attach(player)
+        com.opentune.data.connect.Connect.qualityLabel = {
+            com.opentune.data.NerdStats.playbackSource.value
+                ?.takeIf { it.mediaId == player.currentSong.value?.videoId }
+                ?.let { com.opentune.ui.player.qualityStatusLabel(it, player.audioFormat.value, false) }
+        }
         com.opentune.data.connect.Connect.attach(player)
         viewModelScope.launch { player.connect() }
         viewModelScope.launch { watchLyrics() }
@@ -270,10 +286,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun dismiss() = player.dismiss()
     fun skipNext() { if (!Connect.skipNext() && !Together.intercept(Together.Control.Next)) player.skipNext() }
     fun skipPrevious() { if (!Connect.skipPrevious() && !Together.intercept(Together.Control.Previous)) player.skipPrevious() }
-    fun toggleShuffle() = player.toggleShuffle()
+    fun toggleShuffle() { if (!Connect.toggleShuffle()) player.toggleShuffle() }
     /** Off, shuffle, then smart shuffle for a queue from a list; returns the new mode. */
-    fun cycleShuffle(): com.opentune.playback.ShuffleMode = player.cycleShuffle()
-    fun cycleRepeatMode() = player.cycleRepeatMode()
+    fun cycleShuffle(): com.opentune.playback.ShuffleMode {
+        val far = remote.value ?: return player.cycleShuffle()
+        Connect.toggleShuffle()
+        return if (far.state?.shuffle == true) com.opentune.playback.ShuffleMode.OFF else com.opentune.playback.ShuffleMode.ON
+    }
+    fun cycleRepeatMode() { if (!Connect.cycleRepeat()) player.cycleRepeatMode() }
     fun playQueueItem(index: Int) = player.playQueueItem(index)
     fun removeQueueItem(index: Int) = player.removeQueueItem(index)
     fun moveQueueItem(from: Int, to: Int) = player.moveQueueItem(from, to)

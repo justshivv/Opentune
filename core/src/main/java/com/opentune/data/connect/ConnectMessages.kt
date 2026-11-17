@@ -58,9 +58,17 @@ sealed interface ConnectMsg {
         val volume: Float = 1f,
         val shuffle: Boolean = false,
         val repeat: String = "off",
+        /**
+         * When this device took the music (started it, changed the song, or
+         * was handed it), on its own clock. The others show whichever took it
+         * last; pausing doesn't count.
+         */
+        val since: Long? = null,
+        /** How it sounds there, in that device's words ("Lossless", "High Quality"). */
+        val quality: String? = null,
     ) : ConnectMsg
 
-    /** Asks device [to] to do [action]: play, pause, next, previous, seek, volume, playTrack or addToQueue. */
+    /** Asks device [to] to do [action]: play, pause, next, previous, seek, volume, shuffle, repeat, playTrack or addToQueue. */
     @Serializable @SerialName("command")
     data class Command(
         override val from: String,
@@ -73,6 +81,8 @@ sealed interface ConnectMsg {
         val value: Float = 0f,
         val track: CTrack? = null,
         val tracks: List<CTrack> = emptyList(),
+        /** For repeat: "off", "all" or "one". */
+        val mode: String? = null,
     ) : ConnectMsg
 
     /** The answer to a [Command] or [Transfer] with the same [id]. */

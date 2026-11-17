@@ -105,6 +105,7 @@ object Connect {
         watching = main.launch {
             merge(
                 combine(player.currentSong, player.isPlaying, player.queue, player.upNext, player.volume) { _, _, _, _, _ -> Unit },
+                combine(player.shuffleEnabled, player.repeatMode, player.audioFormat, com.opentune.data.NerdStats.playbackSource) { _, _, _, _ -> Unit },
                 player.seeks,
             ).debounce(300).collect { session?.localChanged() }
         }
@@ -210,6 +211,20 @@ object Connect {
     fun skipPrevious(): Boolean = session?.intercept("previous") ?: false
     fun seekTo(positionMs: Long): Boolean = session?.intercept("seek", pos = positionMs) ?: false
     fun setVolume(value: Float): Boolean = session?.intercept("volume", value = value) ?: false
+    /** Shuffle on or off on the device playing elsewhere. */
+    fun toggleShuffle(): Boolean {
+        val target = controlling.value ?: return false
+        return session?.intercept("shuffle", value = if (target.state?.shuffle == true) 0f else 1f) ?: false
+    }
+    /** Off, all, one, as this player's own repeat button goes, on the device playing elsewhere. */
+    fun cycleRepeat(): Boolean {
+        val target = controlling.value ?: return false
+        val next = when (target.state?.repeat) { "off" -> "all"; "all" -> "one"; else -> "off" }
+        return session?.intercept("repeat", mode = next) ?: false
+    }
+
+    /** How the music sounds here, in the player's words ("Lossless · 16-bit/44.1 kHz"); set by the app. */
+    @Volatile var qualityLabel: () -> String? = { null }
 
     /** Moves playback to [deviceId]; this device's own id brings it here. */
     fun transferTo(deviceId: String) = session?.transferTo(deviceId)
@@ -265,7 +280,17 @@ internal class ConnectionConnectPlayer(private val c: PlayerConnection) : Connec
                 androidx.media3.common.Player.REPEAT_MODE_ALL -> "all"
                 else -> "off"
             },
+            quality = runCatching { Connect.qualityLabel() }.getOrNull(),
         )
+    }
+    override fun setShuffle(on: Boolean) { if (c.shuffleEnabled.value != on) c.toggleShuffle() }
+    override fun setRepeat(mode: String) {
+        val want = when (mode) {
+            "one" -> androidx.media3.common.Player.REPEAT_MODE_ONE
+            "all" -> androidx.media3.common.Player.REPEAT_MODE_ALL
+            else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+        }
+        c.setRepeatMode(want)
     }
     override fun play() = c.play()
     override fun pause() = c.pause()

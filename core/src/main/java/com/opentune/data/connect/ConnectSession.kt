@@ -32,6 +32,9 @@ internal interface ConnectPlayer {
     fun previous()
     fun seekTo(ms: Long)
     fun setVolume(v: Float)
+    fun setShuffle(on: Boolean)
+    /** "off", "all" or "one". */
+    fun setRepeat(mode: String)
     fun playTrack(t: CTrack)
     fun addToQueue(ts: List<CTrack>)
     /** Loads [queue] from [index] at [pos] ms; false when none of it can play here. */
@@ -49,9 +52,15 @@ data class Snapshot(
     val volume: Float,
     val shuffle: Boolean,
     val repeat: String,
+    /** How it sounds here, in this device's words; null when it can't say. */
+    val quality: String? = null,
 )
 
-/** Another of the person's devices, as last heard. [receivedAt] is this device's clock when its [state] came. */
+/**
+ * Another of the person's devices, as last heard. [receivedAt] is this
+ * device's clock when its [state] came; [since] when it took the music (see
+ * [State.since]).
+ */
 data class Device(
     val id: String,
     val name: String,
@@ -59,6 +68,7 @@ data class Device(
     val lastSeen: Long,
     val state: State? = null,
     val receivedAt: Long = 0,
+    val since: Long = 0,
 ) {
     /** Where its song is now, counting on from its last state while it plays. */
     fun positionAt(now: Long): Long = state?.let { if (it.playing) it.pos + (now - receivedAt) else it.pos } ?: 0
@@ -130,6 +140,8 @@ internal class ConnectSession(
 
     private class Pending(val to: String, val job: Job, val onAck: (Ack) -> Unit)
     private val pending = HashMap<String, Pending>()
+    /** Play or pause pressed here for a device: until when, and which it was. */
+    private val guesses = HashMap<String, Pair<Long, Boolean>>()
 
     fun start() {
         // Numbered from the clock, so a restarted device's messages still count as newer than its last ones.
@@ -195,7 +207,8 @@ internal class ConnectSession(
         mine = now
         if (now == null) { refresh(); return }
         val started = now.playing && before?.playing != true
-        if (now.track != before?.track || now.playing != before?.playing || now.private != before?.private) mineAt = clock()
+        // Taking the music: a new song, or starting it. Pausing leaves it where it was taken.
+        if (now.track != before?.track || now.private != before?.private || (now.playing && before?.playing != true)) mineAt = clock()
         if (started) {
             for (d in devices.values) if (d.state?.playing == true) command(d.id, "pause", quiet = true)
         }
@@ -207,7 +220,7 @@ internal class ConnectSession(
      * A button pressed here while another device is the one playing: sends it
      * there instead. True when it went, so the caller does nothing here.
      */
-    fun intercept(action: String, pos: Long = 0, value: Float = 0f): Boolean {
+    fun intercept(action: String, pos: Long = 0, value: Float = 0f, mode: String? = null): Boolean {
         val target = view.value.controlling ?: return false
         // Show the change at once; the target's own state confirms it.
         val shown = target.state
@@ -217,11 +230,16 @@ internal class ConnectSession(
                 "pause" -> shown.copy(playing = false, pos = target.positionAt(clock()))
                 "seek" -> shown.copy(pos = pos)
                 "volume" -> shown.copy(volume = value)
+                "shuffle" -> shown.copy(shuffle = value > 0.5f)
+                "repeat" -> shown.copy(repeat = mode ?: shown.repeat)
                 else -> null
             }
             if (guess != null) setDevice(target.copy(state = guess, receivedAt = clock()))
+            if (guess != null && (action == "play" || action == "pause")) guesses[target.id] = clock() + GUESS_MS to guess.playing
         }
-        command(target.id, action, pos = pos, value = value) { ack -> if (!ack.ok && shown != null) setDevice(target.copy(state = shown)) }
+        command(target.id, action, pos = pos, value = value, mode = mode) { ack ->
+            if (!ack.ok && shown != null) { guesses.remove(target.id); setDevice(target.copy(state = shown)) }
+        }
         return true
     }
 
@@ -253,6 +271,8 @@ internal class ConnectSession(
         if (deviceId == myId) {
             if (player.load(queue, 0, pos, state.playing)) {
                 command(source.id, "pause", quiet = true)
+                mine = null
+                mineAt = clock()
                 localChanged()
             } else notice(CANT_PLAY, myName)
             return
@@ -283,8 +303,14 @@ internal class ConnectSession(
                 if (known == null) { sayPresence(); sayState(force = true) }
             }
             is State -> {
+                // A play or pause pressed here a moment ago: a report from before it landed doesn't undo it on screen.
+                guesses[msg.from]?.let { (until, playing) ->
+                    if (now < until && msg.playing != playing) { touch(msg.from, now); return }
+                    guesses.remove(msg.from)
+                }
                 val base = known ?: Device(msg.from, "", "", now)
-                setDevice(base.copy(lastSeen = now, state = msg, receivedAt = now))
+                val since = msg.since ?: if (base.state?.track != msg.track || (msg.playing && base.state?.playing != true)) now else base.since
+                setDevice(base.copy(lastSeen = now, state = msg, receivedAt = now, since = since))
                 if (known == null) sayPresence()
             }
             is Leave -> {
@@ -297,14 +323,15 @@ internal class ConnectSession(
                 if (msg.to != myId) return
                 val ok = apply(msg)
                 send(Ack(myId, ++seq, now, to = msg.from, id = msg.id, ok = ok, reason = if (ok) null else "unplayable"))
-                localChanged()
+                // A play or pause shows in the player's state a moment later; its own change sends it then.
+                if (msg.action != "play" && msg.action != "pause") localChanged()
             }
             is Transfer -> {
                 touch(msg.from, now)
                 if (msg.to != myId) return
                 val ok = player.load(msg.queue, msg.index, msg.pos + (now - msg.at).coerceIn(0, 10_000), msg.playing)
                 send(Ack(myId, ++seq, now, to = msg.from, id = msg.id, ok = ok, reason = if (ok) null else "unplayable"))
-                if (ok) { mine = null; localChanged() }
+                if (ok) { mine = null; mineAt = clock(); localChanged() }
             }
             is Ack -> {
                 touch(msg.from, now)
@@ -326,6 +353,8 @@ internal class ConnectSession(
             "previous" -> player.previous()
             "seek" -> player.seekTo(c.pos)
             "volume" -> player.setVolume(c.value)
+            "shuffle" -> player.setShuffle(c.value > 0.5f)
+            "repeat" -> player.setRepeat(c.mode?.takeIf { it in setOf("off", "all", "one") } ?: return false)
             "playTrack" -> player.playTrack(c.track ?: return false)
             "addToQueue" -> player.addToQueue(c.tracks)
             else -> return false
@@ -342,11 +371,12 @@ internal class ConnectSession(
         value: Float = 0f,
         track: CTrack? = null,
         tracks: List<CTrack> = emptyList(),
+        mode: String? = null,
         quiet: Boolean = false,
         onAck: (Ack) -> Unit = {},
     ) {
         val id = newId()
-        send(Command(myId, ++seq, clock(), to = to, id = id, action = action, pos = pos, value = value, track = track, tracks = tracks))
+        send(Command(myId, ++seq, clock(), to = to, id = id, action = action, pos = pos, value = value, track = track, tracks = tracks, mode = mode))
         if (!quiet) expect(id, to, timings.commandMs, onAck)
     }
 
@@ -381,7 +411,7 @@ internal class ConnectSession(
         mine = s
         if (s.track == null && !s.private && !force) return
         lastStateSent = clock()
-        send(State(myId, ++seq, clock(), track = s.track, private = s.private, playing = s.playing, pos = s.pos, queue = s.queue.take(ConnectMsg.MAX_QUEUE), volume = s.volume, shuffle = s.shuffle, repeat = s.repeat))
+        send(State(myId, ++seq, clock(), track = s.track, private = s.private, playing = s.playing, pos = s.pos, queue = s.queue.take(ConnectMsg.MAX_QUEUE), volume = s.volume, shuffle = s.shuffle, repeat = s.repeat, since = mineAt.takeIf { it > 0 }, quality = s.quality))
     }
 
     private fun send(m: ConnectMsg) {
@@ -409,11 +439,11 @@ internal class ConnectSession(
         val m = mine
         val meHas = m != null && (m.track != null || m.private)
         if (meHas && m!!.playing) return myId
-        val playing = others.filter { it.hasSomething && it.state!!.playing }.maxByOrNull { it.receivedAt }
+        val playing = others.filter { it.hasSomething && it.state!!.playing }.maxByOrNull { it.since }
         if (playing != null) return playing.id
-        val newest = others.filter { it.hasSomething }.maxByOrNull { it.receivedAt }
+        val newest = others.filter { it.hasSomething }.maxByOrNull { it.since }
         return when {
-            meHas && (newest == null || mineAt >= newest.receivedAt) -> myId
+            meHas && (newest == null || mineAt >= newest.since) -> myId
             newest != null -> newest.id
             else -> null
         }
@@ -425,6 +455,8 @@ internal class ConnectSession(
 
     companion object {
         const val KIND = 21421
+        /** How long a play or pause pressed here outlasts reports from before it landed. */
+        private const val GUESS_MS = 1_500L
         const val NOT_ANSWERING = "{0} isn't answering"
         const val CANT_PLAY = "Can't play this on {0}"
         const val NEEDS_TAP = "Click in {0} first, then try again"

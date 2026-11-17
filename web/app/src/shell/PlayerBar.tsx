@@ -95,8 +95,10 @@ export function PlayerBar() {
   const playingHere = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
   const playing = remote ? !!remote.state?.playing : playingHere;
   const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0)) || !!remote;
-  const shuffle = usePlayer((s) => s.shuffle);
-  const repeat = usePlayer((s) => s.repeat);
+  const localShuffle = usePlayer((s) => s.shuffle);
+  const localRepeat = usePlayer((s) => s.repeat);
+  const shuffle = remote ? !!remote.state?.shuffle : localShuffle;
+  const repeat = remote ? (remote.state?.repeat ?? 'off') : localRepeat;
   const { togglePlay, next, previous, toggleShuffle, cycleRepeat } = usePlayer.getState();
   const [volumeOpen, setVolumeOpen] = useState(false);
   const glass = useLiquidGlass<HTMLDivElement>(24, 26);
