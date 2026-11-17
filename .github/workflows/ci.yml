@@ -53,6 +53,7 @@ jobs:
           --tests '*UpgradeHandoffTest'
           --tests '*PodcastParserTest'
           --tests '*PodcastsTest'
+          --tests '*SongCommentsTest'
       - name: Player and sign-in regression tests
         run: >-
           ./gradlew --no-daemon :app:testDebugUnitTest
