@@ -129,6 +129,9 @@
 .ot-circle-button { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 50%; background: var(--systemQuinary); transition: background-color .15s, scale .16s var(--ot-ease-settle); }
 .ot-circle-button:hover:not(:disabled) { background: var(--systemQuaternary); }
 .ot-circle-button:active:not(:disabled) { scale: .94; }
+/* The featured shelf's close button, sized to its title row. */
+.ot-circle-button.ot-shelf-close { width: 32px; height: 32px; color: var(--systemSecondary); }
+.ot-circle-button.ot-shelf-close:hover { color: var(--systemPrimary); }
 .ot-circle-button:disabled { opacity: .5; }
 .ot-quick-title { display: flex; align-items: center; justify-content: space-between; margin: 0 var(--body-gutter); }
 .ot-quick-title h2 { font: var(--title-2-emphasized); }
@@ -138,7 +141,10 @@
 .ot-home-links a { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: var(--systemQuinary); border-radius: 24px; font-weight: 600; transition: background-color .15s; }
 .ot-home-links a:hover { background: var(--systemQuaternary); }
 /* An announcement the owner publishes (Remote config › banners), above the feed. */
-.ot-banner { margin: 0 var(--body-gutter) 24px; padding: 18px 20px; border-radius: 18px; background: color-mix(in srgb, var(--keyColor) 12%, var(--systemQuinary)); }
+.ot-banner { position: relative; margin: 0 var(--body-gutter) 24px; padding: 18px 52px 18px 20px; border-radius: 18px; background: color-mix(in srgb, var(--keyColor) 12%, var(--systemQuinary)); }
+.ot-banner .ot-banner-close { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 99px; color: var(--systemSecondary); }
+.ot-banner .ot-banner-close:hover { background: color-mix(in srgb, var(--systemPrimary) 10%, transparent); color: var(--systemPrimary); }
+.ot-banner .ot-banner-close:focus-visible { outline: 2px solid var(--keyColor); outline-offset: 2px; }
 .ot-banner h2 { margin: 0 0 4px; font: var(--title-3-emphasized); }
 .ot-banner p { margin: 0; max-width: 64ch; color: var(--systemSecondary); font: var(--body-tall); }
 .ot-banner > div { margin-top: 12px; }

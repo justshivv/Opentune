@@ -1,11 +1,12 @@
 import { useRemoteConfig } from '@/config/remote';
 import { syncPublished } from '@/addons/client';
-import { Clock, RefreshCw, Settings, Sparkles, ListMusic } from 'lucide-react';
+import { Clock, RefreshCw, Settings, Sparkles, ListMusic, X } from 'lucide-react';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { queryClient } from '@/lib/queryClient';
 import { homeSections } from './homeSections';
 import { Fragment, useEffect, useRef } from 'react';
-import { Shelves, TrackShelf } from '@/components/music/ShelfView';
+import { Shelves, ShelfView, TrackShelf } from '@/components/music/ShelfView';
+import { openBanners, showsPlaylists, useHomeDismissals } from '@/state/homeDismissals';
 import { LoadError, LoadMoreError, NeedsExtension } from '@/components/music/States';
 import { useHome, useLibrary, useYouTubeReady } from '@/data/music/queries';
 import type { Track } from '@/data/music/types';
@@ -31,6 +32,10 @@ function useRecentlyPlayed(): Track[] {
 /** YouTube Music's home feed, as Apple's Home: shelf after shelf, more as you scroll. */
 export default function HomePage() {
   const runtime = useRemoteConfig(s => s.config.data);
+  const closedBanners = useHomeDismissals(s => s.banners);
+  const closedPlaylists = useHomeDismissals(s => s.playlists);
+  const dismissBanner = useHomeDismissals(s => s.dismissBanner);
+  const dismissPlaylists = useHomeDismissals(s => s.dismissPlaylists);
   const { missing } = useYouTubeReady();
   const home = useHome();
   const recent = useRecentlyPlayed();
@@ -61,9 +66,14 @@ export default function HomePage() {
     }}><RefreshCw size={20} className={home.isFetching ? 'animate-spin' : ''} /></button>
     <PrefetchLink className="ot-circle-button" to="/settings" aria-label="Settings"><Settings size={20} /></PrefetchLink>
   </div></header>;
-  const banners = runtime.banners.filter(b => b.enabled && b.platforms.includes('web')).map(b => (
-    <section className="ot-banner" key={b.id} aria-label={b.title}><h2>{b.title}</h2><p>{b.body}</p><div><a href={b.url} target="_blank" rel="noreferrer">{b.action} ↗</a></div></section>
+  // From the control dashboard, each closable here (and kept closed in this browser), as on the phone.
+  const banners = openBanners(runtime.banners, closedBanners).map(b => (
+    <section className="ot-banner" key={b.id} aria-label={b.title}>
+      <button className="ot-banner-close" aria-label={`Dismiss ${b.title}`} onClick={() => dismissBanner(b.id)}><X size={16} strokeWidth={2.4} /></button>
+      <h2>{b.title}</h2><p>{b.body}</p><div><a href={b.url} target="_blank" rel="noreferrer">{b.action} ↗</a></div>
+    </section>
   ));
+  const featuredIds = runtime.playlists.map(p => p.id);
   if (missing) {
     return (
       <>
@@ -99,10 +109,11 @@ export default function HomePage() {
             {arranged.quick ? <Shelves shelves={[{ ...arranged.quick, title: title('Quick picks') }]} /> : recent.length > 0 && <TrackShelf title={title('Quick picks')} to="/library/recent" tracks={recent} source={RECENT_SOURCE} />}
           </Fragment>;
           case 'mixes': return <div className="ot-home-links" key={section.id}><PrefetchLink to="/library/made-for-you"><Sparkles size={18} />{title('Made for you')}</PrefetchLink><PrefetchLink to="/library/playlists"><ListMusic size={18} />Your playlists</PrefetchLink></div>;
-          case 'featured-playlists': return runtime.playlists.length > 0 && <Shelves key={section.id} shelves={[{
+          // Closed until a playlist is added that wasn't there when it was closed.
+          case 'featured-playlists': return showsPlaylists(featuredIds, closedPlaylists) && <ShelfView key={section.id} shelf={{
             title: title('From the community'), strapline: null, layout: 'square', seeAll: null,
             items: runtime.playlists.map(p => ({ kind: 'playlist', id: p.browseId, title: p.title, subtitle: 'OpenTune picks', artists: [], album: null, thumbnail: p.artwork || null, wide: false, durationSec: null, explicit: false })),
-          }]} />;
+          }} action={<button className="ot-circle-button ot-shelf-close" aria-label="Dismiss featured playlists" onClick={() => dismissPlaylists(featuredIds)}><X size={16} strokeWidth={2.4} /></button>} />;
           case 'recommendations': return <Fragment key={section.id}>{section.title && <h2 className="mx-5 type-title-2-emphasized">{section.title}</h2>}<Shelves shelves={arranged.shelves} /></Fragment>;
           // These shelves are native-only until their web counterparts are implemented.
           case 'speed-dial': case 'spotify-mixes': return null;
