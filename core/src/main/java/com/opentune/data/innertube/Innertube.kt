@@ -1333,6 +1333,17 @@ object Innertube {
         put("createCommentParams", params)
     }
 
+    /** Posts [text] as a reply, with the parameters YouTube gave the signed-in reply box of a comment. */
+    suspend fun createCommentReply(params: String, text: String): JsonObject = postWeb("comment/create_comment_reply", attempts = 1) {
+        put("commentText", text)
+        put("createReplyParams", params)
+    }
+
+    /** Does what YouTube's comment buttons do (like, unlike, delete): [action] as the button carries it. */
+    suspend fun performCommentAction(action: String): JsonObject = postWeb("comment/perform_comment_action", attempts = 1) {
+        put("actions", JsonArray(listOf(JsonPrimitive(action))))
+    }
+
     /**
      * A request to YouTube's own site API (the WEB client) rather than YouTube Music's, for
      * comments, which YouTube Music doesn't show. Signed with the same sign-in when there is
