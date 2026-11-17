@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useConnect } from '@/connect/connect';
 import { useRoom } from '@/together/room';
 
-/** A room's short messages ("Only the host can change the song"), for a few seconds over the page. */
+/** Short messages from a room ("Only the host can change the song") or from Connect, for a few seconds over the page. */
 export function RoomNotice() {
-  const notice = useRoom((s) => s.notice);
+  const fromRoom = useRoom((s) => s.notice);
+  const fromConnect = useConnect((s) => s.notice);
+  const notice = !fromConnect || (fromRoom && fromRoom.at > fromConnect.at) ? fromRoom : fromConnect;
   const [shown, setShown] = useState(false);
   useEffect(() => {
     if (!notice) return;

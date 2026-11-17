@@ -44,7 +44,7 @@ export class ConnectGroup {
     if (!value) return null;
     let raw: string;
     if (value.startsWith('opentune://connect/#')) raw = value.slice('opentune://connect/#'.length);
-    else if (value.startsWith(WEB_PLAYER)) raw = /#(?:.*&)?connect=([^&]*)/.exec(value)?.[1] ?? '';
+    else if (value.startsWith(WEB_PLAYER)) raw = /[?&#](?:join|connect)=([A-Za-z0-9_-]{43})/.exec(value)?.[1] ?? '';
     else if (value.includes('://')) return null;
     else raw = value;
     return ENCODED.test(raw) ? raw : null;
@@ -62,7 +62,7 @@ export class ConnectGroup {
     return `opentune://connect/#${this.encoded}`;
   }
   get webLink(): string {
-    return `${WEB_PLAYER}#connect=${this.encoded}`;
+    return `${WEB_PLAYER}#/settings/devices?join=${this.encoded}`;
   }
 
   seal(plain: string): Promise<string> {

@@ -209,7 +209,26 @@ let partyHooks: PartyHooks | null = null;
 export function setPartyHooks(hooks: PartyHooks | null): void {
   partyHooks = hooks;
 }
-const intent = () => partyHooks?.onIntent();
+const intent = () => {
+  partyHooks?.onIntent();
+  connectHooks?.onIntent?.();
+};
+
+// ---- Connect's door (connect/connect.ts) --------------------------------------------
+//
+// While another of the person's devices is the one playing, this player's
+// play/pause, skips and seeks act on that device instead.
+
+export interface ConnectHooks {
+  /** True when another device took the control, so nothing happens here. */
+  intercept(control: PartyControl): boolean;
+  /** The user did something to playback here. */
+  onIntent?(): void;
+}
+let connectHooks: ConnectHooks | null = null;
+export function setConnectHooks(hooks: ConnectHooks | null): void {
+  connectHooks = hooks;
+}
 
 // ---- Store ------------------------------------------------------------------------
 
@@ -378,11 +397,13 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   next() {
+    if (connectHooks?.intercept({ kind: 'next' })) return;
     if (partyHooks?.intercept({ kind: 'next' })) return;
     void advance(false).then(intent);
   },
 
   previous() {
+    if (connectHooks?.intercept({ kind: 'previous' })) return;
     if (partyHooks?.intercept({ kind: 'previous' })) return;
     const { index, queue, repeat } = get();
     const audio = getAudio();
@@ -394,6 +415,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   togglePlay() {
+    if (connectHooks?.intercept({ kind: 'toggle' })) return;
     const audio = getAudio();
     const { nowPlaying, status, index } = get();
     if (!nowPlaying) return;
@@ -411,6 +433,7 @@ export const usePlayer = create<PlayerState>()((set, get) => ({
   },
 
   seek(seconds) {
+    if (connectHooks?.intercept({ kind: 'seek', ms: seconds * 1000 })) return;
     const audio = getAudio();
     if (!audio) {
       // A restored track not started yet: Play starts it from here.
@@ -911,9 +934,9 @@ const PARTY_SOURCE: QueueSource = { title: 'Listen Together', type: 'queue' };
 
 export const partyPlayer = {
   /** Puts the party's running order on the player at [index], at [startSec]; starts it only when [play]. */
-  load(tracks: Track[], tiers: ('user' | 'autoplay')[], index: number, startSec: number, play: boolean): Promise<void> {
+  load(tracks: Track[], tiers: ('user' | 'autoplay')[], index: number, startSec: number, play: boolean, source: QueueSource = PARTY_SOURCE): Promise<void> {
     canonical = null;
-    usePlayer.setState({ queue: tracks.map((t, i) => asEntry(t, tiers[i] ?? 'user', PARTY_SOURCE)) });
+    usePlayer.setState({ queue: tracks.map((t, i) => asEntry(t, tiers[i] ?? 'user', source)) });
     return startAt(index, { startSec, autoplay: play });
   },
   play(): void {

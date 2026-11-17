@@ -25,7 +25,7 @@ describe('group key, as the phone makes it', () => {
     expect(ConnectGroup.parse(g.appLink)).toBe(g.encoded);
     expect(ConnectGroup.parse(g.webLink)).toBe(g.encoded);
     expect(ConnectGroup.parse(` ${g.encoded} `)).toBe(g.encoded);
-    expect(ConnectGroup.parse(`https://example.com/#connect=${g.encoded}`)).toBeNull();
+    expect(ConnectGroup.parse(`https://example.com/#/settings/devices?join=${g.encoded}`)).toBeNull();
     expect(ConnectGroup.parse(g.encoded.slice(1))).toBeNull();
   });
 });

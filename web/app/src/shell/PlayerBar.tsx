@@ -1,3 +1,4 @@
+import { MonitorSmartphone } from 'lucide-react';
 import { useState } from 'react';
 import {
   BackwardIcon,
@@ -18,6 +19,8 @@ import { usePlayer } from '@/state/player';
 import { useUi } from '@/state/ui';
 import { useLiquidGlass } from '@/lib/liquidGlass';
 import { Lcd } from './Lcd';
+import { openDevices, useControlling } from '@/connect/connect';
+import { RemoteLcd } from '@/connect/RemoteLcd';
 
 const control = 'grid place-items-center rounded-[6px] disabled:opacity-40';
 // Shuffle and repeat: secondary, and when on the key colour on a fill of it with a dot under (.ot-toggle).
@@ -85,10 +88,13 @@ export function PlayerBar() {
   const toggleSidePanel = useUi((s) => s.toggleSidePanel);
   const lyrics = useLyrics();
   const hasLyrics = !!lyrics.data || sidePanel === 'lyrics';
-  const hasTrack = usePlayer((s) => s.nowPlaying !== null);
+  // Another of the person's devices playing: the bar shows and controls it (see Connect).
+  const remote = useControlling();
+  const hasTrack = usePlayer((s) => s.nowPlaying !== null) || !!remote;
   const videoId = usePlayer((s) => s.nowPlaying?.videoId ?? null);
-  const playing = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
-  const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0));
+  const playingHere = usePlayer((s) => s.status === 'playing' || s.status === 'buffering');
+  const playing = remote ? !!remote.state?.playing : playingHere;
+  const hasNext = usePlayer((s) => s.index + 1 < s.queue.length || s.repeat !== 'off' || (s.autoplay && s.index >= 0)) || !!remote;
   const shuffle = usePlayer((s) => s.shuffle);
   const repeat = usePlayer((s) => s.repeat);
   const { togglePlay, next, previous, toggleShuffle, cycleRepeat } = usePlayer.getState();
@@ -135,7 +141,7 @@ export function PlayerBar() {
         </div>
 
         <div className="h-full min-w-0 px-4">
-          <Lcd />
+          {remote ? <RemoteLcd device={remote} /> : <Lcd />}
         </div>
 
         <div
@@ -164,6 +170,9 @@ export function PlayerBar() {
             onClick={() => toggleSidePanel('up-next')}
           >
             <UpNextIcon size={18} />
+          </button>
+          <button className={fading} aria-label="Your devices" aria-pressed={!!remote} onClick={openDevices}>
+            <MonitorSmartphone size={18} />
           </button>
           <VolumeControl open={volumeOpen} onOpen={() => setVolumeOpen(true)} />
         </div>

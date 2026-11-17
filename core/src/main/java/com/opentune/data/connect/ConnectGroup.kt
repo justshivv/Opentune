@@ -31,7 +31,7 @@ class ConnectGroup(val secret: ByteArray) {
 
     /** Links that add a device to the group. The secret is in the fragment, which never reaches a server. */
     val appLink: String get() = "opentune://connect/#$encoded"
-    val webLink: String get() = "$WEB_PLAYER#connect=$encoded"
+    val webLink: String get() = "$WEB_PLAYER#/settings/devices?join=$encoded"
 
     override fun equals(other: Any?) = other is ConnectGroup && other.secret.contentEquals(secret)
     override fun hashCode() = secret.contentHashCode()
@@ -41,6 +41,7 @@ class ConnectGroup(val secret: ByteArray) {
         const val WEB_PLAYER = "https://justshivv.github.io/Opentune/player/"
         private val random = SecureRandom()
         private val ENCODED = Regex("[A-Za-z0-9_-]{43}")
+        private val WEB_SECRET = Regex("[?&#](?:join|connect)=([A-Za-z0-9_-]{43})")
 
         fun generate() = ConnectGroup(ByteArray(SIZE).also(random::nextBytes))
 
@@ -49,7 +50,7 @@ class ConnectGroup(val secret: ByteArray) {
             val value = text?.trim() ?: return null
             val raw = when {
                 value.startsWith("opentune://connect/#") -> value.removePrefix("opentune://connect/#")
-                value.startsWith(WEB_PLAYER) -> value.substringAfter("#connect=", "").substringBefore('&')
+                value.startsWith(WEB_PLAYER) -> WEB_SECRET.find(value)?.groupValues?.get(1).orEmpty()
                 "://" in value -> return null
                 else -> value
             }
