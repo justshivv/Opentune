@@ -91,7 +91,13 @@ data class DownloadEntry(
     val codec: String? = null,
     /** A lossless copy being fetched to replace this one; this file stays and plays until it's in. */
     val upgrade: DownloadUpgrade? = null,
+    /** The last FLAC search for this song found none: no stream would beat the file while it holds. */
+    val losslessMiss: LosslessMiss? = null,
 )
+
+/** A FLAC search that found no matching recording, [at] wall-clock time, with the add-ons then on. */
+@Serializable
+data class LosslessMiss(val at: Long, val addons: String)
 
 /** "Download again in lossless" under way for a finished download. */
 @Serializable
@@ -200,8 +206,10 @@ object Downloads {
         val known = com.opentune.data.lossless.ExternalStreams.cached(videoId)?.let {
             if (it.lossless) DownloadedCopy.losslessKbps(it.bits, it.sampleRate) else it.kbps ?: 320
         }
+        // A FLAC search that recently found nothing, with the same add-ons on, isn't counted on.
+        val noFlac = DownloadedCopy.missHolds(_entries.value[videoId]?.losslessMiss, System.currentTimeMillis(), DownloadedCopy.addonSet())
         val possible = when {
-            com.opentune.data.lossless.ExternalStreams.allowed(true) -> DownloadedCopy.CD_KBPS
+            com.opentune.data.lossless.ExternalStreams.allowed(true) && !noFlac -> DownloadedCopy.CD_KBPS
             com.opentune.data.lossless.ExternalStreams.allowed(false) -> 320
             else -> youtube
         }
@@ -414,6 +422,19 @@ object Downloads {
         }
     }
 
+    /**
+     * What a FLAC search for a downloaded song found, kept with the download: a miss lets
+     * "Stream only when it's better" play the file instead of streaming in hope of a FLAC.
+     */
+    fun noteLosslessLookup(videoId: String, found: Boolean) {
+        if (_entries.value[videoId] == null) return
+        val miss = if (found) null else LosslessMiss(System.currentTimeMillis(), DownloadedCopy.addonSet())
+        _entries.update { m ->
+            val e = m[videoId] ?: return@update m
+            if (e.losslessMiss == miss) m else m + (videoId to e.copy(losslessMiss = miss))
+        }
+    }
+
     /** A lossless re-download's progress; false once it's no longer wanted (removed, or another took its place). */
     internal fun updateUpgrade(videoId: String, workId: String, progress: Float): Boolean {
         while (true) {
@@ -498,7 +519,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         var shadow: DownloadEntry? = if (!upgrading) null else entry.copy(
             state = DownloadState.QUEUED, progress = 0f, path = null, artPath = null, bytes = 0, error = null,
             loudnessDb = null, exportUri = null, source = null, bits = null, sampleRate = null, codec = null,
-            preferLossless = true, upgrade = null, workId = myWork)
+            preferLossless = true, upgrade = null, losslessMiss = null, workId = myWork)
         var owner = entry.workId
         fun publish(transform: (DownloadEntry) -> DownloadEntry) {
             val copy = shadow
