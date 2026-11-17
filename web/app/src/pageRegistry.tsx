@@ -1,4 +1,5 @@
-import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
+import { Suspense, type ComponentType, type ReactNode } from 'react';
+import { lazyRecovering } from '@/lib/staleBuild';
 import { matchPath } from 'react-router';
 import { prefetchPageData } from '@/data/music/queries';
 import {
@@ -46,7 +47,8 @@ export const pages: PageRoute[] = [
 export const notFound: PageRoute = { path: '*', load: () => import('@/pages/NotFoundPage'), skeleton: <PlainSkeleton /> };
 
 export function pageElement({ load, skeleton }: PageRoute) {
-  const Page = lazy(load);
+  // A tab left open across an update reloads into the new build rather than failing here.
+  const Page = lazyRecovering(load);
   return (
     <Suspense fallback={skeleton}>
       <Page />
