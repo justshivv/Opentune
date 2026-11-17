@@ -46,6 +46,7 @@ jobs:
           --tests '*AddonVerificationRequestTest'
           --tests '*FirstPartyAddonAuthTest'
           --tests '*SourcePrefetchTest'
+          --tests '*AheadLosslessTest'
           --tests '*ExternalStreamsTest'
           --tests '*LosslessSourceTest'
           --tests '*UpgradeHandoffTest'
