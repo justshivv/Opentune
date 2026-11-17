@@ -54,6 +54,7 @@ object Core {
         UpgradedTracks.init(app)
         QueueStore.init(app)
         com.opentune.data.together.Together.init(app)
+        com.opentune.data.connect.Connect.init(app)
         LastFm.init(app)
         Subsonic.init(app)
         ListenBrainz.init(app)
