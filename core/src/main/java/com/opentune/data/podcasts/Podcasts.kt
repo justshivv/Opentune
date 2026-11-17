@@ -44,9 +44,22 @@ object Podcasts {
     }
 
     @Serializable
-    private class Saved(val shows: List<PodcastShow> = emptyList(), val progress: List<Progress> = emptyList())
+    private class Saved(
+        val shows: List<PodcastShow> = emptyList(),
+        val progress: List<Progress> = emptyList(),
+        /** How often each topic chip was picked. */
+        val topics: Map<String, Int> = emptyMap(),
+    )
 
-    data class Home(val popular: List<PodcastEpisode>, val shows: List<PodcastShow>, val more: List<Pair<String, List<PodcastShow>>>)
+    data class Home(
+        val popular: List<PodcastEpisode>,
+        val shows: List<PodcastShow>,
+        val more: List<Pair<String, List<PodcastShow>>>,
+        /** Shows like those listened to, by the show they're like ("Because you listened to …"). */
+        val becauseOf: List<Pair<String, List<PodcastShow>>> = emptyList(),
+        /** Episodes like those listened to. */
+        val suggested: List<PodcastEpisode> = emptyList(),
+    )
 
     private val json = Json { ignoreUnknownKeys = true }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -62,9 +75,26 @@ object Podcasts {
         file = f
         runCatching { json.decodeFromString(Saved.serializer(), f.readText()) }.getOrNull()?.let { s ->
             _subscriptions.value = s.shows
+            _topicUse.value = s.topics
             _progress.value = s.progress.associateBy { it.episode.videoId }
         }
     }
+
+    // ---- Topics -------------------------------------------------------------
+
+    private val _topicUse = MutableStateFlow<Map<String, Int>>(emptyMap())
+    /** How often each topic was picked, to put the reader's first. */
+    val topicUse: StateFlow<Map<String, Int>> = _topicUse.asStateFlow()
+
+    fun pickedTopic(topic: String) {
+        if (topic !in TOPICS) return
+        _topicUse.value = _topicUse.value + (topic to (_topicUse.value[topic] ?: 0) + 1)
+        save()
+    }
+
+    /** The topics, those picked most first; the rest keep their order. */
+    fun topicsInOrder(use: Map<String, Int> = _topicUse.value): List<String> =
+        TOPICS.withIndex().sortedWith(compareByDescending<IndexedValue<String>> { use[it.value] ?: 0 }.thenBy { it.index }).map { it.value }
 
     // ---- Subscriptions ------------------------------------------------------
 
@@ -127,22 +157,93 @@ object Podcasts {
             val page = async { runCatching { Innertube.browse("FEmusic_non_music_audio") }.getOrNull() }
             val explore = async { runCatching { Innertube.browse("FEmusic_explore") }.getOrNull() }
             val home = async { runCatching { Innertube.browse("FEmusic_home") }.getOrNull() }
+            val personal = async { runCatching { forYou() }.onFailure { Log.w(TAG, "suggestions failed", it) }.getOrNull() }
             val own = page.await()
             val popular = (own?.let { PodcastParser.episodesIn(it) }.orEmpty() + explore.await()?.let { PodcastParser.episodesIn(it) }.orEmpty())
                 .distinctBy { it.videoId }
             val shows = (own?.let { PodcastParser.showsIn(it) }.orEmpty() + home.await()?.let { PodcastParser.showsIn(it) }.orEmpty())
                 .distinctBy { it.browseId }
-            // Topics filled in up front, different ones each day: two beside YouTube Music's own
-            // picks, more when it sends none (signed out, its podcasts page answers 404 and
+            val mine = personal.await() ?: ForYou(emptyList(), emptyList())
+            // Topics filled in up front, different ones each day: two beside other picks, more
+            // when there are none (signed out, YouTube Music's podcasts page answers 404 and
             // Explore and Home carry no podcasts), since topics are found by search, which works.
             val day = (System.currentTimeMillis() / 86_400_000L).toInt() + homeVisits.getAndIncrement()
-            val picks = topicPicks(day, if (popular.isEmpty() && shows.isEmpty()) 4 else 2)
+            val nothingElse = popular.isEmpty() && shows.isEmpty() && mine.shows.isEmpty() && mine.episodes.isEmpty()
+            val favourites = topicsInOrder().filter { (_topicUse.value[it] ?: 0) > 0 }
+            val picks = topicsToShow(day, nothingElse, enoughFor(mine), favourites)
             val more = picks.map { topic -> async { topic to runCatching { searchShows(topic) }.getOrDefault(emptyList()) } }.awaitAll()
                 .filter { it.second.isNotEmpty() }
             // Nothing at all came back: that's the connection, or YouTube Music refusing.
-            if (popular.isEmpty() && shows.isEmpty() && more.isEmpty()) throw java.io.IOException("YouTube Music sent no podcasts")
-            Home(popular, shows, more)
+            if (nothingElse && more.isEmpty()) throw java.io.IOException("YouTube Music sent no podcasts")
+            Home(popular, shows, more, mine.shows, mine.episodes)
         }
+    }
+
+    /** Suggestions from what was listened to: shows under the show that brought them, and episodes. */
+    data class ForYou(val shows: List<Pair<String, List<PodcastShow>>>, val episodes: List<PodcastEpisode>)
+
+    /**
+     * The episodes suggestions are drawn from: the last few listened to, one a show; with none
+     * yet, the newest of the subscribed shows.
+     */
+    fun seeds(all: Map<String, Progress> = _progress.value, limit: Int = 3): List<PodcastEpisode> =
+        all.values.sortedByDescending { it.updatedAt }.map { it.episode }
+            .distinctBy { it.showBrowseId ?: it.showTitle }.take(limit)
+
+    /** What YouTube Music lists beside [videoId] (its Related tab): similar episodes, and suggested shows. */
+    suspend fun related(videoId: String): Pair<List<PodcastEpisode>, List<PodcastShow>> = withContext(Dispatchers.IO) {
+        val r = Innertube.browse("MPPR$videoId")
+        PodcastParser.episodesIn(r) to PodcastParser.showsIn(r)
+    }
+
+    private suspend fun forYou(): ForYou = coroutineScope {
+        val seeds = seeds().ifEmpty {
+            _subscriptions.value.take(2).map { s -> async { runCatching { show(s.browseId).episodes.firstOrNull() }.getOrNull() } }.awaitAll().filterNotNull()
+        }
+        if (seeds.isEmpty()) return@coroutineScope ForYou(emptyList(), emptyList())
+        val related = seeds.map { s -> async { runCatching { related(s.videoId) }.getOrNull() } }.awaitAll()
+        suggestions(seeds, related, _subscriptions.value.map { it.browseId }.toSet(), _progress.value.keys)
+    }
+
+    /**
+     * The suggestions to show for [seeds] and what's related to each ([related], null where it
+     * didn't load): shows not already [subscribed] to, each shown once, under the first seed
+     * that brought it; and the related episodes, taken from each seed in turn, leaving out
+     * those already [heard] and the seeds' own shows' (those are in Continue listening).
+     */
+    internal fun suggestions(
+        seeds: List<PodcastEpisode>,
+        related: List<Pair<List<PodcastEpisode>, List<PodcastShow>>?>,
+        subscribed: Set<String>,
+        heard: Set<String>,
+    ): ForYou {
+        val seedShows = seeds.mapNotNull { it.showBrowseId }.toSet()
+        val placed = HashSet<String>()
+        val shows = seeds.zip(related).mapNotNull { (seed, r) ->
+            val list = r?.second.orEmpty().filter { it.browseId !in subscribed && it.browseId !in seedShows && placed.add(it.browseId) }.take(MAX_SUGGESTED)
+            if (list.isEmpty()) null else seed.showTitle.ifBlank { seed.title } to list
+        }
+        val lists = related.map { r -> r?.first.orEmpty().filter { it.videoId !in heard && it.showBrowseId !in seedShows } }
+        val episodes = (0 until (lists.maxOfOrNull { it.size } ?: 0)).flatMap { i -> lists.mapNotNull { it.getOrNull(i) } }
+            .distinctBy { it.videoId }.take(MAX_SUGGESTED)
+        return ForYou(shows, episodes)
+    }
+
+    private const val MAX_SUGGESTED = 10
+
+    /** Suggestions enough to fill the page on their own: two shelves' worth or more. */
+    internal fun enoughFor(mine: ForYou): Boolean =
+        mine.shows.size + (if (mine.episodes.size >= 3) 1 else 0) >= 2
+
+    /**
+     * The topics on the front page: four of the day's when there's nothing else; with
+     * [enough] suggestions, only the reader's favourite one (no others); otherwise two, the
+     * reader's favourite first.
+     */
+    internal fun topicsToShow(day: Int, nothingElse: Boolean, enough: Boolean, favourites: List<String>): List<String> = when {
+        nothingElse -> (favourites.take(2) + topicPicks(day, 6)).distinct().take(4)
+        enough -> favourites.take(1)
+        else -> (favourites.take(1) + topicPicks(day, 3)).distinct().take(2)
     }
 
     /** [count] different topics for [day]; a step of 7 through the 16 topics brings each up in turn. */
@@ -178,7 +279,7 @@ object Podcasts {
 
     private fun save() {
         val f = file ?: return
-        val saved = Saved(_subscriptions.value, _progress.value.values.toList())
+        val saved = Saved(_subscriptions.value, _progress.value.values.toList(), _topicUse.value)
         scope.launch {
             runCatching {
                 val tmp = File(f.parentFile, "${f.name}.tmp")
