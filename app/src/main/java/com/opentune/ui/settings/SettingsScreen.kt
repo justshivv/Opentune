@@ -779,7 +779,7 @@ private fun settingsSections(
     if (downloadedPlaybackDialog) {
         val pb by AppSettings.playback.collectAsState()
         ChoiceSheet(
-            title = "Downloaded songs play from",
+            title = "Stream downloaded songs",
             options = com.opentune.data.download.DownloadedPlayback.entries,
             selected = pb.downloadedPlayback,
             label = { "${it.label} · ${it.summary}" },
@@ -1617,16 +1617,16 @@ private fun settingsSections(
                 Entry("Download on Wi-Fi only", "mobile data metered") {
                     ToggleRow("Download on Wi-Fi only", lib.downloadWifiOnly, { v -> AppSettings.updateLibrary { it.copy(downloadWifiOnly = v) }; com.opentune.data.download.Downloads.requeueWaiting(context) }, summary = "Waits for Wi-Fi before saving songs", icon = ImageVector.vectorResource(AppIcons.Wifi))
                 },
-                Entry("Downloaded songs play from", "stream downloads when online offline file internet mobile data wifi play quality") {
+                Entry("Stream downloaded songs", "downloaded songs play from downloads when online offline file internet mobile data wifi quality") {
                     val pbd by AppSettings.playback.collectAsState()
-                    NavRow("Downloaded songs play from", { downloadedPlaybackDialog = true }, icon = ImageVector.vectorResource(AppIcons.Wifi),
+                    NavRow("Stream downloaded songs", { downloadedPlaybackDialog = true }, icon = ImageVector.vectorResource(AppIcons.Wifi),
                         summary = "${pbd.downloadedPlayback.label} · ${pbd.downloadedPlayback.summary}")
                 },
-                Entry("Stream only when it's better", "downloaded songs downloads file quality lossless data stream better") {
+                Entry("Prefer the download when it's as good", "downloaded songs downloads file quality lossless data stream only when better") {
                     val pbd by AppSettings.playback.collectAsState()
-                    ToggleRow("Stream only when it's better", pbd.streamDownloadsOnlyIfBetter,
+                    ToggleRow("Prefer the download when it's as good", pbd.streamDownloadsOnlyIfBetter,
                         { v -> AppSettings.updatePlayback { it.copy(streamDownloadsOnlyIfBetter = v) } },
-                        summary = "A downloaded song plays its file when no stream can beat it, such as a lossless download",
+                        summary = "Plays the saved file instead of streaming when no stream would sound better, such as a lossless download. Saves data.",
                         icon = ImageVector.vectorResource(AppIcons.HighQuality), enabled = pbd.downloadedPlayback != com.opentune.data.download.DownloadedPlayback.FILE)
                 },
                 Entry("Export compatible downloads", "music folder other apps files save export mp4 aac copy") {

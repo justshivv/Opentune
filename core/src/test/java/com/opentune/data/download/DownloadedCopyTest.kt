@@ -43,7 +43,7 @@ class DownloadedCopyTest {
         assertFalse(file(DownloadedPlayback.WIFI, online = true, metered = false))
         assertTrue(file(DownloadedPlayback.WIFI, online = true, metered = true))
         assertFalse(file(DownloadedPlayback.ONLINE, online = true, metered = true))
-        // "Stream only when it's better": a file no stream beats plays, one a stream beats streams as chosen.
+        // "Prefer the download when it's as good": a file no stream beats plays, one a stream beats streams as chosen.
         assertTrue(file(DownloadedPlayback.ONLINE, online = true, metered = false, onlyIfBetter = true, streamBetter = false))
         assertFalse(file(DownloadedPlayback.ONLINE, online = true, metered = false, onlyIfBetter = true, streamBetter = true))
         assertTrue(file(DownloadedPlayback.WIFI, online = true, metered = true, onlyIfBetter = true, streamBetter = true))
