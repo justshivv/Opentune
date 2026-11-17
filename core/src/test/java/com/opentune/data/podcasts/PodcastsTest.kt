@@ -8,6 +8,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PodcastsTest {
+    @Test
+    fun frontPageTopicsDifferAndChangeDaily() {
+        // Four when YouTube Music sends no podcasts of its own, all different.
+        val four = Podcasts.topicPicks(day = 20_000, count = 4)
+        assertEquals(4, four.toSet().size)
+        assertTrue(four.all { it in Podcasts.TOPICS })
+        assertTrue(Podcasts.topicPicks(20_001, 2) != Podcasts.topicPicks(20_000, 2))
+        // Every topic comes up over the days.
+        assertEquals(Podcasts.TOPICS.toSet(), (0 until Podcasts.TOPICS.size).map { Podcasts.topicPicks(it, 1).single() }.toSet())
+    }
+
 
     private val sampleEpisode = PodcastEpisode(
         videoId = "ep_test_01",

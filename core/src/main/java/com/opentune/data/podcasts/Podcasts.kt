@@ -132,15 +132,22 @@ object Podcasts {
                 .distinctBy { it.videoId }
             val shows = (own?.let { PodcastParser.showsIn(it) }.orEmpty() + home.await()?.let { PodcastParser.showsIn(it) }.orEmpty())
                 .distinctBy { it.browseId }
-            if (popular.isEmpty() && shows.isEmpty()) throw java.io.IOException("YouTube Music sent no podcasts")
-            // Two topics filled in up front, a different pair each day.
+            // Topics filled in up front, different ones each day: two beside YouTube Music's own
+            // picks, more when it sends none (signed out, its podcasts page answers 404 and
+            // Explore and Home carry no podcasts), since topics are found by search, which works.
             val day = (System.currentTimeMillis() / 86_400_000L).toInt() + homeVisits.getAndIncrement()
-            val picks = listOf(day % TOPICS.size, (day * 7 + 3) % TOPICS.size).distinct().map { TOPICS[it] }
+            val picks = topicPicks(day, if (popular.isEmpty() && shows.isEmpty()) 4 else 2)
             val more = picks.map { topic -> async { topic to runCatching { searchShows(topic) }.getOrDefault(emptyList()) } }.awaitAll()
                 .filter { it.second.isNotEmpty() }
+            // Nothing at all came back: that's the connection, or YouTube Music refusing.
+            if (popular.isEmpty() && shows.isEmpty() && more.isEmpty()) throw java.io.IOException("YouTube Music sent no podcasts")
             Home(popular, shows, more)
         }
     }
+
+    /** [count] different topics for [day]; a step of 7 through the 16 topics brings each up in turn. */
+    internal fun topicPicks(day: Int, count: Int): List<String> =
+        (0 until count.coerceAtMost(TOPICS.size)).map { TOPICS[Math.floorMod(day + it * 7, TOPICS.size)] }
 
     suspend fun searchShows(query: String): List<PodcastShow> = withContext(Dispatchers.IO) {
         PodcastParser.parseShowSearch(Innertube.search(query, SEARCH_SHOWS))
