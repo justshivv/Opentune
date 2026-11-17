@@ -90,9 +90,9 @@ object InnertubeParser {
                 }
             }
             rows.forEach { renderer ->
-            // Browse rows are tested first: an album row also carries a
-            // "play album" videoId in its overlay, so checking for a track
-            // first would misread every album as a single song.
+                // Browse rows are tested first: an album row also carries a
+                // "play album" videoId in its overlay, so checking for a track
+                // first would misread every album as a single song.
                 val browse = parseBrowseItem(renderer)
                 if (browse != null) {
                     if (seen.add("b:${browse.browseId}")) add(SearchResult.Browse(browse))
@@ -408,7 +408,7 @@ object InnertubeParser {
         val seen = HashSet<String>()
         val items = body.flatMap { part ->
             collectRenderers(part, "musicTwoRowItemRenderer").mapNotNull(::parseTwoRowItem) +
-                collectRenderers(part, "musicResponsiveListItemRenderer").mapNotNull(::parseArtistRow)
+                    collectRenderers(part, "musicResponsiveListItemRenderer").mapNotNull(::parseArtistRow)
         }.filter { item -> item.browseId?.let(seen::add) == true }
         return ShelfItemsPage(items, continuationToken(JsonArray(body)))
     }
@@ -440,7 +440,7 @@ object InnertubeParser {
             val channelId = button.s("channelId")
                 ?: button.a("serviceEndpoints")?.firstNotNullOfOrNull { endpoint ->
                     (endpoint.o("subscribeEndpoint").a("channelIds")?.firstOrNull()
-                        as? JsonPrimitive)?.contentOrNull
+                            as? JsonPrimitive)?.contentOrNull
                 }
                 ?: return@firstNotNullOfOrNull null
             SubscriptionState(channelId = channelId, subscribed = subscribed)
@@ -458,12 +458,12 @@ object InnertubeParser {
         val button2 = immersive.o("subscriptionButton2").o("subscribeButtonRenderer")
         val button1 = immersive.o("subscriptionButton").o("subscribeButtonRenderer")
         return (
-            button2.o("subscriberCountWithSubscribeText").firstRunText()
-                ?: button1.o("longSubscriberCountText").firstRunText()
-                ?: button1.o("subscriberCountWithSubscribeText").firstRunText()
-                ?: button1.o("subscriberCountText").firstRunText()
-                ?: button1.o("shortSubscriberCountText").firstRunText()
-            )?.trim()?.takeIf { it.isNotEmpty() }?.let(::subscriberLabel)
+                button2.o("subscriberCountWithSubscribeText").firstRunText()
+                    ?: button1.o("longSubscriberCountText").firstRunText()
+                    ?: button1.o("subscriberCountWithSubscribeText").firstRunText()
+                    ?: button1.o("subscriberCountText").firstRunText()
+                    ?: button1.o("shortSubscriberCountText").firstRunText()
+                )?.trim()?.takeIf { it.isNotEmpty() }?.let(::subscriberLabel)
     }
 
     /**
@@ -503,12 +503,12 @@ object InnertubeParser {
         val immersive = header.o("musicImmersiveHeaderRenderer")
         val visual = header.o("musicVisualHeaderRenderer")
         val renderer = (
-            immersive.o("thumbnail")
-                ?: visual.o("foregroundThumbnail")
-                ?: visual.o("thumbnail")
-            ).o("musicThumbnailRenderer")
-            // Header shapes drift; fall back to the first image anywhere under
-            // the header rather than to the caller's album art.
+                immersive.o("thumbnail")
+                    ?: visual.o("foregroundThumbnail")
+                    ?: visual.o("thumbnail")
+                ).o("musicThumbnailRenderer")
+        // Header shapes drift; fall back to the first image anywhere under
+        // the header rather than to the caller's album art.
             ?: collectRenderers(header, "musicThumbnailRenderer").firstOrNull()
         return renderer.o("thumbnail").a("thumbnails").best()
     }
@@ -838,7 +838,12 @@ object InnertubeParser {
             // credit; the "All" tab often lists only "Song • 4:30" otherwise,
             // and an album's own rows carry no credit at all — the release is
             // billed once, in the header the row hangs under.
-            artist = com.opentune.data.model.preferredArtist(credits.artistName, artist, fallback.artistName),
+            artist = com.opentune.data.model.preferredArtist(
+                com.opentune.data.model.fullerArtist(credits.artistName, credits.artistLine)
+                    .takeIf { it != credits.artistName?.trim() }
+                    ?: com.opentune.data.model.fullerArtist(credits.artistName, artist),
+                fallback.artistName,
+            ),
             thumbnailUrl = thumbnails.best(),
             durationText = duration,
             artistId = credits.artistId?.takeUnless { com.opentune.data.model.isPlaceholderArtist(credits.artistName) }
@@ -884,7 +889,11 @@ object InnertubeParser {
         return Song(
             videoId = videoId,
             title = title,
-            artist = com.opentune.data.model.preferredArtist(credits.artistName, artist),
+            artist = com.opentune.data.model.preferredArtist(
+                com.opentune.data.model.fullerArtist(credits.artistName, credits.artistLine)
+                    .takeIf { it != credits.artistName?.trim() }
+                    ?: com.opentune.data.model.fullerArtist(credits.artistName, artist),
+            ),
             thumbnailUrl = thumbnails.best(),
             durationText = duration,
             artistId = credits.artistId?.takeUnless { com.opentune.data.model.isPlaceholderArtist(credits.artistName) },
@@ -992,10 +1001,13 @@ object InnertubeParser {
         val artistName: String? = null,
         val albumId: String? = null,
         val albumName: String? = null,
+        /** Every artist the runs link, joined — when more than one performs. */
+        val artistLine: String? = null,
     )
 
     private fun creditsOf(runs: List<JsonElement>): Credits {
         var credits = Credits()
+        val linkedNames = mutableListOf<String>()
         runs.forEach { run ->
             val browse = run.o("navigationEndpoint").o("browseEndpoint")
             val id = browse.s("browseId") ?: return@forEach
@@ -1003,14 +1015,23 @@ object InnertubeParser {
                 .o("browseEndpointContextMusicConfig").s("pageType").orEmpty()
             credits = when {
                 "ARTIST" in pageType && (credits.artistId == null ||
-                    (com.opentune.data.model.isPlaceholderArtist(credits.artistName) && !com.opentune.data.model.isPlaceholderArtist(run.s("text")))) ->
+                        (com.opentune.data.model.isPlaceholderArtist(credits.artistName) && !com.opentune.data.model.isPlaceholderArtist(run.s("text")))) ->
                     credits.copy(artistId = id, artistName = run.s("text"))
                 "ALBUM" in pageType && credits.albumId == null ->
                     credits.copy(albumId = id, albumName = run.s("text"))
                 else -> credits
             }
+            // Every artist the row links, in order. The printed byline can
+            // split them across separate segments, but the links always name
+            // each performer — two or more make the fuller credit on their own.
+            if ("ARTIST" in pageType) {
+                val name = run.s("text")?.trim().orEmpty()
+                if (name.isNotEmpty() && !com.opentune.data.model.isPlaceholderArtist(name) &&
+                    linkedNames.none { it.equals(name, ignoreCase = true) }
+                ) linkedNames += name
+            }
         }
-        return credits
+        return if (linkedNames.size > 1) credits.copy(artistLine = linkedNames.joinToString(", ")) else credits
     }
 
     /**
@@ -1047,7 +1068,7 @@ object InnertubeParser {
         // a link to follow, leaving the name as the only thing to go on.
         val name = parts.firstOrNull {
             it.isNotBlank() && it.lowercase(Locale.ROOT) !in TYPE_WORDS && !it.matches(TALLY) &&
-                !it.matches(YEAR) && !it.matches(DURATION)
+                    !it.matches(YEAR) && !it.matches(DURATION)
         }
         return credits.copy(artistName = name)
     }
@@ -1430,7 +1451,7 @@ object InnertubeParser {
      */
     private val JsonElement?.isSaveToggle: Boolean
         get() = o("defaultIcon").s("iconType") == "BOOKMARK_BORDER" ||
-            o("toggledIcon").s("iconType") == "BOOKMARK"
+                o("toggledIcon").s("iconType") == "BOOKMARK"
 
     /**
      * Whether a playlist page is one the account *made*, rather than one it
@@ -1624,7 +1645,7 @@ object InnertubeParser {
      */
     private val TALLY = Regex(
         """[\d.,]+\s*[KMB]?\s+(plays|views|likes|songs|tracks|subscribers|""" +
-            """hours?|minutes?|seconds?)\b.*""",
+                """hours?|minutes?|seconds?)\b.*""",
         RegexOption.IGNORE_CASE,
     )
     /** Header words that mark a page as a release, whose rows share its credit. */
