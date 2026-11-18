@@ -28,6 +28,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.opentune.data.settings.AppSettings
 import com.opentune.data.settings.GlassStyle
 import java.io.File
+import androidx.compose.ui.test.assertIsNotEnabled
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -65,6 +66,21 @@ class TogetherScreenshotTest {
     }
 
     @Test fun start() = shoot("together-start") { StartRoom(code = null, onBack = {}) }
+
+    /** Join a room: the code, Paste, and Join as the one main button. */
+    @Test fun startOnJoin() {
+        shoot("together-start-join") { StartRoom(code = null, onBack = {}) }
+        compose.onNodeWithText("Join").performClick()
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        compose.onNodeWithText("Room code").assertExists()
+        compose.onNodeWithText("Paste").assertExists()
+        compose.onNodeWithText("Join a room").assertIsNotEnabled()
+        val view = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bitmap))
+        File(File("build/screenshots").apply { mkdirs() }, "together-start-join.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
 
     @Test fun inviteWaitsForJoinAndDoesNotAskForTheCodeAgain() {
         shoot("together-invite") {

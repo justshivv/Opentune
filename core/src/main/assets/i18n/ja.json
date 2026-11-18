@@ -1,7 +1,7 @@
 {
-"\n\nShared from OpenTune": "\n\n\n\nOpenTune から共有",
-"\n\n…and ": "\n\n\n\n…ほか ",
-"\nCouldn't switch": "\n\n切り替えられませんでした",
+"\n\nShared from OpenTune": "\n\nOpenTune から共有",
+"\n\n…and ": "\n\n…ほか ",
+"\nCouldn't switch": "\n切り替えられませんでした",
 " ({0} frames)": " （{0} フレーム）",
 " Mobile Safari/": " Mobile Safari/",
 " Safari/": " Safari/",
@@ -1127,6 +1127,7 @@
 "JioSaavn's picks after the last song, strong on Indian music, found on YouTube Music": "最後の曲に続く JioSaavn の選曲。インド音楽に強く、YouTube Music で探して再生します",
 "JioSaavn: verified 320 kbps stream": "JioSaavn：確認済みの 320 kbps ストリーム",
 "Join": "参加",
+"Join a room": "ルームに参加",
 "Join a room's call and just talk: what you say is heard as you say it, and a ring lights up round whoever is speaking. Hold Talk for a quick word instead. Nothing is kept in the chat.": "ルームの通話に参加して、そのまま話せます。話した声はすぐに届き、話している人の周りにリングが光ります。ちょっと話したいときは「話す」を長押しします。チャットには何も残りません。",
 "Join room": "ルームに参加",
 "Join the Discord": "Discord に参加",

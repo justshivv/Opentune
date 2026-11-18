@@ -28,6 +28,8 @@ def merge(tag, keys, lines):
         if i >= len(keys): refused.append((i, 'no such key')); continue
         key = keys[i]
         text = text.strip().replace('\\n', '\n').replace('\\"', '"')
+        # A translation's own line breaks at its edges stand in for the key's, which are put back below.
+        text = text.strip()
         if not text: refused.append((i, 'empty')); continue
         if sorted(PLACE.findall(text)) != sorted(PLACE.findall(key)): refused.append((i, f'places differ: {key!r} -> {text!r}')); continue
         if sorted(PRINTF.findall(text)) != sorted(PRINTF.findall(key)): refused.append((i, f'formats differ: {key!r} -> {text!r}')); continue

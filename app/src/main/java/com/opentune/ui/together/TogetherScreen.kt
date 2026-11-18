@@ -1,6 +1,10 @@
 package com.opentune.ui.together
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.semantics.selected
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -210,16 +214,30 @@ internal fun StartRoom(
     val parsed = if (invite != null) invite else CodeEntry.code(typed)
     val canJoin = parsed != null && name.isNotBlank() && !opening
     val join = { parsed?.let { Together.join(it, name) } }
+    // One task at a time: start a room or join one. An invite opens straight on joining.
+    var joining by rememberSaveable { mutableStateOf(false) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = LocalContext.current
+    val paste: () -> Unit = {
+        val text = clipboard.getText()?.text.orEmpty()
+        if (text.isBlank()) com.opentune.data.Pills.info(com.opentune.i18n.Tr.t("Nothing to paste"), context)
+        else {
+            val edit = CodeEntry.accept("", text)
+            if (edit.raw.isEmpty() || edit.rejected && CodeEntry.code(edit.raw) == null) { turnedAway = true; shake++ }
+            else { typed = edit.raw; turnedAway = false }
+        }
+    }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item { PageHeader(if (invite != null) "You’re invited" else "Listen together", onBack = onBack) }
         item {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Hero()
+                Hero(height = 148.dp)
                 Text(
                     if (invite != null) "Listen with your friends in OpenTune. Tap Join when you’re ready."
                     else "Start a room and friends hear what you play, in step, on their own phones. Or join a friend's room with their code.",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Body text at full strength: the grey it had read faint on black.
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.widthIn(max = 420.dp),
                 )
@@ -227,7 +245,11 @@ internal fun StartRoom(
         }
         item {
             Column(Modifier.padding(horizontal = 24.dp)) {
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(24.dp))
+                if (invite == null) {
+                    ModeSwitch(joining, onPick = { joining = it }, enabled = !opening)
+                    Spacer(Modifier.height(24.dp))
+                }
                 FieldLabel("Your name")
                 NameField(name, { name = it.take(30) }, enabled = !opening)
                 Spacer(Modifier.height(20.dp))
@@ -241,50 +263,113 @@ internal fun StartRoom(
                         textAlign = TextAlign.Center,
                     )
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = { join() }, enabled = canJoin, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text("Join") }
+                    Button(onClick = { join() }, enabled = canJoin, modifier = Modifier.fillMaxWidth().height(56.dp), shape = CircleShape) { Text("Join") }
                 } else {
-                    StartButton(opening = opening, enabled = name.isNotBlank()) { onStart(name) }
-                    Row(Modifier.padding(vertical = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                        HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
-                        Text(
-                            "or join with a code",
-                            Modifier.padding(horizontal = 12.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
+                    val still = AppSettings.ui.collectAsState().value.reduceAnimation
+                    AnimatedContent(
+                        joining,
+                        transitionSpec = {
+                            val way = if (targetState) 1 else -1
+                            if (still) fadeIn(snap()) togetherWith fadeOut(snap())
+                            else (fadeIn(tween(200, 60)) + slideInHorizontally(tween(240)) { it / 10 * way }) togetherWith
+                                (fadeOut(tween(120)) + slideOutHorizontally(tween(200)) { -it / 12 * way })
+                        },
+                        label = "mode",
+                    ) { join_ ->
+                        if (!join_) {
+                            StartButton(opening = opening, enabled = name.isNotBlank()) { onStart(name) }
+                        } else Column {
+                            Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.weight(1f)) { FieldLabel("Room code", bottom = 0.dp) }
+                                androidx.compose.material3.TextButton(onClick = paste, enabled = !opening) {
+                                    Icon(ImageVector.vectorResource(AppIcons.ContentPaste), null, Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Paste")
+                                }
+                            }
+                            CodeField(
+                                typed,
+                                onChange = { edit ->
+                                    typed = edit.raw
+                                    if (edit.rejected) { turnedAway = true; shake++ } else turnedAway = false
+                                },
+                                onGo = { if (canJoin) join() else if (parsed == null) { turnedAway = false; shake++ } },
+                                shake = shake,
+                                enabled = !opening,
+                            )
+                            Text(
+                                when {
+                                    turnedAway -> "Room codes never use 0, 1, I or O"
+                                    parsed != null && name.isBlank() -> "Add your name above to join"
+                                    parsed != null -> com.opentune.i18n.Tr.f("Ready to join {0}", parsed.pretty)
+                                    else -> "Type the code, or paste the code or invite link"
+                                },
+                                Modifier.padding(start = 4.dp, top = 8.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = when {
+                                    turnedAway -> MaterialTheme.colorScheme.error
+                                    parsed != null -> MaterialTheme.colorScheme.primary
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            // Joining is this side's one action, so it's the main button here.
+                            Button(onClick = { join() }, enabled = canJoin, modifier = Modifier.fillMaxWidth().height(56.dp), shape = CircleShape) {
+                                Text("Join a room", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            }
+                            Text(
+                                "If the host has approval on, you wait for them to let you in.",
+                                Modifier.fillMaxWidth().padding(top = 10.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
                     }
-                    CodeField(
-                        typed,
-                        onChange = { edit ->
-                            typed = edit.raw
-                            if (edit.rejected) { turnedAway = true; shake++ } else turnedAway = false
-                        },
-                        onGo = { if (canJoin) join() else if (parsed == null) { turnedAway = false; shake++ } },
-                        shake = shake,
-                        enabled = !opening,
-                    )
-                    Text(
-                        when {
-                            turnedAway -> "Room codes never use 0, 1, I or O"
-                            parsed != null && name.isBlank() -> "Add your name above to join"
-                            parsed != null -> com.opentune.i18n.Tr.f("Ready to join {0}", parsed.pretty)
-                            else -> "Type the code, or paste the code or invite link"
-                        },
-                        Modifier.padding(start = 4.dp, top = 8.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            turnedAway -> MaterialTheme.colorScheme.error
-                            parsed != null -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    FilledTonalButton(onClick = { join() }, enabled = canJoin, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text("Join") }
                 }
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(36.dp))
                 PrivacyNote()
                 Spacer(Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
+/**
+ * Start a room or join one, as two halves of one control; the lit half slides across.
+ * Like a pair of tabs, it shows one task at a time instead of both stacked down the page.
+ */
+@Composable
+private fun ModeSwitch(joining: Boolean, onPick: (Boolean) -> Unit, enabled: Boolean) {
+    val scheme = MaterialTheme.colorScheme
+    val still = AppSettings.ui.collectAsState().value.reduceAnimation
+    val haptics = com.opentune.ui.components.rememberHaptics()
+    val at by animateFloatAsState(if (joining) 1f else 0f, if (still) snap() else spring(dampingRatio = 0.85f, stiffness = 520f), label = "mode")
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        Modifier.fillMaxWidth().height(48.dp).clip(CircleShape).background(scheme.surfaceContainerHigh).padding(4.dp),
+    ) {
+        val half = maxWidth / 2
+        Box(
+            Modifier.width(half).fillMaxHeight().graphicsLayer { translationX = at * half.toPx() }
+                .clip(CircleShape).background(scheme.primary.copy(alpha = 0.18f)),
+        )
+        Row(Modifier.fillMaxSize()) {
+            listOf(false to "Host", true to "Join").forEach { (side, label) ->
+                val chosen = side == joining
+                Box(
+                    Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
+                        .clickable(enabled = enabled && !chosen, role = Role.Tab) { haptics.press(); onPick(side) }
+                        .semantics { selected = chosen },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (chosen) scheme.primary else scheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
@@ -295,14 +380,14 @@ internal fun StartRoom(
  * three friends drifting round it. Still, with reduce animation on.
  */
 @Composable
-private fun Hero() {
+private fun Hero(height: Dp = 176.dp) {
     val still = AppSettings.ui.collectAsState().value.reduceAnimation
     val scheme = MaterialTheme.colorScheme
     val time = if (still) null else rememberInfiniteTransition(label = "hero")
     val pulse = time?.animateFloat(0f, 1f, infiniteRepeatable(tween(3_600, easing = LinearEasing), RepeatMode.Restart), label = "rings")
     val turn = time?.animateFloat(0f, 360f, infiniteRepeatable(tween(24_000, easing = LinearEasing), RepeatMode.Restart), label = "orbit")
     Box(
-        Modifier.fillMaxWidth().height(176.dp).drawBehind {
+        Modifier.fillMaxWidth().height(height).drawBehind {
             val inner = 40.dp.toPx()
             val outer = 84.dp.toPx()
             val p = pulse?.value ?: 0f
@@ -333,10 +418,10 @@ private const val RINGS = 3
 private val ORBIT_COLORS = listOf(0xFF4FC3F7, 0xFFFFD54F, 0xFFF06292)
 
 @Composable
-private fun FieldLabel(text: String) {
+private fun FieldLabel(text: String, bottom: Dp = 8.dp) {
     Text(
         text,
-        Modifier.padding(start = 4.dp, bottom = 8.dp),
+        Modifier.padding(start = 4.dp, bottom = bottom),
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -419,26 +504,22 @@ private fun StartButton(opening: Boolean, enabled: Boolean, onClick: () -> Unit)
     }
 }
 
-/** What rooms are and what travels through them, a line at a time. */
+/** What rooms are and what travels through them, a line each with its own mark, quietly under the actions. */
 @Composable
 private fun PrivacyNote() {
     val scheme = MaterialTheme.colorScheme
-    Row(
-        Modifier.fillMaxWidth()
-            .background(scheme.onSurface.copy(alpha = 0.04f), RoundedCornerShape(20.dp))
-            .padding(16.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Icon(ImageVector.vectorResource(AppIcons.Lock), null, Modifier.size(20.dp), tint = scheme.onSurfaceVariant)
-        Spacer(Modifier.width(12.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("How rooms work", style = MaterialTheme.typography.titleSmall)
-            listOf(
-                "Rooms run over public Nostr relays, which only pass messages along and don't keep them.",
-                "Music, chat and voice messages are encrypted.",
-                "If the host has approval on, you wait for them to let you in.",
-                "Each phone plays the music itself.",
-            ).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("How rooms work", style = MaterialTheme.typography.titleSmall, color = scheme.onSurface)
+        listOf(
+            AppIcons.Lock to "Music, chat and voice messages are encrypted.",
+            AppIcons.Podcasts to "Rooms run over public Nostr relays, which only pass messages along and don't keep them.",
+            AppIcons.PhoneAndroid to "Each phone plays the music itself.",
+        ).forEach { (icon, line) ->
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(ImageVector.vectorResource(icon), null, Modifier.padding(top = 1.dp).size(18.dp), tint = scheme.onSurfaceVariant)
+                Spacer(Modifier.width(12.dp))
+                Text(line, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+            }
         }
     }
 }
