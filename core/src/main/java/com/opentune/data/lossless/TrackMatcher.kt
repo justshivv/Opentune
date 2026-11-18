@@ -123,8 +123,20 @@ internal object TrackMatcher {
         val want = artistNames(wanted)
         val have = artistNames(got)
         return want.isNotEmpty() && have.isNotEmpty() &&
-                want.any { w -> have.any { h -> sameArtist(w, h) } }
+                (want.any { w -> have.any { h -> sameArtist(w, h) } } || billedByMembers(wanted, have) || billedByMembers(got, want))
     }
+
+    /**
+     * Whether a hyphenated act in [credit] ("Sachin-Jigar") is billed by its members in
+     * [names] ("Sachin Sanghvi", "Jigar Saraiya"): every member must open one of the names.
+     * One member is not the act, so "Ne-Yo" is not "Yo Gotti", and "JAY-Z", which has only
+     * one member longer than a letter, is no act at all and never matches "Jay Rock".
+     */
+    private fun billedByMembers(credit: String, names: Set<List<String>>): Boolean =
+        normalize(credit).split(ARTIST_SEPARATORS).filter { '-' in it }.any { act ->
+            val members = act.split('-').map(::wordsOf).filter { it.isNotEmpty() }
+            members.size > 1 && members.all { m -> names.any { n -> n.size >= m.size && n.subList(0, m.size) == m } }
+        }
 
     // ── Judging ─────────────────────────────────────────────────────────────
 
@@ -615,20 +627,18 @@ internal object TrackMatcher {
      * "Atif Aslam, Tulsi Kumar". Single letters go — an initialled
      * "A. R. Rahman" and a plain "AR Rahman" are the same person.
      *
-     * A hyphenated act name ("Sachin-Jigar") is its members: catalogues bill
-     * the same act by the members' full names ("Sachin Sanghvi", "Jigar
-     * Saraiya"), and as one fused name it shares no artist with either.
+     * A hyphenated name stays one name here: split into its pieces, any one
+     * piece matched, so "JAY-Z" became "Jay" and took Jay Rock's songs. An act
+     * billed by its members' full names is [billedByMembers]'s to judge.
      */
     internal fun artistNames(value: String): Set<List<String>> = normalize(value)
         .split(ARTIST_SEPARATORS)
-        .flatMap { name -> name.split('-') }
-        .map { name ->
-            name.split(WORD_SPLIT)
-                .map { it.replace(NON_ALNUM, "") }
-                .filter { it.length > 1 }
-        }
+        .map(::wordsOf)
         .filter { it.isNotEmpty() }
         .toSet()
+
+    private fun wordsOf(name: String): List<String> =
+        name.split(WORD_SPLIT).map { it.replace(NON_ALNUM, "") }.filter { it.length > 1 }
 
     private fun sameArtist(a: List<String>, b: List<String>) = runOf(a, b) || runOf(b, a)
 

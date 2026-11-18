@@ -67,4 +67,13 @@ class TrackMatcherTest {
         assertEquals(listOf("paniyon sa atif aslam", "paniyon sa"), queries)
         assertTrue(TrackMatcher.queries(Target("Song (Live)", "Artist")).first().contains("live"))
     }
+
+    /** A hyphen in a name is not a list of artists: one piece of it is never enough. */
+    @Test fun aHyphenatedNameIsNotMatchedByOnePieceOfIt() {
+        assertNull(TrackMatcher.score(row("Holy Grail", "Jay Rock", 320), Target("Holy Grail", "JAY-Z", 338)))
+        assertNull(TrackMatcher.score(row("So Sick", "Yo Gotti", 210), Target("So Sick", "Ne-Yo", 217)))
+        assertNull(TrackMatcher.score(row("Ciao Adios", "Lisa Marie Presley", 190), Target("Ciao Adios", "Anne-Marie", 200)))
+        // The act itself, as one name, still matches.
+        assertNotNull(TrackMatcher.score(row("Holy Grail", "JAY-Z, Justin Timberlake", 340), Target("Holy Grail", "JAY-Z", 338)))
+    }
 }
