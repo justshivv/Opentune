@@ -91,6 +91,8 @@ data class DownloadEntry(
     val codec: String? = null,
     /** A lossless copy being fetched to replace this one; this file stays and plays until it's in. */
     val upgrade: DownloadUpgrade? = null,
+    /** Times the job waited for Wi-Fi: not failures, so they don't use up its retries. */
+    val networkWaits: Int = 0,
     /** The last FLAC search for this song found none: no stream would beat the file while it holds. */
     val losslessMiss: LosslessMiss? = null,
 )
@@ -307,7 +309,10 @@ object Downloads {
     @Synchronized
     fun requeueWaiting(context: Context) {
         _entries.value.values.filter { it.state == DownloadState.QUEUED }.forEach { schedule(context, it.song, it.preferLossless, it.preferredRenditionKey, it.smartDownload) }
-        _entries.value.values.filter { it.state == DownloadState.DONE && it.upgrade != null }.forEach { schedule(context, it.song, preferLossless = true, upgradeOf = it) }
+        // Only re-downloads not started yet: scheduling one again replaces the running job,
+        // which started a big FLAC over from nothing on every network change.
+        _entries.value.values.filter { it.state == DownloadState.DONE && it.upgrade != null && it.upgrade.progress == 0f }
+            .forEach { schedule(context, it.song, preferLossless = true, upgradeOf = it) }
     }
 
     /**
@@ -334,7 +339,11 @@ object Downloads {
             val before = behindVpn
             behindVpn = now
             // On start only a VPN matters: jobs queued while the app was closed waited for "unmetered".
-            if (now != before && (before != null || now)) runCatching { requeueWaiting(context) }
+            if (now != before && (before != null || now)) {
+                runCatching { requeueWaiting(context) }
+                // The smart-download refresh keeps the network it was scheduled for too.
+                runCatching { SmartDownloads.init(context) }
+            }
         }
         val callback = object : android.net.ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: android.net.Network) = check()
@@ -517,7 +526,10 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         if (!upgrading && entry.workId != null && entry.workId != myWork) return Result.success()
         if (entry.smartDownload && !SmartDownloads.allowed(applicationContext)) return Result.retry()
         // Scheduled for any connection because of a VPN (see Downloads.schedule): still Wi-Fi only.
-        if (!entry.smartDownload && Downloads.waitingForWifi(applicationContext)) return Result.retry()
+        if (!entry.smartDownload && Downloads.waitingForWifi(applicationContext)) {
+            if (!upgrading) Downloads.updateWorker(id, entry.workId) { it.copy(networkWaits = it.networkWaits + 1) }
+            return Result.retry()
+        }
         runCatching { setForeground(foregroundInfo(entry.song.title, 0f)) }
         // A re-download works on its own copy of the entry, which replaces the listed one once its file is in.
         var shadow: DownloadEntry? = if (!upgrading) null else entry.copy(
@@ -656,7 +668,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         } catch (e: CancellationException) {
             throw e
         } catch (e: SmartDownloadDeferred) {
-            publish { it.copy(state = DownloadState.QUEUED, progress = 0f, error = null) }
+            publish { it.copy(state = DownloadState.QUEUED, progress = 0f, error = null, networkWaits = it.networkWaits + 1) }
             Result.retry()
         } catch (e: NoLosslessCopy) {
             publish { it.copy(state = DownloadState.FAILED, progress = 0f) }
@@ -666,7 +678,9 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             Log.w(TAG, "Download of $id failed", e)
             // A stream YouTube wouldn't hand over just then fails the same way as a
             // dropped connection: both are worth another go a little later.
-            val retrying = runAttemptCount < MAX_ATTEMPTS
+            // Waits for Wi-Fi are retries too, but not failures.
+            val waits = Downloads.entryNow(id)?.networkWaits ?: 0
+            val retrying = runAttemptCount - waits < MAX_ATTEMPTS
             publish { it.copy(state = if (retrying) DownloadState.QUEUED else DownloadState.FAILED,
                 progress = 0f, error = e.message) }
             if (upgrading && !retrying) com.opentune.data.Pills.error(com.opentune.i18n.Tr.f("Couldn't download {0} again; keeping the one you have", entry.song.title), applicationContext)
@@ -685,8 +699,11 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val now = android.os.SystemClock.elapsedRealtime()
         if (!force && now - smartCheckedAt < 1_000L) return
         smartCheckedAt = now
-        val entry = inputData.getString(KEY_ID)?.let(Downloads::entryNow)
-        if (entry?.smartDownload == true && !SmartDownloads.allowed(applicationContext)) throw SmartDownloadDeferred()
+        val entry = inputData.getString(KEY_ID)?.let(Downloads::entryNow) ?: return
+        if (entry.smartDownload && !SmartDownloads.allowed(applicationContext)) throw SmartDownloadDeferred()
+        // Wi-Fi only, checked as the file comes in too: behind a VPN the job runs on any
+        // connection, so one started on Wi-Fi carried on over mobile data when Wi-Fi went.
+        if (!entry.smartDownload && Downloads.waitingForWifi(applicationContext)) throw SmartDownloadDeferred()
     }
 
     /** The audio, in ranges (see [RangedFetch]), then moved into place. */
