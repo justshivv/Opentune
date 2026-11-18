@@ -5,6 +5,12 @@ import java.util.Locale
 /** Where one printed credit ends and the next begins, in a byline. */
 private val NAME_JOINS = Regex("""\s*,\s*|\s+&\s+|\s+x\s*|\s+and\s*|\s+(?:feat\.?|ft\.?|featuring|with)\s+""", RegexOption.IGNORE_CASE)
 
+/**
+ * Whether [line] prints more than one name: the only kind of credit [fullerArtist] ever
+ * widens a shorter one to, so the only kind worth remembering by song.
+ */
+fun namesSeveral(line: String): Boolean = line.split(NAME_JOINS).count { it.isNotBlank() } > 1
+
 /** Compilation and missing-credit labels are not a recording's performing artist. */
 fun isPlaceholderArtist(name: String?): Boolean {
     val key = name.orEmpty().trim().replace(Regex("\\s*-\\s*Topic$", RegexOption.IGNORE_CASE), "")

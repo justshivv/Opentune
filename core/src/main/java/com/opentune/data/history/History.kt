@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
@@ -112,7 +113,7 @@ object History {
         val artist = com.opentune.data.model.fullerArtist(song.artist,
             com.opentune.data.library.LibraryStore.artistLine(song.videoId)) ?: song.artist
         val r = PlayRecord(song.videoId, song.title, artist, song.thumbnailUrl, song.durationText, song.albumName, now, listenedMs, song.isExplicit, song.artistId)
-        _records.value = (listOf(r) + _records.value).take(MAX_RECORDS)
+        _records.update { (listOf(r) + it).take(MAX_RECORDS) }
         com.opentune.data.library.LibraryStore.learnArtistLines(mapOf(song.videoId to artist))
         return now
     }
@@ -120,8 +121,8 @@ object History {
     /** Widens stored credits from the library's fullest known lines. */
     fun applyArtistLines(lines: Map<String, String>) {
         if (lines.isEmpty() || _records.value.isEmpty()) return
-        val next = _records.value.map { widenRecord(it, lines) }
-        if (next != _records.value) _records.value = next
+        // Atomic: this runs on sync threads while plays are recorded on the main one.
+        _records.update { records -> records.map { widenRecord(it, lines) }.takeIf { it != records } ?: records }
     }
 
     /**
@@ -139,7 +140,7 @@ object History {
             sections.flatMap { it.second }.associate { it.videoId to it.artist })
         val added = accountListens(_records.value, sections, now)
         if (added.isEmpty()) return
-        _records.value = (_records.value + added).sortedByDescending { it.playedAt }.take(MAX_RECORDS)
+        _records.update { (it + added).sortedByDescending { r -> r.playedAt }.take(MAX_RECORDS) }
     }
 
     internal fun accountListens(existing: List<PlayRecord>, sections: List<Pair<String, List<Song>>>, now: Long): List<PlayRecord> {
@@ -173,7 +174,7 @@ object History {
     }
 
     fun updateListened(playedAt: Long, listenedMs: Long) {
-        _records.value = _records.value.map { if (it.playedAt == playedAt) it.copy(listenedMs = listenedMs) else it }
+        _records.update { records -> records.map { if (it.playedAt == playedAt) it.copy(listenedMs = listenedMs) else it } }
     }
 
     fun clear() {

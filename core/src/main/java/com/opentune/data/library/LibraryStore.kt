@@ -230,7 +230,7 @@ object LibraryStore {
     fun init(context: Context) {
         val f = com.opentune.data.SavedFile(File(context.filesDir, "library.json"), "LibraryStore").also { saved = it }
         // A library that won't read is kept aside, never saved over with an empty one.
-        publish(f.read(LibraryDocument()) { json.decodeFromString(LibraryDocument.serializer(), it) })
+        publish(f.read(LibraryDocument()) { json.decodeFromString(LibraryDocument.serializer(), it) }.withoutSingleNameLines())
         _ready.value = true
         scope.launch {
             doc.drop(1).onEach { f.dirty = true }.debounce(800).collect { d ->
@@ -597,7 +597,12 @@ object LibraryStore {
 
     fun exportJson(): JsonElement = json.encodeToJsonElement(LibraryDocument.serializer(), doc.value)
 
-    fun importJson(element: JsonElement) = publish(json.decodeFromJsonElement(LibraryDocument.serializer(), element))
+    fun importJson(element: JsonElement) = publish(json.decodeFromJsonElement(LibraryDocument.serializer(), element).withoutSingleNameLines())
+
+    /** Lines saved before only lines naming several artists were kept: a single name widens nothing. */
+    private fun LibraryDocument.withoutSingleNameLines(): LibraryDocument =
+        artistLines.filterValues { com.opentune.data.model.namesSeveral(it) }
+            .let { kept -> if (kept.size == artistLines.size) this else copy(artistLines = kept) }
 }
 
 /**
@@ -609,7 +614,9 @@ internal fun widestArtistLines(known: Map<String, String>, credits: List<Pair<St
     var out: MutableMap<String, String>? = null
     for ((id, artist) in credits) {
         val wider = com.opentune.data.model.fullerArtist((out ?: known)[id], artist)
-        if (wider != null && wider != (out ?: known)[id]) {
+        // Only a line naming several artists can widen another; a song's single name is
+        // left out, so the book doesn't grow by every song ever played or listed.
+        if (wider != null && wider != (out ?: known)[id] && com.opentune.data.model.namesSeveral(wider)) {
             if (out == null) out = LinkedHashMap(known)
             out[id] = wider
         }

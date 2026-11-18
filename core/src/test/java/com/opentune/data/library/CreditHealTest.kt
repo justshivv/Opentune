@@ -12,7 +12,8 @@ class CreditHealTest {
         val lines = widestArtistLines(emptyMap(), listOf(
             "a" to "Calvin Harris", "a" to "Calvin Harris, Dua Lipa", "b" to "deadmau5"))
         assertEquals("Calvin Harris, Dua Lipa", lines["a"])
-        assertEquals("deadmau5", lines["b"])
+        // A single name widens nothing, so it isn't kept: the book doesn't grow by every song.
+        assertNull(lines["b"])
     }
 
     @Test fun aNarrowerCreditNeverShrinksAKnownLine() {
@@ -21,8 +22,8 @@ class CreditHealTest {
     }
 
     @Test fun aPlaceholderCreditIsHealedByARealOne() {
-        val lines = widestArtistLines(mapOf("a" to "Unknown artist"), listOf("a" to "Kaskade"))
-        assertEquals("Kaskade", lines["a"])
+        val lines = widestArtistLines(mapOf("a" to "Unknown artist"), listOf("a" to "Kaskade, Kx5"))
+        assertEquals("Kaskade, Kx5", lines["a"])
     }
 
     @Test fun refsAndRecordsWidenFromTheBook() {

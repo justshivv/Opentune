@@ -164,12 +164,16 @@ object Downloads {
     /** Widens stored credits from the library's fullest known lines, under the same rule as everywhere. */
     fun applyArtistLines(lines: Map<String, String>) {
         if (lines.isEmpty() || _entries.value.isEmpty()) return
-        var changed = false
-        val next = _entries.value.mapValues { (_, e) ->
-            val wider = com.opentune.data.model.fullerArtist(e.song.artist, lines[e.song.videoId])
-            if (wider != null && wider != e.song.artist) { changed = true; e.copy(song = e.song.copy(artist = wider)) } else e
+        // Atomic, as every other writer: download workers write progress and state meanwhile,
+        // and a plain read-then-write here put back a finished download as still downloading.
+        _entries.update { entries ->
+            var changed = false
+            val next = entries.mapValues { (_, e) ->
+                val wider = com.opentune.data.model.fullerArtist(e.song.artist, lines[e.song.videoId])
+                if (wider != null && wider != e.song.artist) { changed = true; e.copy(song = e.song.copy(artist = wider)) } else e
+            }
+            if (changed) next else entries
         }
-        if (changed) _entries.value = next
     }
 
     /** The finished file for [videoId], if it's been downloaded and is still there. */
