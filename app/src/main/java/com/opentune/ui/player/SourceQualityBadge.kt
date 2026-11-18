@@ -128,17 +128,19 @@ private fun QualityBadge(mediaId: String, format: AudioFormatInfo?, onClick: () 
     val label = qualityStatusLabel(source, if (source != null) format else null, upgrading == mediaId)
     val colors = MaterialTheme.colorScheme
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
-    // A thin light line runs across the label, but only for lossless and Hi-Res
-    // lossless: lossy streams keep a plain grey label.
-    val lossless = isHighestQuality(source, format)
+    // A thin light line runs across the label, but only for lossless, Hi-Res
+    // lossless and Dolby: lossy streams keep a plain grey label.
+    val dolby = source != null && com.opentune.playback.dolbyName(format) != null
+    val lossless = isHighestQuality(source, format) || dolby
     val phase = if (ui.reduceAnimation || !lossless) null else rememberInfiniteTransition(label = "quality light")
         .animateFloat(-0.15f, 1.15f, infiniteRepeatable(tween(2800, easing = LinearEasing)), label = "quality sweep")
     TextButton(onClick = onClick, modifier = modifier.widthIn(max = 280.dp).fillMaxWidth().heightIn(min = 40.dp).semantics { contentDescription = com.opentune.i18n.Tr.f("{0}. Open signal path", label) },
         colors = ButtonDefaults.textButtonColors(contentColor = colors.onSurfaceVariant),
         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)) {
         // Lossless gets the waveform; a lossy stream the plain HQ mark (a headphone read as the output, not the quality).
-        Icon(if (lossless) ImageVector.vectorResource(AppIcons.GraphicEq) else ImageVector.vectorResource(AppIcons.HighQuality),
-            null, Modifier.size(16.dp))
+        // Dolby audio wears Dolby's double D.
+        Icon(ImageVector.vectorResource(if (dolby) AppIcons.Dolby else if (lossless) AppIcons.GraphicEq else AppIcons.HighQuality),
+            null, Modifier.size(if (dolby) 18.dp else 16.dp))
         Spacer(Modifier.width(5.dp))
         Text(label, style = MaterialTheme.typography.labelMedium,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,

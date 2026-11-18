@@ -738,11 +738,6 @@ fun bestKbps(info: AudioFormatInfo?, measured: Int?, sourceKbps: Int?): Int? {
 }
 
 /**
- * What Dolby format [info] is, as the player names it, or null when it isn't Dolby:
- * Atmos for E-AC-3 with objects (JOC) and for AC-4, Dolby Digital Plus for plain
- * E-AC-3, Dolby Digital for AC-3.
- */
-/**
  * Why a Dolby stream didn't play. AC-3 and E-AC-3 have OpenTune's own decoder to fall back on
  * (third_party/ffmpeg-dolby); AC-4 has none, as FFmpeg can't decode it.
  */
@@ -750,6 +745,11 @@ fun dolbyUnplayable(mime: String?): String =
     if (mime == "audio/ac4") "This phone has no Dolby AC-4 decoder. AC-4 plays on phones with Dolby's own decoder, or through a Dolby-capable receiver or TV over HDMI or eARC."
     else "This Dolby audio couldn't be decoded. It also plays through a Dolby-capable receiver or TV over HDMI or eARC."
 
+/**
+ * What Dolby format [info] is, as the player names it, or null when it isn't Dolby:
+ * Atmos for E-AC-3 with objects (JOC) and for AC-4, Dolby Digital Plus for plain
+ * E-AC-3, Dolby Digital for AC-3.
+ */
 fun dolbyName(info: AudioFormatInfo?): String? {
     val mime = info?.mime?.lowercase().orEmpty()
     val codec = info?.codec?.lowercase().orEmpty()

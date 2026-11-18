@@ -1,0 +1,11 @@
+<!-- The double D that marks Dolby audio: two hollow half-discs, straight sides toward each other. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M11.2 4.5v15A7.5 7.5 0 0 1 11.2 4.5ZM9.4 7.6A4.4 4.4 0 0 0 9.4 16.4Z M12.8 4.5v15A7.5 7.5 0 0 0 12.8 4.5ZM14.6 7.6A4.4 4.4 0 0 1 14.6 16.4Z"/>
+</vector>

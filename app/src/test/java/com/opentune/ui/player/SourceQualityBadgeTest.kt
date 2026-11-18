@@ -34,6 +34,10 @@ class SourceQualityBadgeTest {
         assertEquals("High quality · 320 kbps · upgrading", qualityStatusLabel(source, AudioFormatInfo("AAC",320,44100,2), true))
         assertEquals("Lossless · 16-bit/44.1 kHz", qualityStatusLabel(source, AudioFormatInfo("FLAC",null,44100,2,16), false))
         assertEquals("Hi-Res Lossless · 24-bit/96 kHz", qualityStatusLabel(source, AudioFormatInfo("FLAC",null,96000,2,24), false))
+        // Dolby audio is named as Dolby, with its channels.
+        assertEquals("Dolby Atmos · 7.1", qualityStatusLabel(source, AudioFormatInfo("E-AC-3", 768, 48000, 8, mime = "audio/eac3-joc"), false))
+        assertEquals("Dolby Atmos", qualityStatusLabel(source, AudioFormatInfo("AC-4", null, 48000, 2, mime = "audio/ac4"), false))
+        assertEquals("Dolby Digital Plus · 5.1", qualityStatusLabel(source, AudioFormatInfo("E-AC-3", 640, 48000, 6, mime = "audio/eac3"), false))
         assertEquals("Upgrading quality", qualityStatusLabel(null, null, true))
     }
 

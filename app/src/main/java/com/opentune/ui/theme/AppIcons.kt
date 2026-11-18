@@ -88,6 +88,8 @@ internal object AppIcons {
     val Fullscreen = R.drawable.symbol_fullscreen_rounded
     val Gradient = R.drawable.symbol_gradient
     val GraphicEq = R.drawable.symbol_graphic_eq_rounded
+    /** Dolby's double D, on the quality badge of Dolby audio. */
+    val Dolby = R.drawable.symbol_dolby
     val GridView = R.drawable.symbol_grid_view_rounded
     val Groups = R.drawable.symbol_groups_rounded
     val Headphones = R.drawable.symbol_headphones_rounded

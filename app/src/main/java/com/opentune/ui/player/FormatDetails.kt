@@ -76,7 +76,9 @@ internal fun FormatDetailsDialog(song: Song?, format: AudioFormatInfo?, onDismis
     val kbps = com.opentune.playback.bestKbps(format, measured, source?.kbps)
     val channels = format?.channels
     val trackRate = pipe.outputSampleRateHz ?: rate
+    val dolby = com.opentune.playback.dolbyName(format)
     val quality = when {
+        dolby != null -> dolby.uppercase(java.util.Locale.ROOT)
         lossless && (bits ?: 0) >= 24 -> "HI-RES LOSSLESS"
         lossless -> "LOSSLESS"
         (kbps ?: 0) >= 256 -> "HIGH QUALITY"
@@ -105,7 +107,7 @@ internal fun FormatDetailsDialog(song: Song?, format: AudioFormatInfo?, onDismis
                 Box(
                     Modifier.size(52.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center,
-                ) { Icon(ImageVector.vectorResource(AppIcons.GraphicEq), null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary) }
+                ) { Icon(ImageVector.vectorResource(if (dolby != null) AppIcons.Dolby else AppIcons.GraphicEq), null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary) }
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text("Audio Format Details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
