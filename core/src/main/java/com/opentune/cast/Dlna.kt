@@ -163,7 +163,8 @@ class Dlna(
         /** "0:03:25" for 205 s, the way UPnP writes times. */
         fun clock(ms: Long): String {
             val s = (ms / 1000).coerceAtLeast(0)
-            return "%d:%02d:%02d".format(s / 3600, (s / 60) % 60, s % 60)
+            // Western digits whatever the app's language: a renderer reads this, not a person.
+            return String.format(java.util.Locale.ROOT, "%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60)
         }
 
         fun parseClock(text: String?): Long? {

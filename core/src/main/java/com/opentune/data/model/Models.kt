@@ -158,6 +158,18 @@ fun Song.isSameTrackAs(other: Song?): Boolean {
  */
 fun Song.durationMillis(): Long = durationText.durationMillis()
 
+/**
+ * A song's length as [Song.durationText] holds it: `M:SS`, or `H:MM:SS` from an hour. Always in
+ * Western digits, whatever the app's language: [durationMillis] reads it back, and in Arabic,
+ * Persian, Bengali or Marathi a plain format() wrote digits it couldn't read, so the song had no
+ * length at all.
+ */
+fun durationTextOf(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    return if (s >= 3600) String.format(java.util.Locale.ROOT, "%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60)
+    else String.format(java.util.Locale.ROOT, "%d:%02d", s / 60, s % 60)
+}
+
 /** As [Song.durationMillis], for a `M:SS` or `H:MM:SS` string on its own. */
 fun String?.durationMillis(): Long {
     val parts = this?.trim()?.takeIf { it.isNotEmpty() }?.split(":") ?: return 0L

@@ -250,7 +250,7 @@ object Subsonic {
             title = o["title"].string().orEmpty(),
             artist = o["artist"].string().orEmpty(),
             thumbnailUrl = coverRef(o["coverArt"].string()),
-            durationText = seconds?.let { "%d:%02d".format(it / 60, it % 60) },
+            durationText = seconds?.let { com.opentune.data.model.durationTextOf(it * 1000) },
             albumName = o["album"].string(),
         )
     }

@@ -155,10 +155,7 @@ object Audiobooks {
         }
     }
 
-    private fun clock(ms: Long): String {
-        val s = ms / 1000
-        return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s / 60) % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
-    }
+    private fun clock(ms: Long): String = com.opentune.data.model.durationTextOf(ms)
 
     private fun parseBook(doc: JSONObject): Book? {
         val id = doc.optString("identifier").ifBlank { return null }

@@ -98,8 +98,5 @@ object LocalMusic {
         return out
     }
 
-    private fun formatDuration(ms: Long): String {
-        val s = ms / 1000
-        return "%d:%02d".format(s / 60, s % 60)
-    }
+    private fun formatDuration(ms: Long): String = com.opentune.data.model.durationTextOf(ms)
 }
