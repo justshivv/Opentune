@@ -1,5 +1,7 @@
 package com.opentune.desktop
 
+import androidx.compose.foundation.layout.heightIn
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
@@ -108,13 +110,27 @@ internal fun LyricsPane(song: Song, modifier: Modifier = Modifier) {
     val settings by AppSettings.lyrics.collectAsState()
     val lyrics = (state as? LyricsState.Found)?.lyrics
     val offset = lyricsOffset(settings.offsets[song.videoId], lyrics)
+    // Translated a line under each, as on the phone, when a language is chosen.
+    val target = settings.translateTo
+    val lines = remember(lyrics) {
+        when (lyrics) {
+            is Lyrics.Synced -> lyrics.lines.map(::lyricDisplayText)
+            is Lyrics.Plain -> lyrics.text.lines()
+            else -> emptyList()
+        }
+    }
+    val translated by androidx.compose.runtime.produceState<List<String?>>(emptyList(), lines, target) {
+        value = emptyList()
+        if (target.isBlank() || lines.isEmpty()) return@produceState
+        value = com.opentune.data.lyrics.LyricsTranslator.translate(lines, target).getOrDefault(emptyList())
+    }
     Column(modifier) {
         LyricsHeader(song, lyrics, offset)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 state is LyricsState.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                lyrics is Lyrics.Synced -> SyncedLyrics(song, lyrics, offset)
-                lyrics is Lyrics.Plain -> PlainLyrics(lyrics.text)
+                lyrics is Lyrics.Synced -> SyncedLyrics(song, lyrics, offset, translated)
+                lyrics is Lyrics.Plain -> PlainLyrics(lyrics.text, translated)
                 else -> Text(
                     "No lyrics for this song.",
                     style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -151,6 +167,7 @@ private fun LyricsHeader(song: Song, lyrics: Lyrics?, offset: Long) {
                 }
             }
         }
+        TranslateButton(settings.translateTo, settings.translateTarget)
         Spacer(Modifier.weight(1f))
         if (lyrics is Lyrics.Synced) {
             val choruses = remember(lyrics) { SongParts.choruses(lyrics) }
@@ -183,7 +200,7 @@ private fun LyricsHeader(song: Song, lyrics: Lyrics?, offset: Long) {
 }
 
 @Composable
-private fun SyncedLyrics(song: Song, lyrics: Lyrics.Synced, offset: Long) {
+private fun SyncedLyrics(song: Song, lyrics: Lyrics.Synced, offset: Long, translated: List<String?>) {
     var position by remember(song.videoId) { mutableLongStateOf(0L) }
     LaunchedEffect(song.videoId) {
         while (true) {
@@ -209,13 +226,13 @@ private fun SyncedLyrics(song: Song, lyrics: Lyrics.Synced, offset: Long) {
         itemsIndexed(lyrics.lines, key = { i, l -> "$i:${l.startMs}" }) { i, line ->
             // Only the line being sung follows the clock; the rest stay as they are, so the
             // 25-a-second position updates redraw one row rather than the whole list.
-            LyricRow(line, i == active, if (i == active) at else 0L) { Player.seekTo((line.startMs - offset).coerceAtLeast(0)) }
+            LyricRow(line, i == active, if (i == active) at else 0L, translated.getOrNull(i)) { Player.seekTo((line.startMs - offset).coerceAtLeast(0)) }
         }
     }
 }
 
 @Composable
-private fun LyricRow(line: LyricLine, active: Boolean, at: Long, onClick: () -> Unit) {
+private fun LyricRow(line: LyricLine, active: Boolean, at: Long, translation: String?, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val lit = scheme.onSurface
     val dim = scheme.onSurface.copy(alpha = 0.32f)
@@ -253,16 +270,55 @@ private fun LyricRow(line: LyricLine, active: Boolean, at: Long, onClick: () -> 
         line.background?.let {
             Text(it, style = MaterialTheme.typography.titleMedium, color = if (active) lit.copy(alpha = 0.7f) else dim, modifier = Modifier.padding(top = 2.dp))
         }
+        translation?.takeIf { it.isNotBlank() && it != lyricDisplayText(line) }?.let {
+            Text(it, style = MaterialTheme.typography.titleMedium, color = if (active) lit.copy(alpha = 0.75f) else dim, modifier = Modifier.padding(top = 2.dp),
+                textAlign = if (second) TextAlign.End else TextAlign.Start)
+        }
+    }
+}
+
+/** Translate: a language to show the lyrics in, a line under each, or off. The last one picked comes first. */
+@Composable
+private fun TranslateButton(current: String, last: String) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { open = true }) {
+            Text(
+                com.opentune.data.lyrics.LyricsTranslator.languageName(current)?.let { "In $it" } ?: "Translate",
+                style = MaterialTheme.typography.labelLarge,
+                color = if (current.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        DropdownMenu(open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 420.dp)) {
+            fun pick(code: String) {
+                open = false
+                AppSettings.updateLyrics { it.copy(translateTo = code, translateTarget = code.ifBlank { it.translateTarget }) }
+            }
+            if (current.isNotBlank()) DropdownMenuItem(text = { Text("Off") }, onClick = { pick("") })
+            val languages = com.opentune.data.lyrics.LyricsTranslator.LANGUAGES
+            (languages.filter { it.code == last } + languages.filter { it.code != last }).forEach { l ->
+                DropdownMenuItem(
+                    text = { Text(l.name) },
+                    leadingIcon = { if (l.code == current) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
+                    onClick = { pick(l.code) },
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun PlainLyrics(text: String) {
+private fun PlainLyrics(text: String, translated: List<String?>) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 16.dp)) {
-        Text(
+        if (translated.isEmpty()) Text(
             text, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
             lineHeight = MaterialTheme.typography.titleLarge.lineHeight * 1.2f,
-        )
+        ) else text.lines().forEachIndexed { i, line ->
+            Text(line, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+            translated.getOrNull(i)?.takeIf { it.isNotBlank() && it != line }?.let {
+                Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+            }
+        }
         Text(
             "These lyrics aren't timed to the song.", style = MaterialTheme.typography.bodySmall, color = Color.Gray,
             modifier = Modifier.padding(top = 24.dp, bottom = 120.dp),

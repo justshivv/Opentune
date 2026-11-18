@@ -29,6 +29,7 @@ fun main(args: Array<String>) {
     com.opentune.data.account.AccountStore.init(appContext)
     // Listen together, run against this computer's player; a guest's controls go to the host.
     com.opentune.data.together.Together.init(appContext)
+    com.opentune.data.lyrics.LyricsTranslator.init(appContext)
     com.opentune.data.together.Together.attach(DesktopRoomPlayer)
     Player.intercept = com.opentune.data.together.Together::intercept
     // What's playing, to the listener's Discord profile and Last.fm scrobbles, when they've turned them on.
