@@ -73,6 +73,21 @@ class DesktopTest {
         assertEquals(listOf("2"), ids())
     }
 
+    /** A Listen together room sees the desktop's queue as the phone's: the song playing and what comes after. */
+    @Test fun aRoomSeesTheQueue() {
+        fun song(n: Int) = Song("r${n.toString().padStart(10, '0')}", "Song $n", "Artist", null)
+        Player.cue((0 until 4).map(::song), 1)
+        DesktopRoomPlayer.queue
+        Thread.sleep(300)
+        assertEquals("Song 1", DesktopRoomPlayer.currentSong.value?.title)
+        assertEquals(listOf(2, 3), DesktopRoomPlayer.upNext.value)
+        // The host's queue replaces what's after the song playing.
+        DesktopRoomPlayer.replaceUpcoming(listOf(song(7), song(8)))
+        assertEquals(listOf("Song 0", "Song 1", "Song 7", "Song 8"), Player.queue.value.map { it.title })
+        // Not in a room, a control isn't taken away from the player.
+        assertFalse(com.opentune.data.together.Together.intercept(com.opentune.data.together.Together.Control.Next))
+    }
+
     @Test fun theSoftCoverBlendsAHardEdgeIntoAFade() {
         // Half black, half white, as a cover split hard down the middle.
         val image = androidx.compose.ui.graphics.ImageBitmap(32, 32)

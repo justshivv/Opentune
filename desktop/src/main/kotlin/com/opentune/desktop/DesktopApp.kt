@@ -62,6 +62,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
@@ -165,6 +166,7 @@ internal enum class Tab(val label: String, val icon: ImageVector, val selectedIc
     SEARCH("Search", Icons.Rounded.Search, Icons.Rounded.Search),
     LIBRARY("Library", Icons.Outlined.LibraryMusic, Icons.Rounded.LibraryMusic),
     QUEUE("Up next", Icons.AutoMirrored.Outlined.QueueMusic, Icons.AutoMirrored.Rounded.QueueMusic),
+    TOGETHER("Listen together", Icons.Rounded.Groups, Icons.Rounded.Groups),
     SETTINGS("Settings", Icons.Outlined.Settings, Icons.Rounded.Settings),
 }
 
@@ -202,6 +204,8 @@ fun DesktopApp(startPanel: SidePanel? = null) {
     }
     val back: () -> Unit = { history.removeLastOrNull()?.let { page = it } }
     var helpOpen by remember { mutableStateOf(false) }
+    // What a room has to say ("Only the host can skip"), as a notice.
+    LaunchedEffect(Unit) { com.opentune.data.together.Together.notices.collect { Notice.show(it) } }
     LaunchedEffect(Unit) {
         Shortcuts.commands.collect { c ->
             when (c) {
@@ -366,6 +370,7 @@ private fun Pages(
             shown.tab == Tab.LIBRARY -> shown.shelf?.let { LibraryPage(it, onShelf, onPlaylist) }
                 ?: LibraryHome(onShelf = onShelf, onPlaylist = onPlaylist, onOpenAny = onOpenAny)
             shown.tab == Tab.SETTINGS -> SettingsPage()
+            shown.tab == Tab.TOGETHER -> ListenTogetherPage()
             else -> QueuePage(queue, index)
         }
     }

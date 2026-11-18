@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Person
@@ -131,7 +132,12 @@ internal fun songActions(song: Song, queueIndex: Int? = null, onAddToPlaylist: (
     val index by Player.index.collectAsState()
     val isLiked = liked.any { it.videoId == song.videoId }
     val youTube = isYouTubeId(song.videoId)
+    val room by com.opentune.data.together.Together.room.collectAsState()
     return buildList {
+        // In a room: the song goes to the room's queue, for everyone.
+        if (room != null && queueIndex == null) add(SongAction("Add to the room's queue", Icons.Rounded.Groups) {
+            if (com.opentune.data.together.Together.suggest(song)) Notice.show("Added to the room")
+        })
         if (queueIndex == null) {
             add(SongAction("Play next", Icons.AutoMirrored.Rounded.PlaylistPlay) { Player.playNext(listOf(song)); Notice.show("Playing next") })
             add(SongAction("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic) { Player.addToQueue(listOf(song)); Notice.show("Added to queue") })

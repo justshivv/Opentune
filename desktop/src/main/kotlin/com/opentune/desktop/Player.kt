@@ -150,13 +150,30 @@ object Player {
         if (Platform.isFxApplicationThread()) block() else Platform.runLater(block)
     }
 
-    fun playAll(songs: List<Song>, start: Int) {
+    fun playAll(songs: List<Song>, start: Int, atMs: Long = 0) {
         if (songs.isEmpty()) return
         unshuffled = null
         _shuffled.value = false
         _queue.value = songs
-        open(start.coerceIn(songs.indices))
+        open(start.coerceIn(songs.indices), atMs)
     }
+
+    /** Whether the listener wants sound (playing, or about to once it loads). */
+    private val _wanted = MutableStateFlow(false)
+    val wantsPlay: StateFlow<Boolean> = _wanted.asStateFlow()
+
+    private val _seeks = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    /** Fires when the listener moves the position by hand, not when a room keeps in step. */
+    val seeks: kotlinx.coroutines.flow.SharedFlow<Unit> = _seeks
+
+    /**
+     * Listen together, as a guest following a room: the controls go to the host instead of
+     * acting here. Returns true when the room took the control.
+     */
+    @Volatile internal var intercept: ((com.opentune.data.together.Together.Control) -> Boolean)? = null
+
+    fun play() { if (!wanted) toggle() }
+    fun pause() { if (wanted) toggle() }
 
     // ---- Editing the queue -----------------------------------------------------------
     // The song playing never changes here; only what comes before and after it.
@@ -241,13 +258,15 @@ object Player {
         _index.value = at
     }
 
-    fun playAt(i: Int) {
-        if (i in _queue.value.indices) open(i)
+    fun playAt(i: Int, atMs: Long = 0) {
+        if (i in _queue.value.indices) open(i, atMs)
     }
 
     fun toggle() {
+        if (intercept?.invoke(com.opentune.data.together.Together.Control.PlayPause) == true) return
         val e = synchronized(gate) { engine } ?: return current?.let { open(_index.value) } ?: Unit
         wanted = !wanted
+        _wanted.value = wanted
         if (wanted) e.play() else e.pause()
         synchronized(gate) { incoming }?.let { if (wanted) it.play() else it.pause() }
         _playing.value = wanted
@@ -255,11 +274,18 @@ object Player {
 
     private fun pauseAll() {
         wanted = false
+        _wanted.value = false
         synchronized(gate) { listOfNotNull(engine, incoming) }.forEach { it.pause() }
         _playing.value = false
     }
 
     fun next() {
+        if (intercept?.invoke(com.opentune.data.together.Together.Control.Next) == true) return
+        skipNext()
+    }
+
+    /** The next song, whatever a room says; a room's own skip comes here. */
+    internal fun skipNext() {
         val i = _index.value + 1
         when {
             i in _queue.value.indices -> open(i)
@@ -314,12 +340,30 @@ object Player {
 
     /** Back to the start of the song a few seconds in; before that, the song before. */
     fun previous() {
-        if (positionMs() > 4_000) seekTo(0)
+        if (intercept?.invoke(com.opentune.data.together.Together.Control.Previous) == true) return
+        skipPrevious()
+    }
+
+    internal fun skipPrevious() {
+        if (positionMs() > 4_000) seekTo(0, byHand = false)
         else if (_index.value > 0) open(_index.value - 1)
     }
 
-    fun seekTo(ms: Long) {
+    /** Moves to [ms] in the song; [byHand] when the listener did it, which a room hears about. */
+    fun seekTo(ms: Long, byHand: Boolean = true) {
+        if (byHand && intercept?.invoke(com.opentune.data.together.Together.Control.Seek(ms)) == true) return
         synchronized(gate) { engine }?.seek(ms)
+        if (byHand) _seeks.tryEmit(Unit)
+    }
+
+    /** Puts [songs] after the song playing in place of what was there, as a room's queue changes. */
+    internal fun replaceUpcoming(songs: List<Song>) {
+        val q = _queue.value
+        if (_index.value !in q.indices) return playAll(songs, 0)
+        _queue.value = q.take(_index.value + 1) + songs
+        unshuffled = null
+        _shuffled.value = false
+        lookAheadNext()
     }
 
     fun setVolume(v: Double) {
@@ -345,13 +389,14 @@ object Player {
     fun positionMs(): Long = synchronized(gate) { engine }?.positionMs() ?: 0L
     fun durationMs(): Long = synchronized(gate) { engine }?.durationMs() ?: 0L
 
-    private fun open(i: Int) {
+    private fun open(i: Int, atMs: Long = 0) {
         val song = _queue.value.getOrNull(i) ?: return
         _index.value = i
         _error.value = null
         _loading.value = true
         _quality.value = null
         wanted = true
+        _wanted.value = true
         _playing.value = false
         Library.played(song)
         val gen = synchronized(gate) {
@@ -362,7 +407,7 @@ object Player {
             ++generation
         }
         val ready = upgrades[song.videoId]?.takeIf { System.currentTimeMillis() - it.at < UPGRADE_KEEP_MS }
-        if (ready != null) start(song, gen, ready, takeover = false) else startBase(song, gen)
+        if (ready != null) start(song, gen, ready, takeover = false, atMs = atMs) else startBase(song, gen, atMs)
         upgradeJob = scope.launch {
             findUpgrades(song, gen)
             // Then the next song's, so it can start in its best quality.
@@ -460,7 +505,8 @@ object Player {
         } else if (_repeat.value == Repeat.ONE) {
             open(_index.value)
         } else {
-            next()
+            // A song that ends isn't a skip pressed: a guest in a room doesn't send it to the host.
+            skipNext()
         }
     }
 
@@ -524,9 +570,9 @@ object Player {
      * [takeover], else from the start. The old engine plays on until the new
      * one's first sound; if the new one fails, the old one simply carries on.
      */
-    private fun start(song: Song, gen: Int, upgrade: Upgrade, takeover: Boolean) {
+    private fun start(song: Song, gen: Int, upgrade: Upgrade, takeover: Boolean, atMs: Long = 0) {
         val old = synchronized(gate) { engine.takeIf { takeover } }
-        val startAt: () -> Long = { old?.positionMs() ?: 0L }
+        val startAt: () -> Long = { old?.positionMs() ?: atMs }
         lateinit var e: Engine
         val quality: () -> Quality = {
             upgrade.flac?.let { f ->

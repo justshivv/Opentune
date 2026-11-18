@@ -75,6 +75,14 @@ val sharedFromCore = listOf(
     // The YouTube Music account, signed in from the phone over the home Wi-Fi as the TV is.
     "com/opentune/data/account/AccountStore.kt",
     "com/opentune/data/account/SessionPairing.kt",
+    // Listen together: the room protocol as the phone and the web player speak it.
+    "com/opentune/data/together/RoomCode.kt",
+    "com/opentune/data/together/Schnorr.kt",
+    "com/opentune/data/together/Nostr.kt",
+    "com/opentune/data/together/Messages.kt",
+    "com/opentune/data/together/RoomSession.kt",
+    "com/opentune/data/together/VoiceFrames.kt",
+    "com/opentune/data/radio/Radio.kt",
     // NewPipe's patched helper, see that file.
     "org/schabi/newpipe/extractor/utils/Utils.java",
 )

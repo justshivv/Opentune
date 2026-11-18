@@ -83,6 +83,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Explore
@@ -177,6 +178,7 @@ internal fun Sidebar(selected: Any?, folded: Boolean, onPick: (Any) -> Unit) {
             SideRow(Icons.Rounded.History, "History", selected == Shelf.RECENT, folded) { onPick(Shelf.RECENT) }
             SideRow(Icons.Rounded.Favorite, "Liked songs", selected == Shelf.LIKED, folded) { onPick(Shelf.LIKED) }
             SideRow(Icons.AutoMirrored.Rounded.PlaylistPlay, "Up next", selected == Tab.QUEUE, folded) { onPick(Tab.QUEUE) }
+            SideRow(Icons.Rounded.Groups, "Listen together", selected == Tab.TOGETHER, folded) { onPick(Tab.TOGETHER) }
             HorizontalDivider(color = divider, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
             // Your playlists by name, scrolling on their own between the pages and Settings.
             LazyColumn(Modifier.weight(1f)) {
