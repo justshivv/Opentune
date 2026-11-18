@@ -415,6 +415,7 @@ export function FullScreenPlayer({ closing = false, onClosed }: { closing?: bool
               videoId={nowPlaying.videoId}
               className="grid size-8 flex-none place-items-center rounded-full bg-quinary text-primary hover:bg-quaternary"
               size={18}
+              likedColor={coverColor?.accent}
             />
           </div>
 

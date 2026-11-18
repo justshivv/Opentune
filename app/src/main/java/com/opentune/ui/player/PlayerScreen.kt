@@ -1612,7 +1612,7 @@ private fun RowScope.TitleRow(song: Song, liked: Boolean, onLike: () -> Unit, on
         )
     }
     Spacer(Modifier.width(10.dp))
-    if (apple) StarButton(liked, onLike) else HeartButton(liked, onLike)
+    if (apple) StarButton(liked, song.thumbnailUrl, onLike) else HeartButton(liked, song.thumbnailUrl, onLike)
     Spacer(Modifier.width(10.dp))
     Box(
         Modifier.size(46.dp).clip(CircleShape)
@@ -1679,7 +1679,9 @@ internal fun TitleFlight(
 
 /** Apple Music's favourite: a star in a soft round button that fills in red. */
 @Composable
-private fun StarButton(liked: Boolean, onClick: () -> Unit) {
+private fun StarButton(liked: Boolean, artworkUrl: String?, onClick: () -> Unit) {
+    // Filled, it takes the cover's colour; Apple's red until the cover has one.
+    val likeColor = rememberCoverLikeColor(artworkUrl, fallback = Color(0xFFFA2D48))
     val haptics = com.opentune.ui.components.rememberHaptics()
     val still = AppSettings.ui.collectAsState().value.reduceAnimation
     val pop = remember { androidx.compose.animation.core.Animatable(1f) }
@@ -1700,16 +1702,21 @@ private fun StarButton(liked: Boolean, onClick: () -> Unit) {
     ) {
         Icon(if (liked) ImageVector.vectorResource(AppIcons.Star) else ImageVector.vectorResource(AppIcons.StarBorder),
             if (liked) "Remove from Liked" else "Favourite", Modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
-            tint = if (liked) Color(0xFFFA2D48) else LocalContentColor.current)
+            tint = if (liked) likeColor else LocalContentColor.current)
     }
 }
+
+/** The filled heart's colour until (or unless) the cover gives one. */
+internal val LIKE_FALLBACK = Color(0xFFFF4D6D)
 
 /** How strongly the like and more buttons beside the title tint what's behind them. */
 private const val PLAYER_BUTTON_TINT = 0.14f
 
 /** The heart pops when tapped on. */
 @Composable
-private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
+private fun HeartButton(liked: Boolean, artworkUrl: String?, onClick: () -> Unit) {
+    // Filled, it takes the cover's colour; the usual pink until the cover has one.
+    val likeColor = rememberCoverLikeColor(artworkUrl, fallback = LIKE_FALLBACK)
     val haptics = com.opentune.ui.components.rememberHaptics()
     val still = AppSettings.ui.collectAsState().value.reduceAnimation
     val interactions = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -1728,7 +1735,8 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
         burst.snapTo(0f)
         burst.animateTo(1f, tween(720, easing = androidx.compose.animation.core.LinearEasing))
     }
-    val burstColors = listOf(Color(0xFFFF4D6D), Color(0xFFFF8FA3), Color(0xFFFFC2D1), MaterialTheme.colorScheme.primary)
+    // The burst in the heart's own colour and paler shades of it.
+    val burstColors = listOf(likeColor, androidx.compose.ui.graphics.lerp(likeColor, Color.White, 0.35f), androidx.compose.ui.graphics.lerp(likeColor, Color.White, 0.65f), MaterialTheme.colorScheme.primary)
     Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier.size(46.dp).graphicsLayer { scaleX = scale; scaleY = scale }
@@ -1743,7 +1751,7 @@ private fun HeartButton(liked: Boolean, onClick: () -> Unit) {
         ) {
             Icon(if (liked) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder),
                 if (liked) "Remove from Liked" else "Like", Modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
-                tint = if (liked) Color(0xFFFF4D6D) else LocalContentColor.current)
+                tint = if (liked) likeColor else LocalContentColor.current)
         }
         // Drawn past the button's edges, over whatever is around it.
         if (burst.value < 1f) LikeBurst(burst.value, bursts, burstColors, Modifier.requiredSize(150.dp))
