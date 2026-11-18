@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -114,6 +115,10 @@ internal fun ArtistView(item: ShelfItem, onOpen: (ShelfItem) -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         RoundButton(Icons.Rounded.Shuffle, "Shuffle", 46.dp, solid = false, enabled = songs.isNotEmpty()) { Player.playAll(songs.shuffled(), 0) }
                         RoundButton(Icons.Rounded.PlayArrow, "Play", 58.dp, solid = true, enabled = songs.isNotEmpty()) { Player.playAll(songs, 0) }
+                        // A radio from the artist's best-known song: their music and music like it.
+                        RoundButton(Icons.Rounded.Radio, "Artist radio", 46.dp, solid = false, enabled = songs.isNotEmpty()) {
+                            Player.startRadio(songs.first()); Notice.show("Radio from $name")
+                        }
                     }
                 }
             }

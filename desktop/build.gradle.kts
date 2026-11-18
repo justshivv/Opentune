@@ -70,6 +70,8 @@ val sharedFromCore = listOf(
     "com/opentune/data/addons/AddonModels.kt",
     // The owner's signed app configuration from the VPS, which carries the published add-ons.
     "com/opentune/data/config/RemoteConfig.kt",
+    // Banners and featured playlists from the dashboard that the listener closed.
+    "com/opentune/data/config/HomeDismissals.kt",
     // NewPipe's patched helper, see that file.
     "org/schabi/newpipe/extractor/utils/Utils.java",
 )

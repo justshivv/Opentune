@@ -354,6 +354,7 @@ private fun AppearanceSection() {
     val ui by AppSettings.ui.collectAsState()
     Section("Look") {
         Choices("Theme", com.opentune.data.settings.ThemeMode.entries, theme.mode, { it.label }) { v -> AppSettings.updateTheme { it.copy(mode = v) } }
+        SwitchRow("Pure black", "A black background in the dark theme, rather than a dark grey", theme.pureBlack) { on -> AppSettings.updateTheme { it.copy(pureBlack = on) } }
         Text("Accent", style = MaterialTheme.typography.bodyLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             com.opentune.data.settings.SEED_COLORS.forEach { c ->

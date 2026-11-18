@@ -250,6 +250,7 @@ internal fun TrackRow(i: Int, song: Song, songs: List<Song>, onRemove: ((Song) -
     val current = queue.getOrNull(index)?.videoId == song.videoId
     var adding by remember { mutableStateOf(false) }
     val tools by animateFloatAsState(if (hovered || isLiked || adding) 1f else 0f, tween(140), label = "row tools")
+    SongContextMenu(song) {
     Row(
         Modifier.padding(horizontal = GUTTER - 12.dp).fillMaxWidth().hoverWash(hover, RoundedCornerShape(10.dp))
             .clickable(interactionSource = hover, indication = null) { Player.playAll(songs, i) }
@@ -279,11 +280,11 @@ internal fun TrackRow(i: Int, song: Song, songs: List<Song>, onRemove: ((Song) -
             LikeButton(isLiked, { Library.setLiked(song, !isLiked) }, size = 20.dp)
         }
         Text(song.durationText.orEmpty(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(52.dp).padding(start = 10.dp))
+        Box(Modifier.graphicsLayer { alpha = tools }) { SongMoreButton(song, size = 30.dp) }
         if (onRemove != null) {
             Box(Modifier.graphicsLayer { alpha = tools }) { HoverIcon(Icons.Rounded.Close, "Remove", size = 30.dp, iconSize = 17.dp) { onRemove(song) } }
-        } else {
-            Spacer(Modifier.width(30.dp))
         }
+    }
     }
 }
 

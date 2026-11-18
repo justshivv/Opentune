@@ -1,5 +1,6 @@
 package com.opentune.desktop
 
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -144,12 +145,32 @@ internal fun HomePage(onOpen: (ShelfItem) -> Unit, onOpenAny: (Any) -> Unit) {
     val speedDial = remember(history) { SpeedDial.fromHistory(history, limit = 27) }
     val mixes = remember(history) { DailyMixes.build(history) }
     val loaded = shelves
+    // The dashboard's banners for computers (it names them "web") and its featured playlists.
+    val runtime by com.opentune.data.config.RemoteConfig.state.collectAsState()
+    val closedBanners by com.opentune.data.config.HomeDismissals.banners.collectAsState()
+    val closedPlaylists by com.opentune.data.config.HomeDismissals.playlists.collectAsState()
+    LaunchedEffect(Unit) { runCatching { com.opentune.data.config.RemoteConfig.refresh() } }
+    val banners = runtime.banners.filter { "web" in it.platforms && it.id !in closedBanners }
+    val featured = runtime.playlists.takeIf { com.opentune.data.config.HomeDismissals.showsPlaylists(it.map { p -> p.id }, closedPlaylists) }.orEmpty()
     ScrollPage("Home", greeting(), state = list) {
+        banners.forEach { b -> item(key = "banner:${b.id}") { DashboardBanner(b) } }
         recent.firstOrNull()?.let { last -> item(key = "hero") { JumpBackIn(last, recent) } }
         if (mixes.isNotEmpty() || speedDial.isNotEmpty()) item(key = "picks") {
             Section("Top picks for you") { TopPicks(mixes, speedDial.take(8), onOpenMix = { onOpenAny(it) }) }
         }
         if (recent.isNotEmpty()) item(key = "recents") { SongGrid("Recents", recent.take(32)) }
+        if (featured.isNotEmpty()) item(key = "featured") {
+            Section(runtime.title("featured-playlists", "From the community"), onClose = {
+                com.opentune.data.config.HomeDismissals.dismissPlaylists(featured.map { it.id })
+            }) {
+                HRow(16.dp) {
+                    items(featured) { p ->
+                        val card = ShelfItem(p.title, "Playlist", p.artwork, null, p.browseId)
+                        Card(card) { onOpen(card) }
+                    }
+                }
+            }
+        }
         if (moods.isNotEmpty()) item(key = "moods") {
             Section("Find your mood") { MoodTiles(moods) { onOpenAny(MoodKey(it.title, it.browseId, it.params)) } }
         }
@@ -182,15 +203,15 @@ private fun greeting(): String = when (java.time.LocalTime.now().hour) {
 
 /** A titled part of a page, with its grey line under the title. */
 @Composable
-private fun Section(title: String, subtitle: String? = null, onShowAll: (() -> Unit)? = null, content: @Composable () -> Unit) {
+private fun Section(title: String, subtitle: String? = null, onShowAll: (() -> Unit)? = null, onClose: (() -> Unit)? = null, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionHeader(title, subtitle, onShowAll)
+        SectionHeader(title, subtitle, onShowAll, onClose)
         content()
     }
 }
 
 @Composable
-private fun SectionHeader(title: String, subtitle: String? = null, onShowAll: (() -> Unit)? = null) {
+private fun SectionHeader(title: String, subtitle: String? = null, onShowAll: (() -> Unit)? = null, onClose: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(horizontal = GUTTER), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp)
@@ -203,6 +224,25 @@ private fun SectionHeader(title: String, subtitle: String? = null, onShowAll: ((
                 modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onShowAll).padding(horizontal = 10.dp, vertical = 4.dp),
             )
         }
+        if (onClose != null) HoverIcon(Icons.Rounded.Close, "Hide", size = 30.dp, iconSize = 17.dp, onClick = onClose)
+    }
+}
+
+/** A banner from the dashboard: its title and words, its button, and a cross to close it for good. */
+@Composable
+private fun DashboardBanner(banner: com.opentune.data.config.RemoteBanner) {
+    val links = androidx.compose.ui.platform.LocalUriHandler.current
+    Row(
+        Modifier.padding(horizontal = GUTTER).fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer).padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 16.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(banner.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            if (banner.body.isNotBlank()) Text(banner.body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            androidx.compose.material3.Button(onClick = { runCatching { links.openUri(banner.url) } }, modifier = Modifier.padding(top = 6.dp)) { Text(banner.action) }
+        }
+        HoverIcon(Icons.Rounded.Close, "Dismiss", size = 32.dp, iconSize = 18.dp) { com.opentune.data.config.HomeDismissals.dismissBanner(banner.id) }
     }
 }
 

@@ -201,6 +201,19 @@ fun DesktopApp(startPanel: SidePanel? = null) {
         page = to
     }
     val back: () -> Unit = { history.removeLastOrNull()?.let { page = it } }
+    var helpOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        Shortcuts.commands.collect { c ->
+            when (c) {
+                Shortcuts.Command.SEARCH -> { playerOpen = false; if (page.tab != Tab.SEARCH || page.opened != null) go(Page(Tab.SEARCH)) }
+                Shortcuts.Command.SETTINGS -> { playerOpen = false; go(Page(Tab.SETTINGS)) }
+                Shortcuts.Command.LYRICS -> panel = if (panel == SidePanel.LYRICS) null else SidePanel.LYRICS
+                Shortcuts.Command.QUEUE -> panel = if (panel == SidePanel.QUEUE) null else SidePanel.QUEUE
+                Shortcuts.Command.CLOSE -> if (helpOpen) helpOpen = false else playerOpen = false
+                Shortcuts.Command.HELP -> helpOpen = true
+            }
+        }
+    }
     val sideSelected: Any? = when {
         page.opened is PlaylistKey -> page.opened
         page.opened != null -> null
@@ -215,6 +228,7 @@ fun DesktopApp(startPanel: SidePanel? = null) {
         val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
         androidx.compose.runtime.LaunchedEffect(dark, chosenMaterial) { WindowsFrame.applyMaterial(dark) }
         val clear = material != WindowsFrame.Material.OFF
+        val openAnywhere: (Any) -> Unit = { playerOpen = false; go(page.copy(opened = it)) }
         // The ink named outright: Surface works it out from its colour only when that is the
         // theme's own, and the see-through page over a material isn't, which left text black.
         Surface(
@@ -222,6 +236,12 @@ fun DesktopApp(startPanel: SidePanel? = null) {
             contentColor = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.fillMaxSize(),
         ) {
+            CompositionLocalProvider(
+                LocalOpen provides openAnywhere,
+                // Right-click menus in the theme's own light or dark.
+                androidx.compose.foundation.LocalContextMenuRepresentation provides
+                    if (dark) androidx.compose.foundation.DarkDefaultContextMenuRepresentation else androidx.compose.foundation.LightDefaultContextMenuRepresentation,
+            ) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val roomForPanel = maxWidth >= 1100.dp
                 val panelShown = panel != null && song != null && roomForPanel
@@ -289,6 +309,10 @@ fun DesktopApp(startPanel: SidePanel? = null) {
                     enter = PageMotion.playerIn(ui.playerMotion, ui.reduceAnimation),
                     exit = PageMotion.playerOut(ui.playerMotion, ui.reduceAnimation),
                 ) { full?.let { NowPlaying(it, docked = false, onClose = { playerOpen = false }) } }
+
+                NoticePill(Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp))
+                if (helpOpen) ShortcutsDialog { helpOpen = false }
+            }
             }
         }
     }
@@ -342,7 +366,7 @@ private fun Pages(
             shown.tab == Tab.LIBRARY -> shown.shelf?.let { LibraryPage(it, onShelf, onPlaylist) }
                 ?: LibraryHome(onShelf = onShelf, onPlaylist = onPlaylist, onOpenAny = onOpenAny)
             shown.tab == Tab.SETTINGS -> SettingsPage()
-            else -> SongPage("Up next", queue, "The queue is empty.", current = index, onPlay = { _, i -> Player.playAt(i) })
+            else -> QueuePage(queue, index)
         }
     }
 }
@@ -373,7 +397,7 @@ private const val MATERIAL_PAGE_ALPHA = 0.45f
  */
 @Composable
 internal fun SearchPage(query: String, onQuery: (String) -> Unit, searches: Int, onSearch: () -> Unit, onOpenAny: (Any) -> Unit) {
-    var results by remember { mutableStateOf<List<Song>?>(null) }
+    var results by remember { mutableStateOf<Pages.Found?>(null) }
     var searching by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     var shownFor by remember { mutableStateOf("") }
@@ -384,16 +408,30 @@ internal fun SearchPage(query: String, onQuery: (String) -> Unit, searches: Int,
         AppSettings.addRecentSearch(q)
         searching = true
         failed = false
-        runCatching { Pages.search(q) }.onSuccess { results = it; shownFor = q }.onFailure { failed = true }
+        runCatching { Pages.searchAll(q) }.onSuccess { results = it; shownFor = q }.onFailure { failed = true }
         searching = false
+    }
+    // What YouTube Music suggests while typing, until Enter searches.
+    var suggestions by remember { mutableStateOf(emptyList<String>()) }
+    LaunchedEffect(query, shownFor) {
+        val q = query.trim()
+        if (q.isEmpty() || q == shownFor) { suggestions = emptyList(); return@LaunchedEffect }
+        kotlinx.coroutines.delay(220)
+        suggestions = runCatching { Pages.suggestions(q) }.getOrDefault(emptyList()).filterNot { it.equals(q, ignoreCase = true) }
     }
     // Cleared: back to browsing.
     LaunchedEffect(query) { if (query.isBlank()) { results = null; shownFor = "" } }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val askedForFocus by Shortcuts.searchFocus.collectAsState()
+    LaunchedEffect(askedForFocus) { runCatching { focus.requestFocus() } }
     val found = results
     ScrollPage("Search", spacing = 22.dp) {
-        item(key = "field") { SearchField(query, onQuery, onSearch, focus) }
+        item(key = "field") {
+            Column {
+                SearchField(query, onQuery, onSearch, focus)
+                if (suggestions.isNotEmpty() && !searching) Suggestions(suggestions) { onQuery(it); onSearch() }
+            }
+        }
         when {
             searching -> item(key = "loading") { Loading() }
             failed -> item(key = "failed") { Message("Couldn't search", "Check your connection and try again.") }
@@ -407,13 +445,19 @@ internal fun SearchPage(query: String, onQuery: (String) -> Unit, searches: Int,
                 }
                 if (recentSearches.isEmpty() && moods.isEmpty()) item(key = "hint") { Message("Find something to play", "Type a song or an artist and press Enter.", icon = Icons.Rounded.Search) }
             }
-            found.isEmpty() -> item(key = "none") { Message("No results for “$shownFor”", "Try different words.", icon = Icons.Rounded.SearchOff) }
+            found.isEmpty -> item(key = "none") { Message("No results for “$shownFor”", "Try different words.", icon = Icons.Rounded.SearchOff) }
             else -> {
-                item(key = "top") { TopResult(found) }
-                item(key = "all-head") {
-                    Text("Songs", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = GUTTER, vertical = 4.dp))
+                if (found.songs.isNotEmpty()) item(key = "top") { TopResult(found.songs) }
+                // Each kind on a row of its own, as the web player shows them.
+                listOf("Artists" to found.artists, "Albums" to found.albums, "Playlists" to found.playlists, "Videos" to found.videos)
+                    .filter { it.second.isNotEmpty() }
+                    .forEach { (title, items) -> item(key = "shelf:$title") { ShelfRow(Pages.Shelf(title, items)) { onOpenAny(it) } } }
+                if (found.songs.size > 5) {
+                    item(key = "all-head") {
+                        Text("Songs", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = GUTTER, vertical = 4.dp))
+                    }
+                    tracks(found.songs)
                 }
-                tracks(found)
             }
         }
     }
@@ -447,6 +491,27 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, onSearch: () -
             )
         }
         if (query.isNotEmpty()) HoverIcon(Icons.Rounded.Close, "Clear", size = 30.dp, iconSize = 18.dp) { onQuery("") }
+    }
+}
+
+/** YouTube Music's suggestions for what's typed, under the box; a click searches for one. */
+@Composable
+private fun Suggestions(suggestions: List<String>, onPick: (String) -> Unit) {
+    Column(
+        Modifier.padding(horizontal = GUTTER).padding(top = 6.dp).widthIn(max = 720.dp).fillMaxWidth()
+            .glass(RoundedCornerShape(14.dp), MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)).padding(vertical = 6.dp),
+    ) {
+        suggestions.forEach { s ->
+            val hover = remember { MutableInteractionSource() }
+            Row(
+                Modifier.fillMaxWidth().hoverWash(hover, RoundedCornerShape(10.dp)).clickable(interactionSource = hover, indication = null) { onPick(s) }
+                    .padding(horizontal = 18.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                Text(s, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }
 
@@ -598,18 +663,6 @@ internal fun IconCover(icon: ImageVector, colours: List<Color>, modifier: Modifi
 
 internal enum class Shelf(val label: String) { LIKED("Liked songs"), PLAYLISTS("Playlists"), SERVER("Your server"), RECENT("Recently played") }
 
-/** A plain list of songs under a big title, such as Up next. */
-@Composable
-private fun SongPage(title: String, songs: List<Song>, empty: String, current: Int = -1, onPlay: (List<Song>, Int) -> Unit) {
-    ScrollPage(title, if (songs.isEmpty()) null else lengthLine(songs), spacing = 4.dp) {
-        if (songs.isEmpty()) item { Message(empty, null) }
-        else {
-            item { TrackHeader() }
-            tracks(songs)
-        }
-    }
-}
-
 /** An album, playlist or podcast: the head over a blur of its cover, then its tracks. */
 @Composable
 internal fun CollectionPage(item: ShelfItem) {
@@ -630,8 +683,17 @@ internal fun CollectionPage(item: ShelfItem) {
             coverUrl = item.thumbnailUrl, kind = kind, title = item.title,
             subtitle = item.subtitle.split(" • ").filter { it !in setOf("Album", "Single", "EP", "Playlist") }.joinToString(" • "),
             songs = songs,
+            extra = { ListMoreButton(songs.orEmpty(), linkOf(id)) },
         )
     }
+}
+
+/** The YouTube Music address of an album, playlist or podcast, to share. */
+internal fun linkOf(browseId: String): String? = when {
+    browseId.isBlank() -> null
+    browseId.startsWith("VL") -> "https://music.youtube.com/playlist?list=${browseId.removePrefix("VL")}"
+    browseId.startsWith("PL") || browseId.startsWith("RD") || browseId.startsWith("OLAK") -> "https://music.youtube.com/playlist?list=$browseId"
+    else -> "https://music.youtube.com/browse/$browseId"
 }
 
 // ---- Rows and cards ----------------------------------------------------------
@@ -652,6 +714,7 @@ internal fun SongList(songs: List<Song>, current: Int = -1, onRemove: ((Song) ->
             val isCurrent = if (current >= 0) i == current else song.videoId == playingId
             var adding by remember { mutableStateOf(false) }
             val hover = remember { MutableInteractionSource() }
+            SongContextMenu(song) {
             Row(
                 Modifier.appear(i, since).padding(horizontal = 8.dp).fillMaxWidth().hoverWash(hover, RoundedCornerShape(12.dp))
                     .clickable(interactionSource = hover, indication = null) { onPlay(songs, i) }.padding(horizontal = 8.dp, vertical = 6.dp),
@@ -682,11 +745,13 @@ internal fun SongList(songs: List<Song>, current: Int = -1, onRemove: ((Song) ->
                     AddToPlaylistMenu(song, adding) { adding = false }
                 }
                 LikeButton(isLiked, { Library.setLiked(song, !isLiked) }, size = 24.dp)
+                SongMoreButton(song, size = 36.dp)
                 if (onRemove != null) {
                     IconButton(onClick = { onRemove(song) }) {
                         Icon(Icons.Rounded.Close, "Remove", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+            }
             }
         }
     }

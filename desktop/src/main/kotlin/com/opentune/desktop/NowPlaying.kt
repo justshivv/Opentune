@@ -49,6 +49,9 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
@@ -457,9 +460,26 @@ private fun FootRow(showLyrics: Boolean, onLyrics: (() -> Unit)?) {
                 )
             }
         }
+        val shuffled by Player.shuffled.collectAsState()
+        val repeat by Player.repeat.collectAsState()
+        IconButton(onClick = Player::toggleShuffle) {
+            Icon(Icons.Rounded.Shuffle, if (shuffled) "Shuffle on" else "Shuffle",
+                tint = if (shuffled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+        }
+        IconButton(onClick = Player::cycleRepeat) {
+            Icon(
+                if (repeat == Player.Repeat.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                when (repeat) { Player.Repeat.OFF -> "Repeat off"; Player.Repeat.ALL -> "Repeat all"; Player.Repeat.ONE -> "Repeat this song" },
+                tint = if (repeat != Player.Repeat.OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+        }
         Icon(Icons.AutoMirrored.Rounded.VolumeUp, "Volume", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp).size(20.dp))
         var level by remember { mutableFloatStateOf(volume.toFloat()) }
-        LineBar(level, { level = it; Player.setVolume(it.toDouble()) }, MaterialTheme.colorScheme.onSurface, faint, Modifier.weight(1f).padding(horizontal = 10.dp))
+        LaunchedEffect(volume) { level = volume.toFloat() }
+        LineBar(
+            level, { level = it; Player.setVolume(it.toDouble()) }, MaterialTheme.colorScheme.onSurface, faint,
+            Modifier.weight(1f).padding(horizontal = 10.dp).volumeWheel(),
+        )
         Box {
             IconButton(onClick = { timing = true }) {
                 Icon(Icons.Rounded.Bedtime, "Sleep timer", tint = if (sleep != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
@@ -621,12 +641,12 @@ private fun MoreButton(song: Song) {
             Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable { open = true },
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Rounded.MoreHoriz, "More", Modifier.size(26.dp)) }
+        // The same actions as a song's right-click menu, as on the web player.
+        val actions = songActions(song) { adding = true }
         DropdownMenu(open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text("Add to playlist") },
-                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null) },
-                onClick = { open = false; adding = true },
-            )
+            actions.forEach { a ->
+                DropdownMenuItem(text = { Text(a.label) }, leadingIcon = { Icon(a.icon, null) }, onClick = { open = false; a.run() })
+            }
         }
         AddToPlaylistMenu(song, adding) { adding = false }
     }

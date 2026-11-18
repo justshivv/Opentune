@@ -41,6 +41,24 @@ class DesktopShots {
         scene.close()
     }
 
+    /** Search with every kind of result, and the queue as it can be edited. */
+    @Test fun searchAndQueue() {
+        assumeTrue(folder != null)
+        AppSettings.init(appContext)
+        AppSettings.updateTheme { it.copy(mode = com.opentune.data.settings.ThemeMode.DARK) }
+        shoot("desktop-search-results", 1400, 1700, 14_000) {
+            DesktopTheme { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { SearchPage("the weeknd", {}, 1, {}, {}) } }
+        }
+        val songs = listOf("Blinding Lights", "Save Your Tears", "Starboy", "The Hills", "Die For You").mapIndexed { i, t ->
+            com.opentune.data.model.Song("w${i.toString().padStart(10, '0')}", t, "The Weeknd", "https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg", "3:2$i")
+        }
+        Player.cue(songs, 1)
+        shoot("desktop-queue-page", 1200, 800, 4_000) {
+            DesktopTheme { Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) { QueuePage(songs, 1) } }
+        }
+        shoot("desktop-shortcuts", 700, 800, 2_000) { DesktopTheme { ShortcutsDialog {} } }
+    }
+
     @Test fun windows() {
         assumeTrue(folder != null)
         AppSettings.init(appContext)

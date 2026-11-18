@@ -46,6 +46,33 @@ class DesktopTest {
         assertEquals(Player.Repeat.OFF, Player.repeat.value)
     }
 
+    /** The queue as the song menu and Up next change it: the song playing always keeps playing. */
+    @Test fun theQueueIsEditedAroundTheSongPlaying() {
+        fun song(n: Int) = Song("q${n.toString().padStart(10, '0')}", "Song $n", "Artist", null)
+        val songs = (0 until 6).map(::song)
+        fun ids() = Player.queue.value.map { it.title.removePrefix("Song ") }
+        Player.cue(songs, 2)
+        Player.playNext(listOf(song(9)))
+        assertEquals(listOf("0", "1", "2", "9", "3", "4", "5"), ids())
+        Player.addToQueue(listOf(song(8)))
+        assertEquals("8", ids().last())
+        // Moving the song playing takes its place with it; moving another past it shifts it.
+        Player.move(2, 0)
+        assertEquals(0, Player.index.value)
+        assertEquals("2", ids()[Player.index.value])
+        Player.move(4, 0)
+        assertEquals(1, Player.index.value)
+        assertEquals("2", ids()[Player.index.value])
+        // Removing a song before it keeps it current; the song playing can't be removed.
+        Player.removeAt(0)
+        assertEquals(0, Player.index.value)
+        assertEquals("2", ids()[Player.index.value])
+        Player.removeAt(Player.index.value)
+        assertEquals("2", ids()[Player.index.value])
+        Player.clearUpcoming()
+        assertEquals(listOf("2"), ids())
+    }
+
     @Test fun theSoftCoverBlendsAHardEdgeIntoAFade() {
         // Half black, half white, as a cover split hard down the middle.
         val image = androidx.compose.ui.graphics.ImageBitmap(32, 32)

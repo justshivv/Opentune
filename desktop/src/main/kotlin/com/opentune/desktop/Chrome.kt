@@ -381,7 +381,7 @@ internal fun RightPanel(panel: SidePanel, song: Song, queue: List<Song>, index: 
                     SidePanel.LYRICS -> LyricsPane(song, Modifier.fillMaxSize().padding(horizontal = 14.dp))
                     SidePanel.QUEUE -> androidx.compose.runtime.CompositionLocalProvider(LocalPageBottom provides 32.dp) {
                         if (queue.isEmpty()) Message("The queue is empty.", null)
-                        else SongList(queue, current = index) { _, i -> Player.playAt(i) }
+                        else QueueList(queue, index)
                     }
                 }
             }

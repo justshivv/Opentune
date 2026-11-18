@@ -7,6 +7,7 @@ import com.opentune.data.model.SearchResult
 import com.opentune.data.model.ShelfItem
 import com.opentune.data.model.Song
 import com.opentune.data.podcasts.PodcastParser
+import kotlinx.coroutines.async
 
 /** What the desktop pages show, from YouTube Music through the shared client. */
 object Pages {
@@ -60,6 +61,57 @@ object Pages {
     suspend fun search(query: String): List<Song> =
         songsIn(InnertubeParser.parseSearchPage(Innertube.search(query, SearchFilter.SONGS.params)).rows)
             .ifEmpty { songsIn(InnertubeParser.parseSearchPage(Innertube.search(query)).rows) }
+
+    /** A search's answer by kind, as the web player shows it: songs first, then each kind on a row of its own. */
+    data class Found(
+        val songs: List<Song>,
+        val artists: List<ShelfItem>,
+        val albums: List<ShelfItem>,
+        val playlists: List<ShelfItem>,
+        val videos: List<ShelfItem>,
+    ) {
+        val isEmpty get() = songs.isEmpty() && artists.isEmpty() && albums.isEmpty() && playlists.isEmpty() && videos.isEmpty()
+    }
+
+    /**
+     * Everything [query] finds: songs, artists, albums, playlists and videos, each from
+     * YouTube Music's own filtered search, asked at once. A kind that fails is left out;
+     * only when every one fails does the search fail.
+     */
+    suspend fun searchAll(query: String): Found = kotlinx.coroutines.coroutineScope {
+        fun browse(filter: SearchFilter): kotlinx.coroutines.Deferred<Result<List<ShelfItem>>> = async {
+            runCatching {
+                InnertubeParser.parseSearchPage(Innertube.search(query, filter.params)).rows
+                    .filterIsInstance<SearchResult.Browse>().map { it.item }
+                    .map { ShelfItem(it.title, it.subtitle, it.thumbnailUrl, null, it.browseId, it.explicit) }
+                    .distinctBy { it.browseId }.take(20)
+            }
+        }
+        val songs = async { runCatching { search(query) } }
+        val artists = browse(SearchFilter.ARTISTS)
+        val albums = browse(SearchFilter.ALBUMS)
+        val playlists = browse(SearchFilter.PLAYLISTS)
+        val videos = async {
+            runCatching {
+                songsIn(InnertubeParser.parseSearchPage(Innertube.search(query, SearchFilter.VIDEOS.params), includeVideos = true).rows)
+                    .take(20).map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null, it.isExplicit == true) }
+            }
+        }
+        val all: List<Result<List<Any>>> = listOf(songs.await(), artists.await(), albums.await(), playlists.await(), videos.await())
+        all.firstOrNull { it.isSuccess }
+            ?: throw (all.first().exceptionOrNull() ?: IllegalStateException("search failed"))
+        Found(
+            songs.await().getOrDefault(emptyList()),
+            artists.await().getOrDefault(emptyList()),
+            albums.await().getOrDefault(emptyList()),
+            playlists.await().getOrDefault(emptyList()),
+            videos.await().getOrDefault(emptyList()),
+        )
+    }
+
+    /** What YouTube Music suggests for what's typed so far. */
+    suspend fun suggestions(input: String): List<String> =
+        InnertubeParser.parseSearchSuggestions(Innertube.searchSuggestions(input)).distinct().take(8)
 
     /** The songs behind a card: an album or playlist's tracks, an artist's top songs, a podcast's episodes. */
     suspend fun songsOf(browseId: String): List<Song> {

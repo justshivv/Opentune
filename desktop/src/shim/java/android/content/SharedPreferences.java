@@ -7,6 +7,7 @@ public interface SharedPreferences {
     long getLong(String key, long defValue);
     float getFloat(String key, float defValue);
     boolean getBoolean(String key, boolean defValue);
+    java.util.Set<String> getStringSet(String key, java.util.Set<String> defValues);
     boolean contains(String key);
     Editor edit();
 
@@ -16,6 +17,7 @@ public interface SharedPreferences {
         Editor putLong(String key, long value);
         Editor putFloat(String key, float value);
         Editor putBoolean(String key, boolean value);
+        Editor putStringSet(String key, java.util.Set<String> values);
         Editor remove(String key);
         Editor clear();
         boolean commit();

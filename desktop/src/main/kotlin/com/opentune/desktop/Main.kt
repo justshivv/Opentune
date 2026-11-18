@@ -24,6 +24,7 @@ fun main(args: Array<String>) {
     Runtime.getRuntime().addShutdownHook(Thread { AppSettings.flush() })
     Subsonic.init(appContext)
     com.opentune.data.config.RemoteConfig.init(appContext)
+    com.opentune.data.config.HomeDismissals.init(appContext)
     // What's playing, to the listener's Discord profile and Last.fm scrobbles, when they've turned them on.
     DiscordPresence.start()
     LastFmDesktop.start()
@@ -38,6 +39,7 @@ fun main(args: Array<String>) {
     application {
         Window(
             onCloseRequest = ::exitApplication,
+            onKeyEvent = Shortcuts::handle,
             title = "OpenTune",
             icon = rememberLogo(Logo.APP),
             state = rememberWindowState(size = DpSize(1180.dp, 760.dp)),

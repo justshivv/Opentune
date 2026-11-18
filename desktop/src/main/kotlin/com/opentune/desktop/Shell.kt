@@ -144,15 +144,17 @@ internal fun VolumeControl(slider: Boolean) {
         volume < 0.5 -> Icons.AutoMirrored.Rounded.VolumeDown
         else -> Icons.AutoMirrored.Rounded.VolumeUp
     }
-    HoverIcon(icon, if (volume <= 0.0) "Unmute" else "Mute", iconSize = 19.dp) {
-        if (volume > 0.0) { before = volume; Player.setVolume(0.0) } else Player.setVolume(before.takeIf { it > 0 } ?: 0.8)
+    Box(Modifier.volumeWheel()) {
+        HoverIcon(icon, if (volume <= 0.0) "Unmute" else "Mute", iconSize = 19.dp) {
+            if (volume > 0.0) { before = volume; Player.setVolume(0.0) } else Player.setVolume(before.takeIf { it > 0 } ?: 0.8)
+        }
     }
     if (!slider) return
     var width by remember { mutableFloatStateOf(1f) }
     val color = MaterialTheme.colorScheme.onSurface
     fun set(x: Float) = Player.setVolume((x / width).coerceIn(0f, 1f).toDouble())
     Box(
-        Modifier.width(96.dp).height(20.dp)
+        Modifier.width(96.dp).height(20.dp).volumeWheel()
             .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }
             .pointerInput(Unit) { detectTapGestures { set(it.x) } }
             .pointerInput(Unit) { detectHorizontalDragGestures { change, _ -> set(change.position.x) } }

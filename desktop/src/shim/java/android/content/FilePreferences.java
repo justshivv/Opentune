@@ -52,6 +52,17 @@ final class FilePreferences implements SharedPreferences {
         return v != null ? Boolean.parseBoolean(v) : defValue;
     }
 
+    /** A set is kept as one value, its items joined by the unit separator, which no id holds. */
+    private static final String JOIN = "\u001f";
+
+    @Override public java.util.Set<String> getStringSet(String key, java.util.Set<String> defValues) {
+        String v = raw(key);
+        if (v == null) return defValues;
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        if (!v.isEmpty()) out.addAll(java.util.Arrays.asList(v.split(JOIN, -1)));
+        return out;
+    }
+
     @Override public synchronized boolean contains(String key) {
         return values.containsKey(key);
     }
@@ -72,6 +83,9 @@ final class FilePreferences implements SharedPreferences {
             @Override public Editor putLong(String key, long value) { return putString(key, Long.toString(value)); }
             @Override public Editor putFloat(String key, float value) { return putString(key, Float.toString(value)); }
             @Override public Editor putBoolean(String key, boolean value) { return putString(key, Boolean.toString(value)); }
+            @Override public Editor putStringSet(String key, java.util.Set<String> set) {
+                return set == null ? remove(key) : putString(key, String.join(JOIN, set));
+            }
             @Override public Editor remove(String key) { removes.add(key); puts.remove(key); return this; }
             @Override public Editor clear() { clear = true; return this; }
 

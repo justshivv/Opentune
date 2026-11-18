@@ -158,6 +158,83 @@ object Player {
         open(start.coerceIn(songs.indices))
     }
 
+    // ---- Editing the queue -----------------------------------------------------------
+    // The song playing never changes here; only what comes before and after it.
+
+    /** [songs] right after the song playing; with nothing playing, they start now. */
+    fun playNext(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val q = _queue.value
+        if (current == null) return playAll(songs, 0)
+        val at = _index.value + 1
+        _queue.value = q.take(at) + songs + q.drop(at)
+        unshuffled = unshuffled?.let { it + songs }
+        lookAheadNext()
+    }
+
+    /** [songs] at the end of the queue; with nothing playing, they start now. */
+    fun addToQueue(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        if (current == null) return playAll(songs, 0)
+        _queue.value = _queue.value + songs
+        unshuffled = unshuffled?.let { it + songs }
+        if (_queue.value.size - songs.size == _index.value + 1) lookAheadNext()
+    }
+
+    /** Takes the song at [i] out of the queue; the song playing stays. */
+    fun removeAt(i: Int) {
+        val q = _queue.value
+        if (i !in q.indices || i == _index.value) return
+        val gone = q[i]
+        _queue.value = q.filterIndexed { k, _ -> k != i }
+        if (i < _index.value) _index.value -= 1
+        unshuffled = unshuffled?.let { list -> list.indexOfFirst { it.videoId == gone.videoId }.takeIf { it >= 0 }?.let { at -> list.filterIndexed { k, _ -> k != at } } ?: list }
+        if (i == _index.value + 1) lookAheadNext()
+    }
+
+    /** Moves the song at [from] to [to]; the song playing keeps playing wherever it ends up. */
+    fun move(from: Int, to: Int) {
+        val q = _queue.value.toMutableList()
+        if (from !in q.indices || to !in q.indices || from == to) return
+        q.add(to, q.removeAt(from))
+        _queue.value = q
+        val now = _index.value
+        _index.value = when (now) {
+            from -> to
+            in (minOf(from, to)..maxOf(from, to)) -> if (from < to) now - 1 else now + 1
+            else -> now
+        }
+        lookAheadNext()
+    }
+
+    /** Clears everything after the song playing. */
+    fun clearUpcoming() {
+        val q = _queue.value
+        if (_index.value !in q.indices) return
+        _queue.value = q.take(_index.value + 1)
+        unshuffled = null
+        _shuffled.value = false
+    }
+
+    /** A radio from [song]: the song now, then YouTube Music's up-next for it. */
+    fun startRadio(song: Song) {
+        playAll(listOf(song), 0)
+        if (!isYouTubeId(song.videoId)) return
+        scope.launch {
+            val more = runCatching { InnertubeParser.parseWatchQueue(Innertube.next(song.videoId)) }.getOrDefault(emptyList())
+            if (current?.videoId != song.videoId) return@launch
+            val have = _queue.value.mapTo(HashSet()) { it.videoId }
+            _queue.value = _queue.value + more.filter { it.videoId !in have }
+        }
+    }
+
+    /** Asks the next song's sources ahead, after the queue's order changed. */
+    private fun lookAheadNext() {
+        val following = _queue.value.getOrNull(_index.value + 1) ?: return
+        aheadJob?.cancel()
+        aheadJob = scope.launch { lookAhead(following) }
+    }
+
     /** Loads [songs] without playing them, for pictures of the window (DesktopShots). */
     internal fun cue(songs: List<Song>, at: Int) {
         _queue.value = songs
@@ -249,6 +326,20 @@ object Player {
         _volume.value = v.coerceIn(0.0, 1.0)
         Library.setVolume(_volume.value)
         applyVolume()
+    }
+
+    /** The volume before muting, to go back to. */
+    private var unmuted = 0.6
+
+    /** Mutes, or puts the volume back to what it was. */
+    fun toggleMute() {
+        if (_volume.value > 0.0) { unmuted = _volume.value; setVolume(0.0) } else setVolume(unmuted.takeIf { it > 0.0 } ?: 0.6)
+    }
+
+    /** [by] milliseconds on (or back), within the song. */
+    fun seekBy(by: Long) {
+        val length = durationMs()
+        seekTo((positionMs() + by).coerceIn(0L, if (length > 0) length - 1_000 else Long.MAX_VALUE))
     }
 
     fun positionMs(): Long = synchronized(gate) { engine }?.positionMs() ?: 0L
