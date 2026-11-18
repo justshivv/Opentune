@@ -55,7 +55,8 @@ class SignInPageScreenshotTest {
         compose.waitForIdle()
         val page = compose.onNodeWithTag("sign-in-page").fetchSemanticsNode().boundsInRoot
         val browser = compose.onNodeWithTag("sign-in-browser").fetchSemanticsNode().boundsInRoot
-        val toolbar = 56f * compose.activity.resources.displayMetrics.density
+        // The header: 48 dp buttons with 8 dp above and below.
+        val toolbar = 64f * compose.activity.resources.displayMetrics.density
         assertEquals(page.width, browser.width, 1f)
         assertEquals(page.bottom, browser.bottom, 1f)
         assertEquals(page.height - toolbar, browser.height, 1f)

@@ -106,7 +106,7 @@ class PlaylistToolsScreenshotTest {
         LibraryStore.putSpotifyPlaylist("1234567890123456789012", "Late nights", songs, "revision", null)
         val spotify = LibraryStore.playlists.value.first { it.spotifyId != null }
         shoot("playlist/spotify") { LocalPlaylistScreen(spotify.id, PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), onBack = {}) }
-        compose.onNodeWithText("Spotify").assertExists()
+        compose.onNodeWithText("Spotify · ", substring = true).assertExists()
         compose.onNodeWithText("Search this list").assertDoesNotExist()
         compose.onNodeWithContentDescription("Add songs").assertDoesNotExist()
         compose.onNodeWithContentDescription("More").performClick()

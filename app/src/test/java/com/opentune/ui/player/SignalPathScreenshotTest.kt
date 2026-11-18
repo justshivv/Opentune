@@ -39,7 +39,8 @@ class SignalPathScreenshotTest {
         // Into the run, so the light is on its way round the first rings.
         compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithText("TRACK INFO").assertIsDisplayed()
-        compose.onNodeWithText("DECODER").assertIsDisplayed()
+        // The card opens at half height (pulled up for the rest), so the next stage is there below the fold.
+        compose.onNodeWithText("DECODER").assertExists()
         compose.onNodeWithText("HOW IT WAS CHOSEN").assertIsDisplayed()
         val sheet = org.robolectric.shadows.ShadowDialog.getLatestDialog().window!!.decorView
         val image = android.graphics.Bitmap.createBitmap(sheet.width, sheet.height, android.graphics.Bitmap.Config.ARGB_8888)

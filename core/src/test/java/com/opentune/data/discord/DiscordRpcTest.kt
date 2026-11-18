@@ -22,7 +22,8 @@ class DiscordRpcTest {
         // A Listening activity: the card is headed "Listening to OpenTune · Labon Ko" and draws the progress bar.
         assertEquals(2, a.getInt("type"))
         assertEquals("OpenTune · Labon Ko", a.getString("name"))
-        assertEquals(2, a.getInt("status_display_type"))
+        // The compact status line reads the name, so it leads with the app: "OpenTune · Labon Ko".
+        assertEquals(0, a.getInt("status_display_type"))
         assertEquals("Labon Ko", a.getString("details"))
         assertEquals("Pritam", a.getString("state"))
         val t = a.getJSONObject("timestamps")

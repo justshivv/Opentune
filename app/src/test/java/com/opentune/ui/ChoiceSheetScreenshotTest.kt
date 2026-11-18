@@ -216,11 +216,11 @@ class ChoiceSheetScreenshotTest {
         val menu = com.opentune.ui.components.SongMenuActions({}, {}, {}, {}, {}, dislike = {})
         show {
             androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongMenu provides menu) {
-                com.opentune.ui.components.SongMenuSheet(song.copy(artistId = "UC1", albumId = "MPRE1"), onDismiss = {})
+                com.opentune.ui.components.SongMenuSheet(song.copy(artistId = "UC1", albumId = "MPRE1"), onDismiss = {}, startExpanded = true)
             }
         }
         save("song_menu_full")
-        // It opens at full height, so a row well down the menu is already on screen without any scrolling.
+        // Asked to open at full height (sheets otherwise open at half), a row well down the menu is on screen without any scrolling.
         compose.onNodeWithText("Open album").assertIsDisplayed()
     }
 

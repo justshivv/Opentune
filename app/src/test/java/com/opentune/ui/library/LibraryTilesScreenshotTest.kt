@@ -56,9 +56,18 @@ class LibraryTilesScreenshotTest {
         shoot("library-tiles") { LibraryScreen(PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), nav) }
     }
 
+    /** Every playlist is now the library's second page, reached from the row's Show all. */
+    private fun allPlaylistsPage(name: String, button: String) {
+        shoot(name) { LibraryScreen(PaddingValues(), SongActions(null, false, { _, _, _, _ -> }, {}, {}), nav) }
+        compose.onNodeWithText(button).performClick()
+        compose.waitForIdle()
+        org.junit.Assert.assertTrue(compose.onAllNodes(androidx.compose.ui.test.hasText("Ghazals")).fetchSemanticsNodes().isNotEmpty())
+        save(name, topWindow() ?: compose.activity.window.decorView)
+    }
+
     @Test fun allPlaylists() {
         playlists()
-        shoot("library-all-playlists") { AllPlaylistsScreen(PaddingValues(), nav, onBack = {}) }
+        allPlaylistsPage("library-all-playlists", "Show all")
     }
 
     /** The list view chosen in Settings: new and import, then each source's playlists, five until Show more. */
@@ -75,11 +84,14 @@ class LibraryTilesScreenshotTest {
                 }
             }
             compose.waitForIdle()
-            compose.onNode(androidx.compose.ui.test.hasScrollToNodeAction() and androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange)).performScrollToNode(androidx.compose.ui.test.hasText("Show more (1)"))
+            // The library's first page; the second (every playlist) scrolls on its own.
+            compose.onAllNodes(androidx.compose.ui.test.hasScrollToNodeAction() and androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange))[0].performScrollToNode(androidx.compose.ui.test.hasText("Show more (1)"))
             compose.onNodeWithText("View all").assertExists()
             org.junit.Assert.assertTrue(compose.onAllNodes(androidx.compose.ui.test.hasText("On this phone")).fetchSemanticsNodes().isNotEmpty())
             val names = listOf("Lub", "Old Hindi Romantic Songs", "Throwback Workout", "Late night drive", "Punjabi hits", "Ghazals")
-            fun shown() = names.count { compose.onAllNodes(androidx.compose.ui.test.hasText(it)).fetchSemanticsNodes().isNotEmpty() }
+            // Counted on the library's own page: the page of every playlist sits beside it, off screen.
+            val width = compose.activity.window.decorView.width
+            fun shown() = names.count { name -> compose.onAllNodes(androidx.compose.ui.test.hasText(name)).fetchSemanticsNodes().any { it.boundsInRoot.left < width && it.boundsInRoot.right > 0 } }
             org.junit.Assert.assertEquals("five before Show more", 5, shown())
             compose.onNodeWithText("Show more (1)").performClick()
             compose.waitForIdle()
@@ -95,7 +107,7 @@ class LibraryTilesScreenshotTest {
         com.opentune.data.settings.AppSettings.init(ApplicationProvider.getApplicationContext())
         com.opentune.data.settings.AppSettings.updateUi { it.copy(playlistList = true) }
         try {
-            shoot("library-all-playlists-list") { AllPlaylistsScreen(PaddingValues(), nav, onBack = {}) }
+            allPlaylistsPage("library-all-playlists-list", "View all")
         } finally {
             com.opentune.data.settings.AppSettings.updateUi { it.copy(playlistList = false) }
         }

@@ -35,7 +35,7 @@ class DiscordSignInScreenshotTest {
         // The browser fills the page; alternative methods live in Help.
         val page = compose.onNodeWithTag("sign-in-page").fetchSemanticsNode().boundsInRoot
         val browser = compose.onNodeWithTag("sign-in-browser").fetchSemanticsNode().boundsInRoot
-        org.junit.Assert.assertEquals(page.height - 56f * compose.activity.resources.displayMetrics.density, browser.height, 1f)
+        org.junit.Assert.assertEquals(page.height - 64f * compose.activity.resources.displayMetrics.density, browser.height, 1f)
         compose.onNodeWithContentDescription("Sign-in help").performClick()
         compose.mainClock.advanceTimeBy(1000)
         compose.onNodeWithText("Use OpenTune's form").assertIsDisplayed().performClick()
