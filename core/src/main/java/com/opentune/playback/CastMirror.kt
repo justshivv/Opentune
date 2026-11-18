@@ -48,21 +48,42 @@ class CastMirror(private val context: Context, private val player: Player, priva
         statusJob = scope.launch { r.status.collect(::onRemote) }
     }
 
-    /** Stops mirroring; with [resume], the phone picks up where the device was. */
-    fun detach(resume: Boolean = true) {
+    /**
+     * Stops mirroring; with [resume], the phone picks up where the device was.
+     * With [playOn], the phone goes on playing out loud (casting stopped on
+     * purpose: the device was told to stop); without it, the phone is left
+     * paused there, still silenced while it pauses.
+     */
+    fun detach(resume: Boolean = true, playOn: Boolean = true) {
         val r = receiver ?: return
         val last = r.status.value
         statusJob?.cancel()
         loadJob?.cancel()
+        stuckJob?.cancel()
         player.removeListener(this)
         receiver = null
         loadedId = null
-        DspAudioProcessor.silenced = false
+        // Paused before the sound comes back, so not a moment of it reaches the speaker.
+        if (!playOn) player.pause()
         if (resume && last.mediaId == player.currentMediaItem?.mediaId && last.state in listOf(RemoteState.PLAYING, RemoteState.PAUSED)) {
             player.seekTo(last.positionNow())
         }
-        if (waiting) player.play()
+        if (playOn && waiting) player.play()
         waiting = false
+        DspAudioProcessor.silenced = false
+    }
+
+    /**
+     * The device dropped out on its own: its connection closed, or it was
+     * taken over. That doesn't mean it stopped: a Chromecast plays on what it
+     * was given from its buffer, and one that can't be reached can't be told
+     * to stop. So the phone doesn't take over out loud on top of it; it's
+     * left paused at the device's place, to be played again by hand.
+     */
+    private fun lose(r: Receiver) {
+        com.opentune.data.DebugLog.w(TAG, "${r.name} went away while casting; the phone stays paused")
+        detach(resume = true, playOn = false)
+        Cast.lost(r)
     }
 
     private fun load(item: MediaItem, positionMs: Long, play: Boolean) {
@@ -71,12 +92,29 @@ class CastMirror(private val context: Context, private val player: Player, priva
         commandAt = SystemClock.elapsedRealtime()
         loadJob?.cancel()
         loadJob = scope.launch {
-            val media = Cast.mediaFor(context, item, r)
+            // Casting can end while the song is looked up (the device gone, its server
+            // stopped); that's no reason to crash, which would leave the device playing alone.
+            val media = try {
+                Cast.mediaFor(context, item, r)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                com.opentune.data.DebugLog.w(TAG, "couldn't cast ${item.mediaId}", e)
+                null
+            }
+            if (receiver !== r) return@launch
             if (media == null) {
                 Cast.say(com.opentune.i18n.Tr.f("Can't cast {0}", item.mediaMetadata.title ?: com.opentune.i18n.Tr.t("this song")))
                 return@launch
             }
-            r.load(media, positionMs, play)
+            try {
+                r.load(media, positionMs, play)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                com.opentune.data.DebugLog.w(TAG, "${r.name} didn't take ${item.mediaId}", e)
+                return@launch
+            }
             // The next song's stream is looked up now, so skipping to it doesn't wait for that.
             nextItem()?.let { Cast.warm(it) }
         }
@@ -122,7 +160,7 @@ class CastMirror(private val context: Context, private val player: Player, priva
     private fun onRemote(s: RemoteStatus) {
         val r = receiver ?: return
         if (s.state == RemoteState.GONE) {
-            Cast.lost(r)
+            lose(r)
             return
         }
         val current = player.currentMediaItem?.mediaId
@@ -176,6 +214,7 @@ class CastMirror(private val context: Context, private val player: Player, priva
     }
 
     private companion object {
+        const val TAG = "CastMirror"
         /** How long after a command the device's reports are taken as out of date. */
         const val SETTLE_MS = 2_500L
         /** How far apart the phone and the device may get before the phone moves. */

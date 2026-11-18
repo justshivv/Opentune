@@ -132,6 +132,7 @@ object Cast {
     /** Called when the device drops the connection on its own. */
     internal fun lost(receiver: Receiver) {
         if (_session.value?.receiver !== receiver) return
+        Log.w(TAG, "lost the connection to ${receiver.name}")
         _messages.tryEmit(com.opentune.i18n.Tr.f("Lost the connection to {0}", receiver.name))
         disconnect()
     }
