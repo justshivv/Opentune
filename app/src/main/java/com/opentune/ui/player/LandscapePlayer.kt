@@ -165,7 +165,8 @@ internal fun LandscapePlayer(
                 val lines = if (showLines) rememberLyricLines(state.lyrics, lyricsPosition) else null
                 if (lines != null) LyricsPeek(lines, next = roomy, animate = animate, onClick = onLyrics)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    RoundIcon(if (liked) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder), if (liked) "Unlike" else "Like", { haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE); onLike() }, tint = if (liked) scheme.primary else scheme.onSurface)
+                    val likeColor = rememberCoverLikeColor(song.thumbnailUrl, fallback = LIKE_FALLBACK)
+                    RoundIcon(if (liked) ImageVector.vectorResource(AppIcons.Favorite) else ImageVector.vectorResource(AppIcons.FavoriteBorder), if (liked) "Unlike" else "Like", { haptics.pattern(if (liked) com.opentune.ui.components.Haptics.Pattern.OFF else com.opentune.ui.components.Haptics.Pattern.LIKE); onLike() }, tint = if (liked) likeColor else scheme.onSurface)
                     Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                         Tap("Previous", { haptics.pattern(com.opentune.ui.components.Haptics.Pattern.PREVIOUS); previousRolls++; actions.previous() }) { SkipGlyph(false, previousRolls, scheme.onSurface, animate, Modifier.size(38.dp)) }
                         Tap(if (state.isPlaying) "Pause" else "Play", { haptics.pattern(if (state.isPlaying) com.opentune.ui.components.Haptics.Pattern.PAUSE else com.opentune.ui.components.Haptics.Pattern.PLAY); actions.togglePlay() }) { PlayPauseGlyph(state.isPlaying, scheme.onSurface, animate, Modifier.size(54.dp)) }
