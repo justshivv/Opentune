@@ -1,5 +1,8 @@
 package com.opentune.desktop
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -44,8 +47,16 @@ fun main(args: Array<String>) {
             .build()
     }
     application {
+        // Closing the window keeps the music going in the tray, as BitChord's desktop does,
+        // when the tray is there and the setting is on; the tray's Quit ends it.
+        var shown by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+        val inTray by TrayPrefs.keepPlaying.collectAsState()
+        val trayed = inTray && TrayPrefs.supported
+        val close: () -> Unit = { if (trayed) shown = false else exitApplication() }
+        if (TrayPrefs.supported) TrayMenu(onShow = { shown = true }, onQuit = ::exitApplication)
         Window(
-            onCloseRequest = ::exitApplication,
+            onCloseRequest = close,
+            visible = shown,
             onKeyEvent = Shortcuts::handle,
             title = "OpenTune",
             icon = rememberLogo(Logo.APP),
@@ -58,7 +69,7 @@ fun main(args: Array<String>) {
             window.minimumSize = java.awt.Dimension(760, 520)
             DesktopWindow.style(window)
             DesktopWindow.window = window
-            DesktopWindow.close = ::exitApplication
+            DesktopWindow.close = close
             if (WindowsFrame.drawn) androidx.compose.runtime.LaunchedEffect(Unit) {
                 // The handle exists once the window is on screen.
                 repeat(20) {

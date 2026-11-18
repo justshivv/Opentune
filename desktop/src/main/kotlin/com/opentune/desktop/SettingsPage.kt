@@ -381,6 +381,10 @@ private fun AppearanceSection() {
         Choices("Player background", com.opentune.data.settings.PlayerBackground.entries, theme.playerBackground, { it.label }) { v -> AppSettings.updateTheme { it.copy(playerBackground = v) } }
         Choices("Player buttons", com.opentune.data.settings.ControlStyle.entries, ui.controlStyle, { it.label }) { v -> AppSettings.updateUi { it.copy(controlStyle = v) } }
         Choices("Player opens", com.opentune.data.settings.PlayerMotion.entries, ui.playerMotion, { it.label }) { v -> AppSettings.updateUi { it.copy(playerMotion = v) } }
+        if (TrayPrefs.supported) {
+            val tray by TrayPrefs.keepPlaying.collectAsState()
+            SwitchRow("Keep playing in the tray", "Closing the window leaves the music playing; the tray icon brings it back or quits", tray, TrayPrefs::setKeepPlaying)
+        }
         if (WindowsFrame.isWindows) WindowRows()
     }
 }
