@@ -73,9 +73,33 @@ object JapaneseReadings {
      * no spaces between words, so none are lost; spaces next to Latin words
      * stay.
      */
-    internal fun joined(line: String): String = JAPANESE_GAP.replace(line.trim(), "")
+    internal fun joined(line: String): String {
+        // By hand rather than with a regex: Android's regex engine (ICU) rejects Java's
+        // \p{IsHan}-style script names, and the pattern that used them crashed the lyrics
+        // view on its first Japanese line (PatternSyntaxException, U_ILLEGAL_ARGUMENT_ERROR).
+        val text = line.trim()
+        val out = StringBuilder(text.length)
+        var i = 0
+        while (i < text.length) {
+            if (text[i] !in GAP) { out.append(text[i]); i++; continue }
+            var end = i
+            while (end < text.length && text[end] in GAP) end++
+            // Trimmed, so a gap always has a character either side.
+            if (!(japanese(text.codePointBefore(i)) && japanese(text.codePointAt(end)))) out.append(text, i, end)
+            i = end
+        }
+        return out.toString()
+    }
 
-    private val JAPANESE_GAP = Regex("""(?<=[\p{IsHan}\p{IsHiragana}\p{IsKatakana}ー々〆])\s+(?=[\p{IsHan}\p{IsHiragana}\p{IsKatakana}ー々〆])""")
+    /** What a regex's \s matches: the spaces a syllable gap is made of. */
+    private const val GAP = " \t\n\u000B\u000C\r"
+
+    private val JAPANESE_SCRIPTS = setOf(Character.UnicodeScript.HAN, Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA)
+
+    /** Kanji, kana, the long-vowel mark and the iteration marks: Japanese, which has no spaces between words. */
+    private fun japanese(codePoint: Int): Boolean =
+        codePoint == 'ー'.code || codePoint == '々'.code || codePoint == '〆'.code ||
+            Character.UnicodeScript.of(codePoint) in JAPANESE_SCRIPTS
 
     private fun batches(lines: List<Pair<Int, String>>): List<List<Pair<Int, String>>> {
         val all = mutableListOf<List<Pair<Int, String>>>()

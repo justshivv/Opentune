@@ -32,4 +32,12 @@ class JapaneseReadingsTest {
         // Spaces beside Latin words stay.
         org.junit.Assert.assertEquals("Baby 君が好き yeah", JapaneseReadings.joined("Baby 君 が 好き yeah"))
     }
+
+    @Test fun onlyPlainSpacesBetweenJapaneseAreJoined() {
+        // Tabs too, and a kanji outside the basic plane (𠮷); Latin words and full-width spaces keep theirs.
+        org.junit.Assert.assertEquals("𠮷野家へ", JapaneseReadings.joined("𠮷 野\t家 へ"))
+        org.junit.Assert.assertEquals("君と I love you", JapaneseReadings.joined("君 と I love you"))
+        org.junit.Assert.assertEquals("夜\u3000空", JapaneseReadings.joined("夜\u3000空"))
+        org.junit.Assert.assertEquals("", JapaneseReadings.joined("   "))
+    }
 }
