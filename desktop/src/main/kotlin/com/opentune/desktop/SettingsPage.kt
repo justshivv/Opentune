@@ -181,6 +181,7 @@ private fun PlaybackSection() {
     val sleep by Player.sleep.collectAsState()
     Section("Playback") {
         SwitchRow("Autoplay", "When the queue ends, keep going with similar songs", playback.autoplay, AppSettings::setAutoplay)
+        OutputDeviceRow()
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Speed", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.width(120.dp))
             Slider(
@@ -557,4 +558,33 @@ private fun DiscordCardRows() {
         card.openTuneLabel, { v -> DiscordPresence.setCard { it.copy(openTuneLabel = v.take(32)) } },
         label = { Text("OpenTune button text") }, placeholder = { Text("Visit OpenTune") }, singleLine = true,
     )
+}
+
+/** Where the sound goes: the system's default, or a device of this computer's. */
+@Composable
+private fun OutputDeviceRow() {
+    val selected by AudioDevices.selected.collectAsState()
+    var devices by remember { mutableStateOf(AudioDevices.available()) }
+    var open by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Output device", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                selected.ifBlank { "The system's default" },
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Box {
+            androidx.compose.material3.OutlinedButton(onClick = { devices = AudioDevices.available(); open = true }) { Text("Change") }
+            androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }) {
+                androidx.compose.material3.DropdownMenuItem(text = { Text("The system's default") }, onClick = { open = false; AudioDevices.select("") })
+                devices.forEach { d ->
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Column { Text(d.name); if (d.description.isNotBlank() && d.description != d.name) Text(d.description, style = MaterialTheme.typography.bodySmall) } },
+                        onClick = { open = false; AudioDevices.select(d.name) },
+                    )
+                }
+            }
+        }
+    }
 }

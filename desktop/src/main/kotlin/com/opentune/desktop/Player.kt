@@ -356,6 +356,15 @@ object Player {
         if (byHand) _seeks.tryEmit(Unit)
     }
 
+    /** Opens the song playing again where it is, on the output now chosen. */
+    internal fun restartOutput() {
+        if (current == null || synchronized(gate) { engine } == null) return
+        val at = positionMs()
+        val playing = wanted
+        open(_index.value, at)
+        if (!playing) pause()
+    }
+
     /** Puts [songs] after the song playing in place of what was there, as a room's queue changes. */
     internal fun replaceUpcoming(songs: List<Song>) {
         val q = _queue.value

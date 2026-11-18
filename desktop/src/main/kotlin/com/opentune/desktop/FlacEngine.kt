@@ -45,7 +45,7 @@ internal interface PcmOut {
     fun setGainDb(db: Float): Boolean
 }
 
-/** The computer's default output, through Java Sound, at the song's own rate and depth when it takes them. */
+/** The computer's output (the chosen device, else the default), through Java Sound, at the song's own rate and depth when it takes them. */
 internal class SoundCard : PcmOut {
     private var line: SourceDataLine? = null
 
@@ -54,7 +54,9 @@ internal class SoundCard : PcmOut {
         var last: Exception? = null
         for (f in tries) {
             try {
-                val l = AudioSystem.getLine(DataLine.Info(SourceDataLine::class.java, f)) as SourceDataLine
+                // The device chosen in Settings, or the system's default.
+                val info = DataLine.Info(SourceDataLine::class.java, f)
+                val l = (AudioDevices.mixer()?.takeIf { it.isLineSupported(info) }?.getLine(info) ?: AudioSystem.getLine(info)) as SourceDataLine
                 // Half a second of sound in hand: enough to ride out a busy moment, little to wait for on a seek.
                 l.open(f, (f.frameRate * f.frameSize / 2).toInt())
                 line = l
