@@ -116,13 +116,18 @@ internal fun CommentsSheet(
         val token = next ?: return@LaunchedEffect
         if (!nearEnd || more) return@LaunchedEffect
         more = true
-        pageOf(token)?.let { page ->
-            val seen = comments.map { it.id }.toHashSet()
-            comments += page.comments.filter { it.id !in seen }
-            next = page.next
-            if (createParams == null) createParams = page.createParams
+        // In finally: scrolling up while a page loads restarts this effect, and a flag left
+        // set by the cancelled run kept every later page from loading, the spinner spinning.
+        try {
+            pageOf(token)?.let { page ->
+                val seen = comments.map { it.id }.toHashSet()
+                comments += page.comments.filter { it.id !in seen }
+                next = page.next
+                if (createParams == null) createParams = page.createParams
+            }
+        } finally {
+            more = false
         }
-        more = false
     }
 
     /** The next page of [parent]'s replies, opening them. */

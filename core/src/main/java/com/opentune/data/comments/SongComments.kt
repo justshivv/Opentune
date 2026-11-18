@@ -77,22 +77,31 @@ object SongComments {
     /** The replies to a comment, from its [Comment.repliesToken] (and then each page's [Page.next]). */
     suspend fun replies(token: String): Page? = page(token)
 
+    /** [block]'s result, or what went wrong; a cancelled call (the sheet closed) is no failure, so it isn't caught. */
+    private inline fun <T> attempt(block: () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
     /** Posts [text]; the comment as posted when YouTube sends it back, or why it wasn't. */
-    suspend fun post(createParams: String, text: String): Result<Comment?> = runCatching {
+    suspend fun post(createParams: String, text: String): Result<Comment?> = attempt {
         val r = Innertube.createComment(createParams, text.trim())
         checkResult(r, "YouTube didn't take the comment")
         posted(r)
     }
 
     /** Posts [text] as a reply; the reply as posted when YouTube sends it back, or why it wasn't. */
-    suspend fun reply(replyParams: String, text: String): Result<Comment?> = runCatching {
+    suspend fun reply(replyParams: String, text: String): Result<Comment?> = attempt {
         val r = Innertube.createCommentReply(replyParams, text.trim())
         checkResult(r, "YouTube didn't take the reply")
         posted(r)?.copy(isReply = true)
     }
 
     /** Likes, unlikes or deletes a comment: sends what that button of it carries ([action]). */
-    suspend fun act(action: String, failed: String = "YouTube didn't take that"): Result<Unit> = runCatching {
+    suspend fun act(action: String, failed: String = "YouTube didn't take that"): Result<Unit> = attempt {
         checkResult(Innertube.performCommentAction(action), failed)
     }
 
