@@ -145,6 +145,27 @@ class StartupSelectionTest {
         val tagged = fallback.buildUpon().appendQueryParameter("startup", "old").build()
         assertEquals(fallback, withoutStartup(tagged))
     }
+
+    /**
+     * A song ExoPlayer opens early, to have it ready, doesn't start on its FLAC even with one on
+     * record: its lossless file is fetched only once it plays. The song playing now still does.
+     */
+    @Test fun aSongOpenedAheadOfTimeWaitsForItsFlacUntilItPlays() = runBlocking {
+        val ahead = StartupSelection(song, original, { true }, findJioSaavn = { _, _ -> null }, playingNow = { false }) { flac }
+        assertEquals(original, ahead.resolve(spec).uri)
+        val playing = StartupSelection(song, original, { true }, findJioSaavn = { _, _ -> null }, playingNow = { true }) { flac }
+        assertEquals("flac", externalStreamKeyOf(playing.resolve(spec).uri))
+    }
+
+    /** A lossless file picked by hand waits the same way; a lossy one picked by hand is fine ahead of time. */
+    @Test fun aHandPickedFlacAlsoWaitsUntilItPlays() = runBlocking {
+        val saavn = ExternalStreams.Rendition("saavn", "https://cdn.example/aac", "JioSaavn 320", false, 0, picked = true)
+        val pickedFlac = flac.copy(picked = true)
+        val ahead = StartupSelection(song, original, { false }, { true }, picked = { pickedFlac }, saavnWanted = { false },
+            findJioSaavn = { _, _ -> null }, playingNow = { false }) { null }
+        assertEquals(original, ahead.resolve(spec).uri)
+        val lossy = StartupSelection(song, original, { false }, { true }, picked = { saavn }, saavnWanted = { false },
+            findJioSaavn = { _, _ -> null }, playingNow = { false }) { null }
+        assertEquals("saavn", externalStreamKeyOf(lossy.resolve(spec).uri))
+    }
 }
-
-

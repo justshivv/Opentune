@@ -161,9 +161,6 @@ object ExternalStreams {
 
     private val losslessInFlight = ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Rendition?>>()
 
-    internal fun awaitingFirstLossless(videoId: String): Boolean =
-        losslessInFlight[videoId]?.isActive == true && cached(videoId)?.lossless != true
-
     /**
      * The best external stream for [song]. A FLAC search already running for it (one readying
      * the song ahead, say) is joined rather than started again, so a song is never searched

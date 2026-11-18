@@ -34,6 +34,11 @@ internal class StartupSelection(
     private val saavnWanted: () -> Boolean = { ExternalStreams.allowed(false) },
     private val lookupBudgetMs: Long = 6_000L,
     private val findJioSaavn: suspend (Song, Long) -> ExternalStreams.Rendition? = ExternalStreams::findJioSaavn,
+    /**
+     * Whether this song is the one playing, not one opened early to have it ready. Only then does
+     * it start on a lossless file: a song ahead never downloads its FLAC before it plays.
+     */
+    private val playingNow: () -> Boolean = { true },
     private val cached: (String) -> ExternalStreams.Rendition? = ExternalStreams::cached,
 ) {
     private val mutex = Mutex()
@@ -42,10 +47,12 @@ internal class StartupSelection(
     suspend fun resolve(spec: DataSpec): DataSpec = mutex.withLock {
         currentCoroutineContext().ensureActive()
         if (selected == null) {
-            // A lossless file found ahead of time starts the song whenever lossless is on, not only at Max.
+            // A lossless file already found starts the song whenever lossless is on, not only at Max,
+            // but only the song playing now: one opened early waits for its FLAC until it plays.
             // A stream picked by hand in Search starts the song whatever the quality setting.
-            val ready = picked(song.videoId)?.takeIf { it.mimeType == null }
-                ?: if (maximum() || losslessWanted()) cached(song.videoId)?.takeIf { it.mimeType == null && it.lossless } else null
+            val now = playingNow()
+            val ready = picked(song.videoId)?.takeIf { it.mimeType == null && (now || !it.lossless) }
+                ?: if (now && (maximum() || losslessWanted())) cached(song.videoId)?.takeIf { it.mimeType == null && it.lossless } else null
             // The song starts on YouTube only if JioSaavn has no match or is slower than the budget; the lookup itself
             // carries on (see ExternalStreams.findJioSaavn) and the upgrade switches to it when it answers.
             val rendition = ready ?: if (maximum() || saavnWanted()) try {
@@ -59,6 +66,7 @@ internal class StartupSelection(
             selected = rendition?.let { externalStreamUri(song.videoId, it.key) } ?: original
             com.opentune.data.DebugLog.d("StartupSelection", "${song.videoId} starts on " + when {
                 rendition != null -> rendition.label
+                !now && (maximum() || losslessWanted()) -> "YouTube for now: opened ahead of time, so its lossless file waits until it plays"
                 maximum() || saavnWanted() -> "YouTube: JioSaavn had no match within ${lookupBudgetMs / 1000}s"
                 else -> "YouTube: external sources are off for this quality setting"
             })
