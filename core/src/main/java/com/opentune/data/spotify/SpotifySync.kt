@@ -87,6 +87,10 @@ object SpotifySync {
     private var file: File? = null
     /** YouTube Music's song for each Spotify song id found so far. */
     private val found = ConcurrentHashMap<String, SongRef>()
+    /** Matches saved before credits were kept whole: used only when a song's new search fails. */
+    private val earlier = ConcurrentHashMap<String, SongRef>()
+    /** Reading the saved state; a sync waits for it. */
+    @Volatile private var loaded: kotlinx.coroutines.Job? = null
     /** Whether the one-time re-read for whole credits has been set up. */
     @Volatile private var creditsReset = false
     private val _status = MutableStateFlow(Status())
@@ -98,12 +102,13 @@ object SpotifySync {
     fun init(context: Context) {
         val f = File(context.applicationContext.filesDir, "spotify-sync.json")
         file = f
-        scope.launch {
+        loaded = scope.launch {
             runCatching { json.decodeFromString(Saved.serializer(), f.readText()) }.getOrNull()?.let { saved ->
                 creditsReset = saved.creditsReset
-                // Matches saved before credits were kept whole are not
-                // trusted: the next sync finds those songs again.
-                if (saved.creditsReset) found.putAll(saved.found)
+                // Matches saved before credits were kept whole are searched
+                // again, so their credits come back whole; they are kept aside
+                // for a song whose new search fails, which keeps its old match.
+                if (saved.creditsReset) found.putAll(saved.found) else earlier.putAll(saved.found)
                 _mixes.value = saved.mixes
                 _status.update { it.copy(lastSynced = saved.lastSynced) }
             }
@@ -149,6 +154,8 @@ object SpotifySync {
     fun cancel() = job?.cancel()
 
     private suspend fun run(cookie: String, force: Boolean, withMixes: Boolean) {
+        // The saved state first: started before it's read, the one-time re-read below ran again.
+        loaded?.join()
         // One-time: playlists stored before credits were kept whole are
         // re-read once, so their songs are matched again and stored with
         // every performer named. Forgetting the kept revisions is what
@@ -231,7 +238,16 @@ object SpotifySync {
         items.map { item ->
             async {
                 val ref = found[item.uri] ?: gate.withPermit {
-                    runCatching { PlaylistImport.match(item.track) }.getOrNull()?.let(SongRef::of)?.also { found[item.uri] = it }
+                    val matched = try {
+                        PlaylistImport.match(item.track)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                    // A search that fails (rate limit, timeout) or now scores too low keeps the
+                    // song's earlier match: re-reading for credits never takes a song out.
+                    (matched?.let(SongRef::of) ?: earlier[item.uri])?.also { found[item.uri] = it }
                 }
                 // Each song carries when it was added to this list on Spotify, so the
                 // list's order by recency lives in the songs, not in their positions.
