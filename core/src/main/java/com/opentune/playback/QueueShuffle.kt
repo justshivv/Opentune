@@ -1,5 +1,6 @@
 package com.opentune.playback
 
+import com.opentune.data.model.QueueTier
 import kotlin.random.Random
 
 /**
@@ -8,6 +9,15 @@ import kotlin.random.Random
  * AutoPlay's keep their places.
  */
 internal object QueueShuffle {
+    /**
+     * Which of [items] shuffle moves: the list's own songs, or, when fewer than two of those are
+     * still to come (a single song playing on into AutoPlay), AutoPlay's as well, so the button
+     * always changes something. Songs queued by hand never move.
+     */
+    fun <T> movable(items: List<T>, tier: (T) -> QueueTier): (T) -> Boolean =
+        if (items.count { tier(it) == QueueTier.CONTEXT } >= 2) { item -> tier(item) == QueueTier.CONTEXT }
+        else { item -> tier(item) != QueueTier.USER }
+
     /** [items] with the list's songs in a new order, and those songs as they were, to put back later. */
     fun <T> mix(items: List<T>, isList: (T) -> Boolean, random: Random = Random): Pair<List<T>, List<T>> {
         val slots = items.indices.filter { isList(items[it]) }

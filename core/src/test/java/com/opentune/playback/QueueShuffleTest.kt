@@ -48,4 +48,24 @@ class QueueShuffleTest {
         val upcoming = listOf(Q("only"), Q("hand", list = false))
         assertEquals(upcoming, QueueShuffle.mix(upcoming, { it.list }).first)
     }
+
+    /** Issue 64: one song played on into AutoPlay; shuffle has no list to mix, so it mixes AutoPlay's songs. */
+    @Test fun aSongPlayingIntoAutoPlayShufflesAutoPlaysSongs() {
+        val tiers = mapOf("hand" to com.opentune.data.model.QueueTier.USER) +
+            (1..8).associate { "auto$it" to com.opentune.data.model.QueueTier.AUTOPLAY }
+        val upcoming = listOf("hand") + (1..8).map { "auto$it" }
+        val movable = QueueShuffle.movable(upcoming) { tiers.getValue(it) }
+        val (mixed, before) = QueueShuffle.mix(upcoming, movable, Random(7))
+        assertNotEquals(upcoming, mixed)
+        assertEquals("hand", mixed.first())
+        assertEquals(upcoming, QueueShuffle.restore(mixed, movable, before) { it })
+    }
+
+    @Test fun aListToComeKeepsAutoPlayInPlace() {
+        val tiers = (1..4).associate { "s$it" to com.opentune.data.model.QueueTier.CONTEXT } +
+            mapOf("auto" to com.opentune.data.model.QueueTier.AUTOPLAY)
+        val upcoming = (1..4).map { "s$it" } + "auto"
+        val (mixed, _) = QueueShuffle.mix(upcoming, QueueShuffle.movable(upcoming) { tiers.getValue(it) }, Random(2))
+        assertEquals("auto", mixed.last())
+    }
 }

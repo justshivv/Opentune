@@ -397,6 +397,9 @@ class PlayerConnection(private val context: Context) {
      */
     private var beforeShuffle: List<MediaItem>? = null
 
+    /** Which songs that shuffle moved (see [QueueShuffle.movable]), to put the same ones back. */
+    private var shuffled: (MediaItem) -> Boolean = { it.queueTier == QueueTier.CONTEXT }
+
     /**
      * Shuffle, as a new order for the songs still to come rather than the player's shuffle
      * mode: the song playing is never touched, and the queue's order is the play order, so
@@ -407,7 +410,8 @@ class PlayerConnection(private val context: Context) {
         controller.shuffleModeEnabled = false
         val from = controller.currentMediaItemIndex + 1
         val items = (from until controller.mediaItemCount).map(controller::getMediaItemAt)
-        val (mixed, before) = QueueShuffle.mix(items, { it.queueTier == QueueTier.CONTEXT })
+        shuffled = QueueShuffle.movable(items) { it.queueTier }
+        val (mixed, before) = QueueShuffle.mix(items, shuffled)
         beforeShuffle = before
         if (mixed != items) replaceAfter(controller, from, mixed)
     }
@@ -419,7 +423,7 @@ class PlayerConnection(private val context: Context) {
         beforeShuffle = null
         val from = controller.currentMediaItemIndex + 1
         val items = (from until controller.mediaItemCount).map(controller::getMediaItemAt)
-        val restored = QueueShuffle.restore(items, { it.queueTier == QueueTier.CONTEXT }, before) { it.mediaId }
+        val restored = QueueShuffle.restore(items, shuffled, before) { it.mediaId }
         if (restored != items) replaceAfter(controller, from, restored)
     }
 
