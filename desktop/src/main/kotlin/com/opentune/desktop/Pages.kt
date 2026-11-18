@@ -109,6 +109,19 @@ object Pages {
         )
     }
 
+    /** The signed-in account's own library on YouTube Music: its playlists, albums and artists, each a row. */
+    suspend fun accountLibrary(): List<Shelf> = kotlinx.coroutines.coroutineScope {
+        listOf("Your YouTube Music playlists" to "FEmusic_liked_playlists", "Saved albums" to "FEmusic_liked_albums", "Artists you follow" to "FEmusic_library_corpus_artists")
+            .map { (title, id) ->
+                async {
+                    runCatching { InnertubeParser.parseLibraryItems(Innertube.browse(id)) }.getOrDefault(emptyList())
+                        // The "New playlist" tile has nothing to open.
+                        .filter { it.browseId != null || it.videoId != null }
+                        .let { Shelf(title, it) }
+                }
+            }.map { it.await() }.filter { it.items.isNotEmpty() }
+    }
+
     /** What YouTube Music suggests for what's typed so far. */
     suspend fun suggestions(input: String): List<String> =
         InnertubeParser.parseSearchSuggestions(Innertube.searchSuggestions(input)).distinct().take(8)

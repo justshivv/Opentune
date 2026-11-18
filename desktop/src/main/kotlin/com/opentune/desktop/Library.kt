@@ -5,6 +5,7 @@ import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
@@ -67,14 +68,30 @@ object Library {
 
     fun isLiked(id: String) = _liked.value.any { it.videoId == id }
 
-    fun setLiked(song: Song, liked: Boolean) = write {
-        if (liked) {
-            keep(song.saved())
-            exec("INSERT OR REPLACE INTO liked(id, at) VALUES (?, ?)", song.videoId, System.currentTimeMillis())
-        } else {
-            exec("DELETE FROM liked WHERE id = ?", song.videoId)
+    fun setLiked(song: Song, liked: Boolean) {
+        write {
+            if (liked) {
+                keep(song.saved())
+                exec("INSERT OR REPLACE INTO liked(id, at) VALUES (?, ?)", song.videoId, System.currentTimeMillis())
+            } else {
+                exec("DELETE FROM liked WHERE id = ?", song.videoId)
+            }
+        }
+        // Signed in, the like reaches YouTube Music too, as on the phone and the web player.
+        if (com.opentune.data.account.AccountStore.signedIn.value && com.opentune.data.isYouTubeId(song.videoId)) {
+            sync.launch {
+                runCatching {
+                    com.opentune.data.innertube.Innertube.rate(
+                        song.videoId,
+                        if (liked) com.opentune.data.model.LikeStatus.LIKE else com.opentune.data.model.LikeStatus.INDIFFERENT,
+                    )
+                }.onFailure { System.err.println("Library: couldn't send the like to YouTube Music: ${it.message}") }
+            }
         }
     }
+
+    /** Sends likes to the account off the window's thread. */
+    private val sync = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
     fun played(song: Song) = write {
         keep(song.saved())

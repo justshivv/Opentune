@@ -25,6 +25,8 @@ fun main(args: Array<String>) {
     Subsonic.init(appContext)
     com.opentune.data.config.RemoteConfig.init(appContext)
     com.opentune.data.config.HomeDismissals.init(appContext)
+    // The YouTube Music account, before Home asks for anything: signed in, Home is your own.
+    com.opentune.data.account.AccountStore.init(appContext)
     // What's playing, to the listener's Discord profile and Last.fm scrobbles, when they've turned them on.
     DiscordPresence.start()
     LastFmDesktop.start()

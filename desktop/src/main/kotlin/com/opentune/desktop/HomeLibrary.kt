@@ -507,6 +507,12 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
     }
     val month = remember(history) { Wrapped.summarize(history, now - 30L * 86_400_000L, now) }
     val mixes = remember(history) { DailyMixes.build(history) }
+    // Signed in: the account's own library on YouTube Music too, as on the phone and the web player.
+    val signedIn by com.opentune.data.account.AccountStore.signedIn.collectAsState()
+    val accountName by com.opentune.data.account.AccountStore.account.collectAsState()
+    val onAccount by produceState(emptyList<Pages.Shelf>(), signedIn, accountName) {
+        value = if (signedIn) runCatching { Pages.accountLibrary() }.getOrDefault(emptyList()) else emptyList()
+    }
     ScrollPage("Library") {
         item(key = "year") { YearCard(year) }
         item(key = "shortcuts") {
@@ -539,6 +545,23 @@ internal fun LibraryHome(onShelf: (Shelf) -> Unit, onPlaylist: (String) -> Unit,
                 }
             }
         }
+        if (signedIn) item(key = "ytm-liked") {
+            Section("On YouTube Music", accountName?.name) {
+                HRow(12.dp) {
+                    item {
+                        Shortcut(Icons.Rounded.Favorite, "Liked music", "Your likes on YouTube Music", heart = true) {
+                            onOpenAny(ShelfItem("Liked music", "Playlist", null, null, "VLLM"))
+                        }
+                    }
+                    item {
+                        Shortcut(Icons.Rounded.History, "History", "What you played on YouTube Music") {
+                            onOpenAny(ShelfItem("History", "Playlist", null, null, "FEmusic_history"))
+                        }
+                    }
+                }
+            }
+        }
+        onAccount.forEach { shelf -> item(key = "ytm:${shelf.title}") { ShelfRow(shelf) { onOpenAny(it) } } }
         if (mixes.isNotEmpty()) item(key = "mixes") {
             Section("Your mixes", "Made fresh each day from what you play") {
                 HRow(16.dp) {

@@ -72,6 +72,9 @@ val sharedFromCore = listOf(
     "com/opentune/data/config/RemoteConfig.kt",
     // Banners and featured playlists from the dashboard that the listener closed.
     "com/opentune/data/config/HomeDismissals.kt",
+    // The YouTube Music account, signed in from the phone over the home Wi-Fi as the TV is.
+    "com/opentune/data/account/AccountStore.kt",
+    "com/opentune/data/account/SessionPairing.kt",
     // NewPipe's patched helper, see that file.
     "org/schabi/newpipe/extractor/utils/Utils.java",
 )

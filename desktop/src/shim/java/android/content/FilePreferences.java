@@ -110,6 +110,11 @@ final class FilePreferences implements SharedPreferences {
         } catch (IOException e) {
             return false;
         }
+        // Readable by this user only: the account's sign-in session is kept here.
+        tmp.setReadable(false, false);
+        tmp.setReadable(true, true);
+        tmp.setWritable(false, false);
+        tmp.setWritable(true, true);
         if (!tmp.renameTo(file)) {
             file.delete();
             return tmp.renameTo(file);

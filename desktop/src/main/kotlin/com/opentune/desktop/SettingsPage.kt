@@ -103,7 +103,7 @@ internal fun SettingsPage() {
                             Group.SOURCES -> SourcesSection()
                             Group.SOUND -> EqualizerSection()
                             Group.LYRICS -> LyricsSection()
-                            Group.ACCOUNTS -> ConnectedSection()
+                            Group.ACCOUNTS -> Column(verticalArrangement = Arrangement.spacedBy(18.dp)) { AccountSection(); ConnectedSection() }
                             Group.SERVER -> ServerSection()
                             Group.ABOUT -> Section("About") {
                                 Text("OpenTune ${BuildConfig.VERSION_NAME} for computers", style = MaterialTheme.typography.bodyLarge)
