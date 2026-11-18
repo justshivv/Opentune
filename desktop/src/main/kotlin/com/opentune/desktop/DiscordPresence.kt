@@ -72,6 +72,34 @@ object DiscordPresence {
     private val _status = MutableStateFlow(Status.Off)
     val status: StateFlow<Status> = _status.asStateFlow()
 
+    /**
+     * How the card reads, as the web player sets it: the status line led by the song (or by
+     * OpenTune), and its two buttons, each with the words the listener chose.
+     */
+    data class Card(
+        val leadWithSong: Boolean = true,
+        val listenButton: Boolean = true,
+        val listenLabel: String = "",
+        val openTuneButton: Boolean = false,
+        val openTuneLabel: String = "",
+    )
+
+    private fun cardOf(o: JSONObject) = Card(
+        leadWithSong = o.optBoolean("leadWithSong", true),
+        listenButton = o.optBoolean("listenButton", true),
+        listenLabel = o.optString("listenLabel"),
+        openTuneButton = o.optBoolean("openTuneButton", false),
+        openTuneLabel = o.optString("openTuneLabel"),
+    )
+
+    private val _card = MutableStateFlow(cardOf(saved()))
+    val card: StateFlow<Card> = _card.asStateFlow()
+
+    fun setCard(change: (Card) -> Card) {
+        _card.value = change(_card.value)
+        save()
+    }
+
     fun setEnabled(on: Boolean) {
         _enabled.value = on
         save()
@@ -80,7 +108,13 @@ object DiscordPresence {
     private fun save() {
         runCatching {
             file.parentFile.mkdirs()
-            file.writeText(JSONObject().put("enabled", _enabled.value).put("appId", _ownAppId.value).toString())
+            val c = _card.value
+            file.writeText(
+                JSONObject().put("enabled", _enabled.value).put("appId", _ownAppId.value)
+                    .put("leadWithSong", c.leadWithSong).put("listenButton", c.listenButton).put("listenLabel", c.listenLabel)
+                    .put("openTuneButton", c.openTuneButton).put("openTuneLabel", c.openTuneLabel)
+                    .toString(),
+            )
         }
     }
 
@@ -117,6 +151,7 @@ object DiscordPresence {
         file = at
         _enabled.value = saved().optBoolean("enabled", true)
         _ownAppId.value = saved().optString("appId")
+        _card.value = cardOf(saved())
     }
 
     /** Where the Discord app listens: discord-ipc-0…9, in the usual folders and the Flatpak and Snap ones. */
@@ -164,10 +199,11 @@ object DiscordPresence {
     internal fun activity(song: Song, positionMs: Long, durationMs: Long, withType: Boolean): JSONObject {
         val started = System.currentTimeMillis() - positionMs
         return JSONObject().apply {
+            val card = _card.value
             if (withType) {
                 put("type", 2) // Listening
-                // The status line reads "Listening to <song>" rather than the application's name.
-                put("status_display_type", 2)
+                // The status line reads "Listening to <song>" (2), or the application's name (0).
+                put("status_display_type", if (card.leadWithSong) 2 else 0)
             }
             put("details", line(song.title))
             put("state", line(song.artist.ifBlank { "Unknown artist" }))
@@ -176,11 +212,19 @@ object DiscordPresence {
                 cover(song.thumbnailUrl)?.let { put("large_image", it) }
                 put("large_text", line(song.albumName ?: song.title))
             })
-            if (isYouTubeId(song.videoId)) {
-                put("buttons", JSONArray().put(JSONObject().put("label", "Listen on YouTube Music").put("url", "https://music.youtube.com/watch?v=${song.videoId}")))
+            // Discord takes up to two buttons, each label 1 to 32 characters.
+            val buttons = JSONArray()
+            if (card.listenButton && isYouTubeId(song.videoId)) {
+                buttons.put(JSONObject().put("label", button(card.listenLabel, "Listen on YouTube Music")).put("url", "https://music.youtube.com/watch?v=${song.videoId}"))
             }
+            if (card.openTuneButton) {
+                buttons.put(JSONObject().put("label", button(card.openTuneLabel, "Visit OpenTune")).put("url", com.opentune.data.config.RemoteConfig.current.tv))
+            }
+            if (buttons.length() > 0) put("buttons", buttons)
         }
     }
+
+    private fun button(label: String, fallback: String) = label.trim().ifEmpty { fallback }.take(32)
 
     private fun isYouTubeId(id: String) = id.matches(Regex("[A-Za-z0-9_-]{11}"))
 
@@ -244,7 +288,7 @@ object DiscordPresence {
                 val position = Player.positionMs()
                 val duration = song?.let { s -> Player.durationOf.value.takeIf { it.first == s.videoId }?.second ?: s.durationText?.let(Player::seconds)?.times(1000)?.toLong() } ?: 0L
                 // What's on the card, to the nearest few seconds: a seek moves it, ordinary playback doesn't.
-                val want = if (playing) "${song!!.videoId}@${(System.currentTimeMillis() - position) / 3_000}" else null
+                val want = if (playing) "${song!!.videoId}@${(System.currentTimeMillis() - position) / 3_000}#${_card.value.hashCode()}" else null
                 if (want != shown) {
                     val sent = runCatching {
                         pipe!!.send(OP_FRAME, setActivity(if (playing) activity(song!!, position, duration, withType) else null))

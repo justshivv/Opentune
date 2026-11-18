@@ -111,6 +111,7 @@ internal fun SettingsPage() {
                                     "Settings and playlists are kept in ${appContext.getFilesDir().parentFile.absolutePath}.",
                                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                AboutLinks()
                             }
                         }
                     }
@@ -463,6 +464,7 @@ private fun ConnectedSection() {
             },
             discord, DiscordPresence::setEnabled,
         )
+        if (discord) DiscordCardRows()
         if (!DiscordPresence.buildHasApp) {
             val saved by DiscordPresence.ownAppId.collectAsState()
             var appId by remember(saved) { mutableStateOf(saved) }
@@ -518,4 +520,41 @@ private fun ConnectedSection() {
             )
         }
     }
+}
+
+/** Where else OpenTune is, as the web player's About lists it: the code, the community, the phone and TV apps, the web player. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun AboutLinks() {
+    val links = androidx.compose.ui.platform.LocalUriHandler.current
+    val config = com.opentune.data.config.RemoteConfig.current
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(
+            "GitHub" to config.github,
+            "Community on Discord" to config.discord,
+            "Android app" to "${config.github.trimEnd('/')}/releases/latest",
+            "TV app" to config.tv,
+            "Web player" to config.web,
+            "Build an add-on" to "https://bitchord.kushagrasingh.in/docs",
+        ).forEach { (label, url) ->
+            androidx.compose.material3.OutlinedButton(onClick = { runCatching { links.openUri(url) } }) { Text(label) }
+        }
+    }
+}
+
+/** How the Discord card reads, as the web player sets it. */
+@Composable
+private fun DiscordCardRows() {
+    val card by DiscordPresence.card.collectAsState()
+    SwitchRow("Lead with the song", "Member lists show the song's title rather than OpenTune", card.leadWithSong) { on -> DiscordPresence.setCard { it.copy(leadWithSong = on) } }
+    SwitchRow("Listen button", "A button under the card that opens the song on YouTube Music", card.listenButton) { on -> DiscordPresence.setCard { it.copy(listenButton = on) } }
+    if (card.listenButton) OutlinedTextField(
+        card.listenLabel, { v -> DiscordPresence.setCard { it.copy(listenLabel = v.take(32)) } },
+        label = { Text("Listen button text") }, placeholder = { Text("Listen on YouTube Music") }, singleLine = true,
+    )
+    SwitchRow("OpenTune button", "A button under the card that opens OpenTune's page", card.openTuneButton) { on -> DiscordPresence.setCard { it.copy(openTuneButton = on) } }
+    if (card.openTuneButton) OutlinedTextField(
+        card.openTuneLabel, { v -> DiscordPresence.setCard { it.copy(openTuneLabel = v.take(32)) } },
+        label = { Text("OpenTune button text") }, placeholder = { Text("Visit OpenTune") }, singleLine = true,
+    )
 }
