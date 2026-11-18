@@ -34,4 +34,18 @@ class CreditHealTest {
         assertEquals("Avicii, Nicky Romero", widenRecord(record, lines).artist)
         assertEquals("Avicii", widenRecord(record, emptyMap()).artist)
     }
+
+    /** A change reads only what's new, yet every list still wears the fullest credit. */
+    @Test fun healingOnlyReadsWhatsNewAndStillWidensEverywhere() {
+        val credited = HashSet<String>()
+        val first = healCreditsSince(LibraryDocument(playlists = listOf(LocalPlaylist("p", "Mix", listOf(ref("a", "Avicii"), ref("b", "Kygo"))))), credited)
+        assertEquals("Avicii", first.playlists[0].songs[0].artist)
+        // The same song liked with its full credit: the playlist's copy widens too.
+        val liked = healCreditsSince(first.copy(liked = listOf(ref("a", "Avicii, Nicky Romero"))), credited)
+        assertEquals("Avicii, Nicky Romero", liked.playlists[0].songs[0].artist)
+        assertEquals("Avicii, Nicky Romero", liked.artistLines["a"])
+        // Added again later with the short credit, it's widened from the book.
+        val again = healCreditsSince(liked.copy(playlists = liked.playlists + LocalPlaylist("q", "Other", listOf(ref("a", "Avicii")))), credited)
+        assertEquals("Avicii, Nicky Romero", again.playlists[1].songs[0].artist)
+    }
 }

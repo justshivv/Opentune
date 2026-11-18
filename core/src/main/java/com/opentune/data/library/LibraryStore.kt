@@ -112,7 +112,7 @@ data class SavedList(
 )
 
 @Serializable
-private data class LibraryDocument(
+internal data class LibraryDocument(
     val liked: List<SongRef> = emptyList(),
     val playlists: List<LocalPlaylist> = emptyList(),
     /** Songs marked "Dislike": kept out of autoplay. */
@@ -230,6 +230,7 @@ object LibraryStore {
     fun init(context: Context) {
         val f = com.opentune.data.SavedFile(File(context.filesDir, "library.json"), "LibraryStore").also { saved = it }
         // A library that won't read is kept aside, never saved over with an empty one.
+        synchronized(credited) { credited.clear() }
         publish(f.read(LibraryDocument()) { json.decodeFromString(LibraryDocument.serializer(), it) }.withoutSingleNameLines())
         _ready.value = true
         scope.launch {
@@ -270,13 +271,10 @@ object LibraryStore {
      * lines from the document itself first: a fuller credit stored anywhere
      * — a sync, a fresh add — widens the same song in every other list.
      */
-    private fun healCredits(d: LibraryDocument): LibraryDocument {
-        val lines = widestArtistLines(d.artistLines, (d.liked + d.playlists.flatMap { it.songs }).map { it.videoId to it.artist })
-        val liked = d.liked.map { widenRef(it, lines) }
-        val playlists = d.playlists.map { p -> p.copy(songs = p.songs.map { widenRef(it, lines) }) }
-        return if (lines == d.artistLines && liked == d.liked && playlists == d.playlists) d
-        else d.copy(liked = liked, playlists = playlists, artistLines = lines)
-    }
+    private fun healCredits(d: LibraryDocument): LibraryDocument = synchronized(credited) { healCreditsSince(d, credited) }
+
+    /** Song credits already learned from, as "id\u0000artist", so each publish reads only what's new. */
+    private val credited = HashSet<String>()
 
     /** The fullest artist credit known for [videoId], when any list has named one. */
     fun artistLine(videoId: String): String? = doc.value.artistLines[videoId]
@@ -597,7 +595,10 @@ object LibraryStore {
 
     fun exportJson(): JsonElement = json.encodeToJsonElement(LibraryDocument.serializer(), doc.value)
 
-    fun importJson(element: JsonElement) = publish(json.decodeFromJsonElement(LibraryDocument.serializer(), element).withoutSingleNameLines())
+    fun importJson(element: JsonElement) {
+        synchronized(credited) { credited.clear() }
+        publish(json.decodeFromJsonElement(LibraryDocument.serializer(), element).withoutSingleNameLines())
+    }
 
     /** Lines saved before only lines naming several artists were kept: a single name widens nothing. */
     private fun LibraryDocument.withoutSingleNameLines(): LibraryDocument =
@@ -622,6 +623,25 @@ internal fun widestArtistLines(known: Map<String, String>, credits: List<Pair<St
         }
     }
     return out ?: known
+}
+
+/**
+ * [d] with its credits healed, doing only the work this change needs: credits not seen
+ * before (the song just liked, a playlist just synced) are learned into the book, and only
+ * songs whose credit isn't their stored line are widened. Every change used to read and rewrite every song in the library on the
+ * main thread, which on a phone with a big library held a like back by most of a second.
+ * [credited] is the set of credits already learned, kept from one publish to the next.
+ */
+internal fun healCreditsSince(d: LibraryDocument, credited: MutableSet<String>): LibraryDocument {
+    val refs = d.liked.asSequence() + d.playlists.asSequence().flatMap { it.songs.asSequence() }
+    val fresh = refs.filter { credited.add(it.videoId + '\u0000' + it.artist) }.toList()
+    val lines = if (fresh.isEmpty()) d.artistLines else widestArtistLines(d.artistLines, fresh.map { it.videoId to it.artist })
+    // Only a song whose credit isn't its stored line can widen: a lookup for the rest, no parsing.
+    fun heal(r: SongRef) = lines[r.videoId]?.takeIf { it != r.artist }?.let { widenRef(r, lines) } ?: r
+    val liked = d.liked.map(::heal)
+    val playlists = d.playlists.map { p -> if (p.songs.none { s -> lines[s.videoId]?.let { it != s.artist } == true }) p else p.copy(songs = p.songs.map(::heal)) }
+    return if (lines == d.artistLines && liked == d.liked && playlists == d.playlists) d
+    else d.copy(liked = liked, playlists = playlists, artistLines = lines)
 }
 
 /** [ref] with its credit widened from [lines], when the book knows a fuller one. */
