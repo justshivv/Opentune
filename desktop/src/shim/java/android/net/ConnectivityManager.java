@@ -7,4 +7,6 @@ public final class ConnectivityManager {
     public Network getActiveNetwork() { return null; }
 
     public NetworkCapabilities getNetworkCapabilities(Network network) { return null; }
+
+    public Network[] getAllNetworks() { return new Network[0]; }
 }

@@ -105,5 +105,6 @@ object Core {
         History.flush()
         com.opentune.data.history.ListenedCollections.flush()
         Downloads.flush()
+        com.opentune.data.settings.AppSettings.flush()
     }
 }

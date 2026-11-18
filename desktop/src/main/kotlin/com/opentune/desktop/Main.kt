@@ -20,6 +20,8 @@ fun main(args: Array<String>) {
     if ("--self-check" in args) return selfCheck()
     // The shared settings and music server, as the phone starts them.
     AppSettings.init(appContext)
+    // A setting changed in the last moment before closing is written on its way out.
+    Runtime.getRuntime().addShutdownHook(Thread { AppSettings.flush() })
     Subsonic.init(appContext)
     com.opentune.data.config.RemoteConfig.init(appContext)
     // What's playing, to the listener's Discord profile and Last.fm scrobbles, when they've turned them on.

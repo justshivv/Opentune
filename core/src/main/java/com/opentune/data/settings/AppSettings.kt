@@ -4,9 +4,13 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.os.Handler
-import android.os.Looper
 import androidx.core.content.edit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -959,6 +963,8 @@ object AppSettings {
     }
 
     fun init(context: Context) {
+        // A change still waiting to be written goes to the store it was made against first.
+        flush()
         val p = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         prefs = p
         connectivity = context.getSystemService(ConnectivityManager::class.java)
@@ -987,16 +993,33 @@ object AppSettings {
     // stay live) but the document is written out on a short delay, once the
     // burst settles, instead of the whole document being serialized and
     // stored on every single tick.
-    private val persistHandler = Handler(Looper.getMainLooper())
-    private val persistWrite = Runnable {
-        val p = prefs ?: return@Runnable
+    // The write runs off the main thread, and flush() (called when the app goes to the
+    // background, see Core.flush) writes a pending change at once, so a setting changed
+    // just before the app is closed isn't lost with the delay.
+    private val persistScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Volatile private var persistJob: Job? = null
+    private val dirty = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    private fun persistNow() {
+        if (!dirty.getAndSet(false)) return
+        val p = prefs ?: return
         p.edit { putString(K_STATE, json.encodeToString(SettingsState.serializer(), _state.value)) }
+    }
+
+    /** Writes a change still waiting on the delay. */
+    fun flush() {
+        persistJob?.cancel()
+        persistNow()
     }
 
     private fun update(transform: (SettingsState) -> SettingsState) {
         publish(transform(_state.value))
-        persistHandler.removeCallbacks(persistWrite)
-        persistHandler.postDelayed(persistWrite, 600)
+        dirty.set(true)
+        persistJob?.cancel()
+        persistJob = persistScope.launch {
+            delay(600)
+            persistNow()
+        }
     }
 
     fun updateTheme(t: (ThemeSettings) -> ThemeSettings) = update { it.copy(theme = t(it.theme)) }
