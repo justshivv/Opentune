@@ -111,7 +111,8 @@ object Connect {
         watching = main.launch {
             merge(
                 combine(player.currentSong, player.isPlaying, player.queue, player.upNext, player.volume) { _, _, _, _, _ -> Unit },
-                combine(player.shuffleMode, player.repeatMode, player.audioFormat, com.opentune.data.NerdStats.playbackSource) { _, _, _, _ -> Unit },
+                // A stall starting or ending too: other devices' clocks for this one stop and start with it.
+                combine(player.shuffleMode, player.repeatMode, player.audioFormat, com.opentune.data.NerdStats.playbackSource, player.isSounding) { _, _, _, _, _ -> Unit },
                 player.seeks,
             ).debounce(300).collect { session?.localChanged() }
         }
@@ -298,7 +299,11 @@ internal class ConnectionConnectPlayer(private val c: PlayerConnection) : Connec
         return Snapshot(
             track = track,
             private = track == null,
-            playing = c.isPlaying.value,
+            // Moving, not just meant to: other devices run this one's clock on from its last report
+            // while it says it's playing, so a stall said as playing ran their timestamp ahead of it.
+            // Another player carrying the song through a quality switch counts as moving.
+            playing = c.isPlaying.value && (c.isSounding.value || com.opentune.playback.MixState.showing.value != null),
+            wants = c.isPlaying.value,
             pos = c.currentPositionMs(),
             queue = c.upNext.value.mapNotNull { queue.getOrNull(it)?.let(CTrack::of) },
             volume = c.volume.value,

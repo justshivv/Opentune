@@ -132,7 +132,10 @@ const webPlayer: ConnectPlayer = {
     return {
       track,
       private: !track,
-      playing: !!audio && !audio.paused,
+      // Moving, not just meant to: other devices run this one's clock on from its last report
+      // while it says it's playing, so a stall said as playing ran their timestamp ahead of it.
+      playing: !!audio && !audio.paused && !audio.seeking && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA,
+      wants: !!audio && !audio.paused,
       pos: Math.max(0, (audio?.currentTime ?? 0) * 1000),
       queue: queue.slice(index + 1).map((e) => toCTrack(e.track)).filter((t): t is CTrack => !!t),
       volume,
@@ -188,6 +191,21 @@ const webPlayer: ConnectPlayer = {
 let session: ConnectSession | null = null;
 let unsubscribe: (() => void) | null = null;
 let settle: ReturnType<typeof setTimeout> | null = null;
+/** The audio element whose stalls are being listened to; the player swaps between two for crossfades. */
+let heard: HTMLMediaElement | null = null;
+const MEDIA_EVENTS = ['waiting', 'stalled', 'playing', 'seeked', 'canplay'] as const;
+const onMedia = () => {
+  if (settle) clearTimeout(settle);
+  settle = setTimeout(() => session?.localChanged(), 150);
+};
+/** Listens to the audio element now playing: a stall starting or ending goes out as this device's state. */
+function hearAudio(): void {
+  const audio = getAudio() ?? null;
+  if (audio === heard) return;
+  for (const e of MEDIA_EVENTS) heard?.removeEventListener(e, onMedia);
+  heard = audio;
+  for (const e of MEDIA_EVENTS) audio?.addEventListener(e, onMedia);
+}
 let starting: Promise<void> = Promise.resolve();
 
 const notice = (template: string, name: string) => useConnect.setState({ notice: { text: template.replace('{0}', name), at: Date.now() } });
@@ -197,6 +215,8 @@ function stop(): void {
   session = null;
   unsubscribe?.();
   unsubscribe = null;
+  for (const e of MEDIA_EVENTS) heard?.removeEventListener(e, onMedia);
+  heard = null;
   useConnect.setState({ view: null });
 }
 
@@ -217,7 +237,9 @@ function restart(): void {
     session = s;
     s.start();
     // The player changing (a song, play/pause, the queue) goes out a moment after it settles.
+    hearAudio();
     unsubscribe = usePlayer.subscribe((now, before) => {
+      hearAudio();
       if (
         now.nowPlaying?.videoId === before.nowPlaying?.videoId && now.nowPlaying?.streamInfo === before.nowPlaying?.streamInfo &&
         now.status === before.status && now.queue === before.queue && now.volume === before.volume &&

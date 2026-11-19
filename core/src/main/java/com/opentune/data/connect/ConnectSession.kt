@@ -52,6 +52,7 @@ data class Snapshot(
     val track: CTrack?,
     /** Something only this device can play (its own files, a private server). */
     val private: Boolean,
+    /** Moving: the clock other devices run on for this one. Not while it stalls to load. */
     val playing: Boolean,
     val pos: Long,
     /** What comes after [track]. */
@@ -61,6 +62,8 @@ data class Snapshot(
     val repeat: String,
     /** How it sounds here, in this device's words; null when it can't say. */
     val quality: String? = null,
+    /** Meant to play, stalled or not: starting to play is judged by this, so a stall ending isn't a start. */
+    val wants: Boolean? = null,
 )
 
 /**
@@ -231,9 +234,10 @@ internal class ConnectSession(
         val now = player.snapshot()
         mine = now
         if (now == null) { refresh(); return }
-        val started = now.playing && before?.playing != true
+        val meant = { s: Snapshot? -> s?.wants ?: s?.playing ?: false }
+        val started = meant(now) && !meant(before)
         // Taking the music: a new song, or starting it. Pausing leaves it where it was taken.
-        if (now.track != before?.track || now.private != before?.private || (now.playing && before?.playing != true)) mineAt = clock()
+        if (now.track != before?.track || now.private != before?.private || started) mineAt = clock()
         if (started) {
             for (d in devices.values) if (d.state?.playing == true) command(d.id, "pause", quiet = true)
         }
