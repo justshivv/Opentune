@@ -182,7 +182,7 @@ object StreamResolver {
                 builder.header(
                     "User-Agent",
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+                            "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
                 )
             }
 
@@ -204,7 +204,7 @@ object StreamResolver {
                 TrackLog.w(
                     TAG,
                     "extractor fetch FAILED after ${SystemClock.elapsedRealtime() - requestStart}ms " +
-                        "${request.httpMethod()} ${request.url()}: ${e.javaClass.simpleName}: ${e.message}",
+                            "${request.httpMethod()} ${request.url()}: ${e.javaClass.simpleName}: ${e.message}",
                 )
                 throw e
             }
@@ -641,7 +641,7 @@ object StreamResolver {
             TrackLog.w(
                 TAG,
                 "resolve hit a linkage failure for $videoId after " +
-                    "${SystemClock.elapsedRealtime() - resolveStart}ms: ${e.javaClass.name}: ${e.message}",
+                        "${SystemClock.elapsedRealtime() - resolveStart}ms: ${e.javaClass.name}: ${e.message}",
                 e,
             )
             throw IOException("Stream resolution cannot run on this device: $e", e)
@@ -657,7 +657,7 @@ object StreamResolver {
             TrackLog.w(
                 TAG,
                 "resolve failed for $videoId after ${SystemClock.elapsedRealtime() - resolveStart}ms: " +
-                    "${e.javaClass.name}: ${e.message}",
+                        "${e.javaClass.name}: ${e.message}",
                 e,
             )
             // Recorded before it is rethrown, so the retries stacked above this
@@ -1052,7 +1052,7 @@ object StreamResolver {
                     TrackLog.d(
                         TAG,
                         "${client.clientName} offered ${candidates.size} format(s) for $videoId but none " +
-                            "could be unlocked (${candidates.joinToString { "${it.mimeType} @ ${it.kbps}kbps" }})",
+                                "could be unlocked (${candidates.joinToString { "${it.mimeType} @ ${it.kbps}kbps" }})",
                     )
                     refused(videoId, client)
                     continue
@@ -1085,7 +1085,7 @@ object StreamResolver {
                 TrackLog.w(
                     TAG,
                     "${client.clientName} minted an unusable URL for $videoId: " +
-                        "$verdict for ${picked.mimeType} @ ${picked.kbps}kbps",
+                            "$verdict for ${picked.mimeType} @ ${picked.kbps}kbps",
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -1163,6 +1163,21 @@ object StreamResolver {
         val qualityScore: Double get() = if (isOpus) kbps * OPUS_EFFICIENCY else kbps.toDouble()
     }
 
+    /**
+     * One video entry of a player response, before its URL has been unlocked.
+     * [muxed] entries (YouTube's progressive formats) carry their own audio;
+     * the rest are video-only and need an audio track merged in to play.
+     */
+    internal class Video(
+        val url: String?,
+        val signatureCipher: String?,
+        val kbps: Int,
+        val mimeType: String,
+        val width: Int,
+        val height: Int,
+        val muxed: Boolean,
+    )
+
     private const val OPUS_EFFICIENCY = 1.5
 
     /** An upgrade has to gain this much, in AAC-equivalent kbps, to be worth a swap. */
@@ -1170,6 +1185,7 @@ object StreamResolver {
 
     private fun audioFormats(response: JsonObject): List<Audio> {
         rememberLoudness(response)
+        rememberVideo(response)
         // The description carries the song's credits; kept so View credits needs no request of its own.
         com.opentune.data.metadata.SongCreditsRepository.remember(response)
         return audioFormatList(response)
@@ -1188,6 +1204,21 @@ object StreamResolver {
     private fun keepLoudness(videoId: String, db: Double) {
         loudness[videoId] = db
         LoudnessStore.put(videoId, db)
+    }
+
+    /** The best video format seen for each track, kept for the process's lifetime. */
+    private val videos = ConcurrentHashMap<String, Video>()
+
+    /** Whether [videoId]'s response offered any video format worth switching to. */
+    fun hasVideo(videoId: String): Boolean = videos.containsKey(videoId)
+
+    /** The best video format seen for [videoId], or null when its response offered none. */
+    internal fun videoFor(videoId: String): Video? = videos[videoId]
+
+    private fun rememberVideo(response: JsonObject) {
+        val id = response["videoDetails"]?.jsonObject?.str("videoId") ?: return
+        val best = rankVideoFormats(response).firstOrNull() ?: return
+        videos[id] = best
     }
 
     private fun rememberLoudness(response: JsonObject) {
@@ -1221,6 +1252,47 @@ object StreamResolver {
             .orEmpty()
 
     /**
+     * Every video entry of [response]: the progressive (muxed) formats from
+     * `formats` and the video-only ones from `adaptiveFormats`, in one list.
+     * Entries with neither a URL nor a cipher are useless and dropped, the
+     * same rule [audioFormatList] applies to audio.
+     */
+    internal fun videoFormatList(response: JsonObject): List<Video> {
+        val data = response["streamingData"]?.jsonObject ?: return emptyList()
+        fun entry(it: JsonObject, muxed: Boolean) = Video(
+            url = it.str("url"),
+            signatureCipher = it.str("signatureCipher") ?: it.str("cipher"),
+            kbps = ((it.str("bitrate")?.toLongOrNull() ?: 0L) / 1000).toInt(),
+            mimeType = it.str("mimeType").orEmpty(),
+            width = it.str("width")?.toIntOrNull() ?: 0,
+            height = it.str("height")?.toIntOrNull() ?: 0,
+            muxed = muxed,
+        )
+        val muxed = data["formats"]?.jsonArray?.map { it.jsonObject }
+            ?.filter { it.str("mimeType")?.startsWith("video/") == true }
+            ?.map { entry(it, muxed = true) }
+            .orEmpty()
+        val adaptive = data["adaptiveFormats"]?.jsonArray?.map { it.jsonObject }
+            ?.filter { it.str("mimeType")?.startsWith("video/") == true }
+            ?.map { entry(it, muxed = false) }
+            .orEmpty()
+        return (muxed + adaptive).filter { it.url != null || it.signatureCipher != null }
+    }
+
+    /**
+     * [response]'s video formats in the order they are worth attempting:
+     * muxed first (they play through the existing single-stream pipeline),
+     * tallest first within each kind, unciphered ahead of ciphered on a tie —
+     * the same preference [rankByQuality] gives audio.
+     */
+    internal fun rankVideoFormats(response: JsonObject): List<Video> =
+        videoFormatList(response).sortedWith(
+            compareByDescending<Video> { it.muxed }
+                .thenByDescending { it.height }
+                .thenByDescending { it.url != null },
+        )
+
+    /**
      * What playback wants, best first: the formats the connection's ceiling
      * allows, in the order they are worth trying.
      *
@@ -1250,7 +1322,7 @@ object StreamResolver {
         // often reads a little under AAC 140's while sounding clearly better.
         // AAC 256 (Premium's 141) still outranks Opus 160.
         val ranked = withinBudget.sortedWith(compareByDescending<Audio> { it.qualityScore }.then(order)) +
-            overBudget.sortedWith(compareBy<Audio> { it.kbps }.then(order))
+                overBudget.sortedWith(compareBy<Audio> { it.kbps }.then(order))
         return if (signatureSolverBroken) ranked.sortedWith(order) else ranked
     }
 
@@ -1312,7 +1384,7 @@ object StreamResolver {
             .mapNotNull { part ->
                 val i = part.indexOf('=').takeIf { it > 0 } ?: return@mapNotNull null
                 URLDecoder.decode(part.substring(0, i), "UTF-8") to
-                    URLDecoder.decode(part.substring(i + 1), "UTF-8")
+                        URLDecoder.decode(part.substring(i + 1), "UTF-8")
             }
             .toMap()
 
@@ -1354,9 +1426,9 @@ object StreamResolver {
             .joinToString(" ")
             .lowercase(Locale.ROOT)
         return "deobfuscation function" in text ||
-            "player js" in text ||
-            "player javascript" in text ||
-            "javascript base url" in text
+                "player js" in text ||
+                "player javascript" in text ||
+                "javascript base url" in text
     }
 
     /**
@@ -1390,8 +1462,8 @@ object StreamResolver {
         TrackLog.w(
             TAG,
             "this NewPipe release cannot read YouTube's current player JavaScript " +
-                "(${cause.message}); ciphered formats are unavailable for the rest of this session — " +
-                "signed-in device clients are the only route to an age-restricted track",
+                    "(${cause.message}); ciphered formats are unavailable for the rest of this session — " +
+                    "signed-in device clients are the only route to an age-restricted track",
         )
     }
 
@@ -1920,14 +1992,14 @@ object StreamResolver {
                 // Progressive only — DASH/HLS entries carry a manifest, not a URL.
                 .filter {
                     !it.content.isNullOrBlank() &&
-                        it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP
+                            it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP
                 }
             val stream = select(candidates.map { it.averageBitrate to it })
                 ?: error("Track unavailable: no audio streams")
             TrackLog.d(
                 TAG,
                 "NewPipe picked ${stream.format?.name} @ ${stream.averageBitrate}kbps " +
-                    "(extraction held the gate ${SystemClock.elapsedRealtime() - waited}ms)",
+                        "(extraction held the gate ${SystemClock.elapsedRealtime() - waited}ms)",
             )
             // stream.content is already playable, not raw: YoutubeStreamExtractor
             // resolves the signature cipher and the `n` parameter itself while
