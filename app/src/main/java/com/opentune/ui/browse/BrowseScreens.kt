@@ -82,6 +82,12 @@ import com.opentune.data.model.artworkAt
 import com.opentune.ui.components.Artwork
 import com.opentune.ui.components.GlassBackButton
 import com.opentune.ui.components.glass
+import com.opentune.ui.components.posterLayout
+import com.opentune.ui.components.PosterCaps
+import com.opentune.ui.components.posterGlass
+import com.opentune.ui.components.PosterPill
+import com.opentune.ui.components.PosterRound
+import com.opentune.ui.components.POSTER_ROUND
 import com.opentune.ui.components.ErrorState
 import com.opentune.ui.components.Placeholder
 import com.opentune.ui.components.SongListItem
@@ -574,80 +580,6 @@ internal fun playlistMeta(songs: List<com.opentune.data.model.Song>): String {
 internal fun fullListCover(): Boolean =
     com.opentune.data.settings.AppSettings.ui.collectAsState().value.let { it.fullScreenListCover || it.pageLayout == com.opentune.data.settings.PageLayout.POSTER }
 
-/** Whether album, playlist and artist pages wear the Poster layout (Settings › Page layout). */
-@Composable
-internal fun posterLayout(): Boolean =
-    com.opentune.data.settings.AppSettings.ui.collectAsState().value.pageLayout == com.opentune.data.settings.PageLayout.POSTER
-
-/** A line in the Poster layout's spaced capitals: "ALBUM · 9 SONGS · 42 MIN", an artist's name under a title. */
-@Composable
-internal fun PosterCaps(
-    text: String,
-    modifier: Modifier = Modifier,
-    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.labelLarge,
-    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    textAlign: TextAlign = TextAlign.Center,
-) {
-    Text(
-        text.uppercase(),
-        style = style.copy(letterSpacing = 3.sp),
-        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-        color = color,
-        textAlign = textAlign,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier,
-    )
-}
-
-/**
- * The Poster layout's glass, the same whatever Settings › Glass style says: a soft tint of
- * light over the page's own colour, a thin rim brighter along the top, and a gentle shadow
- * under it, so the buttons read as clear glass laid on the page.
- */
-@Composable
-internal fun Modifier.posterGlass(shape: androidx.compose.ui.graphics.Shape): Modifier {
-    val ink = MaterialTheme.colorScheme.onSurface
-    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val rimTop = if (dark) Color.White.copy(alpha = 0.32f) else ink.copy(alpha = 0.16f)
-    val rimFoot = if (dark) Color.White.copy(alpha = 0.06f) else ink.copy(alpha = 0.08f)
-    return this
-        .shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.22f), spotColor = Color.Black.copy(alpha = 0.22f))
-        .clip(shape)
-        .background(if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.45f))
-        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.07f else 0.2f), Color.Transparent)))
-        .border(1.dp, Brush.verticalGradient(listOf(rimTop, rimFoot)), shape)
-}
-
-/** The Poster layout's Play: a wide glass pill with the word in it. */
-@Composable
-internal fun PosterPill(label: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
-    Row(
-        modifier.height(56.dp).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
-            .posterGlass(shape).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
-            .padding(horizontal = 26.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
-        Spacer(Modifier.width(10.dp))
-        Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-    }
-}
-
-/** The Poster layout's round glass button, for shuffle, save and the like. */
-@Composable
-internal fun PosterRound(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
-    Box(
-        Modifier.size(POSTER_ROUND).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
-            .posterGlass(androidx.compose.foundation.shape.CircleShape)
-            .clickable(enabled = enabled, onClickLabel = label, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { Icon(icon, label, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface) }
-}
-
-internal val POSTER_ROUND = 52.dp
 
 /**
  * The top of a playlist, album or Liked page, as Settings › Full-screen playlist covers asks.

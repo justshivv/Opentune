@@ -35,6 +35,11 @@ import com.opentune.ui.theme.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
+import com.opentune.ui.components.posterLayout
+import com.opentune.ui.components.PosterCaps
+import com.opentune.ui.components.posterGlass
+import com.opentune.ui.components.PosterPill
+import com.opentune.ui.components.POSTER_ROUND
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider

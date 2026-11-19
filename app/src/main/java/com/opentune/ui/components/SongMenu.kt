@@ -14,6 +14,10 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -152,8 +156,17 @@ fun SongMenuSheet(
     val header: @Composable ColumnScope.() -> Unit = {
         val card = LocalFloatingCard.current
         val close: () -> Unit = { card?.close() ?: onDismiss() }
-        // The page shows the song larger itself.
-        if (!menuAsPage) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        // The page shows the song larger itself. The Poster layout centres it: the cover large,
+        // the title under it, who it's by in spaced capitals.
+        if (!menuAsPage && posterLayout()) Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            val frame = RoundedCornerShape(18.dp)
+            Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX * 3), Modifier.size(132.dp)
+                .shadow(18.dp, frame, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f)), shape = frame)
+            Text(song.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 16.dp))
+            PosterCaps(song.artist, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelLarge)
+        }
+        else if (!menuAsPage) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Artwork(song.thumbnailUrl.artworkAt(ROW_ART_PX), Modifier.size(56.dp))
             Spacer(Modifier.size(14.dp))
             Column(Modifier.weight(1f)) {
@@ -442,6 +455,9 @@ private fun SongMenuPage(
  * short stretch of the ring runs round instead.
  */
 private fun QuickAction(icon: ImageVector, label: String, active: Boolean, progress: Float? = null, onClick: () -> Unit) {
+    // The Poster layout's are round, of clear glass, with the label in small spaced capitals.
+    val poster = posterLayout()
+    val round = if (poster) 26.dp else 18.dp
     val ringColour = MaterialTheme.colorScheme.primary
     val trackColour = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
     val shown by androidx.compose.animation.core.animateFloatAsState((progress ?: 0f).coerceIn(0f, 1f), androidx.compose.animation.core.tween(300), label = "downloadRing")
@@ -460,7 +476,7 @@ private fun QuickAction(icon: ImageVector, label: String, active: Boolean, progr
                     val stroke = 3.dp.toPx()
                     val inset = stroke / 2
                     // The button's own outline, starting at the top middle and going clockwise.
-                    val corner = 18.dp.toPx() - inset
+                    val corner = round.toPx() - inset
                     val outline = androidx.compose.ui.graphics.Path().apply {
                         val w = size.width - inset
                         val h = size.height - inset
@@ -495,26 +511,40 @@ private fun QuickAction(icon: ImageVector, label: String, active: Boolean, progr
                         drawPath(piece, ringColour, style = style)
                     }
                 })
-                .clip(RoundedCornerShape(18.dp))
-                .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest),
+                .then(
+                    if (poster && !active) Modifier.posterGlass(RoundedCornerShape(round))
+                    else Modifier.clip(RoundedCornerShape(round))
+                        .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest),
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, null, tint = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
         }
-        Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp), maxLines = 1)
+        if (poster) Text(com.opentune.ui.theme.tr(label).uppercase(), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
+            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp), maxLines = 1)
+        else Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp), maxLines = 1)
     }
 }
 
 @Composable
 fun MenuRow(icon: ImageVector, label: String, summary: String? = null, onClick: () -> Unit) {
+    // The Poster layout's rows are a little roomier, their icons quieter, with a hairline under
+    // each from the text to the edge, as the songs on its pages are.
+    val poster = posterLayout()
+    val hairline = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = if (summary == null) 15.dp else 10.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick)
+            .then(if (poster) Modifier.drawBehind {
+                val y = size.height - 0.5.dp.toPx()
+                drawLine(hairline, androidx.compose.ui.geometry.Offset(70.dp.toPx(), y), androidx.compose.ui.geometry.Offset(size.width - 24.dp.toPx(), y), 1.dp.toPx())
+            } else Modifier)
+            .padding(horizontal = 24.dp, vertical = if (summary == null) (if (poster) 17.dp else 15.dp) else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(22.dp),
     ) {
-        Icon(icon, null, Modifier.size(24.dp))
+        Icon(icon, null, Modifier.size(24.dp), tint = if (poster) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.material3.LocalContentColor.current)
         Column {
-            Text(com.opentune.ui.theme.tr(label), style = MaterialTheme.typography.bodyLarge)
+            Text(com.opentune.ui.theme.tr(label), style = if (poster) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge)
             if (summary != null) Text(summary, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }

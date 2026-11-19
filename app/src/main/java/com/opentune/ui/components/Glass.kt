@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -455,7 +456,8 @@ fun GlassIconButton(
         shape = CircleShape,
         color = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = modifier.size(size).glass(CircleShape),
+        // The Poster layout's clear glass, as on its pages' buttons.
+        modifier = modifier.size(size).then(if (posterLayout()) Modifier.posterGlass(CircleShape) else Modifier.glass(CircleShape)),
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (content != null) content() else Icon(icon, contentDescription, Modifier.size(size * 0.46f))
@@ -486,7 +488,9 @@ fun PageHeader(title: String, onBack: (() -> Unit)? = null, actions: (@Composabl
         }
         Text(
             title,
-            style = MaterialTheme.typography.displaySmall,
+            // The Poster layout's titles are heavy and set a little tight, as on its pages.
+            style = if (posterLayout()) MaterialTheme.typography.displaySmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Black, letterSpacing = (-0.5).sp)
+                else MaterialTheme.typography.displaySmall,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
         )
     }

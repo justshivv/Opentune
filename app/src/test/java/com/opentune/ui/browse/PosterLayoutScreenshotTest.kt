@@ -12,6 +12,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.core.app.ApplicationProvider
 import com.opentune.data.model.ArtistPage
@@ -82,5 +83,40 @@ class PosterLayoutScreenshotTest {
             listState = rememberLazyListState(),
             actions = actions,
         )
+    }
+
+    @Test fun pagePieces() = shoot("poster-page") {
+        Column(Modifier.fillMaxWidth()) {
+            com.opentune.ui.components.PageHeader("Downloads", onBack = {})
+            com.opentune.ui.components.SectionHeader("Recently played", subtitle = "From the last week")
+            com.opentune.ui.components.MenuRow(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.opentune.ui.theme.AppIcons.PlaylistPlay), "Play next") {}
+            com.opentune.ui.components.MenuRow(androidx.compose.ui.graphics.vector.ImageVector.vectorResource(com.opentune.ui.theme.AppIcons.QueueMusic), "Add to queue") {}
+            com.opentune.ui.components.SectionHeader("Your playlists")
+        }
+    }
+
+    @Test fun songMenu() {
+        val song = Song("abc", "Antea", "Barasuara", null, albumId = "MPRE1", artistId = "UC1")
+        compose.setContent {
+            MaterialTheme(darkColorScheme(background = page, surface = page, surfaceContainerHigh = Color(0xFF39424D), onSurface = Color(0xFFECEFF3), onSurfaceVariant = Color(0xFFB4BCC6))) {
+                androidx.compose.material3.Surface(color = page, contentColor = Color(0xFFECEFF3)) {
+                    androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongMenu provides com.opentune.ui.components.SongMenuActions({}, {}, {}, {}, {})) {
+                        com.opentune.ui.components.SongMenuSheet(song, onDismiss = {}, startExpanded = true)
+                    }
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        val back = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(back.width, back.height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        back.draw(canvas)
+        val sheet = org.robolectric.shadows.ShadowDialog.getLatestDialog().window!!.decorView
+        canvas.save()
+        canvas.translate(0f, (back.height - sheet.height).toFloat())
+        sheet.draw(canvas)
+        canvas.restore()
+        File(File("build/screenshots").apply { mkdirs() }, "poster-song-menu.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }

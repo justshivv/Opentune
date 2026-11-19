@@ -540,6 +540,23 @@ fun SectionHeader(
     /** A smaller title where a page's sections sit under a bigger one; the app's usual size when null. */
     titleStyle: TextStyle? = null,
 ) {
+    if (posterLayout()) {
+        // The Poster layout's section: a hairline across, the name in spaced capitals under it,
+        // and its line, if any, in plain small type below.
+        Column(modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 26.dp, bottom = 10.dp)) {
+            androidx.compose.material3.HorizontalDivider(Modifier.padding(end = 4.dp, bottom = 14.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    PosterCaps(com.opentune.ui.theme.tr(title), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Start)
+                    if (!subtitle.isNullOrBlank()) Text(com.opentune.ui.theme.tr(subtitle), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                }
+                action?.invoke()
+            }
+        }
+        return
+    }
     Row(
         modifier = modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

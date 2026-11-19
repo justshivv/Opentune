@@ -367,7 +367,18 @@ fun HomeScreen(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column(Modifier.weight(1f)) {
-                            if (firstName != null) {
+                            if (com.opentune.ui.components.posterLayout()) {
+                                // The Poster layout: the greeting in spaced capitals over the name, heavy and large.
+                                if (firstName != null) com.opentune.ui.components.PosterCaps(com.opentune.ui.theme.tr(greeting), style = MaterialTheme.typography.labelLarge,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Start)
+                                Text(
+                                    firstName ?: com.opentune.ui.theme.tr(greeting),
+                                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Black, letterSpacing = (-0.5).sp),
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = if (firstName != null) 6.dp else 0.dp),
+                                )
+                            } else if (firstName != null) {
                                 Text(com.opentune.ui.theme.tr(greeting), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                                 Text(
                                     firstName,
