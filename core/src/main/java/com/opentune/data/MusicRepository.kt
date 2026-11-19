@@ -503,6 +503,22 @@ object MusicRepository {
         ContentFilter.results(InnertubeParser.parseSearchPage(response, includeVideos = filter == SearchFilter.VIDEOS).rows)
     }
 
+    /**
+     * A filtered search's first page, with the token for its next ([searchMore]); null when
+     * there's no more, and always for the mixed All page, whose shelves don't page.
+     */
+    suspend fun searchPage(query: String, filter: SearchFilter): Pair<List<SearchResult>, String?> = io {
+        val page = InnertubeParser.parseSearchPage(Innertube.search(query, filter.params), includeVideos = filter == SearchFilter.VIDEOS)
+        ContentFilter.results(page.rows) to page.continuation.takeIf { filter != SearchFilter.ALL }
+    }
+
+    /** The page of a filtered search after [token], with the token for the one after it. */
+    suspend fun searchMore(token: String, filter: SearchFilter): Pair<List<SearchResult>, String?> = io {
+        val page = InnertubeParser.parseSearchPage(Innertube.searchContinuation(token), includeVideos = filter == SearchFilter.VIDEOS)
+        // The same token again would only bring the same page back.
+        ContentFilter.results(page.rows) to page.continuation?.takeIf { it != token }
+    }
+
     suspend fun suggestions(input: String): List<String> = io {
         InnertubeParser.parseSearchSuggestions(Innertube.searchSuggestions(input))
     }

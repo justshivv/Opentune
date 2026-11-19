@@ -135,6 +135,12 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
 
     private var searchJob: Job? = null
 
+    /** Whether a filtered search's results go on past what's shown; see [loadMore]. */
+    private val _more = MutableStateFlow(MoreResults.NONE)
+    val more = _more.asStateFlow()
+    private var nextPage: String? = null
+    private var moreJob: Job? = null
+
     init {
         viewModelScope.launch { watchSuggestions() }
         viewModelScope.launch { watchLive() }
@@ -360,22 +366,54 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
         val q = _submitted.value ?: return
         val f = _filter.value
         searchJob?.cancel()
+        moreJob?.cancel()
+        nextPage = null
+        _more.value = MoreResults.NONE
         val key = "$f:${q.trim().lowercase()}"
         // A search made a minute ago comes back at once; it's refreshed anyway.
         _results.value = recentSearches[key]?.let { UiState.Success(it) } ?: UiState.Loading
         searchJob = viewModelScope.launch {
             val fresh = try {
-                UiState.Success(MusicRepository.search(q, f))
+                MusicRepository.searchPage(q, f)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (_results.value is UiState.Success) null else UiState.Error(friendlyError(e))
+                if (_results.value !is UiState.Success) _results.value = UiState.Error(friendlyError(e))
+                null
+            } ?: return@launch
+            val (rows, token) = fresh
+            _results.value = UiState.Success(rows)
+            nextPage = token
+            _more.value = if (token != null && rows.isNotEmpty()) MoreResults.MORE else MoreResults.NONE
+            recentSearches[key] = rows
+            warmTopResult(rows)
+        }
+    }
+
+    /**
+     * The next page of a filtered search's results, added under the ones shown. Only the first
+     * page was ever read, so a search for Songs or Albums stopped after twenty or so.
+     */
+    fun loadMore() {
+        val token = nextPage ?: return
+        if (_more.value == MoreResults.LOADING || searchJob?.isActive == true) return
+        val f = _filter.value
+        _more.value = MoreResults.LOADING
+        moreJob = viewModelScope.launch {
+            val page = try {
+                MusicRepository.searchMore(token, f)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _more.value = MoreResults.FAILED
+                return@launch
             }
-            fresh?.let { _results.value = it }
-            (fresh as? UiState.Success)?.data?.let { rows ->
-                recentSearches[key] = rows
-                warmTopResult(rows)
-            }
+            val shown = (_results.value as? UiState.Success)?.data.orEmpty()
+            val added = withoutShown(shown, page.first)
+            _results.value = UiState.Success(shown + added)
+            nextPage = page.second
+            // A page that adds nothing new ends the list rather than asking again and again.
+            _more.value = if (page.second != null && added.isNotEmpty()) MoreResults.MORE else MoreResults.NONE
         }
     }
 
@@ -409,6 +447,23 @@ class SearchViewModel(application: android.app.Application) : androidx.lifecycle
     private val recentSearches = object : LinkedHashMap<String, List<SearchResult>>(32, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<SearchResult>>?) = size > 60
     }
+}
+
+/** Whether there are more of a search's results to show: none, more, on their way, or a page that didn't load. */
+enum class MoreResults { NONE, MORE, LOADING, FAILED }
+
+/**
+ * The results of a later page that aren't shown already: the pages overlap now and then, and a
+ * row shown twice would also be two rows of the list with the same key, which it can't have.
+ */
+internal fun withoutShown(shown: List<SearchResult>, page: List<SearchResult>): List<SearchResult> {
+    fun key(r: SearchResult) = when (r) {
+        is SearchResult.TopTrack -> "v:${r.song.videoId}"
+        is SearchResult.Track -> "v:${r.song.videoId}"
+        is SearchResult.Browse -> "b:${r.item.browseId}"
+    }
+    val seen = shown.mapTo(HashSet(), ::key)
+    return page.filter { seen.add(key(it)) }
 }
 
 /** A playlist or saved album in the library that a search found: one of yours ([playlistId]) or one saved from YouTube Music ([browseId]). */

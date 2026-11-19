@@ -124,6 +124,7 @@ fun SearchScreen(
     val suggestions by vm.suggestions.collectAsState()
     val live by vm.live.collectAsState()
     val results by vm.results.collectAsState()
+    val moreResults by vm.more.collectAsState()
     val recent by AppSettings.recentSearches.collectAsState()
     val recentAddon by AppSettings.recentAddonSearches.collectAsState()
     val source by vm.source.collectAsState()
@@ -260,7 +261,8 @@ fun SearchScreen(
                         FilterChip(selected = f == filter, onClick = { vm.setFilter(f) }, label = { Text(f.label) })
                     }
                 }
-                Results(results, contentPadding, currentVideoId, isPlaying, onPlay, onPlayNext, onAddToQueue, onBrowse, vm::retry)
+                Results(results, contentPadding, currentVideoId, isPlaying, onPlay, onPlayNext, onAddToQueue, onBrowse, vm::retry,
+                    more = moreResults, onLoadMore = vm::loadMore)
             }
         }
     }
@@ -393,6 +395,8 @@ private fun Results(
     onAddToQueue: (Song) -> Unit,
     onBrowse: (BrowseItem) -> Unit,
     onRetry: () -> Unit,
+    more: MoreResults = MoreResults.NONE,
+    onLoadMore: () -> Unit = {},
 ) {
     when (state) {
         is UiState.Loading -> Column(Modifier.padding(top = 8.dp)) { repeat(8) { SongRowPlaceholder() } }
@@ -440,6 +444,20 @@ private fun Results(
                             }
                         }
                     }
+                }
+                // The next page, asked for as the end of the list comes into view.
+                when (more) {
+                    MoreResults.MORE -> item(key = "more") {
+                        androidx.compose.runtime.LaunchedEffect(state.data.size) { onLoadMore() }
+                        SongRowPlaceholder()
+                    }
+                    MoreResults.LOADING -> item(key = "more") { SongRowPlaceholder() }
+                    MoreResults.FAILED -> item(key = "more-failed") {
+                        TextButton(onClick = onLoadMore, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                            Text("Couldn't load more results. Retry")
+                        }
+                    }
+                    MoreResults.NONE -> Unit
                 }
             }
         }
