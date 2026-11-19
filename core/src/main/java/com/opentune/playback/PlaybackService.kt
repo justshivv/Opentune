@@ -237,6 +237,12 @@ class PlaybackService : MediaLibraryService() {
         com.opentune.data.AppInUse.started.value = true
         super.onCreate()
         val context: Context = this
+        // Android 12 and later refuse a media notification's foreground start from the
+        // background: a song another device hands this phone with the app closed played
+        // with no notification at all. Then a plain one says so and opens the player.
+        setListener(object : Listener {
+            override fun onForegroundServiceStartNotAllowedException() = PlayingHereNotice.show(context, mediaSession?.player?.currentMediaItem?.mediaMetadata)
+        })
 
         val songSources = SongSources(context)
         val cached = songSources.cached
@@ -844,16 +850,27 @@ class PlaybackService : MediaLibraryService() {
     private var remoteSession: MediaSession? = null
     private var remotePlayer: ConnectRemotePlayer? = null
 
+    /** A remote session's removal waiting for this phone's own player to start; see [showRemote]. */
+    private var remoteLeaving: kotlinx.coroutines.Job? = null
+
     private fun showRemote(device: com.opentune.data.connect.Device?, sessionActivity: PendingIntent) {
+        remoteLeaving?.cancel()
+        remoteLeaving = null
         if (device == null) {
-            val session = remoteSession ?: return
-            remoteSession = null
-            removeSession(session)
-            session.release()
-            remotePlayer?.release()
-            remotePlayer = null
-            // The phone's own song back in the notification.
-            mediaSession?.let { onUpdateNotification(it, false) }
+            if (remoteSession == null) return
+            // Playback handed to this phone: its own song takes the notification while the
+            // other device's still holds the service in the foreground. Removed first, the
+            // service left the foreground, and from the background Android won't let it back,
+            // so the phone played with no notification until the app was opened. The hand-over
+            // and the phone's own start come in either order, so the other device's session
+            // waits a moment for the phone's player to be meant to play.
+            remoteLeaving = scope.launch {
+                val started = kotlinx.coroutines.withTimeoutOrNull(HAND_OVER_WAIT_MS) {
+                    while (mediaSession?.player?.let { it.playWhenReady && it.mediaItemCount > 0 } != true) kotlinx.coroutines.delay(100)
+                    true
+                } == true
+                dropRemote(started)
+            }
             return
         }
         val player = remotePlayer ?: ConnectRemotePlayer().also { remotePlayer = it }
@@ -867,10 +884,29 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    /** The other device's session goes; [handOver] when this phone's own song is meant to play. */
+    private fun dropRemote(handOver: Boolean) {
+        val session = remoteSession ?: return
+        val local = mediaSession
+        remoteSession = null
+        // Into the foreground on the phone's own song while the other session still holds it there.
+        if (handOver && local != null) super.onUpdateNotification(local, true)
+        removeSession(session)
+        session.release()
+        remotePlayer?.release()
+        remotePlayer = null
+        // The phone's own song back in the notification.
+        local?.let { onUpdateNotification(it, handOver) }
+    }
+
     /** While another device plays, the phone's own paused song doesn't take the notification back. */
     override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
         if (remoteSession != null && session === mediaSession && !startInForegroundRequired) return
         super.onUpdateNotification(session, startInForegroundRequired)
+        // The stand-in (see PlayingHereNotice) goes once the real notification is up in the
+        // foreground, or once there's nothing playing for it to stand in for.
+        val foreground = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q && foregroundServiceType != 0
+        if (foreground || !session.player.playWhenReady) PlayingHereNotice.cancel(this)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -887,6 +923,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        PlayingHereNotice.cancel(this)
         ExternalStreams.playing(null, null)
         (mediaSession?.player as? ExoPlayer)?.takeIf { it.mediaItemCount > 0 }?.let { p ->
             QueueStore.save(QueueStore.Saved((0 until p.mediaItemCount).map { SongRef.of(p.getMediaItemAt(it).toSong()) }, p.currentMediaItemIndex, p.currentPosition))
@@ -3024,6 +3061,9 @@ class PlaybackService : MediaLibraryService() {
 
     private companion object {
         const val TAG = "PlaybackService"
+
+        /** How long another device's session waits for this phone's player to start after a hand-over. */
+        const val HAND_OVER_WAIT_MS = 4_000L
 
         /** Bounds on the loudness gain, in millibels: down 15 dB, up 3 dB at most. */
         const val LOUDNESS_RETRY_MS = 6_000L
