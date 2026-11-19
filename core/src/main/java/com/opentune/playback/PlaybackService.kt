@@ -806,6 +806,11 @@ class PlaybackService : MediaLibraryService() {
                                 SleepTimer.setWindDown(f)
                                 delay(200)
                             } else {
+                                // Wind-down turned off partway through the fade: the volume comes back.
+                                if (com.opentune.playback.dsp.DspAudioProcessor.masterGain != 1f) {
+                                    com.opentune.playback.dsp.DspAudioProcessor.masterGain = 1f
+                                    SleepTimer.setWindDown(0f)
+                                }
                                 delay(minOf(left - fadeMs, 1_000L).coerceAtLeast(50))
                             }
                         }
@@ -815,14 +820,25 @@ class PlaybackService : MediaLibraryService() {
                     SleepTimer.State.EndOfTrack -> {
                         // The last seconds of the song fade out, then pauseAtEndOfMediaItems pauses.
                         val stopped = scope.launch { playWhenReadyFlow(player).first { !it } }
-                        while (stopped.isActive) {
-                            val left = player.duration - player.currentPosition
-                            if (AppSettings.playback.value.sleepWindDown && player.duration > 0 && left in 0 until END_FADE_MS) {
-                                val f = 1f - left.toFloat() / END_FADE_MS
-                                com.opentune.playback.dsp.DspAudioProcessor.masterGain = SleepTimer.gainAt(f)
-                                SleepTimer.setWindDown(f)
+                        // A timer turned off or changed first takes its watch on the player with it.
+                        try {
+                            while (stopped.isActive) {
+                                val left = player.duration - player.currentPosition
+                                if (AppSettings.playback.value.sleepWindDown && player.duration > 0 && left in 0 until END_FADE_MS) {
+                                    val f = 1f - left.toFloat() / END_FADE_MS
+                                    com.opentune.playback.dsp.DspAudioProcessor.masterGain = SleepTimer.gainAt(f)
+                                    SleepTimer.setWindDown(f)
+                                } else if (com.opentune.playback.dsp.DspAudioProcessor.masterGain != 1f) {
+                                    // Out of the last seconds again (a skip to the next song, a seek back, wind-down
+                                    // turned off): full volume. The fade held where it was, and the song skipped to
+                                    // played through as quietly as the last one had got.
+                                    com.opentune.playback.dsp.DspAudioProcessor.masterGain = 1f
+                                    SleepTimer.setWindDown(0f)
+                                }
+                                delay(200)
                             }
-                            delay(200)
+                        } finally {
+                            stopped.cancel()
                         }
                         SleepTimer.cancel()
                     }

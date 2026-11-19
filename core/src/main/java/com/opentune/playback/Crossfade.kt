@@ -184,6 +184,7 @@ internal class Crossfade(
         if (tail != null) {
             val expected = expectedNext
             if (!enabled || BitPerfectUsb.active || main.repeatMode == Player.REPEAT_MODE_ONE ||
+                (phase == Phase.LOADING && main.pauseAtEndOfMediaItems) ||
                 (expected != null && (expected.first !in 0 until main.mediaItemCount || main.getMediaItemAt(expected.first).mediaId != expected.second))) {
                 bail()
                 return POLL_MS
@@ -198,6 +199,9 @@ internal class Crossfade(
         }
         if (mix?.isActive == true || !enabled || BitPerfectUsb.active) return POLL_MS
         if (!main.isPlaying || !main.hasNextMediaItem() || main.repeatMode == Player.REPEAT_MODE_ONE) return POLL_MS
+        // The sleep timer stops at the end of this song: nothing of the next is brought in. A mix
+        // played its first seconds, then the pause at the song's end stopped both halfway in.
+        if (main.pauseAtEndOfMediaItems) return POLL_MS
         val item = main.currentMediaItem ?: return POLL_MS
         // Some streams (a FLAC sent as it's read) don't say how long they are; the song's details do.
         val duration = main.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: durationOf(item) ?: return POLL_MS
