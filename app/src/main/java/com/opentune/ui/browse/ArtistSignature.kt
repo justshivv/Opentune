@@ -75,7 +75,7 @@ internal fun ArtistNameOrSignature(name: String, start: Boolean = false) {
     Column(horizontalAlignment = if (start) Alignment.Start else Alignment.CenterHorizontally) {
         if (sig != null) {
             // Loaded off screen first, so the name doesn't blink out for an empty space.
-            SignatureImage(sig, name, onDrawn = { drawn = true }, onFailed = { failed = true }, shown = drawn)
+            SignatureImage(sig, name, onDrawn = { drawn = true }, onFailed = { failed = true }, shown = drawn, start = start)
         }
         AnimatedContent(sig != null && drawn, transitionSpec = { fadeIn(tween(420)) togetherWith fadeOut(tween(200)) }, label = "signed") { signed ->
             if (signed) {
@@ -107,7 +107,7 @@ internal fun ArtistNameOrSignature(name: String, start: Boolean = false) {
 }
 
 @Composable
-private fun SignatureImage(sig: ArtistSignature, name: String, onDrawn: () -> Unit, onFailed: () -> Unit, shown: Boolean) {
+private fun SignatureImage(sig: ArtistSignature, name: String, onDrawn: () -> Unit, onFailed: () -> Unit, shown: Boolean, start: Boolean = false) {
     val context = LocalContext.current
     // The vector when the signature came as one, drawn at the size it's shown; Wikimedia's
     // raster of it if the vector won't load.
@@ -122,18 +122,28 @@ private fun SignatureImage(sig: ArtistSignature, name: String, onDrawn: () -> Un
             .build()
     }
     // Tall signatures stay short enough to leave the photo showing; wide ones fill the width.
-    val height = if (sig.aspect >= 1.4f) 120.dp else 150.dp
+    // In the Poster layout ([start]) it's a little smaller and kept to the left, its ink resting
+    // on the "Signed by" line under it rather than floating in the middle of the photo.
+    val height = when {
+        start -> if (sig.aspect >= 1.4f) 96.dp else 120.dp
+        sig.aspect >= 1.4f -> 120.dp
+        else -> 150.dp
+    }
+    val corner = if (start) Alignment.BottomStart else Alignment.BottomCenter
     // Drawn over the photo, not in the layout: the slot is a hair tall and the image
     // overflows upward out of it, so a signature arriving never makes the hero taller.
-    Box(Modifier.fillMaxWidth().height(1.dp), contentAlignment = Alignment.BottomCenter) {
+    Box(Modifier.fillMaxWidth().height(1.dp), contentAlignment = corner) {
         AsyncImage(
             request,
             contentDescription = com.opentune.i18n.Tr.f("{0}'s signature", name),
             contentScale = ContentScale.Fit,
+            // In the Poster layout the ink sits at the foot and left of its box, so a wide
+            // signature leaves no gap above the line under it; the Classic layout keeps it centred.
+            alignment = if (start) Alignment.BottomStart else Alignment.Center,
             onSuccess = { onDrawn() },
             onError = { if (vector) vector = false else onFailed() },
             alpha = if (shown) 1f else 0f,
-            modifier = Modifier.padding(horizontal = 40.dp).widthIn(max = 420.dp).fillMaxWidth()
+            modifier = Modifier.padding(horizontal = if (start) 0.dp else 40.dp).widthIn(max = if (start) 320.dp else 420.dp).fillMaxWidth()
                 .wrapContentHeight(unbounded = true, align = Alignment.Bottom).height(height),
         )
     }
