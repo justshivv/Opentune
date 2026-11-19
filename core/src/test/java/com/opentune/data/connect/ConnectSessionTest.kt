@@ -36,10 +36,23 @@ class ConnectSessionTest {
         thread.close()
     }
 
-    private class Hub {
+    private inner class Hub {
         val flow = MutableSharedFlow<NostrEvent>(extraBufferCapacity = 1024)
         /** Devices that stopped hearing anything, without saying goodbye. */
         val deaf = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+        /**
+         * How the relays treat each message: the delays its copies arrive after. Empty drops
+         * it, two copies duplicate it, a longer delay than the next message's reorders them.
+         */
+        @Volatile var rule: (ConnectMsg) -> List<Long> = { listOf(0L) }
+        fun deliver(event: NostrEvent): Boolean {
+            val msg = group.open(event.content)?.let(ConnectMsg::decode) ?: return flow.tryEmit(event)
+            for (d in rule(msg)) {
+                if (d == 0L) flow.tryEmit(event)
+                else kotlinx.coroutines.GlobalScope.launch { kotlinx.coroutines.delay(d); flow.emit(event) }
+            }
+            return true
+        }
         /** Like real relays, nothing goes out until the transport has connected, [connectMs] after it starts. */
         fun transport(id: String, connectMs: Long = 0) = object : RoomTransport {
             override val events: SharedFlow<NostrEvent> = MutableSharedFlow<NostrEvent>(extraBufferCapacity = 1024).also { mine ->
@@ -49,7 +62,7 @@ class ConnectSessionTest {
             override fun start() {
                 if (connectMs > 0) kotlinx.coroutines.GlobalScope.launch { kotlinx.coroutines.delay(connectMs); connected.value = 1 }
             }
-            override fun publish(event: NostrEvent) = connected.value > 0 && flow.tryEmit(event)
+            override fun publish(event: NostrEvent) = connected.value > 0 && deliver(event)
             override fun close() = Unit
         }
     }
@@ -60,13 +73,15 @@ class ConnectSessionTest {
         var track: CTrack? = null
         var queue: List<CTrack> = emptyList()
         var playing = false
+        /** Meant to play, but stalled to load: not moving. */
+        var stalled = false
         var pos = 0L
         var vol = 1f
         val calls = mutableListOf<String>()
-        override fun snapshot() = track?.let { Snapshot(it, false, playing, pos, queue, vol, false, "off") }
+        override fun snapshot() = track?.let { Snapshot(it, false, playing && !stalled, pos, queue, vol, false, "off", wants = playing) }
         override fun play() { calls += "play"; playing = true }
         override fun pause() { calls += "pause"; playing = false }
-        override fun next() { calls += "next"; track = queue.firstOrNull(); queue = queue.drop(1) }
+        override fun next() { calls += "next"; track = queue.firstOrNull(); queue = queue.drop(1); pos = 0 }
         override fun previous() { calls += "previous" }
         override fun seekTo(ms: Long) { calls += "seek $ms"; pos = ms }
         override fun setVolume(v: Float) { calls += "volume $v"; vol = v }
@@ -103,15 +118,24 @@ class ConnectSessionTest {
         val connectMs: Long = 0,
         val g: ConnectGroup = group,
         val former: List<ConnectGroup> = emptyList(),
+        /** How far this device's clock is off the real time (and so the others'). */
+        val skew: Long = 0,
     ) {
         val view = MutableStateFlow(ConnectView(id, name))
         val notices = mutableListOf<String>()
         val movedTo = mutableListOf<String>()
         lateinit var session: ConnectSession
-        fun start(): Dev {
-            session = ConnectSession(g, id, name, "phone", player, hub.transport(id, connectMs), view, { t, n -> notices += t.replace("{0}", n) }, scope, timings, moved = { movedTo += it }, former = former)
+        val clock = { System.currentTimeMillis() + skew }
+        fun start(took: Long = 0): Dev {
+            session = ConnectSession(g, id, name, "phone", player, hub.transport(id, connectMs), view, { t, n -> notices += t.replace("{0}", n) }, scope, timings, clock, moved = { movedTo += it }, former = former, took = took)
             onLoop { session.start() }
             return this
+        }
+        /** Connect starting over here (the app's screen made again, a setting changed), the player left as it is. */
+        fun restart(): Dev {
+            val took = onLoop { session.tookAt }
+            onLoop { session.stop() }
+            return start(took)
         }
         fun others() = view.value.devices.map { it.id }.toSet()
     }
@@ -345,5 +369,207 @@ class ConnectSessionTest {
             a.session.handle(ConnectMsg.Presence("a", 99, 0, "Me", "web"))
         }
         assertEquals(listOf("New"), a.view.value.devices.map { it.name })
+    }
+
+    // ---- Handovers over relays that delay, reorder, duplicate and drop -------------------------
+
+    private val x get() = track('x')
+    private val y get() = track('y')
+
+    private fun Dev.plays(t: CTrack, pos: Long = 0, queue: List<CTrack> = emptyList()) = onLoop {
+        player.track = t; player.queue = queue; player.pos = pos; player.playing = true; session.localChanged()
+    }
+
+    private fun pair(a: Dev, b: Dev) = eventually("connected") { a.others() == setOf(b.id) && b.others() == setOf(a.id) }
+
+    @Test fun anAnswerOvertakenByALaterReportStillLands() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        pair(a, b)
+        a.plays(x, 60_000)
+        eventually("b sees a") { b.view.value.activeId == "a" }
+        // b's answer to the handover takes a slow relay; what b says after it gets there first.
+        hub.rule = { m -> if (m is ConnectMsg.Ack) listOf(150L) else listOf(0L) }
+        onLoop { a.session.transferTo("b") }
+        eventually("b plays") { b.player.playing }
+        eventually("a stops") { !a.player.playing }
+        Thread.sleep(fast.transferMs + 200)
+        assertEquals(emptyList<String>(), a.notices)
+    }
+
+    @Test fun aRepeatedOrLateHandoverIsNotAppliedAgain() {
+        val b = Dev("b", "Chrome").start()
+        val now = System.currentTimeMillis()
+        onLoop {
+            val t = ConnectMsg.Transfer("a", 10, now, to = "b", id = "t1", queue = listOf(x), pos = 1_000)
+            b.session.handle(t)
+            b.session.handle(t) // a second relay's copy
+            b.session.handle(ConnectMsg.Command("a", 12, now, to = "b", id = "c1", action = "pause"))
+            // An older handover, held up on its way, arriving after the pause that followed it.
+            b.session.handle(ConnectMsg.Transfer("a", 11, now, to = "b", id = "t0", queue = listOf(y), pos = 5_000))
+        }
+        assertEquals(1, b.player.calls.count { it.startsWith("load") })
+        assertEquals(x, b.player.track)
+        assertFalse(b.player.playing)
+    }
+
+    @Test fun aHandoverStartsWhereItWasWhateverTheClocksSay() {
+        val a = Dev("a", "Phone").start()
+        // The browser's clock runs 20 s ahead of the phone's.
+        val b = Dev("b", "Chrome", skew = 20_000).start()
+        pair(a, b)
+        a.plays(x, 60_000)
+        eventually("b sees a") { b.view.value.activeId == "a" }
+        onLoop { a.session.transferTo("b") }
+        eventually("b plays") { b.player.playing && b.player.track == x }
+        assertTrue("started at ${b.player.pos}", b.player.pos in 60_000..61_000)
+    }
+
+    @Test fun theOtherDevicesClockIsLearnedOverTheRelays() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome", skew = 20_000).start()
+        // Every message takes 100 ms to arrive.
+        hub.rule = { listOf(100L) }
+        pair(a, b)
+        eventually("b knows a's clock") { b.session.clockOffset("a") != null }
+        val offset = onLoop { b.session.clockOffset("a")!! }
+        assertTrue("offset $offset", offset in -20_100L..-19_900L)
+        a.plays(x, 60_000)
+        eventually("b sees a") { b.view.value.activeId == "a" }
+        onLoop { a.session.transferTo("b") }
+        eventually("b plays") { b.player.playing && b.player.track == x }
+        // Started on from where a was when it said so, the relay's 100 ms included.
+        assertTrue("started at ${b.player.pos}", b.player.pos in 60_030..60_300)
+    }
+
+    @Test fun pausedMusicHandedOverKeepsItsPlace() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome", skew = 5_000).start()
+        pair(a, b)
+        a.plays(x, 30_000)
+        eventually("b sees a") { b.view.value.activeId == "a" }
+        onLoop { a.player.playing = false; a.session.localChanged() }
+        Thread.sleep(50)
+        onLoop { a.session.transferTo("b") }
+        eventually("b has it") { b.player.track == x }
+        assertEquals(30_000L, b.player.pos)
+        assertFalse(b.player.playing)
+    }
+
+    @Test fun whoTookTheMusicLastIsJudgedOnEachDevicesOwnClock() {
+        // The phone's clock runs a minute ahead.
+        val a = Dev("a", "Phone", skew = 60_000).start()
+        val b = Dev("b", "Chrome").start()
+        pair(a, b)
+        a.plays(x)
+        eventually("b sees a") { b.view.value.activeId == "a" }
+        onLoop { a.player.playing = false; a.session.localChanged() }
+        Thread.sleep(50)
+        onLoop { b.session.transferTo("b") }
+        eventually("b has it") { b.player.track == x }
+        eventually("both show b") { a.view.value.activeId == "b" && b.view.value.activeId == "b" }
+    }
+
+    @Test fun aDeviceStalledToLoadIsStillTheOnePlaying() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        pair(a, b)
+        a.plays(x)
+        eventually("b sees a") { b.view.value.activeId == "a" }
+        Thread.sleep(30)
+        // b has a song of its own loaded, paused; then a stalls to load.
+        onLoop { b.player.track = y; b.session.localChanged() }
+        onLoop { a.player.stalled = true; a.session.localChanged() }
+        Thread.sleep(200)
+        assertEquals("a", onLoop { a.view.value.activeId })
+        assertEquals("a", onLoop { b.view.value.activeId })
+        assertEquals(true, onLoop { b.view.value.controlling?.state?.meant })
+        assertEquals(false, onLoop { b.view.value.controlling?.state?.playing })
+    }
+
+    @Test fun aPausedDeviceStartingConnectAgainDoesntTakeTheMusicBack() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        pair(a, b)
+        onLoop { a.player.track = x; a.session.localChanged() }
+        Thread.sleep(30)
+        b.plays(y)
+        eventually("a shows b") { a.view.value.activeId == "b" }
+        onLoop { b.player.playing = false; b.session.localChanged() }
+        Thread.sleep(50)
+        a.restart()
+        Thread.sleep(300)
+        pair(a, b)
+        assertEquals("b", onLoop { b.view.value.activeId })
+        assertEquals("b", onLoop { a.view.value.activeId })
+    }
+
+    @Test fun bothDontKeepPlayingWhenTheAnswerAndThePauseAreLost() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        pair(a, b)
+        a.plays(x)
+        eventually("b sees a") { b.view.value.activeId == "a" }
+        // Nothing b sends to a in particular gets through: only what b says it plays.
+        hub.rule = { m -> if (m.from == "b" && (m is ConnectMsg.Ack || m is ConnectMsg.Command)) emptyList() else listOf(0L) }
+        onLoop { a.session.transferTo("b") }
+        eventually("b plays") { b.player.playing }
+        eventually("a stops") { !a.player.playing }
+        eventually("both show b") { a.view.value.activeId == "b" && b.view.value.activeId == "b" }
+        // b did take it: a doesn't say it couldn't.
+        Thread.sleep(fast.transferMs + 100)
+        assertFalse(a.notices.any { it.startsWith("Can't play") })
+    }
+
+    @Test fun aDuplicatingReorderingRelayLeavesOneDevicePlaying() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        pair(a, b)
+        a.plays(x, 60_000)
+        eventually("b sees a") { b.view.value.activeId == "a" }
+        // Every message twice, the second copy late; answers, commands and handovers slower than reports.
+        hub.rule = { m -> if (m is ConnectMsg.Ack || m is ConnectMsg.Command || m is ConnectMsg.Transfer) listOf(60L, 250L) else listOf(0L, 200L) }
+        onLoop { a.session.transferTo("b") }
+        eventually("b plays, a stops") { b.player.playing && !a.player.playing }
+        Thread.sleep(600)
+        assertTrue(b.player.playing)
+        assertFalse(a.player.playing)
+        assertEquals(1, b.player.calls.count { it.startsWith("load") })
+        assertFalse("play" in a.player.calls)
+        assertEquals("b", onLoop { a.view.value.activeId })
+        assertEquals("b", onLoop { b.view.value.activeId })
+    }
+
+    @Test fun aReportFromBeforeASeekDoesNotUndoIt() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        pair(a, b)
+        a.plays(x, 10_000)
+        eventually("b controls a") { b.view.value.controlling?.id == "a" }
+        onLoop {
+            b.session.intercept("seek", pos = 42_000)
+            // a's report, sent before the seek reached it.
+            b.session.handle(ConnectMsg.State("a", Long.MAX_VALUE - 1, a.clock(), track = x, playing = true, pos = 10_000))
+        }
+        val shown = onLoop { b.view.value.controlling!!.positionAt(System.currentTimeMillis()) }
+        assertTrue("shown at $shown", shown in 42_000..43_000)
+        eventually("a seeked") { "seek 42000" in a.player.calls }
+    }
+
+    @Test fun theNextSongShowsFromItsStartAtOnce() {
+        val a = Dev("a", "Phone").start()
+        val b = Dev("b", "Chrome").start()
+        pair(a, b)
+        a.plays(x, 100_000, queue = listOf(y))
+        eventually("b controls a") { b.view.value.controlling?.state?.track == x }
+        onLoop { b.session.intercept("next") }
+        fun shown() = onLoop { b.view.value.controlling!!.let { it.state!!.track to it.positionAt(System.currentTimeMillis()) } }
+        assertEquals(y, shown().first)
+        assertTrue("at ${shown().second}", shown().second < 1_000)
+        // a's report from before the skip landed: neither the old song nor its place come back.
+        onLoop { b.session.handle(ConnectMsg.State("a", Long.MAX_VALUE - 1, a.clock(), track = x, playing = true, pos = 100_000, queue = listOf(y))) }
+        assertEquals(y, shown().first)
+        assertTrue("at ${shown().second}", shown().second < 1_000)
+        eventually("a skipped") { a.player.track == y }
     }
 }

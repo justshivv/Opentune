@@ -66,6 +66,11 @@ sealed interface ConnectMsg {
         val since: Long? = null,
         /** How it sounds there, in that device's words ("Lossless", "High Quality"). */
         val quality: String? = null,
+        /**
+         * Meant to play, stalled or not; [playing] is whether it moves. Missing
+         * from devices too old to say: they're taken at [playing].
+         */
+        val wants: Boolean? = null,
     ) : ConnectMsg
 
     /** Asks device [to] to do [action]: play, pause, next, previous, seek, volume, shuffle, repeat, playTrack or addToQueue. */
