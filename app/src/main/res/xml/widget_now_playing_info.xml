@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Widget provider metadata for NowPlayingWidget.
+
+    Default placement: 4 × 1 cells (compact bar: cover + text + controls).
+    The user can resize it vertically to 2 rows (tall layout: cover + stacked text/controls).
+    On API 31+ the Kotlin code serves size-appropriate RemoteViews automatically,
+    so both the 1-row and 2-row designs update live as the user drags the handle.
+-->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:description="@string/widget_description"
     android:initialLayout="@layout/widget_now_playing"
     android:minWidth="250dp"
-    android:minHeight="80dp"
+    android:minHeight="40dp"
     android:minResizeWidth="250dp"
-    android:minResizeHeight="80dp"
+    android:minResizeHeight="40dp"
     android:previewLayout="@layout/widget_now_playing"
-    android:resizeMode="horizontal"
+    android:resizeMode="horizontal|vertical"
     android:targetCellWidth="4"
     android:targetCellHeight="1"
     android:updatePeriodMillis="0"
