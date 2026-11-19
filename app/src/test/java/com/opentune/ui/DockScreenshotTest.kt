@@ -165,6 +165,30 @@ class DockScreenshotTest {
         save("dock-poster")
     }
 
+    /** The Poster dock's focus pill jumping from Home to Library: lift-off, flight, landing, settled. */
+    @Test fun posterPillJumps() {
+        com.opentune.data.settings.AppSettings.init(compose.activity)
+        com.opentune.data.settings.AppSettings.updateUi { it.copy(pageLayout = com.opentune.data.settings.PageLayout.POSTER, liquidGlass = false, reduceBlur = true) }
+        var selected by androidx.compose.runtime.mutableIntStateOf(0)
+        compose.setContent {
+            MaterialTheme(darkColorScheme()) { androidx.compose.material3.Surface(color = Color(0xFF34404E)) {
+                Box(Modifier.fillMaxWidth().background(Color(0xFF3A4656)).padding(vertical = 24.dp)) {
+                    BottomChrome(inline = false, tabs = tabs(), selected = selected, onSelect = {}, onExpand = {},
+                        searchSelected = false, onSearch = {}, mini = null)
+                }
+            } }
+        }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        selected = 3
+        var at = 0L
+        for (t in listOf(80L, 150L, 260L, 380L, 1500L)) {
+            compose.mainClock.advanceTimeBy(t - at)
+            at = t
+            save("dock-poster-jump-$t", idle = false)
+        }
+    }
+
     private fun save(name: String, idle: Boolean = true) {
         if (idle) compose.waitForIdle()
         val view = compose.activity.window.decorView

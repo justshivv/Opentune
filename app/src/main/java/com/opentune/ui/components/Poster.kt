@@ -60,21 +60,19 @@ internal fun PosterCaps(
 }
 
 /**
- * The Poster layout's glass, the same whatever Settings › Glass style says: a soft tint of
- * light over the page's own colour, a thin rim brighter along the top, and a gentle shadow
- * under it, so the buttons read as clear glass laid on the page.
+ * The Poster layout's glass: the app's real glass (see [glass]), so on phones with Liquid Glass
+ * the page behind is blurred, bent at the edges and lit along the top, with a clear film rather
+ * than the theme's colour, and a thin rim brighter along the top so it reads on any page.
  */
 @Composable
 internal fun Modifier.posterGlass(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val ink = MaterialTheme.colorScheme.onSurface
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val rimTop = if (dark) Color.White.copy(alpha = 0.32f) else ink.copy(alpha = 0.16f)
+    val rimTop = if (dark) Color.White.copy(alpha = 0.34f) else ink.copy(alpha = 0.16f)
     val rimFoot = if (dark) Color.White.copy(alpha = 0.06f) else ink.copy(alpha = 0.08f)
     return this
-        .shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.22f), spotColor = Color.Black.copy(alpha = 0.22f))
+        .glass(shape, tint = if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.28f), alwaysLiquid = true)
         .clip(shape)
-        .background(if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.45f))
-        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.07f else 0.2f), Color.Transparent)))
         .border(1.dp, Brush.verticalGradient(listOf(rimTop, rimFoot)), shape)
 }
 
@@ -112,16 +110,15 @@ internal val POSTER_ROUND = 52.dp
 internal val POSTER_SMOKE = Color(0xFF2A2D32)
 
 /**
- * The Poster layout's smoked glass, for the dock and the mini player: the page blurred behind,
- * a dark film over it whatever the theme, a thin light rim brighter along the top, and a soft
- * shadow. What's on it is drawn light (see [PosterInk]).
+ * The Poster layout's smoked glass, for the dock and the mini player: the same real glass as
+ * its buttons, the page behind blurred and bent at the edges, under a dark film whatever the
+ * theme, with a thin light rim. What's on it is drawn light (see [PosterInk]).
  */
 @Composable
 internal fun Modifier.posterSmoke(shape: androidx.compose.ui.graphics.Shape): Modifier = this
-    .shadow(16.dp, shape, ambientColor = Color.Black.copy(alpha = 0.35f), spotColor = Color.Black.copy(alpha = 0.35f))
-    .glass(shape, tint = POSTER_SMOKE, swell = false)
-    .background(POSTER_SMOKE.copy(alpha = 0.55f), shape)
-    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.05f))), shape)
+    .glass(shape, tint = POSTER_SMOKE.copy(alpha = 0.5f), swell = false, alwaysLiquid = true)
+    .clip(shape)
+    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.05f))), shape)
 
 /** What's drawn on [posterSmoke]: white, and a softer white for what's not picked. */
 internal object PosterInk {

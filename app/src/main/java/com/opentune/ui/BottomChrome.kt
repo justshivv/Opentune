@@ -7,6 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 import androidx.compose.ui.zIndex
@@ -252,9 +253,12 @@ fun BottomChrome(
         { awayProgress.value },
         CHROME_TAB_HEIGHT + navBottom + 32.dp,
     )
-    // The Poster layout has a chrome of its own, which stays open as pages scroll.
+    // The Poster layout has a chrome of its own. Scrolling down a page, its dock slides away
+    // and the now-playing card drops into its place, as on pages where the dock goes away.
     if (com.opentune.ui.components.posterLayout()) {
-        PosterChrome(c, modifier)
+        val fold = animateFloatAsState(if (inline) 1f else 0f,
+            if (reduceMotion) androidx.compose.animation.core.snap() else spring(dampingRatio = 0.9f, stiffness = 380f), label = "posterFold")
+        PosterChrome(c, { fold.value }, onExpand, reduceMotion, modifier)
         return
     }
     val chrome: @Composable (Boolean, () -> Float, Modifier) -> Unit = { folded, progress, m ->
@@ -310,34 +314,97 @@ private class ChromeContent(
  * its place.
  */
 @Composable
-private fun PosterChrome(c: ChromeContent, modifier: Modifier) {
+private fun PosterChrome(c: ChromeContent, fold: () -> Float, onExpand: () -> Unit, reduceMotion: Boolean, modifier: Modifier) {
     val haptics = com.opentune.ui.components.rememberHaptics()
     val pill = RoundedCornerShape(percent = 50)
+    // How far the dock has gone: slid away on destination pages, or folded by a scroll.
+    val gone = { maxOf(c.away(), fold()) }
     Box(modifier.fillMaxWidth().padding(horizontal = 12.dp)
         .height(if (c.mini != null) CHROME_MINI_HEIGHT + CARD_GAP + CHROME_TAB_HEIGHT else CHROME_TAB_HEIGHT)) {
         c.mini?.invoke(false, Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CHROME_MINI_HEIGHT)
-            .graphicsLayer { translationY = (CHROME_TAB_HEIGHT + CARD_GAP).toPx() * c.away() })
-        Row(
+            .graphicsLayer { translationY = (CHROME_TAB_HEIGHT + CARD_GAP).toPx() * gone() })
+        BoxWithConstraints(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(CHROME_TAB_HEIGHT)
-                .graphicsLayer { translationY = c.drop.toPx() * c.away() }
+                .graphicsLayer {
+                    translationY = c.drop.toPx() * gone()
+                    alpha = 1f - (fold() * 1.4f).coerceIn(0f, 1f)
+                }
                 .posterSmoke(pill)
                 .padding(DOCK_INSET),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            c.tabs.forEachIndexed { i, tab ->
-                val open = i == c.selected && !c.searchSelected
-                PosterDockItem(if (open) tab.selectedIcon else tab.icon, tab.label, open, Modifier.weight(1f)) {
-                    if (i != c.selected) haptics.tick()
-                    c.onSelect(i)
+            val count = c.tabs.size + 1
+            val slot = maxWidth / count
+            // Search is the last place; nothing open lets the lens fade where it last was.
+            val shown = when {
+                c.searchSelected -> c.tabs.size
+                c.selected != null && c.selected in c.tabs.indices -> c.selected
+                else -> null
+            }
+            var resting by remember { mutableIntStateOf(shown ?: 0) }
+            if (shown != null) resting = shown
+            PosterLens(resting, slot, visible = shown != null, still = reduceMotion)
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                c.tabs.forEachIndexed { i, tab ->
+                    val open = i == shown
+                    PosterDockItem(if (open) tab.selectedIcon else tab.icon, tab.label, open, Modifier.width(slot)) {
+                        if (i != c.selected) haptics.tick()
+                        c.onSelect(i)
+                    }
+                }
+                PosterDockItem(ImageVector.vectorResource(AppIcons.Search), "Search", c.searchSelected, Modifier.width(slot),
+                    onLongClick = { haptics.tick(); c.onSearchLongPress() }) {
+                    if (!c.searchSelected) haptics.tick()
+                    c.onSearch()
                 }
             }
-            PosterDockItem(ImageVector.vectorResource(AppIcons.Search), "Search", c.searchSelected, Modifier.weight(1f),
-                onLongClick = { haptics.tick(); c.onSearchLongPress() }) {
-                if (!c.searchSelected) haptics.tick()
-                c.onSearch()
+            // Folded away by a scroll, a tap where it was brings it back.
+            if (fold() > 0.5f) Box(Modifier.matchParentSize().clickable(onClickLabel = "Show navigation", onClick = onExpand))
+        }
+    }
+}
+
+/**
+ * The Poster dock's focus pill: a pill of lit glass behind the open place. Picking another,
+ * it jumps: lifts off and swells as it leaves, flies across, then lands on the new place with
+ * a small squash and settles. [still] (reduced motion) just slides it over.
+ */
+@Composable
+private fun PosterLens(index: Int, slot: Dp, visible: Boolean, still: Boolean) {
+    val x = remember { Animatable(index.toFloat()) }
+    // 0 resting, 1 at the top of the jump; dipping below 0 is the squash as it lands.
+    val hop = remember { Animatable(0f) }
+    LaunchedEffect(index) {
+        if (x.targetValue == index.toFloat()) return@LaunchedEffect
+        if (still) { x.animateTo(index.toFloat(), tween(220)); return@LaunchedEffect }
+        kotlinx.coroutines.coroutineScope {
+            launch { x.animateTo(index.toFloat(), spring(dampingRatio = 0.74f, stiffness = 230f)) }
+            launch {
+                hop.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
+                hop.animateTo(0f, spring(dampingRatio = 0.38f, stiffness = 260f))
             }
         }
     }
+    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(240), label = "posterLensAlpha")
+    val shape = RoundedCornerShape(percent = 50)
+    Box(
+        Modifier
+            .width(slot)
+            .fillMaxHeight()
+            .graphicsLayer {
+                this.alpha = alpha
+                val h = hop.value
+                translationX = x.value * slot.toPx()
+                // Up in the air it rises and grows; landing (h below 0) it squashes wide and low.
+                translationY = -3.dp.toPx() * h.coerceAtLeast(0f)
+                scaleX = 1f + 0.12f * h.coerceAtLeast(0f) - 0.10f * h.coerceAtMost(0f)
+                scaleY = 1f + 0.12f * h.coerceAtLeast(0f) + 0.14f * h.coerceAtMost(0f)
+                shadowElevation = 10.dp.toPx() * h.coerceAtLeast(0f)
+                this.shape = shape
+                clip = true
+            }
+            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.09f))))
+            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.40f), Color.White.copy(alpha = 0.06f))), shape),
+    )
 }
 
 /** One of the Poster dock's destinations: its icon over its name, a soft pill behind the open one. */
@@ -345,11 +412,9 @@ private fun PosterChrome(c: ChromeContent, modifier: Modifier) {
 private fun PosterDockItem(icon: ImageVector, label: String, open: Boolean, modifier: Modifier, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val ink = com.opentune.ui.components.PosterInk
     val fg by animateColorAsState(if (open) ink.on else ink.off, tween(260), label = "posterDock")
-    val glow by animateFloatAsState(if (open) 1f else 0f, tween(260), label = "posterDockPill")
     val shape = RoundedCornerShape(percent = 50)
     Column(
         modifier.fillMaxHeight().clip(shape)
-            .background(Color.White.copy(alpha = 0.13f * glow), shape)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics { role = Role.Tab; this.selected = open },
         horizontalAlignment = Alignment.CenterHorizontally,

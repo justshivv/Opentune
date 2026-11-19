@@ -135,8 +135,16 @@ fun liquidGlassOn(): Boolean {
  * Every grade keeps a hairline edge so the shape reads on any background.
  */
 @Composable
-fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surfaceContainerHigh, touchResponse: Boolean = true, swell: Boolean = true): Modifier {
+fun Modifier.glass(
+    shape: Shape,
+    tint: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    touchResponse: Boolean = true,
+    swell: Boolean = true,
+    /** Liquid Glass wherever the phone can draw it, whatever the glass style (the Poster layout's look). */
+    alwaysLiquid: Boolean = false,
+): Modifier {
     val ui by AppSettings.ui.collectAsState()
+    val liquidOn = liquidGlassOn() || (alwaysLiquid && liquidGlassSupported && !ui.reduceBlur)
     val haze = LocalHazeState.current
     val backdrop = LocalBackdrop.current
     val edge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
@@ -149,7 +157,7 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
     // Liquid Glass answers a finger: it swells a little toward it, settles back with a small
     // wobble, and a pool of light follows the touch. Left out in Lite mode and with motion reduced.
     val touch = remember { LiquidTouch() }
-    val liquid = backdrop != null && liquidGlassOn()
+    val liquid = backdrop != null && liquidOn
     val live = liquid && !lite && !ui.reduceAnimation && touchResponse
     val press by animateFloatAsState(
         if (live && touch.down) 1f else 0f,
@@ -157,13 +165,13 @@ fun Modifier.glass(shape: Shape, tint: Color = MaterialTheme.colorScheme.surface
         label = "liquidPress",
     )
     val body = if (live) this.liquidTouch(touch, swell) { press } else this
-    if (backdrop != null && liquidGlassOn()) {
+    if (backdrop != null && liquidOn) {
         androidx.compose.runtime.DisposableEffect(Unit) {
             GlassPerformance.glassShowing++
             onDispose { GlassPerformance.glassShowing-- }
         }
     }
-    if (backdrop != null && liquidGlassOn() && ui.glassStyle == GlassStyle.LIQUID) {
+    if (backdrop != null && liquidOn && (ui.glassStyle == GlassStyle.LIQUID || alwaysLiquid)) {
         // Apple's material: what's behind is softly frosted, so colours read
         // as glowing fields rather than detail; a deep lens at the edges that
         // bends it and splits the light into a colour fringe; vibrancy so the
