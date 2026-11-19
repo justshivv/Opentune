@@ -19,9 +19,9 @@
   <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+">
   <img src="https://img.shields.io/badge/Kotlin-Compose-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin and Jetpack Compose">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0"></a>
-  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Dinstallations%26label%3Dinstalls&cacheSeconds=86400" alt="Installations reported"></a>
-  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Ddaily%26label%3Dlistening%2520today&cacheSeconds=86400" alt="Installations active today"></a>
-  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Flabel%3Dactive%2520this%2520month&cacheSeconds=86400" alt="Active installations this month"></a>
+  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Dinstallations%26label%3Dinstalls&cacheSeconds=3600" alt="Installations reported"></a>
+  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Fmetric%3Dyesterday%26label%3Dlistening%2520yesterday&cacheSeconds=3600" alt="Installations active yesterday"></a>
+  <a href="https://justshivv.github.io/Opentune/usage/"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fopentune-usage.create-a-new-site-with-sites.workers.dev%2Fv1%2Fbadge%3Flabel%3Dactive%2520this%2520month&cacheSeconds=3600" alt="Active installations this month"></a>
 </p>
 
 <p align="center">
@@ -714,9 +714,9 @@ No hardware identifiers, accounts, song names or listening history are sent. Tur
 under Settings > About > Count this phone in usage numbers. Debug builds never count.
 
 The badge above and `GET /v1/public` expose only aggregate counts (total installations
-and daily, weekly and monthly active installations) with no sign-in; `GET /v1/badge`
+and active installations today, yesterday, this week and this month) with no sign-in; `GET /v1/badge`
 returns the same as a [Shields endpoint](https://shields.io/badges/endpoint-badge), so
-the README counts refresh themselves once a day. The full breakdown — versions, plays, downloads and
+the README counts refresh themselves once a day, after 06:00 India time. The full breakdown — versions, plays, downloads and
 per-day active numbers — stays behind the owner login on the usage dashboard. These are
 measured anonymous reports, not fraud-proof head counts, and there is no "active right
 now": the finest granularity is a calendar day.

@@ -179,18 +179,20 @@ export async function analytics(db, range, now = new Date(), timeZone = 'UTC') {
 // month are the installations listed under them (kept by triggers as reports arrive).
 export async function publicCounts(db, now = new Date(), timeZone = 'Asia/Kolkata') {
   reportZone(timeZone);
-  const day = calendarDay(now, timeZone);
+  const day = calendarDay(now, timeZone), yesterday = calendarDay(new Date(now.getTime() - DAY), timeZone);
   const week = new Date(day + 'T00:00:00Z');
   week.setUTCDate(week.getUTCDate() - ((week.getUTCDay() + 6) % 7));
+  const activeOn = 'SELECT COUNT(*) AS n FROM (SELECT installation FROM activity WHERE day=? UNION SELECT installation FROM activity_ist WHERE day=?)';
   const results = await db.batch([
     db.prepare('SELECT installations AS n FROM totals WHERE id=1').bind(),
-    db.prepare('SELECT COUNT(*) AS n FROM (SELECT installation FROM activity WHERE day=? UNION SELECT installation FROM activity_ist WHERE day=?)').bind(day, day),
+    db.prepare(activeOn).bind(day, day),
+    db.prepare(activeOn).bind(yesterday, yesterday),
     db.prepare('SELECT COUNT(*) AS n FROM active_weeks WHERE week=?').bind(week.toISOString().slice(0, 10)),
     db.prepare('SELECT COUNT(*) AS n FROM active_months WHERE month=?').bind(day.slice(0, 7)),
   ]);
   return { asOf: now.toISOString(), timeZone,
-    installations: results[0].results[0].n, daily: results[1].results[0].n,
-    weekly: results[2].results[0].n, monthly: results[3].results[0].n };
+    installations: results[0].results[0].n, daily: results[1].results[0].n, yesterday: results[2].results[0].n,
+    weekly: results[3].results[0].n, monthly: results[4].results[0].n };
 }
 
 // 1234 -> "1.2k", 1200000 -> "1.2M": short enough for a badge.
@@ -206,10 +208,12 @@ export function badge(counts, params = new URLSearchParams()) {
   const metric = params.get('metric');
   const value = metric === 'installations' ? counts.installations
     : metric === 'daily' ? counts.daily
+    // The whole of yesterday: a day's count is complete once it's over.
+    : metric === 'yesterday' ? counts.yesterday
     : metric === 'weekly' ? counts.weekly
     : counts.monthly;
   const label = params.get('label') || (metric === 'installations' ? 'installs' : 'active');
-  return { schemaVersion: 1, label, message: shortCount(value), color: '1db954', cacheSeconds: 86400 };
+  return { schemaVersion: 1, label, message: shortCount(value), color: '1db954', cacheSeconds: 3600 };
 }
 
 // Kept in this isolate's memory (one copy per Cloudflare location, gone when it
@@ -229,14 +233,19 @@ export function forget(db, key) { remembered.get(db)?.delete(key); }
 
 // The memory above is per instance, and Cloudflare starts new ones all the time, so on
 // its own it let nearly every badge request count again. This copy lives in D1 and is
-// shared by every instance: a request reads one row, and once a day ([SNAPSHOT_MS]) one
-// instance claims the refresh and counts again while the rest serve the copy.
-export const SNAPSHOT_MS = 24 * 60 * 60_000;
+// shared by every instance: a request reads one row, and once a day one instance claims the
+// refresh and counts again while the rest serve the copy. The day turns at 06:00 in [zone],
+// not midnight, so the apps have sent in the evening's listening before yesterday is counted.
+export const REFRESH_AFTER_MS = 6 * 60 * 60_000;
+export const countDay = (at, zone) => calendarDay(new Date(at - REFRESH_AFTER_MS), zone);
+// How long an instance keeps the copy in memory before reading the row again (one row).
+export const PUBLIC_MEMORY_MS = 60 * 60_000;
 const changed = result => (result?.meta?.changes ?? result?.changes ?? 0) > 0;
 export async function sharedCounts(db, zone, now = Date.now()) {
   const [{results: [row]}] = await db.batch([db.prepare('SELECT payload, computed_at FROM public_snapshot WHERE zone=?').bind(zone)]);
   const saved = row?.payload ? JSON.parse(row.payload) : null;
-  if (saved && now - row.computed_at < SNAPSHOT_MS) return saved;
+  // A copy saved before yesterday's count existed is counted again.
+  if (saved && 'yesterday' in saved && countDay(row.computed_at, zone) === countDay(now, zone)) return saved;
   const claim = row
     ? await db.prepare('UPDATE public_snapshot SET computed_at=? WHERE zone=? AND computed_at=?').bind(now, zone, row.computed_at).run()
     : await db.prepare("INSERT OR IGNORE INTO public_snapshot(zone,payload,computed_at) VALUES(?,'',?)").bind(zone, now).run();
@@ -316,10 +325,10 @@ export default {
       }
       if (request.method==='GET' && path==='/v1/public') {
         let zone;try { zone=reportZone(url.searchParams.get('timeZone') || 'Asia/Kolkata'); } catch(e) {return json({error:e.message},400);}
-        return json(await rememberFor(env.DB, 'public:'+zone, SNAPSHOT_MS, () => sharedCounts(env.DB,zone)));
+        return json(await rememberFor(env.DB, 'public:'+zone, PUBLIC_MEMORY_MS, () => sharedCounts(env.DB,zone)));
       }
       if (request.method==='GET' && path==='/v1/badge') {
-        return json(badge(await rememberFor(env.DB, 'public:Asia/Kolkata', SNAPSHOT_MS, () => sharedCounts(env.DB,'Asia/Kolkata')),url.searchParams));
+        return json(badge(await rememberFor(env.DB, 'public:Asia/Kolkata', PUBLIC_MEMORY_MS, () => sharedCounts(env.DB,'Asia/Kolkata')),url.searchParams));
       }
       if (request.method!=='POST' || !['/v1/activity','/v1/download'].includes(path)) return json({error:'Not found'},404);
       if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'JSON required'},415);

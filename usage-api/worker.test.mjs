@@ -257,7 +257,7 @@ test('public counts are aggregate only and match the dashboard figures',async()=
   assert.equal(counts.daily,2);
   assert.equal(counts.monthly,2);
   // No per-installation or version detail leaks out.
-  assert.deepEqual(Object.keys(counts).sort(),['asOf','daily','installations','monthly','timeZone','weekly']);
+  assert.deepEqual(Object.keys(counts).sort(),['asOf','daily','installations','monthly','timeZone','weekly','yesterday']);
 });
 
 test('public counts include current apps (India time) and older ones (UTC), each installation once',async()=>{
@@ -380,7 +380,7 @@ test('the period splits its active installations into new and returning, each co
   assert.equal(result.split.newPlays + result.split.returningPlays, result.totals.plays);
 });
 
-const { sharedCounts, SNAPSHOT_MS } = await import('./worker.mjs');
+const { sharedCounts, countDay } = await import('./worker.mjs');
 test('summary tables built from existing history match a full count, and running the schema again changes nothing', async () => {
   const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
   const before = schema.slice(0, schema.indexOf('-- Summaries kept'));
@@ -414,17 +414,24 @@ test('reports keep the summary tables in step with the activity they record', as
   assert.deepEqual([counts.installations, counts.daily, counts.weekly, counts.monthly], [2, 1, 2, 2]);
 });
 
-test('the shared public copy is counted once a day, whichever instance asks', async () => {
+test('the shared public copy is counted once a day, after 06:00 India time', async () => {
   const db = database();
-  const day = '2026-10-09', at = Date.parse('2026-10-09T12:00:00Z');
-  const report = n => ingest(db, {installationId:id.replace(/1$/, String(n)), days:[{day,version:'1.0.1',plays:1,timeZone:'Asia/Kolkata'}]}, now);
-  await report(1);
-  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at)).installations, 1);
-  await report(2);
-  assert.equal(SNAPSHOT_MS, 24 * 60 * 60_000);
-  // Within the day every instance gets the saved copy without counting again.
-  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at + SNAPSHOT_MS - 1)).installations, 1);
-  // After it, the copy is counted again and saved for the others.
-  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at + SNAPSHOT_MS)).installations, 2);
-  assert.equal((await sharedCounts(db, 'Asia/Kolkata', at + SNAPSHOT_MS + 1)).installations, 2);
+  const report = (n, day) => ingest(db, {installationId:id.replace(/1$/, String(n)), days:[{day,version:'1.0.1',plays:1,timeZone:'Asia/Kolkata'}]}, new Date('2026-10-10T12:00:00Z'));
+  await report(1, '2026-10-09');
+  const morning = Date.parse('2026-10-10T01:00:00Z');                         // 06:30 IST on the 10th
+  assert.equal((await sharedCounts(db, 'Asia/Kolkata', morning)).yesterday, 1);
+  await report(2, '2026-10-09');                                              // a late report for the 9th
+  // The rest of the day every instance gets the saved copy without counting again.
+  assert.equal((await sharedCounts(db, 'Asia/Kolkata', Date.parse('2026-10-10T23:59:00Z'))).yesterday, 1);
+  // Before 06:00 IST on the 11th it's still the 10th's copy.
+  assert.equal((await sharedCounts(db, 'Asia/Kolkata', Date.parse('2026-10-11T00:20:00Z'))).yesterday, 1);
+  // After it, counted again: the 10th, which nobody listened on.
+  const next = await sharedCounts(db, 'Asia/Kolkata', Date.parse('2026-10-11T00:31:00Z'));
+  assert.equal(next.yesterday, 0); assert.equal(next.installations, 2);
+  assert.equal(countDay(Date.parse('2026-10-11T00:29:00Z'), 'Asia/Kolkata'), '2026-10-10');
+});
+
+test('the yesterday badge shows the whole of the day before', async () => {
+  const shield = badge({yesterday: 1234, daily: 5}, new URLSearchParams('metric=yesterday&label=listening%20yesterday'));
+  assert.equal(shield.message, '1.2k'); assert.equal(shield.label, 'listening yesterday'); assert.equal(shield.cacheSeconds, 3600);
 });

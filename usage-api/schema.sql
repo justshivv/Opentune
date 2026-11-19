@@ -80,9 +80,11 @@ CREATE TABLE IF NOT EXISTS totals (
   installations INTEGER NOT NULL,
   plays INTEGER NOT NULL
 );
--- First created with the plays already recorded; after that the triggers keep it.
-INSERT OR IGNORE INTO totals(id, installations, plays) VALUES (1, 0,
-  (SELECT COALESCE(SUM(plays), 0) FROM activity) + (SELECT COALESCE(SUM(plays), 0) FROM activity_ist));
+-- First created with the plays already recorded; after that the triggers keep it. The sums
+-- are only worked out while there's no row: this file runs on every deploy.
+INSERT INTO totals(id, installations, plays)
+  SELECT 1, 0, (SELECT COALESCE(SUM(plays), 0) FROM activity) + (SELECT COALESCE(SUM(plays), 0) FROM activity_ist)
+  WHERE NOT EXISTS (SELECT 1 FROM totals);
 
 -- Who was active in each calendar week (by its Monday) and month, across both tables.
 CREATE TABLE IF NOT EXISTS active_weeks (week TEXT NOT NULL, installation TEXT NOT NULL, PRIMARY KEY (week, installation));
@@ -136,16 +138,25 @@ BEGIN
   UPDATE totals SET plays = plays + new.plays - old.plays WHERE id = 1;
 END;
 
--- Backfill from what was recorded before these tables existed. INSERT OR IGNORE
--- leaves rows already there alone, so running this again changes nothing; the
--- count_installation trigger counts each installation as it's added.
+-- Backfill from what was recorded before these tables existed, once. This file runs on every
+-- deploy, and each of these reads every activity row; the marker in backfills makes the later
+-- runs read nothing (the empty "go" row comes first, so the scans never start). INSERT OR
+-- IGNORE leaves rows already there alone; count_installation counts each installation added.
+CREATE TABLE IF NOT EXISTS backfills (name TEXT PRIMARY KEY);
 INSERT OR IGNORE INTO installations(installation, first_day)
-  SELECT installation, MIN(day) FROM (SELECT installation, day FROM activity UNION ALL SELECT installation, day FROM activity_ist) GROUP BY installation;
+  SELECT installation, MIN(day) FROM (SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM backfills WHERE name = 'summaries')) AS go
+  CROSS JOIN (SELECT installation, day FROM activity UNION ALL SELECT installation, day FROM activity_ist) GROUP BY installation;
 INSERT OR IGNORE INTO active_weeks(week, installation)
-  SELECT date(day, '-6 days', 'weekday 1'), installation FROM activity UNION SELECT date(day, '-6 days', 'weekday 1'), installation FROM activity_ist;
+  SELECT week, installation FROM (SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM backfills WHERE name = 'summaries')) AS go
+  CROSS JOIN (SELECT date(day, '-6 days', 'weekday 1') AS week, installation FROM activity
+    UNION SELECT date(day, '-6 days', 'weekday 1'), installation FROM activity_ist);
 INSERT OR IGNORE INTO active_months(month, installation)
-  SELECT substr(day, 1, 7), installation FROM activity UNION SELECT substr(day, 1, 7), installation FROM activity_ist;
+  SELECT month, installation FROM (SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM backfills WHERE name = 'summaries')) AS go
+  CROSS JOIN (SELECT substr(day, 1, 7) AS month, installation FROM activity UNION SELECT substr(day, 1, 7), installation FROM activity_ist);
 INSERT OR IGNORE INTO version_installs(version, installation)
-  SELECT version, installation FROM activity UNION SELECT version, installation FROM activity_ist;
+  SELECT version, installation FROM (SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM backfills WHERE name = 'summaries')) AS go
+  CROSS JOIN (SELECT version, installation FROM activity UNION SELECT version, installation FROM activity_ist);
 INSERT OR IGNORE INTO versions_seen(version, last_day)
-  SELECT version, MAX(day) FROM (SELECT version, day FROM activity UNION ALL SELECT version, day FROM activity_ist) GROUP BY version;
+  SELECT version, MAX(day) FROM (SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM backfills WHERE name = 'summaries')) AS go
+  CROSS JOIN (SELECT version, day FROM activity UNION ALL SELECT version, day FROM activity_ist) GROUP BY version;
+INSERT OR IGNORE INTO backfills(name) VALUES ('summaries');
