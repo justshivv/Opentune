@@ -1010,8 +1010,8 @@ private fun settingsSections(
                         icon = ImageVector.vectorResource(AppIcons.Speaker),
                     )
                 } else null,
-                Entry("Preload upcoming songs", "latency fast skip instant buffer") {
-                    ToggleRow("Preload upcoming songs", pb.preloadUpcoming, { v -> AppSettings.updatePlayback { it.copy(preloadUpcoming = v) } }, summary = "Next and previous songs start almost instantly. Uses a little extra data.", icon = ImageVector.vectorResource(AppIcons.Speed))
+                Entry("Preload upcoming songs", "latency fast skip instant buffer lossless flac data") {
+                    ToggleRow("Preload upcoming songs", pb.preloadUpcoming, { v -> AppSettings.updatePlayback { it.copy(preloadUpcoming = v) } }, summary = "The next two songs are readied in their best quality, lossless included, so they start at once. Off saves data.", icon = ImageVector.vectorResource(AppIcons.Speed))
                 },
                 if (pb.preloadUpcoming) Entry("Boost preloading on Wi-Fi", "preload wifi unmetered buffer performance speed") {
                     ToggleRow(

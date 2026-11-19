@@ -151,9 +151,9 @@ class StartupSelectionTest {
      * record: its lossless file is fetched only once it plays. The song playing now still does.
      */
     @Test fun aSongOpenedAheadOfTimeWaitsForItsFlacUntilItPlays() = runBlocking {
-        val ahead = StartupSelection(song, original, { true }, findJioSaavn = { _, _ -> null }, playingNow = { false }) { flac }
+        val ahead = StartupSelection(song, original, { true }, findJioSaavn = { _, _ -> null }, losslessNow = { false }) { flac }
         assertEquals(original, ahead.resolve(spec).uri)
-        val playing = StartupSelection(song, original, { true }, findJioSaavn = { _, _ -> null }, playingNow = { true }) { flac }
+        val playing = StartupSelection(song, original, { true }, findJioSaavn = { _, _ -> null }, losslessNow = { true }) { flac }
         assertEquals("flac", externalStreamKeyOf(playing.resolve(spec).uri))
     }
 
@@ -162,10 +162,10 @@ class StartupSelectionTest {
         val saavn = ExternalStreams.Rendition("saavn", "https://cdn.example/aac", "JioSaavn 320", false, 0, picked = true)
         val pickedFlac = flac.copy(picked = true)
         val ahead = StartupSelection(song, original, { false }, { true }, picked = { pickedFlac }, saavnWanted = { false },
-            findJioSaavn = { _, _ -> null }, playingNow = { false }) { null }
+            findJioSaavn = { _, _ -> null }, losslessNow = { false }) { null }
         assertEquals(original, ahead.resolve(spec).uri)
         val lossy = StartupSelection(song, original, { false }, { true }, picked = { saavn }, saavnWanted = { false },
-            findJioSaavn = { _, _ -> null }, playingNow = { false }) { null }
+            findJioSaavn = { _, _ -> null }, losslessNow = { false }) { null }
         assertEquals("saavn", externalStreamKeyOf(lossy.resolve(spec).uri))
     }
 }
