@@ -58,6 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
@@ -234,7 +235,8 @@ internal fun ShuffleButton(onShuffle: () -> Unit, onSmartShuffle: (() -> Unit)?,
         onClick = onShuffle,
     )
     if (compact) {
-        Box(modifier.size(44.dp).glass(androidx.compose.foundation.shape.CircleShape).then(press), contentAlignment = Alignment.Center) {
+        val poster = posterLayout()
+        Box(modifier.size(44.dp).then(if (poster) Modifier.posterGlass(androidx.compose.foundation.shape.CircleShape) else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).then(press), contentAlignment = Alignment.Center) {
             Icon(ImageVector.vectorResource(AppIcons.Shuffle), "Shuffle", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
         }
     } else {
@@ -598,13 +600,32 @@ internal fun PosterCaps(
     )
 }
 
+/**
+ * The Poster layout's glass, the same whatever Settings › Glass style says: a soft tint of
+ * light over the page's own colour, a thin rim brighter along the top, and a gentle shadow
+ * under it, so the buttons read as clear glass laid on the page.
+ */
+@Composable
+internal fun Modifier.posterGlass(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val ink = MaterialTheme.colorScheme.onSurface
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val rimTop = if (dark) Color.White.copy(alpha = 0.32f) else ink.copy(alpha = 0.16f)
+    val rimFoot = if (dark) Color.White.copy(alpha = 0.06f) else ink.copy(alpha = 0.08f)
+    return this
+        .shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.22f), spotColor = Color.Black.copy(alpha = 0.22f))
+        .clip(shape)
+        .background(if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.45f))
+        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.07f else 0.2f), Color.Transparent)))
+        .border(1.dp, Brush.verticalGradient(listOf(rimTop, rimFoot)), shape)
+}
+
 /** The Poster layout's Play: a wide glass pill with the word in it. */
 @Composable
 internal fun PosterPill(label: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
     Row(
         modifier.height(56.dp).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
-            .glass(shape).clip(shape).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .posterGlass(shape).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .padding(horizontal = 26.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -620,7 +641,7 @@ internal fun PosterPill(label: String, icon: ImageVector, enabled: Boolean, onCl
 internal fun PosterRound(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
         Modifier.size(POSTER_ROUND).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
-            .glass(androidx.compose.foundation.shape.CircleShape).clip(androidx.compose.foundation.shape.CircleShape)
+            .posterGlass(androidx.compose.foundation.shape.CircleShape)
             .clickable(enabled = enabled, onClickLabel = label, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, label, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface) }

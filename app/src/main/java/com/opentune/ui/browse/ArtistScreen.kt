@@ -486,9 +486,10 @@ private fun FollowButton(browseId: String, page: ArtistPage?, modifier: Modifier
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { }
     val label = if (following) "Following. Tap to stop new release alerts" else "Follow for new releases"
+    val poster = posterLayout()
     Box(
         modifier
-            .glass(CircleShape)
+            .then(if (poster) Modifier.posterGlass(CircleShape) else Modifier.glass(CircleShape))
             .clip(CircleShape)
             .clickable(enabled = page != null, onClickLabel = label) {
                 if (page == null) return@clickable
