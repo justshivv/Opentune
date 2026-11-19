@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./bridge": "./src/bridge/index.ts",
-    "./addons": "./src/addons/protocol.ts"
+    "./addons": "./src/addons/protocol.ts",
+    "./share": "./src/share/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

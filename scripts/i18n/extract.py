@@ -24,7 +24,7 @@ SKIPLINE = re.compile(r'\b(Log\.[dwiev]|AppLog\.|DebugLog\.|TrackLog\.|println|R
 # Parts of the code that never put words on the screen.
 SKIPDIRS = tuple('core/src/main/java/com/opentune/' + d for d in (
     'data/innertube/potoken/', 'cast/Dlna.kt', 'cast/CastServer.kt', 'data/innertube/PlayerClient.kt', 'data/spotify/PlaylistCsv.kt',
-    'data/Usage.kt', 'data/AppLog.kt', 'data/together/Schnorr.kt', 'i18n/', 'data/Http.kt',
+    'data/Usage.kt', 'data/AppLog.kt', 'data/together/Schnorr.kt', 'i18n/', 'data/Http.kt', 'data/account/WebShare.kt',
 ))
 
 def shown(t):
