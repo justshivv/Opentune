@@ -500,8 +500,12 @@ class ConnectSessionTest {
         a.restart()
         Thread.sleep(300)
         pair(a, b)
+        // Seeing b again comes before hearing what b plays: wait for that, then it has to stay with b.
+        eventually("a hears b's state again") { a.view.value.activeId == "b" }
+        Thread.sleep(300)
         assertEquals("b", onLoop { b.view.value.activeId })
         assertEquals("b", onLoop { a.view.value.activeId })
+        assertFalse(onLoop { a.player.playing })
     }
 
     @Test fun bothDontKeepPlayingWhenTheAnswerAndThePauseAreLost() {
