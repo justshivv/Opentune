@@ -3,6 +3,7 @@ package com.opentune.ui
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -104,5 +105,26 @@ class ChoiceTransitionTest {
         compose.waitForIdle()
         assertEquals("Off", picked.value)
         assertFalse(open.value)
+    }
+
+    /** Settings › Choice menus, chosen from its own menu: the menu closes as any other does, rather than turning into the other kind and staying open. */
+    @Test fun choosingTheMenuStyleItselfCloses() {
+        AppSettings.init(compose.activity)
+        AppSettings.updateUi { it.copy(choiceMenus = ChoiceMenuStyle.SCREEN, reduceAnimation = true) }
+        val open = mutableStateOf(true)
+        compose.setContent {
+            MaterialTheme {
+                val ui = AppSettings.ui.collectAsState().value
+                if (open.value) ChoiceSheet("Choice menus", ChoiceMenuStyle.entries, ui.choiceMenus, { it.label },
+                    { m -> AppSettings.updateUi { it.copy(choiceMenus = m) } }, { open.value = false })
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText(ChoiceMenuStyle.POPUP.label).performClick()
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        assertEquals(ChoiceMenuStyle.POPUP, AppSettings.ui.value.choiceMenus)
+        assertFalse(open.value)
+        AppSettings.updateUi { it.copy(choiceMenus = ChoiceMenuStyle.SCREEN) }
     }
 }

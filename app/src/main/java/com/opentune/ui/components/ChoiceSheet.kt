@@ -108,7 +108,10 @@ fun <T> ChoiceSheet(
     footer: (@Composable () -> Unit)? = null,
 ) {
     val ui by AppSettings.ui.collectAsState()
-    if (ui.choiceMenus == ChoiceMenuStyle.SCREEN) {
+    // As it was when this one opened: choosing in Settings › Choice menus itself swapped this
+    // menu for the other kind mid-choice, a fresh one that stayed open on what was just picked.
+    val style = remember { ui.choiceMenus }
+    if (style == ChoiceMenuStyle.SCREEN) {
         ChoiceScreen(title, options, selected, label, onSelect, onDismiss, enabled, keepOpen, footer)
         return
     }
