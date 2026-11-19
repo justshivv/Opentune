@@ -379,7 +379,7 @@ class PlaybackService : MediaLibraryService() {
 
         val player = ExoPlayer.Builder(context, renderers)
             .setMediaSourceFactory(qualitySources)
-            .setLoadControl(loadControl)
+            .setLoadControl(LossyHoldBack(loadControl, LOSSY_AHEAD_MS * 1_000L) { lossyHeldBack?.isActive == true })
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -1483,6 +1483,8 @@ class PlaybackService : MediaLibraryService() {
     // ---- Quality upgrade -----------------------------------------------------------
 
     private var upgradeJob: Job? = null
+    /** The FLAC search the player's buffering waits on (see [LossyHoldBack]); read on the playback thread. */
+    @Volatile private var lossyHeldBack: Job? = null
 
     /** The song being swapped onto its better stream; its transition isn't a new listen. */
     private var swappingTo: String? = null
@@ -1553,6 +1555,8 @@ class PlaybackService : MediaLibraryService() {
                 announce()
             }
             if (alreadyExternal() && !force) return@launch
+            // While a FLAC may replace it, the stream playing now is fetched only a minute ahead.
+            if (ExternalStreams.allowed(true)) lossyHeldBack = coroutineContext[Job]
             val duration = player.duration.takeIf { it > 0 } ?: item.toSong().durationMillis()
             // The FLAC search (every add-on at once) and JioSaavn go out together, and
             // whichever answers first is acted on. JioSaavn usually does and is played
@@ -3052,6 +3056,8 @@ class PlaybackService : MediaLibraryService() {
         const val STALL_MIN_POSITION_MS = 3_000L
         const val FAR_BUFFER_MS = 15 * 60 * 1000
         const val FAR_BUFFER_BYTES = 48 * 1024 * 1024
+        /** How far ahead a stream that a FLAC may replace is fetched; past the 30 s the player wants at least. */
+        const val LOSSY_AHEAD_MS = 60_000L
         const val BACK_BUFFER_MS = 30_000
         const val MIN_LOUDNESS_GAIN_MB = -1500
         const val MAX_LOUDNESS_GAIN_MB = 900
