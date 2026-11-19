@@ -346,13 +346,16 @@ fun DesktopApp(startPanel: SidePanel? = null, startAccountMenu: Boolean = false,
                     onAccounts = { ChromeSettingsJump.accounts.value = true; go(Page(Tab.SETTINGS)) },
                 )
 
-                // The full player rises over everything.
+                // The full player rises over everything (see PlayerOverlay).
                 val full = rememberLast(song)
-                AnimatedVisibility(
-                    visible = playerOpen && song != null,
-                    enter = PageMotion.playerIn(ui.playerMotion, ui.reduceAnimation),
-                    exit = PageMotion.playerOut(ui.playerMotion, ui.reduceAnimation),
-                ) { full?.let { NowPlaying(it, docked = false, onClose = { playerOpen = false }) } }
+                PlayerOverlay(open = playerOpen && song != null, cover = song?.thumbnailUrl, onClose = { playerOpen = false }) {
+                    full?.let {
+                        NowPlaying(
+                            it, docked = false, onClose = { playerOpen = false },
+                            onOpenTogether = { playerOpen = false; go(Page(Tab.TOGETHER)) },
+                        )
+                    }
+                }
 
                 NoticePill(Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp))
                 if (helpOpen) ShortcutsDialog { helpOpen = false }
