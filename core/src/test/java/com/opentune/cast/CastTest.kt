@@ -109,6 +109,44 @@ class CastTest {
         }
     }
 
+    /**
+     * Casting ended: a device still fetching a song (one the phone can no
+     * longer tell to stop) loses its stream, rather than playing on alongside
+     * the phone.
+     */
+    @Test fun stoppingEndsStreamsInFlight() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        CastServer.start(context)
+        val size = 64 * 1024 * 1024
+        val file = File.createTempFile("long", ".m4a").apply { deleteOnExit() }
+        java.io.RandomAccessFile(file, "rw").use { it.setLength(size.toLong()) }
+        try {
+            val url = java.net.URL(CastServer.publish(CastServer.Source.OnPhone(file, "audio/mp4"), InetAddress.getLoopbackAddress()))
+            val socket = java.net.Socket(url.host, url.port)
+            socket.use { s ->
+                s.soTimeout = 10_000
+                s.getOutputStream().write("GET ${url.path} HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
+                val input = s.getInputStream()
+                val buffer = ByteArray(64 * 1024)
+                var read = input.read(buffer).toLong()
+                assertTrue(read > 0)
+                CastServer.stop()
+                val got = runCatching {
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        read += n
+                    }
+                }
+                assertTrue("the stream went on after casting stopped: $read bytes", read < size)
+                assertTrue(got.isSuccess || got.exceptionOrNull() is java.net.SocketException)
+            }
+        } finally {
+            CastServer.stop()
+            file.delete()
+        }
+    }
+
     /** A pretend renderer: answers SOAP calls and records which ones came. */
     @Test fun drivesARenderer() {
         val calls = Collections.synchronizedList(mutableListOf<String>())

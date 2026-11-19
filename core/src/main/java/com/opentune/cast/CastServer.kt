@@ -45,6 +45,8 @@ object CastServer {
     private var server: ServerSocket? = null
     private val pool = Executors.newCachedThreadPool()
     private val sources = ConcurrentHashMap<String, Source>()
+    /** Requests being answered, so stopping can end them too. */
+    private val clients = ConcurrentHashMap.newKeySet<Socket>()
     private lateinit var app: Context
 
     /** Starts listening if it isn't; returns the port. */
@@ -57,7 +59,14 @@ object CastServer {
         pool.execute {
             while (!s.isClosed) {
                 val client = runCatching { s.accept() }.getOrNull() ?: break
-                pool.execute { runCatching { serve(client) }.onFailure { Log.d(TAG, "request ended: ${it.message}") } }
+                clients += client
+                pool.execute {
+                    try {
+                        runCatching { serve(client) }.onFailure { Log.d(TAG, "request ended: ${it.message}") }
+                    } finally {
+                        clients -= client
+                    }
+                }
             }
         }
         return s.localPort
@@ -68,6 +77,10 @@ object CastServer {
         runCatching { server?.close() }
         server = null
         sources.clear()
+        // A device still fetching a song loses it: one the phone can't reach any more
+        // would otherwise play on from here, alongside the phone, with nothing to stop it.
+        clients.toList().forEach { runCatching { it.close() } }
+        clients.clear()
     }
 
     /** Puts [source] up and returns its address as seen from [host] (the phone's address on the device's network). */
