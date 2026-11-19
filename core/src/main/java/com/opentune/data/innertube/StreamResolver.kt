@@ -351,7 +351,38 @@ object StreamResolver {
         // would have every one of them killed and conclude nothing is usable.
         return withContext(Dispatchers.IO) {
             playerStream(videoId, select = { response -> rankVideoFormats(response).filter { !it.muxed } })?.url
+                ?: innerTubeXVideo(videoId)
         }
+    }
+
+    /**
+     * The video side of the InnerTubeX engine. The clients that keep audio
+     * playing under a bot flag carry PoTokens, and their extraction includes
+     * the music video; the plain client walk has neither advantage, so when
+     * it comes back empty — refused, bot-checked, ciphered — this is asked
+     * before giving up. Probed and excluded exactly like its audio streams.
+     */
+    private suspend fun innerTubeXVideo(videoId: String): String? {
+        val skip = mutableSetOf<String>()
+        repeat(INNERTUBEX_ATTEMPTS) {
+            val found = try {
+                withTimeoutOrNull(INNERTUBEX_TIMEOUT_MS) { InnerTubeXResolver.extractVideo(videoId, skip) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Errors as well as exceptions: third-party code, and a
+                // linkage error here must not take the track down with it.
+                TrackLog.w(TAG, "InnerTubeX video failed for $videoId: ${e.javaClass.simpleName}: ${e.message}")
+                return null
+            } ?: return null
+            if (probe(found.url, expectVideo = true) == Probe.OK) {
+                TrackLog.d(TAG, "InnerTubeX served video for $videoId via ${found.clientName} at ${found.kbps} kbps")
+                return found.url
+            }
+            InnerTubeXResolver.exclude(videoId, found.profileId)
+            skip += found.profileId
+        }
+        return null
     }
 
     // ---- Quality upgrade ------------------------------------------------------
@@ -1272,6 +1303,9 @@ object StreamResolver {
             only
         })
         if (stream != null) return true
+        // The walk can be bot-flagged into silence while the PoToken engine
+        // still knows the track's video; ask it before concluding none.
+        if (innerTubeXVideo(videoId) != null) return true
         if (answered && !offered) noVideo += videoId
         return false
     }
