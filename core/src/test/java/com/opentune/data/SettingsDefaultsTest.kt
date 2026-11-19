@@ -99,4 +99,14 @@ class SettingsDefaultsTest {
         val settings = json.decodeFromString<SettingsState>("""{"playback":{"losslessUnmeteredOnly":false}}""")
         assertTrue(settings.playback.losslessWifiOnly)
     }
+
+    @Test fun pageButtonsDefaultToGlassAndAccentSurvivesBackup() {
+        assertEquals(com.opentune.data.settings.PageButtons.GLASS, json.decodeFromString<SettingsState>("{}").ui.pageButtons)
+        // Settings saved before the choice existed, or by a newer version with a look this one lacks, read back as glass.
+        assertEquals(com.opentune.data.settings.PageButtons.GLASS, json.decodeFromString<SettingsState>("""{"ui":{"listBackground":"PLAIN"}}""").ui.pageButtons)
+        assertEquals(com.opentune.data.settings.PageButtons.GLASS, json.decodeFromString<SettingsState>("""{"ui":{"pageButtons":"CHROME"}}""").ui.pageButtons)
+        val accent = json.decodeFromString<SettingsState>("""{"ui":{"pageButtons":"ACCENT"}}""")
+        assertEquals(com.opentune.data.settings.PageButtons.ACCENT, accent.ui.pageButtons)
+        assertEquals(com.opentune.data.settings.PageButtons.ACCENT, json.decodeFromString<SettingsState>(json.encodeToString(accent)).ui.pageButtons)
+    }
 }

@@ -58,7 +58,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -92,11 +91,12 @@ class PageWash(val tint: Color, val base: Color, val glow: Color)
 val LocalPageWash = staticCompositionLocalOf<PageWash?> { null }
 
 /**
- * The layer Liquid Glass refracts. Only floating chrome drawn outside that
- * layer gets one (the nav pill, mini player, player buttons): glass inside
- * the layer it samples would sample itself.
+ * The layer Liquid Glass refracts. Only glass drawn outside that layer gets
+ * one (the nav pill, mini player, player buttons, and a page header's buttons,
+ * which refract the page's background and picture recorded on their own; see
+ * PageButtons.kt): glass inside the layer it samples would sample itself.
  */
-val LocalBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
+val LocalBackdrop = staticCompositionLocalOf<com.kyant.backdrop.Backdrop?> { null }
 
 /** How much Liquid Glass frosts what's behind it; Apple's bars sit around here. */
 private val LIQUID_BLUR = 22.dp

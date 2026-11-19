@@ -69,32 +69,33 @@ internal fun Modifier.posterGlass(shape: androidx.compose.ui.graphics.Shape): Mo
     return this.webLiquidGlass(shape, if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.3f)).clip(shape)
 }
 
-/** The Poster layout's Play: a wide glass pill with the word in it. */
+/** The Poster layout's Play: a wide glass pill with the word in it (or an accent one, as Settings › Page buttons asks). */
 @Composable
 internal fun PosterPill(label: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+    val ink = pageButtonInk()
     Row(
         modifier.height(56.dp).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
-            .posterGlass(shape).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .pageButtonFace(shape, poster = true).clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .padding(horizontal = 26.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
+        Icon(icon, null, Modifier.size(24.dp), tint = ink)
         Spacer(Modifier.width(10.dp))
-        Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = ink, maxLines = 1)
     }
 }
 
-/** The Poster layout's round glass button, for shuffle, save and the like. */
+/** The Poster layout's round glass button, for shuffle, save and the like (or an accent one, as Settings › Page buttons asks). */
 @Composable
 internal fun PosterRound(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
         Modifier.size(POSTER_ROUND).graphicsLayer { alpha = if (enabled) 1f else 0.4f }
-            .posterGlass(androidx.compose.foundation.shape.CircleShape)
+            .pageButtonFace(androidx.compose.foundation.shape.CircleShape, poster = true)
             .clickable(enabled = enabled, onClickLabel = label, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Icon(icon, label, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface) }
+    ) { Icon(icon, label, Modifier.size(22.dp), tint = pageButtonInk()) }
 }
 
 internal val POSTER_ROUND = 52.dp

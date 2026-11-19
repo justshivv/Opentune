@@ -37,7 +37,15 @@ import androidx.compose.material3.MaterialTheme
 import com.opentune.ui.theme.Text
 import com.opentune.ui.components.posterLayout
 import com.opentune.ui.components.PosterCaps
-import com.opentune.ui.components.posterGlass
+import com.opentune.ui.components.HeaderButtonsScope
+import com.opentune.ui.components.PageAccent
+import com.opentune.ui.components.PageBackdropScope
+import com.opentune.ui.components.pageButtonFace
+import com.opentune.ui.components.pageButtonInk
+import com.opentune.ui.components.recordHeaderPicture
+import com.opentune.ui.components.recordPageBackdrop
+import com.opentune.ui.components.rememberHeaderBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opentune.ui.components.PosterPill
 import com.opentune.ui.components.POSTER_ROUND
 import androidx.compose.material3.TextButton
@@ -208,12 +216,17 @@ internal fun ArtistPageView(
                     }
                 },
             ) {
+              // The page's background is recorded for the glass buttons in its header.
+              PageBackdropScope {
                 val band = com.opentune.ui.components.rememberRubberBand()
+                // Light lays a soft wash of the photo's colour over the page's deep shade; Dark leaves the deep shade alone.
+                // Drawn on its own behind the list (it stays put as the list scrolls, as it did
+                // painted under the list), so the glass buttons in the header can bend it.
+                val washed = appearance.artistPageTint && appearance.artistShade == com.opentune.data.settings.ArtistShade.LIGHT
+                if (washed) Box(Modifier.fillMaxSize().recordPageBackdrop().coverWash(rememberCoverTint(photo), photo))
+                else com.opentune.ui.components.PlainPageBackdrop()
                 LazyColumn(state = listState, contentPadding = contentPadding,
-                    // Light lays a soft wash of the photo's colour over the page's deep shade; Dark leaves the deep shade alone.
-                    modifier = Modifier.fillMaxSize().then(
-                        if (appearance.artistPageTint && appearance.artistShade == com.opentune.data.settings.ArtistShade.LIGHT) Modifier.coverWash(rememberCoverTint(photo), photo) else Modifier,
-                    ),
+                    modifier = Modifier.fillMaxSize(),
                     overscrollEffect = band) {
                     item(key = "hero", contentType = "hero") { ArtistHero(browseId, page, photo, listState, actions, band) }
                     if (page == null) {
@@ -251,6 +264,7 @@ internal fun ArtistPageView(
                     }
                     item(key = "end") { Spacer(Modifier.height(16.dp)) }
                 }
+              }
             }
         }
     }
@@ -330,6 +344,13 @@ internal fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, lis
         if (!still && listState.firstVisibleItemIndex == 0) translationY = listState.firstVisibleItemScrollOffset * PARALLAX
     }
     val poster = posterLayout()
+    // The photo is recorded on its own, as it is drawn (drifting, stretched by a pull, fading
+    // into the page), and the name and buttons are drawn beside that box, not inside it, so
+    // the buttons' glass bends the photo and the page's wash under it (see PageButtons.kt).
+    val picture = rememberLayerBackdrop()
+    val behind = rememberHeaderBackdrop(picture)
+    // The photo's accent, as the page's own (see ArtistTint), for Settings › Page buttons › Accent colour.
+    val accent = PageAccent(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
     Box(Modifier.fillMaxWidth()) {
         // The height of a full-screen playlist cover, so the photo takes
         // the same share of the screen as the covers on the other pages;
@@ -337,6 +358,7 @@ internal fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, lis
         val photoHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * if (poster) POSTER_HERO_FRACTION else ARTIST_HERO_FRACTION).dp
         Box(
             Modifier
+                .recordHeaderPicture(picture, behind)
                 // Pulled down at the top, the photo stays at the top of the screen and grows to
                 // fill the room; the name and buttons move down over more of it.
                 .pinnedToTop(band)
@@ -388,7 +410,7 @@ internal fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, lis
         if (poster) {
             // The name large at the left over the photo's foot, "ARTIST · 3 RELEASES" under it,
             // then Play and Shuffle as two wide glass pills.
-            Column(
+            HeaderButtonsScope(behind, accent) { Column(
                 Modifier.fillMaxWidth().padding(top = (photoHeight - POSTER_NAME_OVERLAP).coerceAtLeast(0.dp)).padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.Start,
             ) {
@@ -401,10 +423,10 @@ internal fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, lis
                     textAlign = androidx.compose.ui.text.style.TextAlign.Start,
                 )
                 PosterArtistButtons(browseId, page, actions, Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 12.dp))
-            }
+            } }
             return@Box
         }
-        Column(
+        HeaderButtonsScope(behind, accent) { Column(
             Modifier.fillMaxWidth().padding(top = (photoHeight - NAME_OVERLAP).coerceAtLeast(0.dp)),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -414,7 +436,7 @@ internal fun ArtistHero(browseId: String, page: ArtistPage?, photo: String?, lis
                 ArtistNameOrSignature(page.name.orEmpty())
             }
             HeroButtons(browseId, page, actions, Modifier.padding(top = 18.dp, bottom = 12.dp))
-        }
+        } }
     }
 }
 
@@ -491,11 +513,12 @@ private fun FollowButton(browseId: String, page: ArtistPage?, modifier: Modifier
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { }
     val label = if (following) "Following. Tap to stop new release alerts" else "Follow for new releases"
-    val poster = posterLayout()
+    // Filled with the accent (Settings › Page buttons), the star is the fill's ink either way: filled says following.
+    val accentFace = com.opentune.ui.components.LocalPageAccent.current != null
+    val ink = pageButtonInk()
     Box(
         modifier
-            .then(if (poster) Modifier.posterGlass(CircleShape) else Modifier.glass(CircleShape))
-            .clip(CircleShape)
+            .pageButtonFace(CircleShape)
             .clickable(enabled = page != null, onClickLabel = label) {
                 if (page == null) return@clickable
                 // Signed in, this subscribes or unsubscribes on YouTube Music too (ArtistSync).
@@ -516,7 +539,7 @@ private fun FollowButton(browseId: String, page: ArtistPage?, modifier: Modifier
             if (following) ImageVector.vectorResource(AppIcons.Star) else ImageVector.vectorResource(AppIcons.StarBorder),
             label,
             Modifier.size(24.dp),
-            tint = if (following) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            tint = if (following && !accentFace) MaterialTheme.colorScheme.primary else ink,
         )
     }
 }

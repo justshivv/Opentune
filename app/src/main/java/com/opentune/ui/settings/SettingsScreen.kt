@@ -484,6 +484,7 @@ private fun settingsSections(
     var choiceMenusDialog by remember { mutableStateOf(false) }
     var artistShadeDialog by remember { mutableStateOf(false) }
     var listBackgroundDialog by remember { mutableStateOf(false) }
+    var pageButtonsDialog by remember { mutableStateOf(false) }
     var pageTransitionDialog by remember { mutableStateOf(false) }
     var playerMotionDialog by remember { mutableStateOf(false) }
     var coverChangeDialog by remember { mutableStateOf(false) }
@@ -695,6 +696,16 @@ private fun settingsSections(
             label = { "${com.opentune.i18n.Tr.t(it.label)} · ${com.opentune.i18n.Tr.t(it.summary)}" },
             onSelect = { m -> AppSettings.updateUi { it.copy(listBackground = m) } },
             onDismiss = { listBackgroundDialog = false },
+        )
+    }
+    if (pageButtonsDialog) {
+        ChoiceSheet(
+            title = "Page buttons",
+            options = com.opentune.data.settings.PageButtons.entries,
+            selected = ui.pageButtons,
+            label = { "${com.opentune.i18n.Tr.t(it.label)} · ${com.opentune.i18n.Tr.t(it.summary)}" },
+            onSelect = { b -> AppSettings.updateUi { it.copy(pageButtons = b) } },
+            onDismiss = { pageButtonsDialog = false },
         )
     }
     if (choiceMenusDialog) {
@@ -1280,6 +1291,9 @@ private fun settingsSections(
                 },
                 Entry("Page layout", "layout poster classic album playlist artist page design look header") {
                     NavRow("Page layout", { pageLayoutDialog = true }, summary = ui.pageLayout.summary, icon = ImageVector.vectorResource(AppIcons.GridView), value = ui.pageLayout.label)
+                },
+                Entry("Page buttons", "play shuffle save follow header buttons glass liquid frosted accent colour color solid fill album playlist liked artist page") {
+                    NavRow("Page buttons", { pageButtonsDialog = true }, summary = ui.pageButtons.summary, icon = ImageVector.vectorResource(AppIcons.AutoAwesome), value = ui.pageButtons.label)
                 },
                 Entry("Full-screen playlist covers", "playlist album cover art edge full screen header") {
                     ToggleRow("Full-screen playlist covers", ui.fullScreenListCover, { v -> AppSettings.updateUi { it.copy(fullScreenListCover = v) } }, summary = "Playlists and albums open with their cover across the top of the page, edge to edge", icon = ImageVector.vectorResource(AppIcons.Fullscreen))

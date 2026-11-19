@@ -1570,7 +1570,8 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
     com.opentune.ui.browse.ListPageTint(coverUrl = likedCoverUrl, seed = LIKED_SEED) {
         // The page's menu is composed inside the tint, so its sheet wears the page's colours.
         if (moreOpen) LikedMoreSheet(songs, actions) { moreOpen = false }
-        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
+        // The page's wash is recorded for the glass buttons in its header.
+        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) { com.opentune.ui.components.PageBackdropScope {
             com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
                 com.opentune.ui.browse.PlaylistSearchHeader(search) {
                     val returning = com.opentune.ui.browse.rememberSearchReturn(search, listState) { i, o -> i > 0 || o > heroHeightPx - barHeightPx }
@@ -1661,7 +1662,7 @@ fun LikedScreen(contentPadding: PaddingValues, actions: SongActions, onBack: () 
                     }
                 }
             }
-        }
+        } }
     }
 }
 
@@ -2031,7 +2032,8 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
             },
             onAddSongs = { adding = true }, onRename = { renaming = true }, onDelete = { deleting = true },
             onShare = share, onPrivacy = if (online) ({ choosingPrivacy = true }) else null, onDismiss = { moreOpen = false })
-        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
+        // The page's wash is recorded for the glass buttons in its header.
+        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) { com.opentune.ui.components.PageBackdropScope {
             com.opentune.ui.components.GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
                 com.opentune.ui.browse.PlaylistSearchHeader(search) {
                     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -2138,7 +2140,7 @@ fun LocalPlaylistScreen(id: String, contentPadding: PaddingValues, actions: Song
                     }
                 }
             }
-        }
+        } }
     }
 }
 

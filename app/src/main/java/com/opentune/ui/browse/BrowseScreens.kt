@@ -84,7 +84,13 @@ import com.opentune.ui.components.GlassBackButton
 import com.opentune.ui.components.glass
 import com.opentune.ui.components.posterLayout
 import com.opentune.ui.components.PosterCaps
-import com.opentune.ui.components.posterGlass
+import com.opentune.ui.components.HeaderButtonsScope
+import com.opentune.ui.components.pageButtonFace
+import com.opentune.ui.components.pageButtonInk
+import com.opentune.ui.components.recordHeaderPicture
+import com.opentune.ui.components.recordPageBackdrop
+import com.opentune.ui.components.rememberHeaderBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.opentune.ui.components.PosterPill
 import com.opentune.ui.components.PosterRound
 import com.opentune.ui.components.POSTER_ROUND
@@ -241,9 +247,9 @@ internal fun ShuffleButton(onShuffle: () -> Unit, onSmartShuffle: (() -> Unit)?,
         onClick = onShuffle,
     )
     if (compact) {
-        val poster = posterLayout()
-        Box(modifier.size(44.dp).then(if (poster) Modifier.posterGlass(androidx.compose.foundation.shape.CircleShape) else Modifier.glass(androidx.compose.foundation.shape.CircleShape)).then(press), contentAlignment = Alignment.Center) {
-            Icon(ImageVector.vectorResource(AppIcons.Shuffle), "Shuffle", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+        // Glass, or in a page's header the page's accent when Settings › Page buttons asks for it.
+        Box(modifier.size(44.dp).pageButtonFace(androidx.compose.foundation.shape.CircleShape).then(press), contentAlignment = Alignment.Center) {
+            Icon(ImageVector.vectorResource(AppIcons.Shuffle), "Shuffle", Modifier.size(20.dp), tint = pageButtonInk())
         }
     } else {
         // Drawn like a FilledTonalButton, which has no long press of its own.
@@ -409,6 +415,29 @@ private val LocalListBase = androidx.compose.runtime.compositionLocalOf<Color?> 
 private val LocalListCover = androidx.compose.runtime.compositionLocalOf<String?> { null }
 /** Which look a tinted page has behind its songs. */
 private val LocalListLook = androidx.compose.runtime.compositionLocalOf { com.opentune.data.settings.ListBackground.PLAIN }
+/** The page's accent for its header buttons, while Settings › Page buttons asks for it; see [rememberListAccent]. */
+private val LocalListAccent = androidx.compose.runtime.compositionLocalOf<com.opentune.ui.components.PageAccent?> { null }
+
+/**
+ * The colour a list page's header buttons are filled with when Settings › Page buttons says
+ * Accent colour: the cover's own colour at a tone that reads on the page (the one its tint is
+ * mixed from, see [rememberCoverTint]), or [seed]'s for a drawn cover, or the theme's accent
+ * when there's neither; with black or white on it, whichever reads. Null with glass buttons.
+ */
+@Composable
+private fun rememberListAccent(coverUrl: String?, seed: Color?): com.opentune.ui.components.PageAccent? {
+    val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
+    if (ui.pageButtons != com.opentune.data.settings.PageButtons.ACCENT) return null
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val fromCover = com.opentune.ui.theme.rememberArtworkSeed(coverUrl?.takeIf { it.isNotBlank() })
+    val target = (fromCover ?: seed)?.let { coverTone(it, dark) } ?: MaterialTheme.colorScheme.primary
+    val fill by androidx.compose.animation.animateColorAsState(
+        target,
+        animationSpec = if (ui.reduceAnimation) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(550),
+        label = "pageAccent",
+    )
+    return com.opentune.ui.components.PageAccent(fill, com.opentune.ui.components.inkOn(fill))
+}
 
 /**
  * A playlist, album or Liked page with the background Settings ask for (Playlist page
@@ -421,8 +450,9 @@ private val LocalListLook = androidx.compose.runtime.compositionLocalOf { com.op
 internal fun ListPageTint(coverUrl: String?, seed: Color? = null, content: @Composable () -> Unit) {
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
     val base = MaterialTheme.colorScheme
+    val accent = rememberListAccent(coverUrl, seed)
     if (ui.listBackground == com.opentune.data.settings.ListBackground.PLAIN) {
-        content()
+        androidx.compose.runtime.CompositionLocalProvider(LocalListAccent provides accent, content = content)
         return
     }
     val dark = base.background.luminance() < 0.5f
@@ -453,6 +483,7 @@ internal fun ListPageTint(coverUrl: String?, seed: Color? = null, content: @Comp
         val glow = rememberPageGlow(tint, coverUrl)
         androidx.compose.runtime.CompositionLocalProvider(
             LocalListBase provides base.background, LocalListCover provides coverUrl, LocalListLook provides ui.listBackground,
+            LocalListAccent provides accent,
             com.opentune.ui.components.LocalPageWash provides com.opentune.ui.components.PageWash(tint, tint, glow),
             content = content,
         )
@@ -466,21 +497,30 @@ internal fun ListPageTint(coverUrl: String?, seed: Color? = null, content: @Comp
  */
 @Composable
 internal fun ListPageWash() {
-    val base = LocalListBase.current ?: return
+    // Recorded, while the page asks (PageBackdropScope), for the glass buttons in its header:
+    // the wash lies behind the list, so they can bend it. A plain page records its plain colour.
+    val base = LocalListBase.current
+    if (base == null) {
+        com.opentune.ui.components.PlainPageBackdrop()
+        return
+    }
     val cover = LocalListCover.current
     val tint = MaterialTheme.colorScheme.background
     val ui by com.opentune.data.settings.AppSettings.ui.collectAsState()
     if (LocalListLook.current == com.opentune.data.settings.ListBackground.AMBIENT) {
         // The artist page's look: the cover's colours washed down the page, its second colour
         // glowing in from the side, all fading back to the plain background at the very bottom.
-        Box(Modifier.fillMaxSize().coverWash(tint, cover)) {
+        Box(Modifier.fillMaxSize().recordPageBackdrop().coverWash(tint, cover)) {
             Box(Modifier.matchParentSize().drawBehind {
                 drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.72f to Color.Transparent, 1f to base))
             })
         }
         return
     }
-    Box(Modifier.fillMaxSize()) {
+    // The page's colour is under this wash already; while it is recorded it is painted here
+    // too, so the recording is the whole background rather than a blur over nothing.
+    val recorded = com.opentune.ui.components.LocalPageBackdrop.current != null
+    Box(Modifier.fillMaxSize().recordPageBackdrop().then(if (recorded) Modifier.background(tint) else Modifier)) {
         if (!cover.isNullOrBlank() && !ui.reduceBlur && !ui.liteMode) {
             com.opentune.ui.library.CoverWash(cover.artworkAt(com.opentune.data.model.CARD_ART_PX) ?: cover, tint, Modifier.fillMaxWidth().height(380.dp))
         }
@@ -595,6 +635,8 @@ internal fun ListHero(
     listState: androidx.compose.foundation.lazy.LazyListState? = null,
     info: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
+    // The colour the buttons take when Settings › Page buttons asks for the accent.
+    val accent = LocalListAccent.current
     if (fullListCover()) {
         val heroHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * COLLECTION_HERO_FRACTION).dp
         // The cover drifts down at a fraction of the scroll, so the list rises
@@ -605,9 +647,14 @@ internal fun ListHero(
                 translationY = listState.firstVisibleItemScrollOffset * LIST_PARALLAX
             }
         }
+        // The cover is recorded on its own, as it is drawn (drifting, stretched by a pull, melting
+        // away), and the buttons over it are drawn beside that box rather than inside it, so
+        // their glass bends the cover and the page's wash under it (see PageButtons.kt).
+        val picture = rememberLayerBackdrop()
+        val behind = rememberHeaderBackdrop(picture)
         Box(Modifier.fillMaxWidth().height(heroHeight)) {
             // The cover melts into the page behind it, with no edge where it ends.
-            Box(Modifier.fillMaxSize().pinnedToTop(band).meltIntoPage()) {
+            Box(Modifier.fillMaxSize().recordHeaderPicture(picture, behind).pinnedToTop(band).meltIntoPage()) {
                 cover(Modifier.fillMaxSize().graphicsLayer(drift))
                 // A shade at the very top, so the back button reads on any cover.
                 Box(
@@ -615,11 +662,13 @@ internal fun ListHero(
                         .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent))),
                 )
             }
-            Column(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = footPadding),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                content = info,
-            )
+            HeaderButtonsScope(behind, accent) {
+                Column(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = footPadding),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    content = info,
+                )
+            }
         }
     } else {
         Column(
@@ -634,7 +683,8 @@ internal fun ListHero(
                     .clip(frame),
             ) { cover(Modifier.fillMaxSize()) }
             Spacer(Modifier.height(22.dp))
-            info()
+            // Under the framed cover the buttons sit on the page's own background, so that is all their glass bends.
+            HeaderButtonsScope(rememberHeaderBackdrop(null), accent) { info() }
         }
     }
 }
@@ -749,10 +799,10 @@ internal fun ListPlayRow(
             Text(com.opentune.ui.theme.tr("Play"), style = MaterialTheme.typography.titleMedium)
         }
         if (onSave != null) Box(
-            Modifier.size(56.dp).glass(androidx.compose.foundation.shape.CircleShape).clip(androidx.compose.foundation.shape.CircleShape).clickable(enabled = enabled, onClick = onSave),
+            Modifier.size(56.dp).pageButtonFace(androidx.compose.foundation.shape.CircleShape, poster = false).clickable(enabled = enabled, onClick = onSave),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(if (saved) ImageVector.vectorResource(AppIcons.Check) else ImageVector.vectorResource(AppIcons.Add), actionLabel ?: if (saved) "Remove from library" else "Save to library", tint = colors.onSurface)
+            Icon(if (saved) ImageVector.vectorResource(AppIcons.Check) else ImageVector.vectorResource(AppIcons.Add), actionLabel ?: if (saved) "Remove from library" else "Save to library", tint = pageButtonInk())
         }
     }
 }
@@ -1049,7 +1099,8 @@ fun CollectionScreen(
     ) {
         // The page's menu is composed inside the tint, so its sheet wears the page's colours.
         if (moreOpen && loaded != null) ListMoreSheet(loaded, isAlbum, actions, onRefresh = { loader.reload() }, onDismiss = { moreOpen = false })
-        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) {
+        // The page's wash is recorded for the glass buttons in its header.
+        androidx.compose.runtime.CompositionLocalProvider(com.opentune.ui.components.LocalSongSelection provides selection) { com.opentune.ui.components.PageBackdropScope {
             GlassPage(Modifier.fillMaxSize().dismissPlaylistSearch(search), overlay = {
                 PlaylistSearchHeader(search) {
                     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -1219,6 +1270,6 @@ fun CollectionScreen(
                     }
                 }
             }
-        }
+        } }
     }
 }

@@ -497,6 +497,8 @@ data class InterfaceSettings(
     val artistShade: ArtistShade = ArtistShade.LIGHT,
     /** What is behind a playlist, album or Liked page: the cover's colour and blur, or the theme's plain background. */
     val listBackground: ListBackground = ListBackground.AMBIENT,
+    /** What the Play, Shuffle and Save buttons in a playlist, album, Liked or artist page's header are made of. */
+    val pageButtons: PageButtons = PageButtons.GLASS,
     val statsForNerds: Boolean = false,
     val recentsAsGrid: Boolean = false,
     /** Speed dial at the top of Home: the most-played songs, albums and artists. */
@@ -691,6 +693,13 @@ enum class ListBackground(val label: String, val summary: String) {
     AMBIENT("Ambient colours", "The cover's colours wash down the page and fade out at the very bottom, like the artist page"),
     COVER("Cover blur", "The cover's colour fades down the page, over a soft blur of the cover"),
     PLAIN("Plain", "The app's own light or dark background"),
+}
+
+/** What the buttons in a playlist, album, Liked or artist page's header (Play, Shuffle, Save, Follow) are made of. */
+@Serializable
+enum class PageButtons(val label: String, val summary: String) {
+    GLASS("Glass", "Liquid Glass that bends and blurs the cover or photo behind it, or frosted glass where Liquid Glass isn't available"),
+    ACCENT("Accent colour", "A solid fill in the colour of the page's cover or artist photo, with no blur"),
 }
 
 /** How a choice in Settings (quality, glass style, and so on) is picked from a list. */
