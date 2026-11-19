@@ -129,6 +129,9 @@
 .ot-circle-button { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 50%; background: var(--systemQuinary); transition: background-color .15s, scale .16s var(--ot-ease-settle); }
 .ot-circle-button:hover:not(:disabled) { background: var(--systemQuaternary); }
 .ot-circle-button:active:not(:disabled) { scale: .94; }
+/* The featured shelf's close button, sized to its title row. */
+.ot-circle-button.ot-shelf-close { width: 32px; height: 32px; color: var(--systemSecondary); }
+.ot-circle-button.ot-shelf-close:hover { color: var(--systemPrimary); }
 .ot-circle-button:disabled { opacity: .5; }
 .ot-quick-title { display: flex; align-items: center; justify-content: space-between; margin: 0 var(--body-gutter); }
 .ot-quick-title h2 { font: var(--title-2-emphasized); }
@@ -138,7 +141,10 @@
 .ot-home-links a { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: var(--systemQuinary); border-radius: 24px; font-weight: 600; transition: background-color .15s; }
 .ot-home-links a:hover { background: var(--systemQuaternary); }
 /* An announcement the owner publishes (Remote config › banners), above the feed. */
-.ot-banner { margin: 0 var(--body-gutter) 24px; padding: 18px 20px; border-radius: 18px; background: color-mix(in srgb, var(--keyColor) 12%, var(--systemQuinary)); }
+.ot-banner { position: relative; margin: 0 var(--body-gutter) 24px; padding: 18px 52px 18px 20px; border-radius: 18px; background: color-mix(in srgb, var(--keyColor) 12%, var(--systemQuinary)); }
+.ot-banner .ot-banner-close { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 99px; color: var(--systemSecondary); }
+.ot-banner .ot-banner-close:hover { background: color-mix(in srgb, var(--systemPrimary) 10%, transparent); color: var(--systemPrimary); }
+.ot-banner .ot-banner-close:focus-visible { outline: 2px solid var(--keyColor); outline-offset: 2px; }
 .ot-banner h2 { margin: 0 0 4px; font: var(--title-3-emphasized); }
 .ot-banner p { margin: 0; max-width: 64ch; color: var(--systemSecondary); font: var(--body-tall); }
 .ot-banner > div { margin-top: 12px; }
@@ -314,7 +320,7 @@
    names fade and the rows that only the open sidebar has fold away. Phones keep the full drawer.
    Labels stay in the page for screen readers; the tooltips name each icon for everyone else. */
 @media (min-width: 484px) {
-  .ot-side { overflow: hidden; }
+  .ot-side { overflow: hidden; transition: width .38s var(--ot-ease-settle); }
   .ot-side-top, .ot-side-scroll, .ot-side-bottom { transition: padding .38s var(--ot-ease-settle); }
   .ot-side-wordmark, .ot-side-android { min-width: 0; flex-shrink: 1; overflow: hidden; white-space: nowrap; }
   .ot-side-wordmark, .ot-side-android, .ot-side-label { transition: opacity .22s ease .14s, visibility 0s linear 0s; }
@@ -344,6 +350,12 @@
   .ot-side[data-folded='true'] .ot-side-header { height: 1px; margin: 12px 4px; padding: 0; color: transparent; background: var(--labelDivider); transition: height .38s var(--ot-ease-settle), margin .38s var(--ot-ease-settle), padding .38s var(--ot-ease-settle), color .1s ease, background-color .2s ease .15s; }
   .ot-side[data-folded='true'] :is(.ot-side-extra, .ot-side-full) { max-height: 0; opacity: 0; transition: max-height .38s var(--ot-ease-settle), opacity .12s ease; }
   .ot-side[data-folded='true'] .ot-side-compact { max-height: 48px; opacity: 1; }
+  /* Folded, the extension icon, the account photo and Settings share one centre line down the rail:
+     the Android link next to Settings takes no room, so Settings no longer sits off to the right. */
+  .ot-side-android { max-width: 240px; transition: opacity .22s ease .14s, visibility 0s linear 0s, max-width .38s var(--ot-ease-settle); }
+  .ot-side[data-folded='true'] .ot-side-android { max-width: 0; padding: 0; }
+  .ot-side[data-folded='true'] .ot-side-foot { justify-content: center; }
+  .ot-side[data-folded='true'] .ot-side-compact { align-items: center; }
   .ot-side[data-folded='true'] .ot-side-badge { position: absolute; top: 5px; right: 9px; width: 8px; height: 8px; padding: 0; border-radius: 50%; font-size: 0; }
 }
 :root[data-motion='false'] { transition: none !important; }
@@ -365,6 +377,31 @@
 .ot-wash[data-loaded] { opacity: .75; }
 :root[data-appearance='light'] .ot-wash[data-loaded] { opacity: .5; }
 .ot-wash img { position: absolute; left: -20%; top: -50%; width: 140%; max-width: none; height: 200%; object-fit: cover; filter: blur(72px) saturate(1.8); }
+/* The page's own colour laid over the wash, so a pale patch of the cover (a white corner, a mint
+   gradient) can't turn into a bright cloud behind the title. The labels are chosen against that
+   colour, so they stay readable on it. A dark tint also dims the wash a little, and a soft shadow
+   keeps light text off any patch that is still bright. */
+.ot-wash::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--page-tint, var(--pageBG)) 42%, transparent); }
+[data-tint='dark'] .ot-wash img, :root[data-appearance='dark'] #scrollable-page:not([data-tint]) .ot-wash img { filter: blur(72px) saturate(1.6) brightness(.78); }
+[data-tint='dark'] .ot-detail-text { text-shadow: 0 1px 18px rgb(0 0 0 / .3); }
+
+/* Album and playlist pages: Back at the top left, and a frosted strip with the cover, title and
+   Play once the title has scrolled under it (DetailHeader's DetailBar). */
+.ot-detail-bar { position: sticky; top: 0; z-index: calc(var(--z-default) + 5); display: flex; align-items: center; gap: 12px; height: 56px; margin-bottom: -56px; padding-inline: var(--body-gutter); }
+.ot-detail-bar::before { content: ''; position: absolute; inset: 0; z-index: -1; opacity: 0; background: color-mix(in srgb, var(--page-tint, var(--pageBG)) 80%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); box-shadow: inset 0 -.5px 0 var(--labelDivider); transition: opacity .25s ease; }
+.ot-detail-bar[data-stuck]::before { opacity: 1; }
+.ot-detail-back { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 999px; color: var(--systemPrimary); background: var(--systemQuinary); border: .75px solid var(--systemQuaternary); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); transition: background-color .2s ease, scale .2s var(--ot-ease-emph); }
+.ot-detail-back:hover { background: var(--systemQuaternary); }
+/* Over an artist's photograph, before the strip comes in: the dark glass of the hero's own buttons. */
+.ot-detail-bar[data-over-photo]:not([data-stuck]) .ot-detail-back { color: #fff; background: #0000004d; border-color: transparent; }
+.ot-detail-bar[data-over-photo]:not([data-stuck]) .ot-detail-back:hover { background: #00000066; }
+.ot-detail-back:active { scale: .92; }
+.ot-detail-bar-title { display: flex; min-width: 0; flex: 1; align-items: center; gap: 10px; }
+.ot-detail-bar-play { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px; color: var(--button-pill-color, var(--systemPrimary)); background: var(--button-pill-background-color, var(--keyColor)); }
+.ot-detail-bar-title, .ot-detail-bar-play { opacity: 0; translate: 0 8px; pointer-events: none; transition: opacity .22s ease, translate .4s var(--ot-ease-emph); }
+.ot-detail-bar[data-stuck] .ot-detail-bar-title, .ot-detail-bar[data-stuck] .ot-detail-bar-play { opacity: 1; translate: 0 0; pointer-events: auto; }
+.ot-detail-bar[data-stuck] .ot-detail-bar-play:disabled { opacity: .4; pointer-events: none; }
+#scrollable-page[data-own-bar] ~ .ot-scroll-edge { display: none; }
 
 /* Cards: the cover lifts and zooms a little in its frame, a shade rises from the bottom and the play
    disc comes up with it. Translate, scale and opacity only, so a full shelf stays on the compositor. */
@@ -405,6 +442,7 @@
 
 @media (prefers-reduced-transparency: reduce) {
   .ot-wash, .ot-scroll-edge { display: none; }
+  .ot-detail-bar::before { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--page-tint, var(--pageBG)); }
   .ot-arrow { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--opaqueShelfBG); }
 }
 

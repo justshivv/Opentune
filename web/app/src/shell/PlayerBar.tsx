@@ -109,6 +109,7 @@ export function PlayerBar() {
     // The side panel overlays the page; the pill re-centres in what's left. It slides there
     // (translate, on the compositor) rather than the row's padding growing under it.
     <div
+      data-shift="bar"
       className="group/bar pointer-events-none absolute right-0 bottom-(--player-bottom-offset) left-(--web-navigation-width) z-[calc(var(--z-web-chrome)-1)] flex justify-center px-5 max-sm:hidden"
       data-panel-open={sidePanel !== null}
     >

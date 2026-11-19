@@ -9,7 +9,7 @@ const SIGN_IN_URL = 'https://accounts.google.com/ServiceLogin?service=youtube&co
 const pill =
   'self-start rounded-[16px] bg-key-bg px-3.5 py-[5px] type-[600_13px/18px] text-white hover:brightness-[1.08] disabled:opacity-60';
 // The folded sidebar's version: the same action as a round icon, its words in the tooltip.
-const roundPill = 'grid size-9 place-items-center self-center rounded-full bg-key-bg text-white hover:brightness-[1.08] disabled:opacity-60';
+const roundPill = 'grid size-8 place-items-center self-center rounded-full bg-key-bg text-white hover:brightness-[1.08] disabled:opacity-60';
 const avatar = 'inline-grid flex-none place-items-center rounded-full bg-quinary object-cover type-[600_11px/1] text-secondary';
 
 function Avatar({ src, name, size }: { src: string | null; name: string; size: number }) {
@@ -80,7 +80,7 @@ export function AccountButton({ compact = false }: { compact?: boolean }) {
         // Signed in: a 24px avatar and the name, opening the account menu.
         className={
           compact
-            ? 'grid size-10 place-items-center self-center rounded-nav hover:bg-quinary aria-expanded:bg-quinary'
+            ? 'grid size-8 place-items-center self-center rounded-full hover:bg-quinary aria-expanded:bg-quinary'
             : 'flex w-full min-w-0 items-center gap-2 rounded-nav px-1 py-1.5 text-start type-body-reduced text-primary hover:bg-quinary aria-expanded:bg-quinary'
         }
         aria-haspopup="menu"

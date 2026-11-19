@@ -1,5 +1,5 @@
 import { ArrowUpRight, ListMusic, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { MdOutlineExtension } from 'react-icons/md';
 import { SiSpotify } from 'react-icons/si';
 import { PrefetchLink, PrefetchNavLink } from '@/components/PrefetchLink';
@@ -153,10 +153,27 @@ export function Sidebar() {
   const folded = useUi((s) => s.sidebarCollapsed);
   const toggleSidebar = useUi((s) => s.toggleSidebar);
   const close = () => setDrawerOpen(false);
-  // The page and the player pill take their left edge from --web-navigation-width (tokens.css).
-  useEffect(() => {
-    if (folded) document.documentElement.dataset.sidebar = 'collapsed';
-    else delete document.documentElement.dataset.sidebar;
+  // The page and the player pill take their left edge from --web-navigation-width (tokens.css),
+  // which changes in one step; the sidebar eases its own width. The page and the pill then slide
+  // from where they were to where they now are, as transforms: no layout on any frame of it.
+  const first = useRef(true);
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const width = () => parseFloat(getComputedStyle(root).getPropertyValue('--web-navigation-width')) || 0;
+    const before = width();
+    if (folded) root.dataset.sidebar = 'collapsed';
+    else delete root.dataset.sidebar;
+    const shift = before - width();
+    const animate = !first.current && shift !== 0 && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    first.current = false;
+    if (!animate) return;
+    // The pill is centred in what's left of the row, so its middle moves half as far.
+    for (const [selector, share] of [['[data-shift="page"]', 1], ['[data-shift="bar"]', 0.5]] as const) {
+      document.querySelector<HTMLElement>(selector)?.animate(
+        [{ transform: `translateX(${shift * share}px)` }, { transform: 'none' }],
+        { duration: 380, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      );
+    }
   }, [folded]);
 
   return (

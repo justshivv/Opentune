@@ -2,7 +2,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { SiYoutubemusic } from 'react-icons/si';
 import { PageHeader } from '@/components/PageHeader';
-import { addSource, allowSource, allowSources, checkAccess, syncPublished, useAddons } from '@/addons/client';
+import { addSource, allowSource, allowSources, checkAccess, hostAllowed, syncPublished, useAddons } from '@/addons/client';
 import { JIOSAAVN_ORIGIN } from '@/addons/jiosaavn';
 import { SourceList } from './SourceList';
 import { settingsUi } from './settingsStyles';
@@ -19,11 +19,15 @@ export default function AudioAddonsPage() {
   const sources = useAddons(s => s.sources);
   const locked = useAddons(s => s.locked);
   const waiting = sources.filter(s => s.enabled && !s.ownerOff && locked.includes(s.id));
+  // Whether the extension may reach JioSaavn: undefined while asking, null without the extension.
+  const [saavnAccess, setSaavnAccess] = useState<boolean | null | undefined>(undefined);
   // The owner's published sources, looked at afresh each time this page opens; then which hosts
   // still need the extension's OK, again on coming back from the extension's tab.
   useEffect(() => {
+    const saavn = () => void hostAllowed(JIOSAAVN_ORIGIN).then(setSaavnAccess);
     void syncPublished(true).then(() => checkAccess());
-    const again = () => { if (document.visibilityState === 'visible') void checkAccess(); };
+    saavn();
+    const again = () => { if (document.visibilityState === 'visible') { void checkAccess(); saavn(); } };
     document.addEventListener('visibilitychange', again);
     return () => document.removeEventListener('visibilitychange', again);
   }, []);
@@ -73,9 +77,11 @@ export default function AudioAddonsPage() {
         <div className={`${settingsUi.integrationPlain} !grid-cols-[minmax(0,1fr)_auto]`}>
           <span className={settingsUi.rowText}>
             <span>Access to JioSaavn</span>
-            <span className={settingsUi.rowDetail}>Its catalog is read through the extension: allow <code className="font-mono">www.jiosaavn.com</code> once.</span>
+            <span className={settingsUi.rowDetail}>{saavnAccess === true ? 'The extension can read its catalog.' : <>Its catalog is read through the extension: allow <code className="font-mono">www.jiosaavn.com</code> once.</>}</span>
           </span>
-          <button type="button" className={settingsUi.inlineButton} onClick={() => void allowSource(JIOSAAVN_ORIGIN).then(() => setNotice('Approve JioSaavn in the extension tab that opened.')).catch(e => setNotice(message(e, 'Permission unavailable')))}>Allow</button>
+          {saavnAccess === true ? <span className={settingsUi.value}>Allowed</span>
+            : saavnAccess === false ? <button type="button" className={settingsUi.inlineButton} onClick={() => void allowSource(JIOSAAVN_ORIGIN).then(() => setNotice('Approve JioSaavn in the extension tab that opened.')).catch(e => setNotice(message(e, 'Permission unavailable')))}>Allow</button>
+            : <span className={settingsUi.value}>{saavnAccess === null ? 'Needs the extension' : 'Checking…'}</span>}
         </div>
       </section>
 

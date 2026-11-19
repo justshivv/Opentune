@@ -8,3 +8,5 @@ minimumReleaseAgeExclude:
   - react-dom@19.3.1
   - react@19.3.1
 
+patchedDependencies:
+  '@uimaxbai/am-lyrics@1.8.2': patches/@uimaxbai__am-lyrics@1.8.2.patch

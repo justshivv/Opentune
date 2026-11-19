@@ -1,5 +1,6 @@
 import { ArrowUpRight, AudioLines, ChevronRight, Info, Mic2, MonitorSmartphone, Palette, Play, Plug, Smartphone, Tv, Users, Wrench, type LucideIcon } from 'lucide-react';
-import { lazy, Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { lazyRecovering } from '@/lib/staleBuild';
 import { MdOutlineExtension } from 'react-icons/md';
 import { SiApplemusic, SiDiscord, SiGithub, SiSpotify, SiYoutubemusic } from 'react-icons/si';
 import { PageHeader } from '@/components/PageHeader';
@@ -19,7 +20,7 @@ import { AppleMusicIntegration, AppleMusicToggles, CanvasToggle, LyricSourcesAcc
 import { AppearanceSettings } from './AppearanceSettings';
 import { settingsUi } from './settingsStyles';
 
-const LyricsSettings = lazy(() => import('@/shell/LyricsSettings').then((m) => ({ default: m.LyricsSettings })));
+const LyricsSettings = lazyRecovering(() => import('@/shell/LyricsSettings').then((m) => ({ default: m.LyricsSettings })));
 
 /** An integration's coloured glyph, as on the Extension page. */
 function Glyph({ Icon, color, ink }: { Icon: ComponentType<{ size?: number }>; color: string; ink?: string }) {

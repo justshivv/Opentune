@@ -29,6 +29,11 @@
   <a href="https://trendshift.io/repositories/311235?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-311235" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/311235" alt="justshivv%2FOpentune | Trendshift" width="250" height="55"/></a>
 </p>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/311235?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-311235" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/311235/daily?language=Kotlin" alt="justshivv%2FOpentune | Trendshift" width="250" height="55"/></a>
+  <a href="https://trendshift.io/repositories/311235?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-311235" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/311235" alt="justshivv%2FOpentune | Trendshift" width="250" height="55"/></a>
+</p>
+
 [![Get it on Orion Store](https://raw.githubusercontent.com/RookieEnough/Orion-Store/refs/heads/main/assets/orion-badge.png)](https://rookieenough.github.io/Orion-Data/redirect.html?id=opentune&icon=https%3A%2F%2Fjustshivv.github.io%2FOpentune%2Ficon-512.png)
 
 # OpenTune

@@ -1,5 +1,5 @@
 import { Check, Link2, ListEnd, ListStart, MoreHorizontal, Plus, Shuffle } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Menu, MenuItem, MenuSeparator } from '@/components/Menu';
 import { PrefetchLink } from '@/components/PrefetchLink';
 import { toast } from '@/components/Toast';
@@ -8,6 +8,7 @@ import { useSetListSaved, useSignedIn } from '@/data/music/queries';
 import type { AppleMotion } from '@/data/apple/motionArt';
 import type { HeaderInfo } from '@/data/music/types';
 import { Artwork } from './Artwork';
+import { DetailBar } from './DetailBar';
 import { ExplicitBadge } from './ExplicitBadge';
 import { MotionArtwork } from './MotionArtwork';
 import { artistHref } from './links';
@@ -90,11 +91,14 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, 
   const signedIn = useSignedIn();
   const setSaved = useSetListSaved();
   const library = signedIn ? info.library : null;
+  const title = useRef<HTMLHeadingElement>(null);
   return (
-    // Artwork beside the headings, description and actions; stacked and centred below 768px.
+    <>
+    <DetailBar title={info.title} thumbnail={info.thumbnail} watch={title} onPlay={onPlay} canPlay={canPlay} />
+    {/* Artwork beside the headings, description and actions; stacked and centred below 768px. */}
     <div className="ot-detail relative isolate mb-10 px-(--body-gutter)">
       {info.thumbnail && <CoverWash src={info.thumbnail} />}
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-[34px] pt-11 [grid-template-areas:'artwork_headings'_'artwork_description'_'artwork_actions'] max-md:grid-cols-[1fr] max-md:grid-rows-[auto] max-md:justify-items-center max-md:pt-4 max-md:text-center max-md:[grid-template-areas:'artwork'_'headings'_'actions'_'description']">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr_auto] gap-x-[34px] pt-14 [grid-template-areas:'artwork_headings'_'artwork_description'_'artwork_actions'] max-md:grid-cols-[1fr] max-md:grid-rows-[auto] max-md:justify-items-center max-md:pt-12 max-md:text-center max-md:[grid-template-areas:'artwork'_'headings'_'actions'_'description']">
         <div className="ot-detail-cover relative w-[270px] self-start rounded-artwork-lg shadow-[0_24px_60px_-12px_var(--radiosityShadowColor)] [grid-area:artwork] max-lg:w-[220px] max-md:w-[min(270px,70vw)]">
           {info.thumbnail && (
             // A blurred copy behind the artwork: Apple's radiosity glow.
@@ -113,7 +117,7 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, 
           )}
         </div>
         <div className="ot-detail-text flex flex-col pt-[37px] [grid-area:headings] max-md:items-center max-md:pt-5">
-          <h1 className="flex items-center type-large-title-emphasized leading-[30px] max-md:justify-center">
+          <h1 ref={title} className="flex items-center type-large-title-emphasized leading-[30px] max-md:justify-center">
             {info.title}
             {info.explicit && <ExplicitBadge size={16} />}
           </h1>
@@ -175,6 +179,7 @@ export function DetailHeader({ info, onPlay, onShuffle, canPlay, extra, motion, 
         </div>
       </div>
     </div>
+    </>
   );
 }
 
