@@ -59,7 +59,10 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 internal object Shortcuts {
     /** What the window itself does for a key: open a page or a panel, close the player, show help. */
-    enum class Command { SEARCH, LYRICS, QUEUE, CLOSE, HELP, SETTINGS }
+    enum class Command { SEARCH, LYRICS, QUEUE, CLOSE, HELP, SETTINGS, TOGETHER }
+
+    /** Asks the window for [c], as a key would: for a button outside the pages (the top bar's room pill). */
+    fun ask(c: Command) { _commands.tryEmit(c) }
 
     private val _commands = MutableSharedFlow<Command>(extraBufferCapacity = 8)
     val commands: SharedFlow<Command> = _commands.asSharedFlow()

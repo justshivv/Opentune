@@ -598,6 +598,8 @@ internal fun TopBar(
                 ChromeLcd(song, onOpenPlayer, Modifier.widthIn(max = 650.dp).fillMaxWidth())
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(CHROME_ICON_GAP)) {
+                // In a Listen together room: who's in, and the way to the room.
+                RoomChip { Shortcuts.ask(Shortcuts.Command.TOGETHER) }
                 if (!tight) Row(verticalAlignment = Alignment.CenterVertically) {
                     ChromeSpeaker()
                     if (slider) ChromeVolumeSlider(Modifier.padding(start = 4.dp, end = 4.dp).width(100.dp))

@@ -216,6 +216,7 @@ fun DesktopApp(startPanel: SidePanel? = null, startAccountMenu: Boolean = false,
                 Shortcuts.Command.QUEUE -> panel = if (panel == SidePanel.QUEUE) null else SidePanel.QUEUE
                 Shortcuts.Command.CLOSE -> if (helpOpen) helpOpen = false else if (accountOpen) accountOpen = false else playerOpen = false
                 Shortcuts.Command.HELP -> helpOpen = true
+                Shortcuts.Command.TOGETHER -> { playerOpen = false; go(Page(Tab.TOGETHER)) }
             }
         }
     }
