@@ -508,7 +508,7 @@ fun AppRoot(vm: PlayerViewModel) {
         // back to the tab would open Search instead. They and anything opened from them end the list.
         return stack.drop(at + 1).takeWhile { it.destination.route != SEARCH_ROUTE && it.destination.route?.startsWith("recognize") != true }.mapNotNull { e ->
             val template = e.destination.route ?: return@mapNotNull null
-            template.replace(Regex("""\{([^}]+)\}""")) { m -> Uri.encode(e.arguments?.get(m.groupValues[1])?.toString().orEmpty()) }
+            filledRoute(template, { name -> e.arguments?.get(name) }, Uri::encode)
         }
     }
     val selectTab: (Int) -> Unit = { i ->
@@ -1025,6 +1025,24 @@ private fun PlayerStrip(vm: PlayerViewModel, onExpand: () -> Unit) {
         onNext = vm::skipNext,
         onExpand = onExpand,
     ) { m -> MiniPlayerBar(vm, onExpand = onExpand, modifier = m, inline = true) }
+}
+
+/**
+ * The route that opens again the page [template] made with these arguments ([arg] by name),
+ * each [encode]d. An optional one that was left out (null) stays out: written in as nothing,
+ * it came back as "" rather than null, so a new smart playlist's editor came back as the
+ * editor of one with no id, which saved and didn't open the new list.
+ */
+internal fun filledRoute(template: String, arg: (String) -> Any?, encode: (String) -> String): String {
+    val slot = Regex("""\{([^}]+)\}""")
+    val path = template.substringBefore('?')
+        .replace(slot) { m -> encode(arg(m.groupValues[1])?.toString().orEmpty()) }
+    val query = template.substringAfter('?', "").split('&').filter { it.isNotEmpty() }.mapNotNull { part ->
+        val name = slot.find(part)?.groupValues?.get(1) ?: return@mapNotNull part
+        val value = arg(name) ?: return@mapNotNull null
+        part.replace(slot) { encode(value.toString()) }
+    }
+    return if (query.isEmpty()) path else path + "?" + query.joinToString("&")
 }
 
 /**
