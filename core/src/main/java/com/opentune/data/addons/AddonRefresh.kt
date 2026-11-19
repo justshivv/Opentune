@@ -16,17 +16,27 @@ object AddonRefresh {
     private val reachability = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val availability: kotlinx.coroutines.flow.StateFlow<Map<String, Boolean>> = reachability
     private val mutex = Mutex()
-    private var checkedAt: Long? = null
-    private const val INTERVAL = 10 * 60_000L
+    /**
+     * Once a day, or when Refresh is tapped ([force]). The time is saved, so opening the app or a
+     * background start doesn't check again: every check was a request to the catalog server and
+     * to each add-on, from every phone, many times a day.
+     */
+    internal const val INTERVAL = 24 * 60 * 60_000L
+    /** A check that failed (offline, say) is tried again after this long, not a day later. */
+    internal const val RETRY = 60 * 60_000L
+
+    /** Whether a check is due, given when the last one was recorded (0 for never). */
+    internal fun due(checkedAt: Long, now: Long): Boolean = checkedAt <= 0L || now < checkedAt || now - checkedAt >= INTERVAL
 
     suspend fun refresh(force: Boolean = false): Boolean = mutex.withLock {
-        val now = android.os.SystemClock.elapsedRealtime()
-        if (!force && checkedAt?.let { now - it < INTERVAL } == true) return@withLock true
+        val now = System.currentTimeMillis()
+        if (!force && !due(AddonStore.checkedAt, now)) return@withLock true
         withContext(Dispatchers.IO) {
             val catalogOk = CommunityAddons.refresh(force)
             val manifestsOk = refreshInstalled(AddonStore.addons.value, force)
-            checkedAt = now
-            catalogOk && manifestsOk
+            val ok = catalogOk && manifestsOk
+            AddonStore.checkedAt = if (ok) now else now - INTERVAL + RETRY
+            ok
         }
     }
 

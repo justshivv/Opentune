@@ -19,8 +19,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 
 /** Random installation identity, no hardware IDs or song information. Never backed up.
- * Daily cumulative totals are durable before upload; the server merges with MAX so lost
- * acknowledgements and out-of-order retries cannot inflate plays. Up to 30 days offline.
+ * Each day's plays are counted on the phone and sent once, the first time the app or its
+ * background job runs after the day is over (India time): one report a day, with the whole
+ * day's number. The server keeps the larger of what it has and what comes in, so a retry or a
+ * lost acknowledgement never counts a day twice. Up to 30 days offline.
  */
 object Usage {
     private const val CONFIG = "https://justshivv.github.io/Opentune/usage-config.json"
@@ -82,9 +84,10 @@ object Usage {
             // one report per play was most of the Worker's daily allowance.
             val monotonic = System.nanoTime() / 1_000_000
             val lastReport = p.getLong("last-report", 0L)
-            if (!due(lastReport, now, pending, istDay(now))) return
+            val today = istDay(now)
+            if (!due(lastReport, now, pending, today)) return
             // Until the installation has been counted once, a failed try is repeated
-            // within minutes; after that, plays only ever go out in the four-hour batch.
+            // within minutes; after that, a failed daily report waits a few hours.
             val retry = retryAfter(lastReport)
             if (lastAttempt != 0L && monotonic - lastAttempt < retry) return
             val attempted = p.getLong("last-attempt", 0L)
@@ -94,7 +97,10 @@ object Usage {
             try {
                 val base = endpoint(monotonic) ?: return
                 if (!enabled) return
-                val batch = pending.sorted().take(64)
+                // Days that are over, each sent once. The very first report also takes today's
+                // count so far, so a new installation shows up; the day's full count follows.
+                val batch = pending.filter { lastReport <= 0L || finished(it, today) }.sorted().take(64)
+                if (batch.isEmpty()) return
                 val payload = buildJsonObject {
                     put("installationId", id)
                     // Separate current installation state from historical daily plays.
@@ -121,22 +127,27 @@ object Usage {
             catch (_: Exception) { /* Retain the exact totals for the next foreground/play retry. */ }
     }
 
-    /** How long totals wait on the phone before they're sent. */
-    internal const val REPORT_EVERY_MS = 4 * 60 * 60_000L
-    /** The least time between two tries in one run, after one that failed. */
-    private const val RETRY_MS = REPORT_EVERY_MS
+    /** The least time between two tries, after one that failed. */
+    internal const val RETRY_MS = 4 * 60 * 60_000L
     /** The same, for an installation not yet counted: it should show on the dashboard straight away. */
     internal const val FIRST_RETRY_MS = 15 * 60_000L
 
     /** How long a failed report waits before the next try: minutes for the first one, the batch interval after. */
     internal fun retryAfter(lastReport: Long): Long = if (lastReport <= 0L) FIRST_RETRY_MS else RETRY_MS
 
+    /** Whether a pending day ([entry] is "yyyyMMdd|version|zone") is over by [today] (India time). */
+    internal fun finished(entry: String, today: String): Boolean = entry.substringBefore('|') < today
+
     /**
-     * Whether the totals are worth sending now: never sent, sent long enough
-     * ago, with a four-hour gap even when a day ends. [today] is kept for old callers.
+     * Whether to send now: never sent (a new installation is counted at once), or a day that's
+     * over is waiting and nothing has gone out yet today. So at most one report a day.
      */
-    internal fun due(lastReport: Long, now: Long, pending: Set<String>, today: String): Boolean =
-        pending.isNotEmpty() && (lastReport <= 0L || now - lastReport >= REPORT_EVERY_MS || now < lastReport)
+    internal fun due(lastReport: Long, now: Long, pending: Set<String>, today: String): Boolean {
+        if (pending.isEmpty()) return false
+        if (lastReport <= 0L) return true
+        val sentToday = lastReport <= now && istDay(lastReport) >= today
+        return !sentToday && pending.any { finished(it, today) }
+    }
 
     internal fun persistDaily(p: SharedPreferences, now: Long, version: String, play: Boolean): Pair<String, MutableSet<String>>? {
             val id = p.getString("installation", null) ?: UUID.randomUUID().toString().also {

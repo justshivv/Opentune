@@ -7,8 +7,8 @@ import kotlinx.coroutines.CancellationException
 
 /**
  * Android batches these checks with other background work; no polling service or wake lock.
- * Every few hours: opening the app and the add-on settings check too, and a half-hourly check
- * started the whole app in the background about 48 times a day, each start a burst of work.
+ * Once a day, like the check when the app opens ([AddonRefresh] skips it if that already ran): a
+ * half-hourly check started the whole app in the background about 48 times a day.
  */
 class AddonRefreshWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result = try {
@@ -19,7 +19,7 @@ class AddonRefreshWorker(context: Context, parameters: WorkerParameters) : Corou
     companion object {
         fun schedule(context: Context) {
             val work = runCatching { WorkManager.getInstance(context) }.getOrNull() ?: return
-            val request = PeriodicWorkRequestBuilder<AddonRefreshWorker>(6, TimeUnit.HOURS, 1, TimeUnit.HOURS)
+            val request = PeriodicWorkRequestBuilder<AddonRefreshWorker>(24, TimeUnit.HOURS, 2, TimeUnit.HOURS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.MINUTES)
                 .build()

@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.work.*
 import java.util.concurrent.TimeUnit
 
-/** Upload durable daily totals at most every four hours; no per-song HTTP requests. */
+/** Sends the days that are over, once a day; no per-song HTTP requests (see [Usage]). */
 class UsageUploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result {
         Usage.flushPending()
@@ -18,10 +18,11 @@ class UsageUploadWorker(context: Context, parameters: WorkerParameters) : Corout
 
         fun schedule(context: Context) {
             val manager = runCatching { WorkManager.getInstance(context) }.getOrNull() ?: return
-            val request = PeriodicWorkRequestBuilder<UsageUploadWorker>(4, TimeUnit.HOURS, 30, TimeUnit.MINUTES)
+            val request = PeriodicWorkRequestBuilder<UsageUploadWorker>(12, TimeUnit.HOURS, 1, TimeUnit.HOURS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
-            manager.enqueueUniquePeriodicWork("usage-batch-upload", ExistingPeriodicWorkPolicy.KEEP, request)
+            // UPDATE, so phones that scheduled the old four-hourly job move to this one.
+            manager.enqueueUniquePeriodicWork("usage-batch-upload", ExistingPeriodicWorkPolicy.UPDATE, request)
         }
 
         /** Counts a new installation as soon as there's a network, retried with backoff until it's taken. */

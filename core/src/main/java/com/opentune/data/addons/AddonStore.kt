@@ -18,6 +18,10 @@ object AddonStore {
     val revision = MutableStateFlow(0L)
     var outputAllowed: () -> Boolean = { false }
     var onChanged: () -> Unit = {}
+    /** When the add-on list and manifests were last checked, by the wall clock; kept across restarts. */
+    var checkedAt: Long
+        get() = preferences?.getLong("checked-at", 0L) ?: 0L
+        set(value) { preferences?.edit()?.putLong("checked-at", value)?.apply() }
     fun init(context: Context) {
         FirstPartyAddonAuth.init(context)
         preferences = context.getSharedPreferences("audio_addons", Context.MODE_PRIVATE)

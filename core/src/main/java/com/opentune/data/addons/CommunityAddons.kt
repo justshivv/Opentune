@@ -8,8 +8,8 @@ import org.json.JSONObject
 
 /**
  * Public owner-curated catalog. URLs are hidden in UI, not confidential network credentials.
- * Read each time the app comes to the front (at most every [EVERY_MS]), so a source the
- * owner turns off stops being asked within minutes on every phone that's in use.
+ * Read once a day, or when Refresh is tapped (see [AddonRefresh]), so a source the owner turns
+ * off stops being asked within a day on every phone.
  */
 object CommunityAddons {
     private const val CONFIG = "https://justshivv.github.io/Opentune/usage-config.json"
